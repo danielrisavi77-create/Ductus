@@ -105,9 +105,9 @@ test("a low PR with any runtime, config or served file still waits for review", 
       { filename: "docs/FEATURES.md", status: "modified" },
       { filename, status },
     ];
-    // F-033: the toolchain files are critical, so a low declaration fails
+    // F-033, F-174: the toolchain files are critical, so a low declaration fails
     // outright and the critical one still waits for review.
-    const critical = [".npmrc", "pnpm-workspace.yaml", ".nvmrc"].includes(filename);
+    const critical = [".npmrc", ".pnpmfile.cjs", "pnpm-workspace.yaml", ".nvmrc"].includes(filename);
     if (critical) {
       const low = runLow(list);
       assert.equal(low.result.state, "failure", filename);

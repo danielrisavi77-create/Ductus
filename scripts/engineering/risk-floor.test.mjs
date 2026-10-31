@@ -33,6 +33,9 @@ const CRITICAL_SAMPLES = [
   ".gitleaks.toml",
   ".gitleaksignore",
   ".semgrepignore",
+  ".pnpmfile.cjs",
+  ".pnpmfile.mjs",
+  "pnpm-lock.yaml",
   "STATE.md",
   ".worktreeinclude",
   "plugins/ductura-engineering/plugin.json",
@@ -205,7 +208,7 @@ test("ordinary documentation stays low and ordinary code stays standard", () => 
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "src/pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });
@@ -401,5 +404,23 @@ test("every script a committed settings hook runs is critical and owner-command"
   for (const file of paths) {
     assert.deepEqual(ownerCommandPaths([file]), [file], file);
     assert.equal(minimumRisk([file]).risk, "critical", file);
+  }
+});
+
+// F-174: pnpm runs the root pnpmfile on every install, so it needs the owner's
+// command like the hooks it can replace; the lockfile carries the critical floor.
+test("the pnpm install hook is owner-command and the lockfile is critical", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of [".pnpmfile.cjs", ".pnpmfile.mjs", "./.PNPMFILE.cjs", ".\\.pnpmfile.mjs"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(ownerCommandPaths([file]).length, 1, file);
+    assert.equal(d97Matches([file]).length, 1, file);
+    assert.equal(declared("standard", [file]).ok, false, file);
+  }
+  const added = decide({ risk: "critical", names: [".pnpmfile.cjs"], autoMerge: true });
+  assert.equal(added.state, "pending");
+  for (const file of ["pnpm-lock.yaml", "PNPM-LOCK.yaml"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(declared("standard", [file]).ok, false, file);
   }
 });

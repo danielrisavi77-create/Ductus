@@ -1,5 +1,5 @@
 import { field } from "./metadata-parser.mjs";
-import { D97_MANUAL_PATHS, D97_PATHS, isAgentControlPath, matchesPath, normalizePath } from "./protected-paths.mjs";
+import { D97_MANUAL_PATHS, D97_PATHS, INSTALL_HOOK_PATHS, isAgentControlPath, matchesPath, normalizePath } from "./protected-paths.mjs";
 
 const RISK_RANK = { low: 0, standard: 1, critical: 2 };
 const AGENT_RE =
@@ -26,6 +26,10 @@ export const CRITICAL_PATHS = [
   ".gitleaks.toml",
   ".gitleaksignore",
   ".semgrepignore",
+  // F-174: the pnpm install hook runs on every install; the lockfile decides
+  // which package code the hooks and tools run.
+  ...INSTALL_HOOK_PATHS,
+  "pnpm-lock.yaml",
   "vitest.config.ts",
   "playwright.config.ts",
   "playwright.login.config.ts",
