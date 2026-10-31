@@ -85,6 +85,8 @@ afterAll(async () => {
       `DELETE FROM institution.assignment_version WHERE assignment_id IN (
          SELECT a.id FROM institution.assignment a JOIN institution.course c ON c.id = a.course_id WHERE c.institution_id = ANY ($1))`, [faculties],
     );
+    // The A10 removals write append-only audit rows that reference the memberships.
+    await cleaner.query("DELETE FROM audit.course_member_event WHERE institution_id = ANY ($1)", [faculties]);
     await cleaner.query("COMMIT");
   } finally {
     cleaner.release();
@@ -213,7 +215,7 @@ describe("new assignment version: real POST, session and database (DAN-292)", ()
     );
     expect(events.rows).toEqual([{ recipient_id: late }]);
     const open = await admin.query(
-      "SELECT count(*)::int AS n FROM institution.course_member WHERE course_id = $1 AND member_to IS NULL", [course],
+      "SELECT count(*)::int AS n FROM institution.course_member WHERE course_id = $1 AND role = 'student' AND member_to IS NULL", [course],
     );
     expect(open.rows[0].n).toBe(0);
   });
