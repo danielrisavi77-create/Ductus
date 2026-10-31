@@ -30,6 +30,7 @@
     "demo:up:native": "node scripts/demo/native/up.mjs",
     "demo:bootstrap-accounts": "node scripts/demo/bootstrap-accounts.mjs",
     "db:new": "dbmate new",
+    "db:sum": "node scripts/engineering/migrations-ledger.mjs --write",
     "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
     "db:provision:app": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/app-login.sql",
     "db:provision:auth": "node scripts/db/provision-auth.mjs",
