@@ -222,7 +222,7 @@
   padding-top: 10px;
   border-top: 1px solid var(--rule);
   font-family: var(--ff-ui);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   color: var(--ink-3);
 }
@@ -491,7 +491,7 @@
   gap: 8px 24px;
   padding-top: 24px;
   padding-bottom: 40px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   color: var(--ink-3);
 }
@@ -529,7 +529,9 @@
 
   /* Phone: no interface text under 13 px (review #156, 5; e2e/shell.spec.ts). */
   .eyebrow,
-  .soon {
+  .soon,
+  .signature,
+  .footer {
     font-size: 13px;
   }
 
