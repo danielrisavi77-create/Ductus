@@ -47,7 +47,7 @@ test.afterEach(async () => {
 async function asTeacher(page: Page): Promise<void> {
   await signIn(page, "/", "Demo nastavnik");
   roleGrantedByThisTest = !(await teacherRoleActive());
-  await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
+  await run("node", ["scripts/local/provision-teacher.mjs"], { cwd: ROOT });
 }
 
 async function snapshot(page: Page, name: string): Promise<void> {

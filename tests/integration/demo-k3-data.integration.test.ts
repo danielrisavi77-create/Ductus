@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { expect, it } from "vitest";
 
-// K-3b2 / DAN-88 (#635): db/local/demo-k3.sql, the file `pnpm demo:up` loads,
+// K-3b2 / DAN-88 (#635): db/local/demo-k3.sql, the file `pnpm local:up` loads,
 // run twice through the same psql path inside one transaction that is rolled
 // back, so CI checks it without leaving a confirmed teacher for the E2E tests.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";

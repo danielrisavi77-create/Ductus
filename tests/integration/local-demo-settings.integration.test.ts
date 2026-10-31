@@ -60,7 +60,7 @@ it("seeds only the local demo settings and preserves configuration and enrollmen
   let courseId = "";
   let original: Settings | undefined;
   try {
-    // CI runs demo:prepare first. Remove only this synthetic row to model a
+    // CI runs local:prepare first. Remove only this synthetic row to model a
     // freshly migrated stack, then restore its original value in finally.
     const institutions = await admin.query<{ id: string; slug: string }>(
       "SELECT id, slug FROM identity.institution WHERE slug = ANY($1)", [[DEMO_SLUG, OTHER_SLUG]]);

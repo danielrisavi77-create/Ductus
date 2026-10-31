@@ -16,9 +16,9 @@ const scratch = () => mkdtemp(join(tmpdir(), "ductus-native-"));
 const bytesResponse = (bytes) => new Response(new Blob([bytes]).stream(), { status: 200 });
 
 test("the runner takes its three flags and refuses any other argument", () => {
-  assert.deepEqual(parseArgs([]), { stop: false, prepareOnly: false, demoData: true });
-  assert.deepEqual(parseArgs(["--prepare-only", "--no-demo-data"]), { stop: false, prepareOnly: true, demoData: false });
-  assert.deepEqual(parseArgs(["--stop"]), { stop: true, prepareOnly: false, demoData: true });
+  assert.deepEqual(parseArgs([]), { stop: false, prepareOnly: false, sampleData: true });
+  assert.deepEqual(parseArgs(["--prepare-only", "--no-sample-data"]), { stop: false, prepareOnly: true, sampleData: false });
+  assert.deepEqual(parseArgs(["--stop"]), { stop: true, prepareOnly: false, sampleData: true });
   assert.throws(() => parseArgs(["--allow-non-windows"]), /unknown argument/);
   assert.throws(() => parseArgs(["--stop", "--prepare-only"]), /--stop takes no other argument/);
 });
@@ -128,9 +128,9 @@ test("the fake OIDC preload binds a port to loopback and refuses a pipe or a soc
   assert.match(listen(path), /loopback port only/);
 });
 
-test("without demo data the K-3 step is skipped and nothing else is", async () => {
+test("without sample data the K-3 step is skipped and nothing else is", async () => {
   const home = await scratch();
-  const run = createNativeRun({ env: {}, home, platform: "linux", tools: async () => ({}), demoData: false });
+  const run = createNativeRun({ env: {}, home, platform: "linux", tools: async () => ({}), sampleData: false });
   assert.deepEqual(await run.runNode("db/local/demo-k3.mjs", {}), { code: 0, stdout: "" });
   assert.equal(await run.runScript("stack:down", {}), 1);
   await run.interrupt();
@@ -193,7 +193,7 @@ test("--stop kills a recorded pid only while its image and start time are the re
   }));
   const now = new Map([
     [101, { image: "node.exe", start: "999" }], // the pid reused after a restart, by another node.exe
-    [102, { image: "rustfs.exe", start: "501" }], // the store this demo started
+    [102, { image: "rustfs.exe", start: "501" }], // the store this run started
     [103, { image: "code.exe", start: "502" }],
     [104, { image: "node.exe", start: "600" }], // a record without a start time
   ]);

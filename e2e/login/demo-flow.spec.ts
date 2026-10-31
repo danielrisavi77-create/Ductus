@@ -420,9 +420,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(page.getByText(t.teacher.denied)).toBeVisible();
       await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
     }
-    // DAN-346: against `pnpm demo:up:native` the same command uses the native
+    // DAN-346: against `pnpm local:up:native` the same command uses the native
     // runner's socket instead of the Compose container.
-    await run("node", ["scripts/demo/provision-teacher.mjs", ...NATIVE_PROVISION], { cwd: ROOT });
+    await run("node", ["scripts/local/provision-teacher.mjs", ...NATIVE_PROVISION], { cwd: ROOT });
     await page.goto("/nastavnik/zadatak/novi");
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
 

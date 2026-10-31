@@ -1,7 +1,7 @@
 // Where the db/local scripts run psql (DAN-324). Their default stays the
 // docker invocation of the compose postgres container. A caller that imports a
 // script (the native demo runner) may pass a native psql target instead; no
-// environment variable chooses it, so demo:up and demo:prepare keep docker.
+// environment variable chooses it, so local:up and local:prepare keep docker.
 
 const CONTAINER = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 // A socket directory: POSIX `/...` or a Windows drive path, the two forms libpq

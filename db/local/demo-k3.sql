@@ -1,7 +1,7 @@
 -- K-3b2 / DAN-88 (#635): the invented course, assignment and enrolment of the
 -- local demo (docs/PLAN-DEMO.md K-3). Local compose stack only, after
--- `pnpm db:seed`; `pnpm demo:up` runs it through db/local/demo-k3.mjs, and
--- `pnpm demo:prepare` (CI) does not, because the E2E tests start from an
+-- `pnpm db:seed`; `pnpm local:up` runs it through db/local/demo-k3.mjs, and
+-- `pnpm local:prepare` (CI) does not, because the E2E tests start from an
 -- unconfirmed teacher. Never a migration, never production.
 --
 -- Every row comes from the function the application calls, under the session

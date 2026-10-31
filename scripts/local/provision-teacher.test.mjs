@@ -87,7 +87,7 @@ test("--native is refused, without running psql, off Windows or with a missing o
     const errors = [];
     const code = await provision(["--native"], { env: { LOCALAPPDATA: BASE }, spawn: never, log: () => {}, error: (line) => errors.push(line), ...options });
     assert.equal(code, 1);
-    assert.match(errors[0], /^Demo teacher provision refused: /);
+    assert.match(errors[0], /^Teacher provision refused: /);
   }
   // LOCALAPPDATA must be an absolute path (tools.mjs).
   assert.equal(await provision(["--native"], { env: { LOCALAPPDATA: "relative" }, platform: "win32", spawn: never, exists: never, hash: never, ...quiet }), 1);
@@ -100,7 +100,7 @@ test("a failing psql gives exit 1 and a message without SQL or credentials, on b
     const code = await provision(argv, { env: { LOCALAPPDATA: BASE, PGPASSWORD: "local-only" }, spawn, log: () => {}, error: (line) => errors.push(line), ...extra });
     assert.equal(code, 1);
     assert.equal(errors.length, 1);
-    assert.match(errors[0], /^Demo teacher provision failed: /);
+    assert.match(errors[0], /^Teacher provision failed: /);
     assert.doesNotMatch(errors[0], /local-only|SELECT|INSERT|account=/i);
   }
 });

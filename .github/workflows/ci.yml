@@ -94,9 +94,9 @@ jobs:
       - name: Property tests
         if: needs.scope.outputs.profile == 'full'
         run: pnpm test:property
-      - name: Demo launcher and fake OIDC account tests
+      - name: Local launcher and fake OIDC account tests
         if: needs.scope.outputs.profile == 'full'
-        run: pnpm test:demo && pnpm test:fake-oidc
+        run: pnpm test:local && pnpm test:fake-oidc
       # F-152: the node tests of skill scripts (both skill copies).
       - name: Skill script tests
         run: pnpm test:skills
@@ -124,8 +124,8 @@ jobs:
         run: |
           case "$SCOPE_RESULT/$PROFILE/$E2E_RESULT/$LOGIN_RESULT/$EVIDENCE_RESULT/$LOGIN_EVIDENCE_RESULT" in
             success/full/success/success/success/success) echo 'Both isolated application stack and browser checks passed.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB, browser, property, local launcher and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB, browser, property, local launcher and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
             *) echo 'Missing, unsuccessful or unexpected CI scope/stack result.' >&2; exit 1 ;;
           esac
       - name: Reject cancelled stack
@@ -203,7 +203,7 @@ jobs:
         run: pnpm test:db
       # Exercise the P7 setup path after pgTAP's isolated fixtures; it seeds
       # only the local institutions before integration and E2E tests.
-      - run: pnpm demo:prepare
+      - run: pnpm local:prepare
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - run: pnpm test:integration
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -375,7 +375,7 @@ jobs:
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      - run: pnpm demo:prepare
+      - run: pnpm local:prepare
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Install login browser
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -384,9 +384,9 @@ jobs:
         run: bash scripts/engineering/playwright-install.sh chromium
       # F-152: the demo account bootstrap's guards drive a real Chromium, which
       # only this job installs; each shard runs them (a few seconds).
-      - name: Demo account bootstrap tests
+      - name: Test account bootstrap tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-        run: pnpm test:demo:browser
+        run: pnpm test:local:browser
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in production); Chromium only (owner decision).
       # The full suite as this runner sees it, before sharding; the inventory

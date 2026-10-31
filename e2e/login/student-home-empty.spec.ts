@@ -21,7 +21,7 @@ const home = t.student.home;
 const e = t.student.enroll;
 const STUDENT_2 = "demo-student-2@demo.ductus.test";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const PROVISION_TEACHER = fileURLToPath(new URL("../../scripts/demo/provision-teacher.mjs", import.meta.url));
+const PROVISION_TEACHER = fileURLToPath(new URL("../../scripts/local/provision-teacher.mjs", import.meta.url));
 
 /** Closes the account's open student memberships; returns them to reopen. */
 async function park(): Promise<string[]> {

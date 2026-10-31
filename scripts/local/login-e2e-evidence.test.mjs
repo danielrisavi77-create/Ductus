@@ -15,7 +15,7 @@ const quiet = (work) => {
   }
 };
 
-test("the login E2E server gets the signer, the store credentials and the storage domain, and nothing of the demo auth setup", () => {
+test("the login E2E server gets the signer, the store credentials and the storage domain, and nothing of the local auth setup", () => {
   const seen = [];
   const env = evidenceServerEnvironment({ ...LOCAL, DUCTUS_DEV_SIGNING_KEY_FILE: "/seed/demo.seed" }, (child) => {
     seen.push(child);
@@ -36,6 +36,6 @@ test("without a usable local stack the E2E server gets no evidence variables", (
   const junk = () => ({ status: 0, stdout: "EVIDENCE_STORAGE_DOMAINS={}\n" });
   assert.deepEqual(quiet(() => evidenceServerEnvironment(LOCAL, down)), {});
   assert.deepEqual(quiet(() => evidenceServerEnvironment(LOCAL, junk)), {});
-  // A docker target override is refused by the demo environment (F-100): no variables, no child run.
+  // A docker target override is refused by the local environment (F-100): no variables, no child run.
   assert.deepEqual(quiet(() => evidenceServerEnvironment({ ...LOCAL, DOCKER_HOST: "tcp://elsewhere:2375" }, () => assert.fail("must not run"))), {});
 });

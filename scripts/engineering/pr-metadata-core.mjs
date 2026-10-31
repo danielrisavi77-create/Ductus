@@ -23,15 +23,15 @@ export const CRITICAL_PATHS = [
   ".cc-safety-net/",
   "plugins/",
   "scripts/forbidden-terms/",
-  // Native demo tooling (F-140) and the demo scripts it runs in process (F-144).
-  "scripts/demo/native/",
-  "scripts/demo/up.mjs",
-  "scripts/demo/bootstrap-accounts.mjs",
-  "scripts/demo/provision-teacher.mjs",
+  // Native local runner tooling (F-140) and the local scripts it runs in process (F-144).
+  "scripts/local/native/",
+  "scripts/local/up.mjs",
+  "scripts/local/bootstrap-accounts.mjs",
+  "scripts/local/provision-teacher.mjs",
   // The tests that guard those scripts' local-only and production refusals (F-148).
-  "scripts/demo/up.test.mjs",
-  "scripts/demo/bootstrap-accounts.test.mjs",
-  "scripts/demo/provision-teacher.test.mjs",
+  "scripts/local/up.test.mjs",
+  "scripts/local/bootstrap-accounts.test.mjs",
+  "scripts/local/provision-teacher.test.mjs",
   "db/migrations/",
   "db/local/",
   "db/tests/",

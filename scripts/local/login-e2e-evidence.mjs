@@ -1,6 +1,6 @@
 // Z5 (F-10 contract, #476): the web server of the full login E2E (playwright.login.config.ts)
-// gets the evidence signer and the storage domain that `pnpm demo:up` hands to the app, so the
-// evidence routes (open, commit, submission) work in that run. `pnpm demo:prepare` registers the
+// gets the evidence signer and the storage domain that `pnpm local:up` hands to the app, so the
+// evidence routes (open, commit, submission) work in that run. `pnpm local:prepare` registers the
 // signing key and the storage domain in the local database (CI does it before the E2E); the
 // web server also needs the seed file path, the local store credentials and the one
 // EVIDENCE_STORAGE_DOMAINS line, which the storage script prints and nothing else keeps.
@@ -8,11 +8,11 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { createDemoEnvironment, parseStorageDomainsLine } from "./up.mjs";
+import { createLocalEnvironment, parseStorageDomainsLine } from "./up.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const STORAGE_SCRIPT = "db/local/evidence-storage-domain.mjs";
-// Only the evidence variables; the auth password and the database URLs of the demo
+// Only the evidence variables; the auth password and the database URLs of the local
 // environment are not passed on (the login config sets its own).
 const KEYS = [
   "S3_ENDPOINT",
@@ -42,7 +42,7 @@ function runStorageScript(env) {
 export function evidenceServerEnvironment(source = process.env, run = runStorageScript) {
   let env;
   try {
-    env = createDemoEnvironment(source);
+    env = createLocalEnvironment(source);
   } catch (error) {
     console.warn(`Login E2E: no evidence environment (${error.message})`);
     return {};
