@@ -12,7 +12,7 @@
 }
 
 .dialog::backdrop {
-  background: #0008;
+  background: var(--scrim);
 }
 
 .body {
