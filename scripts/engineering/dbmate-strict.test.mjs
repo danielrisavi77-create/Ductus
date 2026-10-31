@@ -2,8 +2,9 @@
 // (or `migrate --strict`), so a migration older than the newest applied one is
 // refused instead of applied out of order. CI applies them through
 // `pnpm db:migrate` (.github/workflows/ci.yml); the Windows local runner
-// through scripts/local/native/up.mjs (DAN-434 moved it from scripts/demo). No deploy path exists yet; one that is added
-// later is caught by the scans below.
+// through scripts/local/native/up.mjs (DAN-434 moved it from scripts/demo).
+// No deploy path exists yet; one that is added later is caught by the scans
+// below.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -64,6 +65,8 @@ test("a script that calls the dbmate CLI with up or migrate passes --strict in t
       if (/\[[^\]]*dbmate[^\]]*"(up|migrate)"/.test(line)) calls.push([file, line]);
     }
   }
-  assert.ok(calls.some(([file]) => file.endsWith(path.join("local", "native", "up.mjs"))), "the native local runner applies migrations");
+  // The exact path, so no other folder whose name merely ends in "local" counts.
+  const runner = path.join("scripts", "local", "native", "up.mjs");
+  assert.ok(calls.some(([file]) => file === runner), "the native local runner applies migrations");
   for (const [file, line] of calls) assert.match(line, /"--strict"/, `${file}: ${line.trim()}`);
 });
