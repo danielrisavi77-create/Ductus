@@ -3,15 +3,17 @@
 // CI applies (pr-metadata-core). Exit 2 blocks the tool call and shows the
 // reason to the agent. For a PR command an internal error blocks too (DAN-137);
 // every other command passes untouched.
-import { evaluateMetadata } from "../engineering/pr-metadata-core.mjs";
 import { changedFiles, extractBody, prAction, readInput } from "./pr-command.mjs";
 
 const input = readInput();
 const command = input.tool_input?.command ?? "";
 const action = prAction(command);
+// Every other command leaves here, before the metadata rules are loaded: this
+// hook runs on each Bash and PowerShell call.
 if (!action) process.exit(0);
 
 try {
+  const { evaluateMetadata } = await import("../engineering/pr-metadata-core.mjs");
   const cwd = input.cwd ?? process.cwd();
   const body = extractBody(command, cwd);
   // `gh pr edit` without a body leaves the description alone; a body file that

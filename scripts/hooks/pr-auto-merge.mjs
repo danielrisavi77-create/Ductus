@@ -8,8 +8,6 @@
 // `--dry-run` prints the decision instead of calling gh (used by the tests).
 import { execFileSync } from "node:child_process";
 
-import { evaluateMetadata } from "../engineering/pr-metadata-core.mjs";
-import { ownerCommandPaths } from "../engineering/protected-paths.mjs";
 import { changedFiles, extractBody, prAction, readInput } from "./pr-command.mjs";
 
 const PR_URL = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
@@ -22,6 +20,9 @@ function output(response) {
 const input = readInput();
 const command = input.tool_input?.command ?? "";
 if (prAction(command) !== "create") process.exit(0);
+// Loaded only for a PR create: this hook runs after each Bash and PowerShell call.
+const { evaluateMetadata } = await import("../engineering/pr-metadata-core.mjs");
+const { ownerCommandPaths } = await import("../engineering/protected-paths.mjs");
 
 const url = output(input.tool_response).match(PR_URL)?.[0];
 const cwd = input.cwd ?? process.cwd();

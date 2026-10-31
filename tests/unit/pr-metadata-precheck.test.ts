@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -227,5 +227,57 @@ describe("pr-auto-merge hook", { timeout: 30_000 }, () => {
     expect(decide('gh pr create --title "x" --body "Risk: low\nTask: DAN-1"', url)).toBe("");
     expect(decide('gh pr create --title "x" --body "Agent: claude:a:nobody\nRisk: low\nTask: DAN-1"', url)).toBe("");
     expect(decide('gh pr create --title "x" --body-file missing.md', url)).toBe("");
+  });
+});
+
+// Both hooks run after each Bash and PowerShell call, so they are started with node
+// directly instead of through bash, and they load the metadata rules only for a PR command.
+describe("PR hooks registration and start-up", { timeout: 30_000 }, () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const settings = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
+  type Hook = { command?: string; args?: string[]; shell?: string; timeout?: number };
+  const entries = (event: string): Hook[] =>
+    settings.hooks[event].flatMap((group: { matcher?: string; hooks: Hook[] }) =>
+      group.matcher === "Bash|PowerShell" ? group.hooks : [],
+    );
+
+  it.each([
+    ["PreToolUse", "pr-metadata-precheck.mjs"],
+    ["PostToolUse", "pr-auto-merge.mjs"],
+  ])("%s registers %s once, started by node without a shell", (event, file) => {
+    const found = entries(event).filter((hook) =>
+      [hook.command, ...(hook.args ?? [])].some((part) => part?.includes(file)),
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      command: "node",
+      args: [`\${CLAUDE_PROJECT_DIR}/scripts/hooks/${file}`],
+    });
+    expect(found[0].shell).toBeUndefined();
+  });
+
+  // A copy of the hooks without scripts/engineering: a module the hook loads for
+  // every command would make the ordinary command fail too.
+  const bare = mkdtempSync(join(tmpdir(), "pr-hooks-bare-"));
+  mkdirSync(join(bare, "scripts/hooks"), { recursive: true });
+  for (const file of ["pr-command.mjs", "pr-metadata-precheck.mjs", "pr-auto-merge.mjs"]) {
+    copyFileSync(join(root, "scripts/hooks", file), join(bare, "scripts/hooks", file));
+  }
+  const runBare = (file: string, command: string) =>
+    spawnSync(process.execPath, [join(bare, "scripts/hooks", file), "--dry-run"], {
+      input: JSON.stringify({ tool_input: { command }, tool_response: { stdout: "" }, cwd: docsOnly }),
+      encoding: "utf8",
+      env,
+    });
+
+  it("passes an ordinary command without loading the metadata rules", () => {
+    expect(runBare("pr-metadata-precheck.mjs", "git status").status).toBe(0);
+    expect(runBare("pr-auto-merge.mjs", "git status").status).toBe(0);
+  });
+
+  it("still blocks a PR command when the metadata rules cannot load", () => {
+    const result = runBare("pr-metadata-precheck.mjs", heredoc("claude:desktop:platforma"));
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("could not run");
   });
 });
