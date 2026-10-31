@@ -81,7 +81,7 @@ Preglednik (Next.js klijent, Tiptap, Dexie)
         +-----> Scaleway Object Storage (privatni bucket, S3 API, javni endpoint s autentikacijom)
         +-----> Scaleway TEM
         +-----> AWS KMS (D-92 Sign nad prefiksiranim digestom; D-93 Sign nad izvornim C2SP tekstom; dva ključa)
-        +-----> OpenRouter (samo kad student pokrene AI; izvan pilota, D-77)
+        +-----> AI pružatelj (samo kad student pokrene AI; u pilotu, D-194; pružatelj još nije izabran)
         +-----> TSA (RFC 3161, jednom dnevno, iz workera)
 Javno: dnevni potpisani korijen + žig (bez sadržaja rada); drugi neovisni primatelji korijena (§4.2)
 ```
@@ -174,7 +174,7 @@ Pravila:
 
 - pg-boss u workeru, `migrate: false` (njegovu shemu vodi `ductus_migrator`). **Tijela poslova su samo ID-ovi** (test).
 - Obavijest nastavniku o novoj reviziji nastaje **najviše jednom po P-03 prozoru** (D-39 potvrđena; odnos s D-06 otvoren u Owner queue, do odluke vrijedi D-06), pa polling od 30 do 60 s ne pretvara pogled u uživo (D-06). Test.
-- AI proxy (izvan pilota, D-77; vrijedi nakon pilota) je obična Next.js ruta koja provodi popis dopuštenih pružatelja po fakultetu i zadatku, uz `provider.only`, isključene fallbackove i `data_collection: deny` u zahtjevu prema OpenRouteru, te ograničenje troška po studentu. Studentov ključ šifrira se aplikacijski: AES-256-GCM, KEK iz okoline, **AAD = `user_id` + namjena + verzija ključa**. Ne `pgsodium` (u najavi ukidanja).
+- AI proxy (u pilotu, D-194; mijenja D-77) je obična Next.js ruta koja provodi popis dopuštenih pružatelja po fakultetu i zadatku, bez automatskog prelaska na pružatelja izvan popisa, uz ograničenje troška. Pružatelj i model računa još nisu odlučeni (D-194 t. 6 i 7, PRIJEDLOG), pa su `provider.only` i `data_collection: deny` iz ranijeg teksta o OpenRouteru samo primjer jamstva koje pružatelj mora dati ugovorom, ne odabrana tehnika. Kineski pružatelji i modeli kineskih tvrtki ne smiju biti dostupni (D-194 t. 2); PRIJEDLOG izvedbe: zabrana je u kodu, ne samo u konfiguraciji fakulteta, s negativnim testom. Ako se čuva ključ, šifrira se aplikacijski: AES-256-GCM, KEK iz okoline, **AAD = `user_id` + namjena + verzija ključa**. Ne `pgsodium` (u najavi ukidanja).
 - Uvoz DOCX i PDF: parsira se **u pregledniku ili u izoliranom poslu** s ograničenjem veličine i vremena (zip bombe, XXE), nikad u web procesu.
 
 ### 4.6 Rekonstrukcija i predaja
@@ -649,7 +649,7 @@ Backend nije posebna faza nego okomiti rez kroz M0 do M11. **Procjena dodatka pr
 | B4 Evidencija | Točan popis prijenosa (§2), novi RPC-i, okidači, uloge, jedan RPC za commit i `reserve`, worker potpis preko KMS-a, kontrolne točke, praznine | Ugovorni testovi nad in-memory i pg/S3; B4 test dokazuje 0-based indekse bez praznina pod konkurentnim prihvatima, rollbackom i idempotentnim retryjem; property testovi; sintetički prolaz na stagingu s povratom | M3 | +5 do 8 |
 | B5 Dnevni korijen i žig | Kumulativni log i dnevna kontrolna točka (D-93), consistency dokaz, KMS potpis uz usporedbu s potpunom vanjskom append-only poviješću, TSA, objava, neovisni primatelji i CLI verifikator | Neovisna provjera prolazi; C2SP known-answer vektor kontrolne točke iz §4.1 prolazi standardnim verifierom, uključujući negativne slučajeve; promjena odsječka ruši provjeru; dan bez TSA-a se oporavlja; test povrata baze dokazuje da se regresivni ili razgranati checkpoint ne potpisuje, žigoše ni objavljuje; konkurentni `reserve` tijekom cutovera s praznim inventarom ne može upasti između snapshot-a i prve vanjski pohranjene kontrolne točke, a nakon otvaranja gatea dobiva indeks 0; kvar cutovera ostavlja gate zatvorenim | M3 do M7 | 4 do 5 |
 | B6 Poslovi i obavijesti | pg-boss, retention (uklj. verzije), e-pošta, `notification` s prozorom P-03 | Ponovljen posao ne duplicira učinak; nastavnik ne dobiva obavijest češće od P-03 | M6, M7, M10 | +1 do 2 |
-| B7 AI proxy | Izvan pilota (D-77) | | nakon pilota | 0 u pilotu |
+| B7 AI proxy | U pilotu (D-194, mijenja D-77); pružatelj i model računa su otvoreni, pa je sadržaj paketa PRIJEDLOG | Samo odobreni pružatelji; kineski pružatelji i modeli nedostupni; regija obrade zabilježena uz odgovor | M9 | procjena nije dana |
 | B8 Predaja | `requested_at`, rekonstrukcija u workeru, usporedba JCS | Točna na svim scenarijima uključujući prazninu i pred-rokovni val | M7 | uključeno u M7 |
 | B9 Operacije i GO | Backup i replika bucketa, mjesečna proba povrata (baza i bucket), alarmi, statusna stranica, `OPERATIONS.md`, load test, OWASP, popis podizvršitelja s DPA-ima | Svi crveni GO uvjeti zeleni; zapisana proba povrata | M11 | +3 do 4 |
 
