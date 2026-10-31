@@ -77,17 +77,13 @@ function rules() {
     }));
 }
 
-// F-114: Mergify sees only statuses, not the risk. Auto-queue is allowed only
-// for the explicit "auto-queue low and test-only PRs" rule that requires the
-// gate-published "Auto-merge eligible" status.
-test("only the low/test-only rule may auto-queue a PR", () => {
+// F-114, F-165: Mergify sees only statuses, not the risk. No rule queues a PR
+// by itself; a PR enters the queue only by the owner's `@Mergifyio queue`.
+test("no rule auto-queues a PR; only the owner's command queues (F-165)", () => {
   const all = rules();
-  const queuing = all.filter((rule) => rule.queue);
-  assert.equal(queuing.length, 1);
-  assert.equal(queuing[0].name, "auto-queue low and test-only PRs");
-  assert.ok(queuing[0].conditions.includes("check-success=Auto-merge eligible"));
-  // #971: a fork never auto-queues, even if the status were green.
-  assert.ok(queuing[0].conditions.includes("head-repo-full-name=danielrisavi77-create/Ductus"));
+  assert.deepEqual(all.filter((rule) => rule.queue).map((rule) => rule.name), []);
+  assert.doesNotMatch(body, /actions:\n\s+queue:/);
+  assert.doesNotMatch(body, /Auto-merge eligible/);
   assert.match(body, /commands_restrictions:\n  queue:\n    conditions:\n      - sender=danielrisavi77-create/);
 });
 test("the refresh rule still exists and a draft or conflict is left alone", () => {
