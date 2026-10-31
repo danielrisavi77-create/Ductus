@@ -15,7 +15,7 @@ Preporuke su istraživačke, nisu odluka o instalaciji; D-09 ostaje isključivo 
 7. H: jsdiff, PROBATI kao ograničen testni oracle za sintetičke promjene teksta, bez zamjene kanonskog replaya.
 8. I: Gatus, PROBATI privatni monitor sintetičkih health provjera u M11, s isključenim javnim metrikama.
 9. F: Cosign, PROBATI provjeru podrijetla jedne deploy slike u M11 uz točan identitet izdavača i offline bundle.
-10. E: StrykerJS, PRAĆENJE kompatibilnosti s Vitestom 5 prije malog mutation pokusa, ne novi gate.
+10. E: StrykerJS, PRAĆENJE kompatibilnosti s Vitestom 5 prije malog mutation pokusa, ne novi demo gate.
 
 ## 2. Kandidati po kategorijama
 
