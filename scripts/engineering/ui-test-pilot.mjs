@@ -8,6 +8,9 @@ import { fileURLToPath } from "node:url";
 export const UI_PATH = "src/components/landing/Landing.module.css";
 export const UI_SPECS = ["landing", "home", "shell", "accessibility", "screenshots"]
   .map((name) => `e2e/${name}.spec.ts`);
+// M0.3 (DAN-114): the standard E2E runs every project of playwright.config.ts
+// on every event, pull requests included (.github/workflows/ci.yml).
+export const E2E_PROJECTS = Object.freeze(["desktop", "mobile", "firefox", "webkit"]);
 const full = (reason, changedFiles = []) => ({ selection: "full", reason, changedFiles, specs: null });
 const sha = (value) => typeof value === "string" && /^[a-f0-9]{40}$/.test(value);
 
@@ -168,8 +171,7 @@ export function runPilot(env = process.env, cwd = process.cwd()) {
   const evidence = { mode: "shadow", scope: "standard-e2e", policyVersion: 2,
     baseSha: sha(env.PR_BASE) ? env.PR_BASE : null, headSha: sha(env.PR_HEAD) ? env.PR_HEAD : null,
     testedSha: sha(env.GITHUB_SHA) ? env.GITHUB_SHA : null, ...plan,
-    ...compareReport(plan, report, { cwd, inventory, projects: env.EVENT_NAME === "pull_request"
-      ? ["desktop", "mobile"] : ["desktop", "mobile", "firefox", "webkit"] }) };
+    ...compareReport(plan, report, { cwd, inventory, projects: E2E_PROJECTS }) };
   mkdirSync(resolve(cwd, "playwright-report"), { recursive: true });
   writeFileSync(resolve(cwd, "playwright-report/ui-test-pilot.json"), JSON.stringify(evidence, null, 2) + "\n");
   const summary = `## UI test selection pilot (shadow)\n\n` +
