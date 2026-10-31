@@ -167,8 +167,10 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr-metadata-precheck.mjs\"",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hooks/pr-metadata-precheck.mjs"
+            ],
             "timeout": 20
           }
         ]
@@ -180,8 +182,10 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr-auto-merge.mjs\"",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hooks/pr-auto-merge.mjs"
+            ],
             "timeout": 30
           }
         ]
