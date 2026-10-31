@@ -108,9 +108,23 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
 // exhausted budget carries nothing.
 export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = CARRY_BUDGET_MS, log = console.log } = {}) {
   const signal = AbortSignal.timeout(budgetMs);
-  const compare = (range) => api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`, { signal });
+  // F-046 c: each compared file gets its git mode at the compared head (from
+  // the head's tree; "absent" for a removed file). A truncated tree throws, so
+  // nothing carries.
+  const compare = async (range) => {
+    const result = await api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`, { signal });
+    const head = range.split("...")[1];
+    const tree = await api(`/repos/${owner}/${repo}/git/trees/${head}?recursive=1`, { signal });
+    if (tree?.truncated !== false || !Array.isArray(tree?.tree)) throw new Error(`the tree of ${head} could not be read whole`);
+    const modes = new Map(tree.tree.map((entry) => [entry.path, String(entry.mode)]));
+    const files = Array.isArray(result?.files)
+      ? result.files.map((file) => ({ ...file, mode: modes.get(file?.filename) ?? "absent" }))
+      : result?.files;
+    return { ...result, files };
+  };
   let candidates;
   let current;
+  let base;
   try {
     // No trusted verdict, override or command names an earlier head: nothing
     // could carry, so the walk and its API calls are skipped (F-148).
@@ -121,11 +135,20 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
     if (reason) log(`Carry-over refused: ${reason}.`);
     candidates = heads;
     if (candidates.length === 0) return new Set();
-    current = await compare(`${pr.base.sha}...${pr.head.sha}`);
+    // F-046 b: anchor both compares on the live tip of the base branch, read
+    // once, not on `pr.base.sha`, which GitHub may leave on an older commit.
+    // Against the live tip a merge that kept the PR's side of a file main has
+    // since changed shows main's change reverted, so the diffs differ.
+    const tipCommit = typeof pr.base?.ref === "string" && pr.base.ref !== ""
+      ? await api(`/repos/${owner}/${repo}/branches/${encodeURIComponent(pr.base.ref)}`, { signal })
+      : null;
+    base = String(tipCommit?.commit?.sha ?? "").toLowerCase();
+    if (!/^[0-9a-f]{40}$/.test(base)) throw new Error("the base branch tip could not be read");
+    current = await compare(`${base}...${pr.head.sha}`);
   } catch (error) {
     log(`Carry-over check failed closed: ${error.message}`);
     return new Set();
   }
-  log(`Carry-over compares ${pr.base.sha}...<head> with ${pr.base.sha}...${pr.head.sha}.`);
-  return carriedByCompare(candidates, current, (sha) => compare(`${pr.base.sha}...${sha}`), log);
+  log(`Carry-over compares ${base}...<head> with ${base}...${pr.head.sha} (live tip of ${pr.base.ref}).`);
+  return carriedByCompare(candidates, current, (sha) => compare(`${base}...${sha}`), log);
 }

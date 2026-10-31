@@ -747,6 +747,9 @@ function changeKey(file) {
     file?.previous_filename ?? null,
     file?.status ?? null,
     file?.patch,
+    // F-046 c: the git mode at that head (regular, executable, link), which
+    // the compare does not show; attached by the caller, absent never matches.
+    file?.mode ?? null,
   ]);
 }
 
@@ -760,7 +763,7 @@ export function sameChange(current, earlier) {
   const a = current?.files ?? [];
   const b = earlier?.files ?? [];
   if (a.length === 0 || a.length !== b.length || a.length >= COMPARE_FILE_CAP) return false;
-  if ([...a, ...b].some((file) => typeof file?.patch !== "string")) return false;
+  if ([...a, ...b].some((file) => typeof file?.patch !== "string" || typeof file?.mode !== "string")) return false;
   const keys = (files) => files.map(changeKey).sort();
   const left = keys(a);
   const right = keys(b);

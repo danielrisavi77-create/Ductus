@@ -40,7 +40,7 @@ const override = (sha) =>
     association: "OWNER",
   });
 
-const file = (filename, patch = "@@ -1 +1 @@\n-a\n+b") => ({ filename, status: "modified", patch, sha: "1".repeat(40) });
+const file = (filename, patch = "@@ -1 +1 @@\n-a\n+b", mode = "100644") => ({ filename, status: "modified", patch, sha: "1".repeat(40), mode });
 
 test("verdicts on a carried earlier head count for the current head", () => {
   const comments = [review(earlier), qa(earlier)];
@@ -180,6 +180,18 @@ test("a file without a patch never carries", () => {
   assert.equal(sameChange({ files: [file("a.mjs"), binary("1".repeat(40))] }, { files: [file("a.mjs"), binary("1".repeat(40))] }), false);
   const renamed = { filename: "b.png", previous_filename: "a.png", status: "renamed", sha: "1".repeat(40) };
   assert.equal(sameChange({ files: [renamed] }, { files: [renamed] }), false);
+});
+
+test("F-046 c: a changed or unknown file mode never carries", () => {
+  const regular = { files: [file("a.sh")] };
+  assert.equal(sameChange(regular, { files: [file("a.sh")] }), true);
+  // Same patch and blob, but the file became executable or a link.
+  for (const mode of ["100755", "120000", "absent"]) {
+    assert.equal(sameChange(regular, { files: [file("a.sh", undefined, mode)] }), false, mode);
+  }
+  // A mode the caller did not attach does not match.
+  const { mode: _unused, ...noMode } = file("a.sh");
+  assert.equal(sameChange({ files: [noMode] }, { files: [noMode] }), false);
 });
 
 test("a merge that changes the base side of the PR's hunk does not carry", () => {

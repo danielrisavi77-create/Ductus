@@ -32,6 +32,13 @@ function routes(path) {
   if (path.endsWith(`/commits/${earlier}`)) return { sha: earlier, parents: [{ sha: "0".repeat(40) }] };
   if (path.includes(`/compare/main...${mainParent}`)) return { status: "behind", files: [] };
   if (path.includes("/compare/")) return files;
+  return shared(path);
+}
+
+// The live base tip and the trees the carry reads modes from (F-046).
+function shared(path) {
+  if (path === "/repos/o/r/branches/main") return { commit: { sha: baseSha } };
+  if (path.includes("/git/trees/")) return { truncated: false, tree: [{ path: "a.mjs", mode: "100644", type: "blob" }] };
   throw new Error(`unexpected ${path}`);
 }
 
@@ -195,7 +202,7 @@ function chainFetch(depth) {
     }
     if (path.includes(`/compare/main...${mainParent}`)) return json({ status: "behind", files: [] });
     if (path.includes("/compare/")) return json(files);
-    throw new Error(`unexpected ${path}`);
+    return json(shared(path));
   };
   return { fetchImpl, calls };
 }
@@ -235,4 +242,42 @@ test("a named head that is not on the path still walks to the PR's own commit (F
   const carried = await carriedHeads(api, "o", "r", pr, [review("d".repeat(40)), review(chainSha(1))], { log: quiet });
   assert.deepEqual([...carried], [chainSha(1)]);
   assert.equal(commitCalls(calls), 5);
+});
+// F-046 b: both compares are anchored on the live tip of the base branch, read
+// once, never on pr.base.sha.
+test("F-046 b: the carry compares against the live base tip, not a stale pr.base.sha", async () => {
+  const stale = { ...pr, base: { sha: "9".repeat(40), ref: "main" } };
+  const { fetchImpl, calls } = fakeFetch();
+  const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+  assert.equal((await carriedHeads(api, "o", "r", stale, comments, { log: quiet })).size, 1);
+  const compares = calls.filter((path) => path.includes("/compare/") && !path.includes(`main...${mainParent}`));
+  assert.equal(compares.length, 2, calls.join("\n"));
+  for (const path of compares) assert.ok(path.includes(`/compare/${baseSha}...`), path);
+  assert.ok(!calls.some((path) => path.includes("9".repeat(40))), "the stale base SHA is never used");
+  assert.equal(calls.filter((path) => path.endsWith("/branches/main")).length, 1, "the tip is read once");
+  // An unreadable tip carries nothing.
+  for (const answer of [{ ok: false, status: 404, text: async () => "Not Found" }, json({ commit: { sha: "not-a-sha" } }), json({})]) {
+    const broken = async (url) => (url.endsWith("/branches/main") ? answer : json(routes(url.replace("https://api.test", ""))));
+    const brokenApi = createApi({ fetchImpl: broken, baseUrl: "https://api.test", token: "t" });
+    assert.equal((await carriedHeads(brokenApi, "o", "r", pr, comments, { log: quiet })).size, 0);
+  }
+});
+
+// F-046 c: the git mode at each head is part of the comparison.
+test("F-046 c: a file whose mode changed, or a tree that is not whole, carries nothing", async () => {
+  for (const [name, treeFor] of [
+    ["executable at the new head", (sha) => ({ truncated: false, tree: [{ path: "a.mjs", mode: sha === head ? "100755" : "100644" }] })],
+    ["a link at the new head", (sha) => ({ truncated: false, tree: [{ path: "a.mjs", mode: sha === head ? "120000" : "100644" }] })],
+    ["missing from the new tree", (sha) => ({ truncated: false, tree: sha === head ? [] : [{ path: "a.mjs", mode: "100644" }] })],
+    ["a truncated tree", () => ({ truncated: true, tree: [{ path: "a.mjs", mode: "100644" }] })],
+    ["no truncated flag", () => ({ tree: [{ path: "a.mjs", mode: "100644" }] })],
+  ]) {
+    const fetchImpl = async (url) => {
+      const path = url.replace("https://api.test", "");
+      const tree = path.match(/\/git\/trees\/([0-9a-f]{40})\?recursive=1$/);
+      return json(tree ? treeFor(tree[1]) : routes(path));
+    };
+    const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+    assert.equal((await carriedHeads(api, "o", "r", pr, comments, { log: quiet })).size, 0, name);
+  }
 });

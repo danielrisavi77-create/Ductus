@@ -26,7 +26,7 @@ const evaluate = (comments, carriedHeads = new Set()) =>
 
 const merge = (sha) => ({ sha, parents: [{}, {}], mergesBase: true });
 const plain = (sha) => ({ sha, parents: [{}] });
-const file = (patch) => ({ filename: "a.mjs", status: "modified", patch });
+const file = (patch) => ({ filename: "a.mjs", status: "modified", patch, mode: "100644" });
 
 test("an override on an earlier head counts once that head is carried", () => {
   assert.equal(evaluate([override(earlier)], new Set([earlier])).state, "success");
