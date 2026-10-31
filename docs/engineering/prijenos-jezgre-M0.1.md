@@ -42,7 +42,7 @@ Izvor ima 1.274 statička unit i property slučaja. Brojanje po recima iz tablic
 | --- | --- | --- |
 | A. Preneseno na istu putanju | 510 | 612 na istim putanjama; nijedna datoteka nema manje slučajeva nego u izvoru |
 | B. Nije preneseno, razlog zapisan u PR-u prijenosa | 143 | – |
-| C. U planu prijenosa ili na popisu §12, a nije preneseno ni zapisano kao izostavljeno | 273 | karta jednakovrijednosti: 100 pokriveno, 24 nedostaje test, 149 nema koda |
+| C. U planu prijenosa ili na popisu §12, a nije preneseno ni zapisano kao izostavljeno | 273 | karta jednakovrijednosti: 100 pokriveno, 24 nedostaje test, 47 čeka kod (M8.4), 102 drugačiji dizajn |
 | D. Izvan opsega prijenosa prema §12 i odlukama u PR-ovima prijenosa | 348 | – |
 
 **A. Preneseno (izvor → Ductus, statički):** `domain/json` 8 → 11; `domain/diff` 7 → 7; `domain/document` 78 → 78 (5 datoteka); `domain/collaboration` 20 → 26; `domain/evidence/basis` 6 → 10; `domain/forensics` (`canonicalization.property`, `crypto`, `evidence-segment-v2`, `forensics`, `jcs`, `signature`) 32 → 47; `forensics/replay` 2 iz `replay-rhythm` → 4 u `replay.test.ts`; `domain/serverSync` (`bootstrap`, `checkpoints`, `contract`) 80 → 84; `domain/sync` (`conflict`, `drain`, `labels`, `recovery`, `states`) 170 → 191; `application/evidence` (`evidence-gateway`, `evidence-outbox`) 21 → 51; `application/ports/evidence-ingest` 2 → 13; `adapters/crypto` (`aws-kms-ed25519-signer`, `development-ed25519-signer`) 6 → 8; `editor` (`schema`, `interop`, `interop.bench`) 53 → 57 (Ductus je brojen po recima; `interop.bench` ima 4 slučaja u oba stabla); `lib/i18n/hr` 25 → 25.
@@ -75,9 +75,9 @@ Izvor ima 1.274 statička unit i property slučaja. Brojanje po recima iz tablic
 
 - **Ukupno:** Ductus ima više testova od izvora u svakom sloju koji izvor ima, osim slojeva koji se po §12 ne prenose (AI Architect `node --test`, OpenFGA).
 - **Skupina A:** 510 izvornih slučajeva preneseno je na istu putanju; nijedna datoteka nema manje slučajeva.
-- **Skupina C (kriterij jednakovrijednosti, odluka vlasnika):** od 273 slučaja 100 pokriva Ductus test, 24 imaju kod bez testa, a 149 opisuju ponašanje koje Ductus nema. Svaki slučaj je u karti jednakovrijednosti.
+- **Skupina C (kriterij jednakovrijednosti, odluka vlasnika):** od 273 slučaja 100 pokriva Ductus test, 24 imaju kod bez testa, a 149 opisuju ponašanje koje Ductus nema: 47 čeka kod koraka M8.4, a 102 su drugačiji dizajn. Svaki slučaj je u karti jednakovrijednosti.
 - **Što se vraća kao test:** 24 slučaja „nedostaje test” idu u zaseban issue (#1071) i zaseban PR; ovaj zapis ih ne piše.
-- **Slučajevi „nema koda”:** dijele se na dvije vrste. Prva je kod koji još nije izgrađen (DOCX izvoz u M8.4, `verified-*`); test se vraća s tim kodom. Druga je drukčiji dizajn Ductusa (nema spremišta sukoba, nema vremenskih provjera po D-24 i pravilu 4, nema obnove baze); tu se test ne vraća. Ta podjela je prijedlog za potvrdu orkestratora.
+- **Slučajevi bez koda:** „čeka kod” je kod koji još nije izgrađen (DOCX izvoz, korak M8.4); test se vraća s tim kodom, a M8.4 se ne zatvara bez njega. „Drugačiji dizajn” je ponašanje koje Ductus namjerno nema (nema spremišta sukoba, nema vremenskih provjera po D-24 i pravilu 4, nema obnove baze, nema registra akademskih objekata); tu se test ne vraća. Podjelu je potvrdio vlasnik (#87 `issuecomment-6548359259`), a pravilo za buduće prijenose je D-195.
 
 ## Naredbe
 

@@ -235,7 +235,9 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 **Ekrani:** S-19 uvoz teksta, S-20 izvoz, N-18 izvoz predanog rada i paket za Merlin.
 
-**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil).
+**Kriterij izlaska koraka M8.4 (D-195):** vraćeni su testovi za 47 izvornih slučajeva označenih „čeka kod (M8.4)” u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, odjeljak „Čeka kod, po koraku”: `src/domain/docx/labels.test.ts` (7), `manifest.test.ts` (13), `serialize.test.ts` (15) i `src/lib/docx/export.test.ts` (12) iz `pisac-editor@6cd0b75`. Za svaki redak karta dobiva Ductus datoteku i ime testa, a oznaka postaje „pokriveno”.
+
+**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil); kriterij izlaska koraka M8.4.
 
 ## M9 AI pomoćnik
 
