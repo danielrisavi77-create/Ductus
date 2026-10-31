@@ -1,4 +1,4 @@
-// DAN-88 K-3b1: explicit local/CI operator command after demo:prepare and app startup.
+// DAN-88 K-3b1: explicit local/CI operator command after local:prepare and app startup.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";

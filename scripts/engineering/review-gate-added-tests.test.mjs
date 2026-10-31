@@ -184,7 +184,7 @@ test("a new test file on a path Next.js serves, or outside the test directories,
     "src/pages/api/x.test.ts",
     "public/x.test.js",
     "infra/fake-oidc/x.test.mjs",
-    "scripts/demo/x.test.mjs",
+    "scripts/local/x.test.mjs",
     "x.test.ts",
   ]) {
     for (const risk of ["standard", "critical"]) {

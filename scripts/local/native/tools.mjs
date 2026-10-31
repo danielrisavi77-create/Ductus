@@ -1,4 +1,4 @@
-// DAN-324 (#799): the pinned Windows binaries of the native demo runner. The
+// DAN-324 (#799): the pinned Windows binaries of the native runner. The
 // runner downloads each archive once from its publisher, checks size and
 // SHA-256 before it is unpacked, and checks the tree hash of the unpacked
 // files before every start, so no binary runs whose bytes differ from the

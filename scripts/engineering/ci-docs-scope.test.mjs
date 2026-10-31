@@ -218,7 +218,7 @@ test("both runtime suites are independent, full-only and keep their own setup an
     assert.match(stack, /^ {4}runs-on: ubuntu-latest$/m);
     assert.ok(stack.includes(`    if: \${{ !cancelled() && needs.scope.result == 'success' && ${full} }}\n`));
     assert.doesNotMatch(stack, /continue-on-error/);
-    for (const command of ["pnpm install --frozen-lockfile", "pnpm stack:up", "pnpm db:migrate", "pnpm demo:prepare", "pnpm stack:down"]) {
+    for (const command of ["pnpm install --frozen-lockfile", "pnpm stack:up", "pnpm db:migrate", "pnpm local:prepare", "pnpm stack:down"]) {
       assert.ok(stack.includes(`run: ${command}\n`), `${name}: ${command}`);
     }
     assert.match(step(stack, "Local auth login password"), /openssl rand -hex 24/);

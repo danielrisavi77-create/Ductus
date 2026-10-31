@@ -17,7 +17,7 @@ test("tests profile only for plain unit tests that the unit job runs", () => {
     "src/domain/x.property.test.ts",
     "tests/property/setup.ts",
     "infra/fake-oidc/accounts.test.mjs",
-    "scripts/demo/up.test.mjs",
+    "scripts/local/up.test.mjs",
     "db/local/psql-target.test.mjs",
     "src/ui/Card.test.tsx",
     "src/a.spec.ts",

@@ -38,8 +38,8 @@
 /docs/MULTI-ACCOUNT.md @danielrisavi77-create
 /docs/AGENT_SYSTEM_V2.md @danielrisavi77-create
 
-# Native demo tooling: critical floor (F-140), outside D-97.
-/scripts/demo/native/** @danielrisavi77-create
+# Native local runner tooling: critical floor (F-140), outside D-97.
+/scripts/local/native/** @danielrisavi77-create
 
 # Plugin shipped to agents: skills, references and plugin.json are all agent instructions.
 /plugins/ductura-engineering/** @danielrisavi77-create

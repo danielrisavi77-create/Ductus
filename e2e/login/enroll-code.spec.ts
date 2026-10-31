@@ -18,7 +18,7 @@ import { localAdminUrl, localAppUrl } from "./local-db-url";
 const e = t.student.enroll;
 const CODE = "ab12-cd34-ef56-7890";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const PROVISION_TEACHER = fileURLToPath(new URL("../../scripts/demo/provision-teacher.mjs", import.meta.url));
+const PROVISION_TEACHER = fileURLToPath(new URL("../../scripts/local/provision-teacher.mjs", import.meta.url));
 const STUDENT = "demo-student@demo.ductus.test";
 
 async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
@@ -188,7 +188,7 @@ test("the real enrollment POST takes a new student straight to the open notice a
        WHERE u.id = $1`, [student]));
   expect(settings.rows).toEqual([{
     display_name: "Demo fakultet (test)", enrollment_attempt_limit: 5, enrollment_attempt_window: "00:15:00",
-  }]); // From normal demo:prepare seed, never inserted by this spec.
+  }]); // From normal local:prepare seed, never inserted by this spec.
   const seeded = await seedCourse(browser, true);
   try {
     const before = await studentState(seeded.course, student);

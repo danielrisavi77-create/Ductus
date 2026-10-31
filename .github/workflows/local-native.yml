@@ -1,16 +1,16 @@
-name: Demo native
+name: Local native
 
-# DAN-324 (#799): the demo runner without Docker, on the Windows it is made
+# DAN-324 (#799): the local runner without Docker, on the Windows it is made
 # for. Docker is stopped first, so every step below proves the runner alone.
 # Not a required status (docs/ENGINEERING_SYSTEM.md §10 keeps its list).
 on:
   pull_request:
     paths:
-      - "scripts/demo/**"
+      - "scripts/local/**"
       - "db/local/**"
       - "db/migrations/**"
       - "infra/fake-oidc/**"
-      - ".github/workflows/demo-native.yml"
+      - ".github/workflows/local-native.yml"
       # The runner calls dbmate's and next's dist files and the Node of .nvmrc.
       - "package.json"
       - "pnpm-lock.yaml"
@@ -21,12 +21,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: demo-native-${{ github.ref }}
+  group: local-native-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   native:
-    name: Demo native (Windows)
+    name: Local native (Windows)
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
@@ -57,13 +57,13 @@ jobs:
           echo "DUCTUS_AUTH_LOCAL_PASSWORD=${password}" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
       # From an empty %LOCALAPPDATA%\Ductus: download, verify, initdb, migrate.
-      - run: pnpm demo:up:native --prepare-only
+      - run: pnpm local:up:native --prepare-only
       # The second run changes nothing and must succeed as well.
-      - run: pnpm demo:up:native --prepare-only
+      - run: pnpm local:up:native --prepare-only
       - name: Install login browser
         shell: bash
         run: bash scripts/engineering/playwright-install.sh chromium
-      # With the K-3 demo data, as the demo is run: "Demo nastavnik" is a
+      # With the K-3 sample data, as the runner is used: "Demo nastavnik" is a
       # confirmed teacher (T6), which on Compose an earlier spec provisions
       # through docker. The specs that call docker stay on Compose CI.
       - name: Login E2E against the native runner
@@ -72,28 +72,28 @@ jobs:
         run: |
           $logs = Join-Path $env:RUNNER_TEMP "native-runner"
           New-Item -ItemType Directory -Force -Path $logs | Out-Null
-          $runner = Start-Process -FilePath node -ArgumentList "scripts/demo/native/up.mjs" -NoNewWindow -PassThru `
+          $runner = Start-Process -FilePath node -ArgumentList "scripts/local/native/up.mjs" -NoNewWindow -PassThru `
             -RedirectStandardOutput (Join-Path $logs "stdout.log") -RedirectStandardError (Join-Path $logs "stderr.log")
           $ready = $false
           for ($i = 0; $i -lt 120 -and -not $runner.HasExited; $i++) {
             try { Invoke-WebRequest -Uri http://localhost:3000/ -UseBasicParsing -TimeoutSec 10 | Out-Null; $ready = $true; break } catch { Start-Sleep -Seconds 5 }
           }
-          if (-not $ready) { pnpm demo:up:native --stop; throw "the native app did not answer on port 3000" }
+          if (-not $ready) { pnpm local:up:native --stop; throw "the native app did not answer on port 3000" }
           pnpm exec playwright test --config playwright.login.config.ts `
             e2e/login/login.spec.ts e2e/login/sign-out.spec.ts e2e/login/shell-sign-out.spec.ts `
             e2e/login/prijava.spec.ts e2e/login/session-and-panels.spec.ts e2e/login/submission.spec.ts
           $code = $LASTEXITCODE
-          pnpm demo:up:native --stop
+          pnpm local:up:native --stop
           exit $code
-      - name: Full runner twice, with demo data
+      - name: Full runner twice, with sample data
         run: |
           for ($round = 1; $round -le 2; $round++) {
-            $runner = Start-Process -FilePath node -ArgumentList "scripts/demo/native/up.mjs" -NoNewWindow -PassThru
+            $runner = Start-Process -FilePath node -ArgumentList "scripts/local/native/up.mjs" -NoNewWindow -PassThru
             $status = 0
             for ($i = 0; $i -lt 120 -and -not $runner.HasExited; $i++) {
               try { $status = (Invoke-WebRequest -Uri http://localhost:3000/ -UseBasicParsing -TimeoutSec 10).StatusCode; break } catch { Start-Sleep -Seconds 5 }
             }
-            pnpm demo:up:native --stop
+            pnpm local:up:native --stop
             if ($status -ne 200) { throw "round ${round}: GET / gave ${status}" }
           }
       - name: No process is left behind

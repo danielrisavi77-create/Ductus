@@ -12,7 +12,7 @@ import { localAppUrl } from "./local-db-url";
 // the local operator bootstrap prerequisite without pretending F-6 UI exists.
 // The CLI reaches only the local compose database; no HTTP or production
 // API may turn an OIDC affiliation into a confirmed teacher role.
-const PROVISION_SCRIPT = fileURLToPath(new URL("../../scripts/demo/provision-teacher.mjs", import.meta.url));
+const PROVISION_SCRIPT = fileURLToPath(new URL("../../scripts/local/provision-teacher.mjs", import.meta.url));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 test("synthetic teacher needs explicit local operator provisioning", async ({ page, context, browser }) => {

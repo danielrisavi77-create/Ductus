@@ -12,7 +12,7 @@ const AUTH_DATABASE_USER = "ductus_auth_local";
 const EXAMPLE_AUTH_PASSWORD = "<DUCTUS_AUTH_LOCAL_PASSWORD>";
 const EVIDENCE_KEY_SCRIPT = "db/local/evidence-signing-key.mjs";
 const EVIDENCE_STORAGE_SCRIPT = "db/local/evidence-storage-domain.mjs";
-const DEMO_DATA_SCRIPT = "db/local/demo-k3.mjs";
+const SAMPLE_DATA_SCRIPT = "db/local/demo-k3.mjs";
 const STORAGE_DOMAINS_VAR = "EVIDENCE_STORAGE_DOMAINS";
 // The evidence scripts reach Postgres through docker, not through the database URLs checked below,
 // so these variables could aim them at a non-local daemon or container (F-100).
@@ -50,10 +50,10 @@ function withoutDockerSteering(source) {
   return Object.fromEntries(Object.entries(source).filter(([name]) => !DOCKER_STEERING.test(name)));
 }
 
-export function createDemoEnvironment(source = process.env) {
+export function createLocalEnvironment(source = process.env) {
   for (const name of DOCKER_TARGET_VARS) {
     if (source[name]) {
-      throw new Error(`${name} must be unset for the demo: the evidence setup must reach the local Compose database only.`);
+      throw new Error(`${name} must be unset for the local run: the evidence setup must reach the local Compose database only.`);
     }
   }
   const appUrl = localDatabaseUrl(
@@ -125,7 +125,7 @@ export function pnpmInvocation(env, script, platform = process.platform, nodeExe
     return { command: nodeExecutable, args: [env.npm_execpath, script] };
   }
   if (platform === "win32") {
-    throw new Error("Run the demo through pnpm so its CLI can be started without a shell.");
+    throw new Error("Run it through pnpm so its CLI can be started without a shell.");
   }
   return { command: "pnpm", args: [script] };
 }
@@ -218,10 +218,10 @@ export function parseStorageDomainsLine(stdout) {
 /**
  * Run the shared clean-runner preparation sequence; CI omits only the dev
  * server. After the seed, the evidence signing key and the storage domain of
- * the demo institution are registered (both idempotent), and the storage
+ * the local institution are registered (both idempotent), and the storage
  * configuration goes to the app through its environment, never to disk.
  */
-export async function runDemoLifecycle(env, runScript = runPnpm, includeApp = true, runNode = runNodeCapture) {
+export async function runLocalLifecycle(env, runScript = runPnpm, includeApp = true, runNode = runNodeCapture) {
   for (const script of ["stack:up", "db:migrate", "db:seed"]) {
     const code = await runScript(script, env);
     if (code !== 0) return code;
@@ -239,39 +239,39 @@ export async function runDemoLifecycle(env, runScript = runPnpm, includeApp = tr
   const appEnv = { ...env, [STORAGE_DOMAINS_VAR]: domains };
   if (!includeApp) return 0;
 
-  // K-3 course, assignment and enrolment (#635): demo:up only, because the CI
-  // E2E tests after demo:prepare start from an unconfirmed teacher.
-  const k3 = await runNode(DEMO_DATA_SCRIPT, env);
+  // K-3 course, assignment and enrolment (#635): local:up only, because the CI
+  // E2E tests after local:prepare start from an unconfirmed teacher.
+  const k3 = await runNode(SAMPLE_DATA_SCRIPT, env);
   if (k3.code !== 0) return k3.code;
   return runScript("dev", appEnv);
 }
-async function startDemo(env, prepareOnly) {
+async function startLocal(env, prepareOnly) {
   console.log(prepareOnly
-    ? "Preparing the local Ductus demo stack, migrations, synthetic institutions, evidence key and storage."
-    : "Starting the local Ductus demo stack, migrations, synthetic institutions, evidence key and storage, K-3 course and enrolment, and app.");
+    ? "Preparing the local Ductus stack, migrations, synthetic institutions, evidence key and storage."
+    : "Starting the local Ductus stack, migrations, synthetic institutions, evidence key and storage, K-3 course and enrolment, and app.");
   console.log("A local auth password is generated for this run and is not written to disk or printed.");
-  const code = await runDemoLifecycle(env, runPnpm, !prepareOnly);
+  const code = await runLocalLifecycle(env, runPnpm, !prepareOnly);
   if (code !== 0) process.exitCode = code;
 }
 
 async function main() {
   let env;
   try {
-    env = createDemoEnvironment();
+    env = createLocalEnvironment();
   } catch (error) {
-    console.error(`Demo setup refused: ${error.message}`);
+    console.error(`Local setup refused: ${error.message}`);
     process.exitCode = 1;
     return;
   }
 
   process.on("SIGINT", () => forwardSignal("SIGINT"));
   process.on("SIGTERM", () => forwardSignal("SIGTERM"));
-  await startDemo(env, process.argv.includes("--prepare-only"));
+  await startLocal(env, process.argv.includes("--prepare-only"));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(() => {
-    console.error("Demo setup failed.");
+    console.error("Local setup failed.");
     process.exitCode = 1;
   });
 }

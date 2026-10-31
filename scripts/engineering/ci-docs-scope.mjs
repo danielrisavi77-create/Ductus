@@ -16,7 +16,7 @@ const ORDINARY_DOCS = new Set([
   "docs/privacy/05-otvorena-pitanja.md",
 ]);
 
-// The tests profile skips the stack, DB, browser, property, demo and build steps
+// The tests profile skips the stack, DB, browser, property, local launcher and build steps
 // (#971), so it takes only paths on the review exemption's allowlist
 // (isNewTestExempt: src/ without src/app/ and src/pages/, or tests/unit/) that
 // the always-on vitest `unit` project runs: *.test.ts, not property or

@@ -34,7 +34,7 @@ export async function insertDemoDocument(client: pg.Client, owner: Owner, projec
 
 /**
  * The package of the demo document, made once, when the institution has
- * exactly one evidence domain (`pnpm demo:prepare` registers it; CI does it
+ * exactly one evidence domain (`pnpm local:prepare` registers it; CI does it
  * before the login E2E). Without one the work stays not configured, as
  * open_student_work answers then. A document from before revision 0 had its
  * shape (hash 0…0, no checkpoint) can take no commit, and its revisions never
@@ -45,7 +45,7 @@ export async function ensureDemoPackage(client: pg.Client): Promise<void> {
     `SELECT d.current_content_hash = repeat('0', 64) AS zero FROM evidence.document d WHERE d.id = $1`,
     [LOCAL_DEMO_DOCUMENT_ID]);
   if (document?.zero) {
-    throw new Error("the local database holds the demo document from before revision 0; start the local stack from an empty volume (docker compose down -v, then pnpm demo:up)");
+    throw new Error("the local database holds the demo document from before revision 0; start the local stack from an empty volume (docker compose down -v, then pnpm local:up)");
   }
   // Same profile and payload limit (D-96) as open_student_work.
   await client.query(

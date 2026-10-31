@@ -28,7 +28,7 @@ async function d97Paths(): Promise<string[]> {
 // Owned for the record, but outside D-97: product rules and the native demo
 // tooling (critical floor, F-140), not rules about who may write, review,
 // merge or bypass a check.
-const ownedOutsideD97 = new Set(["/docs/PRODUCT.md", "/scripts/demo/native/**"]);
+const ownedOutsideD97 = new Set(["/docs/PRODUCT.md", "/scripts/local/native/**"]);
 
 describe("CODEOWNERS covers the D-97 paths", () => {
   it("gives every rule the owner account and no rule clears an owner", () => {

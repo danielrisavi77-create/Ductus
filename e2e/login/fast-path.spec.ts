@@ -62,7 +62,7 @@ async function answerRoute(page: Page): Promise<unknown[]> {
 async function asTeacher(page: Page, path = `/nastavnik/brz-put?zadatak=${ASSIGNMENT}`, title: string = t.title): Promise<void> {
   await signIn(page, "/", "Demo nastavnik");
   roleGrantedByThisTest = !(await teacherRoleActive());
-  await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
+  await run("node", ["scripts/local/provision-teacher.mjs"], { cwd: ROOT });
   await page.goto(path);
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 }

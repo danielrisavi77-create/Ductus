@@ -96,14 +96,14 @@ export function runBy(commands, file) {
 test("every node:test file on a critical path runs in CI", () => {
   const commands = ciTestCommands(read(".github/workflows/ci.yml"), JSON.parse(read("package.json")).scripts);
   const critical = trackedNodeTests().filter((file) => matchesPath(file, CRITICAL_PATHS));
-  assert.ok(critical.includes("scripts/demo/bootstrap-accounts.test.mjs"), "the critical list is read");
+  assert.ok(critical.includes("scripts/local/bootstrap-accounts.test.mjs"), "the critical list is read");
   assert.ok(critical.includes(".claude/skills/run-ductus/process-command.test.mjs"), "the whole tree is read");
   assert.deepEqual(critical.filter((file) => !runBy(commands, file)), []);
 });
 
 test("the matcher follows test:* scripts and globs, and refuses what no command names", () => {
   const ci = [
-    "      - run: pnpm test:demo && pnpm test:fake-oidc",
+    "      - run: pnpm test:local && pnpm test:fake-oidc",
     "      - name: Engineering",
     "        run: shopt -s failglob; node --test scripts/engineering/*.test.mjs skills/*/*.test.mjs",
     "      - run: |",
@@ -114,7 +114,7 @@ test("the matcher follows test:* scripts and globs, and refuses what no command 
     "",
   ].join("\n");
   const scripts = {
-    "test:demo": "node --test a/x.test.mjs && pnpm test:inner", "test:inner": "node --test b/y.test.mjs",
+    "test:local": "node --test a/x.test.mjs && pnpm test:inner", "test:inner": "node --test b/y.test.mjs",
     "test:named": "node --test named/n.test.mjs",
   };
   const commands = ciTestCommands(ci, scripts);
