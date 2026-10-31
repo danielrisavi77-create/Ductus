@@ -1,0 +1,61 @@
+name: WebKit macOS
+
+# DAN-114 (#1040): the first Safari level. Playwright's WebKit on a macOS
+# runner is closer to Safari than WebKit on Linux (ci.yml, D-108 d). The
+# runner has no Docker and no Compose stack; the `webkit` project of
+# playwright.config.ts needs none (first run, #1041), so it runs whole and
+# leaves nothing out; it stays red until #1046 is fixed (docs/TESTING.md 2).
+# Advisory: not a required status (docs/ENGINEERING_SYSTEM.md §10 keeps that
+# list, .github/mergify.yml its copy).
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 2 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/webkit-macos.yml"
+      - "scripts/engineering/webkit-macos.mjs"
+      - "playwright.config.ts"
+      - "e2e/support/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: webkit-macos-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  webkit:
+    name: WebKit E2E (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # macOS needs no system packages, so no --with-deps.
+      - name: Install WebKit
+        run: pnpm exec playwright install webkit
+      # The whole `webkit` project with Playwright's exit code; the job summary
+      # tells failures tracked in #1046 from new ones.
+      - name: WebKit E2E
+        env:
+          E2E_NO_BUILD: "1"
+        run: node scripts/engineering/webkit-macos.mjs
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-webkit-macos
+          path: playwright-report/
+          retention-days: 14
