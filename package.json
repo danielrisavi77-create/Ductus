@@ -30,11 +30,12 @@
     "local:up:native": "node scripts/local/native/up.mjs",
     "local:bootstrap-accounts": "node scripts/local/bootstrap-accounts.mjs",
     "db:new": "dbmate new",
+    "db:sum": "node scripts/engineering/migrations-ledger.mjs --write",
     "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
     "db:provision:app": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/app-login.sql",
     "db:provision:auth": "node scripts/db/provision-auth.mjs",
     "db:seed": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/seed.sql",
-    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up && pnpm db:provision:app && pnpm db:provision:auth",
+    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up --strict && pnpm db:provision:app && pnpm db:provision:auth",
     "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema rollback",
     "db:status": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" status",
     "orch:status": "node scripts/orchestrator/pr-status.mjs",
@@ -54,9 +55,7 @@
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
     "agents:lint": "pnpm dlx --allow-build=agnix agnix@0.57.0 .",
     "tokens:report": "node scripts/engineering/token-report.mjs",
-    "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize",
-    "storybook": "storybook dev --host 127.0.0.1 --port 6006 --no-open --no-version-updates --disable-telemetry",
-    "storybook:build": "storybook build --output-dir node_modules/.cache/storybook-static --disable-telemetry"
+    "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize"
   },
   "dependencies": {
     "@tiptap/core": "^3.31.3",
@@ -83,7 +82,6 @@
     "@fast-check/vitest": "^0.5.0",
     "@playwright/test": "^1.63.0",
     "@smithy/signature-v4": "5.7.4",
-    "@storybook/nextjs-vite": "10.6.3",
     "@types/node": "^24.10.2",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
@@ -95,7 +93,6 @@
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.2",
     "lefthook": "^2.1.16",
-    "storybook": "10.6.3",
     "typescript": "^5.9.3",
     "vite": "8.3.3",
     "vitest": "^5.0.1"

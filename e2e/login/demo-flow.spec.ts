@@ -560,6 +560,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
     expect(rows).toEqual([{ version_no: current!.version }]);
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
+    // DAN-330: the work starts on the student's click.
+    await page.getByRole("button", { name: t.workspace.startWork }).click();
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
     await expect(page.locator(".brand-line__context")).toHaveText(`${COURSE_NAME} / ${ASSIGNMENT_TITLE}`);
     k4Document = await workDocument(id);
