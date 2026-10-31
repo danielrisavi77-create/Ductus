@@ -101,10 +101,10 @@ test("nothing is authorized while the gate is not green", () => {
 });
 
 test("evaluatePullRequest returns the authorization beside the gate result", () => {
-  const pr = { body: bodyWith("low"), head: { sha: head }, changed_files: 1, user: { login: "x" } };
+  const pr = { body: bodyWith("standard"), head: { sha: head }, changed_files: 1, user: { login: "x" } };
   const out = evaluatePullRequest({
     pr,
-    files: [{ filename: "docs/a.md" }],
+    files: [{ filename: "src/a.ts" }],
     comments: [],
     prReviews: [],
     reviewComments: [],
