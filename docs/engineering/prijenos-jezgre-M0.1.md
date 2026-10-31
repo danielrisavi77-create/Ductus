@@ -1,8 +1,10 @@
 # Zapis prijenosa jezgre iz `pisac-editor` (M0.1)
 
-Datum: 31. 10. 2026. · Korak M0.1 iz `docs/PROGRAM-RAZRADA.md` · DAN-376 · autor `claude:p2:platforma`
+Datum: 31. 10. 2026. · Korak M0.1 iz `docs/PROGRAM-RAZRADA.md` · DAN-376 · autor `claude:pl2:platforma`
 
-Zapis daje broj testova po sloju u izvoru i na `main`, točne naredbe brojanja i usporedbu s izlaznim kriterijem M0 iz `docs/PROGRAM.md`: „Svi preneseni testovi zeleni, isti broj kao u izvoru”. Popis što se prenosi je u `docs/ARCHITECTURE.md` §12 i `docs/BACKEND.md` §2. Zapis ne odlučuje prihvaća li se kriterij; to je pitanje 9 u `docs/PROGRAM-RAZRADA.md`.
+Zapis daje broj testova po sloju u izvoru i na `main`, točne naredbe brojanja i usporedbu s izlaznim kriterijem M0 iz `docs/PROGRAM.md`: „Svi preneseni testovi zeleni, isti broj kao u izvoru”. Popis što se prenosi je u `docs/ARCHITECTURE.md` §12 i `docs/BACKEND.md` §2.
+
+Odluka vlasnika 31. 10. 2026. (#87 `issuecomment-6547174354`): kriterij „isti broj” zamjenjuje dokumentirana jednakovrijednost. Za svaki izvorni slučaj iz skupine C zapisano je koji ga Ductus test pokriva, u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`. Što nije pokriveno vraća se kao test. Izvorni broj testova po datoteci nije uvjet.
 
 ## Točke mjerenja
 
@@ -34,16 +36,16 @@ Napomene uz tablicu:
 
 ## Usporedba po prenesenim datotekama (unit i property, statički)
 
-Izvor ima 1.270 statičkih unit i property slučajeva. Raspored:
+Izvor ima 1.274 statička unit i property slučaja. Brojanje po recima iz tablice gore (1.264 + 6) ne vidi četiri slučaja kojima je `it(` u istom retku kao `describe(`: `interop.bench` (skupina A), `verified-object-binding` i `verified-process-history` (skupina C) i `verification/lekta` (skupina D). Ovdje su ti slučajevi ubrojeni. Raspored:
 
 | Skupina | Slučajeva u izvoru | Stanje u Ductusu |
 | --- | --- | --- |
-| A. Preneseno na istu putanju | 509 | 612 na istim putanjama; nijedna datoteka nema manje slučajeva nego u izvoru |
+| A. Preneseno na istu putanju | 510 | 612 na istim putanjama; nijedna datoteka nema manje slučajeva nego u izvoru |
 | B. Nije preneseno, razlog zapisan u PR-u prijenosa | 143 | – |
-| C. U planu prijenosa ili na popisu §12, a nije preneseno ni zapisano kao izostavljeno | 271 | vlastite zamjene za dio, bez zapisa usporedbe |
-| D. Izvan opsega prijenosa prema §12 i odlukama u PR-ovima prijenosa | 347 | – |
+| C. U planu prijenosa ili na popisu §12, a nije preneseno ni zapisano kao izostavljeno | 273 | karta jednakovrijednosti: 97 pokriveno, 23 nedostaje test, 153 nema koda |
+| D. Izvan opsega prijenosa prema §12 i odlukama u PR-ovima prijenosa | 348 | – |
 
-**A. Preneseno (izvor → Ductus, statički):** `domain/json` 8 → 11; `domain/diff` 7 → 7; `domain/document` 78 → 78 (5 datoteka); `domain/collaboration` 20 → 26; `domain/evidence/basis` 6 → 10; `domain/forensics` (`canonicalization.property`, `crypto`, `evidence-segment-v2`, `forensics`, `jcs`, `signature`) 32 → 47; `forensics/replay` 2 iz `replay-rhythm` → 4 u `replay.test.ts`; `domain/serverSync` (`bootstrap`, `checkpoints`, `contract`) 80 → 84; `domain/sync` (`conflict`, `drain`, `labels`, `recovery`, `states`) 170 → 191; `application/evidence` (`evidence-gateway`, `evidence-outbox`) 21 → 51; `application/ports/evidence-ingest` 2 → 13; `adapters/crypto` (`aws-kms-ed25519-signer`, `development-ed25519-signer`) 6 → 8; `editor` (`schema`, `interop`, `interop.bench`) 52 → 57; `lib/i18n/hr` 25 → 25.
+**A. Preneseno (izvor → Ductus, statički):** `domain/json` 8 → 11; `domain/diff` 7 → 7; `domain/document` 78 → 78 (5 datoteka); `domain/collaboration` 20 → 26; `domain/evidence/basis` 6 → 10; `domain/forensics` (`canonicalization.property`, `crypto`, `evidence-segment-v2`, `forensics`, `jcs`, `signature`) 32 → 47; `forensics/replay` 2 iz `replay-rhythm` → 4 u `replay.test.ts`; `domain/serverSync` (`bootstrap`, `checkpoints`, `contract`) 80 → 84; `domain/sync` (`conflict`, `drain`, `labels`, `recovery`, `states`) 170 → 191; `application/evidence` (`evidence-gateway`, `evidence-outbox`) 21 → 51; `application/ports/evidence-ingest` 2 → 13; `adapters/crypto` (`aws-kms-ed25519-signer`, `development-ed25519-signer`) 6 → 8; `editor` (`schema`, `interop`, `interop.bench`) 53 → 57 (Ductus je brojen po recima; `interop.bench` ima 4 slučaja u oba stabla); `lib/i18n/hr` 25 → 25.
 
 **B. Nije preneseno, s razlogom u PR-u prijenosa:**
 
@@ -55,7 +57,7 @@ Izvor ima 1.270 statičkih unit i property slučajeva. Raspored:
 | `adapters/crypto/azure-key-vault-signer` | 5 | odluka uz B-1 (#32) |
 | `application/ports/revisions` | 2 | koristi ga samo Supabase adapter (#20) |
 
-**C. Nije preneseno, bez zapisa usporedbe (otvoreno):**
+**C. Nije preneseno doslovno; za svaki slučaj karta u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`:**
 
 | Izvor | Slučajeva | Što postoji u Ductusu |
 | --- | --- | --- |
@@ -63,7 +65,7 @@ Izvor ima 1.270 statičkih unit i property slučajeva. Raspored:
 | `lib/sync/drainRunner` (plan F12) | 40 | novi `src/lib/sync/drain-runner.ts` (#408, DAN-49), 12 statičkih slučajeva |
 | `editor/process-capture*` (plan F5) | 25 | novi `src/editor/capture*`; nije doslovni prijenos |
 | `lib/process-ledger/*` (plan F6) | 14 | nema |
-| `domain/forensics/verified-*`, `evidence-v2-legacy-compat` | 11 | nema; #9 ih odgađa „nakon Frontendova editora” |
+| `domain/forensics/verified-*`, `evidence-v2-legacy-compat` | 13 | nema; #9 ih odgađa „nakon Frontendova editora” |
 | `domain/docx/*`, `lib/docx/export` | 47 | nema; DOCX izvoz je na popisu §12 |
 | `lib/document/queries` | 8 | nema; na popisu §12 |
 
@@ -72,8 +74,10 @@ Izvor ima 1.270 statičkih unit i property slučajeva. Raspored:
 ## Ocjena prema kriteriju
 
 - **Ukupno:** Ductus ima više testova od izvora u svakom sloju koji izvor ima, osim slojeva koji se po §12 ne prenose (AI Architect `node --test`, OpenFGA).
-- **Doslovno „isti broj kao u izvoru” za prenesene module:** ispunjeno za skupinu A (509 izvornih slučajeva, nijedna datoteka nema manje). Nije ispunjeno za skupinu C: 271 izvorni slučaj iz plana prijenosa nije prenesen, a zamjenski kod nema zapisanu usporedbu s izvornim testovima.
-- **Za odluku (pitanje 9 u `docs/PROGRAM-RAZRADA.md`):** prihvaća li se skupina C kao zamijenjena novim kodom ili se traži zapis „izvorni test → test u Ductusu” za journal, drain runner i capture te prijenos ili izričito izostavljanje DOCX-a, `queries`, `process-ledger` i `verified-*`.
+- **Skupina A:** 510 izvornih slučajeva preneseno je na istu putanju; nijedna datoteka nema manje slučajeva.
+- **Skupina C (kriterij jednakovrijednosti, odluka vlasnika):** od 273 slučaja 97 pokriva Ductus test, 23 imaju kod bez testa, a 153 opisuju ponašanje koje Ductus nema. Svaki slučaj je u karti jednakovrijednosti.
+- **Što se vraća kao test:** 23 slučaja „nedostaje test” idu u zaseban issue i zaseban PR; ovaj zapis ih ne piše.
+- **Slučajevi „nema koda”:** dijele se na dvije vrste. Prva je kod koji još nije izgrađen (DOCX izvoz u M8.4, dio `queries`, `verified-*`); test se vraća s tim kodom. Druga je drukčiji dizajn Ductusa (nema spremišta sukoba, nema vremenskih provjera po D-24 i pravilu 4, nema obnove baze); tu se test ne vraća. Ta podjela je prijedlog za potvrdu orkestratora.
 
 ## Naredbe
 

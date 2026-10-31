@@ -23,7 +23,7 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Cilj:** repo, CI, lokalni stog i pravila gradnje na kojima stoje sve ostale faze.
 
-**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 49 migracija i 47 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. **Djelomično:** izlazni kriterij „isti broj prenesenih testova kao u izvoru” nema zapisa; E2E izvan Chromiuma nije obvezan (D-191 t. 4 ga vraća u opseg); ljuska još nije u konačnom vizualnom smjeru D-188.
+**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 49 migracija i 47 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. **Djelomično:** kriterij „isti broj prenesenih testova kao u izvoru” vlasnik je zamijenio dokumentiranom jednakovrijednošću (#87 c.6547174354); karta je u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, a 23 nepokrivena slučaja vraćaju se kao testovi; E2E izvan Chromiuma nije obvezan (D-191 t. 4 ga vraća u opseg); ljuska još nije u konačnom vizualnom smjeru D-188.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
@@ -335,5 +335,5 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 6. D-63 (napredak i „preskočena stanka”) prema D-56 i pravilu 4 (DAN-104).
 7. Kriteriji popisa „tko treba pomoć” (N-12, DAN-102).
 8. RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).
-9. Izlazni kriterij M0 „isti broj testova kao u izvoru”: prihvaća li se zapis iz M0.1 kao dokaz ili se kriterij mijenja.
+9. ~~Izlazni kriterij M0 „isti broj testova kao u izvoru”.~~ Riješeno 31. 10. 2026. odlukom vlasnika (#87 c.6547174354): umjesto broja vrijedi zapis jednakovrijednosti za svaki neprenesen izvorni slučaj (`docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`); nepokriveno se vraća kao test.
 10. Sastav backend dodatka (otvoreno pitanje uz D-99) gubi rok 16. 11. 2026. s rasporedom po valovima; rješava li se uz novi raspored.
