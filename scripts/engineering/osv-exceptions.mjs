@@ -4,9 +4,9 @@
 // every package, version and lockfile, so the dev-only claim needs its own check.
 // Run by osv-exceptions.test.mjs in the "Engineering system unit tests" CI step.
 
-export const ALLOWED_IDS = ["GHSA-3g3m-2fjr-6pw4", "GHSA-g3hv-75wg-m249", "GHSA-vfj7-8cjw-p6xm"];
+export const ALLOWED_IDS = ["GHSA-g3hv-75wg-m249", "GHSA-vfj7-8cjw-p6xm"];
 export const IGNORE_UNTIL_WINDOW = { earliest: "2026-11-01", latest: "2027-01-03" };
-export const DEV_ONLY_PACKAGES = ["glob", "minimatch"];
+export const DEV_ONLY_PACKAGES = ["minimatch"];
 export const OSV_STEP_NAME = "OSV-Scanner (lockfiles)";
 export const OSV_SCAN_ARGS = [
   "scan", "source",
