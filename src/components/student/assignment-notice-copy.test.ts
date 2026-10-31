@@ -30,10 +30,17 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("names the key and how long it is held as not recorded, and no measure from time", () => {
     expect(s.notRecorded.inputs).toContain("tipka");
     expect(s.notRecorded.inputs).toContain("držana");
-    expect(s.notRecorded.inputs).toContain("nikad se ne računaju brzina, ritam ni bilo kakva mjera");
-    // D-63: the replay skips long pauses without their length, so pauses are not "never computed".
-    expect(s.notRecorded.inputs).not.toContain("pauze");
-    expect(s.notRecorded.inputs).toContain("preskače duge stanke i ne navodi koliko su trajale");
+    // PRODUCT §5 rule 4 lists pauses among what is never computed from time.
+    expect(s.notRecorded.inputs).toContain("nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera");
+  });
+
+  it("says the replay neither skips nor marks pauses and only jumps by sessions (D-63, 31. 10. 2026.)", () => {
+    expect(s.notRecorded.inputs).toContain("Reprodukcija neće preskakati ni isticati stanke");
+    expect(s.notRecorded.inputs).toContain("skočiti na početak sesije iz sažetka procesa");
+    // The removed D-63 (a): no skipped pauses and no mention of their length.
+    for (const text of notice()) {
+      expect(text).not.toMatch(/preskače duge stanke|preskočena stanka|koliko su trajale/);
+    }
   });
 
   it("announces every change character by character, only for the live view and the replay", () => {

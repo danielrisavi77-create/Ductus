@@ -804,7 +804,9 @@ export const hr = {
   // and PRODUCT §5 rules 4 and 7; D-24 and D-81 for the 30-second steps.
   // AssignmentNotice renders recorded, notRecorded and teacher in key order.
   // Live view and replay are not built yet, so the notice says what will happen
-  // in this assignment; D-63 for the skipped long pauses of the replay.
+  // in this assignment. D-63 as corrected on 31. 10. 2026. (#87 c.6544361788,
+  // PRODUCT §5 rule 4 exception): the replay neither skips nor marks pauses and
+  // only offers a jump by the P-01 sessions of the process summary.
   student: {
     title: "Zadatak",
     // DAN-344 (Archivum S03): the way back from the notice to /zadaci, verbatim from the package.
@@ -897,7 +899,7 @@ export const hr = {
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
-      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, ritam ni bilo kakva mjera. Reprodukcija preskače duge stanke i ne navodi koliko su trajale.",
+      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera. Reprodukcija neće preskakati ni isticati stanke; moći će samo skočiti na početak sesije iz sažetka procesa.",
       outside: "Druge aplikacije i kartice preglednika, kamera, mikrofon i zaslon.",
       device: "IP adresa i podaci o uređaju.",
     },
