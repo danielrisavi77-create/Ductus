@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { LOGIN_SHARDS } from "./login-shard-plan.mjs";
 
 // Guards owner decision D-108 d in .github/workflows/ci.yml: runs on main are
 // never cancelled, pull requests run Chromium, main and the nightly run all
@@ -47,17 +48,26 @@ test("outside a pull request all three engines are installed and every project r
   }
   assert.match(install, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}bash scripts\/engineering\/playwright-install\.sh chromium firefox webkit\n {10}else\n {12}bash scripts\/engineering\/playwright-install\.sh chromium\n {10}fi/);
   // all engines: the plain suite with no --project filter, so every project runs
-  assert.match(e2e, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm test:e2e --shard="\$E2E_SHARD\/2"\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile --shard="\$E2E_SHARD\/2"\n {10}fi/);
+  assert.match(e2e, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm test:e2e --shard="\$E2E_SHARD\/3"\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile --shard="\$E2E_SHARD\/3"\n {10}fi/);
 });
 
 test("the isolated login job runs the full Chromium suite and preserves both reports", () => {
   assert.match(step("Install login browser", "stack-login"), /^ {8}run: bash scripts\/engineering\/playwright-install\.sh chromium$/m);
   const login = step("Full login E2E", "stack-login");
-  // The whole suite, split over the two shards of the matrix; the inventory
-  // job (login-shards.mjs) proves the shards together ran every listed test.
-  assert.match(login, /^ {8}run: pnpm test:e2e:login --shard="\$LOGIN_SHARD\/2"$/m);
-  assert.match(login, /^ {10}LOGIN_SHARD: \$\{\{ matrix\.shard \}\}$/m);
-  assert.match(ci, /^ {2}stack-login:\n(?: {4}.*\n)*? {6}matrix:\n {8}shard: \[1, 2\]$/m);
+  // The whole suite, split over the matrix by the duration plan (DAN-375); the
+  // inventory job (login-shards.mjs) proves each shard ran its plan and the
+  // shards together ran every listed test.
+  assert.match(login, /^ {8}run: pnpm test:e2e:login --test-list \.ci-reports\/test-list\.txt$/m);
+  assert.doesNotMatch(login, /--shard|--grep|LOGIN_SHARD/);
+  const plan = step("Plan login shard", "stack-login");
+  assert.match(plan, /^ {8}run: node scripts\/engineering\/login-shard-plan\.mjs "\$LOGIN_SHARD"$/m);
+  assert.match(plan, /^ {10}LOGIN_SHARD: \$\{\{ matrix\.shard \}\}$/m);
+  assert.match(plan, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
+  // The plan runs after the full listing and before the run it feeds.
+  const order = ["Login E2E inventory", "Plan login shard", "Full login E2E"].map((n) => ci.indexOf(`      - name: ${n}\n`, ci.indexOf("\n  stack-login:\n")));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  const shards = Array.from({ length: LOGIN_SHARDS }, (_, i) => i + 1).join(", ");
+  assert.match(ci, new RegExp(`^ {2}stack-login:\\n {4}name: Login E2E \\(\\$\\{\\{ matrix\\.shard \\}\\}/${LOGIN_SHARDS}\\)\\n(?: {4}.*\\n)*? {6}matrix:\\n {8}shard: \\[${shards}\\]$`, "m"));
   assert.match(step("Login E2E inventory", "stack-login"), /^ {8}run: pnpm exec playwright test --config playwright\.login\.config\.ts --list --reporter=json$/m);
   assert.match(step("Verify complete login E2E inventory", "stack-login-results"), /^ {8}run: node scripts\/engineering\/login-shards\.mjs$/m);
   assert.match(login, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);

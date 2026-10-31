@@ -1,0 +1,18 @@
+# Zaštitne mjere za dbmate (D-91): stanje na mainu
+
+Korak M0.2 iz `docs/PROGRAM-RAZRADA.md`, Linear DAN-71. Ovaj zapis nije izvor pravila: mjere su odlučene u `docs/DECISIONS.md` D-91 i razrađene u `docs/BACKEND.md` §4.8 (točke 1 do 7). Ovdje je samo stanje svake mjere na `main` 31. 10. 2026. (`origin/main` 0cdffe5f), s datotekom i retkom koji ga dokazuju.
+
+| # | Mjera (D-91) | Stanje | Dokaz na mainu | Što nedostaje |
+| --- | --- | --- | --- | --- |
+| 1 | `db/migrations.sum` sa SHA-256 svake migracije; CI pada ako se postojeća migracija izmijeni ili obriše | gotovo (#1036, a10fbba8) | `db/migrations.sum`; `scripts/engineering/migrations-ledger.mjs` (provjera i `--base`); korak "Migration ledger (D-91)" u `.github/workflows/ci.yml` r. 86 do 102; `pnpm db:sum` u `package.json` r. 33 | ništa |
+| 2 | Svako pokretanje migracija u CI-ju i deployu koristi `dbmate up --strict` ili `migrate --strict` | gotovo za CI i lokalni stog (#1045, cbb7de0b) | `package.json` r. 38 (`db:migrate` s `up --strict`); `scripts/demo/native/up.mjs` r. 269; `scripts/engineering/dbmate-strict.test.mjs` r. 32, 39 i 49 (skripte, workflowi i argv) | deploy još ne postoji; kad nastane, test iz r. 49 pokriva samo skripte u repou |
+| 3 | Deploy drži `pg_advisory_lock` dok migracije traju | nema | u repou nema deploy skripte ni poziva `pg_advisory_lock` izvan testova (`tests/integration/with-actor.integration.test.ts` r. 302 je test čišćenja veze, ne zaštita migracija) | ovisi o deployu (B0.x); ne gradi se prije njega |
+| 4 | CI na svježoj bazi: `dbmate --no-dump-schema up --strict`, dump u privremenu datoteku i usporedba s commitanim `db/schema.sql` iz Git HEAD-a | nema | `db/schema.sql` ne postoji; `db:migrate` već radi s `--no-dump-schema` (`package.json` r. 38), ali nijedan korak ne dumpa ni ne uspoređuje shemu | `db/schema.sql`, korak u CI-ju i skripta usporedbe |
+| 5 | Zanošenje stvarnih okruženja: pgTAP matrica nad stagingom i produkcijom i normalizirani `pg_dump --schema-only` između njih | nema | staging i produkcija ne postoje; pgTAP (`db/tests/`) radi samo nad lokalnim i CI stogom (`package.json` `test:db`) | ovisi o stagingu i produkciji (B0.x) |
+| 6 | Uloge u zasebnoj idempotentnoj bootstrap skripti; ovlasti i vlasništvo funkcija u migracijama s pgTAP provjerom; aplikacijske uloge nemaju pristup `schema_migrations` | djelomično | ovlasti i vlasništvo: migracije i `db/tests/010-roles-and-privileges.sql` (npr. r. 60 vlasnik knjige migracija, r. 165 `ductus_app` bez `USAGE` na `public`); bootstrap: samo `ductus_migrator` u `db/local/migrator.sql` (lokalno, zamjena za B0.1) | grupne uloge stvara migracija `db/migrations/20261003210000_roles.sql` r. 31, ne bootstrap skripta; pgTAP izričito ne provjerava da `ductus_worker`, `ductus_retention`, `ductus_auth` i lokalne prijave nemaju ovlast nad `public.schema_migrations` |
+| 7 | Produkcija samo naprijed (`dbmate up --strict` kao `ductus_migrator`); `pg-boss` točno pinan, contract test planova | djelomično | `rollback` postoji samo s lokalnim URL-om (`package.json` r. 39); migracije provjeravaju da rade kao `ductus_migrator` (`db/migrations/20261003210000_roles.sql` r. 23 do 26) | deploy ne postoji; `pg-boss` nije ovisnost (`package.json` ga nema), pa pin i contract test nemaju što provjeriti dok ga worker ne uvede |
+
+## Napomene
+
+- Mjere 3, 5 i dio mjere 7 čekaju deploy i stvarna okruženja; bez njih nema stvarnog pozivatelja.
+- Mjera 6: postojeća migracija uloga ostaje (knjiga migracija iz mjere 1 ne dopušta njezinu izmjenu), pa zasebna bootstrap skripta znači da uloge stvara skripta prije prve migracije, a migracija ih samo zatekne i provjeri. Uloge i pgTAP su područje Backenda (`docs/SESSIONS.md` §1).

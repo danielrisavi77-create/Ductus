@@ -89,7 +89,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
     await pool.end();
   }
 
-  // The real open route makes the work, as Predaja and /rad?zadatak= do.
+  // The real open route makes the work, as the click on "Započni rad" does (DAN-330).
   const response = await student.request.post("/api/evidence/open", {
     headers: { origin: ORIGIN, "ductus-protocol": DUCTUS_PROTOCOL_VERSION }, data: { assignmentId, start: true },
   });

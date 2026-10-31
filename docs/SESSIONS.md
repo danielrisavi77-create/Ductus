@@ -202,13 +202,15 @@ Codex CLI je zadani automatizirani reviewer kad je dostupan, ali nije jedini dop
 powershell -File scripts/codex-review.ps1 -Level <light|standard|critical>
 ```
 
-Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Daniel, 3. 10. 2026.):
+Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po riziku PR-a i tablici (D-192, Daniel, 31. 10. 2026.):
 
-| Razina | Codex model, effort | Zadaci |
+| Razina (`Risk` PR-a) | Codex model, effort | Zadaci |
 | --- | --- | --- |
-| `light` | GPT-6-Luna, medium | dokumenti, CI i konfiguracija, paketi, preimenovanja |
-| `standard` | GPT-6-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
-| `critical` | GPT-6-Astra, xhigh | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
+| `light` (`low`) | GPT-6.1-Terra, high | dokumenti, CI i konfiguracija, paketi, preimenovanja |
+| `standard` (`standard`) | GPT-6.1-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
+| `critical` (`critical`) | GPT-6.1-Sol, ultra | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
+
+Zamjena na bilo kojoj razini (D-192): ako prvi pregled zapne, ponavlja se jednom na istom headu s `-Escalate` (GPT-6-Astra, high). Zapeo je kad se pokretanje prekine ili istekne, kad nalaz nema redak "Dohvatljivo kroz:" ili kad ga orkestrator ili autor obrazloženo ocijeni nepouzdanim. Ova tablica vrijedi samo za lokalni pregled skriptom; Astra u fallback paru za kanonski `critical` PASS (`docs/ENGINEERING_SYSTEM.md` §6, D-158) ostaje neizmijenjena, a komentar skripte nije PASS ni FAIL.
 
 Claude worker sesije trenutačno su na Opusu, osim gdje `docs/ORKESTRATOR.md` §7 ("Model po poslu") traži drugi model; effort orkestrator postavlja po zadatku: `low` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
@@ -221,6 +223,8 @@ pwsh -File scripts/grok-review.ps1 [-Pr <broj>] [-Post -Verdict <PASS|FAIL|BLOCK
 ```
 
 Treba PowerShell 7.4 ili noviji (`pwsh`), ne Windows PowerShell 5.1. Jednokratno: instaliraj Grok Build CLI (`npm install -g @xai-official/grok` ili `irm https://x.ai/cli/install.ps1 | iex`) i prijavi se naredbom `grok login`. Skripta odbija rad ako je postavljen `XAI_API_KEY` (istekla prijava bi tiho naplatila API). Pokreće se samo nad vlastitom ili provjerenom granom, nikad u `ductus-security`, jer diff ide xAI-ju; diff veći od jedne naredbene linije ne prima (podijeli PR). Razine nema: dubinu određuje zadani model CLI-ja. Bez `-Post` pregled se samo ispisuje; s `-Post -Verdict ...` objavljuje se kanonski review komentar s tvog GitHub računa, s verdiktom koji ti daješ nakon čitanja i s retkom `Review-Channel: grok-cli`. Gate ga broji kao Grok provider (D-162, `docs/ENGINEERING_SYSTEM.md` §6).
+
+Isti put ima Codex CLI (D-193): review ili QA pokrenut iz `codex exec` postaje kanonski verdikt kad se objavi s vlasnikova računa s kanonskim blokom (`Agent-Review`/`Review-Head`/`Review-Verdict` ili `QA-Agent`/`QA-Head`/`QA-Verdict`) i retkom `Review-Channel: codex-cli` izvan code blocka; gate ga broji kao Codex App. Komentar `scripts/codex-review.ps1` bez tih redaka i dalje nije PASS ni FAIL.
 
 ## 6. Dizajn
 

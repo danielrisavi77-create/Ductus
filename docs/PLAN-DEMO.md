@@ -2,6 +2,8 @@
 
 Verzija 0.1 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Cilj: **ponedjeljak 2. 11. 2026.** (D-82)
 
+**Povijesni zapis (D-191, 30. 10. 2026.):** demo je odgođen bez datuma i ovaj dokument više nije radni plan. Nositelj plana je `docs/PROGRAM.md`.
+
 Razrada odjeljka "Demo za fakultet" iz `PROGRAM.md` (D-76) na zadatke za sesije iz `docs/SESSIONS.md`. Svaki zadatak orkestrator šalje u obliku predloška iz `SESSIONS.md` §3; ova tablica je izvor za te poruke. Kad se plan i `PROGRAM.md` razlikuju u opsegu, vrijedi `PROGRAM.md`, a razlika se prijavljuje orkestratoru.
 
 ## 1. Što demo mora pokazati

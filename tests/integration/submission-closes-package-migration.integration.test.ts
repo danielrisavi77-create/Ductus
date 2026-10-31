@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // DAN-289 A1 (contract #756, Codex finding on #763): a submission recorded
 // before the closing migration closes its packages when the migration runs,
 // since a repeated record_submission inserts nothing and never reaches the
@@ -15,9 +17,7 @@ import { afterAll, describe, expect, it } from "vitest";
 // foreign keys and triggers: only the three tables the migration reads matter.
 // Every identifier is random or invented.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(ADMIN_URL).hostname)) {
-  throw new Error("The migration test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(ADMIN_URL, "The migration test runs only against a loopback database (DATABASE_URL).");
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
 const TARGET = "20261026120000_submission_closes_package.sql";
 

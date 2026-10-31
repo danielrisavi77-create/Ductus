@@ -7,6 +7,8 @@ import { REVISION_ZERO_SHA256 } from "@/domain/document/revision-zero";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-8 step 2 / DAN-83 (docs/BACKEND.md 4.13, pgTAP rows): pgTAP runs in one
 // transaction and cannot race two first calls. Here two app connections open
 // the same student's work on the same assignment at once, as two tabs would:
@@ -17,9 +19,7 @@ import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 // one random login and random synthetic rows, removed afterwards.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The open-work race test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The open-work race test runs only against a loopback database (DATABASE_URL).");
 const suffix = randomBytes(5).toString("hex");
 const login = `it_open_work_${suffix}`;
 const applicationName = `it_open_work_${suffix}`;
