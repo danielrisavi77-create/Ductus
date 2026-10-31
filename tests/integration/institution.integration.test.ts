@@ -190,6 +190,7 @@ afterAll(async () => {
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY ($1)", [institutions]);
   await admin.query("DELETE FROM institution.institution_role WHERE institution_id = ANY ($1)", [institutions]);
   await admin.query("DELETE FROM institution.institution_settings WHERE institution_id = ANY ($1)", [institutions]);
+  await admin.query("DELETE FROM institution.notification WHERE institution_id = ANY ($1)", [institutions]);
   await admin.query("DELETE FROM identity.session WHERE user_id = ANY ($1)", [userIds]);
   await admin.query("DELETE FROM identity.user_account WHERE id = ANY ($1)", [userIds]);
   await admin.query("DELETE FROM identity.institution WHERE id = ANY ($1)", [institutions]);

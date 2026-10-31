@@ -51,7 +51,6 @@ export const hr = {
     homeCrumb: "Početna",
   },
   home: {
-    lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidite što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
     openTeacher: "Otvori kolegije",
     // #802 part B: the signed-in home (pocetna.dc.html: greeting, cards).
@@ -73,14 +72,14 @@ export const hr = {
     sectionsNav: "Odjeljci početne stranice",
     howItWorksLink: "Kako radi",
     forWhomLink: "Za koga",
-    eyebrow: "Prostor za akademsko pisanje",
-    title: "Od prve rečenice do predaje,",
-    titleAccent: "uz svog nastavnika.",
-    intro: `${APP_NAME} je mjesto na kojem student piše seminarski ili završni rad, a nastavnik prati kako rad nastaje i komentira ga uz odlomke.`,
+    eyebrow: "Dnevnik pisanja · seminarski i završni radovi",
+    title: "Rad se vidi",
+    titleAccent: "dok nastaje.",
+    intro: `Student piše, a nastavnik prati kako rad nastaje i komentira uz odlomke. ${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja, a prije početka vidite što nastavnik vidi i od kada.`,
     enter: "Prijavi se i počni",
     aaiOnly: "Prijava isključivo preko AAI@EduHr.",
     previewLabel: "Primjer radnog prostora: list rada i komentar nastavnika, izmišljeni podaci",
-    previewCourse: "Javne politike · seminarski rad",
+    previewSignature: "DUC · 371.3 · rad 07",
     previewTitle: "Gradski promet i održiva mobilnost",
     previewSection: "1. Uvod",
     previewParagraph1:
