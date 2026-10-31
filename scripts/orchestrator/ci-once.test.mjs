@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { ciOnce, ciOnceLines, EXIT, GATE_CONTEXTS } from "./ci-once-core.mjs";
+import { ciOnce, ciOnceLines, EXIT, GATE_CONTEXTS, runCiOnce } from "./ci-once-core.mjs";
+import { requiredStatusChecks } from "./preflight-core.mjs";
 
 const REQUIRED = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"]
   .map((context) => ({ context, appId: 15368 }));
@@ -85,7 +86,59 @@ test("unread checks or unread required checks throw instead of answering", () =>
 });
 
 test("the script reads once and never loops or sleeps", () => {
-  const src = readFileSync(new URL("./ci-once.mjs", import.meta.url), "utf8");
-  assert.doesNotMatch(src, /setTimeout|setInterval|while\s*\(|for\s*\(\s*;|--watch/);
-  assert.match(src, /process\.exit\(EXIT\[result\.verdict\]\)/);
+  for (const file of ["./ci-once.mjs", "./ci-once-core.mjs"]) {
+    const src = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.doesNotMatch(src, /setTimeout|setInterval|while\s*\(|for\s*\(\s*;|--watch/, file);
+  }
+  const cli = readFileSync(new URL("./ci-once.mjs", import.meta.url), "utf8");
+  assert.match(cli, /runCiOnce\(/);
+  assert.match(cli, /process\.exit\(result\.exit\)/);
+  assert.match(readFileSync(new URL("./ci-once-core.mjs", import.meta.url), "utf8"), /exit: EXIT\[result\.verdict\]/);
+});
+
+// The CLI path with GitHub injected (#1081 review and QA1081-01, QA1081-02).
+const A = "a".repeat(40);
+const B = "b".repeat(40);
+const PROTECTION = { checks: REQUIRED.map((r) => ({ context: r.context, app_id: r.appId })), contexts: REQUIRED.map((r) => r.context) };
+function fakeGh({ heads, protection = PROTECTION, rollup = green() }) {
+  let reads = 0;
+  return {
+    prView: async () => ({ headRefOid: heads[Math.min(reads++, heads.length - 1)] }),
+    repoId: async () => ({ owner: "o", repo: "r" }),
+    ghJson: async () => ({ protection: { required_status_checks: protection } }),
+    checkRollup: async () => rollup,
+  };
+}
+const cli = (opts, expectHead = A) => runCiOnce({ n: 5, expectHead, gh: fakeGh(opts), requiredOf: requiredStatusChecks });
+
+test("green CLI read on a head that stays put exits 0", async () => {
+  const r = await cli({ heads: [A, A] });
+  assert.equal(r.exit, 0);
+  assert.match(r.out[0], /^CI GREEN #5 head aaaaaaaa/);
+});
+
+test("a push during the read (head A to B) exits 2, never green for A", async () => {
+  for (const expectHead of [A, null]) {
+    const r = await cli({ heads: [A, B] }, expectHead);
+    assert.equal(r.exit, 2, String(expectHead));
+    assert.deepEqual(r.out, []);
+    assert.match(r.err[0], /^CI HEAD MOVED #5: expected aaaaaaaa, PR is at bbbbbbbb$/);
+  }
+  assert.equal((await cli({ heads: [A, null] })).exit, 2);
+});
+
+test("a head other than --head before the read exits 2", async () => {
+  assert.equal((await cli({ heads: [B, B] })).exit, 2);
+});
+
+test("a required check with an invalid context is a read error (exit 2), not a dropped check", async () => {
+  for (const bad of [{ context: "", app_id: 15368 }, { context: 7, app_id: 15368 }, { app_id: 15368 }, null]) {
+    const protection = { ...PROTECTION, checks: [...PROTECTION.checks.slice(0, 3), bad] };
+    const r = await cli({ heads: [A, A], protection, rollup: green().slice(0, 3) });
+    assert.equal(r.exit, 2, JSON.stringify(bad));
+    assert.match(r.err[0], /required checks of main could not be read/);
+  }
+  const contexts = { ...PROTECTION, contexts: [...PROTECTION.contexts, ""] };
+  assert.equal((await cli({ heads: [A, A], protection: contexts })).exit, 2);
+  assert.equal((await cli({ heads: [A, A], protection: { ...PROTECTION, checks: {} } })).exit, 2);
 });

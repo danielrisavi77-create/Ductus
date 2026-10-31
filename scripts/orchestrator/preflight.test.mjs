@@ -295,6 +295,17 @@ test("required check app identities override the legacy contexts projection", ()
   assert.equal(requiredStatusChecks(null), null);
 });
 
+test("a malformed required check makes the whole list unread, never a silent drop (#1081 QA1081-02)", () => {
+  const ok = { context: "bound", app_id: 15368 };
+  for (const bad of [{ context: "" }, { context: 3 }, {}, null]) {
+    assert.equal(requiredStatusChecks({ checks: [ok, bad], contexts: ["bound"] }), null, JSON.stringify(bad));
+  }
+  assert.equal(requiredStatusChecks({ checks: [ok], contexts: ["bound", ""] }), null);
+  assert.equal(requiredStatusChecks({ checks: {}, contexts: [] }), null);
+  assert.equal(requiredStatusChecks({ checks: [ok], contexts: null }), null);
+  assert.deepEqual(requiredStatusChecks({ checks: [ok] }), [{ context: "bound", appId: 15368 }]);
+});
+
 test("preflight returns exit 2 for a read error, distinct from a failed check", () => {
   const failed = evaluatePreflight(input({ pr: { isDraft: true } }));
   assert.equal(preflightExitCode(failed), 1);

@@ -337,8 +337,14 @@ export const preflightPass = (checks) => checks.length > 0 && checks.every((c) =
 
 export function requiredStatusChecks(statusChecks) {
   if (!statusChecks || typeof statusChecks !== "object") return null;
-  const checks = Array.isArray(statusChecks.checks) ? statusChecks.checks : [];
-  const contexts = Array.isArray(statusChecks.contexts) ? statusChecks.contexts : [];
+  // A malformed entry is an unread answer, never a check to drop silently: the
+  // remaining ones could then look complete (#1081 QA1081-02).
+  const listOrNull = (value) => (value === undefined ? [] : Array.isArray(value) ? value : null);
+  const checks = listOrNull(statusChecks.checks);
+  const contexts = listOrNull(statusChecks.contexts);
+  const named = (context) => typeof context === "string" && context.length > 0;
+  if (!checks || !contexts) return null;
+  if (!checks.every((item) => named(item?.context)) || !contexts.every(named)) return null;
   const configured = [];
   const checkContexts = new Set(checks.filter((item) => typeof item?.context === "string" && item.context)
     .map((item) => item.context));

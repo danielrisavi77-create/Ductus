@@ -45,6 +45,34 @@ export function ciOnce({ rollup, required }) {
   return { verdict, total: checks.length, failed, running, missing };
 }
 
+/**
+ * The whole read of ci-once.mjs with GitHub injected (`gh`: prView, repoId,
+ * ghJson, checkRollup), so the CLI path is testable. Returns { exit, out, err }.
+ * The head is read again after the checks: a push during the read moves the PR
+ * to another head, and the answer for the old one is then a read error (2).
+ */
+export async function runCiOnce({ n, expectHead = null, gh, requiredOf }) {
+  const moved = (want, got) => ({
+    exit: EXIT.error,
+    out: [],
+    err: [`CI HEAD MOVED #${n}: expected ${String(want).slice(0, 8)}, PR is at ${String(got).slice(0, 8)}`],
+  });
+  try {
+    const head = (await gh.prView(n))?.headRefOid;
+    if (!head) throw new Error(`head of #${n} could not be read`);
+    if (expectHead && head.toLowerCase() !== expectHead.toLowerCase()) return moved(expectHead, head);
+    const { owner, repo } = await gh.repoId();
+    const main = await gh.ghJson(["api", `repos/${owner}/${repo}/branches/main`]);
+    const result = ciOnce({ rollup: await gh.checkRollup(head), required: requiredOf(main?.protection?.required_status_checks) });
+    const after = (await gh.prView(n))?.headRefOid;
+    if (!after) throw new Error(`head of #${n} could not be read again`);
+    if (after.toLowerCase() !== head.toLowerCase()) return moved(head, after);
+    return { exit: EXIT[result.verdict], out: ciOnceLines(n, head, result), err: [] };
+  } catch (e) {
+    return { exit: EXIT.error, out: [], err: [`CI READ ERROR #${n}: ${e.message}`] };
+  }
+}
+
 /** The lines ci-once.mjs prints; the first one carries the verdict. */
 export function ciOnceLines(n, head, result) {
   const short = String(head).slice(0, 8);
