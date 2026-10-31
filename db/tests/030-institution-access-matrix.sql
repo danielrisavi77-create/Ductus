@@ -6,7 +6,7 @@ BEGIN;
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(771);
+SELECT plan(835);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
@@ -14,8 +14,8 @@ SELECT bag_eq(
   $$ SELECT c.relname::text FROM pg_class c
      WHERE c.relnamespace = 'institution'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f') $$,
   ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
-        'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship'],
-  'the institution schema holds exactly the eleven tables of this matrix'
+        'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification'],
+  'the institution schema holds exactly the twelve tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -82,9 +82,10 @@ SELECT bag_eq(
     'notice_acknowledgment: notice_acknowledgment_read SELECT to ductus_app',
     'faculty_work_rule: faculty_work_rule_owner ALL to ductus_identity',
     'mentorship: mentorship_owner ALL to ductus_identity',
-    'mentorship: mentorship_read SELECT to ductus_app'
+    'mentorship: mentorship_read SELECT to ductus_app',
+    'notification: notification_owner ALL to ductus_identity'
   ],
-  'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt and faculty_work_rule'
+  'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
 -- A version is immutable by its triggers, and one of a mentorship's assignment
 -- stays within the faculty's rule; losing one must change this list.
@@ -93,8 +94,8 @@ SELECT bag_eq(
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
      WHERE c.relnamespace = 'institution'::regnamespace AND NOT t.tgisinternal $$,
   ARRAY['assignment_version: assignment_version_immutable 27 O', 'assignment_version: assignment_version_no_truncate 34 O',
-        'assignment_version: assignment_version_mentorship_rule 7 O'],
-  'triggers: before every UPDATE and DELETE of a row, before TRUNCATE and before every INSERT of a row of assignment_version, all enabled'
+        'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O'],
+  'triggers: immutable versions, mentorship validation and transactional notification, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -133,7 +134,8 @@ SELECT bag_eq(
     'has_acknowledged_current(p_assignment_id uuid) definer app',
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',
-    'check_mentorship_version() definer'
+    'check_mentorship_version() definer',
+    'notify_assignment_version() definer'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
@@ -187,12 +189,12 @@ FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_aut
                   'ductus_migrator', 'ductus_test_stranger']) WITH ORDINALITY AS r (role, n)
 CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code',
                         'course_member', 'enrollment_attempt', 'assignment', 'assignment_version',
-                        'notice_acknowledgment', 'faculty_work_rule', 'mentorship']) WITH ORDINALITY AS t (tbl, n)
+                        'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(
   pg_temp.probe(role, 'anon', tbl, op),
-  CASE WHEN role = 'ductus_app' AND op = 'SELECT' AND tbl NOT IN ('enrollment_attempt', 'faculty_work_rule') THEN 'rows=0'
+  CASE WHEN role = 'ductus_app' AND op = 'SELECT' AND tbl NOT IN ('enrollment_attempt', 'faculty_work_rule', 'notification') THEN 'rows=0'
        WHEN role IN ('ductus_app', 'ductus_migrator') THEN 'no table privilege'
        ELSE 'no schema privilege' END,
   format('%s: %s on %s', role, op, tbl)
