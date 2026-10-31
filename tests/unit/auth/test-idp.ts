@@ -24,6 +24,14 @@ export interface Misbehaviour {
   tokenStatus?: number;
   /** Network failure on every request. */
   down?: boolean;
+  /** Edits the token endpoint's success body, e.g. drops the ID token. */
+  tokenBody?: (body: Record<string, unknown>) => Record<string, unknown>;
+  /** One endpoint path answers with this status and an error body. */
+  endpointStatus?: { path: string; status: number };
+  /** Requests to one path reject with this error, as fetch does on a failure or timeout. */
+  reject?: { path: string; error: unknown };
+  /** The authorization code outlived its lifetime: the token endpoint answers invalid_grant. */
+  codeExpired?: boolean;
 }
 
 interface Grant {
@@ -52,6 +60,8 @@ export function createTestIdp(
   const foreign = rsaKey();
   const grants = new Map<string, Grant>();
   const tokenRequests: URLSearchParams[] = [];
+  /** Path of every request the provider received, in order. */
+  const requests: string[] = [];
   const state = { next: {} as Misbehaviour, account };
 
   function idToken(grant: Grant): string {
@@ -79,6 +89,10 @@ export function createTestIdp(
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
   async function handle(url: URL, init: RequestInit): Promise<Response> {
+    requests.push(url.pathname);
+    const { endpointStatus, reject } = state.next;
+    if (reject?.path === url.pathname) throw reject.error;
+    if (endpointStatus?.path === url.pathname) return json({ error: "server_error" }, endpointStatus.status);
     switch (url.pathname) {
       case "/.well-known/openid-configuration":
         return json({
@@ -107,13 +121,15 @@ export function createTestIdp(
         if (
           !grant ||
           grant.used ||
+          state.next.codeExpired ||
           grant.redirectUri !== params.get("redirect_uri") ||
           createHash("sha256").update(verifier).digest("base64url") !== grant.challenge
         ) {
           return json({ error: "invalid_grant" }, 400);
         }
         grant.used = true;
-        return json({ access_token: "at-" + randomBytes(8).toString("hex"), token_type: "Bearer", expires_in: 300, id_token: idToken(grant) });
+        const body = { access_token: "at-" + randomBytes(8).toString("hex"), token_type: "Bearer", expires_in: 300, id_token: idToken(grant) };
+        return json(state.next.tokenBody ? state.next.tokenBody(body) : body);
       }
       case "/me": {
         if (state.next.userinfoBody) {
@@ -135,6 +151,7 @@ export function createTestIdp(
   return {
     state,
     tokenRequests,
+    requests,
     fetch: (async (input: string | URL | Request, init: RequestInit = {}) => {
       if (state.next.down) throw new TypeError("fetch failed");
       return handle(new URL(String(input instanceof Request ? input.url : input)), init);
