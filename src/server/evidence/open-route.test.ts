@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
@@ -87,7 +89,7 @@ describe("POST /api/evidence/open", () => {
     });
     // Neither package nor institution goes on the wire.
     expect(JSON.stringify(body)).not.toMatch(/package|institution/i);
-    expect(queries.map((q) => q.values)).toEqual([[ASSIGNMENT], [ASSIGNMENT], ["dokument-1"], [DOMAIN]]);
+    expect(queries.map((q) => q.values)).toEqual([[ASSIGNMENT, false], [ASSIGNMENT], ["dokument-1"], [DOMAIN]]);
     expect(queries[1]?.text).toMatch(/app\.work_submitted\(\$1::uuid\)/);
   });
 
@@ -116,6 +118,7 @@ describe("POST /api/evidence/open", () => {
     ["no session", { outcome: "unauthenticated" }, 401, { status: "unauthenticated" }],
     ["not a student of it, or no such assignment", { outcome: "not_found" }, 404, { status: "not_found" }],
     ["the notice not acknowledged (#155 item 5)", { outcome: "not_accepting" }, 409, { status: "not_accepting" }],
+    ["no work yet and no request to start one (F-137)", { outcome: "not_started" }, 409, { status: "not_started" }],
     ["no evidence domain", { outcome: "not_configured" }, 503, { status: "unavailable", stage: "context" }],
     ["an unknown outcome", { outcome: "otvoreno" }, 503, { status: "unavailable", stage: "context" }],
     ["a malformed revision", { ...OPENED, current_revision: "1.5" }, 503, { status: "unavailable", stage: "context" }],
@@ -140,11 +143,36 @@ describe("POST /api/evidence/open", () => {
     ["an extra key", { assignmentId: ASSIGNMENT, studentId: ASSIGNMENT }],
     ["no key", {}],
     ["not JSON", "{"],
+    ["start as null", { assignmentId: ASSIGNMENT, start: null }],
+    ["start as a string", { assignmentId: ASSIGNMENT, start: "true" }],
+    ["start as a number", { assignmentId: ASSIGNMENT, start: 1 }],
+    ["start as an object", { assignmentId: ASSIGNMENT, start: {} }],
+    ["start and an extra key", { assignmentId: ASSIGNMENT, start: true, studentId: ASSIGNMENT }],
+    ["start without assignmentId", { start: true }],
   ])("refuses %s as invalid before any state", async (_, body) => {
     const { deps, withActor } = setup();
     const response = await handleEvidenceOpenRequest(post(body), deps);
     expect([response.status, await response.json()]).toEqual([422, { status: "invalid" }]);
     expect(withActor).not.toHaveBeenCalled();
+  });
+
+  // DAN-331 (F-137): only a literal true asks the database to make the work.
+  it.each([
+    ["no start", { assignmentId: ASSIGNMENT }, false],
+    ["start false", { assignmentId: ASSIGNMENT, start: false }, false],
+    ["start true", { assignmentId: ASSIGNMENT, start: true }, true],
+    ["start true, keys in the other order", { start: true, assignmentId: ASSIGNMENT }, true],
+  ] as const)("passes %s to the database as an explicit second argument", async (_, body, start) => {
+    const { deps, queries } = setup();
+    const response = await handleEvidenceOpenRequest(post(body), deps);
+    expect(response.status).toBe(200);
+    expect(queries[0]?.values).toEqual([ASSIGNMENT, start]);
+    expect(queries[0]?.text).toMatch(/app\.open_student_work\(\$1::uuid, \$2::boolean\)/);
+  });
+
+  it("never lets the database default decide: the route source names both arguments", () => {
+    const source = readFileSync(new URL("./open-route.ts", import.meta.url), "utf8");
+    expect(source.match(/open_student_work\([^)]*\)/g)).toEqual(["open_student_work($1::uuid, $2::boolean)"]);
   });
 
   it.each([
