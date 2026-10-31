@@ -144,11 +144,20 @@ async function smallText(page: Page, limit: number): Promise<string[]> {
   }, limit);
 }
 
-/** Full-page shot at 1440 and 390 px; at 390 the text is then checked against 13 px. */
+/**
+ * Full-page shots in the light and dark theme at 1440 and 390 px, attached to
+ * the report as visual evidence; the last state (dark, 390 px) is then checked
+ * against 13 px.
+ */
 async function shoot(page: Page, name: string) {
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.screenshot({ path: test.info().outputPath(`fe-d8-${name}-${width}.png`), fullPage: true });
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const path = test.info().outputPath(`fe-d8-${name}-${colorScheme}-${width}.png`);
+      await page.screenshot({ path, fullPage: true });
+      await test.info().attach(`fe-d8-${name}-${colorScheme}-${width}`, { path, contentType: "image/png" });
+    }
   }
   expect(await smallText(page, 13)).toEqual([]);
 }
