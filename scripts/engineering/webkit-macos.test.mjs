@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { checkSelection, KNOWN_FAILURES, KNOWN_ISSUE, knownPattern, listedTests } from "./webkit-macos.mjs";
+import { classify, exitCode, KNOWN_FAILURES, KNOWN_ISSUE, playwrightArgs, reportedTests, summary } from "./webkit-macos.mjs";
 
 // DAN-114 (#1040): the advisory WebKit job on a macOS runner.
 const root = new URL("../../", import.meta.url);
@@ -20,7 +20,7 @@ test("the job runs on macOS, read-only, without secrets and without a soft failu
   for (const [, ref] of workflow.matchAll(/uses: ([^\s#]+)/g)) assert.match(ref, /@[0-9a-f]{40}$/, ref);
 });
 
-test("the job runs the webkit project through the known-failure script against the build", () => {
+test("the job runs the whole webkit project through the script against the build", () => {
   assert.match(workflow, /^ {6}- run: pnpm build$/m);
   assert.match(workflow, /^ {8}run: pnpm exec playwright install webkit$/m);
   assert.match(workflow, /^ {10}E2E_NO_BUILD: "1"\n {8}run: node scripts\/engineering\/webkit-macos\.mjs$/m);
@@ -52,29 +52,45 @@ test("every known failure names a test that exists, once, and the issue that tra
   for (const { file, title } of KNOWN_FAILURES) {
     assert.match(file, /^e2e\/[\w-]+\.spec\.ts$/, file);
     const source = await read(file);
-    // The CI list check proves Playwright selects it; this catches a rename early.
+    // The summary names a listed test that did not run; this catches a rename earlier.
     assert.ok(source.includes(title), title);
   }
 });
 
-test("the pattern matches each listed title at the end of a title path and nothing else", () => {
-  const pattern = new RegExp(knownPattern());
-  for (const { file, title } of KNOWN_FAILURES) {
-    assert.ok(pattern.test(`webkit ${file.slice(4)} describe ${title}`), title);
-    assert.ok(!pattern.test(`webkit ${file.slice(4)} describe ${title} more`), `${title} is anchored`);
+test("nothing is left out: the whole project runs and the exit code is Playwright's", async () => {
+  const args = playwrightArgs();
+  assert.ok(args.includes("--project=webkit"));
+  for (const arg of args) {
+    assert.doesNotMatch(arg, /^--(grep|grep-invert|pass-with-no-tests|last-failed|only-changed|shard)\b/, arg);
   }
-  assert.ok(!pattern.test("webkit quote.spec.ts quote paragraph (E1) a quote keeps its id"));
-  assert.ok(!pattern.test("webkit x.spec.ts ' ', Enter and Backspace at the edges of a quote"), "special characters are literal");
-  assert.equal(knownPattern([]), null);
+  const source = await read("scripts/engineering/webkit-macos.mjs");
+  assert.doesNotMatch(source, /grep-invert|"--grep"|\.skip\(|\.fixme\(|\.fail\(/);
+  assert.doesNotMatch(workflow, /--grep|--shard|\.skip\(/);
+  assert.equal(exitCode(0), 0);
+  for (const status of [1, 2, 130]) assert.equal(exitCode(status), status);
+  assert.equal(exitCode(null), 1, "a killed run is red");
 });
 
+const spec = (title, ...statuses) => ({ title, file: "a.spec.ts", tests: statuses.map((status) => ({ status })) });
 const report = (specs) => ({ suites: [{ file: "a.spec.ts", specs: [], suites: [{ specs }] }] });
 
-test("the selection check passes only for exactly the listed tests", () => {
-  const list = [{ file: "e2e/a.spec.ts", title: "one" }, { file: "e2e/a.spec.ts", title: "two" }];
-  const spec = (title, tests = 1) => ({ title, file: "a.spec.ts", tests: Array.from({ length: tests }, () => ({})) });
-  assert.deepEqual(checkSelection(listedTests(report([spec("one"), spec("two")])), list), []);
-  assert.equal(checkSelection(listedTests(report([spec("one")])), list).length, 1, "one missing");
-  assert.equal(checkSelection(listedTests(report([spec("one"), spec("two"), spec("three")])), list).length, 1, "one too many");
-  assert.equal(checkSelection(listedTests(report([spec("one", 2), spec("two")])), list).length, 1, "selected twice");
+test("the summary splits failures into tracked and new and names listed tests that passed or did not run", () => {
+  const list = ["known", "fixed", "gone"].map((title) => ({ file: "e2e/a.spec.ts", title }));
+  const tests = reportedTests(
+    report([spec("known", "unexpected"), spec("fixed", "expected"), spec("new", "unexpected"), spec("ok", "expected", "flaky")]),
+  );
+  assert.equal(tests.length, 5, "one entry per test of a spec");
+  const result = classify(tests, list);
+  assert.deepEqual(result, {
+    known: ["e2e/a.spec.ts › known"],
+    fresh: ["e2e/a.spec.ts › new"],
+    fixed: ["e2e/a.spec.ts › fixed"],
+    missing: ["e2e/a.spec.ts › gone"],
+  });
+  const text = summary(result);
+  assert.ok(text.includes("**New failures** (1), not tracked in #1046:\n- e2e/a.spec.ts › new\n"));
+  assert.ok(text.includes("Known failures (1), tracked in #1046:\n- e2e/a.spec.ts › known\n"));
+  assert.ok(text.includes("take them off KNOWN_FAILURES:\n- e2e/a.spec.ts › fixed\n"));
+  assert.ok(text.includes("did not run (renamed or removed?):\n- e2e/a.spec.ts › gone\n"));
+  assert.match(summary(classify(reportedTests(report([spec("ok", "expected")])), [])), /No failures\.$/);
 });

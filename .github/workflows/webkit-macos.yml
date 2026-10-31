@@ -3,8 +3,8 @@ name: WebKit macOS
 # DAN-114 (#1040): the first Safari level. Playwright's WebKit on a macOS
 # runner is closer to Safari than WebKit on Linux (ci.yml, D-108 d). The
 # runner has no Docker and no Compose stack; the `webkit` project of
-# playwright.config.ts needs none (first run, #1041), so it runs whole, minus
-# the tests listed in scripts/engineering/webkit-macos.mjs (docs/TESTING.md 2).
+# playwright.config.ts needs none (first run, #1041), so it runs whole and
+# leaves nothing out; it stays red until #1046 is fixed (docs/TESTING.md 2).
 # Advisory: not a required status (docs/ENGINEERING_SYSTEM.md §10 keeps that
 # list, .github/mergify.yml its copy).
 on:
@@ -46,8 +46,8 @@ jobs:
       # macOS needs no system packages, so no --with-deps.
       - name: Install WebKit
         run: pnpm exec playwright install webkit
-      # The `webkit` project without the tests known to fail on macOS WebKit
-      # (#1046); the script first proves its pattern selects exactly those.
+      # The whole `webkit` project with Playwright's exit code; the job summary
+      # tells failures tracked in #1046 from new ones.
       - name: WebKit E2E
         env:
           E2E_NO_BUILD: "1"

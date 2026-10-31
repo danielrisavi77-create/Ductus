@@ -37,7 +37,8 @@ Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paraleln
 - WebKit na macOS-u, prva razina Safarija (DAN-114). Posao "WebKit E2E (macOS)" (`.github/workflows/webkit-macos.yml`) vrti se na `main`, noću, ručno i na PR-u koji mijenja taj workflow, `scripts/engineering/webkit-macos.mjs`, `playwright.config.ts` ili `e2e/support/`.
   - Savjetodavan je, ne obvezan status. Crveni rezultat ipak je nalaz kao i ostali na `main`.
   - Pokreće cijeli projekt `webkit` nad produkcijskim buildom, bez compose stoga, jer ga ti specovi ne trebaju (prvo pokretanje: 245 prošlo, 7 palo, 1 preskočen).
-  - Izostavlja samo testove iz `KNOWN_FAILURES` u `scripts/engineering/webkit-macos.mjs`: padaju samo na macOS WebKitu, prate se u #1046 i na Linuxu se i dalje vrte. Skripta prije pokretanja dokazuje da uzorak bira točno te testove. Popravljeni test izlazi s popisa.
+  - Ne izostavlja nijedan test. Sedam testova iz `KNOWN_FAILURES` u `scripts/engineering/webkit-macos.mjs` pada samo na macOS WebKitu i prati se u #1046, pa je posao crven dok se ne poprave. Izlazni kod je uvijek Playwrightov.
+  - Sažetak posla odvaja padove iz #1046 od novih padova. Navodi i test s popisa koji je prošao, pa izlazi s popisa, te test s popisa koji se nije vrtio (preimenovan ili obrisan).
   - Ne pokriva pravi Safari (`safaridriver`, druga razina), iOS (treća razina), brisanje pohrane nakon nekorištenja (ITP), `e2e/login/` ni stog.
 - QA obveza: PR koji dira `src/lib/journal/`, sync, prijavu ili odjavu ne dobiva QA PASS bez dokaza o prolazu na sva tri enginea na aktualnom headu.
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.

@@ -1,11 +1,15 @@
 // DAN-114 (#1040): the WebKit E2E job on a macOS runner
-// (.github/workflows/webkit-macos.yml). It runs the `webkit` project of
-// playwright.config.ts without a Compose stack, minus the tests listed in
-// KNOWN_FAILURES, which fail on macOS WebKit only (#1046) and still run on
-// Linux. An entry leaves this list once its test passes on the macOS runner.
+// (.github/workflows/webkit-macos.yml). It runs the whole `webkit` project of
+// playwright.config.ts without a Compose stack and leaves nothing out
+// (CLAUDE.md: no test is skipped or quarantined). The tests in KNOWN_FAILURES
+// fail on macOS WebKit only (#1046), so the job stays red until they are
+// fixed. The list only labels the failures in the job summary: a failure
+// outside it is a new regression, a listed test that passes leaves the list.
+// The exit code is always Playwright's own.
 //
-//   node scripts/engineering/webkit-macos.mjs   (CI: list check, then run)
+//   node scripts/engineering/webkit-macos.mjs
 import { spawnSync } from "node:child_process";
+import { appendFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -29,22 +33,21 @@ export const KNOWN_FAILURES = Object.freeze([
   { file: "e2e/status-bar.spec.ts", title: "status bar: words without a range, pages, a selection, never the server" },
 ]);
 
-const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export const REPORT = "test-results/webkit-macos.json";
 
-/** One pattern that matches a listed test by its own title, at the end of Playwright's title path. */
-export function knownPattern(list = KNOWN_FAILURES) {
-  return list.length ? `(?:${list.map(({ title }) => `${escape(title)}$`).join("|")})` : null;
+/** The Playwright arguments: the whole project, no title filter. */
+export function playwrightArgs() {
+  return ["--project=webkit", "--reporter=list,html,json"];
 }
 
-/** Tests of a `playwright test --list --reporter=json` report, as {file, title}. */
-export function listedTests(report) {
+/** Tests of a Playwright JSON report, as {file, title, failed}. */
+export function reportedTests(report) {
   const out = [];
   const walk = (suite, file) => {
     const here = suite.file ?? file;
     for (const spec of suite.specs ?? []) {
-      // one entry per test of the spec, so a test selected twice is visible
-      const entry = { file: `e2e/${spec.file ?? here}`.replaceAll("\\", "/"), title: spec.title };
-      out.push(...(spec.tests ?? []).map(() => entry));
+      const path = `e2e/${spec.file ?? here}`.replaceAll("\\", "/");
+      for (const one of spec.tests ?? []) out.push({ file: path, title: spec.title, failed: one.status === "unexpected" });
     }
     for (const child of suite.suites ?? []) walk(child, here);
   };
@@ -52,39 +55,54 @@ export function listedTests(report) {
   return out;
 }
 
-/** Problems when the pattern selects anything but exactly the listed tests, once each. */
-export function checkSelection(selected, list = KNOWN_FAILURES) {
-  const key = ({ file, title }) => `${file} › ${title}`;
-  const want = list.map(key).sort();
-  const got = selected.map(key).sort();
-  return JSON.stringify(want) === JSON.stringify(got)
-    ? []
-    : [`the known-failure pattern selects ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`];
+const key = ({ file, title }) => `${file} › ${title}`;
+
+/** Splits the failures into known (#1046) and new, and names listed tests that passed or did not run. */
+export function classify(tests, list = KNOWN_FAILURES) {
+  const known = new Set(list.map(key));
+  const failed = new Set(tests.filter((t) => t.failed).map(key));
+  const seen = new Set(tests.map(key));
+  return {
+    known: [...failed].filter((k) => known.has(k)),
+    fresh: [...failed].filter((k) => !known.has(k)),
+    fixed: [...known].filter((k) => seen.has(k) && !failed.has(k)),
+    missing: [...known].filter((k) => !seen.has(k)),
+  };
 }
 
-// The Playwright CLI under this Node, without a shell, so the pattern reaches
-// it as one argument on every platform. `pnpm test:e2e` is `playwright test`.
+/** Markdown for the job summary. */
+export function summary({ known, fresh, fixed, missing }) {
+  const lines = ["## WebKit E2E (macOS)", ""];
+  const block = (head, items) => {
+    if (items.length) lines.push(head, ...items.map((k) => `- ${k}`), "");
+  };
+  block(`**New failures** (${fresh.length}), not tracked in #${KNOWN_ISSUE}:`, fresh);
+  block(`Known failures (${known.length}), tracked in #${KNOWN_ISSUE}:`, known);
+  block(`Listed for #${KNOWN_ISSUE} but passed; take them off KNOWN_FAILURES:`, fixed);
+  block(`Listed for #${KNOWN_ISSUE} but did not run (renamed or removed?):`, missing);
+  if (lines.length === 2) lines.push("No failures.");
+  return lines.join("\n");
+}
+
+/** The job's exit code: Playwright's status, never softened by the list. */
+export const exitCode = (status) => (status === 0 ? 0 : status || 1);
+
+// The Playwright CLI under this Node, without a shell, the same on every platform.
 const CLI = createRequire(import.meta.url).resolve("@playwright/test/cli");
-const playwright = (args, options = {}) => spawnSync(process.execPath, [CLI, "test", ...args], { stdio: "inherit", ...options });
 
 function main() {
-  const pattern = knownPattern();
-  if (pattern) {
-    const list = playwright(["--list", "--reporter=json", "--project=webkit", "--grep", pattern], {
-      stdio: ["ignore", "pipe", "inherit"],
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    });
-    if (list.status !== 0) return list.status ?? 1;
-    const problems = checkSelection(listedTests(JSON.parse(list.stdout)));
-    if (problems.length) {
-      for (const problem of problems) console.error(problem);
-      return 1;
-    }
-    console.log(`Leaving out ${KNOWN_FAILURES.length} tests known to fail on macOS WebKit (#${KNOWN_ISSUE}).`);
+  const run = spawnSync(process.execPath, [CLI, "test", ...playwrightArgs()], {
+    stdio: "inherit",
+    env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_FILE: REPORT, PLAYWRIGHT_HTML_OPEN: "never" },
+  });
+  try {
+    const text = summary(classify(reportedTests(JSON.parse(readFileSync(REPORT, "utf8")))));
+    console.log(text);
+    if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`);
+  } catch (error) {
+    console.error(`No summary: ${error.message}`);
   }
-  const run = playwright(["--project=webkit", ...(pattern ? ["--grep-invert", pattern] : [])]);
-  return run.status ?? 1;
+  return exitCode(run.status);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) process.exitCode = main();
