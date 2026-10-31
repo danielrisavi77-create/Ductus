@@ -83,6 +83,24 @@ jobs:
             build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
       - run: pnpm lint
       - run: pnpm typecheck
+      # D-91 (1): db/migrations.sum matches the files, and no migration of the
+      # base (PR base, or main before this push) changed or disappeared. On a
+      # PR the checkout is the merge commit, so main's newer migrations count.
+      - name: Migration ledger (D-91)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base=""
+          if [ "$EVENT_NAME" = pull_request ]; then base="$PR_BASE"; elif [ "$EVENT_NAME" = push ]; then base="$PUSH_BEFORE"; fi
+          if [ -n "$base" ]; then
+            [[ "$base" =~ ^[a-f0-9]{40}$ ]]
+            git fetch --no-tags --depth=1 origin "$base"
+            node scripts/engineering/migrations-ledger.mjs --base "$base"
+          else
+            node scripts/engineering/migrations-ledger.mjs
+          fi
       - name: Engineering PR metadata
         if: github.event_name == 'pull_request'
         env:
