@@ -23,6 +23,9 @@ export const D97_PATHS = [
   ".claude/",
   ".agents/",
   "plugins/ductura-engineering/",
+  // F-176: the scripts that run a CLI reviewer whose comment the gate counts.
+  "scripts/codex-review.ps1",
+  "scripts/grok-review.ps1",
 ];
 // D-97 also covers DECISIONS entries about who may merge/review; not decidable by path alone.
 export const D97_MANUAL_PATHS = ["docs/DECISIONS.md"];

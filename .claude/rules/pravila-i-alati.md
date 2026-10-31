@@ -17,6 +17,8 @@ paths:
   - ".claude/**"
   - ".agents/**"
   - "plugins/ductura-engineering/**"
+  - "scripts/codex-review.ps1"
+  - "scripts/grok-review.ps1"
 ---
 
 # Područje: pravila rada, gate i alati (D-97)

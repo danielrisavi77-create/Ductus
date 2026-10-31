@@ -37,6 +37,8 @@
 /docs/SESSIONS.md @danielrisavi77-create
 /docs/MULTI-ACCOUNT.md @danielrisavi77-create
 /docs/AGENT_SYSTEM_V2.md @danielrisavi77-create
+/scripts/codex-review.ps1 @danielrisavi77-create
+/scripts/grok-review.ps1 @danielrisavi77-create
 
 # Native demo tooling: critical floor (F-140), outside D-97.
 /scripts/demo/native/** @danielrisavi77-create
