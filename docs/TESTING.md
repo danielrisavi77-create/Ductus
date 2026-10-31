@@ -34,6 +34,11 @@ Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paraleln
 - Chromium: svaki frontend/E2E PR, u CI-ju PR-a.
 - Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi. CI PR-a ga ne pokreće, pa dokaz daje QA (lokalni ili ručno pokrenut prolaz na headu PR-a, zapisan u QA nalazu).
 - WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi. Dokaz kao za Firefox.
+- WebKit na macOS-u, prva razina Safarija (DAN-114). Posao "WebKit E2E (macOS)" (`.github/workflows/webkit-macos.yml`) vrti se na `main`, noću, ručno i na PR-u koji mijenja taj workflow, `scripts/engineering/webkit-macos.mjs`, `playwright.config.ts` ili `e2e/support/`.
+  - Savjetodavan je, ne obvezan status. Crveni rezultat ipak je nalaz kao i ostali na `main`.
+  - Pokreće cijeli projekt `webkit` nad produkcijskim buildom, bez compose stoga, jer ga ti specovi ne trebaju (prvo pokretanje: 245 prošlo, 7 palo, 1 preskočen).
+  - Izostavlja samo testove iz `KNOWN_FAILURES` u `scripts/engineering/webkit-macos.mjs`: padaju samo na macOS WebKitu, prate se u #1046 i na Linuxu se i dalje vrte. Skripta prije pokretanja dokazuje da uzorak bira točno te testove. Popravljeni test izlazi s popisa.
+  - Ne pokriva pravi Safari (`safaridriver`, druga razina), iOS (treća razina), brisanje pohrane nakon nekorištenja (ITP), `e2e/login/` ni stog.
 - QA obveza: PR koji dira `src/lib/journal/`, sync, prijavu ili odjavu ne dobiva QA PASS bez dokaza o prolazu na sva tri enginea na aktualnom headu.
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.
 - Iznimka samo za demo (D-98 dopuna, 10. 10. 2026.): demo spec K-4 obvezan je do 1. 11. samo na Chromiumu; Firefox i WebKit prolaze informativno i ne blokiraju spajanje. Pravilo za pilot se ne mijenja.

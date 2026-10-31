@@ -2,9 +2,11 @@ name: WebKit macOS
 
 # DAN-114 (#1040): the first Safari level. Playwright's WebKit on a macOS
 # runner is closer to Safari than WebKit on Linux (ci.yml, D-108 d). The
-# runner has no Docker, so only the specs that need no Compose stack run
-# here (docs/TESTING.md 2). Advisory: not a required status
-# (docs/ENGINEERING_SYSTEM.md §10 keeps that list).
+# runner has no Docker and no Compose stack; the `webkit` project of
+# playwright.config.ts needs none (first run, #1041), so it runs whole, minus
+# the tests listed in scripts/engineering/webkit-macos.mjs (docs/TESTING.md 2).
+# Advisory: not a required status (docs/ENGINEERING_SYSTEM.md §10 keeps that
+# list, .github/mergify.yml its copy).
 on:
   push:
     branches: [main]
@@ -13,6 +15,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/webkit-macos.yml"
+      - "scripts/engineering/webkit-macos.mjs"
       - "playwright.config.ts"
       - "e2e/support/**"
   workflow_dispatch:
@@ -43,10 +46,12 @@ jobs:
       # macOS needs no system packages, so no --with-deps.
       - name: Install WebKit
         run: pnpm exec playwright install webkit
+      # The `webkit` project without the tests known to fail on macOS WebKit
+      # (#1046); the script first proves its pattern selects exactly those.
       - name: WebKit E2E
         env:
           E2E_NO_BUILD: "1"
-        run: pnpm test:e2e --project=webkit
+        run: node scripts/engineering/webkit-macos.mjs
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
