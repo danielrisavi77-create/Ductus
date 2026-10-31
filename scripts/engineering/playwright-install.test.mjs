@@ -4,11 +4,14 @@ import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Guards scripts/engineering/playwright-install.sh, which ci.yml calls instead
 // of `playwright install` itself: it must keep --with-deps and the browser
 // list on every attempt, cap all attempts but the last, and fail when all fail.
-const script = new URL("./playwright-install.sh", import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows the pathname keeps a leading
+// slash before the drive letter, which fs reads as D:\D:\...
+const script = fileURLToPath(new URL("./playwright-install.sh", import.meta.url));
 const source = await readFile(script, "utf8");
 
 async function run({ failures, hangFirst = false, timeout = "2", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false }) {
