@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 export const SCHEMA = "db/schema.sql";
 // Local and CI stack only (compose.yaml). No role= here: libpq rejects the
 // parameter that dbmate adds for migrations, and a dump only reads.
-const URL = "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable";
+const DB_URL = "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable";
 const IMAGE = /^sha256:[0-9a-f]{64}$/;
 
 /** --write, or a check with an optional --out FILE; anything else is an error. */
@@ -93,7 +93,7 @@ function dump(tmp) {
   chmodSync(path.join(bin, "pg_dump"), 0o755);
   const file = path.join(tmp, "schema.sql");
   const dbmate = fileURLToPath(new URL("../../node_modules/dbmate/dist/cli.js", import.meta.url));
-  const result = spawnSync(process.execPath, [dbmate, "--url", URL, "--schema-file", file, "dump"], {
+  const result = spawnSync(process.execPath, [dbmate, "--url", DB_URL, "--schema-file", file, "dump"], {
     stdio: "inherit",
     env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, DUCTUS_PG_DUMP_IMAGE: serverImage() },
   });
