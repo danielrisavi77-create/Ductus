@@ -222,14 +222,14 @@ Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprod
 
 ## M9 AI pomoćnik
 
-**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-77 ga drži izvan pilota; D-191 ga vraća u cilj programa.
+**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela.
 
 **Gotovo na mainu:** pravilo AI-ja i dopuštene svrhe na kolegiju i zadatku (#943). **Nema:** posrednika prema pružatelju ni sučelja pomoćnika.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M9.1 | Izbor pružatelja i način obrade u EU-u (razlog D-77) | V | | novo |
-| M9.2 | Posrednik prema pružatelju: `provider.only`, ograničenje troška, tajne korisnika AES-256-GCM s AAD (D-74) | B | M9.1 | novo |
+| M9.1 | Izbor pružatelja, model računa i ugovorni model (D-194 t. 6 i 7, PRIJEDLOG; razlog D-77), uz pravno mišljenje i DPIA | V | | novo |
+| M9.2 | Posrednik prema pružatelju: `provider.only`, ograničenje troška, tajne po modelu računa koji se odluči (D-74 pod preispitivanjem, D-194) | B | M9.1 | novo |
 | M9.3 | Dopušteni pružatelji po fakultetu i zadatku | B | M2.12, M9.2 | novo |
 | M9.4 | Panel Asistent i prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42) | F, B | M9.3, M3.1 | novo |
 | M9.5 | Razgovori priloženi uz izjavu; nepriloženi nisu vidljivi nastavniku (D-41) | B, F | M9.4, M7.5 | novo |
@@ -292,7 +292,7 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 ## Otvorena pitanja za vlasnika
 
 1. Novi raspored i datum pilota (D-191 t. 2; već u Owner queueu).
-2. M9: D-191 stavlja AI pomoćnika u cilj, a D-77 ga drži izvan pilota zbog obrade u EU-u. Ostaje li izvan pilota i koji pružatelj ispunjava uvjet (M9.1)?
+2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
 3. Raspored sadržaja vala 3 po fazama (N-14, N-15, P-01, S-46 i stavke iz `docs/PROGRAM.md`, val 3).
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
 5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik) nema odluke u repou.
