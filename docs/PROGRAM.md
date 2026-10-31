@@ -2,7 +2,7 @@
 
 Verzija 0.3 · 30. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
-**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored.
+**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
 
 Faze idu redom po ovisnostima. Faza je gotova tek kad je njezin izlazni kriterij dokazan testom ili zapisom, ne kad je kod napisan. Procjene su u večerima rada (oko 3 sata) jedne osobe uz AI agente i služe samo za planiranje.
 
@@ -29,7 +29,7 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 | **M6 Suradnja** | Nastavnički pogled na spremljeno stanje (polling, D-74), komentari vezani uz odlomak, prijedlozi izmjena, izravne izmjene s pripisivanjem, pravilo D-34; val 2: zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), konzultacije (D-47) | Komentar i prijedlog stižu studentu bez osvježavanja; svaka izmjena nastavnika pripisana u evidenciji; nema izgubljenih promjena kad oboje rade; izmjena prihvaćenog odlomka ponovno otvara pregled | 17 do 24 |
 | **M7 Predaja i sažetak** | Obavijest (S3), ciklusi verzija, pregled prije predaje, zamrzavanje, rekonstrukcija, potvrda, sažetak procesa, usporedba verzija, produljenje roka, izjava po FPZG čl. 9 i 15 (D-40); val 2: prenosiv zapis s QR provjerom (D-49) | Rekonstrukcija podudarna na svim scenarijima, uključujući prazninu; nepodudarnost blokira predaju; student i nastavnik vide isti sažetak; nema zabranjenih riječi; rok testiran preko promjene sata; izjava sadrži sve zabilježene stavke; karta podrijetla bez zbroja (D-57); otvorena mjesta (D-61) i pravila zadatka s kontrolnim popisom (D-62) bez oznaka prolaza | 15 do 20 |
 | **M8 Uvoz i izvoz** | Uvoz DOCX-a i PDF-a kao označen događaj; izvoz DOCX-a i PDF-a u obliku fakulteta | Uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil | 6 do 8 |
-| **M9 AI pomoćnik** (izvan pilota, D-77) | Prijava preko OpenRoutera, popis dopuštenih pružatelja po fakultetu i zadatku, prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42), razgovori uz izjavu (D-41), zaštita sadržaja pri lekturi (D-46), poznato podrijetlo i podudaranje s AI odgovorom (D-58) | Nedopušten pružatelj nije dostupan; svako prenošenje u evidenciji; nepriloženi razgovori nisu vidljivi nastavniku; promijenjena brojka ili citat prikazani prije primjene; prepisan AI odgovor označen; svrhe razine 2 nedostupne dok ih nastavnik ne uključi, pomoćnik koji pita (D-64) | 14 do 19 |
+| **M9 AI pomoćnik** (u pilotu, D-194; mijenja D-77) | Pristup pomoćniku preko računa kod pružatelja (model računa i pružatelj su otvoreni, D-194 t. 6 i 7), popis dopuštenih pružatelja po fakultetu i zadatku bez kineskih pružatelja i modela (D-194 t. 2), sve namjene iz D-64 uključujući transkripciju i alate pružatelja (D-194 t. 4), prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42), razgovori uz izjavu (D-41), zaštita sadržaja pri lekturi (D-46), poznato podrijetlo i podudaranje s AI odgovorom (D-58) | Nedopušten pružatelj nije dostupan; svako prenošenje u evidenciji; nepriloženi razgovori nisu vidljivi nastavniku; promijenjena brojka ili citat prikazani prije primjene; prepisan AI odgovor označen; svrhe razine 2 nedostupne dok ih nastavnik ne uključi, pomoćnik koji pita (D-64) | 14 do 19 |
 | **M10 Podaci** | Klase podataka, brisanje po roku, izvoz za studenta i za bivšeg studenta preko administratora | Brisanje po roku testirano; lanac ostaje provjerljiv nakon brisanja sadržaja | 3 |
 | **M11 GO uvjeti** | Produkcijski okoliš u EU-u (D-08), staging s AAI@EduHr Labom, proba povrata iz kopije, DPIA i ugovor o obradi, obavijest o privatnosti, pristupačnost, `docs/OPERATIONS.md` | Sve stavke iz tablice GO uvjeta zelene i zapisane | 3 + vanjski rokovi |
 | **M12 Pilot** | Faza A tehnička proba, faza B nastava, faza C evaluacija | Mjerila iz `PRODUCT.md` §12 izmjerena i zapisana | Ljetni semestar |
@@ -65,6 +65,8 @@ Ovo nije dodatni posao: sve stavke su dio vala 1 i samo su poredane tako da prvi
 
 ## Raspored po valovima [ODLUČENO D-36, verzija 2]
 
+**Povijesni zapis od D-191 (30. 10. 2026.).** Datumi, kapacitet, kontrolne točke 15. 12. i 16. 11. 2026. te okidač rezova u ovom odjeljku ne vrijede dok vlasnik ne odluči novi raspored. Odluke D-36, D-99 i D-100 ostaju zapisane; redoslijed rada sada je u `docs/PROGRAM-RAZRADA.md`.
+
 U pilot ulazi sve prihvaćeno (D-26, D-65), ali ne odjednom. Faze M0 do M11 iz tablice gore dijele se po valovima; ovdje je što točno ide u koji val.
 
 ### Kapacitet
@@ -94,7 +96,7 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
-Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D-38). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tražiti, D-38); u koji val pilota ulazi M9 (D-194) odlučuje novi raspored prema datumu pilota 1. 3. 2027. Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
@@ -123,7 +125,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | B5 | Dnevni korijen i žig, CLI verifikator (D-72) | 4 do 5 |
 | **Ukupno** | | **28 do 38** |
 
-Izvan pilota (3. 10. 2026.): ugrađeni AI pomoćnik M9 (D-77) i grupni radovi S-12 (D-78).
+Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad.
 
 Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se pomiče prema kraju semestra; ne skraćuje se val 1.
 
@@ -165,14 +167,14 @@ Jedan crveni uvjet znači da val ne kreće.
 | Tehnički | Produkcijska konfiguracija nema lažnog OIDC pružatelja | Test u CI-ju |
 | Tehnički | Nema zabranjenih riječi u sučelju | Automatska provjera u CI-ju |
 | Pristupačnost | axe bez kritičnih nalaza; svi tokovi tipkovnicom; editor i pregled prije predaje provjereni čitačem zaslona | Izvještaj axe i zapis ručne provjere |
-| Podatkovni | DPIA i ugovor o obradi s FPZG-om potpisani | Dokumenti |
+| Podatkovni | DPIA i ugovor o obradi s FPZG-om potpisani; DPIA i pravno mišljenje (D-55, D-151) pokrivaju i AI pomoćnika, uključujući transkripciju i alate pružatelja (D-194 t. 4 i 5). Ugovor potpisuje pravna osoba operatera koju vlasnik osniva kad fakultet odobri pilot, prije prvih stvarnih podataka (D-194 t. 3) | Dokumenti |
 | Podatkovni | Rokovi čuvanja i dopušteni AI pružatelji potvrđeni | `DECISIONS.md` D-30, D-35 |
 | Podatkovni | Obavijest o privatnosti objavljena i ugrađena u obavijest o zadatku | Tekst obavijesti |
 | Nastavni | Koordinator na FPZG-u, odabrani kolegiji i mentori, odluka o obveznosti (D-04) | Zapis dogovora |
 | Nastavni | Pragovi za korisnost i razumijevanje iz `PRODUCT.md` §12 definirani | Zapis u `DECISIONS.md` |
 | Operativni | Kontakt za podršku, postupak incidenta, imenovana osoba na FPZG-u koja smije zaustaviti pilot | `docs/OPERATIONS.md` (nastaje u M11) |
 | Operativni | Registracija u AAI@EduHr Registru resursa odobrena | Potvrda Srca |
-| Podatkovni | Popis podizvršitelja (hosting, baza, objekti, KMS, e-pošta, praćenje grešaka, OpenRouter, GitHub ako objavljuje korijene) s DPA-ima priložen ugovoru s FPZG-om (čl. 28(2) GDPR-a) | Dokument |
+| Podatkovni | Popis podizvršitelja (hosting, baza, objekti, KMS, e-pošta, praćenje grešaka, AI pružatelji koje ustanova odobri, GitHub ako objavljuje korijene) s DPA-ima priložen ugovoru s FPZG-om (čl. 28(2) GDPR-a) | Dokument |
 | Tehnički | Proba povrata baze **i** bucketa uspješna; sintetički prolaz evidencije na stagingu koji koristi iste vrste resursa kao produkcija | Zapis probe |
 
 Pilot se zaustavlja ako se dogodi kritičan neovlašten pristup, gubitak rada ili lažan status (npr. "spremljeno" a nije).

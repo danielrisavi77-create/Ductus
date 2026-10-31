@@ -21,6 +21,8 @@ import { createEvidencePayloadReader } from "@/server/evidence/payload-reader";
 import { handleProcessSummaryRequest } from "@/server/projection/process-summary";
 import { handleFastPathRequest, type FastPathRead } from "@/server/teacher/fast-path";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-11c (#757, DAN-308): the teacher's fast path over the real
 // app.fast_path_works under withActor and the payloads stored in the local S3
 // store of compose.yaml. The summary of each work is the one the
@@ -30,9 +32,7 @@ import { handleFastPathRequest, type FastPathRead } from "@/server/teacher/fast-
 // invented, the text is Lorem ipsum.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The fast path test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The fast path test runs only against a loopback database (DATABASE_URL).");
 const ORIGIN = "http://localhost:3000";
 const THRESHOLDS = { sessionBreakAboveMinutes: 30, pasteListedAboveCharacters: 200 };
 const suffix = randomBytes(5).toString("hex");
