@@ -36,6 +36,7 @@ When fixing review or QA findings on an open PR:
 - refetch `main`, check real overlap and refresh the branch if `main` changed a file the PR touches; dependent work is opened as a PR only after its parent is in `main` (`docs/ENGINEERING_SYSTEM.md` §13, D-163);
 - stage with `git add <paths>` and rerun `pnpm lint`, `pnpm typecheck`, `pnpm test` (`CLAUDE.md`; `docs/SESSIONS.md` §2 step 3);
 - after the push, confirm the head on origin equals the local head (`pnpm orch:push`, i.e. `scripts/orchestrator/push-verify.mjs`); every push invalidates earlier review and QA, except a clean base merge that leaves the PR diff unchanged (D-101) (`docs/ENGINEERING_SYSTEM.md` §6 and §9);
+- check CI once, never in a loop or with `gh pr checks --watch`: `node scripts/orchestrator/ci-once.mjs <pr> [--head <sha>]` exits 0 green, 1 red (failed check named), 3 still running, 2 read error or moved head; on "still running" hand the work back with the head instead of waiting;
 - update the `IZVJEŠTAJ` in the PR description with the new head and an answer to every finding (`docs/SESSIONS.md` §3);
 - never publish `Agent-Review`, `QA-Agent` or `Owner-Override`, and never merge (`docs/ENGINEERING_SYSTEM.md` §3 and §7; `docs/SESSIONS.md` §2 step 7).
 

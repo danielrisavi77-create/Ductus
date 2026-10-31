@@ -18,5 +18,6 @@ Vrijedi uz karticu uloge. Pravila su u dokumentima na koje se upućuje.
 - `cc-safety-net` blokira destruktivne git naredbe (npr. `git checkout -- <datoteka>`, `git reset --hard`). Ne zaobilazi ga: napravi kopiju datoteke i vrati je ručno.
 - Nakon spajanja `main` u granu modul može nedostajati dok ne pokreneš `pnpm install --frozen-lockfile`.
 - Nakon pusha provjeri da je head na originu jednak lokalnom: `pnpm orch:push`.
+- CI provjeravaj jednom, ne čekaj u petlji ni s `gh pr checks --watch`: `node scripts/orchestrator/ci-once.mjs <pr> [--head <sha>]` (izlaz 0 zeleno, 1 crveno s imenom checka, 3 još traje, 2 greška čitanja ili head se pomaknuo). Kod „još traje” predaj posao i javi head; provjera se ponavlja kasnije.
 - Izmjena opisa PR-a ponovno pokreće Engineering review gate; promjena `Risk`, `Agent` ili `Task` ne nasljeđuje stari zeleni status (`docs/ENGINEERING_SYSTEM.md` §5).
 - Kvotni fallback: redak `Provider-Fallback:` prepiši doslovno iz `docs/SESSIONS.md` §3 ("QA upit"); zarez iza imena pružatelja ruši gate.
