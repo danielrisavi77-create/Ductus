@@ -38,7 +38,7 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 
 1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
-3. Testovi i provjere lokalno zeleni prije commita (`pnpm lint`, `pnpm typecheck`, `pnpm test`). Lefthook pri commitu provjerava staged lint i tajne, a prije pusha izvodi puni lint i typecheck te test: push koji mijenja samo `src/` i unit ili property testove pokreće testove koje te promjene dosežu plus sve testove koji čitaju datoteke s diska, a svaka druga promjena pokreće puni `pnpm test` (`scripts/engineering/pre-push-tests.mjs`, D-161 (g)). `DUCTUS_PREPUSH_FULL=1` traži puni skup. CI uvijek pokreće sve; lokalni zeleni test i dalje je uvjet prije commita.
+3. Testovi i provjere lokalno zeleni prije commita (`pnpm lint`, `pnpm typecheck`, `pnpm test`). Lefthook pri commitu provjerava staged lint i tajne, a prije pusha izvodi puni lint i typecheck te test: push koji mijenja samo `src/` i unit ili property testove pokreće testove koje te promjene dosežu plus sve testove koji čitaju datoteke s diska, promjene samo iz strogog popisa skripti i dokumenata pokreću sve engineering/orchestrator `node:test` testove te statičke i datotečne/dinamičke Vitest čitatelje (`tooling`, DAN-361; dopuna D-161 (g); na Windowsu se taj način ne bira i te promjene pokreću puni `pnpm test` do DAN-369), a svaka druga ili nepoznata promjena pokreće puni `pnpm test` (`scripts/engineering/pre-push-tests.mjs`). I dopušteni dokumenti zadržavaju testove čitatelja; nema načina bez testova. `DUCTUS_PREPUSH_FULL=1` traži puni skup. CI uvijek pokreće sve; lokalni zeleni test i dalje je uvjet prije commita.
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`. Nakon svakog pusha, prije čekanja na CI, autor (podagent ili sesija) ostavlja na PR-u kratak komentar "Trag rada" (predložak u §3); završni izvještaj iz koraka 6 i dalje je obvezan (Daniel, 10. 10. 2026.).
 5. PR dobiva neovisni pregled na aktualnom headu. Za `critical` PR obvezan je i zaseban QA/adversarial PASS. Za deklarirani author guard `codex` i `chatgpt` na istom slotu tretiraju se kao isti OpenAI principal (`openai:<slot>`), jer koriste isti GitHub App. Autor, reviewer i QA moraju biti različite aktivne agent-instance po governance pravilu; gate strojno provjerava da reviewer i QA dolaze iz različitih autentificiranih GitHub Appova, osim uz neovisni Codex par samo na aktualnom headu (D-158), kvotni fallback ili put druge Claude sesije (D-139) iz `docs/ENGINEERING_SYSTEM.md` §6. Autor ispravlja prihvaćene nalaze, a odbijene obrazlaže.
 6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Claude sesija na istom računu uz to šalje orkestratoru jednu poruku po `docs/ORKESTRATOR.md` §5; rad s drugog računa ili providera o poruci ne ovisi.
@@ -202,13 +202,15 @@ Codex CLI je zadani automatizirani reviewer kad je dostupan, ali nije jedini dop
 powershell -File scripts/codex-review.ps1 -Level <light|standard|critical>
 ```
 
-Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Daniel, 3. 10. 2026.):
+Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po riziku PR-a i tablici (D-192, Daniel, 31. 10. 2026.):
 
-| Razina | Codex model, effort | Zadaci |
+| Razina (`Risk` PR-a) | Codex model, effort | Zadaci |
 | --- | --- | --- |
-| `light` | GPT-6-Luna, medium | dokumenti, CI i konfiguracija, paketi, preimenovanja |
-| `standard` | GPT-6-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
-| `critical` | GPT-6-Astra, xhigh | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
+| `light` (`low`) | GPT-6.1-Terra, high | dokumenti, CI i konfiguracija, paketi, preimenovanja |
+| `standard` (`standard`) | GPT-6.1-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
+| `critical` (`critical`) | GPT-6.1-Sol, ultra | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
+
+Zamjena na bilo kojoj razini (D-192): ako prvi pregled zapne, ponavlja se jednom na istom headu s `-Escalate` (GPT-6-Astra, high). Zapeo je kad se pokretanje prekine ili istekne, kad nalaz nema redak "Dohvatljivo kroz:" ili kad ga orkestrator ili autor obrazloženo ocijeni nepouzdanim. Ova tablica vrijedi samo za lokalni pregled skriptom; Astra u fallback paru za kanonski `critical` PASS (`docs/ENGINEERING_SYSTEM.md` §6, D-158) ostaje neizmijenjena, a komentar skripte nije PASS ni FAIL.
 
 Claude worker sesije trenutačno su na Opusu, osim gdje `docs/ORKESTRATOR.md` §7 ("Model po poslu") traži drugi model; effort orkestrator postavlja po zadatku: `low` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
@@ -221,6 +223,8 @@ pwsh -File scripts/grok-review.ps1 [-Pr <broj>] [-Post -Verdict <PASS|FAIL|BLOCK
 ```
 
 Treba PowerShell 7.4 ili noviji (`pwsh`), ne Windows PowerShell 5.1. Jednokratno: instaliraj Grok Build CLI (`npm install -g @xai-official/grok` ili `irm https://x.ai/cli/install.ps1 | iex`) i prijavi se naredbom `grok login`. Skripta odbija rad ako je postavljen `XAI_API_KEY` (istekla prijava bi tiho naplatila API). Pokreće se samo nad vlastitom ili provjerenom granom, nikad u `ductus-security`, jer diff ide xAI-ju; diff veći od jedne naredbene linije ne prima (podijeli PR). Razine nema: dubinu određuje zadani model CLI-ja. Bez `-Post` pregled se samo ispisuje; s `-Post -Verdict ...` objavljuje se kanonski review komentar s tvog GitHub računa, s verdiktom koji ti daješ nakon čitanja i s retkom `Review-Channel: grok-cli`. Gate ga broji kao Grok provider (D-162, `docs/ENGINEERING_SYSTEM.md` §6).
+
+Isti put ima Codex CLI (D-193): review ili QA pokrenut iz `codex exec` postaje kanonski verdikt kad se objavi s vlasnikova računa s kanonskim blokom (`Agent-Review`/`Review-Head`/`Review-Verdict` ili `QA-Agent`/`QA-Head`/`QA-Verdict`) i retkom `Review-Channel: codex-cli` izvan code blocka; gate ga broji kao Codex App. Komentar `scripts/codex-review.ps1` bez tih redaka i dalje nije PASS ni FAIL.
 
 ## 6. Dizajn
 

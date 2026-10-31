@@ -109,10 +109,6 @@
   background: var(--accent);
 }
 
-.dot[data-work="revision_requested"]::before {
-  background: var(--cmt);
-}
-
 .dot[data-work="submitted"]::before {
   background: var(--synced);
 }
@@ -204,18 +200,6 @@
   }
 }
 
-.linkButton {
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  text-align: left;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 .text {
   display: flex;
   flex-direction: column;
@@ -242,25 +226,34 @@
   border-radius: var(--radius);
 }
 
-.block p {
+.block p,
+.block ul {
   margin: 0;
   font-family: var(--ff-manuscript);
   font-size: 16px;
   line-height: 1.7;
 }
 
-.block[data-marked="true"] {
-  background: var(--raised);
-  outline: 1px solid var(--ink-3);
+/* A run of bullet items and a run of quotes, as the manuscript draws them (E1). */
+.block ul {
+  padding-left: 26px;
 }
 
-.tag {
-  font-size: 12px;
+.block blockquote {
+  margin: 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--rule);
   color: var(--ink-2);
 }
 
 .state {
   margin: 24px 0;
+  color: var(--ink-2);
+}
+
+.note {
+  margin: 0 0 12px;
+  font-size: 13px;
   color: var(--ink-2);
 }
 

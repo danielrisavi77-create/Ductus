@@ -135,6 +135,36 @@ test("a teacher sees their course with its assignment, in the route's order, and
   expect(lightAxe.violations).toEqual([]);
 });
 
+// DAN-249 (#876): V3 and A2. The form before any input has no dates and no
+// live data (its years are a fixed list), so its baseline is stable. Only the
+// `main` element is compared, so the `next dev` indicator is not in the image;
+// nothing is masked and the tolerances are Playwright's defaults. The baseline
+// is made on the CI runner and committed after review (docs/TESTING.md §2).
+test("V3 and A2: the new course and assignment form matches its baseline; the teacher navigation keeps its items", async ({ page }) => {
+  await asTeacher(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/nastavnik/zadatak/novi");
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.teacher.title })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  await expect(page.getByRole("navigation", { name: messagesHr.shell.workNav })).toMatchAriaSnapshot(`
+    - navigation "Radni prostor":
+      - list:
+        - listitem:
+          - link "Moji kolegiji":
+            - /url: /nastavnik
+        - listitem:
+          - link "Novi kolegij i zadatak":
+            - /url: /nastavnik/zadatak/novi
+        - listitem:
+          - link "Brz put":
+            - /url: /nastavnik/brz-put
+  `);
+  await expect(page.getByRole("main")).toHaveScreenshot("nastavnik-novi-zadatak.png");
+});
+
 test("without JavaScript a teacher on a phone still reaches signing out in the shell (I5)", async ({ page, browser }) => {
   await asTeacher(page);
   const context = await browser.newContext({

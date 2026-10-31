@@ -218,10 +218,19 @@ export class EvidenceSession {
     this.refused = meta.refusedLocalSeq !== undefined;
     this.stopped = meta.evidenceStopped ?? null;
     this.profile = this.work?.evidenceProfileId ?? this.deps.storedProfile?.(meta) ?? null;
+    this.loaded = true;
+    if (this.work?.submitted) {
+      // O2 (DAN-289, #756 c.6399602745): a submitted work opens closed, the
+      // same as after a 409 `not_accepting`. No recorder, runner, watch or
+      // `online` listener starts, so nothing more goes to `/api/evidence/*`;
+      // the rows the journal holds stay there, neither sent nor deleted.
+      this.closedBy = "submission";
+      this.emit();
+      return { kind: "ready", document: document.doc };
+    }
     if (this.work) this.runner = this.deps.createRunner(this.work);
     this.recorder = new EvidenceRecorder();
     this.sessionId = this.newId();
-    this.loaded = true;
     this.unwatch = this.deps.watchSubmission?.(() => this.closeBySubmission()) ?? (() => {});
     this.unlisten = this.deps.network.onOnline(() => {
       this.retryOpen();
@@ -501,9 +510,13 @@ export class EvidenceSession {
     }
   }
 
-  /** Opens again while the work is unknown (§2 t. 4): on `online` and after each saved segment. */
+  /**
+   * Opens again while the work is unknown (§2 t. 4): on `online` and after
+   * each saved segment. Never while paused (the sign-out dialog) or ended
+   * (F-154): `resume()` leaves it to the next `online` or saved segment.
+   */
   private retryOpen(): void {
-    if (this.work || this.opening || this.closed || !this.deps.network.online()) return;
+    if (this.work || this.opening || this.paused || this.ended || !this.deps.network.online()) return;
     this.opening = this.openSafely().then((opened) => {
       if (opened.status !== "opened" || this.closed) return;
       if (opened.work.documentId !== this.id) {
@@ -512,6 +525,12 @@ export class EvidenceSession {
         return;
       }
       this.work = opened.work;
+      if (opened.work.submitted) {
+        // O2 also when the first open could not be reached (Codex #818
+        // r4380722769): close as `load()` does, before any runner exists.
+        this.closeBySubmission();
+        return;
+      }
       this.profile = opened.work.evidenceProfileId;
       this.runner = this.deps.createRunner(opened.work);
       this.startWrites();

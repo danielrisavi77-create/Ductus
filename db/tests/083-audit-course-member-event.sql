@@ -152,6 +152,17 @@ SELECT is(left(pg_temp.as_owner($$ INSERT INTO audit.course_member_event (instit
   VALUES ({fak_a}, {k3}, {ana_k1_again}, {ana}, 'return_allowed', {vesna}, now()) RETURNING 'written' $$), 6), '23503:', 'a course of another institution is refused');
 SELECT is(left(pg_temp.as_owner($$ INSERT INTO audit.course_member_event (institution_id, course_id, membership_id, student_id, kind, actor_id, occurred_at)
   VALUES ({fak_a}, {k1}, {nobody}, {ana}, 'return_allowed', {vesna}, now()) RETURNING 'written' $$), 6), '23503:', 'a membership that does not exist is refused');
+-- F-149 t. 2: the row is bound to its membership, not only to its id. Dora and
+-- K2 are of the same institution, so only that binding refuses these.
+SELECT is(left(pg_temp.as_owner($$ INSERT INTO audit.course_member_event (institution_id, course_id, membership_id, student_id, kind, actor_id, occurred_at)
+  VALUES ({fak_a}, {k1}, {ana_k1_again}, {dora}, 'return_allowed', {vesna}, now()) RETURNING 'written' $$), 6), '23503:',
+  'another student of the same course is refused for Ana''s membership');
+SELECT is(left(pg_temp.as_owner($$ INSERT INTO audit.course_member_event (institution_id, course_id, membership_id, student_id, kind, actor_id, occurred_at)
+  VALUES ({fak_a}, {k2}, {ana_k1_again}, {ana}, 'return_allowed', {vesna}, now()) RETURNING 'written' $$), 6), '23503:',
+  'another course of the same institution is refused for Ana''s membership in K1');
+SELECT fk_ok('audit', 'course_member_event', ARRAY['membership_id', 'course_id', 'student_id', 'institution_id'],
+  'institution', 'course_member', ARRAY['id', 'course_id', 'user_id', 'institution_id'],
+  'the event row names its membership with course, student and institution');
 SELECT is(pg_temp.events(), 4::bigint, 'no refused row was stored');
 
 -- Forced RLS is the protection, not only the missing grants.

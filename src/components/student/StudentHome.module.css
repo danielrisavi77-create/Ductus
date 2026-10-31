@@ -1,0 +1,149 @@
+/*
+ * DAN-344, Archivum S01 on /zadaci (owner's package of 26. 10. 2026.,
+ * S01_pocetna.png), laid out only on the existing tokens of app/globals.css:
+ * no colour of its own, so the page follows the shell's palette and theme.
+ * Its own container, not `.page`, whose 640 px child limit would keep the
+ * two-column course grid from forming.
+ */
+.home {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px clamp(16px, 4vw, 44px) 64px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 28px;
+  padding-bottom: 24px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 64px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin: 8px 0 0;
+  font-size: 26px;
+  line-height: 1.25;
+  color: var(--ink-2);
+}
+
+/* The package's secondary button: an accent outline on the page ground. */
+.enroll {
+  display: inline-flex;
+  align-items: center;
+  gap: 15px;
+  min-height: 54px;
+  padding: 13px 23px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 18px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.enroll:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.enroll:focus-visible {
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
+}
+
+.plus {
+  color: var(--accent);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.sectionTitle {
+  margin: 20px 0 16px;
+  font-family: var(--ff-display);
+  font-size: 42px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 800px;
+  padding: 40px 0;
+}
+
+.state p {
+  margin: 0;
+}
+
+.stateTitle {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.stateBody {
+  font-size: 19px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 1250px) {
+  .title {
+    font-size: 54px;
+  }
+
+  .enroll {
+    font-size: 15px;
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .home {
+    padding-top: 32px;
+  }
+
+  .heading {
+    display: block;
+  }
+
+  .title {
+    font-size: 44px;
+    line-height: 1.1;
+  }
+
+  .lede {
+    font-size: 21px;
+    line-height: 1.45;
+  }
+
+  .heading .enroll {
+    margin-top: 20px;
+    min-height: 46px;
+  }
+
+  .sectionTitle,
+  .stateTitle {
+    font-size: 33px;
+  }
+}

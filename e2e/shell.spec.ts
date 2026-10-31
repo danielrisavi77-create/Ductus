@@ -77,19 +77,19 @@ test.describe("workspace shell", () => {
       const outline = await focused.evaluate((element) => getComputedStyle(element).outlineStyle);
       expect(outline).not.toBe("none");
     }
-    // The teacher view has no address yet (F-8): it is a stop, but says it is not ready.
+    // Without an assignment the teacher view has no address: it is a stop, but says so.
     // The shell's brand, the top bar's Početna (#802) and the theme switch come
     // first (no session: no navigation).
     expect(stops).toEqual([
       "Preskoči na sadržaj", "Ductura, početna", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
-      "Kako vidi nastavnik uskoro",
+      "Kako vidi nastavnik samo uz zadatak",
     ]);
   });
 
-  test("teacher view is visibly disabled until F-8; the sheet is the local editor", async ({ page }) => {
+  test("teacher view is visibly disabled without an assignment; the sheet is the local editor", async ({ page }) => {
     await page.goto("/rad");
     const teacher = page.getByRole("navigation", { name: "Prikaz" }).getByRole("button", {
-      name: "Kako vidi nastavnik uskoro",
+      name: "Kako vidi nastavnik samo uz zadatak",
     });
     await expect(teacher).toHaveAttribute("aria-disabled", "true");
     await expect(teacher).not.toHaveAttribute("href");
@@ -394,15 +394,15 @@ test.describe("workspace shell", () => {
     expect(shadow).toMatch(/0px 0px 0px 1px/);
   });
 
-  test("shell is dark whatever the system says, the sheet is dark by default (design v3)", async ({ page }) => {
+  test("shell is dark whatever the system says, the sheet is the paper by default (D-188)", async ({ page }) => {
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
       await page.goto("/rad");
       const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(body).toBe("rgb(25, 22, 26)");
+      expect(body).toBe("rgb(36, 36, 34)");
       const sheet = page.locator("article.sheet");
-      await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
-      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(41, 35, 41)");
+      await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(252, 251, 248)");
     }
   });
 
@@ -412,26 +412,26 @@ test.describe("workspace shell", () => {
     const view = page.getByRole("toolbar", { name: "Oblikovanje teksta" }).getByRole("button", { name: "Prikaz" });
     const theme = (name: string) => page.getByRole("menu", { name: "Prikaz" }).getByRole("menuitemradio", { name });
     await view.click();
-    await expect(theme("Tamni list")).toHaveAttribute("aria-checked", "true");
-    await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "false");
-    await theme("Bijeli list").click();
-    const sheet = page.locator("article.sheet");
-    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
-    await view.click();
     await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "true");
-    await page.keyboard.press("Escape");
-    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
-    await page.reload();
-    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
-    await view.click();
+    await expect(theme("Tamni list")).toHaveAttribute("aria-checked", "false");
     await theme("Tamni list").click();
+    const sheet = page.locator("article.sheet");
     await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+    await view.click();
+    await expect(theme("Tamni list")).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(46, 46, 43)");
+    await page.reload();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+    await view.click();
+    await theme("Bijeli list").click();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
   });
 
-  test("a stored value that is not a theme leaves the sheet dark", async ({ page }) => {
+  test("a stored value that is not a theme leaves the sheet on the paper", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("ductus.sheetTheme", "sepia"));
     await page.goto("/rad");
-    await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "dark");
+    await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
   });
 
   test("the brand link on the workspace is a comfortable target", async ({ page }) => {
@@ -456,7 +456,7 @@ test.describe("workspace shell", () => {
     await page.goto("/");
     await expect(
       page.getByText(
-        "Ductura ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
+        "Student piše, a nastavnik prati kako rad nastaje i komentira uz odlomke. Ductura ne procjenjuje autorstvo ni korištenje AI-ja, a prije početka vidite što nastavnik vidi i od kada.",
         { exact: true },
       ),
     ).toBeVisible();

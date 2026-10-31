@@ -21,7 +21,8 @@ export const EVIDENCE_HASH_ALGORITHM_V2 = "sha256" as const;
  * size of its steps. Every change with no positive attribution is
  * `unattributed`, and so is a paste or a drop whose event cannot be relied on.
  * The server cannot observe attribution: it keeps the set closed, and the
- * capture layer keeps these rules.
+ * capture layer keeps these rules. The ninth value, `citation-form`, came with
+ * a new format version, v3 (below).
  */
 export const EVIDENCE_SOURCES_V2 = [
   "editor",
@@ -35,6 +36,24 @@ export const EVIDENCE_SOURCES_V2 = [
 ] as const;
 
 export type EvidenceSourceV2 = (typeof EVIDENCE_SOURCES_V2)[number];
+
+/**
+ * Format v3 (owner decision on #87, "Idemo v3"; contract on #896) is v2 with
+ * one more source: `citation-form`, text the Literatura form inserted, and
+ * only that. Every other rule of v2 holds for v3 unchanged. A segment is
+ * written as v3 only when one of its events is `citation-form`
+ * (`evidenceSchemaForEvents`), so every other segment keeps its v2 bytes; a v2
+ * segment never carries `citation-form`. A package may hold v2 and v3
+ * segments in any order, since a tab opened before v3 keeps writing v2.
+ */
+export const EVIDENCE_SEGMENT_SCHEMA_V3 = "ductus-evidence-segment-v3" as const;
+
+export const EVIDENCE_SOURCES_V3 = [...EVIDENCE_SOURCES_V2, "citation-form"] as const;
+
+export type EvidenceSourceV3 = (typeof EVIDENCE_SOURCES_V3)[number];
+
+/** Any source a segment of any accepted version may carry. */
+export type EvidenceSource = EvidenceSourceV3;
 
 /**
  * The editor models a segment may name. The list is closed, like the step
@@ -81,6 +100,31 @@ export type EvidenceSegmentV2 = {
   evidenceProfileId: string;
 };
 
+export type EvidenceEventV3 = Omit<EvidenceEventV2, "source"> & { source: EvidenceSourceV3 };
+
+export type EvidenceSegmentV3 = Omit<EvidenceSegmentV2, "evidenceSchema" | "events"> & {
+  evidenceSchema: typeof EVIDENCE_SEGMENT_SCHEMA_V3;
+  events: EvidenceEventV3[];
+};
+
+/** A segment of any accepted version. */
+export type EvidenceSegment = EvidenceSegmentV2 | EvidenceSegmentV3;
+
+export type EvidenceSegmentSchema = EvidenceSegment["evidenceSchema"];
+
+/** The schema a segment with these events is written in (contract #896, P1). */
+export function evidenceSchemaForEvents(
+  events: readonly { source: EvidenceSource }[],
+): EvidenceSegmentSchema {
+  return events.some((event) => event.source === "citation-form")
+    ? EVIDENCE_SEGMENT_SCHEMA_V3
+    : EVIDENCE_SEGMENT_SCHEMA_V2;
+}
+
+export function isEvidenceSegmentSchema(value: unknown): value is EvidenceSegmentSchema {
+  return value === EVIDENCE_SEGMENT_SCHEMA_V2 || value === EVIDENCE_SEGMENT_SCHEMA_V3;
+}
+
 export type EvidenceSegmentDigestV2 = {
   canonical: string;
   byteLength: number;
@@ -98,7 +142,14 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 const WHOLE_MINUTE_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
 const MAX_ID_LENGTH = 256;
 const MAX_EVENTS = 5000;
-const SOURCES = new Set<string>(EVIDENCE_SOURCES_V2);
+type SourcesBySchema = ReadonlyMap<string, ReadonlySet<string>>;
+const SOURCES_V2: ReadonlySet<string> = new Set<string>(EVIDENCE_SOURCES_V2);
+const SOURCES_V3: ReadonlySet<string> = new Set<string>(EVIDENCE_SOURCES_V3);
+const ONLY_V2: SourcesBySchema = new Map([[EVIDENCE_SEGMENT_SCHEMA_V2, SOURCES_V2]]);
+const V2_OR_V3: SourcesBySchema = new Map([
+  [EVIDENCE_SEGMENT_SCHEMA_V2, SOURCES_V2],
+  [EVIDENCE_SEGMENT_SCHEMA_V3, SOURCES_V3],
+]);
 const EDITOR_MODELS = new Set<string>(EVIDENCE_EDITOR_MODELS_V2);
 const SEGMENT_KEYS = new Set([
   "evidenceSchema",
@@ -202,12 +253,13 @@ function isSortedUniqueStrings(value: unknown): value is string[] {
 function isEvent(
   value: unknown,
   expectedSequence: number,
-): value is EvidenceEventV2 {
+  sources: ReadonlySet<string>,
+): value is EvidenceEventV3 {
   if (!isPlainObject(value) || !hasOnlyKeys(value, EVENT_KEYS)) return false;
   if (
     value.sequence !== expectedSequence ||
     typeof value.source !== "string" ||
-    !SOURCES.has(value.source) ||
+    !sources.has(value.source) ||
     !areSteps(value.steps) ||
     !isSha256(value.beforeDocumentHash) ||
     !isSha256(value.afterDocumentHash)
@@ -229,17 +281,33 @@ function isEvent(
  */
 export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 {
   try {
-    return isSegmentUnguarded(value);
+    return isSegmentUnguarded(value, ONLY_V2);
   } catch {
     return false;
   }
 }
 
-function isSegmentUnguarded(value: unknown): value is EvidenceSegmentV2 {
+/**
+ * A segment of v2 or v3: each version with its own closed set of sources and
+ * every other rule shared. Never throws, like `isEvidenceSegmentV2`. This is
+ * the one check the client (before it sends) and the server (before it
+ * accepts) both use, through `verifyCanonicalEvidencePayloadV2`.
+ */
+export function isEvidenceSegment(value: unknown): value is EvidenceSegment {
+  try {
+    return isSegmentUnguarded(value, V2_OR_V3);
+  } catch {
+    return false;
+  }
+}
+
+function isSegmentUnguarded(value: unknown, schemas: SourcesBySchema): boolean {
   if (!isPlainObject(value) || !hasOnlyKeys(value, SEGMENT_KEYS)) return false;
+  const sources =
+    typeof value.evidenceSchema === "string" ? schemas.get(value.evidenceSchema) : undefined;
 
   if (
-    value.evidenceSchema !== EVIDENCE_SEGMENT_SCHEMA_V2 ||
+    sources === undefined ||
     value.canonicalization !== EVIDENCE_CANONICALIZATION_V2 ||
     value.hashAlgorithm !== EVIDENCE_HASH_ALGORITHM_V2 ||
     !nonEmptyBounded(value.documentId) ||
@@ -282,7 +350,7 @@ function isSegmentUnguarded(value: unknown): value is EvidenceSegmentV2 {
   for (let index = 0; index < value.events.length; index++) {
     const event = value.events[index];
     if (
-      !isEvent(event, sequenceFrom + index) ||
+      !isEvent(event, sequenceFrom + index, sources) ||
       event.beforeDocumentHash !== previousAfter
     ) {
       return false;
@@ -316,7 +384,27 @@ export function canonicalEvidenceSegmentV2(segment: EvidenceSegmentV2): string {
 export async function digestEvidenceSegmentV2(
   segment: EvidenceSegmentV2,
 ): Promise<EvidenceSegmentDigestV2> {
-  const canonical = canonicalEvidenceSegmentV2(segment);
+  return digestOf(canonicalEvidenceSegmentV2(segment));
+}
+
+export function assertEvidenceSegment(value: unknown): asserts value is EvidenceSegment {
+  if (!isEvidenceSegment(value)) {
+    throw new Error("evidence-v2: invalid segment");
+  }
+}
+
+export function canonicalEvidenceSegment(segment: EvidenceSegment): string {
+  assertEvidenceSegment(segment);
+  return canonicalizeJcs(segment);
+}
+
+export async function digestEvidenceSegment(
+  segment: EvidenceSegment,
+): Promise<EvidenceSegmentDigestV2> {
+  return digestOf(canonicalEvidenceSegment(segment));
+}
+
+async function digestOf(canonical: string): Promise<EvidenceSegmentDigestV2> {
   return {
     canonical,
     byteLength: new TextEncoder().encode(canonical).byteLength,

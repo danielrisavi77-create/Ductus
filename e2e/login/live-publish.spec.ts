@@ -59,6 +59,8 @@ test("the signed-in student's text reaches the live route as the exact document,
   const assignment = await seedWork();
   await page.goto(`/rad?zadatak=${assignment}`);
   const puts = recordPuts(page);
+  // DAN-330: the work starts on the student's click.
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
   const documentId = await workDocument(assignment);
   await editorOf(page).click();
@@ -91,6 +93,8 @@ test("publishing stops at Odjava, starts again on Ostani, and nothing goes out a
   await signIn(page, "/rad");
   const assignment = await seedWork();
   await page.goto(`/rad?zadatak=${assignment}`);
+  // DAN-330: the work starts on the student's click.
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
   const dialog = logoutDialogOf(page);
 

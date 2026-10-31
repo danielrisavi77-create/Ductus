@@ -135,7 +135,8 @@ test("CI pilot only observes the unfiltered full run and survives E2E failure", 
   assert.match(ci, /persist-credentials: false\n(?: +#.*\n)+ +fetch-depth: 2/);
   const e2e = ci.split("      - name: E2E tests\n")[1].split("      - name: UI test selection pilot")[0];
   assert.match(e2e, /UI_TEST_PILOT: "1"/);
-  assert.match(e2e, /pnpm test:e2e --shard="\$E2E_SHARD\/2"\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile --shard="\$E2E_SHARD\/2"\n {10}fi/);
+  assert.match(e2e, /^ {8}run: pnpm test:e2e --shard="\$E2E_SHARD\/3"$/m);
+  assert.doesNotMatch(e2e, /--project/);
   assert.doesNotMatch(e2e, /--grep|--only-changed|steps\..*outputs/);
   assert.match(config, /\[playwrightConsoleReporter\(process.env\)\], \["html", \{ open: "never" \}\]/);
   assert.match(config, /process.env.UI_TEST_PILOT === "1"\n +\? \[\["json", \{ outputFile: "test-results\/ui-pilot-full.json" \}\]/);
@@ -182,7 +183,8 @@ test("CI snapshots a no-run test inventory before the full E2E and keeps the ful
   assert.ok(discovery);
   assert.match(discovery, /PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports\/ui-pilot-inventory.json/);
   assert.match(discovery, /playwright test --list --reporter=json/);
-  assert.match(discovery, /--project=desktop --project=mobile/);
+  // M0.3: the inventory lists every project, as the run does.
+  assert.doesNotMatch(discovery, /--project/);
   assert.ok(ci.indexOf(marker) < ci.indexOf("      - name: E2E tests\n"));
-  assert.match(ci, /pnpm test:e2e --shard="\$E2E_SHARD\/2"\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile/);
+  assert.match(ci, /^ {8}run: pnpm test:e2e --shard="\$E2E_SHARD\/3"$/m);
 });

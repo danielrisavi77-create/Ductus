@@ -22,6 +22,8 @@ import { handleSubmissionRequest } from "@/server/evidence/submission-route";
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
 import { digestSubmissionReceiptPayloadV2 } from "@/domain/forensics/submission-receipt-v2";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-12 step 4b1 / DAN-87: the reconstruction of a submission request over the
 // real database, with segments of real ductus-edit-steps-v1 steps committed
 // through the ingest path from revision 0, receipts signed by the persistent
@@ -29,9 +31,7 @@ import { digestSubmissionReceiptPayloadV2 } from "@/domain/forensics/submission-
 // synthetic rows ("Odlomak A", "Odlomak B") and a random seed, all removed.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The submission record test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The submission record test runs only against a loopback database (DATABASE_URL).");
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = randomBytes(5).toString("hex");
 const login = `it_subrec_${suffix}`;

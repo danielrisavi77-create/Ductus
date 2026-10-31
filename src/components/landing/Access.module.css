@@ -1,0 +1,91 @@
+/* Role explorer and questions of the public home page. Tokens come from the
+   shell (D-115, D-123); no colour or family is added here. */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tab {
+  padding: 8px 16px;
+  border: 1px solid var(--rule-2);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  border-color: var(--accent);
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.tab:focus-visible,
+.faqItem summary:focus-visible {
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
+}
+
+.panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+  padding: 20px;
+  border: 1px solid var(--rule);
+  background: var(--raised);
+}
+
+.listTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+}
+
+.faq {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.faqItem {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.faqItem summary {
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.faqItem p {
+  margin: 10px 0 0;
+  max-width: 640px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 640px) {
+  .panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

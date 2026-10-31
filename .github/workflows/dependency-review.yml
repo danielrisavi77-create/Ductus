@@ -4,6 +4,9 @@ name: Dependency review
 # outside the allow list. OSV in ci.yml scans the whole lockfile; this job
 # looks only at what the PR changes. Results are in the job summary; no PR
 # comment, so the job keeps read-only permissions.
+# The required job always runs: it fails when classification failed and
+# skips only the scanner step for a confirmed docs or tests profile, because
+# Mergify's check-success does not count a skipped job (#971).
 on:
   pull_request:
 
@@ -15,14 +18,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  review:
-    name: Dependency review
+  scope:
+    name: Classify for dependency review
     runs-on: ubuntu-latest
+    outputs:
+      profile: ${{ steps.classify.outputs.profile }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.base.sha || 'main' }}
           persist-credentials: false
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - name: Classify
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != pull_request ] || [ "$PR_BASE_REF" != main ]; then
+            echo 'profile=full' >> "$GITHUB_OUTPUT"
+          elif [ ! -f scripts/engineering/ci-docs-scope.mjs ]; then
+            echo 'profile=full' >> "$GITHUB_OUTPUT"
+          else
+            git fetch --no-tags --depth=1 origin "$PR_HEAD"
+            node scripts/engineering/ci-docs-scope.mjs >> "$GITHUB_OUTPUT"
+          fi
+
+  review:
+    name: Dependency review
+    needs: scope
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a successful classification
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          PROFILE: ${{ needs.scope.outputs.profile }}
+        run: |
+          if [ "$SCOPE_RESULT" != success ]; then
+            echo "::error::Classification failed ($SCOPE_RESULT)"
+            exit 1
+          fi
+          case "$PROFILE" in
+            full|docs|tests) echo "Profile: $PROFILE" ;;
+            *) echo "::error::Unknown profile '$PROFILE'"; exit 1 ;;
+          esac
+      - if: needs.scope.outputs.profile == 'full'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: needs.scope.outputs.profile == 'full'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: moderate
           # The list covers every licence in the lockfile on 3. 10. 2026.

@@ -1,83 +1,195 @@
-/* #711 "Moji zadaci", design S2 (docs/design/ductura), on the D-123 tokens (app/globals.css). */
-.course {
-  border: 1px solid var(--rule-2);
-  border-radius: var(--radius);
-  background: var(--chrome);
+/*
+ * #711 "Moji zadaci" as the Archivum course cards of S01 (DAN-344), on the
+ * existing tokens of app/globals.css only. The motifs are the owner's package
+ * images (public/motivi, see course-motif.ts), decorative CSS backgrounds
+ * with no text alternative of their own.
+ */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
-.courseHead {
-  margin: 0;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--rule-2);
-  font-family: var(--ff-display);
-  font-size: 18px;
+.course {
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--chrome);
+  overflow: hidden;
+}
+
+.head {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: 150px;
+  padding: 22px 24px 14px;
+}
+
+.head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: no-repeat right bottom / contain;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.head[data-motif="city"]::before {
+  background-image: url("/motivi/city.webp");
+}
+
+.head[data-motif="research"]::before {
+  background-image: url("/motivi/research.webp");
+}
+
+/* The accent rule under the course name. */
+.head::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.courseName {
+  max-width: 72%;
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 39px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
 }
 
 .none {
-  padding: 14px 18px;
-  color: var(--ink-3);
+  margin: 0;
+  padding: 18px 24px;
+  color: var(--ink-2);
 }
 
 .assignments {
   margin: 0;
-  padding: 0;
+  padding: 0 22px;
   list-style: none;
 }
 
+.assignments > li + li {
+  border-top: 1px solid var(--rule-2);
+}
+
 .assignment {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title notice" "meta notice";
-  gap: 2px 14px;
-  align-items: center;
-  padding: 12px 18px;
-  border-top: 1px solid var(--hover);
+  display: block;
+  padding: 16px 0;
   color: var(--ink);
   text-decoration: none;
 }
 
-li:first-child > .assignment {
-  border-top: 0;
-}
-
-.assignment:hover {
-  background: var(--hover);
-}
-
 .assignment:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
 }
 
 .title {
-  grid-area: title;
-  font-size: 13.5px;
-  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--ff-display);
+  font-size: 24px;
+  font-weight: 450;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
-.meta {
-  grid-area: meta;
-  font-size: 12px;
-  color: var(--ink-3);
+.bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 }
 
-.notice {
-  grid-area: notice;
-  font-size: 12px;
-  color: var(--accent);
+.due {
+  font-size: 16px;
+  color: var(--ink-2);
+}
+
+.action {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 5px 0 3px;
+  border-bottom: 1px solid var(--ink-3);
+  font-size: 16px;
   white-space: nowrap;
 }
 
-@media (max-width: 640px) {
-  .assignment {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "title" "meta" "notice";
+.assignment:hover .action {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.arrow {
+  font-size: 18px;
+}
+
+@media (max-width: 1250px) {
+  .head {
+    padding: 24px 19px 14px;
   }
 
-  .meta,
-  .notice {
-    font-size: 13px;
+  .courseName {
+    font-size: 33px;
+  }
+
+  .bottom {
+    display: block;
+  }
+
+  .due,
+  .action {
+    display: flex;
+    width: fit-content;
+  }
+
+  .action {
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 700px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+
+  .head {
+    min-height: 175px;
+  }
+
+  .courseName {
+    font-size: 36px;
+  }
+
+  .due,
+  .action {
+    font-size: 14px;
+  }
+
+  .action {
+    margin-top: 10px;
   }
 }

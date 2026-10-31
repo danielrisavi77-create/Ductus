@@ -14,8 +14,8 @@ export type WorkspaceShellProps = {
   mode?: WorkspaceMode;
   /**
    * Where each view lives. A view without an address is a visibly disabled
-   * button marked "uskoro", never a link that leads nowhere: the teacher's
-   * view arrives with F-8.
+   * button that says why, never a link that leads nowhere: the teacher's view
+   * exists only for the student's own assignment work (#732 item 7).
    */
   writingHref?: string;
   teacherViewHref?: string;
@@ -31,6 +31,8 @@ export type WorkspaceShellProps = {
   status: ReactNode;
   /** The sheet and its toolbar. */
   children: ReactNode;
+  /** Drawn instead of `children` when `mode` is "teacher-view": a read-only sheet, no toolbar. */
+  teacherView?: ReactNode;
 };
 
 /**
@@ -57,6 +59,7 @@ export default function WorkspaceShell({
   panel,
   status,
   children,
+  teacherView,
 }: WorkspaceShellProps) {
   return (
     <div className="workspace">
@@ -65,10 +68,10 @@ export default function WorkspaceShell({
       <section className="workspace__bar" aria-label={t.workspace.barLabel}>
         {context ? <p className="brand-line brand-line__context">{context}</p> : null}
         <nav className="modes" aria-label={t.workspace.viewModes}>
-          <ModeLink href={writingHref} current={mode === "writing"}>
+          <ModeLink href={writingHref} current={mode === "writing"} off={t.workspace.soon}>
             {t.workspace.modeWriting}
           </ModeLink>
-          <ModeLink href={teacherViewHref} current={mode === "teacher-view"}>
+          <ModeLink href={teacherViewHref} current={mode === "teacher-view"} off={t.workspace.teacherViewOff}>
             {t.workspace.modeTeacherView}
           </ModeLink>
         </nav>
@@ -77,7 +80,7 @@ export default function WorkspaceShell({
       {banner}
       <div className="workspace__body">
         <main id="sadrzaj" tabIndex={-1} className="workspace__main">
-          {children}
+          {mode === "teacher-view" ? teacherView : children}
         </main>
         <ShellRail className="workspace__panel" label={t.workspace.sidePanel}>
           {panel}
@@ -93,18 +96,18 @@ export default function WorkspaceShell({
   );
 }
 
-type ModeLinkProps = { href?: string; current: boolean; children: ReactNode };
+type ModeLinkProps = { href?: string; current: boolean; off: string; children: ReactNode };
 
 /**
  * One entry of the view switch. Without an address it is a button that stays
- * in the Tab order and says it is unavailable (`aria-disabled`), so a keyboard
- * or screen reader user learns the view exists and is not ready yet.
+ * in the Tab order and says it is unavailable (`aria-disabled`) and why
+ * (`off`), so a keyboard or screen reader user learns the view exists.
  */
-function ModeLink({ href, current, children }: ModeLinkProps) {
+function ModeLink({ href, current, off, children }: ModeLinkProps) {
   if (href === undefined) {
     return (
       <button type="button" className="modes__item" aria-disabled="true">
-        {children} <span className="soon">{t.workspace.soon}</span>
+        {children} <span className="soon">{off}</span>
       </button>
     );
   }

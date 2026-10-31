@@ -46,3 +46,18 @@ export async function readShellAccount(token: string | undefined, withActor: Wit
 export async function readShellRole(token: string | undefined, withActor: WithActor): Promise<ShellRole | null> {
   return (await readShellAccount(token, withActor)).role;
 }
+
+/**
+ * Where "/" sends a signed-in person (DAN-325): a confirmed teacher to the
+ * teacher's page, any other open session to the workspace, and no one when
+ * the session is closed or could not be read. One read gives both the way on
+ * and the shell's scope (F-151): the role is the same B-7 check
+ * `list_teacher_courses` makes, so nothing is guessed from the cookie.
+ */
+export async function readHome(
+  token: string | undefined, withActor: WithActor,
+): Promise<{ path: "/rad" | "/nastavnik" | null; scope: string | null }> {
+  const { role, scope } = await readShellAccount(token, withActor);
+  const path = role === "teacher" ? "/nastavnik" : role === "student" ? "/rad" : null;
+  return { path, scope };
+}

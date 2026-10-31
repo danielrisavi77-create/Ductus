@@ -6,7 +6,47 @@ import { browserMarkStore, hasEnded, type MarkStore, type SessionMark } from "./
 /** A read blocked by another tab's deletion must not hold the sign-out (D-118). */
 export const LOGOUT_HOLD_LIMIT_MS = 2_000;
 
-export type HoldRead = LogoutHold | "noStorage" | "unknown" | "ended";
+/**
+ * How long "Odjava" waits for this tab to finish loading its journal (#874).
+ * Past it the count stays unknown and the dialog still offers "Odjavi se",
+ * so a load that never ends cannot hold the sign-out (D-118, I1).
+ */
+export const LOGOUT_LOAD_LIMIT_MS = 10_000;
+
+/**
+ * Resolves once `loading()` is false, checked again on every `wake` the
+ * subscription gives, or once the limit has passed. A click made while the
+ * journal is still being read is decided on what the journal holds, not on
+ * an unread journal (#874).
+ */
+export function untilLoaded(
+  loading: () => boolean,
+  subscribe: (wake: () => void) => () => void,
+  limitMs = LOGOUT_LOAD_LIMIT_MS,
+): Promise<void> {
+  if (!loading()) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    let unsubscribe: (() => void) | null = null;
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe?.();
+      resolve();
+    };
+    const timer = setTimeout(done, limitMs);
+    const stop = subscribe(() => {
+      if (!loading()) done();
+    });
+    if (settled) stop();
+    else unsubscribe = stop;
+    // Loading may have ended between the first check and the subscription.
+    if (!loading()) done();
+  });
+}
+
+export type HoldRead =LogoutHold | "noStorage" | "unknown" | "ended";
 
 export type HoldReadOptions = {
   timeoutMs?: number;
@@ -35,6 +75,32 @@ export async function readLogoutHold(scope: string | null, options: HoldReadOpti
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * One more read before the dialog, under the same limit as `readLogoutHold`:
+ * a read another tab blocks gives `fallback` instead of holding the sign-out
+ * (D-118, F-154).
+ */
+export async function withinHoldLimit<T>(read: () => Promise<T>, fallback: T, timeoutMs = LOGOUT_HOLD_LIMIT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), timeoutMs); });
+  try {
+    return await Promise.race([Promise.resolve().then(read).catch(() => fallback), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The open dialog once the rows after the submission are gone (F-154): the
+ * counts and `kept` come from the journal read again, never from the plan
+ * read before the deletion. A read that fails says nothing it cannot know.
+ */
+export function planAfterDiscard(plan: LogoutPlan, read: HoldRead): LogoutPlan {
+  const rest = { unsaved: plan.unsaved, submitted: plan.submitted, afterSubmission: 0 };
+  if (typeof read === "string") return { ...rest, pending: null };
+  return { ...rest, pending: read.pending, copies: read.copies, kept: read.kept };
 }
 
 export type ShellLogoutStep =

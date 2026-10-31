@@ -55,7 +55,7 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("gives the replay to the mentor and the same replay to the student (D-154)", () => {
     expect(s.teacher.replay.startsWith("Nastavnik (mentor) zadatka moći će")).toBe(true);
     expect(s.teacher.replay).toContain("znak po znak");
-    expect(s.teacher.replay).toContain("Istu reprodukciju svog rada vidjet ćeš i ti.");
+    expect(s.teacher.replay).toContain("Istu reprodukciju svog rada vidjet ćete i Vi.");
     for (const text of notice()) expect(text).not.toMatch(/reprodukciju ne vidiš|Samo nastavnik/);
   });
 

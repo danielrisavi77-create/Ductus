@@ -239,3 +239,21 @@ describe("evidence ingest v2 boundary", () => {
     }
   });
 });
+
+// DAN-343 (contract on #896): a descriptor names the schema v2 or v3 and
+// nothing else.
+describe("evidence ingest descriptor schema (v3)", () => {
+  const withSchema = (evidenceSchema: unknown) => ({ ...validCommand().descriptor, evidenceSchema });
+
+  it("accepts v2 and v3", () => {
+    expect(isEvidenceSegmentDescriptorV2(withSchema("ductus-evidence-segment-v2"))).toBe(true);
+    expect(isEvidenceSegmentDescriptorV2(withSchema("ductus-evidence-segment-v3"))).toBe(true);
+  });
+
+  it.each(["ductus-evidence-segment-v1", "ductus-evidence-segment-v4", "ductus-evidence-segment-V3", "", null])(
+    "refuses %s",
+    (schema) => {
+      expect(isEvidenceSegmentDescriptorV2(withSchema(schema))).toBe(false);
+    },
+  );
+});

@@ -1,11 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Request, type Route } from "@playwright/test";
 
+import { CURRENT_KEY, SESSION_END_CHANNEL } from "../../src/client/session-marks";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
+import { pluralHr } from "../../src/lib/i18n/hr";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { flipSignatureByte, stackCheckpoint } from "./evidence-receipt";
 import { clickSignOut, editorMounted, signIn } from "./support";
-import { admin, closeWork, seedWork, workDocument } from "./work-seed";
+import { admin, closeWork, seedSubmission, seedWork, workDocument } from "./work-seed";
 
 // F-8 3d-2c2 (contract #476 c.6391714810 §6 e2e 1-12, G2 and G3
 // c.6393716541, 3d-2c2a §4): the sheet of `/rad?zadatak=` records, chains and
@@ -36,6 +38,8 @@ async function openSheet(page: Page): Promise<{ assignment: string; documentId: 
   await signIn(page, "/rad");
   const assignment = await seedWork();
   await page.goto(`/rad?zadatak=${assignment}`);
+  // DAN-330: the work starts on the student's click.
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
   // The first opening refreshes the render into a freshly mounted editor (#731).
   await editorMounted(page);
@@ -326,8 +330,20 @@ test("3d-2c2: /rad without an assignment sends no evidence", async ({ page }) =>
   expect(requests.map(pathOf)).toEqual([]);
 });
 
+/**
+ * F-155: the work is really submitted on the server, so the open route asked
+ * again after the 409 says so; the 409 itself is faked only to make its
+ * moment certain.
+ */
+async function submitOnServer(page: Page, documentId: string): Promise<void> {
+  await type(page, "Tekst prije predaje.");
+  await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+  await seedSubmission(documentId);
+}
+
 test("3d-2c2a §4: a submission's 409 not_accepting makes the sheet read-only with its notice", async ({ page }) => {
   const { documentId } = await openSheet(page);
+  await submitOnServer(page, documentId);
   await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
   await type(page, "Tekst nakon predaje.");
   await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
@@ -336,4 +352,123 @@ test("3d-2c2a §4: a submission's 409 not_accepting makes the sheet read-only wi
   // The refused row stays on the device; nothing is deleted (3d-2c2a §4).
   expect((await localOf(page, documentId)).pending.length).toBeGreaterThan(0);
   await shoot(page, "3d-2c2-predano");
+});
+
+/** The submitted sheet with rows after the submission, and the open sign-out dialog. */
+async function submittedWithRows(page: Page): Promise<{ documentId: string; held: number }> {
+  const { documentId } = await openSheet(page);
+  await submitOnServer(page, documentId);
+  await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
+  await type(page, "Tekst nakon predaje.");
+  await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
+  const held = (await localOf(page, documentId)).pending.length;
+  expect(held).toBeGreaterThan(0);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  return { documentId, held };
+}
+
+// F-155: the commit route says not_accepting also for a current version not
+// acknowledged or not open yet. Without a submission on the server the sheet
+// is not closed as submitted, and sign-out offers no deletion of the rows.
+test("F-155: a 409 not_accepting without a submission neither closes the sheet nor offers deletion", async ({ page }) => {
+  const { documentId } = await openSheet(page);
+  await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
+  const opens = page.waitForResponse((r) => pathOf(r.request()) === "/api/evidence/open" && r.request().method() === "POST", { timeout: OPEN });
+  await type(page, "Tekst uz novu verziju zadatka.");
+  // The 409 makes the client ask the open route again, which says not submitted.
+  expect((await (await opens).json()).submitted).toBe(false);
+  await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toHaveCount(0);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  const held = (await localOf(page, documentId)).pending.length;
+  expect(held).toBeGreaterThan(0);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toHaveCount(0);
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
+});
+// F-154 (owner decision 1.3): what was written after the submission stays on
+// sign-out (D-118) and goes only on the second click of its own button.
+test("F-154: after a submission the dialog names its own rows, offers the export, and deletes only on the second click", async ({ page }) => {
+  const { documentId, held } = await submittedWithRows(page);
+  const dialog = page.getByRole("dialog");
+  const forms = t.auth.logoutAfterSubmission;
+  const after = pluralHr(held, forms.one, forms.few, forms.many);
+  await expect(dialog).toContainText(after.replace("{n}", String(held)));
+  await expect(dialog.getByRole("button", { name: t.editor.exportText })).toBeVisible();
+  await shoot(page, "f154-odjava-nakon-predaje");
+
+  // The first click only asks; Escape and "Zadrži izmjene" take it back.
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard }).click();
+  await expect(dialog).toContainText(t.auth.afterSubmissionDiscardAsk);
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionKeep })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toBeVisible();
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard }).click();
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionKeep }).click();
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
+
+  // The second click deletes this document's rows and nothing else.
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard }).click();
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscardConfirm }).click();
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toHaveCount(0);
+  expect(await localOf(page, documentId)).toEqual({ pending: [] });
+  await shoot(page, "f154-odjava-nakon-brisanja");
+});
+
+// Codex r4383074618: a session ended in another tab leaves no deletion behind.
+test("F-154: once the session ends in another tab the open dialog offers no deletion and the rows stay", async ({ page }) => {
+  const { documentId, held } = await submittedWithRows(page);
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toBeVisible();
+  await page.evaluate(({ key, channelName }) => {
+    const mark = JSON.parse(localStorage.getItem(key) ?? "null") as { tag: string } | null;
+    if (!mark) throw new Error("The signed-in page must record its session mark");
+    const channel = new BroadcastChannel(channelName);
+    channel.postMessage(mark.tag);
+    channel.close();
+  }, { key: CURRENT_KEY, channelName: SESSION_END_CHANNEL });
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toHaveCount(0);
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
+});
+
+test("F-154: without the second click sign-out keeps the rows after the submission (D-118)", async ({ page }) => {
+  const { documentId, held } = await submittedWithRows(page);
+  await page.getByRole("dialog").getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await page.waitForURL("http://localhost:3000/");
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
+});
+
+test("O2 (DAN-289): a submitted work opens read-only and sends nothing after the opening", async ({ page }) => {
+  const { assignment, documentId } = await openSheet(page);
+  const TEXT = "Izmišljeni predani tekst.";
+  await type(page, TEXT);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+  await seedSubmission(documentId);
+
+  const requests = recordRequests(page);
+  // A submitted work publishes nothing to the live view, not even its opened text.
+  const live = recordRequests(page, /^\/api\/live\//);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
+  await expect(editorOf(page)).toContainText(TEXT);
+  // The opening alone tells the sheet the work is submitted; nothing follows it for 5 s.
+  const opened = requests.length;
+  for (let waited = 0; waited < 5000; waited += 250) {
+    expect(await editorOf(page).getAttribute("contenteditable")).toBe("false");
+    await page.waitForTimeout(250);
+  }
+  expect(requests.slice(opened).map(pathOf)).toEqual([]);
+  expect(requests.map(pathOf)).toEqual(["/api/evidence/open"]);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  // Typing changes nothing on the sheet or in the journal.
+  const before = await localOf(page, documentId);
+  await editorOf(page).click();
+  await page.keyboard.type("Nakon predaje.");
+  await expect(editorOf(page)).not.toContainText("Nakon predaje.");
+  expect((await localOf(page, documentId)).meta?.localSeq).toBe(before.meta?.localSeq);
+  expect(requests.map(pathOf)).toEqual(["/api/evidence/open"]);
+  expect(live.map(pathOf)).toEqual([]);
+  await shoot(page, "o2-predani-rad");
 });

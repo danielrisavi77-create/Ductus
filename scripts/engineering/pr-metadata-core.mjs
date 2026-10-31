@@ -1,5 +1,5 @@
 import { field } from "./metadata-parser.mjs";
-import { D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath } from "./protected-paths.mjs";
+import { D97_MANUAL_PATHS, D97_PATHS, isAgentControlPath, matchesPath, normalizePath } from "./protected-paths.mjs";
 
 const RISK_RANK = { low: 0, standard: 1, critical: 2 };
 const AGENT_RE =
@@ -31,6 +31,7 @@ export const CRITICAL_PATHS = [
   // The tests that guard those scripts' local-only and production refusals (F-148).
   "scripts/demo/up.test.mjs",
   "scripts/demo/bootstrap-accounts.test.mjs",
+  "scripts/demo/provision-teacher.test.mjs",
   "db/migrations/",
   "db/local/",
   "db/tests/",
@@ -39,7 +40,7 @@ export const CRITICAL_PATHS = [
 ];
 
 function criticalReason(filename) {
-  if (matchesPath(filename, CRITICAL_PATHS)) return "governance/trust-critical path";
+  if (matchesPath(filename, CRITICAL_PATHS) || isAgentControlPath(filename)) return "governance/trust-critical path";
 
   if (
     /^(src|app)\//.test(filename) &&

@@ -1,0 +1,12 @@
+/* #732 item 7: the lead line above the teacher's view and the cards under its sheet. */
+.lead {
+  max-width: 720px;
+  margin: 0 auto 12px;
+}
+
+.after {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+  margin: 24px auto 0;
+}

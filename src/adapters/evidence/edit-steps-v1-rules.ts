@@ -9,7 +9,9 @@ import {
   type EditStepBlock,
   type EditStepV1,
 } from "@/domain/document/edit-step";
-import type { EvidenceEventV2 } from "@/domain/forensics/evidence-segment-v2";
+import { isMark, isPlainBlockType } from "@/domain/document/schema";
+import { EvidenceContentNotSupportedV2 } from "@/domain/forensics/evidence-replay-v2";
+import type { EvidenceEventV3 } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
@@ -235,10 +237,48 @@ function* applyStep(document: PmNode, step: EditStepV1): Generator<RemovedRangeC
   return result.doc;
 }
 
+/** Every node and mark type this replayer knows, in any position. */
+function isKnownType(value: string): boolean {
+  return value === "heading" || value === "text" || isPlainBlockType(value) || isMark(value);
+}
+
+/** What a later version could name a node or mark type: an identifier. */
+const TYPE_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
+/**
+ * True when the refused steps name, as the `type` of any node or mark, an
+ * identifier this replayer knows nowhere: content of a later version of the
+ * format (F-150), not a malformed step. In v1 only nodes and marks have a
+ * `type` (steps have `stepType`), so every `type` outside attribute values is one. The
+ * whole value is searched, not the parser's first refusal: a later inline node
+ * fails on its keys before its type (#863 QA Q1), and the outcome must not
+ * depend on which error the parser meets first (Q2). A known type in the wrong
+ * place, a type that is not an identifier string (Q3) and an unknown attribute
+ * stay a refused step. Own data properties only; nothing is called or written.
+ */
+function namesUnknownType(steps: unknown): boolean {
+  const pending: unknown[] = [steps];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value !== "object" || value === null) continue;
+    for (const key of Object.keys(value)) {
+      const own = Object.getOwnPropertyDescriptor(value, key);
+      // `attrs` and an attr step's `value` hold attribute values, never a type.
+      if (key === "attrs" || key === "value" || own === undefined || !("value" in own)) continue;
+      if (key !== "type") pending.push(own.value);
+      else if (typeof own.value === "string" && TYPE_NAME.test(own.value) && !isKnownType(own.value)) return true;
+    }
+  }
+  return false;
+}
+
 /** The steps of `event` applied to `document` in order, one claim per removed range. */
-export function* runEditStepsV1(document: PmNode, event: EvidenceEventV2): EditStepsV1Run {
+export function* runEditStepsV1(document: PmNode, event: EvidenceEventV3): EditStepsV1Run {
   const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
   if (!parsed.ok) {
+    if (namesUnknownType(event.steps)) {
+      throw new EvidenceContentNotSupportedV2(parsed.code);
+    }
     refuse(parsed.code);
   }
   let current = document;
