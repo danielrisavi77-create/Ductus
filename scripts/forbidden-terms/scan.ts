@@ -38,6 +38,10 @@ import { FORBIDDEN_TERMS, MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, fi
  * - Any other `.ts` module under `app/**`: the Next.js metadata only, that is
  *   the `metadata` export, what `generateMetadata` and `generateImageMetadata`
  *   return, and the `alt` export of `opengraph-image` and `twitter-image`.
+ * - Object properties named in `UI_TEXT_PROPERTIES`, in every `.ts` or `.tsx`
+ *   module: their literal and composed values, read as JSX expressions are.
+ *   Identifier keys and literal computed keys are recognised; bindings,
+ *   shorthand properties, imports and function results are not followed.
  * - Every other string in a `.ts` or `.tsx` module: checked against the
  *   Croatian entries only. Code is written in English, so a Croatian entry in
  *   a string is interface text wherever it stands, while the English entries
@@ -80,6 +84,12 @@ export const UI_TEXT_MODULES: readonly string[] = [
   // The web app manifest: name, short name and description of the application.
   "app/**/manifest.ts",
 ];
+
+/** Object properties that carry interface text, including in props and column definitions (#190). */
+export const UI_TEXT_PROPERTIES: ReadonlySet<string> = new Set([
+  "label", "title", "description", "placeholder", "caption", "heading", "hint",
+  "helperText", "emptyText", "tooltip", "alt", "aria-label", "ariaLabel",
+]);
 
 const SCANNED_DIRS = ["app", "src"];
 const CATALOGUE_DIR = "src/lib/i18n/";
@@ -312,6 +322,19 @@ function operands(expression: ts.Expression): ts.Expression[] {
 const isPlainString = (node: ts.Node): node is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral =>
   ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
 
+/** A property name written in the source, without resolving a binding or evaluating code. */
+function propertyName(name: ts.PropertyName): string | undefined {
+  if (ts.isIdentifier(name) || isPlainString(name)) return name.text;
+  if (ts.isComputedPropertyName(name)) {
+    let expression = name.expression;
+    while (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression) || ts.isTypeAssertionExpression(expression) || ts.isSatisfiesExpression(expression) || ts.isNonNullExpression(expression)) {
+      expression = expression.expression;
+    }
+    if (isPlainString(expression)) return expression.text;
+  }
+  return undefined;
+}
+
 /**
  * Strings an expression can render: literals, both branches of `?:`,
  * `&&`/`||`/`??` operands, `+` chains and templates. In a `+` chain adjacent
@@ -327,6 +350,7 @@ function renderedStrings(expression: ts.Expression, collect: Collect): void {
   } else if (
     ts.isParenthesizedExpression(expression) ||
     ts.isAsExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
     ts.isSatisfiesExpression(expression) ||
     ts.isNonNullExpression(expression)
   ) {
@@ -530,18 +554,18 @@ const isComposition = (node: ts.Node): boolean => ts.isTemplateExpression(node) 
 /** What holds `node`, looking out through brackets, type assertions and the placeholder of a template. */
 function holder(node: ts.Node): ts.Node {
   const outer = node.parent;
-  return ts.isParenthesizedExpression(outer) || ts.isAsExpression(outer) || ts.isSatisfiesExpression(outer) || ts.isNonNullExpression(outer) || ts.isTemplateSpan(outer) ? holder(outer) : outer;
+  return ts.isParenthesizedExpression(outer) || ts.isAsExpression(outer) || ts.isTypeAssertionExpression(outer) || ts.isSatisfiesExpression(outer) || ts.isNonNullExpression(outer) || ts.isTemplateSpan(outer) ? holder(outer) : outer;
 }
 
 /**
- * JSX text, rendered strings, attributes and Next.js metadata; in a `.ts` file
- * only the metadata is left. With `composed`, every `+` chain and template of
- * the file is a text put together from parts as well, wherever it stands: that
- * is how a text module writes one (`"Sum" + "njivo"`), and it is read the way
- * the same expression is read in JSX, closed up over the parts that are
- * computed.
+ * JSX text, rendered strings, attributes, Next.js metadata and named UI
+ * properties. The `properties` mode reads only those object properties in
+ * ordinary modules. In `catalogue` mode, every `+` chain and template is read
+ * wherever it stands: that is how a text module writes text (`"Sum" +
+ * "njivo"`), read as the same expression in JSX, closed up over computed parts.
  */
-function componentText(source: ts.SourceFile, reader: Reader, composed = false): void {
+function componentText(source: ts.SourceFile, reader: Reader, mode: "component" | "catalogue" | "properties" = "component"): void {
+  const composed = mode === "catalogue";
   const isImageRoute = IMAGE_ROUTE_FILE.test(source.fileName);
   /** Inline elements and fragments already read as part of the unit around them. */
   const absorbed = new Set<ts.Node>();
@@ -589,6 +613,7 @@ function componentText(source: ts.SourceFile, reader: Reader, composed = false):
     if (
       ts.isParenthesizedExpression(expression) ||
       ts.isAsExpression(expression) ||
+      ts.isTypeAssertionExpression(expression) ||
       ts.isSatisfiesExpression(expression) ||
       ts.isNonNullExpression(expression)
     ) {
@@ -675,6 +700,18 @@ function componentText(source: ts.SourceFile, reader: Reader, composed = false):
   };
 
   const visit = (node: ts.Node): void => {
+    // A separate pass preserves the original metadata and misplaced-text
+    // scopes, including properties nested inside an already-read metadata export.
+    if (mode === "properties" && ts.isPropertyAssignment(node) && UI_TEXT_PROPERTIES.has(propertyName(node.name) ?? "")) {
+      const expression = node.initializer;
+      renderedStrings(expression, reader.part);
+      const readings = forEveryone((alone) => expressionReadings(expression, alone));
+      reader.unit(expression.getStart(source), expression.pos, expression.end, readings, overflowed);
+    }
+    if (mode === "properties") {
+      ts.forEachChild(node, visit);
+      return;
+    }
     if (composed && isComposition(node) && !isComposition(holder(node))) {
       const readings = forEveryone((alone) => expressionReadings(node as ts.Expression, alone));
       reader.unit(node.getStart(source), node.pos, node.end, readings, overflowed);
@@ -715,7 +752,7 @@ function componentText(source: ts.SourceFile, reader: Reader, composed = false):
 
 type Kind = "catalogue" | "component";
 /** How locate reads a file: by a kind, or only for its strings and imports. */
-type How = Kind | "strings";
+type How = Kind | "properties" | "strings";
 
 /** A piece of text with the span of source it was read from (both zero in JSON). */
 interface Located extends UiText {
@@ -723,6 +760,8 @@ interface Located extends UiText {
   readonly end: number;
   /** Set for a piece of a unit; see `Reader`. */
   readonly part?: true;
+  /** Coverage and character checks only; the enclosing unit supplies term findings. */
+  readonly unitOnly?: true;
   /** The text to check when it is not `text`; see `Collect`. */
   readonly check?: string;
 }
@@ -781,7 +820,7 @@ export function isolatedHost(source: ts.SourceFile): ts.CompilerHost {
   };
 }
 
-function locate(file: string, content: string, kind: How): Read {
+function locate(file: string, content: string, kind: How, readProperties = false): Read {
   const texts: Located[] = [];
   const units: Unit[] = [];
   if (file.toLowerCase().endsWith(".json") || file.endsWith(".webmanifest")) {
@@ -805,17 +844,28 @@ function locate(file: string, content: string, kind: How): Read {
   const [first] = errors;
   if (first) throw new Error(`${file}:${lineAt(first.start)}: the file does not parse, so the scan cannot read it (TS${first.code}, ${errors.length} in all)`);
   const collect =
-    (part?: true): Collect =>
+    (part?: true, unitOnly?: true): Collect =>
     (node, text, at, check) => {
       const start = at ?? node.getStart(source);
-      texts.push({ file, line: lineAt(start), text, start, end: node.getEnd(), ...(part && { part }), ...(check !== undefined && { check }) });
+      if (unitOnly && texts.some((seen) => seen.start === start && seen.end === node.getEnd() && seen.text === text && seen.check === check)) return;
+      texts.push({ file, line: lineAt(start), text, start, end: node.getEnd(), ...(part && { part }), ...(unitOnly && { unitOnly }), ...(check !== undefined && { check }) });
     };
   const unit: Reader["unit"] = (at, start, end, readings, overflowed) => units.push({ line: lineAt(at), at, start, end, readings, overflowed });
   const imports: Import[] = [];
   if (kind === "component") componentText(source, { text: collect(), part: collect(true), unit });
-  else allStrings(source, collect(), (at, name) => imports.push({ name, line: lineAt(at.getStart(source)) }));
+  else if (kind !== "properties") allStrings(source, collect(), (at, name) => imports.push({ name, line: lineAt(at.getStart(source)) }));
+  if (kind === "properties" || (kind === "component" && readProperties)) {
+    const part = collect(true, true);
+    componentText(source, { text: collect(), part: (node, text, at, check) => {
+      // Mark only literal operands as read, not unknown calls inside a + chain.
+      // Their arguments must still reach the Croatian check of every string.
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+        for (const operand of operands(node)) if (isPlainString(operand)) part(operand, operand.text);
+      } else part(node, text, at, check);
+    }, unit }, "properties");
+  }
   // A text module also puts text together with `+` and templates; those are read as in JSX.
-  if (kind === "catalogue") componentText(source, { text: () => undefined, part: () => undefined, unit }, true);
+  if (kind === "catalogue") componentText(source, { text: () => undefined, part: () => undefined, unit }, "catalogue");
   return { texts, units, imports };
 }
 
@@ -887,6 +937,7 @@ function findingsIn(file: string, read: Read): Finding[] {
     return { ...unit, hits, terms: new Set(hits.flatMap((hit) => hit.terms)) };
   });
   for (const text of read.texts) {
+    if (text.unitOnly) continue;
     // A contextual entry is decided by the unit. So is an entry that allows a phrase: a piece such as the
     // "Copied" in `<b>Copied</b> to clipboard` is judged with its phrase, and only as long as a unit holds it.
     const within = units.filter((unit) => unit.start <= text.start && text.end <= unit.end);
@@ -1038,10 +1089,11 @@ function* scannedFiles(root: string): Generator<Scanned> {
     const kind = scanKind(file);
     if (kind === null && !isCode(file)) continue;
     const content = readSource(root, file);
-    const read = kind === null ? NOTHING_READ : locate(file, content, kind);
+    const read = locate(file, content, kind ?? "properties", true);
     // Every string of a code file, and what it imports, whatever its kind reads.
     const all = kind === "catalogue" || !isCode(file) ? read : locate(file, content, "strings");
-    const others = all === read ? [] : all.texts.filter((text) => !read.texts.some((seen) => seen.start <= text.start && text.end <= seen.end));
+    const others = all === read ? [] : all.texts.filter((text) => !read.texts.some((seen) =>
+      seen.unitOnly ? seen.start === text.start && text.end === seen.end : seen.start <= text.start && text.end <= seen.end));
     for (const { name } of all.imports) data.add((name === null ? null : importedData(root, file, name)) ?? "");
     yield { file, read, others, imports: all.imports };
   }
