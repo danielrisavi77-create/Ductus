@@ -74,7 +74,9 @@ async function main() {
   }
 
   const [owner, repo] = repository.split("/");
-  if (event.pull_request?.head?.sha && ownsHead(event.pull_request, repository)) {
+  // A side-base head can be shared with a PR to main, whose statuses it would
+  // overwrite, so only a PR to the default branch gets the failure marker.
+  if (event.pull_request?.head?.sha && ownsHead(event.pull_request, repository) && targetsDefaultBranch(event.pull_request)) {
     knownHead = { repository, sha: event.pull_request.head.sha, url: event.pull_request.html_url };
   }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
@@ -83,7 +85,9 @@ async function main() {
     console.log(`${context}: no status; the PR is not open or its head is outside ${repository}.`);
     return;
   }
-  knownHead = { repository, sha: pr.head.sha, url: pr.html_url };
+  knownHead = targetsDefaultBranch(pr) || isMergifyQueuePr(pr, repository)
+    ? { repository, sha: pr.head.sha, url: pr.html_url }
+    : null;
   // Only an authenticated, open draft owned by Mergify is a CI carrier.
   // It cannot enqueue itself (-draft). No review/owner verdict is fabricated:
   // source PRs retain their own six required statuses and are revalidated by

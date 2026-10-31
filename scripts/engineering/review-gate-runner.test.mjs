@@ -32,7 +32,7 @@ globalThis.fetch = async (url, options = {}) => {
   if (plan.fail.some((p) => path.endsWith(p))) throw new TypeError("fetch failed");
   if (/\\/pulls\\/\\d+$/.test(path)) {
     return reply(200, { number: 7, state: "open", head: { sha: "${HEAD}", repo: { full_name: "o/r" } },
-      base: { sha: "${BASE}", repo: { full_name: "o/r" } },
+      base: { sha: "${BASE}", ref: "main", repo: { full_name: "o/r", default_branch: "main" } },
       html_url: "https://github.com/o/r/pull/7", body: "", ...plan.pr });
   }
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
@@ -70,7 +70,8 @@ const comment = { issue: { number: 7, pull_request: {} } };
 const pullRequest = {
   pull_request: {
     number: 7, state: "open", html_url: "https://github.com/o/r/pull/7",
-    head: { sha: HEAD, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } },
+    head: { sha: HEAD, repo: { full_name: "o/r" } },
+    base: { ref: "main", repo: { full_name: "o/r", default_branch: "main" } },
   },
 };
 
@@ -257,7 +258,19 @@ test("a PR off the default branch writes nothing on a head another open PR share
   // An unread list counts as shared: nothing is written, and the run fails.
   const unread = run(comment, { pr: side, files: addedTest, fail: ["/pulls"] });
   assert.equal(unread.code, 1);
-  assert.ok(unread.posts.every((p) => p.body.state !== "success"));
+  assert.deepEqual(unread.posts, []);
+  // Any other failed read of a side-base PR writes nothing either: the failure
+  // marker would land on a head a PR to main may own.
+  for (const fail of [["/issues/7/comments"], ["/pulls/7/files"], ["/pulls/7/reviews"], ["/pulls/7/comments"]]) {
+    const failed = run(comment, { pr: side, files: addedTest, openPulls: [side, main], fail });
+    assert.equal(failed.code, 1, fail[0]);
+    assert.deepEqual(failed.posts, [], fail[0]);
+  }
+  // A side-base event whose PR read fails does not mark the event head.
+  const sideEvent = { pull_request: { ...pullRequest.pull_request, base: { ref: "feature", repo: { full_name: "o/r", default_branch: "main" } } } };
+  const eventFail = run(sideEvent, { fail: ["/pulls/7"] });
+  assert.equal(eventFail.code, 1);
+  assert.deepEqual(eventFail.posts, []);
   // Control: alone on its head it still gets the pending marker.
   const alone = run(comment, { pr: side, files: addedTest, openPulls: [side] });
   assert.deepEqual(states(alone.posts), ALL.map((c) => [c, "pending"]));
