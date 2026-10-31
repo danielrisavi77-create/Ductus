@@ -355,7 +355,12 @@ export function requiredStatusChecks(statusChecks) {
   return [...new Map(configured.map((item) => [`${item.context}\n${item.appId ?? "*"}`, item])).values()];
 }
 
+// Reads that only add detail to the "main" check: since the owner's decision of
+// 31. 10. 2026. (#87 issuecomment-6549357009) mergeability decides it, so a
+// failed or capped file list never turns the run into a read error.
+export const INFORMATIONAL_READS = new Set(["PR file list", "main file list"]);
+
 export function preflightExitCode(checks, readErrors = []) {
-  if (readErrors.length > 0) return 2;
+  if (readErrors.some((name) => !INFORMATIONAL_READS.has(name))) return 2;
   return preflightPass(checks) ? 0 : 1;
 }

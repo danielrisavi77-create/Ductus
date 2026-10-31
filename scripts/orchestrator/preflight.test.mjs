@@ -381,3 +381,18 @@ test("a critical or D-97 PR behind main fails only on a conflict or an unknown m
     assert.deepEqual(fails(evaluatePreflight(lag({ ...shared, pr: { body: riskBody(risk), mergeable: "UNKNOWN" } }))), ["main"], risk);
   }
 });
+
+// #1098 Codex review: a file list that cannot be read (or is capped) is detail
+// only, so the run's exit code follows the checks, not that read.
+test("an unread file list behind main is not a read error; every other read still is", () => {
+  for (const over of [{ mainPaths: null }, { prPaths: null }]) {
+    const checks = evaluatePreflight(lag(over));
+    for (const errors of [["main file list"], ["PR file list"], ["PR file list", "main file list"]]) {
+      assert.equal(preflightExitCode(checks, errors), 0, `${JSON.stringify(over)} ${errors}`);
+    }
+    assert.equal(preflightExitCode(evaluatePreflight(lag({ ...over, pr: { mergeable: "CONFLICTING" } })), ["main file list"]), 1);
+  }
+  for (const name of ["main branch", "main comparison", "head checks", "file list", "Main file list"]) {
+    assert.equal(preflightExitCode(evaluatePreflight(lag()), [name, "main file list"]), 2, name);
+  }
+});
