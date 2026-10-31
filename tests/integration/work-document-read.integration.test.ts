@@ -6,15 +6,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { readWorkDocument } from "@/server/evidence/work-document-read";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // #711 step B1 (attack plan items A2, A3, A4, A6, A7, A8, A10, A20): the
 // document /rad?zadatak=<id> writes into, read under the web role's RLS
 // against the compose stack the Local stack CI job migrates. Loopback only;
 // one random login and random synthetic rows, removed afterwards.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The work-document read test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The work-document read test runs only against a loopback database (DATABASE_URL).");
 const suffix = randomBytes(5).toString("hex");
 const login = `it_work_doc_${suffix}`;
 const password = randomBytes(24).toString("hex");
