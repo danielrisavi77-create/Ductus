@@ -105,8 +105,22 @@ describe("workDocumentPlan (contract §2 table)", () => {
     });
   });
 
-  it("opening: ready context, the work not opened yet", () => {
-    expect(plan({ doc: DOCS.notOpened })).toEqual({ kind: "opening", journal: null, assignmentId: ID, ...OFF });
+  it("notStarted (DAN-330): ready context, the work not started yet, with the notice's due date", () => {
+    expect(plan({ doc: DOCS.notOpened })).toEqual({ kind: "notStarted", journal: null, assignmentId: ID, dueAt: DUE, ...OFF });
+  });
+
+  it("property (DAN-330): only a signed-in ready context of this assignment with notOpened gives notStarted", () => {
+    let started = 0;
+    for (const value of everyInput()) {
+      const result = workDocumentPlan(value);
+      if (result.kind !== "notStarted") continue;
+      started += 1;
+      expect(value.signedIn && !value.signInAgain && value.scope !== null).toBe(true);
+      expect(value.context.kind === "ready" && value.doc.kind === "notOpened").toBe(true);
+      expect(value.rawParam).toBe(ID);
+      expect(result).toEqual({ kind: "notStarted", journal: null, assignmentId: ID, dueAt: DUE, ...OFF });
+    }
+    expect(started).toBe(1);
   });
 
   it("notYetOpen: ready context, the assignment not accepting work, with the notice's opening time", () => {
@@ -199,8 +213,8 @@ describe("workDocumentPlan (contract §2 table)", () => {
       } else {
         expect([result.comments, result.live, result.submission]).toEqual([false, false, false]);
       }
-      // Only an editor plan has a journal; unavailable, opening and notYetOpen never do.
-      if (["unavailable", "opening", "notYetOpen", "signInAgain"].includes(result.kind)) {
+      // Only an editor plan has a journal; unavailable, notStarted and notYetOpen never do.
+      if (["unavailable", "notStarted", "notYetOpen", "signInAgain"].includes(result.kind)) {
         expect(result.journal).toBeNull();
       }
     }
