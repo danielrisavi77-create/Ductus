@@ -26,7 +26,10 @@
 # conditions remain mandatory on originals AND CI carriers. The gate recognizes
 # carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
 # a branch prefix alone. Mergify revalidates admission and rejects external edits
-# of queue branches. See docs/engineering/mergify-rollout.md before activation.
+# of queue branches. That rejection is Mergify's default: the queue rule option
+# that could allow such edits is deprecated (Mergify changelog 2026-09-23) and
+# must not be set here (mergify-config.test.mjs).
+# See docs/engineering/mergify-rollout.md before activation.
 # A PR whose gate is green but which waits for the owner's command (Risk
 # critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
 # `main`, D-101): review, QA and the command carry through it, and the owner's
@@ -44,7 +47,6 @@ queue_rules:
     batch_size: 3
     batch_max_wait_time: 3 min
     max_checks_retries: 0
-    allow_queue_branch_edit: false
     branch_protection_injection_mode: queue
     queue_conditions: &required
       - base=main
