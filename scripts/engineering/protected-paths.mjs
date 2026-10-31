@@ -151,18 +151,20 @@ export const OWNER_FREE_DIRS = ["src/", "app/", "db/migrations/", "db/tests/", "
 // them from here): the product rules and the forbidden-terms dictionary the
 // scanner checks against. They are never owner-free, though a low doc otherwise.
 export const CRITICAL_DOC_PATHS = ["docs/PRODUCT.md"];
+// Exclusions ignore letter case; the allowlist itself matches exact case, so a
+// directory such as SRC/ or Tests/ is not application code here.
 export function isOwnerFreePath(file) {
   const p = normalizePath(file);
   if (
     hasDotSegment(p) ||
     AGENT_INSTRUCTIONS_RE.test(p) ||
-    p.split("/").includes("node_modules") ||
+    p.toLowerCase().split("/").includes("node_modules") ||
     matchesPath(p, CRITICAL_DOC_PATHS) ||
     ownerCommandPaths([p]).length > 0
   ) {
     return false;
   }
-  return matchesPath(p, OWNER_FREE_DIRS) || isLowDocExemptPath(p);
+  return OWNER_FREE_DIRS.some((dir) => p.startsWith(dir)) || isLowDocExemptPath(p);
 }
 /** True when the list is not empty and every file is on the D-196 allowlist. */
 export const ownerFreeCritical = (files) => {
