@@ -41,15 +41,44 @@ test("Risk low or standard without a D-97 path is authorized without a command",
   assert.equal(authorize({ body: bodyWith("Standard") }).state, "success");
 });
 
-test("Risk critical needs the owner's command", () => {
-  assert.equal(authorize({ body: bodyWith("critical") }).state, "pending");
-  assert.equal(authorize({ body: bodyWith("critical"), comments: [command(head)] }).state, "success");
+// D-195: the owner's command is kept for D-97 paths and for a critical PR whose
+// gate passed without QA; a critical PR with QA and no D-97 path needs none.
+const D97 = ["scripts/engineering/x.mjs"];
+// Only tests, so QA-exempt; its risk floor is below critical, so the parsed
+// risk decides the result.
+const QA_EXEMPT = ["e2e/a.spec.ts"];
+
+test("Risk critical with QA required and no D-97 path is authorized without a command (D-195)", () => {
+  const out = authorize({ body: bodyWith("critical"), filenames: ["src/a.ts", "db/migrations/1.sql"] });
+  assert.equal(out.state, "success");
+  assert.match(out.description, /D-195/);
+});
+
+test("Risk critical on a D-97 path still needs the owner's command (D-195)", () => {
+  for (const filenames of [D97, ["src/a.ts", ...D97], ["src/a.ts", "docs/DECISIONS.md"], ["src/a.ts", ".github/workflows/ci.yml"]]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames }).state, "pending", filenames.join(","));
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, comments: [command(head)] }).state, "success");
+  }
+});
+
+test("a QA-exempt critical PR (only tests or only documents) still needs the owner's command (D-195)", () => {
+  for (const filenames of [QA_EXEMPT, ["tests/unit/a.test.ts"], ["db/tests/a.sql"], ["docs/x.md"]]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames }).state, "pending", filenames.join(","));
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, comments: [command(head)] }).state, "success");
+  }
+});
+
+test("an undeclared or failing metadata never authorizes a critical PR without a command", () => {
+  assert.equal(authorize({ body: "Agent: claude:a:platforma\nTask: B-1\n" }).state, "pending");
 });
 
 test("a description that fools a regex does not fool the parser (review of #565, finding 1)", () => {
   const body = "Agent: claude:a:platforma\nrisk: critical\nTask: B-1\n\n```\nRisk: standard\n```\n";
-  assert.equal(authorize({ body }).state, "pending");
-  assert.equal(authorize({ body: `${bodyWith("critical")}\nRisk: standard\n` }).state, "pending");
+  // A QA-exempt path keeps the command for critical but not for standard, so the
+  // result shows which risk the parser read.
+  assert.equal(authorize({ body, filenames: QA_EXEMPT }).state, "pending");
+  assert.equal(authorize({ body: `${bodyWith("critical")}\nRisk: standard\n`, filenames: QA_EXEMPT }).state, "pending");
+  assert.equal(authorize({ body: bodyWith("standard"), filenames: QA_EXEMPT }).state, "success");
 });
 
 test("a critical-floor path declared as standard is not authorized (metadata fails)", () => {
@@ -73,22 +102,25 @@ test("a D-97 path needs the command even when declared low, and a rename counts 
 
 test("a label or a body edit cannot authorize a critical PR; only the owner's command does (finding 2)", () => {
   const body = `${bodyWith("critical")}\nLabel: spoji-me\n`;
-  assert.equal(authorize({ body }).state, "pending");
+  assert.equal(authorize({ body, filenames: D97 }).state, "pending");
+  assert.equal(authorize({ body, filenames: QA_EXEMPT }).state, "pending");
 });
 
 test("the command binds to the head: another head, another login, an App or a bot do not count", () => {
   const critical = bodyWith("critical");
-  assert.equal(authorize({ body: critical, comments: [command(earlier)] }).state, "pending");
-  assert.equal(authorize({ body: critical, comments: [command(head, { login: "someone", association: "MEMBER" })] }).state, "pending");
-  assert.equal(authorize({ body: critical, comments: [command(head, { appSlug: "some-app" })] }).state, "pending");
-  assert.equal(authorize({ body: critical, comments: [command(head, { type: "Bot" })] }).state, "pending");
-  assert.equal(authorize({ body: critical, comments: [comment(`Owner-Command: reject\nCommand-Head: ${head}\n`)] }).state, "pending");
+  const filenames = D97;
+  assert.equal(authorize({ body: critical, filenames, comments: [command(earlier)] }).state, "pending");
+  assert.equal(authorize({ body: critical, filenames, comments: [command(head, { login: "someone", association: "MEMBER" })] }).state, "pending");
+  assert.equal(authorize({ body: critical, filenames, comments: [command(head, { appSlug: "some-app" })] }).state, "pending");
+  assert.equal(authorize({ body: critical, filenames, comments: [command(head, { type: "Bot" })] }).state, "pending");
+  assert.equal(authorize({ body: critical, filenames, comments: [comment(`Owner-Command: reject\nCommand-Head: ${head}\n`)] }).state, "pending");
 });
 
 test("the command on an earlier head counts only once that head is carried through a clean base merge (D-101)", () => {
   const critical = bodyWith("critical");
   const comments = [command(earlier)];
-  assert.equal(authorize({ body: critical, comments, carriedHeads: new Set([earlier]) }).state, "success");
+  assert.equal(authorize({ body: critical, filenames: D97, comments }).state, "pending");
+  assert.equal(authorize({ body: critical, filenames: D97, comments, carriedHeads: new Set([earlier]) }).state, "success");
   const merge = (sha) => ({ sha, parents: [{}, {}], mergesBase: true });
   assert.deepEqual(carriedHeadCandidates(comments, head, [merge(head), { sha: earlier, parents: [{}] }]).heads, [earlier]);
   const app = [command(earlier, { appSlug: "some-app" })];

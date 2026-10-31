@@ -6,8 +6,10 @@
 # (restricted to the owner below), and only when both statuses the gate
 # publishes are green (D-161 (h)):
 #   - "Engineering review gate": independent review and QA for the head;
-#   - "Merge authorization": green in one of three cases: the PR declares Risk
-#     low or standard and touches no D-97 path; or it only adds new test files
+#   - "Merge authorization": green in one of four cases: the PR declares Risk
+#     low or standard and touches no D-97 path; or it declares Risk critical,
+#     touches no D-97 path and is not QA-exempt, so the green gate includes a
+#     QA PASS (D-195, trial to 14 Nov 2026); or it only adds new test files
 #     from the allowlist in ENGINEERING_SYSTEM section 5, from a head branch in
 #     this repository and with no D-97 path (D-189, critical included); or the
 #     owner's `Owner-Command: merge` comment names this head (D-97,
@@ -27,8 +29,8 @@
 # carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
 # a branch prefix alone. Mergify revalidates admission and rejects external edits
 # of queue branches. See docs/engineering/mergify-rollout.md before activation.
-# A PR whose gate is green but which waits for the owner's command (Risk
-# critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
+# A PR whose gate is green but which waits for the owner's command (a D-97
+# path, or Risk critical without QA) is kept current by Mergify (`update`, a clean merge of
 # `main`, D-101): review, QA and the command carry through it, and the owner's
 # command is not lost when `main` moves while the PR waits. A PR that is not in
 # the gate, is a draft or has a conflict is left alone.
