@@ -152,4 +152,51 @@ describe("new assignment version: real POST, session and database (DAN-292)", ()
       { event_key: `assignment_version:${assignment}:3` },
     ]);
   });
+
+  it("takes the recipients when the publishing statement runs (A10, #955)", async () => {
+    // Two more synthetic students on a course of their own. The publishing
+    // transaction starts first; one removal commits on another connection
+    // before the publishing statement, the other after it and before commit.
+    const early = randomUUID(), late = randomUUID();
+    ids.push(early, late);
+    for (const [label, id] of [["early", early], ["late", late]] as const) {
+      await admin.query(
+        `INSERT INTO identity.user_account (id, institution_id, oidc_issuer, oidc_subject, hr_edu_person_unique_id)
+         VALUES ($1, $2, 'https://issuer.example', $3, $4)`,
+        [id, faculties[0], `a10-${label}-${id}`, `a10-${label}-${id}@assignment-version.example`],
+      );
+    }
+    const course = await withActor(people.teacher.token, async (tx) =>
+      (await tx.query<{ id: string }>("SELECT institution.create_course('Izmisljeni kolegij A10', '2026/2027', 'encouraged') AS id")).rows[0].id);
+    for (const id of [early, late]) await admin.query(
+      "INSERT INTO institution.course_member (course_id, user_id, institution_id, role) VALUES ($1, $2, $3, 'student')", [course, id, faculties[0]],
+    );
+    const c = CONTENT;
+    const rest = [c.instructions, c.workType, c.opensAt, c.dueAt, c.aiPolicy, c.aiPurposes, c.evidenceProfile, c.importAllowed, c.wordMin, c.wordMax];
+    const target = await withActor(people.teacher.token, async (tx) => (await tx.query<{ id: string }>(
+      "SELECT institution.create_assignment($1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11, $12) AS id", [course, c.title, ...rest],
+    )).rows[0].id);
+    const remove = (student: string) => withActor(people.teacher.token, async (tx) =>
+      (await tx.query<{ removed: boolean }>("SELECT institution.remove_student($1, $2) AS removed", [course, student])).rows[0].removed);
+
+    await withActor(people.teacher.token, async (tx) => {
+      await tx.query("SELECT 1");
+      expect(await remove(early)).toBe(true);
+      await tx.query(
+        "SELECT institution.publish_assignment_version($1, 1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11, $12)",
+        [target, "Izmišljeni esej A10, druga verzija", ...rest],
+      );
+      expect(await remove(late)).toBe(true);
+    });
+
+    // Read committed: the statement sees the earlier removal, not the later one.
+    const events = await admin.query(
+      "SELECT recipient_id FROM institution.notification WHERE event_key = $1", [`assignment_version:${target}:2`],
+    );
+    expect(events.rows).toEqual([{ recipient_id: late }]);
+    const open = await admin.query(
+      "SELECT count(*)::int AS n FROM institution.course_member WHERE course_id = $1 AND member_to IS NULL", [course],
+    );
+    expect(open.rows[0].n).toBe(0);
+  });
 });

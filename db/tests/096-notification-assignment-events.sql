@@ -5,7 +5,7 @@ SET LOCAL lc_messages TO 'C';
 SET LOCAL ROLE ductus_identity;
 DELETE FROM institution.notification;
 RESET ROLE;
-SELECT plan(15);
+SELECT plan(20);
 
 CREATE FUNCTION pg_temp.publish_version(p_actor text, p_expected integer) RETURNS text
 LANGUAGE sql AS $$
@@ -46,6 +46,26 @@ SELECT is((SELECT current_version FROM institution.assignment WHERE id = pg_temp
   'a rolled-back publication does not change the assignment');
 SELECT is((SELECT count(*)::integer FROM institution.notification), 3,
   'the same rollback removes the notifications');
+
+-- A05 (#955): a course with no active student still publishes, and emits nothing.
+SAVEPOINT no_students;
+SELECT is(pg_temp.ask('vesna', 'SELECT institution.remove_student({k1}, {ana})::text'), 'true',
+  'the teacher removes the last active student');
+SELECT is(pg_temp.publish_version('vesna', 4), '5', 'a course with no active student still publishes');
+SELECT is((SELECT count(*)::integer FROM institution.notification), 3, 'and that publication emits no event');
+ROLLBACK TO SAVEPOINT no_students;
+
+-- A12 (#955): the producer runs only as a trigger, as the identity role, with
+-- an empty search_path, and no role can call it directly.
+SELECT ok((SELECT p.prosecdef AND p.proowner = 'ductus_identity'::regrole
+    AND p.prorettype = 'trigger'::regtype AND 'search_path=""' = ANY (p.proconfig)
+  FROM pg_proc p WHERE p.oid = 'institution.notify_assignment_version()'::regprocedure),
+  'the producer is a trigger-only SECURITY DEFINER function of the identity role with an empty search_path');
+SELECT is_empty($$
+  SELECT r FROM unnest(ARRAY['public', 'ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth',
+                             'ductus_evidence', 'ductus_test_stranger']) AS r
+   WHERE has_function_privilege(r, 'institution.notify_assignment_version()', 'EXECUTE') $$,
+  'neither PUBLIC nor any runtime role executes the producer');
 
 SELECT * FROM finish();
 ROLLBACK;
