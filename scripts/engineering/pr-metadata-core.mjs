@@ -31,6 +31,7 @@ export const CRITICAL_PATHS = [
   // The tests that guard those scripts' local-only and production refusals (F-148).
   "scripts/demo/up.test.mjs",
   "scripts/demo/bootstrap-accounts.test.mjs",
+  "scripts/demo/provision-teacher.test.mjs",
   "db/migrations/",
   "db/local/",
   "db/tests/",
