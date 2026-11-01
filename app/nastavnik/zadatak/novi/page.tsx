@@ -32,7 +32,7 @@ export default async function TeacherNewAssignmentPage() {
     <AppShell
       session={shellSession(token)}
       scope={principal.kind === "signed-in" ? principal.scope : null}
-      role={screen === "allowed" ? "teacher" : screen === "denied" ? "student" : null}
+      role={screen === "allowed" ? "teacher" : null}
       current="/nastavnik/zadatak/novi"
       crumbs={[t.teacherCourses.title, t.teacher.title]}
     >
