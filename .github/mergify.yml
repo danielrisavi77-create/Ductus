@@ -20,9 +20,10 @@
 # description nor labels nor file names: the gate decides with the same parser
 # that checks the declared risk, so an edited description cannot change what
 # Mergify sees.
-# DAN-263: serial speculative checks test A, A+B, A+B+C on Mergify-owned
-# draft PRs; original heads keep their review/QA/owner approvals.
-# D-177: each check is a batch of up to three PRs (one CI run for the batch),
+# DAN-263: serial speculative checks run on Mergify-owned draft PRs; original
+# heads keep their review/QA/owner approvals.
+# DAN-447 (owner, 1 Nov 2026; replaces D-177's three checks of three): one
+# check at a time, each a batch of up to five PRs (one CI run for the batch),
 # formed after at most three minutes of waiting. A failed batch is split until
 # the failing PR is isolated (no batch_max_failure_resolution_attempts), so the
 # others still merge, each as its own squash commit. Every PR in a batch must
@@ -31,11 +32,16 @@
 # carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
 # a branch prefix alone. Mergify revalidates admission and rejects external edits
 # of queue branches. See docs/engineering/mergify-rollout.md before activation.
-# A PR whose gate is green but which waits for the owner's command (a D-97
-# path, or Risk critical outside the D-196 case) is kept current by Mergify (`update`, a clean merge of
-# `main`, D-101): review, QA and the command carry through it, and the owner's
-# command is not lost when `main` moves while the PR waits. A PR that is not in
-# the gate, is a draft or has a conflict is left alone.
+# External merges reset the queue (`reset_on_external_merge: always`): the
+# batch in flight was tested on a `main` without that commit, so it is rebuilt
+# on the new `main` before anything merges; with one check that is one CI run.
+# DAN-447: Mergify no longer updates a PR that waits for the owner's command
+# when `main` moves (each update started full CI on it). The carrier tests the
+# PR on current `main`, so its head need not be current; a command names that
+# head and stays valid while it does not change. When a PR must be brought
+# up to date (a conflict, or before a manual merge), it is updated once, at
+# merge time, and the command carries over a clean update-branch (D-156, D-101).
+# No rule here updates, labels or queues a PR.
 # Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
 # neither may exist (mergify-config.test.mjs), and Mergify applies the
 # configuration of the default branch only, so a PR cannot change the queue
@@ -45,7 +51,7 @@
 
 queue_rules:
   - name: main
-    batch_size: 3
+    batch_size: 5
     batch_max_wait_time: 3 min
     max_checks_retries: 0
     allow_queue_branch_edit: false
@@ -65,7 +71,7 @@ queue_rules:
 
 merge_queue:
   mode: serial
-  max_parallel_checks: 3
+  max_parallel_checks: 1
   reset_on_external_merge: always
   skip_intermediate_results: false
 
@@ -76,15 +82,3 @@ commands_restrictions:
   requeue:
     conditions:
       - sender=danielrisavi77-create
-
-pull_request_rules:
-  - name: keep a PR that waits for the owner current with main
-    conditions:
-      - base=main
-      - -draft
-      - -conflict
-      - "#commits-behind>0"
-      - check-success=Engineering review gate
-      - -check-success=Merge authorization
-    actions:
-      update: {}

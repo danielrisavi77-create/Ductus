@@ -24,6 +24,17 @@ const CRITICAL_SAMPLES = [
   ".cc-safety-net/rules/rule.json",
   ".cc-safety-net/rules/ductus-rules/rulebook.json",
   "osv-scanner.toml",
+  "package.json",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".nvmrc",
+  "eslint.config.mjs",
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  ".semgrepignore",
+  ".pnpmfile.cjs",
+  ".pnpmfile.mjs",
+  "pnpm-lock.yaml",
   "STATE.md",
   ".worktreeinclude",
   "plugins/ductura-engineering/plugin.json",
@@ -216,7 +227,7 @@ test("ordinary documentation stays low and ordinary code stays standard", () => 
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "src/pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });
@@ -320,5 +331,23 @@ test("the gate workflow re-evaluates when auto-merge is switched on or off", () 
   const types = workflow.match(/pull_request_target:\s*\n\s*types:\s*\[([^\]]+)\]/)?.[1] ?? "";
   for (const type of ["opened", "synchronize", "reopened", "edited", "ready_for_review", "auto_merge_enabled", "auto_merge_disabled"]) {
     assert.ok(types.split(",").map((t) => t.trim()).includes(type), type);
+  }
+});
+
+// F-174: pnpm runs the root pnpmfile on every install, so it needs the owner's
+// command like the hooks it can replace; the lockfile carries the critical floor.
+test("the pnpm install hook is owner-command and the lockfile is critical", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of [".pnpmfile.cjs", ".pnpmfile.mjs", "./.PNPMFILE.cjs", ".\\.pnpmfile.mjs"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(ownerCommandPaths([file]).length, 1, file);
+    assert.equal(d97Matches([file]).length, 1, file);
+    assert.equal(declared("standard", [file]).ok, false, file);
+  }
+  const added = decide({ risk: "critical", names: [".pnpmfile.cjs"], autoMerge: true });
+  assert.equal(added.state, "pending");
+  for (const file of ["pnpm-lock.yaml", "PNPM-LOCK.yaml"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(declared("standard", [file]).ok, false, file);
   }
 });

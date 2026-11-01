@@ -4,8 +4,25 @@ Ovo je operativni postupak za ENGINEERING_SYSTEM §10, ne dokaz da je postavka
 već aktivna. Izvor: Danielova uputa 23. 10. 2026., DAN-263 i plan napada #605.
 Konfiguracija se primjenjuje tek s default grane. Na kandidatu `serial`/3/1 znači
 tri kumulativne provjere, jedan PR po batchu, bez dodatnog čekanja pune grupe.
-Od D-177 je profil `serial`/3/3: grupa do tri PR-a s jednim CI-jem, uz čekanje
+Od D-177 je profil bio `serial`/3/3: grupa do tri PR-a s jednim CI-jem, uz čekanje
 najviše tri minute; grupa koja padne dijeli se dok se ne izdvoji PR koji ju je srušio.
+Od DAN-447 (vlasnikov zahtjev 1. 11. 2026.) profil je `serial`/1/5: u svakom trenutku
+radi samo jedna spekulativna provjera, a ona testira grupu do pet PR-ova (jedan CI za
+cijelu grupu). Čekanje grupe i dijeljenje grupe koja padne ostaju isti. S jednom
+provjerom grupa se dijeli na dva dijela po krugu.
+
+Mergify više ne osvježava PR koji čeka vlasnikovu naredbu na svaki pomak maina
+(svako osvježavanje pokretalo je puni CI na tom PR-u). Carrier testira PR na
+aktualnom mainu, pa izvorni head ne mora biti svjež. Naredba imenuje taj head i
+vrijedi dok se on ne promijeni. Kad PR treba osvježiti (konflikt ili ručno
+spajanje), osvježava se jednom, u trenutku spajanja, a naredba preživljava čisto
+update-branch po D-156.
+
+`reset_on_external_merge: always` ostaje. Commit koji na main stigne izvan reda
+(ručno spajanje) poništava provjeru u tijeku, pa se grupa ponovno gradi na novom
+mainu prije ijednog spajanja. Grupa nije testirana s tim commitom, pa bi `never`
+mogao spojiti netestiranu kombinaciju. S jednom provjerom reset košta jedan CI run
+za cijelu grupu, a ne do tri kao prije.
 
 ## Prije spajanja
 
@@ -44,7 +61,7 @@ najviše tri minute; grupa koja padne dijeli se dok se ne izdvoji PR koji ju je 
   lažni review/QA verdict kao dokaz. Ako pokus nije izveden, prihvat je nepotpun.
 - Dokazati da neuspješan CI na kombinaciji blokira spajanje te da uspješan kasniji
   rezultat ne preskače raniji neuspjeh (`skip_intermediate_results: false`).
-- D-177: na prvoj grupi od dva ili tri PR-a zabilježiti jedan draft carrier za cijelu grupu i zaseban squash commit za svaki izvorni PR. Ako grupa padne, zabilježiti dijeljenje i koji je PR izdvojen. Critical ili D-97 PR u grupi mora imati svoju naredbu na točnom headu.
+- D-177 i DAN-447: na prvoj grupi od dva do pet PR-ova zabilježiti jedan draft carrier za cijelu grupu i zaseban squash commit za svaki izvorni PR. Ako grupa padne, zabilježiti dijeljenje i koji je PR izdvojen. Critical ili D-97 PR u grupi mora imati svoju naredbu na točnom headu.
 - Potvrditi redoslijed squash mergeova i zelen main. Kod neočekivanog ponašanja
   odmah pauzirati red; sačuvati status/logove prije povratka.
 
@@ -61,7 +78,9 @@ obećavati trostruko ubrzanje: login E2E i dostupni runneri mogu ostati usko grl
 
 Povrat: pauzirati red i pripremiti mali odobreni PR koji vraća
 `max_parallel_checks: 1`, uz `mode: serial`, `batch_size: 1`, retry 0 i jednake
-queue/merge uvjete. Pričekati/ukloniti postojeće spekulativne draftove preko
+queue/merge uvjete. Tada Mergify provjerava PR na mjestu: osvježava izvornu granu
+s mainom, što mijenja head i poništava review, QA i naredbu. Zato `batch_size`
+ostaje iznad 1 dok god naredbe vrijede po headu. Pričekati/ukloniti postojeće spekulativne draftove preko
 Mergifyja. Nakon potvrde in-place provjera Daniel vraća prethodno dogovoreni
 strict profil. Carrier prepoznavanje može ostati: običan PR nema izuzeće.
 

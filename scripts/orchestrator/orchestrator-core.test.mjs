@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   allRequiredPass, compareSnapshots, countCanonical, d97ManualMatches, d97Matches,
-  evaluateChecks, evaluateReady, intersectFiles, latestVerdict, parsePushArgs,
+  evaluateChecks, evaluateReady, externalReason, formatStatusRow, intersectFiles, latestVerdict, parsePushArgs,
   pushVerdict, snapshot, summarizeThreads,
 } from "./orchestrator-core.mjs";
 
@@ -151,8 +151,13 @@ test("threads summary and CI evaluation", () => {
   assert.deepEqual(ck.bad.map((b) => b.name), ["e2e", "x"]);
 });
 
+const REPO = "owner1/repo1";
+const own = (over = {}) => ({ headRepo: REPO, author: { login: "owner1", type: "User" }, ...over });
 const ready = (over = {}) => ({
   head: H1,
+  pr: own(),
+  repository: REPO,
+  ownerLogin: "owner1",
   gate: { state: "success", description: "ok" },
   rollup: [{ name: "lint", conclusion: "SUCCESS" }],
   base: "main",
@@ -187,6 +192,72 @@ test("readiness: all pass, and each failure blocks", () => {
     assert.equal(r.find((x) => x.id === id).level, "FAIL", id);
     assert.equal(allRequiredPass(r), false);
   }
+});
+
+test("F-010: only the owner's or an installed app's PR from this repository is internal", () => {
+  const bot = (login, type = "Bot") => own({ author: { login, type } });
+  for (const [why, pr, repository, ownerLogin] of [
+    ["fork head", own({ headRepo: "other/repo1" }), REPO, "owner1"],
+    ["deleted fork", own({ headRepo: null }), REPO, "owner1"],
+    ["empty head repo", own({ headRepo: "" }), REPO, "owner1"],
+    ["other author", own({ author: { login: "someone", type: "User" } }), REPO, "owner1"],
+    ["dependabot login as a user", bot("dependabot[bot]", "User"), REPO, "owner1"],
+    ["mergify login as a user", bot("mergify[bot]", "User"), REPO, "owner1"],
+    ["another app", bot("other[bot]"), REPO, "owner1"],
+    ["no author", own({ author: { login: null, type: null } }), REPO, "owner1"],
+    ["no pr", undefined, REPO, "owner1"],
+    ["unknown owner", own(), REPO, null],
+    ["empty owner", own(), REPO, ""],
+    ["unknown repository", own(), undefined, "owner1"],
+    ["owner login in other case", own({ author: { login: "Owner1", type: "User" } }), REPO, "owner1"],
+    ["app name without [bot]", bot("dependabot"), REPO, "owner1"],
+    ["app login in other case", bot("Dependabot[bot]"), REPO, "owner1"],
+    ["app login with trailing space", bot("mergify[bot] "), REPO, "owner1"],
+    ["head repo in other case", own({ headRepo: "Owner1/Repo1" }), REPO, "owner1"],
+  ]) {
+    assert.equal(typeof externalReason(pr, repository, ownerLogin), "string", why);
+  }
+  assert.equal(externalReason(own(), REPO, "owner1"), null);
+  assert.equal(externalReason(bot("dependabot[bot]"), REPO, "owner1"), null);
+  assert.equal(externalReason(bot("mergify[bot]"), REPO, "owner1"), null);
+  // An app's PR from a fork is still external.
+  assert.match(externalReason(own({ headRepo: "other/repo1", author: { login: "dependabot[bot]", type: "Bot" } }), REPO, "owner1"), /outside/);
+});
+
+test("F-010: an installed app's PR is external while the repository owner is unknown", () => {
+  for (const login of ["dependabot[bot]", "mergify[bot]"]) {
+    for (const ownerLogin of [undefined, null, ""]) {
+      const pr = own({ author: { login, type: "Bot" } });
+      const why = `${login} with owner ${JSON.stringify(ownerLogin)}`;
+      assert.equal(typeof externalReason(pr, REPO, ownerLogin), "string", why);
+      const origin = evaluateReady(ready({ pr, ownerLogin })).find((x) => x.id === "origin");
+      assert.equal(origin.level, "FAIL", why);
+    }
+  }
+});
+
+test("F-010: readiness fails on an external PR and when origin data is missing", () => {
+  assert.equal(evaluateReady(ready()).find((x) => x.id === "origin").level, "PASS");
+  for (const over of [
+    { pr: own({ headRepo: "other/repo1" }) },
+    { pr: own({ author: { login: "someone", type: "User" } }) },
+    { pr: undefined, repository: undefined, ownerLogin: undefined },
+  ]) {
+    const r = evaluateReady(ready(over));
+    const origin = r.find((x) => x.id === "origin");
+    assert.equal(origin.level, "FAIL");
+    assert.match(origin.text, /owner must adopt/);
+    assert.equal(allRequiredPass(r), false);
+  }
+});
+
+test("F-010: orch:status marks an external PR and keeps the line for an internal one", () => {
+  const r = { number: 7, head: "abc12345", base: "main", draft: false, agent: "claude:b:platforma", risk: "low",
+    ci: "ok", gate: "success", review: "-", qa: "-", overlaps: [] };
+  assert.equal(formatStatusRow({ ...r, external: null }),
+    "#7 abc12345 main | claude:b:platforma | low | ci ok | gate success | review - | qa - | preklapa: -");
+  const reason = externalReason(own({ headRepo: null }), REPO, "owner1");
+  assert.match(formatStatusRow({ ...r, draft: true, external: reason }), /^#7 abc12345 main DRAFT VANJSKI \(head is outside .*\) \| claude/);
 });
 
 test("D-97 and draft are INFO only", () => {
