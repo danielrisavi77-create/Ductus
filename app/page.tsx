@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import AccessCard from "@/components/auth/AccessCard";
+import { closedSessionKind } from "@/components/auth/access-kind";
 import homeStyles from "@/components/home/Home.module.css";
 import { homeDate } from "@/components/home/home-date";
 import Landing from "@/components/landing/Landing";
@@ -33,13 +35,25 @@ export default async function HomePage() {
     );
   }
   // One read gives both the way on and the shell's scope (F-151).
-  const { path, scope } = await readHome(token, withActor);
+  const { path, scope, closed } = await readHome(token, withActor);
   if (path !== null) redirect(path);
-  // A closed session, or one the database cannot answer for, guesses no
-  // role and stays on the signed-in home inside the shell (#802 part B). The shell
-  // shows no role here; its sign-out reads the journal under the scope. A
-  // cookie whose session is closed or could not be read has no scope, so
-  // it gets the plain sign-out that only ends the cookie.
+  // #1231: a closed session behind the cookie is told so (Z-03), with one way
+  // to sign in again, and no empty shell with only "Odjava". A new sign-in
+  // replaces the cookie.
+  if (closed) {
+    return (
+      <AppShell session={shellSession(token)} role={null} scope={null} crumbs={[]}>
+        <div className="page">
+          <AccessCard kind={closedSessionKind(token)} returnTo="/" what="home" />
+        </div>
+      </AppShell>
+    );
+  }
+  // A session the database cannot answer for guesses no role and stays on
+  // the signed-in home inside the shell (#802 part B). The shell shows no
+  // role here; its sign-out reads the journal under the scope. A cookie
+  // whose session could not be read has no scope, so it gets the plain
+  // sign-out that only ends the cookie.
   const plainSignOut = scope === null ? (
     <form method="post" action="/api/auth/logout">
       <button type="submit" className="btn">{t.shell.signOut}</button>
