@@ -422,6 +422,20 @@ describe("citation-form", () => {
     expect(pastes.smallerCount).toBe(0);
   });
 
+  // Review on #866 (cxr866): with Ctrl+A the end of the selection is the document itself.
+  it("with everything selected the citation goes at the end of the last paragraph and evidence stays intact", async () => {
+    const t = setup();
+    t.editor.commands.selectAll();
+    expect(writeSource(t.editor, "(Horvat, 2021: 15)", BOOK_ENTRY)).toBe(true);
+    const { sources } = await check(t);
+    expect(sources).toEqual(["citation-form"]);
+    const doc = t.editor.state.doc;
+    expect(doc.child(1).textContent).toBe("Odlomak izmisljen dva(Horvat, 2021: 15)");
+    expect(doc.child(2).textContent).toBe("Literatura");
+    expect(doc.child(3).textContent).toBe(BOOK_ENTRY);
+    expect(doc.childCount).toBe(4);
+  });
+
   it("Undo of the form's text is unattributed", async () => {
     const t = setup();
     t.select(9);

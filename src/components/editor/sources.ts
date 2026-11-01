@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import type { Node as PMNode, NodeType } from "@tiptap/pm/model";
-import type { Selection, Transaction } from "@tiptap/pm/state";
+import { Selection, type Transaction } from "@tiptap/pm/state";
 
 import { CITATION_FORM_META } from "@/editor/source";
 
@@ -166,7 +166,7 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
   return editor.chain().command(({ tr, state }) => {
     // Evidence: this change is `citation-form`, an event of its own (src/editor/source.ts).
     tr.setMeta(CITATION_FORM_META, true);
-    if (citation !== null) tr.insertText(citation, tr.selection.to);
+    if (citation !== null) tr.insertText(citation, citationAt(tr));
     if (entry === null) return true;
     const plan = bibliographyPlan(blocksOf(tr.doc), entry);
     if (plan.kind === "duplicate") return true;
@@ -179,13 +179,8 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     if (plan.heading) blocks.unshift([schema.nodes.heading!, { level: 1 }, BIBLIOGRAPHY_HEADING]);
     let pos = 0;
     for (let i = 0; i < plan.index; i++) pos += tr.doc.child(i).nodeSize;
-    if (!tr.doc.child(plan.index - 1).isTextblock) {
-      // After a list or a quote no split is possible; the evidence log refuses this change.
-      tr.insert(pos, blocks.map(([type, attrs, text]) => type.create(attrs, schema.text(text))));
-      tr.setSelection(keepBefore(kept, tr, from));
-      return true;
-    }
-    // The evidence format writes a new block only as a split at the end of the
+    // Every top-level block of the schema is a text block (src/editor/schema.ts),
+    // so the block before always takes a split. The evidence format writes a new block only as a split at the end of the
     // block before, as Enter does (src/editor/capture-rewrite.ts), never as a
     // closed block after another.
     for (const [type, attrs, text] of blocks) {
@@ -197,6 +192,15 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     tr.setSelection(keepBefore(kept, tr, from));
     return true;
   }).run();
+}
+
+// The citation goes at the end of the selection, inside a text block. With
+// everything selected (Ctrl+A) that end is the document itself, where an
+// insert would wrap the text in a new paragraph the evidence log refuses
+// (review on #866), so it moves back to the end of the last text block.
+function citationAt(tr: Transaction): number {
+  const to = tr.doc.resolve(tr.selection.to);
+  return to.parent.inlineContent ? to.pos : Selection.near(to, -1).to;
 }
 
 // The selection mapped over the bibliography steps only, leaning back, so a
