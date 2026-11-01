@@ -574,8 +574,8 @@ const isComposition = (node: ts.Node): boolean =>
 
 /**
  * The `const` declarations of a file whose name is declared once in it, by
- * name: an identifier that names one of them stands for its value wherever it
- * is used. A name declared twice (a parameter, a `let`, an import or another
+ * name: what the value of such a name can show is checked by itself wherever
+ * the name is used (`expressionReadings`). A name declared twice (a parameter, a `let`, an import or another
  * `const` of the same name) is left out, since without a type checker the scan
  * cannot tell which one a use means.
  */
@@ -633,8 +633,8 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
   /** The values that names stand for (`fileConstants`), and the names being read now, so a cycle ends. */
   const constants = fileConstants(source);
   const resolving = new Set<string>();
-  /** What a name was read as, for each audience, with the parts it leaves to be checked by themselves. */
-  const resolved = new Map<string, { readings: Reading[]; alone: Reading[] }>();
+  /** What the value of a name can show, for each audience, to be checked by itself. */
+  const resolved = new Map<string, Reading[]>();
 
   // Readings of parts that follow one another. A part that would take the
   // count past MAX_READINGS is read as unknown text and its alternatives go to
@@ -699,42 +699,37 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
         );
       }
     }
-    // F-024: the same constant folding for a text module and a component. A
-    // name stands for its `const` value, and the calls that put text together
-    // are read as the parts in a row.
+    // F-024: the same constant folding for a text module and a component.
+    // The calls that put text together are read as the parts in a row, and
+    // the value of a `const` name is checked by itself.
     if (ts.isIdentifier(expression)) {
       const value = constants.get(expression.text);
       // A const that holds markup is read where it is written, as before.
       if (!value || resolving.has(expression.text) || isJsxNode(value)) return [UNKNOWN];
-      // Each name is read once for each audience: a chain of names that use
-      // each other twice would otherwise be read an exponential number of times.
+      // A name stays unknown text where it is used, as before: its value may
+      // have been changed since (an array element), or the name may mean
+      // another binding. What the value can show is checked by itself, so a
+      // name only adds what is checked and never takes a finding away (Codex
+      // review of 1990a11f, #1171). Each name is read once for each audience,
+      // and what it leaves to be checked is kept without repeats.
       const key = `${expression.text}|${audience ?? ""}`;
-      const known = resolved.get(key);
-      if (known) {
-        alone.push(...known.alone);
-        return known.readings;
+      let known = resolved.get(key);
+      if (!known) {
+        resolving.add(expression.text);
+        const before = overflowed;
+        const own: Reading[] = [];
+        try {
+          const folded = expressionReadings(value, own);
+          overflowed = before;
+          known = distinct([...own, ...folded]);
+          resolved.set(key, known);
+        } finally {
+          resolving.delete(expression.text);
+        }
       }
-      resolving.add(expression.text);
-      const before = overflowed;
-      const own: Reading[] = [];
-      try {
-        const readings = expressionReadings(value, own);
-        // A value with one reading is part of the text around it. A value
-        // with alternatives is checked by itself and stands in the text as
-        // unknown, as a name did before, so legitimate choices between texts
-        // do not take a text past MAX_READINGS.
-        const single = readings.length === 1 && overflowed === before;
-        overflowed = before;
-        const result = single ? readings : [UNKNOWN];
-        const extra = single ? own : [...own, ...readings];
-        resolved.set(key, { readings: result, alone: extra });
-        alone.push(...extra);
-        return result;
-      } finally {
-        resolving.delete(expression.text);
-      }
-    }
-    if (isStringCall(expression)) {
+      alone.push(...known);
+      return [UNKNOWN];
+    }    if (isStringCall(expression)) {
       const [argument] = expression.arguments;
       return argument && !ts.isSpreadElement(argument) ? stringReadings(argument, alone) : [UNKNOWN];
     }
@@ -744,20 +739,26 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
       const args = expression.arguments;
       const part = (node: ts.Expression, joined = false): Reading[] => (ts.isSpreadElement(node) ? [UNKNOWN] : stringReadings(node, alone, joined));
       if (method === "toString" && args.length === 0) return stringReadings(target, alone);
-      if (method === "concat") return inSequence([target, ...args].map((node) => part(node)), alone);
+      if (method === "concat") {
+        let receiver: ts.Expression = target;
+        while (ts.isParenthesizedExpression(receiver) || ts.isAsExpression(receiver) || ts.isSatisfiesExpression(receiver) || ts.isNonNullExpression(receiver)) receiver = receiver.expression;
+        // An array joined to arrays is shown item after item, as JSX shows an
+        // array; a string joined to values is the values as strings.
+        if (ts.isArrayLiteralExpression(receiver)) return inSequence([target, ...args].map((node) => (ts.isSpreadElement(node) ? [UNKNOWN] : expressionReadings(node, alone))), alone);
+        return inSequence([target, ...args].map((node) => part(node)), alone);
+      }
       if (method === "join" && args.length <= 1) {
         let items: readonly ts.Expression[] | undefined;
         let array: ts.Expression = target;
         while (ts.isParenthesizedExpression(array) || ts.isAsExpression(array) || ts.isSatisfiesExpression(array) || ts.isNonNullExpression(array)) array = array.expression;
-        if (ts.isIdentifier(array) && !resolving.has(array.text)) {
-          const value = constants.get(array.text);
-          if (value && ts.isArrayLiteralExpression(value)) array = value;
-        }
         if (ts.isArrayLiteralExpression(array)) items = array.elements;
         const separator = args[0] ? part(args[0]) : exactly(",");
         // An array the scan cannot read can still be two empty items around
         // the separator, so the separator is checked by itself.
         if (!items) {
+          // A const array is not folded (an element may have been changed),
+          // but what it can show is checked by itself.
+          if (ts.isIdentifier(array)) expressionReadings(array, alone);
           alone.push(...separator);
           return [UNKNOWN];
         }

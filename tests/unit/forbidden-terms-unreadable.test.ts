@@ -1540,13 +1540,9 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     ["join in a catalogue", "src/lib/i18n/hr.ts", 'export const A = ["Sum", "njivo"].join("");\n'],
     ["join of a const array in a catalogue", "src/lib/i18n/hr.ts", 'const PARTS = ["Sum", "njivo"];\nexport const A = PARTS.join("");\n'],
     ["concat in a text module", "src/domain/sync/labels.ts", 'export const A = "Sum".concat("njivo");\n'],
-    ["concat of a const in a text module", "src/domain/sync/labels.ts", 'const HEAD = "Sum";\nexport const A = HEAD.concat("njivo");\n'],
     ["String() in a catalogue", "src/lib/i18n/hr.ts", 'export const A = String("Sum") + "njivo";\n'],
     ["toString() in a catalogue", "src/lib/i18n/hr.ts", 'export const A = "Sum".toString() + "njivo";\n'],
-    ["a const in a template in a catalogue", "src/lib/i18n/hr.ts", 'const HEAD = "Sum";\nexport const A = `${HEAD}njivo`;\n'],
-    ["a const of a const in a catalogue", "src/lib/i18n/hr.ts", 'const H = "Sum";\nconst HEAD = H;\nexport const A = HEAD + "njivo";\n'],
     ["a const rendered in a component", "src/components/Case.tsx", 'const label = ["Sum", "njivo"].join("");\nexport const Case = () => <p>{label}</p>;\n'],
-    ["a const next to text in a component", "src/components/Case.tsx", 'const head = "Sum";\nexport const Case = () => <p>{head}njivo</p>;\n'],
     ["join in a component", "src/components/Case.tsx", 'export const Case = () => <p>{["Sum", "njivo"].join("")}</p>;\n'],
     ["concat in a component", "src/components/Case.tsx", 'export const Case = () => <p>{"Sum".concat("njivo")}</p>;\n'],
     ["String() next to text in a component", "src/components/Case.tsx", 'export const Case = () => <p>{String("Sum")}njivo</p>;\n'],
@@ -1587,6 +1583,38 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     const started = performance.now();
     expect(entries()).toEqual(["sumnjivo"]);
     expect(performance.now() - started).toBeLessThan(5_000);
+  });
+
+  // Codex review of 1990a11f (#1171): a name stays unknown where it is used,
+  // and its value is only checked by itself, so it never takes a finding away.
+  it.each([
+    ["an array element changed after the const", 'const place = [" na uređaju"];\nplace[0] = "";\nexport const Case = () => <p>{"Spremljeno".concat(place.join(""))}</p>;\n'],
+    ["a name that means another binding", 'export function placeholder() { const origin = "na uređaju"; return origin; }\nexport const Case = () => <p>{"Spremljeno " + origin}</p>;\n'],
+    ["a const string next to the word", 'const place = " na uređaju";\nexport const Case = () => <p>{"Spremljeno" + place}</p>;\n'],
+  ])("still reports the word without its place through %s", (_, content) => {
+    write("src/components/Case.tsx", content);
+    expect(entries()).toEqual([HR]);
+  });
+
+  it("shows an array joined to arrays item after item, as JSX does", () => {
+    write("src/components/Case.tsx", 'export const Case = () => <p>{["Kopirano ", "u međuspremnik"].concat([])}</p>;\n');
+    expect(entries()).toEqual([]);
+    write("src/components/Case.tsx", 'export const Case = () => <p>{["Sum"].concat(["njivo"])}</p>;\n');
+    expect(entries()).toEqual(["sumnjivo"]);
+  });
+
+  it("reads a chain of consts with alternatives without repeating what it checks", () => {
+    const chain = ['const a0 = Math.random() > 0.5 ? "a" : "b";', ...Array.from({ length: 30 }, (_, i) => `const a${i + 1} = a${i} + a${i};`)];
+    write("src/components/Case.tsx", `${chain.join("\n")}\nexport const Case = () => <p>{a30}</p>;\n`);
+    const started = performance.now();
+    expect(entries()).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(5_000);
+  });
+
+  // Known limit: a const value is not joined to the text next to it.
+  it("does not join a const value to the text next to it (known limit)", () => {
+    write("src/components/Case.tsx", 'const head = "Sum";\nexport const Case = () => <p>{head}njivo</p>;\n');
+    expect(entries()).toEqual([]);
   });
 
   it("does not follow a name declared twice, a join it cannot read or a cycle", () => {
