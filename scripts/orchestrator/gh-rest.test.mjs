@@ -73,6 +73,11 @@ test("checkRollup joins check runs and statuses in the rollup shape evaluateChec
   // a completed run without conclusion is not green
   const odd = await checkRollup("abc", { list: async (_p, _e, o) => (o?.key ? [run("x", "completed", null)] : []) });
   assert.deepEqual(evaluateChecks(odd).bad, [{ name: "x", state: "COMPLETED" }]);
+  // the App slug is carried, so the merge queue's own checks can be told apart by App, not by name
+  const slugged = await checkRollup("abc", {
+    list: async (_p, _e, o) => (o?.key ? [{ ...run("Mergify Merge Queue", "in_progress", null), app: { id: 10562, slug: "mergify" } }, run("lint", "completed", "success")] : []),
+  });
+  assert.deepEqual(slugged.map((c) => c.appSlug), ["mergify", null]);
 });
 
 test("ccrThreads maps CCR threads to the node shape and reads authors only when needed", async () => {
