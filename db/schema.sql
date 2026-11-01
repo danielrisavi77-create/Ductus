@@ -567,6 +567,7 @@ CREATE FUNCTION app.current_actor(OUT user_id uuid, OUT institution_id uuid) RET
   WHERE t.token ~ '^[A-Za-z0-9_-]{43}$'
     AND s.closed_at IS NULL
     AND s.expires_at > pg_catalog.now()
+    AND s.last_seen_at > pg_catalog.now() - interval '2 hours'
 $_$;
 
 
@@ -2676,6 +2677,31 @@ $_$;
 
 
 --
+-- Name: close_all_sessions_for_identity(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_all_sessions_for_identity() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+BEGIN
+  SELECT a.user_id INTO v_user FROM app.current_actor() a;
+  IF v_user IS NULL THEN
+    RETURN;
+  END IF;
+  UPDATE identity.session
+  SET closed_at = pg_catalog.now(), close_reason = 'logout_all'
+  WHERE user_id = v_user
+    AND closed_at IS NULL
+    AND expires_at > pg_catalog.now()
+    AND last_seen_at > pg_catalog.now() - interval '2 hours';
+END
+$$;
+
+
+--
 -- Name: close_current_session(); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -2839,6 +2865,54 @@ BEGIN
   RETURN v_expires;
 END
 $$;
+
+
+--
+-- Name: purge_ended_sessions(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.purge_ended_sessions() RETURNS bigint
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  WITH gone AS (
+    DELETE FROM identity.session
+    WHERE LEAST(closed_at, expires_at, last_seen_at + interval '2 hours')
+          < pg_catalog.now() - interval '30 days'
+    RETURNING 1
+  )
+  SELECT pg_catalog.count(*) FROM gone
+$$;
+
+
+--
+-- Name: touch_current_session(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.touch_current_session() RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+DECLARE
+  v_token text := pg_catalog.current_setting('app.session_token', true);
+BEGIN
+  IF v_token IS NULL OR v_token !~ '^[A-Za-z0-9_-]{43}$' THEN
+    RETURN false;
+  END IF;
+  UPDATE identity.session s
+  SET last_seen_at = pg_catalog.now()
+  WHERE s.id = (
+    SELECT c.id FROM identity.session c
+    WHERE c.token_hash = pg_catalog.sha256(pg_catalog.convert_to(v_token, 'UTF8'))
+      AND c.closed_at IS NULL
+      AND c.expires_at > pg_catalog.now()
+      AND c.last_seen_at > pg_catalog.now() - interval '2 hours'
+      AND c.last_seen_at <= pg_catalog.now() - interval '60 seconds'
+    FOR UPDATE SKIP LOCKED
+  );
+  RETURN FOUND;
+END
+$_$;
 
 
 --
@@ -4110,9 +4184,11 @@ CREATE TABLE identity.session (
     expires_at timestamp with time zone NOT NULL,
     closed_at timestamp with time zone,
     close_reason text,
+    last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
-    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text]))),
+    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text]))),
+    CONSTRAINT session_last_seen_check CHECK ((last_seen_at >= created_at)),
     CONSTRAINT session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
 
@@ -6823,4 +6899,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261031200000'),
     ('20261101010000'),
     ('20261101150000'),
-    ('20261101160000');
+    ('20261101160000'),
+    ('20261101200000');
