@@ -633,6 +633,8 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
   /** The values that names stand for (`fileConstants`), and the names being read now, so a cycle ends. */
   const constants = fileConstants(source);
   const resolving = new Set<string>();
+  /** What a name was read as, for each audience, with the parts it leaves to be checked by themselves. */
+  const resolved = new Map<string, { readings: Reading[]; alone: Reading[] }>();
 
   // Readings of parts that follow one another. A part that would take the
   // count past MAX_READINGS is read as unknown text and its alternatives go to
@@ -702,34 +704,47 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
     // are read as the parts in a row.
     if (ts.isIdentifier(expression)) {
       const value = constants.get(expression.text);
-      if (!value || resolving.has(expression.text)) return [UNKNOWN];
+      // A const that holds markup is read where it is written, as before.
+      if (!value || resolving.has(expression.text) || isJsxNode(value)) return [UNKNOWN];
+      // Each name is read once for each audience: a chain of names that use
+      // each other twice would otherwise be read an exponential number of times.
+      const key = `${expression.text}|${audience ?? ""}`;
+      const known = resolved.get(key);
+      if (known) {
+        alone.push(...known.alone);
+        return known.readings;
+      }
       resolving.add(expression.text);
       const before = overflowed;
+      const own: Reading[] = [];
       try {
-        const readings = expressionReadings(value, alone);
+        const readings = expressionReadings(value, own);
         // A value with one reading is part of the text around it. A value
         // with alternatives is checked by itself and stands in the text as
         // unknown, as a name did before, so legitimate choices between texts
         // do not take a text past MAX_READINGS.
-        if (readings.length === 1 && overflowed === before) return readings;
+        const single = readings.length === 1 && overflowed === before;
         overflowed = before;
-        alone.push(...readings);
-        return [UNKNOWN];
+        const result = single ? readings : [UNKNOWN];
+        const extra = single ? own : [...own, ...readings];
+        resolved.set(key, { readings: result, alone: extra });
+        alone.push(...extra);
+        return result;
       } finally {
         resolving.delete(expression.text);
       }
     }
     if (isStringCall(expression)) {
       const [argument] = expression.arguments;
-      return argument && !ts.isSpreadElement(argument) ? expressionReadings(argument, alone) : [UNKNOWN];
+      return argument && !ts.isSpreadElement(argument) ? stringReadings(argument, alone) : [UNKNOWN];
     }
     if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
       const method = calledMethod(expression);
       const target = expression.expression.expression;
       const args = expression.arguments;
-      const part = (node: ts.Expression): Reading[] => (ts.isSpreadElement(node) ? [UNKNOWN] : expressionReadings(node, alone));
-      if (method === "toString" && args.length === 0) return expressionReadings(target, alone);
-      if (method === "concat") return inSequence([target, ...args].map(part), alone);
+      const part = (node: ts.Expression, joined = false): Reading[] => (ts.isSpreadElement(node) ? [UNKNOWN] : stringReadings(node, alone, joined));
+      if (method === "toString" && args.length === 0) return stringReadings(target, alone);
+      if (method === "concat") return inSequence([target, ...args].map((node) => part(node)), alone);
       if (method === "join" && args.length <= 1) {
         let items: readonly ts.Expression[] | undefined;
         let array: ts.Expression = target;
@@ -739,12 +754,17 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
           if (value && ts.isArrayLiteralExpression(value)) array = value;
         }
         if (ts.isArrayLiteralExpression(array)) items = array.elements;
-        if (!items) return [UNKNOWN];
         const separator = args[0] ? part(args[0]) : exactly(",");
+        // An array the scan cannot read can still be two empty items around
+        // the separator, so the separator is checked by itself.
+        if (!items) {
+          alone.push(...separator);
+          return [UNKNOWN];
+        }
         const parts: Reading[][] = [];
         items.forEach((item, index) => {
           if (index > 0) parts.push(separator);
-          parts.push(ts.isOmittedExpression(item) ? [EMPTY] : part(item));
+          parts.push(ts.isOmittedExpression(item) ? [EMPTY] : part(item, true));
         });
         return inSequence(parts, alone);
       }
@@ -752,6 +772,29 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
     return [UNKNOWN];
   };
 
+  // An expression as JavaScript turns it into a string (`String(x)`,
+  // `x.toString()`, `concat`, the items of `join`), which is not how JSX shows
+  // it: `true`, `false` and `null` are words there, a number is its digits and
+  // an array is its items with commas. In `join`, `null` and `undefined` give
+  // nothing. Anything else is read as JSX reads it.
+  const stringReadings = (expression: ts.Expression, alone: Reading[], joined = false): Reading[] => {
+    let node = expression;
+    while (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node)) node = node.expression;
+    if (node.kind === ts.SyntaxKind.TrueKeyword) return exactly("true");
+    if (node.kind === ts.SyntaxKind.FalseKeyword) return exactly("false");
+    if (node.kind === ts.SyntaxKind.NullKeyword) return joined ? [EMPTY] : exactly("null");
+    if (ts.isIdentifier(node) && node.text === "undefined" && !constants.has("undefined")) return joined ? [EMPTY] : exactly("undefined");
+    if (ts.isNumericLiteral(node)) return exactly(String(Number(node.text)));
+    if (ts.isArrayLiteralExpression(node)) {
+      const parts: Reading[][] = [];
+      node.elements.forEach((item, index) => {
+        if (index > 0) parts.push(exactly(","));
+        parts.push(ts.isOmittedExpression(item) ? [EMPTY] : ts.isSpreadElement(item) ? [UNKNOWN] : stringReadings(item, alone, true));
+      });
+      return inSequence(parts, alone);
+    }
+    return expressionReadings(node, alone);
+  };
   const contentReadings = (node: ts.JsxElement | ts.JsxFragment, alone: Reading[]): Reading[] =>
     inSequence(
       node.children.map((child) => {

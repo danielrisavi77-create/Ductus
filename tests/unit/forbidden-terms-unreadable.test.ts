@@ -1559,6 +1559,36 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     expect(entries()).toEqual(["sumnjivo"]);
   });
 
+  // Codex review of 6570fa19 (#1171): three ways the folding lost text.
+  it("checks the separator of a join over an array it cannot read", () => {
+    write("src/components/Case.tsx", 'export const Case = ({ items }: { items: string[] }) => <p>{items.join("Spremljeno")}</p>;\n');
+    expect(entries()).toEqual([HR]);
+  });
+
+  it.each([
+    ["String(false)", '<p>{"Spremljeno na " + String(false) + "uređaju"}</p>'],
+    ["String(null)", '<p>{"Spremljeno na " + String(null) + "uređaju"}</p>'],
+    ["false.toString()", '<p>{"Spremljeno na " + false.toString() + "uređaju"}</p>'],
+    ["concat of true", '<p>{"Spremljeno na ".concat(true, "uređaju")}</p>'],
+    ["String of an array", '<p>{"Spremljeno na " + String(["a", "b"]) + "uređaju"}</p>'],
+  ])("reads %s as JavaScript turns it into a string", (_, element) => {
+    write("src/components/Case.tsx", `export const Case = () => ${element};\n`);
+    expect(entries()).toEqual([HR]);
+  });
+
+  it("reads null and undefined as nothing inside join, as JavaScript does", () => {
+    write("src/components/Case.tsx", 'export const Case = () => <p>{["Sum", null, undefined, "njivo"].join("")}</p>;\n');
+    expect(entries()).toEqual(["sumnjivo"]);
+  });
+
+  it("reads a long chain of consts that use each other twice in linear time", () => {
+    const chain = ['const a0 = "";', ...Array.from({ length: 40 }, (_, i) => `const a${i + 1} = a${i} + a${i};`)];
+    write("src/components/Case.tsx", `${chain.join("\n")}\nexport const Case = () => <p>{a40}Sumnjivo</p>;\n`);
+    const started = performance.now();
+    expect(entries()).toEqual(["sumnjivo"]);
+    expect(performance.now() - started).toBeLessThan(5_000);
+  });
+
   it("does not follow a name declared twice, a join it cannot read or a cycle", () => {
     // Shadowed: the parameter is what the function renders.
     write("src/components/Case.tsx", 'const head = "Sum";\nexport function Case(head: string) { return <p>{head}njivo</p>; }\n');
