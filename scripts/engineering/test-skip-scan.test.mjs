@@ -14,7 +14,7 @@ const mode = "(?:skip|todo|only)";
 const PATTERNS = [
   new RegExp(String.raw`\b${word}\s*\.\s*${mode}\b`, "g"),
   new RegExp(String.raw`\b${word}\s*\[\s*["'\x60]${mode}["'\x60]\s*\]`, "g"),
-  new RegExp(String.raw`[{,]\s*${mode}\s*[:,}]`, "g"),
+  new RegExp(String.raw`[{,]\s*["'\x60]?${mode}["'\x60]?\s*[:,}]`, "g"),
 ];
 
 // Runtime skips that guard a platform the case cannot run on. Each still runs
@@ -67,6 +67,10 @@ test("the scan catches the static, bracket and option forms", () => {
     "test('x', { " + "todo: 'later' }, fn)",
     "test('x', { " + "only }, fn)",
     "test('x', { a: 1, " + "skip: true }, fn)",
+    // Codex review of 094f703c (#1161): a quoted option key is the same option.
+    "test('x', { " + "'skip': true }, fn)",
+    "test('x', { " + '"todo": true }, fn)',
+    "test('x', { " + "`only`: true }, fn)",
     dot("suite", "skip('x')"),
   ];
   for (const src of hits) assert.ok(skipSites(src).length > 0, src);
