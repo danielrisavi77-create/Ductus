@@ -123,11 +123,15 @@ describe("the roles check migration", () => {
   });
 
   it("stops on each attribute a group role must not have, for every group role", async () => {
-    for (const [index, role] of GROUP_ROLES.entries()) {
-      const attribute = ATTRIBUTES[index];
-      const outcome = await attempt([`ALTER ROLE ${role} ${attribute}`], "ductus_migrator", section("up"));
-      expect(outcome.error, `${role} ${attribute}`).toBe(`group role ${role} has LOGIN or an elevated attribute`);
+    let cases = 0;
+    for (const role of GROUP_ROLES) {
+      for (const attribute of ATTRIBUTES) {
+        const outcome = await attempt([`ALTER ROLE ${role} ${attribute}`], "ductus_migrator", section("up"));
+        expect(outcome.error, `${role} ${attribute}`).toBe(`group role ${role} has LOGIN or an elevated attribute`);
+        cases += 1;
+      }
     }
+    expect(cases).toBe(GROUP_ROLES.length * ATTRIBUTES.length);
   });
 
   it("stops when the migrator does not administer a group role", async () => {
