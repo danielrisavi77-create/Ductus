@@ -259,6 +259,15 @@ function codexCleanSummaryOnHead(comments, headSha) {
     )
   );
 }
+/**
+ * "Codex reviewed this head" as the gate counts it (D-138, D-139): a Codex PR
+ * review of the head, or a clean edited-in-place summary naming it. Exported
+ * so the orchestrator's merge-ready report reads it the same way.
+ */
+export function codexOnHead({ comments, prReviews, headSha }) {
+  return codexReviewedHead(prReviews, headSha) || codexCleanSummaryOnHead(comments, headSha);
+}
+
 // A Codex thread is answered once its author replied under the root comment:
 // a non-bot account that is the owner or the PR author's login. A list that
 // was not read answers nothing: fail closed.
@@ -620,7 +629,7 @@ function evaluateGateCore({
     // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
     // does not void it.
     const everReviewers = reviewerPrincipals(trusted);
-    const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
+    const codexOn = (sha) => codexOnHead({ comments, prReviews, headSha: sha });
     const secondSession = separateAppPass || fallbackPass
       ? null
       : qaPasses.find(

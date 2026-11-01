@@ -269,3 +269,48 @@ export async function reviewThreads(n, { graphql = graphqlThreads, ccr = ccrThre
     }
   }
 }
+
+// GitHub answers a busy API with 502, 503 or 504 (and the network sometimes
+// drops the connection); those reads are worth repeating. Anything else, such
+// as 404 or a refused permission, is not.
+const TRANSIENT_RE = /\bHTTP (?:502|503|504)\b|\b(?:502|503|504) (?:Bad Gateway|Service Unavailable|Gateway Time-?out)\b|ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up/i;
+export const transientError = (e) => TRANSIENT_RE.test(`${e?.stderr ?? ""} ${e?.message ?? e ?? ""}`);
+
+/** fn() again on a transient error, at most `tries` times in all, waiting waitMs, 2*waitMs, ... */
+export async function withRetry(fn, { tries = 4, waitMs = 3000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), retryable = transientError } = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= tries || !retryable(e)) throw e;
+      await sleep(waitMs * attempt);
+    }
+  }
+}
+
+/** Numbers of the open PRs, ascending, from the light REST list. */
+export async function openPrNumbers({ list = ghList } = {}) {
+  const prs = await list("repos/{owner}/{repo}/pulls?state=open&per_page=100");
+  const numbers = prs.map((p) => p?.number);
+  if (!numbers.every((n) => Number.isSafeInteger(n) && n > 0)) throw new Error("open PR list has an entry without a number");
+  return numbers.sort((a, b) => a - b);
+}
+
+/**
+ * Every open PR read on its own: the number list first, then read(n) for each,
+ * one after the other, each with retries. One heavy query for all PRs times out
+ * on GitHub (502/504). A PR that stays unreadable is returned as {number, error},
+ * never left out; a failed number list throws.
+ */
+export async function readOpenPrs(read, { numbers = openPrNumbers, retry = withRetry } = {}) {
+  const list = await retry(() => numbers());
+  const out = [];
+  for (const number of list) {
+    try {
+      out.push({ number, value: await retry(() => read(number)) });
+    } catch (e) {
+      out.push({ number, error: String(e?.stderr || e?.message || e).trim().split("\n")[0] });
+    }
+  }
+  return out;
+}
