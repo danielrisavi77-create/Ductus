@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { createHash } from "node:crypto";
+
 import Dexie from "dexie";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -62,6 +64,18 @@ describe("F-8 3d-2a: journal v3", () => {
       state: "SYNCED", localSeq: 1, evidenceHead: { segmentHash: SEG[0]!.sha256, lastSequenceTo: 1 },
     });
     await expect(open().startEvidence(DOC, { ...chain.opened, documentHash: "a".repeat(64) }, UTC)).rejects.toMatchObject({ code: "invalid_input" });
+  });
+
+  // M0.1 queries #7: the hash matches the bytes, so only the canonical model can refuse them.
+  it("13: startEvidence refuses a stored document the canonical model cannot read, even under its own hash", async () => {
+    const hashOf = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+    expect(hashOf(chain.opened.document)).toBe(chain.opened.documentHash);
+    for (const unreadable of [{ type: "nije-dokument" }, { type: "doc", content: "Izmišljeni tekst izvan bloka." }]) {
+      const document = jcsUtf8Bytes(unreadable);
+      const journal = open();
+      await refuses(journal, "invalid_input", () =>
+        journal.startEvidence(DOC, { ...chain.opened, document, documentHash: hashOf(document) }, UTC));
+    }
   });
 
   it("13: startEvidence refuses a missing answer and a server behind this device, without a write", async () => {
