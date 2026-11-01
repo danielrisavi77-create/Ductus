@@ -13,7 +13,7 @@ const ROOT = new URL("../../../", import.meta.url);
 const FILES = {
   rolesMigration: "db/migrations/20261003210000_roles.sql",
   bootstrap: "db/local/migrator.sql",
-  checkMigration: "db/migrations/20261101020000_roles_check.sql",
+  checkMigration: "db/migrations/20261101160000_roles_check.sql",
 } as const;
 
 /** The quoted names inside `group_roles CONSTANT text[] := ARRAY[...]`. */
