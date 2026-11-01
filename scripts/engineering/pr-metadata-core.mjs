@@ -1,7 +1,17 @@
 import { field } from "./metadata-parser.mjs";
-import { D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath } from "./protected-paths.mjs";
+import {
+  CRITICAL_DOC_PATHS,
+  CRITICAL_TEST_PATHS,
+  D97_MANUAL_PATHS,
+  D97_PATHS,
+  INSTALL_HOOK_PATHS,
+  isAgentControlPath,
+  matchesPath,
+  normalizePath,
+} from "./protected-paths.mjs";
 
-const RISK_RANK = { low: 0, standard: 1, critical: 2 };
+// No prototype: `"constructor" in RISK_RANK` must be false (F-041 b).
+const RISK_RANK = Object.freeze(Object.assign(Object.create(null), { low: 0, standard: 1, critical: 2 }));
 const AGENT_RE =
   /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 
@@ -12,14 +22,30 @@ const AGENT_RE =
 // directory and its runner configuration carry the floor of the guards.
 export const CRITICAL_PATHS = [
   ...D97_PATHS,
-  "docs/PRODUCT.md",
+  ...CRITICAL_DOC_PATHS,
   "STATE.md",
   ".worktreeinclude",
   "osv-scanner.toml",
+  // F-033: what installs, runs or pins the toolchain, the lint rules and the
+  // scanner exceptions.
+  "package.json",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".nvmrc",
+  "eslint.config.mjs",
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  ".semgrepignore",
+  // F-174: the pnpm install hook runs on every install; the lockfile decides
+  // which package code the hooks and tools run.
+  ...INSTALL_HOOK_PATHS,
+  "pnpm-lock.yaml",
   "vitest.config.ts",
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
+  // The only test that a production build refuses the fake provider (D-09, F-041 a).
+  ...CRITICAL_TEST_PATHS,
   ".cc-safety-net/",
   "plugins/",
   "scripts/forbidden-terms/",
@@ -40,7 +66,7 @@ export const CRITICAL_PATHS = [
 ];
 
 function criticalReason(filename) {
-  if (matchesPath(filename, CRITICAL_PATHS)) return "governance/trust-critical path";
+  if (matchesPath(filename, CRITICAL_PATHS) || isAgentControlPath(filename)) return "governance/trust-critical path";
 
   if (
     /^(src|app)\//.test(filename) &&
@@ -99,7 +125,7 @@ export function evaluateMetadata({ body, files }) {
   if (!agent || !AGENT_RE.test(agent)) {
     return { ok: false, message: "Missing or invalid Agent metadata." };
   }
-  if (!risk || !(risk in RISK_RANK)) {
+  if (!risk || !Object.hasOwn(RISK_RANK, risk)) {
     return { ok: false, message: "Risk must be low, standard, or critical." };
   }
   if (!task) {

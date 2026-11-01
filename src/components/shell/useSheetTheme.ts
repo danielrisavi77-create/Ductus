@@ -9,8 +9,8 @@ import {
 /**
  * One sheet theme per page, shared by the sheet (SheetFrame) and whatever
  * switches it: the "Prikaz" menu of the toolbar on /rad (FE-D5), the switch
- * above the sheet elsewhere. The server and the hydrating render use the dark
- * default, so hydration matches; the stored choice follows right after.
+ * above the sheet elsewhere. The server and the hydrating render use the default
+ * (paper), so hydration matches; the stored choice follows right after.
  */
 
 let current: SheetTheme | null = null;

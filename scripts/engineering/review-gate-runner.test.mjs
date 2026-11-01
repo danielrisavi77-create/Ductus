@@ -31,16 +31,19 @@ globalThis.fetch = async (url, options = {}) => {
   }
   if (plan.fail.some((p) => path.endsWith(p))) throw new TypeError("fetch failed");
   if (/\\/pulls\\/\\d+$/.test(path)) {
-    return reply(200, { number: 7, head: { sha: "${HEAD}" }, base: { sha: "${BASE}" },
+    return reply(200, { number: 7, state: "open", head: { sha: "${HEAD}", repo: { full_name: "o/r" } },
+      base: { sha: "${BASE}", ref: "main", repo: { full_name: "o/r", default_branch: "main" } },
       html_url: "https://github.com/o/r/pull/7", body: "", ...plan.pr });
   }
+  if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
+  if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
   return reply(200, []);
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {} } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -55,7 +58,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls }),
       FAKE_LOG: log,
     },
   });
@@ -64,7 +67,13 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
 }
 
 const comment = { issue: { number: 7, pull_request: {} } };
-const pullRequest = { pull_request: { number: 7, head: { sha: HEAD }, html_url: "https://github.com/o/r/pull/7" } };
+const pullRequest = {
+  pull_request: {
+    number: 7, state: "open", html_url: "https://github.com/o/r/pull/7",
+    head: { sha: HEAD, repo: { full_name: "o/r" } },
+    base: { ref: "main", repo: { full_name: "o/r", default_branch: "main" } },
+  },
+};
 
 test("a failed comment read after the head is known marks the head pending", () => {
   const { code, posts } = run(comment, { fail: ["/issues/7/comments"] });
@@ -133,6 +142,62 @@ test("a carrier publish failure replaces a partial success with pending on both 
   ]);
 });
 
+// F-165: a PR that only adds a test file, so all three statuses would be green.
+const repoMeta = { id: 1, full_name: "o/r", default_branch: "main" };
+const eligible = {
+  number: 7, state: "open", user: { login: "o" }, changed_files: 1, auto_merge: null,
+  body: "Agent: claude:a:platforma\nRisk: critical\nTask: B-1\n",
+  head: { sha: HEAD, ref: "feat/x", repo: repoMeta },
+  base: { sha: BASE, ref: "main", repo: repoMeta },
+};
+const addedTest = [{ filename: "src/a.test.ts", status: "added" }];
+const states = (posts) => posts.map((p) => [p.body.context, p.body.state]);
+const ALL = ["Merge authorization", "Auto-merge eligible", "Engineering review gate"];
+
+test("control: a PR on the default branch keeps all three green statuses (F-165)", () => {
+  const { code, posts } = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible] });
+  assert.equal(code, 0);
+  assert.deepEqual(states(posts), ALL.map((c) => [c, "success"]));
+});
+
+test("a PR whose base is not the default branch gets no green status for its head (F-165)", () => {
+  for (const base of [
+    { ...eligible.base, ref: "feature" },
+    { ...eligible.base, repo: { ...repoMeta, default_branch: "trunk" } },
+    { ...eligible.base, repo: { id: 1, full_name: "o/r" } },
+  ]) {
+    const { code, posts } = run(comment, { pr: { ...eligible, base }, files: addedTest, openPulls: [] });
+    assert.equal(code, 0);
+    assert.deepEqual(states(posts), ALL.map((c) => [c, "pending"]), JSON.stringify(base));
+    for (const post of posts) {
+      assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
+      assert.match(post.body.description, /only for PRs that target the default branch/);
+    }
+  }
+});
+
+test("another open PR on the same head leaves Auto-merge eligible pending (F-165)", () => {
+  for (const other of [{ number: 8, head: { sha: HEAD } }, { number: 9, head: { sha: HEAD }, base: { ref: "feature" } }]) {
+    const { code, posts } = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible, other] });
+    assert.equal(code, 0);
+    assert.deepEqual(states(posts), [
+      ["Merge authorization", "success"], ["Auto-merge eligible", "pending"], ["Engineering review gate", "success"],
+    ]);
+    assert.match(posts[1].body.description, /another open PR shares this head/);
+  }
+  // A failed read of the open PRs fails the run closed.
+  const failed = run(comment, { pr: eligible, files: addedTest, fail: ["/pulls"] });
+  assert.equal(failed.code, 1);
+  assert.ok(failed.posts.every((p) => p.body.state !== "success"));
+});
+
+test("a queue carrier keeps its statuses without a default_branch field (F-165)", () => {
+  assert.equal(carrier.base.repo.default_branch, undefined);
+  const { code, posts } = run(comment, { pr: carrier, openPulls: [{ number: 8, head: { sha: HEAD } }] });
+  assert.equal(code, 0);
+  assert.deepEqual(states(posts), [["Merge authorization", "success"], ["Engineering review gate", "success"]]);
+});
+
 test("a renamed human branch, fork, non-draft or different bot is still subject to the original gate", () => {
   for (const changed of [
     { user: { ...carrier.user, login: "owner", id: 2, type: "User" } },
@@ -144,4 +209,69 @@ test("a renamed human branch, fork, non-draft or different bot is still subject 
     assert.equal(code, 0);
     assert.ok(posts.every((p) => p.body.state !== "success"), JSON.stringify(changed));
   }
+});
+
+// F-014: statuses are per commit. A closed PR, or a PR whose head lives in
+// another repository, may share its head SHA with an open PR of this
+// repository, so the gate writes nothing for it, on any path.
+const external = [
+  { state: "closed" },
+  { head: { ...eligible.head, repo: { id: 2, full_name: "fork/r" } } },
+  { head: { ...eligible.head, repo: null } },
+  { head: { sha: HEAD, ref: "feat/x" } },
+  { base: { ...eligible.base, repo: { ...repoMeta, full_name: "other/r" } } },
+];
+
+test("a closed PR or a head outside this repository gets no status at all (F-014)", () => {
+  for (const changed of external) {
+    const label = JSON.stringify(changed);
+    const ok = run(comment, { pr: { ...eligible, ...changed }, files: addedTest, openPulls: [eligible] });
+    assert.equal(ok.code, 0, label);
+    assert.deepEqual(ok.posts, [], label);
+    // A later read failure does not fall back to the head either.
+    const failed = run(comment, { pr: { ...eligible, ...changed }, fail: ["/issues/7/comments"] });
+    assert.equal(failed.code, 0, label);
+    assert.deepEqual(failed.posts, [], label);
+  }
+});
+
+test("a failed PR read marks the event head only for an open PR of this repository (F-014)", () => {
+  for (const changed of [
+    { state: "closed" },
+    { head: { sha: HEAD, repo: { full_name: "fork/r" } } },
+    { head: { sha: HEAD, repo: null } },
+    { head: { sha: HEAD } },
+  ]) {
+    const event = { pull_request: { ...pullRequest.pull_request, ...changed } };
+    const { code, posts } = run(event, { fail: ["/pulls/7"] });
+    assert.equal(code, 1, JSON.stringify(changed));
+    assert.deepEqual(posts, [], JSON.stringify(changed));
+  }
+});
+
+test("a PR off the default branch writes nothing on a head another open PR shares (F-014)", () => {
+  const side = { ...eligible, number: 9, base: { ...eligible.base, ref: "feature" } };
+  const main = { ...eligible, number: 8 };
+  const shared = run(comment, { pr: side, files: addedTest, openPulls: [side, main] });
+  assert.equal(shared.code, 0);
+  assert.deepEqual(shared.posts, []);
+  // An unread list counts as shared: nothing is written, and the run fails.
+  const unread = run(comment, { pr: side, files: addedTest, fail: ["/pulls"] });
+  assert.equal(unread.code, 1);
+  assert.deepEqual(unread.posts, []);
+  // Any other failed read of a side-base PR writes nothing either: the failure
+  // marker would land on a head a PR to main may own.
+  for (const fail of [["/issues/7/comments"], ["/pulls/7/files"], ["/pulls/7/reviews"], ["/pulls/7/comments"]]) {
+    const failed = run(comment, { pr: side, files: addedTest, openPulls: [side, main], fail });
+    assert.equal(failed.code, 1, fail[0]);
+    assert.deepEqual(failed.posts, [], fail[0]);
+  }
+  // A side-base event whose PR read fails does not mark the event head.
+  const sideEvent = { pull_request: { ...pullRequest.pull_request, base: { ref: "feature", repo: { full_name: "o/r", default_branch: "main" } } } };
+  const eventFail = run(sideEvent, { fail: ["/pulls/7"] });
+  assert.equal(eventFail.code, 1);
+  assert.deepEqual(eventFail.posts, []);
+  // Control: alone on its head it still gets the pending marker.
+  const alone = run(comment, { pr: side, files: addedTest, openPulls: [side] });
+  assert.deepEqual(states(alone.posts), ALL.map((c) => [c, "pending"]));
 });

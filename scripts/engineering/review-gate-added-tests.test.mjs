@@ -101,10 +101,19 @@ test("a low PR with any runtime, config or served file still waits for review", 
     ["config/faculties/fpzg/citation.json", "modified"],
     ["docs/diagram.svg", "added"],
   ]) {
-    const out = runLow([
+    const list = [
       { filename: "docs/FEATURES.md", status: "modified" },
       { filename, status },
-    ]);
+    ];
+    // F-033, F-174: the toolchain files are critical, so a low declaration fails
+    // outright and the critical one still waits for review.
+    const critical = [".npmrc", ".pnpmfile.cjs", "pnpm-workspace.yaml", ".nvmrc"].includes(filename);
+    if (critical) {
+      const low = runLow(list);
+      assert.equal(low.result.state, "failure", filename);
+      assert.match(low.result.description, /below minimum critical/, filename);
+    }
+    const out = critical ? evaluate("critical", list) : runLow(list);
     assert.notEqual(out.result.state, "success", filename);
     assert.equal(out.autoMergeEligible.state, "pending", filename);
   }
@@ -123,6 +132,8 @@ test("a low PR that renames code into a document still waits for review", () => 
 });
 
 // #971 review: an agent loads CLAUDE.md and AGENTS.md from any directory.
+// F-039: such a file is critical, so a low declaration fails outright, and
+// the correct declaration still waits for review and is not auto-merge eligible.
 test("a low PR with an agent instruction file in any directory still waits for review", () => {
   for (const [filename, status] of [
     ["docs/CLAUDE.md", "added"],
@@ -131,8 +142,11 @@ test("a low PR with an agent instruction file in any directory still waits for r
     ["docs/CLAUDE.local.md", "added"],
     ["docs/x/AGENTS.override.md", "modified"],
   ]) {
-    const out = runLow([{ filename, status }]);
-    assert.notEqual(out.result.state, "success", filename);
+    const low = runLow([{ filename, status }]);
+    assert.equal(low.result.state, "failure", filename);
+    assert.match(low.result.description, /below minimum critical/, filename);
+    const out = evaluate("critical", [{ filename, status }]);
+    assert.equal(out.result.state, "pending", filename);
     assert.equal(out.autoMergeEligible.state, "pending", filename);
   }
 });
@@ -209,7 +223,7 @@ test("new unit tests and specs under src/ and tests/unit/ remain exempt", () => 
 // pull_request_target, so no D-189 exemption reaches a head outside this repository.
 test("a PR from a fork gets no D-189 exemption", () => {
   for (const [risk, file] of [
-    ["low", { filename: "docs/CLAUDE.md", status: "added" }],
+    ["critical", { filename: "docs/CLAUDE.md", status: "added" }],
     ["low", { filename: "docs/BACKEND.md", status: "modified" }],
     ["standard", { filename: "src/lib/x.test.ts", status: "added" }],
     ["critical", { filename: "tests/unit/y.test.ts", status: "added" }],

@@ -16,6 +16,8 @@ import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { readEvidenceDomainKeys } from "@/server/evidence/evidence-domain-keys";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-8 step 4a / DAN-83 (docs/BACKEND.md 4.13 t. 7; ADR 2026-10-11 7 (b)): a
 // receipt signed by one process must verify after a restart with the key the
 // registry holds. The db/local script makes the seed and registers the key;
@@ -24,9 +26,7 @@ import { readEvidenceDomainKeys } from "@/server/evidence/evidence-domain-keys";
 // seed in a temporary directory, all removed afterwards.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The signing key test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The signing key test runs only against a loopback database (DATABASE_URL).");
 const run = promisify(execFile);
 const ROOT = new URL("../../", import.meta.url);
 const SCRIPT = new URL("db/local/evidence-signing-key.mjs", ROOT);
@@ -237,5 +237,11 @@ describe("persistent development signing key", () => {
     expect(await signInNewProcess(message, { NODE_ENV: "production" })).toEqual({ fault: "signing_key_production" });
     const refused = await registerKey({ NODE_ENV: "production" }).then(() => null, (error: { stderr: string }) => error.stderr);
     expect(refused).toContain("refused in production");
+    // F-020: an empty or misspelt NODE_ENV counts as production too.
+    for (const nodeEnv of ["", "Production", "staging"]) {
+      expect(await signInNewProcess(message, { NODE_ENV: nodeEnv })).toEqual({ fault: "signing_key_production" });
+      const again = await registerKey({ NODE_ENV: nodeEnv }).then(() => null, (error: { stderr: string }) => error.stderr);
+      expect(again).toContain("refused in production");
+    }
   });
 });

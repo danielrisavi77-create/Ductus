@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 const CSS = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
 const DOC = readFileSync(join(process.cwd(), "docs", "design", "DESIGN-SYSTEM.md"), "utf8");
 
-const SCOPES = [":root", '[data-theme="light"]', ".sheet", '.sheet[data-sheet-theme="light"]'] as const;
+const SCOPES = [":root", ':root[data-theme="light"]:not(:has(#prijava-kartica, #pocetna-naslov))', ".sheet", '.sheet[data-sheet-theme="light"]'] as const;
 type Scope = (typeof SCOPES)[number];
 
 /** Colour tokens (hex values) declared in the first rule whose selector is exactly `selector`. */
@@ -87,7 +87,8 @@ describe("DESIGN-SYSTEM.md matches app/globals.css (#960)", () => {
 
 describe("shared focus ring and curtain (#960)", () => {
   const files = (readdirSync(join(process.cwd(), "src", "components"), { recursive: true }) as string[])
-    .filter((f) => f.endsWith(".module.css") && !f.startsWith("landing"))
+    // The public landing page included (review of #973): one focus ring everywhere.
+    .filter((f) => f.endsWith(".module.css"))
     .map((f) => [f, readFileSync(join(process.cwd(), "src", "components", f), "utf8")] as const);
 
   it("draws every focus ring from --focus-width and --focus-offset", () => {

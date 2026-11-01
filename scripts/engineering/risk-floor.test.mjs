@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { CRITICAL_PATHS, evaluateMetadata, minimumRisk } from "./pr-metadata-core.mjs";
-import { changedPaths, D97_MANUAL_PATHS, D97_PATHS, ownerCommandPaths } from "./protected-paths.mjs";
+import { changedPaths, D97_MANUAL_PATHS, D97_PATHS, lowReviewExempt, ownerCommandPaths } from "./protected-paths.mjs";
 import { evaluatePullRequest } from "./review-gate-core.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -24,6 +24,17 @@ const CRITICAL_SAMPLES = [
   ".cc-safety-net/rules/rule.json",
   ".cc-safety-net/rules/ductus-rules/rulebook.json",
   "osv-scanner.toml",
+  "package.json",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".nvmrc",
+  "eslint.config.mjs",
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  ".semgrepignore",
+  ".pnpmfile.cjs",
+  ".pnpmfile.mjs",
+  "pnpm-lock.yaml",
   "STATE.md",
   ".worktreeinclude",
   "plugins/ductura-engineering/plugin.json",
@@ -48,6 +59,7 @@ const CRITICAL_SAMPLES = [
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
+  "e2e/auth.spec.ts",
   "scripts/demo/native/tools.mjs",
   "scripts/demo/native/up.mjs",
   "scripts/demo/native/lib/any.mjs",
@@ -70,6 +82,24 @@ test("every protected path has the critical floor and rejects a lower declared r
     }
     assert.equal(declared("critical", [file]).ok, true, file);
   }
+});
+
+test("F-041 b: a Risk value that names an Object property is refused, not passed", () => {
+  for (const risk of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf", "isPrototypeOf"]) {
+    for (const files of [["db/migrations/20270101000000_x.sql"], ["docs/notes.md"]]) {
+      const result = declared(risk, files);
+      assert.equal(result.ok, false, `${risk} ${files}`);
+      assert.match(result.message, /Risk must be low, standard, or critical/, risk);
+    }
+  }
+  // Case still does not matter for the real values.
+  assert.equal(declared("Critical", ["db/migrations/20270101000000_x.sql"]).ok, true);
+});
+
+test("F-041 a: the D-09 production-refuses-fake-provider test is critical; other E2E specs stay standard", () => {
+  assert.equal(minimumRisk(["e2e/auth.spec.ts"]).risk, "critical");
+  assert.equal(minimumRisk(["E2E/Auth.spec.ts"]).risk, "critical");
+  assert.equal(minimumRisk(["e2e/editor.spec.ts"]).risk, "standard");
 });
 
 test("the critical list contains every owner-command path, so the two cannot drift", () => {
@@ -137,13 +167,66 @@ test("the files that hold the protected lists are themselves protected", () => {
   }
 });
 
+// F-039: agent instruction and configuration files count at any depth.
+const AGENT_CONTROL_SAMPLES = [
+  "CLAUDE.local.md",
+  "docs/CLAUDE.md",
+  "src/feature/CLAUDE.local.md",
+  "docs/AGENTS.md",
+  "app/AGENTS.override.md",
+  "docs/notes/GEMINI.md",
+  "infra/copilot-instructions.md",
+  "docs/review.instructions.md",
+  ".mcp.json",
+  "tools/.mcp.json",
+  "docs/.claude/notes.md",
+  "src/lib/.agents/skills/x/SKILL.md",
+  ".codex/config.toml",
+  "tools/.codex/prompts/p.md",
+  "Docs\\Claude.MD",
+  "./docs//Agents.md",
+  "Tools/.MCP.json",
+  "src/.Codex/x",
+];
+
+test("agent instruction and configuration files are critical and owner-command at any depth", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of AGENT_CONTROL_SAMPLES) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(declared("low", [file]).ok, false, file);
+    assert.equal(declared("standard", [file]).ok, false, file);
+    assert.equal(ownerCommandPaths([file]).length, 1, file);
+    assert.equal(d97Matches([file]).length, 1, file);
+    assert.equal(lowReviewExempt([file]), false, file);
+  }
+  const renamed = changedPaths([{ filename: "docs/notes.md", previous_filename: "docs/CLAUDE.md", status: "renamed" }]);
+  assert.equal(minimumRisk(renamed).risk, "critical");
+  const held = decide({ risk: "low", names: ["docs/README.md", "docs/CLAUDE.md"] });
+  assert.equal(held.state, "failure");
+  assert.match(held.description, /below minimum critical/);
+  assert.equal(decide({ risk: "critical", names: ["docs/AGENTS.md"], autoMerge: true }).state, "pending");
+});
+
+test("names that only resemble agent files keep their floor", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of ["docs/PLAN-DEMO.md", "docs/mcp.md", "docs/codex-notes.txt", "docs/claude.txt", "docs/.mcp.json.md"]) {
+    assert.equal(minimumRisk([file]).risk, "low", file);
+    assert.deepEqual(ownerCommandPaths([file]), [], file);
+    assert.deepEqual(d97Matches([file]), [], file);
+  }
+  for (const file of ["src/agent.ts", "src/claude/client.ts", "scripts/.codexrc.mjs"]) {
+    assert.equal(minimumRisk([file]).risk, "standard", file);
+    assert.deepEqual(ownerCommandPaths([file]), [], file);
+  }
+});
+
 test("ordinary documentation stays low and ordinary code stays standard", () => {
   for (const file of ["README.md", "docs/README.md", "docs/PLAN-DEMO.md", "docs/UX-EVAL.md"]) {
     assert.equal(minimumRisk([file]).risk, "low", file);
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "src/pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });
@@ -246,5 +329,23 @@ test("the gate workflow re-evaluates when auto-merge is switched on or off", () 
   const types = workflow.match(/pull_request_target:\s*\n\s*types:\s*\[([^\]]+)\]/)?.[1] ?? "";
   for (const type of ["opened", "synchronize", "reopened", "edited", "ready_for_review", "auto_merge_enabled", "auto_merge_disabled"]) {
     assert.ok(types.split(",").map((t) => t.trim()).includes(type), type);
+  }
+});
+
+// F-174: pnpm runs the root pnpmfile on every install, so it needs the owner's
+// command like the hooks it can replace; the lockfile carries the critical floor.
+test("the pnpm install hook is owner-command and the lockfile is critical", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of [".pnpmfile.cjs", ".pnpmfile.mjs", "./.PNPMFILE.cjs", ".\\.pnpmfile.mjs"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(ownerCommandPaths([file]).length, 1, file);
+    assert.equal(d97Matches([file]).length, 1, file);
+    assert.equal(declared("standard", [file]).ok, false, file);
+  }
+  const added = decide({ risk: "critical", names: [".pnpmfile.cjs"], autoMerge: true });
+  assert.equal(added.state, "pending");
+  for (const file of ["pnpm-lock.yaml", "PNPM-LOCK.yaml"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(declared("standard", [file]).ok, false, file);
   }
 });

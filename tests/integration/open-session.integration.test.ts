@@ -54,6 +54,9 @@ beforeAll(async () => {
   await admin.query("INSERT INTO identity.institution (id, slug, aai_home_org) VALUES ($1, $2, $3)", [
     institution, `it-open-${suffix}`, homeOrg,
   ]);
+  await admin.query("INSERT INTO identity.institution_issuer (institution_id, oidc_issuer) VALUES ($1, $2)", [
+    institution, issuer,
+  ]);
 });
 
 afterAll(async () => {
@@ -64,6 +67,7 @@ afterAll(async () => {
     [institution],
   );
   await admin.query("DELETE FROM identity.user_account WHERE institution_id = $1", [institution]);
+  await admin.query("DELETE FROM identity.institution_issuer WHERE institution_id = $1", [institution]);
   await admin.query("DELETE FROM identity.institution WHERE id = $1", [institution]);
   await admin.query(`DROP ROLE IF EXISTS ${AUTH_LOGIN}`);
   await admin.query(`DROP ROLE IF EXISTS ${APP_LOGIN}`);

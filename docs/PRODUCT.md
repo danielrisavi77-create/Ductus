@@ -73,7 +73,9 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 
 **[ODLUČENO D-09]** Studenti se prijavljuju isključivo AAI@EduHr računom. Drugog načina prijave za studente nema.
 
-**[PRIJEDLOG D-16]** Isto pravilo vrijedi za nastavnike, mentore i administratore fakulteta.
+**[ODLUČENO D-16, 25. 10. 2026.]** Isto pravilo vrijedi za nastavnike, mentore i administratore fakulteta.
+
+Zabilježeni pristup podrške operatera (D-199 t. 3, dopunjuje D-172) traži pristanak fakulteta za konkretan slučaj, razlog, najuži opseg, istek i revizijski trag; pojedinosti zaključuje ADR prije izgradnje.
 
 - Protokol: OpenID Connect Authorization Code s PKCE-om prema AAI@EduHr. Prijava i sesije provode se vlastitim server-side OIDC tokom; Supabase Auth nije odabran. Biblioteka/adapter ostaju otvoreni do M1 spikea (D-73 i `BACKEND.md` §4.3). Lažni OIDC pružatelj služi samo lokalno i u CI-ju.
 - Identitet korisnika je `hrEduPersonUniqueID`, nikad e-mail.
@@ -90,7 +92,7 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 1. Ductus nikad ne tvrdi tko je napisao rad, niti je li AI korišten nedopušteno. Oznaka mjesta unosa („Napisano u Ducturi”) navodi mjesto, ne osobu, i nije tvrdnja o autoru (D-127). (C-9, C-10, D-01)
 2. Nema postotka AI-ja, postotka ljudskosti, ocjene rizika, sumnje ni integriteta. (C-6)
 3. Nepoznato nije krivnja. Praznina u zapisu prikazuje se kao praznina, nikad kao znak nečega. (C-8)
-4. Ne bilježi se koja je tipka pritisnuta ni koliko je držana. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). Uz to se svaka promjena dokumenta, znak po znak, sprema s redoslijedom i vremenom u zasebnoj klasi podataka, isključivo za prikaz uživo i reprodukciju; iz vremena se nikad ne računa brzina, pauze, ritam ni bilo kakva mjera (D-143, D-56). (C-14, v1.4)
+4. Ne bilježi se koja je tipka pritisnuta ni koliko je držana. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). Uz to se svaka promjena dokumenta, znak po znak, sprema s redoslijedom i vremenom u zasebnoj klasi podataka, isključivo za prikaz uživo i reprodukciju; iz vremena se nikad ne računa brzina, pauze, ritam ni bilo kakva mjera (D-143, D-56). Dvije izričite iznimke (D-63, 31. 10. 2026.): sesija po pragu P-01 iz sažetka procesa nije pauza u smislu ovog pravila, pa reprodukcija smije nuditi skok po sesijama; i studentov napredak (riječi po danu prema cilju, napredak po poglavlju, dani do roka) izvodi se iz verzija, ne iz vremena po promjeni, vidi ga samo student i ne ulazi u sažetak, izvoz, predaju ni nastavnički prikaz. (C-14, v1.4)
 5. Student uvijek vidi točno ono što o njegovu radu vidi nastavnik ili mentor, generirano istom funkcijom. Iznimka su mentorovi radni zapisi (oznaka zadnjeg pregleda, privatne bilješke, predlošci komentara, nacrt rubrike i izvješća): oni nisu prikaz rada, ne ulaze u sažetak, izvoz ni predaju, navedeni su u obavijesti i student ih može zatražiti pravom pristupa (D-130). Ocjena i obrazloženje vide se studentu tek nakon objave. (C-4)
 6. Student prije početka rada zna što nastavnik vidi i od kada: obavijest o praćenju je prvi ekran svakog zadatka. (C-3)
 7. Mentor i nastavnik zadatka vide rad uživo dok nastaje: promjene dokumenta pojavljuju se u njihovu prikazu u trenutku kad ih student napravi (D-142). Mentor, odnosno nastavnik zadatka (jedna uloga, D-154), može reproducirati nastanak rada znak po znak (D-143); od ostalih uloga nitko drugi. Student vidi istu reprodukciju svog rada (pravilo 5). Prikaz uživo i reprodukcija služe praćenju i komentarima, nikad ocjeni, rangiranju ni oznaci sumnje. Izvan prikaza uživo i reprodukcije povijest međustanja nije dostupna ni u jednom nastavničkom pregledu, sažetku ni usporedbi. Student smije vidjeti vlastitu povijest rada; ona se ne šalje nikome drugome, ne ulazi u sažetak, izvoz ni predaju i čuva se najviše do kraja akademske godine zadatka (D-131, uvjetno: čeka pravno mišljenje D-55). Student u obavijesti zna da mentor i nastavnik vide rad uživo, pa i tekst koji će možda kasnije obrisati, i da mentor, odnosno nastavnik zadatka, može reproducirati nastanak rada. (C-3, C-14, C-19, v1.4)
@@ -182,7 +184,7 @@ Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslov
 | Osnovni | Spremljeno stanje rada, sažetak procesa, vremensku crtu | Zadana vrijednost |
 | Prošireni | Osnovni + usporedbu verzija na kraju sesija i poslanih verzija | Seminarski i završni radovi s više verzija |
 
-**Reprodukcija (D-56, D-143):** za mentora, odnosno nastavnika zadatka (jedna uloga, D-154), znak po znak, najavljena u obavijesti prije pisanja; od ostalih uloga nitko drugi je ne vidi, a student vidi istu reprodukciju svog rada (pravilo 5). Pokazuje kako je rad rastao, uključujući obrisani tekst, brzinom kojom je pisan, s oznakama lijepljenja, uvoza, AI prijenosa, izmjena nastavnika, dorada i konzultacija. Može se pokrenuti za cijeli rad ili za jedan odlomak. Uz reprodukciju stoji stalni tekst: "Ritam pisanja ne govori ništa o autorstvu ni o trudu." Nema brzine tipkanja, statistike pauza ni isticanja "brzih" ili "sporih" dijelova. Student vidi istu reprodukciju i kad ju je mentor gledao.
+**Reprodukcija (D-56, D-143):** za mentora, odnosno nastavnika zadatka (jedna uloga, D-154), znak po znak, najavljena u obavijesti prije pisanja; od ostalih uloga nitko drugi je ne vidi, a student vidi istu reprodukciju svog rada (pravilo 5). Pokazuje kako je rad rastao, uključujući obrisani tekst, brzinom kojom je pisan, s oznakama lijepljenja, uvoza, AI prijenosa, izmjena nastavnika, dorada i konzultacija. Može se pokrenuti za cijeli rad ili za jedan odlomak. Uz reprodukciju stoji stalni tekst: "Ritam pisanja ne govori ništa o autorstvu ni o trudu." Nema brzine tipkanja, statistike pauza ni isticanja "brzih" ili "sporih" dijelova; reprodukcija ne preskače stanke i ne označava ih, a nudi samo skok po sesijama iz sažetka procesa (P-01, D-63). Student vidi istu reprodukciju i kad ju je mentor gledao.
 
 ### Administrator fakulteta
 
@@ -226,10 +228,10 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 8. AI pomoćnik
 
-> **Izvan pilota (D-77, 3. 10. 2026.).** U pilotu student koristi vanjske alate i prilaže ispis razgovora uz izjavu. Ovaj odjeljak opisuje ciljno stanje nakon pilota.
+> **U pilotu (D-194, 31. 10. 2026.; mijenja D-77).** AI pomoćnik ulazi u pilot (početak 1. 3. 2027.) sa svim namjenama iz kataloga D-64, uključujući transkripciju i alate pružatelja. Student i dalje smije koristiti vanjski alat i uz izjavu priložiti ispis razgovora (izjavljeno). Prije stvarnih studenata moraju postojati ugovor o obradi, popis podizvršitelja, DPIA i pravno mišljenje koji pokrivaju asistenta (D-194 t. 4 i 5; GO uvjeti u `docs/PROGRAM.md`).
 
-- **Prijava studenta svojim računom.** Prvi put: OpenRouter (OAuth s PKCE-om), koji jednom prijavom daje pristup većini modela (Claude, GPT, Gemini, Grok, kineski modeli i drugi); student plaća iz vlastitog računa. Kasnije, ako Ductus postane partner, i "Sign in with ChatGPT". Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana. [PRIJEDLOG D-20]
-- **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23]
+- **Račun kod pružatelja i trošak.** Tko drži račune kod pružatelja i plaća je **OTVORENO**. [PRIJEDLOG D-194 t. 6: račune drži pravna osoba operatera, pružatelji su podizvršitelji s odobrenim popisom, trošak je u cijeni usluge i student ne plaća ništa; čeka pravno mišljenje.] Raniji prijedlog (OpenRouter, student plaća svoj račun, D-20) više nije polazište. Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana.
+- **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23] Nikad nisu dopušteni: pružatelj s kineskim sjedištem, model koji je razvila kineska tvrtka (ni kad ga poslužuje europski pružatelj) i obrada na kineskim serverima; fakultet to ne može uključiti. [ODLUČENO D-194 t. 2]
 - **AI je uvijek dobrovoljan za studenta.** U pilotu zadatak ne smije zahtijevati AI. Obvezni AI kasnije je moguć samo uz ključ koji osigurava fakultet. (C-2)
 - **Tekst studenta šalje se pružatelju samo kad student sam pokrene AI.** Studenti u obavijesti vide da tekst tada odlazi izabranom pružatelju i u koju zemlju.
 - **Zaštita od podmetnutih uputa (C-37):** upute AI-ju sastavlja poslužitelj iz pravila zadatka; tekst rada i uvezenih datoteka šalje se kao omeđeni nepouzdani podaci, a skriveni tekst (npr. bijeli ili skriveni font u DOCX-u, nevidljivi sloj PDF-a) uklanja se pri uvozu.
@@ -327,7 +329,7 @@ Demo prolazi cijeli put na sintetičkom radu s unaprijed poznatim ishodom. Za va
 1. Student se prijavi (AAI@EduHr Lab), uđe u kolegij kodom i otvori zadatak s FPZG profilom.
 2. Napiše tekst s naslovima i citatom; bibliografija se složi u FPZG stilu; provjera oblika javlja odstupanje od pravila. Fusnota i tablica [val 2].
 3. Izbriše dio, zalijepi odlomak, uveze DOCX. Uvoz PDF-a [val 2].
-4. [nakon pilota, D-77] Koristi AI pomoćnik i prenese dio teksta u rad; podmetnuta uputa u uvezenoj datoteci ne mijenja ponašanje pomoćnika. U pilotu: uz izjavu priloži ispis razgovora iz vanjskog alata.
+4. [u pilotu, D-194] Koristi AI pomoćnik i prenese dio teksta u rad; podmetnuta uputa u uvezenoj datoteci ne mijenja ponašanje pomoćnika. Uz izjavu priloži razgovore iz pomoćnika i, kao izjavljeno, ispis razgovora iz vanjskog alata.
 5. Nastavnik u međuvremenu vidi spremljeno stanje, ostavi komentar i prijedlog; student prihvati prijedlog. Nastavnik napravi jednu izravnu izmjenu.
 6. Student radi bez veze, zatim se veza vrati; ništa se ne izgubi i offline rad ostaje označen.
 7. Student pošalje verziju na pregled, dobije komentar, napravi novu verziju i konačno preda rad uz izjavu o pomoći.

@@ -29,7 +29,7 @@ Nepromjenjiva pravila koja paleta ne dira: WCAG 2.1 AA (D-115), boje podrijetla 
 Četiri opsega u `app/globals.css`:
 
 - **Tamna ljuska** (`:root`, zadano i uvijek; ne prati postavku sustava): topli grafit (D-188): `#242422` tlo, `#292a28` trake i bočna navigacija, `#2e2e2b` paneli i dijalozi, tekst `#faf9f5`, zlato `#c8aa6e` s grafitnim tekstom na njemu.
-- **Svijetla ljuska** (`[data-theme="light"]` na elementu ljuske, izbor korisnika, D-187): `#f3f2ee` podloga, `#faf9f6` trake i paneli, tekst `#242422`, tamno zlato `#806529`.
+- **Svijetla ljuska** (`data-theme="light"` na `<html>`, pa vrijedi i za 404, grešku i učitavanje izvan ljuske; izbor korisnika, D-187; Z-13a. Prijava i javna naslovnica zasad ostaju tamne, do #1024 i J-01): `#f3f2ee` podloga, `#faf9f6` trake i paneli, tekst `#242422`, tamno zlato `#806529`.
 - **Tamni list** (`.sheet`): grafitni panel `#2e2e2b` sa svijetlom tintom; drži je i u svijetloj ljusci.
 - **Bijeli list** (`.sheet[data-sheet-theme="light"]`): gotovo bijeli papir `#fcfbf8`, tinta `#242422`, tamno zlato `#806529`; prekidač u editoru, izbor se čuva samo u pregledniku.
 

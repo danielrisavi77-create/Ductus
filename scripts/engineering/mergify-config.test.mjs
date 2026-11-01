@@ -20,8 +20,7 @@ const REQUIRED = [
 ];
 
 test("queue and merge conditions require every required status of main", () => {
-  const queueRules = lines.slice(0, lines.findIndex((line) => line.startsWith("pull_request_rules:")));
-  const checks = queueRules
+  const checks = lines
     .map((line) => /^\s*- check-success=(.+)$/.exec(line)?.[1])
     .filter(Boolean);
   assert.deepEqual(checks, REQUIRED);
@@ -32,9 +31,9 @@ test("queue and merge conditions require every required status of main", () => {
 
 test("serial speculation preserves every intermediate result and rejects edited carriers", () => {
   assert.match(body, /mode: serial\n/);
-  assert.match(body, /max_parallel_checks: 3\n/);
-  // D-177: batches of up to three PRs, one CI run per batch.
-  assert.match(body, /\n    batch_size: 3\n/);
+  // DAN-447: one check at a time, each a batch of up to five PRs (one CI run).
+  assert.match(body, /max_parallel_checks: 1\n/);
+  assert.match(body, /\n    batch_size: 5\n/);
   assert.match(body, /\n    batch_max_wait_time: 3 min\n/);
   assert.match(body, /max_checks_retries: 0\n/);
   assert.match(body, /allow_queue_branch_edit: false\n/);
@@ -51,9 +50,13 @@ test("a batch merges its PRs one by one and a failed batch is split, never dropp
   assert.doesNotMatch(body, /batch_max_failure_resolution_attempts:/);
   assert.equal(body.match(/^\s*merge_method: (.+)$/m)?.[1], "squash");
   assert.doesNotMatch(body, /merge-batch|fast-forward/);
-  // A batch is never larger than three and never a range that could grow.
+  // A batch is never larger than five and never a range that could grow.
   assert.equal(body.match(/batch_size:/g)?.length, 1);
   assert.doesNotMatch(body, /batch_size:\s*\n\s+(min|max):/);
+  // Mergify checks a PR in place, merging main into the original branch, only
+  // with batch_size 1 and one check. A batch above one keeps every check on a
+  // draft carrier, so the queue never moves an original head (DAN-447).
+  assert.ok(Number(body.match(/\n    batch_size: (\d+)\n/)?.[1]) > 1);
   // Each source PR is admitted only on its own green Merge authorization.
   assert.match(body, /queue_conditions: &required\n(?: {6}- .+\n)*? {6}- check-success=Merge authorization\n/);
 });
@@ -66,8 +69,9 @@ test("only the owner can queue or requeue by command", () => {
 
 // The rules under pull_request_rules: name -> condition lines.
 function rules() {
-  const text = body.slice(body.indexOf("pull_request_rules:"));
-  return text
+  const start = body.indexOf("pull_request_rules:");
+  if (start === -1) return [];
+  return body.slice(start)
     .split(/\n  - name: /)
     .slice(1)
     .map((block) => ({
@@ -77,31 +81,21 @@ function rules() {
     }));
 }
 
-// F-114: Mergify sees only statuses, not the risk. Auto-queue is allowed only
-// for the explicit "auto-queue low and test-only PRs" rule that requires the
-// gate-published "Auto-merge eligible" status.
-test("only the low/test-only rule may auto-queue a PR", () => {
+// F-114, F-165: Mergify sees only statuses, not the risk. No rule queues a PR
+// by itself; a PR enters the queue only by the owner's `@Mergifyio queue`.
+test("no rule auto-queues a PR; only the owner's command queues (F-165)", () => {
   const all = rules();
-  const queuing = all.filter((rule) => rule.queue);
-  assert.equal(queuing.length, 1);
-  assert.equal(queuing[0].name, "auto-queue low and test-only PRs");
-  assert.ok(queuing[0].conditions.includes("check-success=Auto-merge eligible"));
-  // #971: a fork never auto-queues, even if the status were green.
-  assert.ok(queuing[0].conditions.includes("head-repo-full-name=danielrisavi77-create/Ductus"));
+  assert.deepEqual(all.filter((rule) => rule.queue).map((rule) => rule.name), []);
+  assert.doesNotMatch(body, /actions:\n\s+queue:/);
+  assert.doesNotMatch(body, /Auto-merge eligible/);
   assert.match(body, /commands_restrictions:\n  queue:\n    conditions:\n      - sender=danielrisavi77-create/);
 });
-test("the refresh rule still exists and a draft or conflict is left alone", () => {
-  const others = rules();
-  assert.ok(others.length >= 1);
-  assert.deepEqual(others[0].conditions, [
-    "base=main",
-    "-draft",
-    "-conflict",
-    '"#commits-behind>0"',
-    "check-success=Engineering review gate",
-    "-check-success=Merge authorization",
-  ]);
-  assert.match(body, /actions:\n      update: \{\}/);
+// DAN-447: no rule updates a waiting PR when main moves (each update started
+// full CI on it); a PR is updated once, at merge time, under D-156.
+test("no rule updates, rebases or otherwise acts on a PR by itself (DAN-447)", () => {
+  assert.deepEqual(rules(), []);
+  assert.doesNotMatch(body, /^pull_request_rules:/m);
+  assert.doesNotMatch(body, /\bupdate: \{|\brebase: \{|\bactions:/);
 });
 
 test("Mergify never reads the description, a label or a file name (review of #565)", () => {
