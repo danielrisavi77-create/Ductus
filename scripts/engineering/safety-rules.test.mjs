@@ -184,14 +184,39 @@ test("blocked neighbours of the gaps named in docs/SESSIONS.md 4a stay blocked",
 // `Tool(pattern)` rule: `*` stands for any text and the pattern covers the whole
 // command, so a rule catches only a command that starts with its leading form.
 const settings = JSON.parse(fs.readFileSync(new URL("../../.claude/settings.json", import.meta.url), "utf8"));
-function denied(tool, command) {
-  return settings.permissions.deny.some((rule) => {
-    const m = /^(\w+)\((.*)\)$/s.exec(rule);
-    if (!m || m[1] !== tool) return false;
-    const re = new RegExp(`^${m[2].split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "s");
-    return re.test(command);
-  });
+// Glob match with plain string steps: the first part is a prefix, the last a
+// suffix, and the parts between them occur in order without overlapping.
+function globMatches(pattern, text) {
+  const parts = pattern.split("*");
+  if (parts.length === 1) return text === pattern;
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  if (text.length < first.length + last.length || !text.startsWith(first) || !text.endsWith(last)) return false;
+  let at = first.length;
+  const end = text.length - last.length;
+  for (const part of parts.slice(1, -1)) {
+    const found = text.indexOf(part, at);
+    if (found === -1 || found + part.length > end) return false;
+    at = found + part.length;
+  }
+  return true;
 }
+function denied(tool, command) {
+  const prefix = `${tool}(`;
+  return settings.permissions.deny.some((rule) => rule.startsWith(prefix) && rule.endsWith(")")
+    && globMatches(rule.slice(prefix.length, -1), command));
+}
+
+test("F-011: the glob model matches as Claude Code reads a pattern", () => {
+  assert.equal(globMatches("git config alias.*", "git config alias.ci 'commit -n'"), true);
+  assert.equal(globMatches("git config alias.*", "git config --local alias.ci x"), false);
+  assert.equal(globMatches("git push *--prune*", "git push origin --prune"), true);
+  assert.equal(globMatches("git push *--prune*", "git push origin"), false);
+  assert.equal(globMatches("a*b*a", "aba"), true);
+  assert.equal(globMatches("ab*ba", "aba"), false);
+  assert.equal(globMatches("git status", "git status"), true);
+  assert.equal(globMatches("git status", "git status -s"), false);
+});
 
 test("F-011: the three git config deny rules hold for PowerShell as for Bash", () => {
   for (const command of ["git config core.hooksPath NUL", "git config alias.ci 'commit -n'", "git config include.path x.cfg"]) {
