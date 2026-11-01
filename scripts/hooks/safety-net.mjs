@@ -14,15 +14,26 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 
-// Must stay below the 30 s `timeout` of the hook in .claude/settings.json: an
-// expiry left to the harness is fail-open. The analysis and the control probes
-// share this budget, and the probe state key adds its own configuration read
-// (DEFAULT_LIMITS.maxMs) on top: worst case ANALYSIS_TIMEOUT_MS + maxMs = 25 s,
-// leaving 5 s for Node and shell start-up.
-export const ANALYSIS_TIMEOUT_MS = 20000;
+// One deadline for everything the wrapper does: the configuration read of the
+// state key, the analysis, the control probes and the second run. From the
+// command line it counts from the start of this Node process, so a slow start
+// on a loaded machine is paid out of the same budget (runCli). It stays
+// STARTUP_MARGIN_MS below the 90 s `timeout` of the hook in
+// .claude/settings.json, so the wrapper, not the harness, answers and says why;
+// the harness itself also blocks on expiry (`onFailure: "block"`). Measured on
+// the 16 GB Windows machine: a routine command takes about 0.25 s idle and 2 to
+// 6 s with every core busy (22 s with twice as many busy processes as cores),
+// and the analysis of a 10 to 40 KB heredoc takes 1.6 to 3.9 s idle and up to
+// 46 s under that load. Waiting longer only on a slow machine is safe: expiry
+// blocks either way.
+export const ANALYSIS_TIMEOUT_MS = 75000;
+export const STARTUP_MARGIN_MS = 15000;
 export const RECOVERY = "Run `pnpm install --frozen-lockfile` in a terminal (or ask for exactly that command), then retry.";
+export const SLOW_HINT =
+  "A long command (a big heredoc, a long quoted body or many chained steps) takes the analysis longer: put the text in a file and pass the file instead (for example gh pr comment <n> --body-file <file>), or retry when the machine is less busy. If short commands also time out:";
 
 // The only commands allowed while the package is unusable: the whole command,
 // no operators, redirection or substitution, one literal spelling each.
@@ -83,7 +94,14 @@ const fingerprint = (file) => {
 // of being read to the end. A caller that gets the error must block.
 export const DEFAULT_LIMITS = { maxEntries: 5000, maxBytes: 8 * 1024 * 1024, maxMs: 5000 };
 export class LimitError extends Error {}
-export const newBudget = (limits = DEFAULT_LIMITS) => ({ ...DEFAULT_LIMITS, ...limits, entries: 0, bytes: 0, deadline: Date.now() + (limits.maxMs ?? DEFAULT_LIMITS.maxMs) });
+// `cap` is the wrapper's overall deadline: the walk never outlives it.
+export const newBudget = (limits = DEFAULT_LIMITS, cap = Infinity) => ({
+  ...DEFAULT_LIMITS,
+  ...limits,
+  entries: 0,
+  bytes: 0,
+  deadline: Math.min(Date.now() + (limits.maxMs ?? DEFAULT_LIMITS.maxMs), cap),
+});
 
 export function treeDigest(dir, skip = [], budget = newBudget()) {
   try {
@@ -251,9 +269,9 @@ const envNames = (env) => [...new Set([...ENV_NAMES, ...Object.keys(env).filter(
 
 // The key of the state, or a LimitError when the configuration is too large or
 // too slow to describe within the limits (the caller then blocks).
-function stateKey(root, rulebookDir, env, limits) {
+function stateKey(root, rulebookDir, env, limits, deadline) {
   const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin");
-  const budget = newBudget(limits);
+  const budget = newBudget(limits, deadline);
   const parts = [
     rulebookDir,
     fingerprint(path.join(bin, "cc-safety-net.js")),
@@ -297,7 +315,8 @@ function runPackage(root, input, timeout, env) {
   return spawnSync(process.execPath, [bin, "hook", "--coding-cli"], {
     input,
     encoding: "utf8",
-    timeout: Math.max(1, timeout),
+    // spawnSync accepts only whole milliseconds; a fractional deadline is normal.
+    timeout: Math.max(1, Math.floor(timeout)),
     killSignal: "SIGKILL",
     cwd: root,
     env,
@@ -312,9 +331,10 @@ function runPackage(root, input, timeout, env) {
 // happen once per state.
 const failure = (problem, hint) => ({ problem, hint });
 function probe(root, rulebookDir, deadline, env, limits) {
+  if (deadline - Date.now() <= 0) return failure("the safety check ran out of time before the control probe", SLOW_HINT + " " + RECOVERY);
   let key;
   try {
-    key = stateKey(root, rulebookDir, env, limits);
+    key = stateKey(root, rulebookDir, env, limits, deadline);
   } catch (error) {
     if (!(error instanceof LimitError)) throw error;
     return failure(
@@ -374,8 +394,9 @@ export function isCdToRoot(command, root) {
 export function answer(run, timeoutMs) {
   const stdout = run.stdout ?? "";
   const stderr = run.stderr ?? "";
-  const failed = (why) => ({ block: { code: 2, stdout: "", stderr: `Safety hook blocked this command: cc-safety-net ${why}. ${RECOVERY}\n${stderr}` } });
-  if (run.error) return failed(run.error.code === "ETIMEDOUT" ? `did not answer within ${timeoutMs} ms` : `could not run (${run.error.message})`);
+  const failed = (why, hint = RECOVERY) => ({ block: { code: 2, stdout: "", stderr: `Safety hook blocked this command: cc-safety-net ${why}. ${hint}\n${stderr}` } });
+  if (run.error?.code === "ETIMEDOUT") return failed(`did not answer within ${timeoutMs} ms`, `${SLOW_HINT} ${RECOVERY}`);
+  if (run.error) return failed(`could not run (${run.error.message})`);
   if (run.signal) return failed(`was killed by ${run.signal}`);
   if (run.status === 2) return { block: { code: 2, stdout, stderr } };
   if (run.status !== 0) return failed(`exited with status ${run.status}`);
@@ -407,9 +428,15 @@ const SECRET_SCAN_SKIP_BLOCK = {
     "Safety hook blocked this command: DUCTUS_ALLOW_SECRET_SCAN_SKIP is for a human only (lefthook.yml). An agent without a secret scanner stops and reports instead.\n",
 };
 
+const outOfTime = (stage) => ({
+  code: 2,
+  stdout: "",
+  stderr: `Safety hook blocked this command: the safety check ran out of time ${stage}. ${SLOW_HINT} ${RECOVERY}\n`,
+});
+
 // Pure decision: { code, stdout, stderr }. `input` is the raw hook stdin.
-export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS, env = process.env, limits }) {
-  const deadline = Date.now() + timeoutMs;
+// `deadline` (epoch ms) bounds all of it; without one it is `timeoutMs` from now.
+export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS, deadline = Date.now() + timeoutMs, env = process.env, limits }) {
   const command = commandOf(input);
   // F-017: the secret-scan skip in lefthook.yml is for a human only.
   if (typeof command === "string" && SECRET_SCAN_SKIP.test(command)) return SECRET_SCAN_SKIP_BLOCK;
@@ -419,7 +446,9 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   if (problem) return unusable(problem);
 
   // Run 1: the event as sent (built-in rules, relative paths keep their meaning).
-  const first = answer(runPackage(root, input, timeoutMs, env), timeoutMs);
+  const firstLeft = deadline - Date.now();
+  if (firstLeft <= 0) return outOfTime("before the analysis started (slow start-up)");
+  const first = answer(runPackage(root, input, firstLeft, env), firstLeft);
   if (first.block) return first.block;
 
   const cwd = eventCwd(input, root);
@@ -454,7 +483,9 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
       moved = null;
     }
     if (moved) {
-      const second = answer(runPackage(root, moved, deadline - Date.now(), env), timeoutMs);
+      const secondLeft = deadline - Date.now();
+      if (secondLeft <= 0) return outOfTime("before the analysis in the rulebook directory");
+      const second = answer(runPackage(root, moved, secondLeft, env), secondLeft);
       if (second.block) return second.block;
       if (second.stdout.trim()) return { code: 0, stdout: second.stdout, stderr: second.stderr };
     }
@@ -462,8 +493,10 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   return { code: 0, stdout: first.stdout, stderr: first.stderr };
 }
 
-// Process entry point: reads stdin; an error never becomes a pass.
-export function runCli({ read = () => fs.readFileSync(0, "utf8"), decideFn = decide } = {}) {
+// Process entry point: reads stdin; an error never becomes a pass. The
+// deadline counts from the start of this process (performance.timeOrigin), so
+// the time Node took to start is not given out a second time.
+export function runCli({ read = () => fs.readFileSync(0, "utf8"), decideFn = decide, startedAt = performance.timeOrigin } = {}) {
   let input = "";
   try {
     input = read();
@@ -471,7 +504,7 @@ export function runCli({ read = () => fs.readFileSync(0, "utf8"), decideFn = dec
     // An unreadable stdin is handled by the decision: no command, not an install.
   }
   try {
-    return decideFn({ input });
+    return decideFn({ input, deadline: startedAt + ANALYSIS_TIMEOUT_MS });
   } catch (error) {
     return blockedFor(`wrapper error (${error?.message})`);
   }

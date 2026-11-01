@@ -6,7 +6,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { answer, decide, isCdToRoot, isInstallCommand, runCli } from "../hooks/safety-net.mjs";
+import { performance } from "node:perf_hooks";
+
+import { answer, decide, DEFAULT_LIMITS, isCdToRoot, isInstallCommand, newBudget, runCli } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -34,6 +36,10 @@ const FAKES = {
   garbage: "process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write('not json');process.exit(0)});",
   deny: "process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny'}}));process.exit(0)});",
   hang: "setInterval(()=>{},1000);",
+  // Answers the first run at once and hangs in the control probe.
+  hangprobe: "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{if(/push --force|add -A/.test(d))return setInterval(()=>{},1000);process.exit(0)});",
+  // Denies the probes, answers a run in a subdirectory at once and hangs in the second run (rulebook directory).
+  hangsecond: "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{if(/push --force|add -A/.test(d)){process.stdout.write(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny'}}));return process.exit(0)}if(/scripts$/.test(JSON.parse(d).cwd))return process.exit(0);setInterval(()=>{},1000)});",
   block2: "process.stdin.resume();process.stdin.on('end',()=>{console.error('nope');process.exit(2)});",
 };
 
@@ -113,7 +119,7 @@ test("settings.json routes Bash and PowerShell through the wrapper, not the bare
   assert.equal(hookEntry.shell, "bash");
   // Claude Code >= 2.1.295: a hook that cannot start, times out or exits other than 0/2 blocks.
   assert.equal(hookEntry.onFailure, "block");
-  assert.equal(hookEntry.timeout, 30, "hook timeout survives Node start-up on a loaded machine");
+  assert.equal(hookEntry.timeout, 90, "hook timeout survives Node start-up and a long analysis on a loaded Windows machine");
   const all = JSON.stringify(settings.hooks);
   assert.ok(!/node_modules\/cc-safety-net/.test(all), "no hook calls node_modules directly");
   for (const group of settings.hooks.PreToolUse) {
@@ -124,6 +130,92 @@ test("settings.json routes Bash and PowerShell through the wrapper, not the bare
 test("analysis limit stays below the hook timeout in settings.json", async () => {
   const { ANALYSIS_TIMEOUT_MS, DEFAULT_LIMITS } = await import("../hooks/safety-net.mjs");
   assert.ok(ANALYSIS_TIMEOUT_MS + DEFAULT_LIMITS.maxMs <= hookEntry.timeout * 1000 - 5000, "analysis budget plus configuration read leaves 5 s of start-up margin");
+});
+
+test("the one deadline leaves the measured start-up margin below the hook timeout", async () => {
+  const { ANALYSIS_TIMEOUT_MS, STARTUP_MARGIN_MS } = await import("../hooks/safety-net.mjs");
+  // Bash plus Node start took up to about 2 s with every core busy; the margin is several times that.
+  assert.ok(STARTUP_MARGIN_MS >= 10000, "start-up margin");
+  assert.ok(ANALYSIS_TIMEOUT_MS <= hookEntry.timeout * 1000 - STARTUP_MARGIN_MS, "the wrapper answers before the harness");
+  // A 40 KB heredoc took 3.9 s idle and 46 s with twice as many busy processes as cores; that must still fit.
+  assert.ok(ANALYSIS_TIMEOUT_MS >= 60000, "room for a long command on a loaded machine");
+});
+
+test("T1 the command-line deadline counts from the start of the Node process", async () => {
+  const { ANALYSIS_TIMEOUT_MS } = await import("../hooks/safety-net.mjs");
+  let seen;
+  const result = runCli({ read: () => "x", startedAt: 1_000, decideFn: (args) => ((seen = args), { code: 0, stdout: "", stderr: "" }) });
+  assert.equal(result.code, 0);
+  assert.equal(seen.input, "x");
+  assert.equal(seen.deadline, 1_000 + ANALYSIS_TIMEOUT_MS);
+  // The default start is this process's own start, not the moment runCli is called.
+  runCli({ read: () => "", decideFn: (args) => ((seen = args), { code: 0, stdout: "", stderr: "" }) });
+  assert.ok(seen.deadline <= performance.timeOrigin + ANALYSIS_TIMEOUT_MS + 1, "anchored at performance.timeOrigin");
+});
+
+test("T1b a fractional deadline (performance.timeOrigin is one) still runs the analysis", () =>
+  withTree({ bin: "allow" }, (tree) => {
+    const result = decide({ root: tree.root, input: event("Bash", "git status"), deadline: Date.now() + 20000.5 });
+    assert.equal(result.code, 0, result.stderr);
+    assert.ok(fs.existsSync(tree.calls), "analysis ran");
+  }));
+
+test("T1c the wrapper run as a process answers a routine command (deadline from its own start)", () =>
+  withTree({ bin: "allow" }, (tree) => {
+    const result = spawnSync(process.execPath, [path.join(tree.root, "scripts", "hooks", "safety-net.mjs")], { input: event("Bash", "git status"), encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(fs.existsSync(tree.calls), "analysis ran");
+  }));
+
+test("T2 a deadline spent before the analysis blocks without running the package, also for the install command", () =>
+  withTree({ bin: "allow" }, (tree) => {
+    for (const command of ["git status", "pnpm install", "pnpm install --frozen-lockfile"]) {
+      const result = decide({ root: tree.root, input: event("Bash", command), deadline: Date.now() - 1 });
+      assert.equal(result.code, 2, command);
+      assert.equal(result.stdout, "", command);
+      assert.match(result.stderr, /ran out of time before the analysis/, command);
+      assert.match(result.stderr, /--body-file/, command);
+    }
+    assert.equal(fs.existsSync(tree.calls), false, "the package never ran");
+  }));
+
+test("T3 the configuration read never outlives the overall deadline", () => {
+  const cap = Date.now() + 10;
+  assert.ok(newBudget(DEFAULT_LIMITS, cap).deadline <= cap);
+  assert.ok(newBudget({ maxMs: 1 }, Date.now() + 60000).deadline <= Date.now() + 1);
+  assert.ok(newBudget().deadline > Date.now(), "without a cap the own limit still applies");
+});
+
+test("T4 the first run, the control probe and the second run all end by the one deadline", { timeout: 30000 }, () => {
+  for (const [bin, why] of [
+    ["hang", /did not answer within \d+ ms[\s\S]*long command/],
+    ["hangprobe", /control probe/],
+    ["hangsecond", /did not answer within \d+ ms[\s\S]*long command/],
+  ]) {
+    withTree({ bin }, (tree) => {
+      // A checkout root with a cwd below it: the second run happens in the rulebook directory.
+      fs.writeFileSync(path.join(tree.root, ".git"), "gitdir: elsewhere");
+      const sub = path.join(tree.root, "scripts");
+      const started = Date.now();
+      const result = decide({ root: tree.root, input: event("Bash", "git status", sub), deadline: Date.now() + 1500 });
+      const took = Date.now() - started;
+      assert.equal(result.code, 2, `${bin}: ${result.stdout}`);
+      assert.equal(result.stdout, "", bin);
+      assert.match(result.stderr, why, bin);
+      assert.ok(took < 6000, `${bin}: ${took} ms`);
+    });
+  }
+});
+
+test("T5 real package: a routine command passes far inside the budget once the probe is remembered", { timeout: 60000 }, async () => {
+  const { ANALYSIS_TIMEOUT_MS } = await import("../hooks/safety-net.mjs");
+  assert.equal(decide({ input: event("Bash", "git status") }).code, 0, "warm-up (probe)");
+  const started = Date.now();
+  const result = decide({ input: event("Bash", "git status") });
+  const took = Date.now() - started;
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout.trim(), "");
+  assert.ok(took < ANALYSIS_TIMEOUT_MS / 10, `routine command took ${took} ms`);
 });
 
 for (const tool of TOOLS) {
