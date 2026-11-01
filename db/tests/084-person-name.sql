@@ -14,6 +14,9 @@ SELECT plan(55);
 INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a', 'a.example'),
   ('00000000-0000-4000-8000-00000000000b', 'test-b', 'b.example');
+INSERT INTO identity.institution_issuer (institution_id, oidc_issuer) VALUES
+  ('00000000-0000-4000-8000-00000000000a', 'https://issuer.test'),
+  ('00000000-0000-4000-8000-00000000000b', 'https://issuer.test');
 
 CREATE FUNCTION pg_temp.h(p_name text) RETURNS bytea
 LANGUAGE sql IMMUTABLE AS $$ SELECT sha256(convert_to(p_name, 'UTF8')) $$;

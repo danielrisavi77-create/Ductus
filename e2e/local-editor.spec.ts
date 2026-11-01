@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+import { LOCAL_DEMO_DOCUMENT_ID, LOCAL_DEMO_SCOPE_HASH } from "../src/lib/journal/local-scope";
+
 /**
  * The local editor on /rad (F-3 step 1b, plan #197). Playwright gives every
  * test a fresh browser context, so every test starts with an empty IndexedDB.
@@ -303,6 +305,39 @@ test.describe("local editor (#197)", () => {
     await journalled(second);
     await second.reload();
     await expect(editorOf(second)).toHaveText("Tekst iz prve kartice, dopisan i nastavljen");
+  });
+
+  test("the journal lock is named for this scope and this document, and the editor holds exactly that one", async ({ page }) => {
+    await openEditor(page);
+    const held = await page.evaluate(async () => (await navigator.locks.query()).held?.map((lock) => lock.name) ?? []);
+    expect(held).toEqual([`ductus-journal:${LOCAL_DEMO_SCOPE_HASH}:${LOCAL_DEMO_DOCUMENT_ID}`]);
+  });
+
+  test("a lock held for another document neither blocks this one nor is taken by it", async ({ page, context }) => {
+    const other = `ductus-journal:${LOCAL_DEMO_SCOPE_HASH}:another-document`;
+    const own = `ductus-journal:${LOCAL_DEMO_SCOPE_HASH}:${LOCAL_DEMO_DOCUMENT_ID}`;
+    // Another tab of the same origin holds the lock of a different document for as long as it is open.
+    const holder = await context.newPage();
+    await holder.goto("/");
+    await holder.evaluate((name) => new Promise<void>((granted) => {
+      void navigator.locks.request(name, () => {
+        granted();
+        return new Promise(() => {});
+      });
+    }), other);
+
+    await openEditor(page);
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
+    await expect(page.getByText(BLOCKED, { exact: false })).toHaveCount(0);
+    await typeInto(page, "Tekst drugog dokumenta");
+    await journalled(page);
+    await expect(chipOf(page)).toHaveText(DURABLE);
+
+    // Each document keeps its own lock: the other one is still held by its tab,
+    // and this document's lock is held by the editor, so a third caller gets neither.
+    const free = await holder.evaluate(async (names) => Promise.all(names.map((name) =>
+      navigator.locks.request(name, { ifAvailable: true }, (lock) => lock !== null))), [other, own]);
+    expect(free).toEqual([false, false]);
   });
 
   test("6: without IndexedDB the author is told and the editor stays read-only", async ({ page }) => {
