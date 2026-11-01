@@ -37,7 +37,7 @@ Obje skripte rade samo lokalno i pri ponovnom pokretanju ništa ne mijenjaju. Sk
 
 `pnpm demo:prepare` (CI) ovaj korak ne izvodi jer E2E testovi počinju od nepotvrđenog nastavnika. Dvije izmišljene povijesti prikazuju se kao unaprijed pripremljen primjer (PLAN-DEMO §5, rez 1). Skripta ne stvara evidenciju ni potvrde (#635).
 
-## Eksplicitna prijava demo računa (DAN-88 K-3b1)
+## Eksplicitna prijava probnih računa (DAN-88 K-3b1)
 
 Nakon `pnpm demo:prepare`, dok aplikacija već radi na `http://localhost:3000` i postojeći lažni OIDC na `http://localhost:8090`, lokalni operator ili CI može pokrenuti:
 
@@ -49,7 +49,7 @@ Naredba kroz stvarnu prijavu i callback otvara četiri postojeća izmišljena ra
 
 ## Bez Dockera (Windows)
 
-Za prijenosno računalo bez Dockera (DAN-324, #799). Pokreće isti demo kao `pnpm demo:up`, s istim izmišljenim podacima i istim lažnim OIDC pružateljem, ali PostgreSQL 17, rustfs i lažni OIDC rade kao obični procesi.
+Za prijenosno računalo bez Dockera (DAN-324, #799). Pokreće istu aplikaciju kao `pnpm demo:up`, s istim izmišljenim podacima i istim lažnim OIDC pružateljem, ali PostgreSQL 17, rustfs i lažni OIDC rade kao obični procesi.
 
 Preduvjeti: Windows 10 1803+ ili Windows 11 (zbog `tar.exe` i Unix socketa), Node 24 i pnpm. PostgreSQL treba Microsoft Visual C++ Redistributable; ako nedostaje, instaliraj ga s Microsoftove stranice (to može tražiti administratora, runner to ne zaobilazi). Windows Defender ili SmartScreen mogu pri prvom pokretanju tražiti potvrdu za `postgres.exe` ili `rustfs.exe`.
 
@@ -63,7 +63,7 @@ pnpm demo:up:native
 - Podaci su u `%LOCALAPPDATA%\Ductus\native-data\` (baza, objekti, zapisi). Za potpuno nov početak zaustavi runner i obriši tu mapu.
 - Svi portovi (PostgreSQL 54329, rustfs 9100, OIDC 8090, aplikacija 3000) slušaju samo na `127.0.0.1`. `psql` se spaja samo kroz lokalni socket, nikad kroz TCP.
 - Ctrl+C zaustavlja aplikaciju, OIDC, rustfs i PostgreSQL. `pnpm demo:up:native --stop` zaustavlja procese prethodnog pokretanja koje je prekid ostavio. Proces gasi samo ako su mu ime i vrijeme nastanka jednaki zapisanima; proces koji je nakon restarta dobio isti PID ostavlja i to javlja.
-- `pnpm demo:up:native --prepare-only` samo priprema bazu (kao `demo:prepare`), a `--no-demo-data` preskače izmišljeni kolegij i zadatak (K-3b2). Windows CI posao prijavni E2E pokreće s demo podacima, jer K-3 potvrđuje ulogu "Demo nastavnik".
-- Automatska provjera probe demoa (DAN-346): dok runner radi, u drugom prozoru pokreni `$env:E2E_REUSE_SERVER="1"; $env:E2E_DEMO_NATIVE="1"; pnpm exec playwright test --config playwright.login.config.ts e2e/login/demo-flow.spec.ts`. Spec tada nastavnika potvrđuje s `node scripts/demo/provision-teacher.mjs --native`, kroz lokalni socket nativne baze, a ne kroz Docker. CI ovaj prolaz ne pokreće.
+- `pnpm demo:up:native --prepare-only` samo priprema bazu (kao `demo:prepare`), a `--no-demo-data` preskače izmišljeni kolegij i zadatak (K-3b2). Windows CI posao prijavni E2E pokreće s probnim podacima, jer K-3 potvrđuje ulogu "Demo nastavnik".
+- Automatska provjera probnog prolaza (DAN-346): dok runner radi, u drugom prozoru pokreni `$env:E2E_REUSE_SERVER="1"; $env:E2E_DEMO_NATIVE="1"; pnpm exec playwright test --config playwright.login.config.ts e2e/login/demo-flow.spec.ts`. Spec tada nastavnika potvrđuje s `node scripts/demo/provision-teacher.mjs --native`, kroz lokalni socket nativne baze, a ne kroz Docker. CI ovaj prolaz ne pokreće.
 
 Granice: Mailpit se ne pokreće, pa lokalna pošta ne postoji. `pnpm test:db` (pgTAP), `pnpm demo:bootstrap-accounts` i E2E testovi koji traže Docker i dalje trebaju Compose. Iznimka je `demo-flow.spec.ts` uz `E2E_DEMO_NATIVE=1`. Baza koristi ugrađeni locale `C.UTF-8` (PG17), a ne `en_US.utf8` iz Composea, pa redoslijed po zadanoj kolaciji može biti drukčiji; migracije koriste izričit `COLLATE "C"`. rustfs pri startu provjerava ima li novije verzije (`version.rustfs.com`) i to se ne može isključiti. Pokretanje na Windowsima dokazuje posao `Demo native` u CI-ju.

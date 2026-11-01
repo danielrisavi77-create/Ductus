@@ -142,6 +142,41 @@ export const isNewTestExempt = (file) => {
   );
 };
 
+// D-196, F-173: the only files a critical PR may change and still merge without
+// the owner's command: application code, its migrations and tests, and the
+// documents of the low-doc allowlist above. Every other file, D-97 or not,
+// keeps the command. An allowlist, never "everything but D-97" (D-190).
+export const OWNER_FREE_DIRS = ["src/", "app/", "db/migrations/", "db/tests/", "tests/", "e2e/"];
+// Documents on the critical floor (CRITICAL_PATHS in pr-metadata-core.mjs takes
+// them from here): the product rules and the forbidden-terms dictionary the
+// scanner checks against. They are never owner-free, though a low doc otherwise.
+export const CRITICAL_DOC_PATHS = ["docs/PRODUCT.md"];
+// Tests on the critical floor inside an owner-free directory: the only test
+// that a production build refuses the fake provider (D-09, F-041 a). Never
+// owner-free either.
+export const CRITICAL_TEST_PATHS = ["e2e/auth.spec.ts"];
+// Exclusions ignore letter case; the allowlist itself matches exact case, so a
+// directory such as SRC/ or Tests/ is not application code here.
+export function isOwnerFreePath(file) {
+  const p = normalizePath(file);
+  if (
+    hasDotSegment(p) ||
+    AGENT_INSTRUCTIONS_RE.test(p) ||
+    p.toLowerCase().split("/").includes("node_modules") ||
+    matchesPath(p, CRITICAL_DOC_PATHS) ||
+    matchesPath(p, CRITICAL_TEST_PATHS) ||
+    ownerCommandPaths([p]).length > 0
+  ) {
+    return false;
+  }
+  return OWNER_FREE_DIRS.some((dir) => p.startsWith(dir)) || isLowDocExemptPath(p);
+}
+/** True when the list is not empty and every file is on the D-196 allowlist. */
+export const ownerFreeCritical = (files) => {
+  const paths = files ?? [];
+  return paths.length > 0 && paths.every(isOwnerFreePath);
+};
+
 /** Files that put a PR under the owner's merge command, by path or by content. */
 export function ownerCommandPaths(files) {
   return (files ?? []).map(normalizePath).filter((f) => isD97Path(f) || matchesPath(f, D97_MANUAL_PATHS));
