@@ -216,6 +216,21 @@ jobs:
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+      # D-91 (4): db:migrate built a fresh database with dbmate --no-dump-schema
+      # up --strict; it is dumped to a temporary file and compared with
+      # db/schema.sql from Git HEAD before any test touches it. The dump is
+      # kept as the db-schema-<shard> artifact for the author to commit.
+      - name: Schema matches db/schema.sql (D-91)
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: node scripts/engineering/db-schema.mjs --out "$RUNNER_TEMP/db-schema/schema.sql"
+      - name: Upload the dumped schema
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: db-schema-${{ matrix.shard }}
+          path: ${{ runner.temp }}/db-schema/schema.sql
+          if-no-files-found: ignore
+          retention-days: 7
       - name: pgTAP (pg_prove)
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: pnpm test:db
