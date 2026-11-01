@@ -179,4 +179,22 @@ describe("teacher student removal HTTP boundary", () => {
     expect(forged.bodyUsed).toBe(false);
     expect(withActor).toHaveBeenCalledTimes(1);
   });
+
+  // DAN-302 L3: the route expects only an origin login would redirect to.
+  it("answers 503 in production for a callback that login refuses, whose origin the request matches", async () => {
+    const { withActor } = port();
+    vi.mocked(appWithActor).mockImplementation(withActor);
+    vi.stubEnv("NODE_ENV", "production");
+    const local = "http://localhost:3000";
+    vi.stubEnv("OIDC_REDIRECT_URI", `${local}/api/auth/callback`);
+    const req = new NextRequest(new Request(`${local}/api/institution/courses/${COURSE}/students/${STUDENT}/removal`, {
+      method: "POST",
+      headers: { origin: local, "content-type": "application/json", cookie: `__Host-ductus_session=${TOKEN}` },
+      body: "{}",
+    }));
+    const response = await POST(req, { params: Promise.resolve({ courseId: COURSE, studentId: STUDENT }) });
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(withActor).not.toHaveBeenCalled();
+  });
 });

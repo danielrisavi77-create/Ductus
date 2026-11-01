@@ -1,9 +1,9 @@
 import type { NextRequest } from "next/server";
 
+import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { handleLivePublishRequest, handleLiveReadRequest } from "@/server/collaboration/live-route";
 import { withActor } from "@/server/db";
-import { applicationOrigin } from "@/server/evidence/ingest-deps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function PUT(request: NextRequest, context: Context): Promise<Respo
   const { documentId } = await context.params;
   return handleLivePublishRequest(request, documentId, {
     withActor,
-    expectedOrigin: applicationOrigin(),
+    expectedOrigin: expectedOrigin(),
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }
