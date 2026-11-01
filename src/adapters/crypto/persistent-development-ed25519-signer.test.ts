@@ -80,6 +80,21 @@ describe("persistent development signer", () => {
     expect(() => signer(file("seed"), "production")).toThrow(DevelopmentSigningKeyError);
   });
 
+  // F-020: an allowlist, so an unset, empty or misspelt NODE_ENV is production.
+  it.each([undefined, "", "Production", "production ", "staging", "prod"])(
+    "refuses construction when NODE_ENV is %j",
+    (nodeEnv) => {
+      const construct = () =>
+        new PersistentDevelopmentEd25519SigningKeyProvider({ NODE_ENV: nodeEnv, [DEV_SIGNING_KEY_FILE]: file("seed") }, repo);
+      expect(construct).toThrow(DevelopmentSigningKeyError);
+      expect(() => construct()).toThrow(expect.objectContaining({ code: "signing_key_production" }));
+    },
+  );
+
+  it.each(["development", "test"])("may be constructed when NODE_ENV is %s", (nodeEnv) => {
+    expect(signer(file("seed"), nodeEnv)).toBeInstanceOf(PersistentDevelopmentEd25519SigningKeyProvider);
+  });
+
   it.each([
     ["no path", undefined, "signing_key_not_configured"],
     ["an empty path", "", "signing_key_not_configured"],

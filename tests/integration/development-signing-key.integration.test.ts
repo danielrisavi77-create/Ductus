@@ -237,5 +237,11 @@ describe("persistent development signing key", () => {
     expect(await signInNewProcess(message, { NODE_ENV: "production" })).toEqual({ fault: "signing_key_production" });
     const refused = await registerKey({ NODE_ENV: "production" }).then(() => null, (error: { stderr: string }) => error.stderr);
     expect(refused).toContain("refused in production");
+    // F-020: an empty or misspelt NODE_ENV counts as production too.
+    for (const nodeEnv of ["", "Production", "staging"]) {
+      expect(await signInNewProcess(message, { NODE_ENV: nodeEnv })).toEqual({ fault: "signing_key_production" });
+      const again = await registerKey({ NODE_ENV: nodeEnv }).then(() => null, (error: { stderr: string }) => error.stderr);
+      expect(again).toContain("refused in production");
+    }
   });
 });
