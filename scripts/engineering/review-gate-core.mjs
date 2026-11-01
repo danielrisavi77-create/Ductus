@@ -765,6 +765,9 @@ function changeKey(file) {
     // F-046 c: the git mode at that head (regular, executable, link), which
     // the compare does not show; attached by the caller, absent never matches.
     file?.mode ?? null,
+    // ...and at the compare's merge base: a base merge that changed only the
+    // mode under the PR's file changes what the PR does to the base.
+    file?.baseMode ?? null,
   ]);
 }
 
@@ -778,7 +781,7 @@ export function sameChange(current, earlier) {
   const a = current?.files ?? [];
   const b = earlier?.files ?? [];
   if (a.length === 0 || a.length !== b.length || a.length >= COMPARE_FILE_CAP) return false;
-  if ([...a, ...b].some((file) => typeof file?.patch !== "string" || typeof file?.mode !== "string")) return false;
+  if ([...a, ...b].some((file) => typeof file?.patch !== "string" || typeof file?.mode !== "string" || typeof file?.baseMode !== "string")) return false;
   const keys = (files) => files.map(changeKey).sort();
   const left = keys(a);
   const right = keys(b);

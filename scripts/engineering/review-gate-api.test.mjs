@@ -22,7 +22,8 @@ const review = (sha) => ({
   created_at: "2026-10-12T10:00:00Z",
 });
 const comments = [review(earlier)];
-const files = { files: [{ filename: "a.mjs", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b", sha: "1".repeat(40) }] };
+const mergeBase = "c".repeat(40);
+const files = { merge_base_commit: { sha: mergeBase }, files: [{ filename: "a.mjs", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b", sha: "1".repeat(40) }] };
 
 const json = (value) => ({ ok: true, status: 200, json: async () => value, text: async () => JSON.stringify(value) });
 
@@ -279,5 +280,35 @@ test("F-046 c: a file whose mode changed, or a tree that is not whole, carries n
     };
     const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
     assert.equal((await carriedHeads(api, "o", "r", pr, comments, { log: quiet })).size, 0, name);
+  }
+});
+
+// F-046 c, review #1114 (6555709979): the mode is compared on the base side too. Each compare
+// has its own merge base; main changed only the mode of the PR's file between them.
+test("F-046 c: a mode that main changed under the PR's file, between the two merge bases, carries nothing", async () => {
+  const oldBase = "1".repeat(40);
+  const newBase = "2".repeat(40);
+  const run = ({ baseOf, modeAt }) => {
+    const fetchImpl = async (url) => {
+      const path = url.replace("https://api.test", "");
+      const tree = path.match(/\/git\/trees\/([0-9a-f]{40})\?recursive=1$/);
+      if (tree) return json({ truncated: false, tree: [{ path: "a.mjs", mode: modeAt(tree[1]), type: "blob" }] });
+      const compare = path.match(/\/compare\/[^.]+\.\.\.([0-9a-f]{40})\?per_page=100$/);
+      if (compare) return json({ ...files, merge_base_commit: baseOf(compare[1]) });
+      return json(routes(path));
+    };
+    const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+    return carriedHeads(api, "o", "r", pr, comments, { log: quiet });
+  };
+  const twoBases = (sha) => ({ sha: sha === head ? newBase : oldBase });
+  // The reviewer's case: both heads 100644, the newer merge base 100755. Without the base side this carried 1.
+  assert.equal((await run({ baseOf: twoBases, modeAt: (sha) => (sha === newBase ? "100755" : "100644") })).size, 0);
+  // Two merge bases with the same mode under the file still carry: only the mode makes the difference.
+  assert.deepEqual([...(await run({ baseOf: twoBases, modeAt: () => "100644" }))], [earlier]);
+  // The file is missing from one merge base: absent on one side only, nothing carries.
+  assert.equal((await run({ baseOf: twoBases, modeAt: (sha) => (sha === newBase ? null : "100644") })).size, 0);
+  // A compare without a readable merge base carries nothing.
+  for (const missing of [() => undefined, () => ({}), () => ({ sha: "not-a-sha" })]) {
+    assert.equal((await run({ baseOf: missing, modeAt: () => "100644" })).size, 0);
   }
 });

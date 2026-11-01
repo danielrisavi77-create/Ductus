@@ -108,17 +108,29 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
 // exhausted budget carries nothing.
 export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = CARRY_BUDGET_MS, log = console.log } = {}) {
   const signal = AbortSignal.timeout(budgetMs);
-  // F-046 c: each compared file gets its git mode at the compared head (from
-  // the head's tree; "absent" for a removed file). A truncated tree throws, so
-  // nothing carries.
+  // F-046 c: each compared file gets its git mode on both sides of the
+  // compare: at the compared head (from the head's tree) and at the compare's
+  // own merge base (from that tree, at the file's base-side path). "absent"
+  // when the file is not in that tree. Without a merge base, or with a tree
+  // that is not whole, this throws, so nothing carries.
+  const treeModes = async (sha) => {
+    const tree = await api(`/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`, { signal });
+    if (tree?.truncated !== false || !Array.isArray(tree?.tree)) throw new Error(`the tree of ${sha} could not be read whole`);
+    return new Map(tree.tree.map((entry) => [entry.path, String(entry.mode)]));
+  };
   const compare = async (range) => {
     const result = await api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`, { signal });
     const head = range.split("...")[1];
-    const tree = await api(`/repos/${owner}/${repo}/git/trees/${head}?recursive=1`, { signal });
-    if (tree?.truncated !== false || !Array.isArray(tree?.tree)) throw new Error(`the tree of ${head} could not be read whole`);
-    const modes = new Map(tree.tree.map((entry) => [entry.path, String(entry.mode)]));
+    const mergeBase = result?.merge_base_commit?.sha;
+    if (typeof mergeBase !== "string" || !/^[0-9a-f]{40}$/.test(mergeBase)) throw new Error(`the compare ${range} has no merge base`);
+    const modes = await treeModes(head);
+    const baseModes = await treeModes(mergeBase);
     const files = Array.isArray(result?.files)
-      ? result.files.map((file) => ({ ...file, mode: modes.get(file?.filename) ?? "absent" }))
+      ? result.files.map((file) => ({
+          ...file,
+          mode: modes.get(file?.filename) ?? "absent",
+          baseMode: baseModes.get(file?.previous_filename ?? file?.filename) ?? "absent",
+        }))
       : result?.files;
     return { ...result, files };
   };

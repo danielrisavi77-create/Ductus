@@ -40,7 +40,7 @@ const override = (sha) =>
     association: "OWNER",
   });
 
-const file = (filename, patch = "@@ -1 +1 @@\n-a\n+b", mode = "100644") => ({ filename, status: "modified", patch, sha: "1".repeat(40), mode });
+const file = (filename, patch = "@@ -1 +1 @@\n-a\n+b", mode = "100644", baseMode = "100644") => ({ filename, status: "modified", patch, sha: "1".repeat(40), mode, baseMode });
 
 test("verdicts on a carried earlier head count for the current head", () => {
   const comments = [review(earlier), qa(earlier)];
@@ -192,6 +192,12 @@ test("F-046 c: a changed or unknown file mode never carries", () => {
   // A mode the caller did not attach does not match.
   const { mode: _unused, ...noMode } = file("a.sh");
   assert.equal(sameChange({ files: [noMode] }, { files: [noMode] }), false);
+  // The base side counts too (review #1114): same head mode, the merge base's mode differs.
+  for (const baseMode of ["100755", "120000", "absent"]) {
+    assert.equal(sameChange(regular, { files: [file("a.sh", undefined, "100644", baseMode)] }), false, baseMode);
+  }
+  const { baseMode: _none, ...noBaseMode } = file("a.sh");
+  assert.equal(sameChange({ files: [noBaseMode] }, { files: [noBaseMode] }), false);
 });
 
 test("a merge that changes the base side of the PR's hunk does not carry", () => {
