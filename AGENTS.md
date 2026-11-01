@@ -38,7 +38,7 @@ Ako način nije jasan, ne pretpostavljaj ovlast za pisanje. Pregled ili analiza 
 
 ## Neovisni pregled
 
-U review načinu čitaj samo odjeljke koji se tiču diffa: `CLAUDE.md`, `STATE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3/§4/§6 kad je primjenjivo i `docs/DECISIONS.md`.
+U review načinu čitaj samo odjeljke koji se tiču diffa: `CLAUDE.md`, `STATE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3/§4/§6 (indeks; tekst je u `docs/backend/`) kad je primjenjivo i `docs/DECISIONS.md`.
 
 Traži, po važnosti:
 

@@ -27,7 +27,7 @@ Potvrđene putanje: `drain.ts` (planDrain/outcomeToEvents/ackedRevision/fastForw
 
 ## Identity: prihvaćena pravila, candidate SQL
 
-Na mainu `src/application/ports/authorization.ts` definira AuthorizationCheck/Port i consistency, ne implementira cjelokupni can()/RLS model. Autoritet su `docs/BACKEND.md` §4.3/4.4 i `docs/PRODUCT.md`, ne R2 model.
+Na mainu `src/application/ports/authorization.ts` definira AuthorizationCheck/Port i consistency, ne implementira cjelokupni can()/RLS model. Autoritet su `docs/backend/prijava-i-ovlasti.md` §4.3/4.4 i `docs/PRODUCT.md`, ne R2 model.
 
 | Kandidat (oba opažena open draft, merged=false) | Potvrđene putanje; opseg |
 | --- | --- |
