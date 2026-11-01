@@ -1,6 +1,7 @@
 import Script from "next/script";
 import type { ReactNode } from "react";
 
+import { THEME_SCRIPT } from "@/components/shell/theme";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import { fontVariables } from "./fonts";
@@ -19,9 +20,12 @@ const enableReactGrab =
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="hr" className={fontVariables}>
-      {enableReactGrab && (
-        <head>
+    // The theme choice is on the whole document (Z-13a): dark until the
+    // inline script, before the body is painted, finds a stored light choice.
+    <html lang="hr" className={fontVariables} data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {enableReactGrab && (
           <Script
             id="ductus-react-grab"
             src="https://unpkg.com/react-grab@0.2.0/dist/index.global.js"
@@ -30,8 +34,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             data-options='{"telemetry":false,"freezeReactUpdates":false}'
             strategy="beforeInteractive"
           />
-        </head>
-      )}
+        )}
+      </head>
       <body>
         <a className="skip-link" href="#sadrzaj">
           {t.shell.skipToContent}

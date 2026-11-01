@@ -4,7 +4,8 @@
 # checkout of the branch under review, run from that checkout:
 #   git fetch origin main
 #   git show origin/main:scripts/codex-review.ps1 | Out-File -Encoding utf8 "$env:TEMP\codex-review.ps1"
-#   powershell -File "$env:TEMP\codex-review.ps1" -Level <light|standard|critical> [-Pr <number>] [-NoComment] [-Escalate]
+#   powershell -File "$env:TEMP\codex-review.ps1" -Level <light|standard|critical> [-Escalate]
+# The script never posts (F-182): it prints the review and the file it saved.
 # Levels (docs/SESSIONS.md 5) follow the PR risk: light = Risk low (docs, config,
 # packages); standard = Risk standard (ports and features); critical = Risk
 # critical (evidence, crypto, auth, RLS, submission).
@@ -73,40 +74,51 @@ if ($instructions.Count -gt 0) {
 
 $out = Join-Path ([IO.Path]::GetTempPath()) ("codex-review-{0}.md" -f [guid]::NewGuid())
 
-# 3. Read-only sandbox (no writes, no network) and no approval prompts,
-#    whatever ~/.codex/config.toml says, and no GitHub token in the
-#    environment of the Codex process. The comment is posted by this script
-#    after Codex has exited.
+# 3. Read-only sandbox (no writes, no network) and no approval prompts, and
+#    no GitHub token in the environment of the Codex process. F-182: MCP
+#    servers and plugins run outside that sandbox, so Codex runs with its own
+#    temporary CODEX_HOME: only auth.json and a minimal config.toml, no MCP
+#    servers, plugins, apps or the owner's global AGENTS.md. It is removed
+#    after the call. --ignore-user-config also keeps any config.toml out.
+$ownerHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$auth = Join-Path $ownerHome 'auth.json'
+if (-not (Test-Path -LiteralPath $auth -PathType Leaf)) { throw "no Codex login file at $auth; refusing to run with the owner's Codex home" }
+$reviewHome = Join-Path ([IO.Path]::GetTempPath()) ("codex-review-home-{0}" -f [guid]::NewGuid())
+New-Item -ItemType Directory -Path $reviewHome | Out-Null
 $tokenNames = @('GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'OWNER_COMMAND_TOKEN')
 $savedTokens = @{}
-foreach ($name in $tokenNames) {
-    $value = [Environment]::GetEnvironmentVariable($name, 'Process')
-    if ($null -ne $value) { $savedTokens[$name] = $value; [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
-}
+$savedHome = $env:CODEX_HOME
 try {
-    codex exec review --base origin/main --ephemeral -m $tier.Model -c "model_reasoning_effort=`"$($tier.Effort)`"" -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' -o $out
+    Copy-Item -LiteralPath $auth -Destination (Join-Path $reviewHome 'auth.json')
+    $minimalConfig = "sandbox_mode = `"read-only`"`napproval_policy = `"never`"`n"
+    [IO.File]::WriteAllText((Join-Path $reviewHome 'config.toml'), $minimalConfig, (New-Object Text.UTF8Encoding $false))
+    foreach ($name in $tokenNames) {
+        $value = [Environment]::GetEnvironmentVariable($name, 'Process')
+        if ($null -ne $value) { $savedTokens[$name] = $value; [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+    }
+    $env:CODEX_HOME = $reviewHome
+    codex exec review --base origin/main --ephemeral --ignore-user-config -m $tier.Model -c "model_reasoning_effort=`"$($tier.Effort)`"" -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' -o $out
     $codexExit = $LASTEXITCODE
 } finally {
+    $env:CODEX_HOME = $savedHome
     foreach ($name in $savedTokens.Keys) { [Environment]::SetEnvironmentVariable($name, $savedTokens[$name], 'Process') }
+    Remove-Item -LiteralPath $reviewHome -Recurse -Force -ErrorAction SilentlyContinue
 }
 if ($codexExit -ne 0) { throw "codex exec review failed with exit code $codexExit" }
 
-# 4. A read-only sandbox can still read local credentials and print them, so
-#    a review that looks like it carries a credential is never posted.
+# 4. A read-only sandbox can still read local files and print them, and a
+#    pattern catches only known credential shapes. F-182: this script never
+#    posts. It saves the review and prints the path; the session posts it
+#    (gh pr comment <n> --body-file <path>) only after reading it.
 $review = Get-Content $out -Raw -Encoding utf8
 $secretRe = '(?i)(gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|"?(access|refresh|id)_token"?\s*[:=])'
 if ($review -match $secretRe) {
-    throw "the review looks like it contains a credential; not posted, kept at $out for the owner to inspect"
+    throw "the review looks like it contains a credential; do not post it, kept at $out for the owner to inspect"
 }
 
 $header = "## Neovisni pregled (Codex)`n`nRazina: $Level ($($tier.Model), $($tier.Effort))`n`n"
-$body = $header + (Get-Content $out -Raw -Encoding utf8)
-Set-Content -Path $out -Value $body -Encoding utf8
-Write-Output $body
-
-if (-not $NoComment) {
-    if ($Pr -eq 0) { $Pr = [int](gh pr view --json number --jq .number) }
-    gh pr comment $Pr --body-file $out
-    if ($LASTEXITCODE -ne 0) { throw "gh pr comment failed; review kept at $out" }
-}
-Remove-Item $out
+Set-Content -Path $out -Value ($header + $review) -Encoding utf8
+Write-Output ($header + $review)
+if ($Pr -ne 0 -or $NoComment) { Write-Warning "-Pr and -NoComment no longer post anything (F-182); read the review and post it yourself" }
+Write-Output "Review saved, not posted: $out"
+Write-Output "Read it, then post: gh pr comment <n> --body-file `"$out`""

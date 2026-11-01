@@ -7,7 +7,7 @@ Plan proizvoda i stanje rada su u `docs/`. Ime proizvoda je **Ductura** (D-186);
 
 ## Lokalni rad
 
-Treba Node 24, pnpm i Docker. `pnpm install` instalira i git hookove (lefthook).
+Treba Node 24, pnpm i Docker, a za testove u `scripts/engineering/` i PowerShell (`pwsh` 7 na Linuxu i macOS-u; na Windowsima je ugrađen). `pnpm install` instalira i git hookove (lefthook).
 
 ```bash
 pnpm install

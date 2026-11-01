@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   canonicalVerdicts, checkMainCi, checkQueue, checkSafetyNet, exitCode, hookTargets, latestOnHead, parseWorktrees, queueItems,
+  watched,
 } from "./health-core.mjs";
 import { defaultFs, health, readOnlyCall } from "./health.mjs";
 
@@ -49,6 +50,7 @@ function world() {
 const rest = (p) => ({
   number: p.number, title: p.title, state: p.state === "MERGED" ? "closed" : p.state.toLowerCase(),
   merged_at: p.state === "MERGED" ? at(1000) : null, draft: p.isDraft, head: { sha: p.headRefOid, ref: p.headRefName },
+  user: p.user ?? { login: "danielrisavi77-create", type: "User" },
 });
 
 function fakeExec(w, calls) {
@@ -356,7 +358,8 @@ test("U4: draft, closed, merged and Dependabot PRs are ignored", async () => {
     { number: 10, state: "OPEN", isDraft: true, headRefOid: H1, headRefName: "a" },
     { number: 11, state: "CLOSED", isDraft: false, headRefOid: H1, headRefName: "b" },
     { number: 12, state: "MERGED", isDraft: false, headRefOid: H1, headRefName: "c" },
-    { number: 13, state: "OPEN", isDraft: false, headRefOid: H1, headRefName: "dependabot/npm/x" },
+    { number: 13, state: "OPEN", isDraft: false, headRefOid: H1, headRefName: "dependabot/npm/x",
+      user: { login: "dependabot[bot]", type: "Bot" } },
   ];
   for (const n of [10, 11, 12, 13]) w.comments.set(n, [verdict(H1, "FAIL", 300)]);
   w.comments.set(87, [queue([10, 11, 12, 13].map((n) => `#${n} head ${H1} → \`claude:rev\``).join("\n"), 300)]);
@@ -926,4 +929,18 @@ test("classify: a loose line names the current head only by a whole short or ful
   assert.equal(await run("- **#10**: review FAIL na ABABABA → nalazi autoru.", AB), "NEPROVJERENO");
   assert.equal(await run(`- **#10**: review FAIL na 0${H1} → nalazi autoru.`), "WARN"); // 41 hex: no SHA
   assert.equal(await run(`- **#10**: review FAIL na ${H1}0 → nalazi autoru.`), "WARN");
+});
+
+test("F-041 d: Dependabot is decided by author, never by branch name", () => {
+  const pr = (over) => ({ state: "OPEN", isDraft: false, headRefName: "x", author: { login: "someone", type: "User" }, ...over });
+  // A person's branch named like Dependabot's is still watched.
+  assert.equal(watched(pr({ headRefName: "dependabot/npm_and_yarn/next-99" })), true);
+  // A login that only looks like the bot, or the bot login on a non-Bot account, is watched.
+  assert.equal(watched(pr({ author: { login: "dependabot", type: "User" } })), true);
+  assert.equal(watched(pr({ author: { login: "dependabot[bot]", type: "User" } })), true);
+  // A missing author is watched (fail towards checking).
+  assert.equal(watched(pr({ author: undefined })), true);
+  assert.equal(watched(pr({ author: { login: null, type: null } })), true);
+  // Only the real Dependabot app is left out, whatever its branch is called.
+  assert.equal(watched(pr({ headRefName: "feat/x", author: { login: "dependabot[bot]", type: "Bot" } })), false);
 });

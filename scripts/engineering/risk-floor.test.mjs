@@ -48,6 +48,7 @@ const CRITICAL_SAMPLES = [
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
+  "e2e/auth.spec.ts",
   "scripts/demo/native/tools.mjs",
   "scripts/demo/native/up.mjs",
   "scripts/demo/native/lib/any.mjs",
@@ -70,6 +71,24 @@ test("every protected path has the critical floor and rejects a lower declared r
     }
     assert.equal(declared("critical", [file]).ok, true, file);
   }
+});
+
+test("F-041 b: a Risk value that names an Object property is refused, not passed", () => {
+  for (const risk of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf", "isPrototypeOf"]) {
+    for (const files of [["db/migrations/20270101000000_x.sql"], ["docs/notes.md"]]) {
+      const result = declared(risk, files);
+      assert.equal(result.ok, false, `${risk} ${files}`);
+      assert.match(result.message, /Risk must be low, standard, or critical/, risk);
+    }
+  }
+  // Case still does not matter for the real values.
+  assert.equal(declared("Critical", ["db/migrations/20270101000000_x.sql"]).ok, true);
+});
+
+test("F-041 a: the D-09 production-refuses-fake-provider test is critical; other E2E specs stay standard", () => {
+  assert.equal(minimumRisk(["e2e/auth.spec.ts"]).risk, "critical");
+  assert.equal(minimumRisk(["E2E/Auth.spec.ts"]).risk, "critical");
+  assert.equal(minimumRisk(["e2e/editor.spec.ts"]).risk, "standard");
 });
 
 test("the critical list contains every owner-command path, so the two cannot drift", () => {

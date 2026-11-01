@@ -16,7 +16,7 @@ Plan je potvrdio vlasnik 12. 10. 2026. (#187, `issuecomment-6124258798`). Izvorn
 
 ## 2. Napadači
 
-| Napadač | Demo (lokalno, sintetski podaci) | Pilot (stvarni studenti) |
+| Napadač | Lokalno (sintetski podaci) | Pilot (stvarni studenti) |
 | --- | --- | --- |
 | Student koji želi lažirati ili mijenjati trag | nizak | visok |
 | Student koji čita tuđi rad | nizak | visok |

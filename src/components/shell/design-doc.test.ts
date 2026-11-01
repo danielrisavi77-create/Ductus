@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 const CSS = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
 const DOC = readFileSync(join(process.cwd(), "docs", "design", "DESIGN-SYSTEM.md"), "utf8");
 
-const SCOPES = [":root", '[data-theme="light"]', ".sheet", '.sheet[data-sheet-theme="light"]'] as const;
+const SCOPES = [":root", ':root[data-theme="light"]:not(:has(#prijava-kartica, #pocetna-naslov))', ".sheet", '.sheet[data-sheet-theme="light"]'] as const;
 type Scope = (typeof SCOPES)[number];
 
 /** Colour tokens (hex values) declared in the first rule whose selector is exactly `selector`. */

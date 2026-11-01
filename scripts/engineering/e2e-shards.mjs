@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compareReport } from "./ui-test-pilot.mjs";
+import { compareReport, E2E_PROJECTS } from "./ui-test-pilot.mjs";
 
 // Three reports from this workflow run, never a count-only coverage check.
 // The existing pilot parser validates identities, paths, attempts and stats.
@@ -61,8 +61,8 @@ export function runShards(env = process.env, cwd = process.cwd()) {
   // Preserve failed results for the advisory pilot even when validation fails.
   writeFileSync(resolve(cwd, "test-results/ui-pilot-full.json"), JSON.stringify(merged));
   writeFileSync(resolve(cwd, ".ci-reports/ui-pilot-inventory.json"), JSON.stringify(shards[0].inventory));
-  const result = verifyShardReports(shards, merged, { cwd, projects: env.EVENT_NAME === "pull_request"
-    ? ["desktop", "mobile"] : ["desktop", "mobile", "firefox", "webkit"] });
+  // M0.3: every event, pull requests included, must show all four projects.
+  const result = verifyShardReports(shards, merged, { cwd, projects: E2E_PROJECTS });
   const summary = `E2E: ${result.full.count} test instances, three shards, SHA ${env.GITHUB_SHA}.\n` +
     `Shard elapsed ms: ${shards.map(({ report }) => report.stats.duration).join(", ")}. ` +
     `Combined elapsed span: ${merged.stats.duration} ms; test work: ${result.full.testWorkMs} ms.\n`;
