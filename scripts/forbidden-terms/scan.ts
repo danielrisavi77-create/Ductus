@@ -1005,17 +1005,50 @@ function readSource(root: string, file: string): string {
 const isModule = (file: string): boolean => /\.[cm]?ts$/.test(file) && !/\.d\.[cm]?ts$/.test(file);
 const isCode = (file: string): boolean => isModule(file) || file.endsWith(".tsx");
 
+/** Every file under `app/` and `src/`, skipped directories and test files included. */
+function* everyFile(root: string): Generator<string> {
+  const walk = function* (dir: string): Generator<string> {
+    for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const relative = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) yield* walk(relative);
+      else yield relative;
+    }
+  };
+  for (const dir of SCANNED_DIRS) if (existsSync(path.join(root, dir))) yield* walk(dir);
+}
+
+// The only test files under app/ and src/ a runner collects (vitest.config.ts:
+// "src/**/*.test.ts", the property project included). Any other test-named
+// file there is an ordinary module that nothing runs and the scan skips.
+const COLLECTED_TEST = /^src\/(?:.+\/)?[^/]+\.test\.ts$/;
+// Files that hold no interface text: style sheets, data that a module imports
+// (read through that import), declarations, and binary fonts and images.
+const NO_UI_TEXT = /\.(?:css|json|d\.[cm]?ts|woff2?|ico|png|jpe?g|gif|webp|avif)$/;
+// The font licences and their source note, shipped with the fonts as they are.
+const FONT_NOTICE = /^app\/fonts\/(?:OFL-[A-Za-z]+\.txt|SOURCE\.md)$/;
+
+/** True when the scan does not read a file under `app/` or `src/` that can hold interface text. */
+function isUnread(file: string): boolean {
+  if (file.split("/").some((segment) => SKIPPED_DIRS.has(segment))) return true;
+  const name = file.slice(file.lastIndexOf("/") + 1);
+  if (/\.(?:test|spec)\./.test(name)) return !COLLECTED_TEST.test(file);
+  if (isCode(file) || scanKind(file) !== null) return false;
+  if (NO_UI_TEXT.test(file) || FONT_NOTICE.test(file)) return false;
+  return true;
+}
+
 /**
- * Guard for the file types the scan does not read: `.js`, `.jsx`, `.mjs`,
- * `.cjs` and `.mdx` under `app/` and `src/` (repository paths, sorted). The
- * project is TypeScript, so there are none today. A file of this kind would
- * hold interface text the scan never looks at and leave it green, so the
- * repository test fails on every one. The fix is to write the file as `.ts` or
- * `.tsx`, never to exempt it.
+ * Guard for the files under `app/` and `src/` the scan does not read
+ * (repository paths, sorted): any file type other than `.ts` and `.tsx` that
+ * can hold interface text (`.js`, `.mdx`, `.svg`, `.html`, `.md` and so on), a
+ * test-named file that no runner collects, and any file inside a `node_modules`
+ * or `.next` directory there (F-024). Such a file could hold interface text the
+ * scan never looks at and leave it green, so the repository test fails on
+ * every one. The fix is to write the file as `.ts` or `.tsx`, never to exempt it.
  */
 export function findUnreadSourceFiles(root: string): string[] {
   return handOver(
-    () => [...sourceFiles(root)].filter((file) => /\.(?:[cm]?jsx?|mdx)$/.test(file)).sort(),
+    () => [...everyFile(root)].filter(isUnread).sort(),
     (files) => files.map(shownText),
   );
 }

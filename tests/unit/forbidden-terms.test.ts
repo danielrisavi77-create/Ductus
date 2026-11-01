@@ -1838,10 +1838,49 @@ describe("source files the scan does not read", () => {
     write("src/lib/a.d.ts", "export declare const x: number;\n");
     write("src/lib/a.test.ts", "export {};\n");
     write("src/lib/i18n/messages.json", "{}\n");
-    write("src/node_modules/pkg/index.js", "module.exports = 1;\n");
-    write("src/.next/chunk.js", "x;\n");
+    write("src/lib/a.property.test.ts", "export {};\n");
+    write("src/domain/vectors.json", "{}\n");
+    write("app/globals.css", "a { color: red; }\n");
+    write("app/favicon.ico", "\u0000");
+    write("app/fonts/Sans.woff2", "\u0000");
+    write("app/fonts/OFL-Sans.txt", "Licence\n");
+    write("app/fonts/SOURCE.md", "# Fonts\n");
+    write("app/manifest.webmanifest", "{}\n");
     write("scripts/tool.mjs", "export {};\n");
     expect(findUnreadSourceFiles(root)).toEqual([]);
+  });
+
+  // F-024: a test-named file that no runner collects is an ordinary module the
+  // scan skips, a text file of another type holds text the scan never reads,
+  // and node_modules or .next inside app/ or src/ is not a dependency or a build.
+  it("reports uncollected test files, other text files and node_modules or .next under app/ and src/", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("src/components/Banner.spec.tsx", "export const B = () => <p>Sumnjivo</p>;\n");
+    write("src/components/Banner.test.tsx", "export const B = () => <p>Sumnjivo</p>;\n");
+    write("src/lib/x.spec.ts", "export const x = \"Sumnjivo\";\n");
+    write("app/flag.test.ts", "export const x = \"Sumnjivo\";\n");
+    write("app/icon.svg", "<svg><text>Sumnjivo</text></svg>\n");
+    write("app/x/page.html", "<p>Sumnjivo</p>\n");
+    write("src/lib/notes.md", "Sumnjivo\n");
+    write("src/lib/strings.yaml", "a: Sumnjivo\n");
+    write("app/fonts/README.txt", "Sumnjivo\n");
+    write("app/site.webmanifest.txt", "Sumnjivo\n");
+    write("src/node_modules/pkg/index.ts", "export const x = \"Sumnjivo\";\n");
+    write("src/.next/chunk.js", "x;\n");
+    expect(findUnreadSourceFiles(root)).toEqual([
+      "app/flag.test.ts",
+      "app/fonts/README.txt",
+      "app/icon.svg",
+      "app/site.webmanifest.txt",
+      "app/x/page.html",
+      "src/.next/chunk.js",
+      "src/components/Banner.spec.tsx",
+      "src/components/Banner.test.tsx",
+      "src/lib/notes.md",
+      "src/lib/strings.yaml",
+      "src/lib/x.spec.ts",
+      "src/node_modules/pkg/index.ts",
+    ]);
   });
 
   it("finds none in this repository (write a new one as .ts or .tsx, or make the scan read it)", () => {
