@@ -180,6 +180,37 @@ test("blocked neighbours of the gaps named in docs/SESSIONS.md 4a stay blocked",
   }
 });
 
+// F-011: the `deny` rules in .claude/settings.json, read as Claude Code reads a
+// `Tool(pattern)` rule: `*` stands for any text and the pattern covers the whole
+// command, so a rule catches only a command that starts with its leading form.
+const settings = JSON.parse(fs.readFileSync(new URL("../../.claude/settings.json", import.meta.url), "utf8"));
+function denied(tool, command) {
+  return settings.permissions.deny.some((rule) => {
+    const m = /^(\w+)\((.*)\)$/s.exec(rule);
+    if (!m || m[1] !== tool) return false;
+    const re = new RegExp(`^${m[2].split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "s");
+    return re.test(command);
+  });
+}
+
+test("F-011: the three git config deny rules hold for PowerShell as for Bash", () => {
+  for (const command of ["git config core.hooksPath NUL", "git config alias.ci 'commit -n'", "git config include.path x.cfg"]) {
+    for (const tool of ["Bash", "PowerShell"]) assert.equal(denied(tool, command), true, `${tool}: ${command}`);
+  }
+});
+
+test("F-011: neighbour forms the deny rules miss are named as gaps in docs/SESSIONS.md 4a", () => {
+  const sessions = fs.readFileSync(new URL("../../docs/SESSIONS.md", import.meta.url), "utf8");
+  for (const [command, named] of [
+    ["git -C . -c core.hooksPath=NUL commit -m x", "`git -C <dir> -c ...`"],
+    ["env LEFTHOOK=0 git commit -m x", "`env LEFTHOOK=0 ...`"],
+    ["git config --local core.hooksPath NUL", "`git config --local|--global core.hooksPath ...`"],
+  ]) {
+    for (const tool of ["Bash", "PowerShell"]) assert.equal(denied(tool, command), false, `${tool}: ${command}`);
+    assert.ok(sessions.includes(named), `docs/SESSIONS.md 4a names ${named}`);
+  }
+});
+
 test("false blocks named in docs/SESSIONS.md 4a are still blocked", () => {
   for (const tool of ["Bash", "PowerShell"]) {
     for (const [command, rule] of Object.entries(DOCUMENTED_FALSE_BLOCKS)) {
