@@ -395,6 +395,19 @@ test("review: the verdict follows the event cwd; a cwd without the project ruleb
       }
       fs.writeFileSync(path.join(admin, "gitdir"), `${path.join(tree.root, "elsewhere", ".git")}\n`);
       assert.equal(run(tree, "Bash", "git status", withRules).code, 2, "admin directory linking elsewhere");
+
+      // Codex on 4467044 (#1110): a `.git` that links to the project's own
+      // `.git` directory is not a checkout of the same repository. A junction
+      // on Windows needs no privilege; CI (Linux) uses a directory symlink.
+      fs.rmSync(path.join(withRules, ".git"), { recursive: true, force: true });
+      fs.symlinkSync(path.join(tree.root, ".git"), path.join(withRules, ".git"), process.platform === "win32" ? "junction" : "dir");
+      for (const tool of TOOLS) {
+        const linked = run(tree, tool, "git status", withRules);
+        assert.equal(linked.code, 2, `.git linked to the project's .git, ${tool}`);
+        assert.match(linked.stderr, /differs from the project root/);
+      }
+      fs.rmSync(path.join(withRules, ".git"), { force: true });
+      assert.ok(fs.existsSync(path.join(tree.root, ".git")), "removing the link keeps the project's .git");
     } finally {
       fs.rmSync(bare, { recursive: true, force: true });
       fs.rmSync(withRules, { recursive: true, force: true });

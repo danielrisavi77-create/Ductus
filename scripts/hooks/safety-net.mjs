@@ -244,11 +244,16 @@ const samePath = (a, b) => {
 
 // The common git directory of the checkout at `dir`, or null. A `.git` file
 // counts only when its admin directory links back to it (`gitdir`), as git
-// writes it for `git worktree add`.
+// writes it for `git worktree add`. A `.git` that is itself a link (symlink or
+// junction) never counts: a link to the project's `.git`, or to a genuine
+// worktree's `.git` file, would otherwise pass for that checkout (Codex on
+// 4467044, #1110).
 function commonGitDir(dir) {
   const dotGit = path.join(dir, ".git");
   try {
-    if (fs.statSync(dotGit).isDirectory()) return dotGit;
+    const stat = fs.lstatSync(dotGit);
+    if (stat.isSymbolicLink()) return null;
+    if (stat.isDirectory()) return dotGit;
     const admin = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotGit, "utf8"))?.[1];
     if (!admin) return null;
     const adminDir = path.resolve(dir, admin);
