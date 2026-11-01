@@ -80,7 +80,7 @@ $out = Join-Path ([IO.Path]::GetTempPath()) ("codex-review-{0}.md" -f [guid]::Ne
 #    temporary CODEX_HOME: only auth.json and a minimal config.toml, no MCP
 #    servers, plugins, apps or the owner's global AGENTS.md. It is removed
 #    after the call. --ignore-user-config also keeps any config.toml out.
-$ownerHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$ownerHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
 $auth = Join-Path $ownerHome 'auth.json'
 if (-not (Test-Path -LiteralPath $auth -PathType Leaf)) { throw "no Codex login file at $auth; refusing to run with the owner's Codex home" }
 $reviewHome = Join-Path ([IO.Path]::GetTempPath()) ("codex-review-home-{0}" -f [guid]::NewGuid())

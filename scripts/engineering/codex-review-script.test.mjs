@@ -134,8 +134,11 @@ test("Codex runs with its own minimal CODEX_HOME and the script never posts (F-1
     const copy = path.join(root, "codex-review.ps1");
     writeFileSync(copy, script);
 
-    const ownerHome = path.join(root, "owner-codex");
-    mkdirSync(ownerHome);
+    // The owner's home is user/.codex, reached through CODEX_HOME or, without
+    // it, through $HOME (HOME on Linux and macOS, USERPROFILE on Windows).
+    const userDir = path.join(root, "user");
+    const ownerHome = path.join(userDir, ".codex");
+    mkdirSync(ownerHome, { recursive: true });
     writeFileSync(path.join(ownerHome, "auth.json"), '{"synthetic":true}\n');
     writeFileSync(path.join(ownerHome, "config.toml"), 'sandbox_mode = "danger-full-access"\n[mcp_servers.node_repl]\ncommand = "node"\n');
     writeFileSync(path.join(ownerHome, "AGENTS.md"), "owner instructions\n");
@@ -150,7 +153,7 @@ test("Codex runs with its own minimal CODEX_HOME and the script never posts (F-1
       'import path from "node:path";',
       "const args = process.argv.slice(2);",
       "const home = process.env.CODEX_HOME;",
-      `writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, home, files: readdirSync(home).sort(), config: readFileSync(path.join(home, "config.toml"), "utf8"), gh: process.env.GH_TOKEN ?? null }));`,
+      `writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, home, files: readdirSync(home).sort(), config: readFileSync(path.join(home, "config.toml"), "utf8"), auth: readFileSync(path.join(home, "auth.json"), "utf8"), gh: process.env.GH_TOKEN ?? null }));`,
       'writeFileSync(args[args.indexOf("-o") + 1], "No findings.\\n");',
     ].join("\n"));
     writeFileSync(path.join(bin, "fake-gh.mjs"), `import { appendFileSync } from "node:fs"; appendFileSync(${JSON.stringify(ghCalls)}, process.argv.slice(2).join(" ") + "\\n");`);
@@ -165,22 +168,28 @@ test("Codex runs with its own minimal CODEX_HOME and the script never posts (F-1
     } catch (error) {
       assert.fail(`this test needs PowerShell (${shell}) on PATH, see README.md: ${error.message}`);
     }
-    const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, CODEX_HOME: ownerHome, GH_TOKEN: "synthetic-token" };
-    const stdout = execFileSync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", copy, "-Level", "standard", "-Pr", "7"], { cwd: work, env, encoding: "utf8" });
+    const base = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, GH_TOKEN: "synthetic-token" };
+    const withoutCodexHome = { ...base, HOME: userDir, USERPROFILE: userDir };
+    delete withoutCodexHome.CODEX_HOME;
+    for (const env of [{ ...base, CODEX_HOME: ownerHome }, withoutCodexHome]) {
+      rmSync(record, { force: true });
+      const stdout = execFileSync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", copy, "-Level", "standard", "-Pr", "7"], { cwd: work, env, encoding: "utf8" });
 
-    const seen = JSON.parse(readFileSync(record, "utf8"));
-    assert.notEqual(path.resolve(seen.home), path.resolve(ownerHome), "not the owner's Codex home");
-    assert.deepEqual(seen.files, ["auth.json", "config.toml"], "only the login file and the minimal config");
-    assert.equal(seen.config.replaceAll("\r\n", "\n"), 'sandbox_mode = "read-only"\napproval_policy = "never"\n');
-    assert.equal(seen.gh, null, "no GitHub token in the Codex environment");
-    // Windows PowerShell 5.1 drops the inner quotes of a native argument; Codex
-    // reads a bare value that is not TOML as a string, so both forms are read-only.
-    assert.ok(seen.args.includes("--ignore-user-config"));
-    assert.ok(seen.args.some((a) => /^sandbox_mode="?read-only"?$/.test(a)), seen.args.join(' '));
-    assert.throws(() => readFileSync(ghCalls), "gh is never called");
-    assert.throws(() => readdirSync(seen.home), "the review home is removed");
-    assert.match(stdout, /Review saved, not posted: /);
-    assert.match(stdout, /No findings\./);
+      const seen = JSON.parse(readFileSync(record, "utf8"));
+      assert.notEqual(path.resolve(seen.home), path.resolve(ownerHome), "not the owner's Codex home");
+      assert.deepEqual(seen.files, ["auth.json", "config.toml"], "only the login file and the minimal config");
+      assert.equal(seen.auth, '{"synthetic":true}\n', "the login file comes from the owner home of this run");
+      assert.equal(seen.config.replaceAll("\r\n", "\n"), 'sandbox_mode = "read-only"\napproval_policy = "never"\n');
+      assert.equal(seen.gh, null, "no GitHub token in the Codex environment");
+      // Windows PowerShell 5.1 drops the inner quotes of a native argument; Codex
+      // reads a bare value that is not TOML as a string, so both forms are read-only.
+      assert.ok(seen.args.includes("--ignore-user-config"));
+      assert.ok(seen.args.some((a) => /^sandbox_mode="?read-only"?$/.test(a)), seen.args.join(' '));
+      assert.throws(() => readFileSync(ghCalls), "gh is never called");
+      assert.throws(() => readdirSync(seen.home), "the review home is removed");
+      assert.match(stdout, /Review saved, not posted: /);
+      assert.match(stdout, /No findings\./);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
