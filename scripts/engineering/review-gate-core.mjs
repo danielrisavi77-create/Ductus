@@ -969,9 +969,14 @@ export function sinceBaseChange(items, cutoff, stamp = "created_at", { codexEdit
   );
 }
 
-// F-165: Auto-merge eligible is refused while another open PR shares the head;
-// a list that was not read counts as shared.
-export const SHARED_HEAD = { state: "pending", description: "Not eligible for auto-merge: another open PR shares this head." };
+// F-165, F-040: a commit status belongs to the head, so while another open PR
+// shares it no status of the gate is green: the verdicts, body and file list
+// of one PR would stand for the other. A list that was not read counts as
+// shared.
+export const SHARED_HEAD = {
+  state: "pending",
+  description: "No green status while another open PR shares this head; close the other PR.",
+};
 export function sharesHeadWithOpenPr(pr, openPulls) {
   if (!Array.isArray(openPulls)) return true;
   const head = String(pr?.head?.sha ?? "").toLowerCase();

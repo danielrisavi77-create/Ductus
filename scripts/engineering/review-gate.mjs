@@ -154,14 +154,15 @@ async function main() {
     carriedHeads: await carriedHeads(api, owner, repo, pr, comments),
   });
 
+  // F-040: the statuses of a shared head would also stand for the other PR.
+  const shared = sharesHeadWithOpenPr(pr, openPulls);
+  const gate = shared ? SHARED_HEAD : result;
   // Authorization first: a stale green one must never sit beside a new green gate.
-  await setStatus(repository, pr.head.sha, mergeAuthorization ?? WAITING, pr.html_url, authorizationContext);
-  const eligible = sharesHeadWithOpenPr(pr, openPulls)
-    ? SHARED_HEAD
-    : (autoMergeEligible ?? { state: "pending", description: "Not eligible for auto-merge." });
+  await setStatus(repository, pr.head.sha, shared ? SHARED_HEAD : (mergeAuthorization ?? WAITING), pr.html_url, authorizationContext);
+  const eligible = shared ? SHARED_HEAD : (autoMergeEligible ?? { state: "pending", description: "Not eligible for auto-merge." });
   await setStatus(repository, pr.head.sha, eligible, pr.html_url, autoMergeContext);
-  await setStatus(repository, pr.head.sha, result, pr.html_url);
-  console.log(`${context}: ${result.state} — ${result.description}`);
+  await setStatus(repository, pr.head.sha, gate, pr.html_url);
+  console.log(`${context}: ${gate.state} — ${gate.description}`);
   if (metadata?.ok) {
     console.log(`Risk: declared=${metadata.risk}, minimum=${metadata.minimumRisk}`);
   }

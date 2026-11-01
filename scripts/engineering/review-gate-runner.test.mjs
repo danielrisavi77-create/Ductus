@@ -180,19 +180,43 @@ test("a PR whose base is not the default branch gets no green status for its hea
   }
 });
 
-test("another open PR on the same head leaves Auto-merge eligible pending (F-165)", () => {
-  for (const other of [{ number: 8, head: { sha: HEAD } }, { number: 9, head: { sha: HEAD }, base: { ref: "feature" } }]) {
+test("another open PR on the same head leaves every status pending (F-165, F-040)", () => {
+  for (const other of [{ number: 8, head: { sha: HEAD } }, { number: 9, head: { sha: HEAD.toUpperCase() }, base: { ref: "feature" } }]) {
     const { code, posts } = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible, other] });
     assert.equal(code, 0);
-    assert.deepEqual(states(posts), [
-      ["Merge authorization", "success"], ["Auto-merge eligible", "pending"], ["Engineering review gate", "success"],
-    ]);
-    assert.match(posts[1].body.description, /another open PR shares this head/);
+    assert.deepEqual(states(posts), ALL.map((c) => [c, "pending"]));
+    for (const post of posts) {
+      assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
+      assert.match(post.body.description, /another open PR shares this head/);
+    }
   }
   // A failed read of the open PRs fails the run closed.
   const failed = run(comment, { pr: eligible, files: addedTest, fail: ["/pulls"] });
   assert.equal(failed.code, 1);
   assert.ok(failed.posts.every((p) => p.body.state !== "success"));
+});
+
+// F-040: two open PRs on one head, one to main and one to a side branch whose
+// diff is a single docs file. No run, for either PR, may leave a green status
+// on the shared head, so neither PR's verdicts stand for the other.
+test("F-040 regression: no green gate status in the registered case", () => {
+  const side = {
+    ...eligible, number: 8, body: "Agent: claude:a:platforma\nRisk: low\nTask: B-1\n",
+    head: { ...eligible.head, ref: "feat/y" }, base: { ...eligible.base, ref: "side" },
+  };
+  const openPulls = [eligible, side];
+  const runs = [
+    run(comment, { pr: eligible, files: addedTest, openPulls }),
+    run(pullRequest, { pr: eligible, files: addedTest, openPulls }),
+    run(comment, { pr: { ...side, number: 7 }, files: [{ filename: "docs/x.md", status: "modified" }], openPulls: [{ ...eligible, number: 8 }, { ...side, number: 7 }] }),
+  ];
+  for (const { code, posts } of runs) {
+    assert.equal(code, 0);
+    assert.ok(posts.every((p) => p.body.state !== "success"), JSON.stringify(states(posts)));
+  }
+  assert.deepEqual(states(runs[0].posts), ALL.map((c) => [c, "pending"]));
+  // The side-branch PR writes nothing on a head that a PR to main shares.
+  assert.equal(runs[2].posts.length, 0);
 });
 
 test("a queue carrier keeps its statuses without a default_branch field (F-165)", () => {
