@@ -179,8 +179,12 @@ const lastActivity = (item) => {
   return Number.isNaN(updated) ? created : Math.max(created || 0, updated);
 };
 
-function quotaEvidence(items, reviews = []) {
-  const appComments = (items ?? [])
+// F-013: evidence counts only from `items` (after the last base change), but
+// activity that voids it is read from `activityItems`, the full history, so a
+// summary created before the change and edited after the quota message still
+// voids the evidence.
+function quotaEvidence(items, reviews = [], activityItems = items) {
+  const readApp = (list) => (list ?? [])
     .map((item, index) => {
       const slug = item?.performed_via_github_app?.slug ?? null;
       const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
@@ -194,6 +198,8 @@ function quotaEvidence(items, reviews = []) {
       };
     })
     .filter(Boolean);
+  const appComments = readApp(items);
+  const appActivity = activityItems === items ? appComments : [...appComments, ...readApp(activityItems)];
   // A PR review carries no App slug, only the App's bot account.
   const appReviews = (reviews ?? [])
     .map((review) => {
@@ -202,7 +208,7 @@ function quotaEvidence(items, reviews = []) {
       return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
     })
     .filter(Boolean);
-  const activity = [...appComments, ...appReviews];
+  const activity = [...appActivity, ...appReviews];
   return appComments.filter(
     (item) =>
       item.exhausted &&
@@ -459,6 +465,9 @@ function evaluateGateCore({
   headSha,
   ownerLogin,
   comments = [],
+  // F-013: every comment, also from before the last base change, for the
+  // D-139 rule that a QA session never reviewed this PR. Defaults to comments.
+  historyComments = null,
   prReviews = [],
   reviewComments = null,
   authorLogin = null,
@@ -608,7 +617,7 @@ function evaluateGateCore({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments, prReviews);
+    const evidence = quotaEvidence(comments, prReviews, historyComments ?? comments);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
@@ -640,7 +649,7 @@ function evaluateGateCore({
     // answered. The QA head is the current head or one carried through clean
     // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
     // does not void it.
-    const everReviewers = reviewerPrincipals(trusted);
+    const everReviewers = reviewerPrincipals(historyComments ? trustedComments(historyComments, trustedLogins, ownerLogin) : trusted);
     const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
     const secondSession = separateAppPass || fallbackPass
       ? null
@@ -893,6 +902,53 @@ export function targetsDefaultBranch(pr) {
   return typeof ref === "string" && ref.length > 0 && ref === pr?.base?.repo?.default_branch;
 }
 
+// F-013: a verdict judged the diff against the base of its time. After the base
+// changes, the same head carries another diff, so nothing written before the
+// last base change counts. Time of the last base change issue event: a manual
+// `base_ref_changed` or GitHub's `automatic_base_change_succeeded`, which
+// retargets a dependent PR after its base branch is deleted (Codex review
+// c.6562680923 on #1117); -Infinity when the base never changed, Infinity
+// (drop everything) when the events were not read or an event has no readable
+// time. A failed automatic change leaves the base as it was.
+export const BASE_CHANGE_EVENTS = new Set(["base_ref_changed", "automatic_base_change_succeeded"]);
+export function lastBaseChange(events) {
+  if (!Array.isArray(events)) return Infinity;
+  let last = -Infinity;
+  for (const event of events) {
+    if (!BASE_CHANGE_EVENTS.has(event?.event)) continue;
+    const at = Date.parse(event?.created_at ?? "");
+    last = Math.max(last, Number.isNaN(at) ? Infinity : at);
+  }
+  return last;
+}
+
+/**
+ * Items stamped strictly after the cutoff; an unreadable stamp drops the item
+ * once a cutoff exists. With `codexEdits`, a Codex App review summary that was
+ * created earlier but edited after the cutoff is kept too: Codex edits one
+ * summary in place, and that summary is no verdict (only its head-bound clean
+ * state counts as Codex evidence, D-139), so keeping it never revives an old
+ * verdict and it can only void quota evidence (Codex r4434170872).
+ */
+export function sinceBaseChange(items, cutoff, stamp = "created_at", { codexEdits = false } = {}) {
+  const list = Array.isArray(items) ? items : [];
+  if (cutoff === -Infinity) return list;
+  const after = (value) => {
+    const at = Date.parse(value ?? "");
+    return Number.isFinite(at) && at > cutoff;
+  };
+  return list.filter(
+    (item) =>
+      after(item?.[stamp]) ||
+      (codexEdits &&
+        isCodexBot(item?.user) &&
+        item?.performed_via_github_app?.slug === CODEX_APP_SLUG &&
+        typeof item?.body === "string" &&
+        item.body.startsWith(CODEX_SUMMARY_MARKER) &&
+        after(item?.updated_at)),
+  );
+}
+
 // F-165: Auto-merge eligible is refused while another open PR shares the head;
 // a list that was not read counts as shared.
 export const SHARED_HEAD = { state: "pending", description: "Not eligible for auto-merge: another open PR shares this head." };
@@ -971,7 +1027,7 @@ export function evaluateMergeAuthorization({
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
 
-export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -996,6 +1052,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
     headSha: pr.head.sha,
     ownerLogin,
     comments,
+    historyComments,
     prReviews,
     reviewComments,
     authorLogin: pr.user?.login ?? null,
