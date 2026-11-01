@@ -53,6 +53,8 @@ test("force push is blocked in every spelling the tool can match", () => {
 const DOCUMENTED_GAPS = {
   Bash: [
     "git push --force-with-lease=platforma/x origin platforma/x",
+    "git rebase --exec=git\\ add\\ -A HEAD~1",
+    "git push --prune=origin",
     "git -c core.hooksPath=/dev/null commit -m x",
     "git --config-env=core.hooksPath=HP commit -m x",
     "LEFTHOOK=0 git commit -m x",
