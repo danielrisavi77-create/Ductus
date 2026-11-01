@@ -174,7 +174,7 @@ test("T2 a deadline spent before the analysis blocks without running the package
       assert.equal(result.code, 2, command);
       assert.equal(result.stdout, "", command);
       assert.match(result.stderr, /ran out of time before the analysis/, command);
-      assert.match(result.stderr, /--body-file/, command);
+      assert.match(result.stderr, /pnpm install --frozen-lockfile/, command);
     }
     assert.equal(fs.existsSync(tree.calls), false, "the package never ran");
   }));
@@ -188,9 +188,9 @@ test("T3 the configuration read never outlives the overall deadline", () => {
 
 test("T4 the first run, the control probe and the second run all end by the one deadline", { timeout: 30000 }, () => {
   for (const [bin, why] of [
-    ["hang", /did not answer within \d+ ms[\s\S]*long command/],
+    ["hang", /did not answer within \d+ ms/],
     ["hangprobe", /control probe/],
-    ["hangsecond", /did not answer within \d+ ms[\s\S]*long command/],
+    ["hangsecond", /did not answer within \d+ ms/],
   ]) {
     withTree({ bin }, (tree) => {
       // A checkout root with a cwd below it: the second run happens in the rulebook directory.
@@ -236,7 +236,7 @@ test("T6 a deadline spent before the control probe blocks the install command to
       assert.equal(result.code, 2, `${command}: ${result.stderr}`);
       assert.equal(result.stdout, "", command);
       assert.match(result.stderr, /ran out of time before the control probe/, command);
-      assert.match(result.stderr, /--body-file/, command);
+      assert.match(result.stderr, /pnpm install --frozen-lockfile/, command);
       assert.equal(fs.readFileSync(tree.calls, "utf8"), "x", "the probe never ran");
     });
   }
@@ -297,7 +297,7 @@ test("T9 the configuration read running out of its own time blocks the install c
       assert.equal(result.code, 2, `${command}: ${result.stderr}`);
       assert.equal(result.stdout, "", command);
       assert.match(result.stderr, /too large or too slow to read \(more than -1 ms\)/, command);
-      assert.match(result.stderr, /--body-file/, command);
+      assert.match(result.stderr, /Remove or shrink/, command);
     });
   }
   // A configuration that is too large (not slow) still leaves the install way out open, as before.

@@ -32,8 +32,6 @@ import { fileURLToPath } from "node:url";
 export const ANALYSIS_TIMEOUT_MS = 75000;
 export const STARTUP_MARGIN_MS = 15000;
 export const RECOVERY = "Run `pnpm install --frozen-lockfile` in a terminal (or ask for exactly that command), then retry.";
-export const SLOW_HINT =
-  "A long command (a big heredoc, a long quoted body or many chained steps) takes the analysis longer: put the text in a file and pass the file instead (for example gh pr comment <n> --body-file <file>), or retry when the machine is less busy. If short commands also time out:";
 
 // The only commands allowed while the package is unusable: the whole command,
 // no operators, redirection or substitution, one literal spelling each.
@@ -341,7 +339,7 @@ const failure = (problem, hint) => ({ problem, hint });
 // A probe that ran out of time is not an unusable package: it blocks every
 // command, the install command too (the install way out is for a broken
 // package, not for a slow one).
-const timedOut = (problem) => ({ problem, hint: SLOW_HINT + " " + RECOVERY, timedOut: true });
+const timedOut = (problem) => ({ problem, hint: RECOVERY, timedOut: true });
 function probe(root, rulebookDir, deadline, env, limits) {
   if (deadline - Date.now() <= 0) return timedOut("the safety check ran out of time before the control probe");
   let key;
@@ -351,7 +349,7 @@ function probe(root, rulebookDir, deadline, env, limits) {
     if (!(error instanceof LimitError)) throw error;
     const problem = `the safety check cannot verify the configuration it depends on: .cc-safety-net under ${rulebookDir} or the user's .cc-safety-net is too large or too slow to read (${error.message}), for example a link to a big directory or file`;
     // Out of its own time (or the overall deadline): a time-out, so the install way out stays shut.
-    if (error instanceof TimeLimitError || deadline - Date.now() <= 0) return { ...timedOut(problem), hint: `Remove or shrink what the links in those directories point to, then retry. ${SLOW_HINT} ${RECOVERY}` };
+    if (error instanceof TimeLimitError || deadline - Date.now() <= 0) return { ...timedOut(problem), hint: "Remove or shrink what the links in those directories point to, then retry" };
     return failure(problem, "Remove or shrink what the links in those directories point to, then retry");
   }
   const dir = markDir();
@@ -407,9 +405,8 @@ export function isCdToRoot(command, root) {
 export function answer(run, timeoutMs) {
   const stdout = run.stdout ?? "";
   const stderr = run.stderr ?? "";
-  const failed = (why, hint = RECOVERY) => ({ block: { code: 2, stdout: "", stderr: `Safety hook blocked this command: cc-safety-net ${why}. ${hint}\n${stderr}` } });
-  if (run.error?.code === "ETIMEDOUT") return failed(`did not answer within ${timeoutMs} ms`, `${SLOW_HINT} ${RECOVERY}`);
-  if (run.error) return failed(`could not run (${run.error.message})`);
+  const failed = (why) => ({ block: { code: 2, stdout: "", stderr: `Safety hook blocked this command: cc-safety-net ${why}. ${RECOVERY}\n${stderr}` } });
+  if (run.error) return failed(run.error.code === "ETIMEDOUT" ? `did not answer within ${timeoutMs} ms` : `could not run (${run.error.message})`);
   if (run.signal) return failed(`was killed by ${run.signal}`);
   if (run.status === 2) return { block: { code: 2, stdout, stderr } };
   if (run.status !== 0) return failed(`exited with status ${run.status}`);
@@ -444,7 +441,7 @@ const SECRET_SCAN_SKIP_BLOCK = {
 const outOfTime = (stage) => ({
   code: 2,
   stdout: "",
-  stderr: `Safety hook blocked this command: the safety check ran out of time ${stage}. ${SLOW_HINT} ${RECOVERY}\n`,
+  stderr: `Safety hook blocked this command: the safety check ran out of time ${stage}. ${RECOVERY}\n`,
 });
 
 // Pure decision: { code, stdout, stderr }. `input` is the raw hook stdin.
