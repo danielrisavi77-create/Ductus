@@ -1005,13 +1005,16 @@ function readSource(root: string, file: string): string {
 const isModule = (file: string): boolean => /\.[cm]?ts$/.test(file) && !/\.d\.[cm]?ts$/.test(file);
 const isCode = (file: string): boolean => isModule(file) || file.endsWith(".tsx");
 
-/** Every file under `app/` and `src/`, skipped directories and test files included. */
-function* everyFile(root: string): Generator<string> {
-  const walk = function* (dir: string): Generator<string> {
+/**
+ * Every file under `app/` and `src/`, skipped directories and test files
+ * included, with whether it is a link (symbolic link or junction).
+ */
+function* everyFile(root: string): Generator<{ file: string; link: boolean }> {
+  const walk = function* (dir: string): Generator<{ file: string; link: boolean }> {
     for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
       const relative = `${dir}/${entry.name}`;
       if (entry.isDirectory()) yield* walk(relative);
-      else yield relative;
+      else yield { file: relative, link: entry.isSymbolicLink() };
     }
   };
   for (const dir of SCANNED_DIRS) if (existsSync(path.join(root, dir))) yield* walk(dir);
@@ -1023,7 +1026,7 @@ function* everyFile(root: string): Generator<string> {
 // tests/integration, so an integration test under src/ is collected by none.
 // Any other test-named file there is an ordinary module that nothing runs and
 // the scan skips.
-const COLLECTED_TEST = /^src\/(?:.+\/)?[^/]+\.test\.ts$/;
+const COLLECTED_TEST = /^src\/(?:.+\/)?[^/]*\.test\.ts$/;
 const UNCOLLECTED_TEST = /\.integration\.test\.ts$/;
 // Files that hold no interface text: style sheets, data that a module imports
 // (read through that import), declarations, and binary fonts and images.
@@ -1048,13 +1051,20 @@ function isUnread(file: string): boolean {
  * (repository paths, sorted): any file type other than `.ts` and `.tsx` that
  * can hold interface text (`.js`, `.mdx`, `.svg`, `.html`, `.md` and so on), a
  * test-named file that no runner collects, and any file inside a `node_modules`
- * or `.next` directory there (F-024). Such a file could hold interface text the
+ * or `.next` directory there, and any link (symbolic link or junction) there
+ * (F-024). Such a file could hold interface text the
  * scan never looks at and leave it green, so the repository test fails on
  * every one. The fix is to write the file as `.ts` or `.tsx`, never to exempt it.
  */
 export function findUnreadSourceFiles(root: string): string[] {
   return handOver(
-    () => [...everyFile(root)].filter(isUnread).sort(),
+    // QA of #1166 (c.6558759318): the scan does not look behind a link, so
+    // every link there is reported, whatever its name or target.
+    () =>
+      [...everyFile(root)]
+        .filter(({ file, link }) => link || isUnread(file))
+        .map(({ file }) => file)
+        .sort(),
     (files) => files.map(shownText),
   );
 }

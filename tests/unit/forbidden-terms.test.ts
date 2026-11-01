@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1891,6 +1891,29 @@ describe("source files the scan does not read", () => {
       "src/lib/x.spec.ts",
       "src/node_modules/pkg/index.ts",
     ]);
+  });
+
+  // Review c.6558762520 and QA c.6558759318 of #1166: vitest collects
+  // src/**/*.test.ts with an empty name before .test.ts as well.
+  it("does not report a collected test whose name before .test.ts is empty", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("src/.test.ts", "export {};\n");
+    write("src/nested/.test.ts", "export {};\n");
+    write("src/.integration.test.ts", "export {};\n");
+    expect(findUnreadSourceFiles(root)).toEqual(["src/.integration.test.ts"]);
+  });
+
+  // QA c.6558759318 of #1166: the scan does not look behind a link, so a link
+  // under app/ or src/ is reported whatever its name says.
+  it("reports a link under app/ or src/, to a directory or to a file", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("lib/Banner.tsx", "export const B = () => <p>Sumnjivo</p>;\n");
+    write("lib/styles.css", "a { color: red; }\n");
+    write("app/page.tsx", "export default () => <p>Spremljeno na uređaju</p>;\n");
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    symlinkSync(path.join(root, "lib"), path.join(root, "src", "linked.css"), "junction");
+    symlinkSync(path.join(root, "lib", "styles.css"), path.join(root, "app", "styles.css"), "file");
+    expect(findUnreadSourceFiles(root)).toEqual(["app/styles.css", "src/linked.css"]);
   });
 
   it("finds none in this repository (write a new one as .ts or .tsx, or make the scan read it)", () => {
