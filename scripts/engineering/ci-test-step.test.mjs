@@ -124,13 +124,18 @@ test("the required job itself cannot be skipped or made non-blocking (#195 item 
 // own line, or the line right above ends every other way out, by throwing
 // unless the platform is Windows or by asserting that CI is not the caller.
 // The CI runner is Linux, so such a marker never fires there. An option key
-// is caught also when the object spans lines (`{\n  skip: true,`).
+// is caught also when the object spans lines (`{\n  skip: true,`) and when
+// the key is quoted. The Windows guard may add only one `|| name !== "value"`
+// term: with `||` the throw still fires whenever the platform is not Windows.
 const MARKERS = ["skip", "todo", "only"].join("|");
-const MARKED = new RegExp(`\\b(?:test|describe|it|t)\\.(?:${MARKERS})\\b|(?:[{,]|^)\\s*(?:${MARKERS})\\s*:`);
+const MARKED = new RegExp(
+  `\\b(?:test|describe|it|t)\\.(?:${MARKERS})\\b|(?:[{,]|^)\\s*(["'\`]?)(?:${MARKERS})\\1\\s*:`,
+);
 const SKIP_CALL = `(?:return )?t\\.${"skip"}\\("[^"]*"\\);?\\s*$`;
 const GUARDED_ON_LINE = new RegExp(`^\\s*if \\(process\\.platform !== "linux"\\) ${SKIP_CALL}`);
 const BARE_SKIP = new RegExp(`^\\s*${SKIP_CALL}`);
-const GUARD_ABOVE = /^\s*(?:if \(process\.platform !== "win32"[^\n]*\) throw [^\n]*;|assert\.ok\(!IN_CI,[^\n]*\);)\s*$/;
+const GUARD_ABOVE =
+  /^\s*(?:if \(process\.platform !== "win32"(?: \|\| [\w.]+ !== "[^"]*")?\) throw [\w.]+;|if \(process\.platform !== "win32"\) throw new Error\("[^"]*"\);|assert\.ok\(!IN_CI, "[^"]*"\);)\s*$/;
 export function unguardedMarkers(src) {
   const lines = src.split("\n");
   const out = [];
@@ -173,6 +178,15 @@ test("engineering and hook tests carry no marker that turns a case off, except a
     `const onLinux = process.platform !== "linux";\n${call("t", "skip", '"never runs"')}`,
     `if (process.platform !== "win32") throw new Error("x");\n\n${call("t", "skip", '"gap"')}`,
     `assert.ok(!IN_CI, "x");\nconsole.log("between");\n${call("t", "skip", '"gap"')}`,
+    // Codex on #1110, second round: a quoted option key.
+    `test("x", { "${"skip"}": true }, () => {});`,
+    `test("x", { '${"only"}': true }, () => {});`,
+    `describe("x", {\n  "${"todo"}": "later",\n}, () => {});`,
+    // Codex on #1110, second round: a guard term that lets Linux fall through.
+    `if (process.platform !== "win32" && error.code !== "EPERM") throw error;\n${call("t", "skip", '"x"')}`,
+    `if (process.platform !== "win32" || a ? b : c) throw error;\n${call("t", "skip", '"x"')}`,
+    `if (process.platform !== "win32" || ok()) throw error;\n${call("t", "skip", '"x"')}`,
+    `assert.ok(!IN_CI || true, "x");\n${call("t", "skip", '"x"')}`,
   ]) assert.notDeepEqual(unguardedMarkers(bad), [], bad);
   // The three forms the scanned tests use stay allowed.
   for (const good of [
