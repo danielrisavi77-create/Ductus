@@ -1,10 +1,25 @@
-import { dirname } from "node:path";
+import { dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FlatCompat } from "@eslint/eslintrc";
 
 const compat = new FlatCompat({
   baseDirectory: dirname(fileURLToPath(import.meta.url)),
 });
+
+// The pg family by package name (pg, pg/lib/..., pg-cursor, pg-boss), or a
+// static path into an installed copy of it (../../node_modules/pg, the pnpm
+// store node_modules/.pnpm/pg@x/..., either slash), DAN-50. Not relative paths
+// like ./pg-like. Both rules below use this one pattern, case-insensitively.
+const PG_SPECIFIER = String.raw`^pg(?:$|/|-)|(?:^|[\\/])node_modules[\\/](?:\.pnpm[\\/])?pg(?:$|[\\/@+-])`;
+const PG_SPECIFIER_RE = new RegExp(PG_SPECIFIER, "iu");
+// A path with an empty, "." or "x/.." segment, or with backslashes, reaches the
+// same file (review of #1172): node_modules//pg, node_modules/./pg,
+// node_modules/x/../pg. The custom rule tests the normalized form.
+// Only the node_modules part is tested on it: normalizing "./pg-like" gives
+// "pg-like", which is not the package.
+const PG_PATH_RE = /(?:^|\/)node_modules\/(?:\.pnpm\/)?pg(?:$|[/@+-])/iu;
+const normalized = (specifier) => posix.normalize(specifier.replace(/\\/g, "/"));
+const isPg = (specifier) => PG_SPECIFIER_RE.test(specifier) || PG_PATH_RE.test(normalized(specifier));
 
 const databaseBoundaryPlugin = {
   rules: {
@@ -40,8 +55,17 @@ const databaseBoundaryPlugin = {
             // Arbitrary computed specifiers cannot be resolved by this static
             // guard. Variables and interpolated templates are not inspected.
             // Match the static rule's default case-insensitive Unicode semantics.
-            if (typeof specifier === "string" && /^pg(?:$|\/|-)/iu.test(specifier)) {
+            if (typeof specifier === "string" && isPg(specifier)) {
               context.report({ node: source, messageId: "restrictedPg" });
+            }
+          },
+          // Static imports and re-exports: no-restricted-imports reads the raw
+          // text, so this rule reports only the forms it cannot see, those
+          // that are the driver only after normalization.
+          "ImportDeclaration, ExportNamedDeclaration, ExportAllDeclaration"(node) {
+            const specifier = node.source?.value;
+            if (typeof specifier === "string" && !PG_SPECIFIER_RE.test(specifier) && isPg(specifier)) {
+              context.report({ node: node.source, messageId: "restrictedPg" });
             }
           },
         };
@@ -77,8 +101,7 @@ const eslintConfig = [
         {
           patterns: [
             {
-              // pg, pg/lib/..., pg-cursor, pg-boss; not relative paths like ./pg-like.
-              regex: "^pg(?:$|/|-)",
+              regex: PG_SPECIFIER,
               message: "Database access goes through src/server/db only.",
             },
           ],
