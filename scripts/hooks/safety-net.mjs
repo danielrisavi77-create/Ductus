@@ -111,9 +111,12 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
   } catch {
     return "absent";
   }
+  const checkTime = () => {
+    if (Date.now() > budget.deadline) throw new TimeLimitError(`more than ${budget.maxMs} ms`);
+  };
   const check = () => {
     if (++budget.entries > budget.maxEntries) throw new LimitError(`more than ${budget.maxEntries} entries`);
-    if (Date.now() > budget.deadline) throw new TimeLimitError(`more than ${budget.maxMs} ms`);
+    checkTime();
   };
   const hash = createHash("sha256");
   const seen = new Set();
@@ -184,6 +187,8 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         } catch {
           hash.update("unreadable");
         }
+        // A slow read is over the time too, also when it was the last one.
+        checkTime();
         hash.update("\n");
       } else {
         hash.update(`other:${name}\n`);
@@ -196,6 +201,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
     // no real path: the entry limit still bounds the walk
   }
   walk(dir, "");
+  checkTime();
   return hash.digest("hex");
 }
 
@@ -447,8 +453,11 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   const command = commandOf(input);
   // F-017: the secret-scan skip in lefthook.yml is for a human only.
   if (typeof command === "string" && SECRET_SCAN_SKIP.test(command)) return SECRET_SCAN_SKIP_BLOCK;
+  // Every way of letting a command through looks at the shared deadline first:
+  // past it, the answer is a time-out, whatever the path.
+  const allow = (result) => (deadline - Date.now() <= 0 ? outOfTime("before the command was let through") : result);
   // The exact install command is the way out of an unusable package.
-  const unusable = (problem, hint) => (isInstallCommand(command) ? { code: 0, stdout: "", stderr: "" } : blockedFor(problem, hint));
+  const unusable = (problem, hint) => (isInstallCommand(command) ? allow({ code: 0, stdout: "", stderr: "" }) : blockedFor(problem, hint));
   const problem = packageProblem(root);
   if (problem) return unusable(problem);
 
@@ -462,7 +471,7 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   const rulebookDir = findRulebookDir(cwd);
   // Without usable project rules here, only the way back to the project root stays open.
   const noRules = (problem) => {
-    if (isCdToRoot(command, root)) return { code: 0, stdout: first.stdout, stderr: first.stderr };
+    if (isCdToRoot(command, root)) return allow({ code: 0, stdout: first.stdout, stderr: first.stderr });
     return unusable(
       problem,
       `${isCdToRoot(`cd "${root}"`, root) ? `Run exactly: cd "${root}" (nothing else in the command) to return to the project root, or ` : ""}leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`,
@@ -497,10 +506,10 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
       if (secondLeft <= 0) return outOfTime("before the analysis in the rulebook directory");
       const second = answer(runPackage(root, moved, secondLeft, env), secondLeft);
       if (second.block) return second.block;
-      if (second.stdout.trim()) return { code: 0, stdout: second.stdout, stderr: second.stderr };
+      if (second.stdout.trim()) return allow({ code: 0, stdout: second.stdout, stderr: second.stderr });
     }
   }
-  return { code: 0, stdout: first.stdout, stderr: first.stderr };
+  return allow({ code: 0, stdout: first.stdout, stderr: first.stderr });
 }
 
 // Process entry point: reads stdin; an error never becomes a pass. The

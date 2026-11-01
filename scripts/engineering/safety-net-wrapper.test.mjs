@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { performance } from "node:perf_hooks";
 
-import { answer, decide, DEFAULT_LIMITS, isCdToRoot, isInstallCommand, newBudget, runCli } from "../hooks/safety-net.mjs";
+import { answer, decide, DEFAULT_LIMITS, isCdToRoot, isInstallCommand, newBudget, runCli, userConfigDirs } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -304,6 +304,58 @@ test("T9 the configuration read running out of its own time blocks the install c
   withTree({ bin: "allow" }, (tree) => {
     assert.equal(decide({ root: tree.root, input: event("Bash", "pnpm install"), limits: { maxEntries: 0 }, deadline: Date.now() + 60000 }).code, 0);
   });
+});
+
+// QA on #1194 (845cb3e5): the last configuration read could overrun its own time
+// unseen, and the path without a rulebook let the install command through late.
+test("T10 a configuration read that overruns its own time on its last file blocks the install command", () => {
+  for (const command of INSTALLS) {
+    withTree({ bin: "allow" }, (tree) => {
+      // A user tree of one file that is walked last: nothing is read after it.
+      const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-lastread-"));
+      const last = path.join(home, ".cc-safety-net", "z.json");
+      fs.mkdirSync(path.dirname(last), { recursive: true });
+      fs.writeFileSync(last, "{}");
+      const env = { ...process.env, HOME: home, USERPROFILE: home };
+      delete env.CC_SAFETY_NET_HOME;
+      assert.equal(userConfigDirs(tree.root, env).at(-1), path.dirname(last), "the slow tree is walked last");
+      const realNow = Date.now;
+      const realRead = fs.readFileSync;
+      let offset = 0;
+      // Reading that last file takes 5.15 s against the read's 5 s.
+      fs.readFileSync = function (file, ...rest) {
+        if (path.resolve(String(file)) === last) offset += 5150;
+        return realRead.call(this, file, ...rest);
+      };
+      Date.now = () => realNow() + offset;
+      let result;
+      try {
+        result = decide({ root: tree.root, input: event("Bash", command), env, limits: { maxMs: 5000 }, deadline: Date.now() + 60000 });
+      } finally {
+        fs.readFileSync = realRead;
+        Date.now = realNow;
+        fs.rmSync(home, { recursive: true, force: true });
+      }
+      assert.ok(offset > 0, "the last file was read");
+      assert.equal(result.code, 2, `${command}: ${result.stderr}`);
+      assert.equal(result.stdout, "", command);
+      assert.match(result.stderr, /too slow to read \(more than 5000 ms\)/, command);
+    });
+  }
+});
+
+test("T11 a deadline spent before the no-rulebook way out blocks the install command too", () => {
+  for (const command of INSTALLS) {
+    withTree({ bin: "allow", rulebook: false }, (tree) => {
+      // The clock passes the deadline once the first run is done, before the rulebook is looked for.
+      const result = withClockJump(tree, "x", () => decide({ root: tree.root, input: event("Bash", command), deadline: Date.now() + 60000 }));
+      assert.equal(result.code, 2, `${command}: ${result.stderr}`);
+      assert.equal(result.stdout, "", command);
+      assert.match(result.stderr, /ran out of time before the command was let through/, command);
+    });
+  }
+  // On time, the install way out without a rulebook stays open, as before.
+  withTree({ bin: "allow", rulebook: false }, (tree) => assert.equal(run(tree, "Bash", "pnpm install").code, 0));
 });
 
 test("T5 real package: a routine command passes far inside the budget once the probe is remembered", { timeout: 60000 }, async () => {
@@ -935,11 +987,13 @@ test("review: the limits are one shared budget across all trees (entries, bytes,
       // Bytes: 600 KiB + 600 KiB against 1 MiB.
       fill(1, 600 * 1024);
       expectShared({ maxBytes: 1024 * 1024 }, "bytes");
-      // Time, on a clock that advances one millisecond per reading: 20 + 20 entries against 40 ms.
+      // Time, on a clock that advances one millisecond per reading: 20 + 20 files against 70 ms.
+      // Each file costs two readings (its entry and the check after it is read, #1194 845cb3e5),
+      // so one tree alone takes about 45 and both together about 90.
       fill(20, 0);
       let now = 1_700_000_000_000;
       Date.now = () => now++;
-      expectShared({ maxMs: 40 }, "time");
+      expectShared({ maxMs: 70 }, "time");
       // The project's own tree draws on the same budget as the user's.
       const project = path.join(tree.root, ".cc-safety-net");
       fs.rmSync(treeA, { recursive: true, force: true });
