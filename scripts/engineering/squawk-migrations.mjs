@@ -54,7 +54,7 @@ export const MIGRATION_NAME = /^(\d+).*\.sql$/;
 export const FIXTURES = Object.freeze({
   good: "scripts/engineering/squawk-fixtures/good.sql",
   bad: "scripts/engineering/squawk-fixtures/bad.sql",
-  badRule: "ban-drop-table",
+  badRule: "adding-required-field",
 });
 
 const DIR = "db/migrations";
