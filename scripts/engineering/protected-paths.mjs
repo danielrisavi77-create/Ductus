@@ -63,8 +63,13 @@ export function isAgentControlPath(file) {
   );
 }
 
-/** A D-97 path by path: one of D97_PATHS or an agent control path. */
-export const isD97Path = (file) => matchesPath(file, D97_PATHS) || isAgentControlPath(file);
+// F-174: pnpm runs the root pnpmfile as code on every install (CI and every
+// agent worktree), so adding or changing one decides what runs everywhere.
+export const INSTALL_HOOK_PATHS = [".pnpmfile.cjs", ".pnpmfile.mjs"];
+
+/** A D-97 path by path: one of D97_PATHS, an agent control path or a pnpm install hook. */
+export const isD97Path = (file) =>
+  matchesPath(file, D97_PATHS) || isAgentControlPath(file) || matchesPath(file, INSTALL_HOOK_PATHS);
 
 /** Paths of a REST pull-request files list; a rename counts under both names. */
 export function changedPaths(files) {

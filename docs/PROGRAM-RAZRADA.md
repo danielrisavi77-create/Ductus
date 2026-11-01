@@ -28,16 +28,16 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M0.1 | Zapis prijenosa jezgre: broj testova u izvoru i na mainu (`docs/engineering/prijenos-jezgre-M0.1.md`) | P | | DAN-376 |
-| M0.2 | Sedam zaštitnih mjera za dbmate (D-91) | P | | DAN-71 |
+| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776) | P | | DAN-71 |
 | M0.3 | E2E na Firefoxu i WebKitu kao obvezna provjera | P | | DAN-114, DAN-232; gotovo: #1097 (`34b94dab`) |
 | M0.4 | Skener zabranjenih izraza i za tekst izvan JSX-a | P | | DAN-133; gotovo: #552 (`247efb68`) |
 | M0.5 | Ljuska u konačnom vizualnom smjeru „papir i grafit”: tokeni, navigacija, dijalozi, mobilni raspored | F | D-188 (#972) | DAN-344 (#973, #974) |
-| M0.6 | Nalazi kontrolne ravnine i review gatea s rokom prije prvog stvarnog studenta (samo ID): F-010, F-011, F-012, F-013, F-014, F-015, F-017, F-023, F-027, F-033, F-035, F-039, F-040, F-041, F-045, F-046 | P | | DAN-141 do DAN-144, DAN-153 do DAN-155, DAN-161, DAN-163, DAN-166, DAN-168, DAN-171 do DAN-173, DAN-177, DAN-178 |
+| M0.6 | Nalazi kontrolne ravnine i review gatea s rokom prije prvog stvarnog studenta (samo ID): F-010, F-011, F-012, F-013, F-014, F-015, F-017, F-023, F-027, F-033, F-035, F-039, F-040, F-041, F-045, F-046; F-040 i F-045 zatvaraju se za M0, ne tek prije M1, a dio F-010 koji je radnja vlasnika ide privatno (#87 c.6557413776) | P | | DAN-141 do DAN-144, DAN-153 do DAN-155, DAN-161, DAN-163, DAN-166, DAN-168, DAN-171 do DAN-173, DAN-177, DAN-178 |
 | M0.7 | Testovi pravila hookova prolaze na Linuxu | P | | DAN-136; gotovo na `main` `34b94dab` |
 
 **Ekrani:** Z-01 ljuska i navigacija, Z-04 greška i 404, Z-06 učitavanje, Z-08 dijalozi, Z-13 tema.
 
-**Uvjet završetka:** CI zelen na `main` uz obvezan E2E na Chromiumu, Firefoxu i WebKitu; zapis M0.1 postoji; mjere D-91 spojene; nalazi iz M0.6 zatvoreni u privatnom registru; ljuska prošla vizualnu provjeru prema D-183.
+**Uvjet završetka:** CI zelen na `main` uz obvezan E2E na Chromiumu, Firefoxu i WebKitu; zapis M0.1 postoji; mjere D-91 1, 2, 4 i 6 spojene (3, 5 i 7 su u B0.x, #87 c.6557413776); nalazi iz M0.6 zatvoreni u privatnom registru; ljuska prošla vizualnu provjeru prema D-183.
 
 ## M1 Prijava preko AAI@EduHr
 
