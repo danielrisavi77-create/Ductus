@@ -101,4 +101,80 @@ describe("the idle-session migration over sessions from before it", () => {
     expect(rows.get(open)!.last_seen_at).toEqual(start);
     expect(rows.get(expired)!.last_seen_at).toEqual(rows.get(expired)!.expires_at);
   });
+
+  // QA on #1253: a touch that finds the row locked by another touch must wait
+  // for it, not skip it. If the holder rolls back, the waiting call is the one
+  // that records the activity; if the holder commits, the waiting call sees the
+  // fresh write and writes nothing. Runs on the database migrated above.
+  it("never drops activity when a concurrent touch on the same session rolls back", async () => {
+    const [setup] = clients;
+    const holder = await connect();
+    const waiter = await connect();
+    const token = randomBytes(32).toString("base64url");
+    const id = randomUUID();
+    const lastSeen = async () =>
+      (await setup!.query<{ t: Date }>("SELECT last_seen_at AS t FROM identity.session WHERE id = $1", [id])).rows[0]!.t;
+    await setup!.query("BEGIN");
+    await setup!.query("SET LOCAL session_replication_role = replica");
+    await setup!.query(
+      `INSERT INTO identity.session (id, token_hash, user_id, institution_id, created_at, expires_at, last_seen_at)
+       VALUES ($1::uuid, sha256(convert_to($2::text, 'UTF8')), $3, $4,
+               now() - interval '3 hours', now() + interval '9 hours', now() - interval '90 minutes')`,
+      [id, token, randomUUID(), randomUUID()],
+    );
+    await setup!.query("COMMIT");
+    const before = await lastSeen();
+
+    await waiter.query("SET ROLE ductus_app");
+    await waiter.query("SELECT set_config('app.session_token', $1, false)", [token]);
+    const waiterPid = (await waiter.query<{ pid: number }>("SELECT pg_backend_pid() AS pid")).rows[0]!.pid;
+
+    // Holds the row lock in an open transaction and returns that transaction's now().
+    const hold = async () => {
+      await holder.query("BEGIN");
+      await holder.query("SET LOCAL ROLE ductus_app");
+      await holder.query("SELECT set_config('app.session_token', $1, true)", [token]);
+      const row = (await holder.query<{ wrote: boolean; t: Date }>(
+        "SELECT identity.touch_current_session() AS wrote, now() AS t",
+      )).rows[0]!;
+      expect(row.wrote).toBe(true);
+      return row.t;
+    };
+    // Starts the second touch and returns once it is waiting on the lock, or has
+    // already answered without waiting.
+    const touchWhileHeld = async () => {
+      let done = false;
+      const result = waiter
+        .query<{ wrote: boolean }>("SELECT identity.touch_current_session() AS wrote")
+        .then((r) => r.rows[0]!.wrote)
+        .finally(() => {
+          done = true;
+        });
+      for (let i = 0; i < 250 && !done; i += 1) {
+        const waiting = await admin.query(
+          "SELECT 1 FROM pg_stat_activity WHERE pid = $1 AND wait_event_type = 'Lock'",
+          [waiterPid],
+        );
+        if (waiting.rowCount) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return result;
+    };
+
+    await hold();
+    const afterRollback = touchWhileHeld();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await holder.query("ROLLBACK");
+    expect(await afterRollback).toBe(true);
+    const recorded = await lastSeen();
+    expect(recorded.getTime()).toBeGreaterThan(before.getTime());
+
+    await setup!.query("UPDATE identity.session SET last_seen_at = now() - interval '90 minutes' WHERE id = $1", [id]);
+    const committed = await hold();
+    const afterCommit = touchWhileHeld();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await holder.query("COMMIT");
+    expect(await afterCommit).toBe(false);
+    expect(await lastSeen()).toEqual(committed);
+  });
 });

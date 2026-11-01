@@ -2901,15 +2901,11 @@ BEGIN
   END IF;
   UPDATE identity.session s
   SET last_seen_at = pg_catalog.now()
-  WHERE s.id = (
-    SELECT c.id FROM identity.session c
-    WHERE c.token_hash = pg_catalog.sha256(pg_catalog.convert_to(v_token, 'UTF8'))
-      AND c.closed_at IS NULL
-      AND c.expires_at > pg_catalog.now()
-      AND c.last_seen_at > pg_catalog.now() - interval '2 hours'
-      AND c.last_seen_at <= pg_catalog.now() - interval '60 seconds'
-    FOR UPDATE SKIP LOCKED
-  );
+  WHERE s.token_hash = pg_catalog.sha256(pg_catalog.convert_to(v_token, 'UTF8'))
+    AND s.closed_at IS NULL
+    AND s.expires_at > pg_catalog.now()
+    AND s.last_seen_at > pg_catalog.now() - interval '2 hours'
+    AND s.last_seen_at <= pg_catalog.now() - interval '60 seconds';
   RETURN FOUND;
 END
 $_$;

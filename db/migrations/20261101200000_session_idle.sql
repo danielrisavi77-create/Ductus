@@ -50,9 +50,11 @@ $$;
 -- Records activity on the caller's own session, only while it is open and
 -- live: an expired or closed session is never revived, and expires_at never
 -- moves. At most one write per 60 seconds, so the idle limit is off by at
--- most a minute. A concurrent call that finds the row locked skips it rather
--- than wait; the other call is writing the same time. Takes no argument: the
--- time is the database's. True when this call wrote the row.
+-- most a minute. A concurrent call on a locked row waits for it rather than
+-- skip it: if the other transaction commits, the row is checked again and
+-- this call writes nothing, and if it rolls back, this call writes, so a
+-- committed call's activity is never lost. Takes no argument: the time is the
+-- database's. True when this call wrote the row.
 CREATE FUNCTION identity.touch_current_session() RETURNS boolean
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -64,15 +66,11 @@ BEGIN
   END IF;
   UPDATE identity.session s
   SET last_seen_at = pg_catalog.now()
-  WHERE s.id = (
-    SELECT c.id FROM identity.session c
-    WHERE c.token_hash = pg_catalog.sha256(pg_catalog.convert_to(v_token, 'UTF8'))
-      AND c.closed_at IS NULL
-      AND c.expires_at > pg_catalog.now()
-      AND c.last_seen_at > pg_catalog.now() - interval '2 hours'
-      AND c.last_seen_at <= pg_catalog.now() - interval '60 seconds'
-    FOR UPDATE SKIP LOCKED
-  );
+  WHERE s.token_hash = pg_catalog.sha256(pg_catalog.convert_to(v_token, 'UTF8'))
+    AND s.closed_at IS NULL
+    AND s.expires_at > pg_catalog.now()
+    AND s.last_seen_at > pg_catalog.now() - interval '2 hours'
+    AND s.last_seen_at <= pg_catalog.now() - interval '60 seconds';
   RETURN FOUND;
 END
 $$;
