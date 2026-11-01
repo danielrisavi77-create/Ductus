@@ -6,7 +6,7 @@ paths:
 
 # Područje: baza i migracije
 
-Podsjetnik, ne pravilo. Pravila su u `CLAUDE.md` ("Tvrda pravila") i `docs/BACKEND.md` §4.4, §4.8 i §6.
+Podsjetnik, ne pravilo. Pravila su u `CLAUDE.md` ("Tvrda pravila") i `docs/backend/prijava-i-ovlasti.md` §4.4, `docs/backend/baza-i-pogon.md` §4.8 i `docs/backend/kontrolna-lista.md` §6.
 
 - Nova tablica: prođi skill `ductus-new-table` prije predaje.
 - Pisanje klijenta u tablice evidencije, predaje i revizijskog traga ide samo kroz RPC; provjeri to u pgTAP matrici, ne samo u kodu.
