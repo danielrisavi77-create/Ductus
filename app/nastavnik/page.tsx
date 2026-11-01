@@ -57,7 +57,7 @@ export default async function TeacherHomePage() {
   } else {
     body = <TeacherCourses courses={read?.kind === "ok" ? read.courses : []} works={works} />;
   }
-  const role = read?.kind === "ok" ? "teacher" : null;
+  const role = screen === "allowed" ? "teacher" : null;
 
   return (
     <AppShell session={shellSession(token)} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} current="/nastavnik" crumbs={[t.title]}>

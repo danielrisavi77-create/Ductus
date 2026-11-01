@@ -19,17 +19,25 @@ export function closedSessionKind(token: string | undefined): "expired" | "signe
 }
 
 /**
- * The screen of a teacher page from `teacherAccess` and the same request's
- * principal. `teacherAccess` answers "denied" both for a closed session and
- * for a signed-in person without the teacher role; the principal tells them
- * apart, so only a signed-in person reads Z-05 and is never offered a new
- * sign-in (#1233). A principal that could not be read is "unavailable", as
- * a failed role read is.
+ * The screen of a teacher page from its access and the same request's
+ * principal. Read together by `teacherPageRead`, "denied" is always an open
+ * session without the teacher role; the course list's read tells a closed
+ * session (ZD401) from a refusal (ZD403) itself. The principal is checked
+ * as well, so only a signed-in person reads Z-05 and is never offered a new
+ * sign-in (#1233), and only a signed-in person sees the page. A principal
+ * that could not be read is "unavailable", as a failed role read is.
  */
 export function teacherPageAccess(
   access: TeacherAccess, principal: SessionPrincipal["kind"], token: string | undefined,
 ): "allowed" | "unavailable" | AccessKind {
-  if (access === "allowed" || access === "unavailable") return access;
+  if (access === "unavailable") return access;
+  // Two reads that disagree (#1242 c.6563056077): a session never reopens,
+  // so an "allowed" read beside a closed principal means it closed between
+  // them, and the page shows Z-03, never its content.
+  if (access === "allowed") {
+    if (principal === "signed-in") return "allowed";
+    return principal === "unverified" ? "unavailable" : closedSessionKind(token);
+  }
   if (access === "signedOut") return closedSessionKind(token);
   if (principal === "signed-in") return "denied";
   return principal === "unverified" ? "unavailable" : closedSessionKind(token);

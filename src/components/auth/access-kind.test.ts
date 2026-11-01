@@ -18,11 +18,21 @@ describe("closedSessionKind", () => {
 });
 
 describe("teacherPageAccess", () => {
-  it("keeps an allowed and an unavailable check as they are", () => {
+  it("keeps an unavailable check as it is", () => {
     for (const principal of ["signed-in", "signed-out", "unverified"] as const) {
-      expect(teacherPageAccess("allowed", principal, SESSION)).toBe("allowed");
       expect(teacherPageAccess("unavailable", principal, SESSION)).toBe("unavailable");
     }
+  });
+
+  it("shows the page only to a signed-in principal", () => {
+    expect(teacherPageAccess("allowed", "signed-in", SESSION)).toBe("allowed");
+  });
+
+  // #1242 c.6563056077: the role read said "allowed", then the session closed
+  // before the principal read. The page shows Z-03, not its content.
+  it("reads an allowed check beside a closed principal as Z-03, never the page", () => {
+    expect(teacherPageAccess("allowed", "signed-out", SESSION)).toBe("expired");
+    expect(teacherPageAccess("allowed", "unverified", SESSION)).toBe("unavailable");
   });
 
   it("shows Z-05 only to a signed-in person without the role (#1233)", () => {

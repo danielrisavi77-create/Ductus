@@ -6,9 +6,8 @@ import { teacherPageAccess } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import TeacherSetup from "@/components/teacher/TeacherSetup";
-import { teacherAccess } from "@/components/teacher/teacher-access";
+import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
-import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -25,7 +24,8 @@ export const metadata = { title: `${t.teacher.title} · ${t.app.name}` };
 // person without the teacher role, who is offered no new sign-in.
 export default async function TeacherNewAssignmentPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [access, principal] = await Promise.all([teacherAccess(token, withActor), sessionPrincipal(token, withActor)]);
+  // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
+  const { access, principal } = await teacherPageRead(token, withActor);
   const screen = teacherPageAccess(access, principal.kind, token);
   const card = screen === "expired" || screen === "signedOut" || screen === "denied";
   return (

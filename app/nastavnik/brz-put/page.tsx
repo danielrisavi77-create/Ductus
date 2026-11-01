@@ -6,9 +6,8 @@ import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import { assignmentParam } from "@/components/student/work-context-read";
 import { FastPath, FastPathLive } from "@/components/teacher/FastPath";
-import { teacherAccess } from "@/components/teacher/teacher-access";
+import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
-import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -27,7 +26,8 @@ export default async function FastPathPage({ searchParams }: { searchParams: Pro
   const assignmentId = assignmentParam((await searchParams).zadatak);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const { tag, at } = shellSession(token);
-  const [access, principal] = await Promise.all([teacherAccess(token, withActor), sessionPrincipal(token, withActor)]);
+  // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
+  const { access, principal } = await teacherPageRead(token, withActor);
   const scope = principal.kind === "signed-in" ? principal.scope : null;
   const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
   const returnTo = assignmentId === null ? "/nastavnik/brz-put" : `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignmentId)}`;
