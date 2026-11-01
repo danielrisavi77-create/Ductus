@@ -38,18 +38,6 @@ export function respond(status: number, body: InstitutionReply): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 
-/** The origin of the configured OIDC callback, or undefined when it is missing or opaque. */
-export function applicationOrigin(): string | undefined {
-  try {
-    const callback = process.env.OIDC_REDIRECT_URI;
-    if (!callback) return undefined;
-    const origin = new URL(callback).origin;
-    return origin === "null" ? undefined : origin;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Runs the guards up to a parsed JSON value. The decoder is fatal and keeps a
  * leading byte order mark, so a body that starts with one is not JSON (400);
