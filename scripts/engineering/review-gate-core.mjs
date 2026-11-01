@@ -352,6 +352,7 @@ function latestVerdicts(entries, {
   carriedHeads,
 }) {
   const latest = new Map();
+  const negatives = new Map();
 
   for (const entry of entries) {
     if (!canonicalBlock(entry.body, agentField)) continue;
@@ -385,9 +386,21 @@ function latestVerdicts(entries, {
     const slot = candidate.current ? "current" : "carried";
     if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
     latest.set(key, slots);
+    if (NEGATIVE.has(verdict)) {
+      const held = negatives.get(`${key}|${candidate.head}`);
+      if (!held || compareOrder(candidate.order, held.order) > 0) negatives.set(`${key}|${candidate.head}`, candidate);
+    }
   }
 
-  return new Map([...latest].map(([key, slots]) => [key, prevailing(slots)]));
+  // F-023 (owner decision 31. 10. 2026.): within one principal, a FAIL or BLOCK
+  // on a head is not cleared by a later PASS on the same head. Only a new head
+  // (a new push) or the owner (Owner-Override for the exact head) moves past it.
+  const held = (candidate, key) =>
+    candidate && candidate.verdict === "PASS" ? negatives.get(`${key}|${candidate.head}`) ?? candidate : candidate;
+  return new Map([...latest].map(([key, slots]) => [
+    key,
+    prevailing({ current: held(slots.current, key), carried: held(slots.carried, key) }),
+  ]));
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the

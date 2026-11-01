@@ -265,15 +265,16 @@ test("a verdict on the current head beats a later carried verdict of the same pr
     assert.equal(result.state, "pending", verdict);
     assert.match(result.description, new RegExp(verdict.toLowerCase()), verdict);
   }
-  // A later PASS on the current head still replaces an older current FAIL.
-  const fixed = evaluateGate({
+  // F-023 (owner decision 31. 10. 2026.): a later PASS on the current head no
+  // longer replaces an older current FAIL of the same principal.
+  const held = evaluateGate({
     body: body("critical"),
     headSha: head,
     comments: [review(head, "FAIL"), review(head, "PASS"), qa(head)],
     ownerLogin,
     carriedHeads: new Set([earlier]),
   });
-  assert.equal(fixed.state, "success");
+  assert.equal(held.state, "pending");
   // Owner decision 16 Oct 2026 (review 6217017710): a later FAIL or BLOCK of
   // the same principal on a carried head still blocks an older current PASS.
   for (const verdict of ["FAIL", "BLOCK"]) {
@@ -309,15 +310,24 @@ test("a verdict on the current head beats a later carried verdict of the same pr
       });
       assert.equal(result.state, "pending", `${currentVerdict}(current), ${middle}(carried), PASS(carried)`);
     }
-    // Control: the normal fix on the current head still clears it.
-    const fixedAfter = evaluateGate({
+    // F-023: a PASS on the same current head no longer clears it; a PASS on a
+    // new head after the carried negatives does.
+    const sameHead = evaluateGate({
       body: body("critical"),
       headSha: head,
       comments: [review(head, currentVerdict), review(earlier, currentVerdict), review(head, "PASS"), qa(head)],
       ownerLogin,
       carriedHeads: new Set([earlier]),
     });
-    assert.equal(fixedAfter.state, "success", `${currentVerdict} then PASS on the current head`);
+    assert.equal(sameHead.state, "pending", `${currentVerdict} then PASS on the same current head`);
+    const newHead = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(earlier, currentVerdict), review(head, "PASS"), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier]),
+    });
+    assert.equal(newHead.state, "success", `${currentVerdict} then PASS on a new head`);
   }
   // A carried PASS still counts when the principal has nothing on the current head.
   const carried = evaluateGate({ body: body("critical"), headSha: head, comments: [review(earlier), qa(head)], ownerLogin, carriedHeads: new Set([earlier]) });
