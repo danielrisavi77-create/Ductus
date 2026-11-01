@@ -159,6 +159,11 @@ test("Codex runs with its own minimal CODEX_HOME and the script never posts (F-1
     }
 
     const shell = process.platform === "win32" ? "powershell" : "pwsh";
+    try {
+      execFileSync(shell, ["-NoProfile", "-Command", "exit 0"]);
+    } catch (error) {
+      assert.fail(`this test needs PowerShell (${shell}) on PATH, see README.md: ${error.message}`);
+    }
     const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, CODEX_HOME: ownerHome, GH_TOKEN: "synthetic-token" };
     const stdout = execFileSync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", copy, "-Level", "standard", "-Pr", "7"], { cwd: work, env, encoding: "utf8" });
 
