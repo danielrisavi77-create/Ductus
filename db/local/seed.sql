@@ -16,6 +16,14 @@ INSERT INTO identity.institution (slug, aai_home_org) VALUES
   ('demo-bez-prijave', NULL)
 ON CONFLICT (slug) DO UPDATE SET aai_home_org = EXCLUDED.aai_home_org;
 
+-- The login institution takes the fake provider's issuer, in the spelling
+-- the login route stores (DAN-159). The institution without logins takes no
+-- issuer either.
+INSERT INTO identity.institution_issuer (institution_id, oidc_issuer)
+SELECT id, 'http://localhost:8090'
+  FROM identity.institution WHERE slug = 'demo-fakultet'
+ON CONFLICT DO NOTHING;
+
 -- Only the invented login institution can enroll in the local demo. The
 -- table defaults are the owner's five attempts / fifteen minutes; a rerun
 -- must leave any configured display name and limits untouched.

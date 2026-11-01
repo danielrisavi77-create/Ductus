@@ -50,6 +50,11 @@ beforeAll(async () => {
     await admin.query("INSERT INTO identity.institution (id, slug, aai_home_org) VALUES ($1, $2, $3)", [
       institution.id, slug, institution.homeOrg,
     ]);
+    // DAN-159: an institution takes logins only from an issuer recorded for
+    // it, in the spelling the login route stores (accountIssuer).
+    await admin.query("INSERT INTO identity.institution_issuer (institution_id, oidc_issuer) VALUES ($1, $2)", [
+      institution.id, ISSUER,
+    ]);
   }
   const url = new URL(ADMIN_URL);
   url.username = AUTH_LOGIN;
@@ -67,6 +72,7 @@ afterAll(async () => {
     [ids],
   );
   await admin.query("DELETE FROM identity.user_account WHERE institution_id = ANY($1::uuid[])", [ids]);
+  await admin.query("DELETE FROM identity.institution_issuer WHERE institution_id = ANY($1::uuid[])", [ids]);
   await admin.query("DELETE FROM identity.institution WHERE id = ANY($1::uuid[])", [ids]);
   await admin.query(`DROP ROLE IF EXISTS ${AUTH_LOGIN}`);
   await admin.end();

@@ -15,6 +15,10 @@ INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-0000000002a3', 'test-b', 'b.test'),
   ('00000000-0000-4000-8000-0000000002a4', 'test-c', 'c.test'),
   ('00000000-0000-4000-8000-0000000002a5', 'test-kit', 'kit.test');
+-- Every fixture institution takes the one issuer the tests use (the issuer
+-- rule itself is 023).
+INSERT INTO identity.institution_issuer (institution_id, oidc_issuer)
+SELECT i.id, 'https://issuer.test' FROM identity.institution i WHERE i.id::text LIKE '00000000-0000-4000-8000-0000000002a_';
 
 CREATE FUNCTION pg_temp.h(p_name text) RETURNS bytea
 LANGUAGE sql IMMUTABLE AS $$ SELECT sha256(convert_to(p_name, 'UTF8')) $$;
