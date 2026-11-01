@@ -3,7 +3,7 @@
 // order checks keep each guard before the Codex call or before the post.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -12,7 +12,7 @@ import { D97_PATHS, ownerCommandPaths } from "./protected-paths.mjs";
 
 const src = readFileSync(new URL("../codex-review.ps1", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const codexCall = src.search(/^[ \t]*codex exec review/m);
-const post = src.indexOf("gh pr comment");
+const post = src.indexOf("Review saved, not posted");
 const at = (needle) => {
   const i = src.indexOf(needle);
   assert.notEqual(i, -1, `missing: ${needle}`);
@@ -102,6 +102,81 @@ test("a review that looks like it carries a credential is never posted", () => {
     assert.ok(secretRe.test(leak), leak);
   }
   for (const fine of ["Review-Verdict: PASS", "token budget", "src/server/auth/session.ts:12"]) assert.ok(!secretRe.test(fine), fine);
+});
+
+// F-182: run main's copy end to end in a throwaway repository with a fake
+// codex and a fake gh on PATH. The fake codex records what it was started
+// with; the fake gh records any call.
+test("Codex runs with its own minimal CODEX_HOME and the script never posts (F-182)", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "codex-review-run-"));
+  try {
+    const sh = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+    const origin = path.join(root, "origin.git");
+    const work = path.join(root, "work");
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin]);
+    execFileSync("git", ["clone", "-q", origin, work]);
+    for (const [k, v] of [["user.email", "t@example.invalid"], ["user.name", "t"], ["core.autocrlf", "false"]]) sh(work, "config", k, v);
+    const script = readFileSync(new URL("../codex-review.ps1", import.meta.url));
+    mkdirSync(path.join(work, "scripts"));
+    writeFileSync(path.join(work, "scripts", "codex-review.ps1"), script);
+    writeFileSync(path.join(work, "AGENTS.md"), "synthetic\n");
+    writeFileSync(path.join(work, "CLAUDE.md"), "synthetic\n");
+    sh(work, "add", "--", ".");
+    sh(work, "commit", "-q", "-m", "main");
+    sh(work, "push", "-q", "origin", "main");
+    sh(work, "checkout", "-q", "-b", "feature");
+    mkdirSync(path.join(work, "src"));
+    writeFileSync(path.join(work, "src", "x.ts"), "export const x = 1;\n");
+    sh(work, "add", "--", "src");
+    sh(work, "commit", "-q", "-m", "feature");
+    const copy = path.join(root, "codex-review.ps1");
+    writeFileSync(copy, script);
+
+    const ownerHome = path.join(root, "owner-codex");
+    mkdirSync(ownerHome);
+    writeFileSync(path.join(ownerHome, "auth.json"), '{"synthetic":true}\n');
+    writeFileSync(path.join(ownerHome, "config.toml"), 'sandbox_mode = "danger-full-access"\n[mcp_servers.node_repl]\ncommand = "node"\n');
+    writeFileSync(path.join(ownerHome, "AGENTS.md"), "owner instructions\n");
+    mkdirSync(path.join(ownerHome, "plugins"));
+
+    const bin = path.join(root, "bin");
+    mkdirSync(bin);
+    const record = path.join(root, "codex-record.json");
+    const ghCalls = path.join(root, "gh-calls.txt");
+    writeFileSync(path.join(bin, "fake-codex.mjs"), [
+      'import { readdirSync, readFileSync, writeFileSync } from "node:fs";',
+      'import path from "node:path";',
+      "const args = process.argv.slice(2);",
+      "const home = process.env.CODEX_HOME;",
+      `writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, home, files: readdirSync(home).sort(), config: readFileSync(path.join(home, "config.toml"), "utf8"), gh: process.env.GH_TOKEN ?? null }));`,
+      'writeFileSync(args[args.indexOf("-o") + 1], "No findings.\\n");',
+    ].join("\n"));
+    writeFileSync(path.join(bin, "fake-gh.mjs"), `import { appendFileSync } from "node:fs"; appendFileSync(${JSON.stringify(ghCalls)}, process.argv.slice(2).join(" ") + "\\n");`);
+    for (const name of ["codex", "gh"]) {
+      writeFileSync(path.join(bin, `${name}.cmd`), `@node "%~dp0fake-${name}.mjs" %*\r\n`);
+      writeFileSync(path.join(bin, name), `#!/bin/sh\nexec node "$(dirname "$0")/fake-${name}.mjs" "$@"\n`, { mode: 0o755 });
+    }
+
+    const shell = process.platform === "win32" ? "powershell" : "pwsh";
+    const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, CODEX_HOME: ownerHome, GH_TOKEN: "synthetic-token" };
+    const stdout = execFileSync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", copy, "-Level", "standard", "-Pr", "7"], { cwd: work, env, encoding: "utf8" });
+
+    const seen = JSON.parse(readFileSync(record, "utf8"));
+    assert.notEqual(path.resolve(seen.home), path.resolve(ownerHome), "not the owner's Codex home");
+    assert.deepEqual(seen.files, ["auth.json", "config.toml"], "only the login file and the minimal config");
+    assert.equal(seen.config.replaceAll("\r\n", "\n"), 'sandbox_mode = "read-only"\napproval_policy = "never"\n');
+    assert.equal(seen.gh, null, "no GitHub token in the Codex environment");
+    // Windows PowerShell 5.1 drops the inner quotes of a native argument; Codex
+    // reads a bare value that is not TOML as a string, so both forms are read-only.
+    assert.ok(seen.args.includes("--ignore-user-config"));
+    assert.ok(seen.args.some((a) => /^sandbox_mode="?read-only"?$/.test(a)), seen.args.join(' '));
+    assert.throws(() => readFileSync(ghCalls), "gh is never called");
+    assert.throws(() => readdirSync(seen.home), "the review home is removed");
+    assert.match(stdout, /Review saved, not posted: /);
+    assert.match(stdout, /No findings\./);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("the review scripts are D-97 paths", () => {
