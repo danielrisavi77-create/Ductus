@@ -94,7 +94,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $reviewHome 'config.toml'), $minimalConfig, (New-Object Text.UTF8Encoding $false))
     foreach ($name in $tokenNames) {
         $value = [Environment]::GetEnvironmentVariable($name, 'Process')
-        if ($null -ne $value) { $savedTokens[$name] = $value; [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+        if ($null -ne $value) { $savedTokens[$name] = $value; Remove-Item -LiteralPath "Env:$name" }
     }
     $env:CODEX_HOME = $reviewHome
     codex exec review --base origin/main --ephemeral --ignore-user-config -m $tier.Model -c "model_reasoning_effort=`"$($tier.Effort)`"" -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' -o $out

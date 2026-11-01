@@ -30,7 +30,8 @@ test("Codex runs read-only with no approval prompts, overriding the user config"
 
 test("GitHub tokens are removed from the environment around the Codex call and restored after", () => {
   for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "OWNER_COMMAND_TOKEN"]) assert.ok(src.includes(`'${name}'`), name);
-  assert.ok(at("SetEnvironmentVariable($name, $null, 'Process')") < codexCall);
+  // Remove-Item, not SetEnvironmentVariable($null): pwsh on Linux leaves an empty variable.
+  assert.ok(at('Remove-Item -LiteralPath "Env:$name"') < codexCall);
   const restore = at("} finally {");
   assert.ok(restore > codexCall && restore < post);
 });
