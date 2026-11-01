@@ -162,9 +162,22 @@ function trustedComments(items, logins, ownerLogin = null) {
       appSlug: commentAppSlug(item, ownerLogin),
       cliChannel: cliChannel(item, ownerLogin),
       createdAt: commentTime(item) || index,
+      edited: wasEdited(item),
       index,
     }))
     .filter((entry) => entry.body);
+}
+
+// F-012: the App a comment was posted through is fixed at creation, while its
+// text can be changed later by any session holding the author's token. A
+// comment whose last edit is later than its creation therefore never gives a
+// PASS; a FAIL or BLOCK still holds, so an edit can only keep a PR waiting.
+function wasEdited(item) {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  // Fails closed: an edit time without a readable creation time is an edit.
+  if (Number.isNaN(updated)) return false;
+  return Number.isNaN(created) || updated > created;
 }
 
 // Evidence holds only while the exhausted App shows nothing else (#128): a
@@ -371,28 +384,33 @@ function latestVerdicts(entries, {
     const fallback = fallbackSlug(fallbackLine);
     const identity = verifiedCommentIdentity(entry, agent);
 
-    if (
-      !isAgent(agent, role) ||
-      !identity ||
-      !identity.principal ||
-      !(sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) ||
-      !verdict ||
-      !VERDICTS.has(verdict) ||
-      (extraField && !extra)
-    ) {
-      continue;
-    }
+    if (!isAgent(agent, role) || !identity || !identity.principal) continue;
+
+    // F-012: an edited comment never gives a PASS. An edited comment of a known
+    // principal on a counted head is that principal's latest word on that head
+    // (its time is the edit time, #129), even when the edit left a PASS or an
+    // unreadable verdict: it then holds that head's slot as EDITED, which is
+    // neither a PASS nor a FAIL, so an edit never brings back the principal's
+    // earlier PASS on that head. An edited FAIL or BLOCK keeps its verdict. An
+    // edit that moves the comment to another head, removes the block or names
+    // another principal is not covered here (rest of F-012, owner).
+    const counted = sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase());
+    if (!counted) continue;
+    const readable = Boolean(verdict) && VERDICTS.has(verdict) && !(extraField && !extra);
+    const held = entry.edited && !(readable && NEGATIVE.has(verdict));
+    if (!readable && !held) continue;
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
-      cli: entry.cliChannel != null, order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+    const candidate = { agent, head: head.toLowerCase(), verdict: held ? "EDITED" : verdict, extra, fallback,
+      fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
+      current: sameHead(head, headSha) };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
     const slot = candidate.current ? "current" : "carried";
     if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
     latest.set(key, slots);
-    if (NEGATIVE.has(verdict)) {
+    if (NEGATIVE.has(candidate.verdict)) {
       // Carried heads have the same PR diff (only clean base merges since), so
       // a negative on one of them is kept under one key for all of them.
       const where = candidate.current ? `${key}|current` : `${key}|carried`;
@@ -407,8 +425,10 @@ function latestVerdicts(entries, {
   // the gate cannot tell which carried head is newer (review of #1155, F-023-R1).
   // Only a verdict on the current head (after a new push or a clean base merge,
   // as before), or the owner's Owner-Override for the exact head, moves past it.
+  // An EDITED slot (F-012) is held the same way, so an edit never turns the
+  // principal's FAIL or BLOCK on that head into a mere wait.
   const held = (candidate, key) =>
-    candidate && candidate.verdict === "PASS"
+    candidate && !NEGATIVE.has(candidate.verdict)
       ? negatives.get(`${key}|${candidate.current ? "current" : "carried"}`) ?? candidate
       : candidate;
   return new Map([...latest].map(([key, slots]) => [
