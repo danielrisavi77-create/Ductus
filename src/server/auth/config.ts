@@ -112,6 +112,37 @@ function isPlainHttpsUrl(value: URL, raw: string): boolean {
   );
 }
 
+/**
+ * OIDC_REDIRECT_URI as login takes it: an http(s) URL, and in production an
+ * https URL of a public host with nothing beside the path.
+ */
+function redirectUriOf(env: Env, production: boolean): URL {
+  const redirectUri = url(env, "OIDC_REDIRECT_URI");
+  if (production) {
+    if (!isPlainHttpsUrl(redirectUri, required(env, "OIDC_REDIRECT_URI"))) {
+      throw new AuthConfigError("OIDC_REDIRECT_URI must be an https URL of a public host in production");
+    }
+  } else if (redirectUri.protocol !== "http:" && redirectUri.protocol !== "https:") {
+    throw new AuthConfigError("OIDC_REDIRECT_URI must be an http(s) URL");
+  }
+  return redirectUri;
+}
+
+/**
+ * The one origin that login and every state-changing route expect (DAN-302
+ * L3): that of OIDC_REDIRECT_URI, checked as loadAuthConfig checks it, never
+ * one taken from Request.url or a Host header. Null when the value is missing
+ * or would not pass login; the route then answers 503. The default passes the
+ * NODE_ENV the build fixed, as the login routes do (deps.ts).
+ */
+export function expectedOrigin(env: Env = { ...process.env, NODE_ENV: process.env.NODE_ENV }): string | null {
+  try {
+    return redirectUriOf(env, !isNonProductionBuild(env.NODE_ENV)).origin;
+  } catch {
+    return null;
+  }
+}
+
 export function loadAuthConfig(env: Env = process.env): AuthConfig {
   // An allowlist, not a match on "production": an unset, empty or misspelt
   // NODE_ENV fails closed (QA of #191).
@@ -131,18 +162,12 @@ export function loadAuthConfig(env: Env = process.env): AuthConfig {
   if (issuer.href.toLowerCase().includes("/.well-known/")) {
     throw new AuthConfigError("OIDC_ISSUER must name the issuer, not its discovery document");
   }
-  const redirectUri = url(env, "OIDC_REDIRECT_URI");
   const insecure = issuer.protocol === "http:";
   if (production) {
     // A production build talks to a real provider over TLS, whatever the
     // provider variable says.
-    for (const [name, value] of [
-      ["OIDC_ISSUER", issuer],
-      ["OIDC_REDIRECT_URI", redirectUri],
-    ] as const) {
-      if (!isPlainHttpsUrl(value, required(env, name))) {
-        throw new AuthConfigError(`${name} must be an https URL of a public host in production`);
-      }
+    if (!isPlainHttpsUrl(issuer, required(env, "OIDC_ISSUER"))) {
+      throw new AuthConfigError("OIDC_ISSUER must be an https URL of a public host in production");
     }
   } else if (provider === "fake-oidc" && !LOOPBACK_HOSTS.has(issuer.hostname)) {
     throw new AuthConfigError("OIDC_ISSUER of the fake provider must be a loopback host");
@@ -151,6 +176,7 @@ export function loadAuthConfig(env: Env = process.env): AuthConfig {
   } else if (issuer.protocol !== "http:" && issuer.protocol !== "https:") {
     throw new AuthConfigError("OIDC_ISSUER must be an http(s) URL");
   }
+  const redirectUri = redirectUriOf(env, production);
 
   const alg = env.OIDC_ID_TOKEN_ALG ?? "RS256";
   if (!(ID_TOKEN_ALGS as readonly string[]).includes(alg)) {

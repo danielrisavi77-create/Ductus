@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 import { handleEnrollmentCodeRequest } from "./enrollment-code-route";
-import { applicationOrigin, readEmptyMutation, readJsonMutation, respond, rpcErrorResponse } from "./mutation-route";
+import { readEmptyMutation, readJsonMutation, respond, rpcErrorResponse } from "./mutation-route";
+import { expectedOrigin } from "@/server/auth/config";
 
 const ORIGIN = "https://ductus.example";
 const COURSE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -75,9 +76,19 @@ describe("shared institution mutation guards", () => {
   it("takes the application origin only from a usable OIDC callback", () => {
     for (const callback of ["", "invalid", "file:///tmp/callback"]) {
       vi.stubEnv("OIDC_REDIRECT_URI", callback);
-      expect(applicationOrigin()).toBeUndefined();
+      expect(expectedOrigin()).toBeNull();
     }
     vi.stubEnv("OIDC_REDIRECT_URI", `${ORIGIN}/api/auth/callback`);
-    expect(applicationOrigin()).toBe(ORIGIN);
+    expect(expectedOrigin()).toBe(ORIGIN);
+  });
+
+  it("takes no origin in production from a callback that login refuses (DAN-302 L3)", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    for (const callback of ["http://localhost:3000/api/auth/callback", "https://10.0.0.5/api/auth/callback"]) {
+      vi.stubEnv("OIDC_REDIRECT_URI", callback);
+      expect(expectedOrigin()).toBeNull();
+    }
+    vi.stubEnv("OIDC_REDIRECT_URI", "https://ductus.example.hr/api/auth/callback");
+    expect(expectedOrigin()).toBe("https://ductus.example.hr");
   });
 });
