@@ -2701,6 +2701,95 @@ $_$;
 
 
 --
+-- Name: close_sessions_on_home_org_change(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_home_org_change() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'institution_changed'
+   WHERE institution_id = OLD.id
+     AND closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_sessions_on_issuer_removal(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_issuer_removal() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND NEW.institution_id = OLD.institution_id
+     AND NEW.oidc_issuer = OLD.oidc_issuer COLLATE "C" THEN
+    RETURN NULL;
+  END IF;
+  UPDATE identity.session s
+     SET closed_at = pg_catalog.now(), close_reason = 'issuer_removed'
+    FROM identity.user_account u
+   WHERE u.id = s.user_id
+     AND s.institution_id = OLD.institution_id
+     AND u.oidc_issuer = OLD.oidc_issuer COLLATE "C"
+     AND s.closed_at IS NULL
+     AND s.expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_sessions_on_issuer_truncate(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_issuer_truncate() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'issuer_removed'
+   WHERE closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_user_sessions(uuid); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_user_sessions(p_user_id uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  closed integer;
+BEGIN
+  IF p_user_id IS NULL THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'operator'
+   WHERE user_id = p_user_id
+     AND closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  GET DIAGNOSTICS closed = ROW_COUNT;
+  RETURN closed;
+END
+$$;
+
+
+--
 -- Name: open_session(text, text, text, text, bytea); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -4112,7 +4201,7 @@ CREATE TABLE identity.session (
     close_reason text,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
-    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text]))),
+    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text]))),
     CONSTRAINT session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
 
@@ -5465,6 +5554,27 @@ CREATE TRIGGER submission_receipt_issuance_no_truncate BEFORE TRUNCATE ON eviden
 --
 
 CREATE TRIGGER submission_receipt_no_truncate BEFORE TRUNCATE ON evidence.submission_receipt FOR EACH STATEMENT EXECUTE FUNCTION evidence.reject_append_only_change();
+
+
+--
+-- Name: institution close_sessions_on_home_org_change; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_home_org_change AFTER UPDATE OF aai_home_org ON identity.institution FOR EACH ROW WHEN ((old.aai_home_org IS DISTINCT FROM new.aai_home_org)) EXECUTE FUNCTION identity.close_sessions_on_home_org_change();
+
+
+--
+-- Name: institution_issuer close_sessions_on_issuer_removal; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_issuer_removal AFTER DELETE OR UPDATE ON identity.institution_issuer FOR EACH ROW EXECUTE FUNCTION identity.close_sessions_on_issuer_removal();
+
+
+--
+-- Name: institution_issuer close_sessions_on_issuer_truncate; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_issuer_truncate AFTER TRUNCATE ON identity.institution_issuer FOR EACH STATEMENT EXECUTE FUNCTION identity.close_sessions_on_issuer_truncate();
 
 
 --
@@ -6823,4 +6933,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261031200000'),
     ('20261101010000'),
     ('20261101150000'),
-    ('20261101160000');
+    ('20261101160000'),
+    ('20261101200000');

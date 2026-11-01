@@ -8,7 +8,7 @@ CREATE ROLE ductus_test_stranger NOLOGIN;
 GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 
-SELECT plan(39);
+SELECT plan(42);
 
 INSERT INTO identity.institution (id, slug) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a'),
@@ -126,18 +126,25 @@ SELECT set_config('app.session_token', (SELECT token FROM tok WHERE name = 'b'),
 SELECT is(app.current_user_id(), '00000000-0000-4000-8000-0000000000b1'::uuid, 'logout of A leaves B open');
 SELECT set_config('app.session_token', '', true);
 SELECT is(identity.close_current_session(), false, 'logout without a token is a no-op');
+-- Closing every session of a user is for the operator alone (DAN-169).
+SELECT throws_ok($$ SELECT identity.close_user_sessions('00000000-0000-4000-8000-0000000000b1') $$, '42501', NULL,
+  'ductus_app: close_user_sessions is denied');
 RESET ROLE;
 
 -- 5. Other roles get neither the table nor the functions.
 SET LOCAL ROLE ductus_worker;
 SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_worker: SELECT on session is denied');
 SELECT throws_ok('SELECT * FROM app.current_actor()', '42501', NULL, 'ductus_worker: current_actor() is denied');
+SELECT throws_ok($$ SELECT identity.close_user_sessions('00000000-0000-4000-8000-0000000000b1') $$, '42501', NULL,
+  'ductus_worker: close_user_sessions is denied');
 RESET ROLE;
 SET LOCAL ROLE ductus_retention;
 SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_retention: SELECT on session is denied');
 RESET ROLE;
 SET LOCAL ROLE ductus_auth;
 SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_auth: SELECT on session is denied (it only executes open_session)');
+SELECT throws_ok($$ SELECT identity.close_user_sessions('00000000-0000-4000-8000-0000000000b1') $$, '42501', NULL,
+  'ductus_auth: close_user_sessions is denied');
 RESET ROLE;
 SET LOCAL ROLE ductus_test_stranger;
 SELECT throws_ok('SELECT * FROM app.current_actor()', '42501', NULL, 'role without grants: current_actor() is denied');
