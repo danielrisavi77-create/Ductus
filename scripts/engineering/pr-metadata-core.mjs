@@ -8,7 +8,8 @@ import {
   normalizePath,
 } from "./protected-paths.mjs";
 
-const RISK_RANK = { low: 0, standard: 1, critical: 2 };
+// No prototype: `"constructor" in RISK_RANK` must be false (F-041 b).
+const RISK_RANK = Object.freeze(Object.assign(Object.create(null), { low: 0, standard: 1, critical: 2 }));
 const AGENT_RE =
   /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 
@@ -27,6 +28,8 @@ export const CRITICAL_PATHS = [
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
+  // The only test that a production build refuses the fake provider (D-09, F-041 a).
+  "e2e/auth.spec.ts",
   ".cc-safety-net/",
   "plugins/",
   "scripts/forbidden-terms/",
@@ -106,7 +109,7 @@ export function evaluateMetadata({ body, files }) {
   if (!agent || !AGENT_RE.test(agent)) {
     return { ok: false, message: "Missing or invalid Agent metadata." };
   }
-  if (!risk || !(risk in RISK_RANK)) {
+  if (!risk || !Object.hasOwn(RISK_RANK, risk)) {
     return { ok: false, message: "Risk must be low, standard, or critical." };
   }
   if (!task) {
