@@ -143,6 +143,7 @@ export async function checkRollup(sha, { list = ghList } = {}) {
       workflowName: String(r.check_suite?.id ?? ""),
       name: r.name,
       appId: Number.isInteger(r.app?.id) ? r.app.id : null,
+      appSlug: typeof r.app?.slug === "string" ? r.app.slug : null,
       status: String(r.status ?? "").toUpperCase(),
       conclusion: r.conclusion ? String(r.conclusion).toUpperCase() : (r.status === "completed" ? "" : String(r.status ?? "").toUpperCase()),
       startedAt: r.started_at,

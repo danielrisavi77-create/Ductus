@@ -7,6 +7,14 @@ import { evaluateChecks, GATE_CONTEXT, latestChecks } from "./orchestrator-core.
 export const AUTHORIZATION_CONTEXT = "Merge authorization";
 // Statuses the gate workflow posts itself; they are not CI.
 const GATE_STATUSES = new Set([GATE_CONTEXT, AUTHORIZATION_CONTEXT, "Auto-merge eligible"]);
+// The merge queue's own check runs (Mergify Merge Queue, Merge Protections, Summary), by App
+// slug, not by name. They wait for the very conditions this tool reports, so counting them as
+// CI deadlocks: a "queue" posted before the owner's command leaves "Mergify Merge Queue" pending
+// and the owner's turn never comes (#1162, #1182). Pending, skipped and passed ones are shown,
+// not counted; a failed one still blocks (fail-closed).
+const QUEUE_APP = "mergify";
+const QUEUE_FAILED = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE", "ERROR"]);
+const isQueueCheck = (c) => c?.appSlug === QUEUE_APP;
 const RUNNING = new Set(["PENDING", "QUEUED", "IN_PROGRESS", "EXPECTED", "WAITING", "REQUESTED"]);
 // The fixed description of evaluateMergeAuthorization when only the owner's command is missing.
 const NEEDS_OWNER = /owner's merge command/i;
@@ -94,7 +102,12 @@ export function evaluateMergeReady({ pr, mergeState, gate, authorization, rollup
     const reported = latestChecks(rollup);
     const missing = req.filter((r) => !reported.some((c) => (c.name ?? c.context) === r.context && (r.appId == null || c.appId === r.appId)));
     if (missing.length) add("WAIT", "required", `required check(s) not reported on the head yet: ${missing.map((r) => r.context).join(", ")}`);
-    const ck = evaluateChecks(rollup.filter((c) => !GATE_STATUSES.has(c?.name ?? c?.context)));
+    const queue = latestChecks(rollup.filter(isQueueCheck));
+    const queueState = (c) => c.conclusion || c.status || "?";
+    const queueFailed = queue.filter((c) => QUEUE_FAILED.has(queueState(c)));
+    if (queueFailed.length) add("FAIL", "queue", `merge queue check failed: ${queueFailed.map((c) => `${c.name}=${queueState(c)}`).join(", ")}`);
+    else if (queue.length) add("INFO", "queue", `merge queue checks (a pending one is not counted as CI): ${queue.map((c) => `${c.name}=${queueState(c)}`).join(", ")}`);
+    const ck = evaluateChecks(rollup.filter((c) => !GATE_STATUSES.has(c?.name ?? c?.context) && !isQueueCheck(c)));
     const running = ck.bad.filter((c) => RUNNING.has(c.state));
     const failing = ck.bad.filter((c) => !RUNNING.has(c.state));
     if (ck.total === 0) add("WAIT", "ci", "no CI checks reported on the head yet");

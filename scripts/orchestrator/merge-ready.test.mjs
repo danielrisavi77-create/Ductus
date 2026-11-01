@@ -117,6 +117,28 @@ test("Codex #1197: a required check that was never reported is not green, so the
   assert.equal(evaluateMergeReady(ready({ rollup: [run("Security scanners", "FAILURE")] })).state, STATES.BLOCKED);
 });
 
+test("#1162/#1182: a pending merge queue check posted before the owner's command does not hide the owner's turn", () => {
+  // "@Mergifyio queue" came first, so Mergify Merge Queue waits for queue conditions (pending).
+  const mergify = (name, status = "IN_PROGRESS", conclusion = "") => ({ ...run(name, conclusion, 10562), status, appSlug: "mergify" });
+  const rollup = [...green, mergify("Mergify Merge Queue"), mergify("Mergify Merge Protections", "COMPLETED", "SKIPPED"), mergify("Summary", "COMPLETED", "SUCCESS")];
+  const r = evaluateMergeReady(ready({ authorization: NEEDS_OWNER, mergeState: "BLOCKED", rollup }));
+  assert.equal(r.state, STATES.WAITS_OWNER, r.reason);
+  assert.equal(level(r, "queue"), "INFO");
+  assert.match(r.checks.find((c) => c.id === "queue").text, /Mergify Merge Queue=IN_PROGRESS/);
+  // A failed queue check is not exempt: it blocks (fail-closed).
+  const failed = evaluateMergeReady(ready({ rollup: [...green, mergify("Mergify Merge Queue", "COMPLETED", "FAILURE")] }));
+  assert.equal(failed.state, STATES.BLOCKED);
+  assert.match(failed.reason, /merge queue check failed: Mergify Merge Queue=FAILURE/);
+  // Without the queue's checks the same PR is still the owner's turn (the exemption changes nothing else).
+  assert.equal(evaluateMergeReady(ready({ authorization: NEEDS_OWNER, mergeState: "BLOCKED" })).state, STATES.WAITS_OWNER);
+  // Only the App slug exempts a check: the same name from another App is CI and still waits.
+  const impostor = { ...run("Mergify Merge Queue", "", 999), status: "IN_PROGRESS", appSlug: "not-mergify" };
+  assert.equal(evaluateMergeReady(ready({ authorization: NEEDS_OWNER, mergeState: "BLOCKED", rollup: [...green, impostor] })).state, STATES.WAITING);
+  // A required check of main is never exempt, even if it came from the queue's App.
+  const requiredFromQueue = [...green.slice(1), mergify(REQUIRED_NAMES[0], "COMPLETED", "SUCCESS")];
+  assert.equal(evaluateMergeReady(ready({ rollup: requiredFromQueue })).state, STATES.WAITING);
+});
+
 test("conflict, draft, closed, other base and an uncomputed merge state", () => {
   assert.equal(evaluateMergeReady(ready({ mergeState: "DIRTY" })).state, STATES.BLOCKED);
   assert.equal(evaluateMergeReady(ready({ pr: pr({ mergeable: "CONFLICTING" }) })).state, STATES.BLOCKED);
