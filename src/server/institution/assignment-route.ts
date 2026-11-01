@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import type { WithActor } from "@/server/db/with-actor";
@@ -20,14 +21,8 @@ export function createAssignmentPostHandler(
   const getRedirectUri = dependencies.getRedirectUri ?? (() => process.env.OIDC_REDIRECT_URI);
 
   return async (request, context) => {
-    const redirectUri = getRedirectUri();
-    let expectedOrigin: string;
-    try {
-      if (!redirectUri) throw new Error("missing redirect URI");
-      const redirect = new URL(redirectUri);
-      if (redirect.protocol !== "https:" && redirect.protocol !== "http:") throw new Error("invalid redirect URI");
-      expectedOrigin = redirect.origin;
-    } catch {
+    const origin = expectedOrigin({ NODE_ENV: process.env.NODE_ENV, OIDC_REDIRECT_URI: getRedirectUri() });
+    if (!origin) {
       console.error("assignment creation unavailable", "origin_config");
       return new Response(JSON.stringify({ error: "assignment_unavailable" }), {
         status: 503,
@@ -36,6 +31,6 @@ export function createAssignmentPostHandler(
     }
     const { courseId } = await context.params;
     const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
-    return createAssignmentResponse(request, token, actor, expectedOrigin, courseId);
+    return createAssignmentResponse(request, token, actor, origin, courseId);
   };
 }
