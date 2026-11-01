@@ -1,5 +1,6 @@
 import pg from "pg";
 
+import { assertNoParameterLogging, withLogCheck } from "./log-settings";
 import { createOpenSession, type OpenSession } from "./open-session";
 import { createWithActor, type WithActor } from "./with-actor";
 
@@ -102,7 +103,10 @@ function connect(): WithActor {
   if (!connectionString) {
     throw new Error("APP_DATABASE_URL is not set; database access stays closed");
   }
-  return createWithActor(handleConnectionErrors(new pg.Pool(appPoolConfig(connectionString))));
+  const pool = handleConnectionErrors(new pg.Pool(appPoolConfig(connectionString)));
+  // The session token is a bind parameter: no transaction runs on a database
+  // that would write it to its log (log-settings.ts).
+  return withLogCheck(() => assertNoParameterLogging(pool), createWithActor(pool));
 }
 
 /**
