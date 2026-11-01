@@ -230,4 +230,4 @@ Odbijeno kao dodatni trošak ili dupliciranje postojećeg governancea: `github/s
 
 ## 10. Istraživanje razvojnih alata — 25. 10. 2026.
 
-Pregled 55 kandidata u jedanaest kategorija (skillovi, hookovi, MCP, evali, testiranje, supply chain, baza, dokumenti, observability, orkestracija, granice otkaza) nalazi se u `docs/ISTRAZIVANJE-ALATA-2026-10-25.md`. Ne mijenja ovaj inventar i ne dodaje nijednu ovisnost: preporuke PROBATI i PRAĆENJE nisu odluka o instalaciji. Pet koraka plana uvođenja (Squawk, Jazzer.js, Toxiproxy, Syft, skillgrade) čeka nakon 2. 11. 2026. (D-107, D-108), svaki kao zaseban PR uz pravilo iz §1.
+Pregled 55 kandidata u jedanaest kategorija (skillovi, hookovi, MCP, evali, testiranje, supply chain, baza, dokumenti, observability, orkestracija, granice otkaza) nalazi se u `docs/arhiva/ISTRAZIVANJE-ALATA-2026-10-25.md` (arhiva, DAN-373). Ne mijenja ovaj inventar i ne dodaje nijednu ovisnost: preporuke PROBATI i PRAĆENJE nisu odluka o instalaciji. Pet koraka plana uvođenja (Squawk, Jazzer.js, Toxiproxy, Syft, skillgrade) čeka nakon 2. 11. 2026. (D-107, D-108), svaki kao zaseban PR uz pravilo iz §1.
