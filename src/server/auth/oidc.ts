@@ -45,6 +45,19 @@ export const MAX_PROVIDER_RESPONSE_BYTES = 256 * 1024;
 /** Seconds for each request to the provider. */
 export const PROVIDER_TIMEOUT_SECONDS = 10;
 
+/**
+ * The scopes of the authorization request, per provider (DAN-196). AAI@EduHr
+ * releases each hrEdu attribute only for its own scope, never for `profile`,
+ * so the hrEdu scopes of docs/PRODUCT.md §4 are added. `profile` stays: it
+ * carries given_name and family_name, which the name parser reads. No e-mail
+ * and no OIB. Which set is the smallest is an open owner decision (plan #1104).
+ * The local fake provider keeps `openid profile`.
+ */
+export const SCOPES: Readonly<Record<AuthConfig["provider"], string>> = {
+  "aai-eduhr": "openid profile hrEduPersonUniqueID hrEduPersonAffiliation hrEduPersonHomeOrg",
+  "fake-oidc": "openid profile",
+};
+
 export function newLoginChecks(): LoginChecks {
   const token = () => randomBytes(32).toString("base64url");
   return { state: token(), nonce: token(), codeVerifier: token() };
@@ -159,7 +172,7 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
     async authorizationUrl(checks) {
       return client.buildAuthorizationUrl(await configuration(), {
         redirect_uri: config.redirectUri.href,
-        scope: "openid profile",
+        scope: SCOPES[config.provider],
         state: checks.state,
         nonce: checks.nonce,
         code_challenge: codeChallenge(checks.codeVerifier),
