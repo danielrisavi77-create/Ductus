@@ -358,3 +358,35 @@ test("a verdict on the current head beats a later carried verdict of the same pr
     assert.equal(current.state, "success", `${verdict} carried, then PASS on the current head`);
   }
 });
+
+// Review c.6558832962 and QA c.6558844226 on #1155: a carried Owner-Override
+// never moves past a FAIL or BLOCK of the same principal on the current head,
+// even when that principal's later FAIL on the carried head would prevail.
+test("a carried override does not lift a principal's FAIL or BLOCK on the current head (F-023)", () => {
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    for (const [name, make] of [["review", review], ["QA", qa]]) {
+      for (const [order, comments] of [
+        ["override, then PASS", () => [make(head, verdict), make(earlier, verdict), override(earlier), make(earlier, "PASS")]],
+        ["PASS, then override", () => [make(head, verdict), make(earlier, verdict), make(earlier, "PASS"), override(earlier)]],
+      ]) {
+        const result = evaluateGate({
+          body: body("critical"),
+          headSha: head,
+          ownerLogin,
+          comments: comments(),
+          carriedHeads: new Set([earlier]),
+        });
+        assert.notEqual(result.state, "success", `${name} ${verdict}: ${order}`);
+      }
+    }
+  }
+  // Control: without a negative on the current head the carried override holds.
+  const clean = evaluateGate({
+    body: body("critical"),
+    headSha: head,
+    ownerLogin,
+    comments: [review(earlier, "FAIL"), override(earlier)],
+    carriedHeads: new Set([earlier]),
+  });
+  assert.equal(clean.state, "success");
+});

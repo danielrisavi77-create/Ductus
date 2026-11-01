@@ -507,9 +507,14 @@ function evaluateGateCore({
     const overrideOrder = carriedOverrides
       .map((entry) => [entry.createdAt, entry.index])
       .reduce((a, b) => (compareOrder(a, b) >= 0 ? a : b));
+    // The current head is also read on its own: a principal's later negative
+    // on a carried head would otherwise prevail over, and hide, its FAIL or
+    // BLOCK on the current head (review c.6558832962, QA c.6558844226, #1155).
     const voids = (agentField, headField, verdictField, role, extraField) =>
       [...latestVerdicts(trusted, { agentField, headField, verdictField, role, headSha, extraField, carriedHeads }).values()]
-        .some((result) => NEGATIVE.has(result.verdict) && (result.current || compareOrder(result.order, overrideOrder) > 0));
+        .some((result) => NEGATIVE.has(result.verdict) && (result.current || compareOrder(result.order, overrideOrder) > 0)) ||
+      [...latestVerdicts(trusted, { agentField, headField, verdictField, role, headSha, extraField, carriedHeads: new Set() }).values()]
+        .some((result) => NEGATIVE.has(result.verdict));
     const negative =
       voids("Agent-Review", "Review-Head", "Review-Verdict", "reviewer") ||
       voids("QA-Agent", "QA-Head", "QA-Verdict", "qa", "QA-Scope");
