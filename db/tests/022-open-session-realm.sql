@@ -28,7 +28,7 @@ CREATE FUNCTION pg_temp.open_as(p_unique_id text, p_home_org text, p_subject tex
 RETURNS text LANGUAGE plpgsql AS $$
 DECLARE v_detail text; v_hint text;
 BEGIN
-  PERFORM identity.open_session('https://issuer.test', p_subject, p_unique_id, p_home_org, pg_temp.h(p_hash));
+  PERFORM identity.open_session('https://issuer.test', p_subject, p_unique_id, p_home_org, pg_temp.h(p_hash), NULL, NULL, false);
   RETURN 'ok';
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL, v_hint = PG_EXCEPTION_HINT;
@@ -40,7 +40,7 @@ CREATE FUNCTION pg_temp.context_of(p_unique_id text, p_home_org text, p_hash tex
 RETURNS text LANGUAGE plpgsql AS $$
 DECLARE v_context text;
 BEGIN
-  PERFORM identity.open_session('https://issuer.test', 'sub-' || p_hash, p_unique_id, p_home_org, pg_temp.h(p_hash));
+  PERFORM identity.open_session('https://issuer.test', 'sub-' || p_hash, p_unique_id, p_home_org, pg_temp.h(p_hash), NULL, NULL, false);
   RETURN 'ok';
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_context = PG_EXCEPTION_CONTEXT;

@@ -21,6 +21,7 @@ export interface OpenSessionPort {
     homeOrg: string;
     givenName?: string;
     familyName?: string;
+    teacherEligible: boolean;
     tokenHash: Buffer;
   }): Promise<
     { ok: true; expires: Date } | { ok: false; reason: "refused" | "conflict" }

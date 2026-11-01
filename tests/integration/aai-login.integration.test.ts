@@ -67,6 +67,7 @@ afterAll(async () => {
   await authPool?.end();
   const ids = [A.id, B.id];
   await admin.query("DELETE FROM identity.person_name WHERE institution_id = ANY($1::uuid[])", [ids]);
+  await admin.query("DELETE FROM identity.teacher_eligibility WHERE institution_id = ANY($1::uuid[])", [ids]);
   await admin.query(
     "DELETE FROM identity.session WHERE user_id IN (SELECT id FROM identity.user_account WHERE institution_id = ANY($1::uuid[]))",
     [ids],
@@ -101,6 +102,17 @@ async function accountsOf(subject: string) {
     [[A.id, B.id], subject],
   );
   return rows.map((row) => row.institution_id);
+}
+
+/** Whether the account of `subject` holds the teacher right, and its stored name. */
+async function rightAndName(subject: string) {
+  const { rows } = await admin.query<{ eligible: boolean; name: string | null }>(
+    `SELECT EXISTS (SELECT 1 FROM identity.teacher_eligibility e WHERE e.user_id = u.id AND e.institution_id = u.institution_id) AS eligible,
+            (SELECT n.given_name || ' ' || n.family_name FROM identity.person_name n WHERE n.user_id = u.id) AS name
+       FROM identity.user_account u WHERE u.institution_id = ANY($1::uuid[]) AND u.oidc_subject = $2`,
+    [[A.id, B.id], subject],
+  );
+  return rows;
 }
 
 const account = (sub: string, local: string, homeOrg: string, realm = homeOrg): TestAccount => ({
@@ -141,5 +153,26 @@ describe("AAI-shaped login into identity.open_session", () => {
     const response = await signIn(both, { userinfo: (u) => ({ ...u, hrEduPersonHomeOrg: [A.homeOrg, B.homeOrg] }) });
     expect(response.status).toBe(403);
     expect(await accountsOf(both.sub)).toEqual([]);
+  });
+
+  // DAN-304 (#1181, items 1, 4, 10, 11, 21 and 26): every login writes the
+  // right anew from its own affiliation, the name stays its own fact, and no
+  // affiliation value is stored.
+  it("DAN-304 gives the teacher right for djelatnik, takes it at a student login and gives it back", async () => {
+    const vid = account(`sub-right-${suffix}`, "vid", A.homeOrg);
+    expect((await signIn(vid)).status).toBe(303);
+    expect(await rightAndName(vid.sub)).toEqual([{ eligible: true, name: "Lea Izmišljić" }]);
+    expect((await signIn({ ...vid, affiliation: ["student"] })).status).toBe(303);
+    expect(await rightAndName(vid.sub)).toEqual([{ eligible: false, name: "Lea Izmišljić" }]);
+    expect((await signIn({ ...vid, affiliation: ["vanjski suradnik"] })).status).toBe(303);
+    expect(await rightAndName(vid.sub)).toEqual([{ eligible: true, name: "Lea Izmišljić" }]);
+    expect((await signIn(vid, { userinfo: (u) => ({ ...u, given_name: ["Lea"] }) })).status).toBe(303);
+    expect(await rightAndName(vid.sub)).toEqual([{ eligible: true, name: null }]);
+    const stored = await admin.query(
+      `SELECT count(*)::int AS n FROM identity.teacher_eligibility e
+        WHERE e.institution_id = ANY($1::uuid[]) AND to_jsonb(e)::text ~* 'djelatnik|suradnik|student'`,
+      [[A.id, B.id]],
+    );
+    expect(stored.rows[0].n).toBe(0);
   });
 });

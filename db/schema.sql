@@ -2842,6 +2842,38 @@ $$;
 
 
 --
+-- Name: open_session(text, text, text, text, bytea, text, text, boolean); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.open_session(p_issuer text, p_subject text, p_unique_id text, p_home_org text, p_token_hash bytea, p_given_name text, p_family_name text, p_teacher_eligible boolean) RETURNS timestamp with time zone
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_expires timestamptz;
+  v_user uuid;
+  v_institution uuid;
+BEGIN
+  v_expires := identity.open_session(p_issuer, p_subject, p_unique_id, p_home_org, p_token_hash, p_given_name, p_family_name);
+
+  SELECT u.id, u.institution_id INTO STRICT v_user, v_institution
+  FROM identity.user_account u
+  WHERE u.oidc_issuer = p_issuer AND u.hr_edu_person_unique_id = p_unique_id;
+
+  -- Only true gives the right; false and NULL take it away.
+  IF p_teacher_eligible IS TRUE THEN
+    INSERT INTO identity.teacher_eligibility (user_id, institution_id)
+    VALUES (v_user, v_institution)
+    ON CONFLICT (user_id) DO UPDATE SET updated_at = pg_catalog.now();
+  ELSE
+    DELETE FROM identity.teacher_eligibility WHERE user_id = v_user;
+  END IF;
+  RETURN v_expires;
+END
+$$;
+
+
+--
 -- Name: acknowledge_notice(uuid, integer); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3034,6 +3066,10 @@ BEGIN
      OR NOT EXISTS (
        SELECT 1 FROM identity.user_account u
        WHERE u.id = p_candidate_id AND u.institution_id = actor.institution_id
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM identity.teacher_eligibility e
+       WHERE e.user_id = p_candidate_id AND e.institution_id = actor.institution_id
      ) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
@@ -4120,6 +4156,19 @@ ALTER TABLE ONLY identity.session FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: teacher_eligibility; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.teacher_eligibility (
+    user_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY identity.teacher_eligibility FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: user_account; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -4845,6 +4894,14 @@ ALTER TABLE ONLY identity.session
 
 ALTER TABLE ONLY identity.session
     ADD CONSTRAINT session_token_hash_key UNIQUE (token_hash);
+
+
+--
+-- Name: teacher_eligibility teacher_eligibility_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.teacher_eligibility
+    ADD CONSTRAINT teacher_eligibility_pkey PRIMARY KEY (user_id);
 
 
 --
@@ -5928,6 +5985,14 @@ ALTER TABLE ONLY identity.session
 
 
 --
+-- Name: teacher_eligibility teacher_eligibility_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.teacher_eligibility
+    ADD CONSTRAINT teacher_eligibility_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: user_account user_account_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -6525,6 +6590,19 @@ CREATE POLICY session_owner ON identity.session TO ductus_identity USING (true) 
 
 
 --
+-- Name: teacher_eligibility; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.teacher_eligibility ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: teacher_eligibility teacher_eligibility_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY teacher_eligibility_owner ON identity.teacher_eligibility TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: user_account; Type: ROW SECURITY; Schema: identity; Owner: -
 --
 
@@ -6823,4 +6901,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261031200000'),
     ('20261101010000'),
     ('20261101150000'),
-    ('20261101160000');
+    ('20261101160000'),
+    ('20261101170000');
