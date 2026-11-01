@@ -133,10 +133,14 @@ const NEW_TEST_RE = /^(?:src|tests\/unit)\/.+\.(?:test|spec)\.ts$/;
 const ROUTE_DIRS = ["src/app/", "src/pages/"];
 // The exclusions ignore letter case (a case-insensitive file system resolves
 // Node_Modules like node_modules; matchesPath already ignores it); the
-// allowlist does not.
+// allowlist does not. Only a printable ASCII path is exempt: Unicode case
+// folding maps letters such as U+017F to "s", which toLowerCase() keeps, so
+// node_moduleſ could still be node_modules on such a file system (QA-1150-01).
+const ASCII_PATH_RE = /^[\x20-\x7e]+$/;
 export const isNewTestExempt = (file) => {
   const p = normalizePath(file);
   return (
+    ASCII_PATH_RE.test(p) &&
     NEW_TEST_RE.test(p) &&
     !matchesPath(p, ROUTE_DIRS) &&
     !hasDotSegment(p) &&

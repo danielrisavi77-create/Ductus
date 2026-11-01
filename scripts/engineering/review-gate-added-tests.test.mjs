@@ -210,6 +210,13 @@ test("a new test under node_modules or a route directory in any letter case stil
     "tests/unit/NODE_MODULES/pkg/x.test.ts",
     "src/App/x.test.ts",
     "src/PAGES/api/x.test.ts",
+    // QA-1150-01: U+017F folds to "s", the Kelvin sign to "k"; any non-ASCII
+    // path loses the exemption.
+    "src/node_moduleſ/x.test.ts",
+    "tests/unit/NODE_MODULEſ/pkg/x.test.ts",
+    "src/pageſ/api/x.test.ts",
+    "src/аpp/x.test.ts",
+    "src/domain/sync/new​.test.ts",
   ]) {
     for (const risk of ["standard", "critical"]) {
       const out = evaluate(risk, [{ filename, status: "added" }]);
