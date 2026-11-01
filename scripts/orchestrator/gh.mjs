@@ -92,6 +92,8 @@ export function toPr(p) {
     isDraft: Boolean(p.draft),
     headRefOid: p.head?.sha,
     headRefName: p.head?.ref,
+    // F-010: where the head lives; null for a deleted fork.
+    headRepo: p.head?.repo?.full_name ?? null,
     // The PR author as GitHub reports it; a branch name is chosen by whoever pushes it.
     author: { login: p.user?.login ?? null, type: p.user?.type ?? null },
     baseRefName: p.base?.ref,
