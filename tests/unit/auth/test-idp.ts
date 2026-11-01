@@ -32,6 +32,8 @@ export interface Misbehaviour {
   reject?: { path: string; error: unknown };
   /** The authorization code outlived its lifetime: the token endpoint answers invalid_grant. */
   codeExpired?: boolean;
+  /** Discovery names this `end_session_endpoint` (DAN-212); without it, none. */
+  endSessionEndpoint?: string;
 }
 
 interface Grant {
@@ -133,6 +135,7 @@ export function createTestIdp(
           subject_types_supported: ["public"],
           id_token_signing_alg_values_supported: ["RS256"],
           code_challenge_methods_supported: ["S256"],
+          ...(state.next.endSessionEndpoint === undefined ? {} : { end_session_endpoint: state.next.endSessionEndpoint }),
         });
       case "/jwks":
         return json({ keys: [{ ...key.jwk, kid: "test-kid", alg: "RS256", use: "sig" }] });

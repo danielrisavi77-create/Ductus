@@ -46,12 +46,13 @@ test("logout closes the session and clears the cookie", async ({ page, context }
   await signIn(page, "/");
   const token = (await appCookie(context, SESSION_COOKIE))!.value;
 
-  const status = await page.evaluate(async () => {
-    const response = await fetch("/api/auth/logout", { method: "POST" });
-    return response.status;
+  const type = await page.evaluate(async () => {
+    const response = await fetch("/api/auth/logout", { method: "POST", redirect: "manual" });
+    return response.type;
   });
-  // fetch follows the 303 to the home page.
-  expect(status).toBe(200);
+  // The 303 leads on to the provider's logout (DAN-212), another origin that a
+  // fetch from the page does not follow; the editor posts natively after it.
+  expect(type).toBe("opaqueredirect");
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
 });
