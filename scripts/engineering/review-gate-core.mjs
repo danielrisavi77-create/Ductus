@@ -573,8 +573,12 @@ function evaluateGateCore({
       // D-196 (c.6549357009 t. 2): a review PASS without QA, because QA is not
       // required for this file list; Merge authorization reads it like qaPass.
       // F-173: only a review posted through an App counts, never an
-      // owner-account CLI comment (D-162, D-193).
-      ...(passingReviews.some((review) => !review.cli) ? { qaExemptPass: true } : {}),
+      // owner-account CLI comment (D-162, D-193). F-180: and only from an App
+      // other than the one the declared author runs on, as F-173 asks of QA on
+      // the non-exempt path; a same-App review keeps the owner's command.
+      ...(passingReviews.some((review) => !review.cli && !APP_RUNTIMES.get(review.identity.appSlug)?.has(authorRuntime))
+        ? { qaExemptPass: true }
+        : {}),
       description: `Independently authenticated review is valid for current head (critical, ${qaExempt} only: QA not required).${carriedNote(passingReviews, headSha)}`,
     };
   }
@@ -921,7 +925,8 @@ export function evaluateMergeAuthorization({
   // D-196 (trial to 14 Nov 2026): a critical PR with no D-97 path needs no owner
   // command when the gate passed by counting verdicts: a separate QA PASS
   // (`qaPass`), or a review PASS on a PR that is QA-exempt by its file list (only
-  // tests or only documents, `qaExemptPass`; owner, #87 c.6549357009 t. 2). A gate
+  // tests or only documents, `qaExemptPass`, set only for a review from another App
+  // than the author's, F-180; owner, #87 c.6549357009 t. 2). A gate
   // that passed by an Owner Override keeps the command. F-173: every file must be
   // on the D-196 allowlist (ownerFreeCritical: application code, migrations,
   // tests, low-doc documents); any other file keeps the command, D-97 or not.

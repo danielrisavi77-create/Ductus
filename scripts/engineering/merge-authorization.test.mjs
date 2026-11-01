@@ -128,10 +128,45 @@ test("end to end: a QA-exempt critical PR merges on review alone, but not on an 
   const overridden = run([comment(`Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: test\n`)]);
   assert.equal(overridden.result.state, "success");
   assert.equal(overridden.mergeAuthorization.state, "pending");
-  const reviewed = run([comment(`Agent-Review: claude:r1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, { appSlug: "claude" })]);
+  // The author runs on Claude, so the review comes from another App (F-180).
+  const reviewed = run([comment(`Agent-Review: codex:r1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, { appSlug: "chatgpt-codex-connector" })]);
   assert.equal(reviewed.result.state, "success", reviewed.result.description);
   assert.equal(reviewed.mergeAuthorization.state, "success");
   assert.equal(run([]).mergeAuthorization.state, "pending");
+});
+
+// F-180: on the QA-exempt path the review is the only independent look, so it
+// must come from an App other than the author's runtime, as F-173 asks of QA.
+test("D-196: a QA-exempt critical PR reviewed only through the author's own App keeps the command (F-180)", () => {
+  const repo = { full_name: "danielrisavi77-create/Ductus" };
+  const run = (author, files, comments) => {
+    const pr = { body: `Agent: ${author}\nRisk: critical\nTask: B-1\n`, head: { sha: head, repo }, base: { repo }, changed_files: files.length, user: { login: "writer" } };
+    return evaluatePullRequest({ pr, files, comments, prReviews: [], reviewComments: [], ownerLogin, carriedHeads: new Set() });
+  };
+  const review = (agent, appSlug) => comment(`Agent-Review: ${agent}\nReview-Head: ${head}\nReview-Verdict: PASS\n`, { appSlug });
+  const claudeReview = review("claude:r1:reviewer", "claude");
+  const codexReview = review("codex:r1:reviewer", "chatgpt-codex-connector");
+  const grokReview = review("grok:r1:reviewer", "grok-by-xai");
+  for (const files of [
+    [{ filename: "db/tests/000-a.sql", status: "added" }],
+    [{ filename: "tests/property/setup.ts", status: "modified" }],
+    [{ filename: "db/tests/020-a.sql", status: "removed" }],
+    [{ filename: "docs/x.md", status: "modified" }],
+  ]) {
+    const label = files[0].filename;
+    const same = run("claude:a:backend", files, [claudeReview]);
+    assert.equal(same.result.state, "success", `${label}: ${same.result.description}`);
+    assert.equal(same.mergeAuthorization.state, "pending", label);
+    assert.equal(run("claude:a:backend", files, [claudeReview, command(head)]).mergeAuthorization.state, "success", label);
+    // Another App's review opens the path; so does it alongside a same-App one.
+    assert.equal(run("claude:a:backend", files, [codexReview]).mergeAuthorization.state, "success", label);
+    assert.equal(run("claude:a:backend", files, [claudeReview, grokReview]).mergeAuthorization.state, "success", label);
+    // Both OpenAI runtimes run on the Codex App, and either side may be the author.
+    for (const author of ["codex:a:backend", "chatgpt:a:backend"]) {
+      assert.equal(run(author, files, [codexReview]).mergeAuthorization.state, "pending", `${author} ${label}`);
+      assert.equal(run(author, files, [claudeReview]).mergeAuthorization.state, "success", `${author} ${label}`);
+    }
+  }
 });
 
 // F-173: the D-196 path takes only an allowlist of files and only verdicts
