@@ -129,17 +129,15 @@ async function main() {
   // without a readable time must still void quota evidence (QA c.6561448849).
   // Filtering them by base change is a separate ticket.
   if (!targetsDefaultBranch(pr)) {
-    // F-014: another open PR on this head owns its statuses; a pending marker
-    // here would overwrite them. An unread list counts as shared.
-    if (sharesHeadWithOpenPr(pr, openPulls)) {
-      knownHead = null;
-      console.log(`${context}: no status; another open PR shares this head. ${NOT_DEFAULT_BASE.description}`);
-      return;
-    }
+    // F-014, F-040: another open PR on this head may own its statuses, and
+    // while the head is shared none of them may stay green (Codex review
+    // c.6564729651), so the run clears them with the shared-head marker. It
+    // never writes success there. An unread list counts as shared.
+    const marker = sharesHeadWithOpenPr(pr, openPulls) ? SHARED_HEAD : NOT_DEFAULT_BASE;
     for (const statusContext of [authorizationContext, autoMergeContext, context]) {
-      await setStatus(repository, pr.head.sha, NOT_DEFAULT_BASE, pr.html_url, statusContext);
+      await setStatus(repository, pr.head.sha, marker, pr.html_url, statusContext);
     }
-    console.log(`${context}: pending — ${NOT_DEFAULT_BASE.description}`);
+    console.log(`${context}: pending — ${marker.description}`);
     return;
   }
 

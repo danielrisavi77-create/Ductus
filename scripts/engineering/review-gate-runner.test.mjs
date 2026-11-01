@@ -197,26 +197,46 @@ test("another open PR on the same head leaves every status pending (F-165, F-040
 });
 
 // F-040: two open PRs on one head, one to main and one to a side branch whose
-// diff is a single docs file. No run, for either PR, may leave a green status
-// on the shared head, so neither PR's verdicts stand for the other.
+// diff is a single docs file. A status belongs to the head, so the test folds
+// the runs in order into the statuses the head is left with: no order of
+// events may leave a green one, also when the PR to main was green first
+// (Codex review c.6564729651).
+const finalStates = (runs) => {
+  const last = {};
+  for (const { posts } of runs) for (const p of posts) last[p.body.context] = [p.path, p.body.state];
+  return last;
+};
 test("F-040 regression: no green gate status in the registered case", () => {
   const side = {
     ...eligible, number: 8, body: "Agent: claude:a:platforma\nRisk: low\nTask: B-1\n",
     head: { ...eligible.head, ref: "feat/y" }, base: { ...eligible.base, ref: "side" },
   };
-  const openPulls = [eligible, side];
-  const runs = [
-    run(comment, { pr: eligible, files: addedTest, openPulls }),
-    run(pullRequest, { pr: eligible, files: addedTest, openPulls }),
-    run(comment, { pr: { ...side, number: 7 }, files: [{ filename: "docs/x.md", status: "modified" }], openPulls: [{ ...eligible, number: 8 }, { ...side, number: 7 }] }),
+  const docs = [{ filename: "docs/x.md", status: "modified" }];
+  // The side PR as seen by its own run (the fake serves PR number 7).
+  const asSide = { pr: { ...side, number: 7 }, files: docs, openPulls: [{ ...eligible, number: 8 }, { ...side, number: 7 }] };
+  const mainAlone = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible] });
+  assert.deepEqual(states(mainAlone.posts), ALL.map((c) => [c, "success"]));
+  const sequences = [
+    // Green first, then the side PR is opened, then later events on either PR.
+    [mainAlone, run(pullRequest, asSide)],
+    [mainAlone, run(pullRequest, asSide), run(comment, { pr: eligible, files: addedTest, openPulls: [eligible, side] })],
+    [mainAlone, run(pullRequest, asSide), run(comment, asSide)],
+    [run(comment, asSide), run(pullRequest, { pr: eligible, files: addedTest, openPulls: [eligible, side] })],
   ];
-  for (const { code, posts } of runs) {
-    assert.equal(code, 0);
-    assert.ok(posts.every((p) => p.body.state !== "success"), JSON.stringify(states(posts)));
+  for (const [index, runs] of sequences.entries()) {
+    for (const { code } of runs) assert.equal(code, 0, `sequence ${index}`);
+    const last = finalStates(runs);
+    assert.deepEqual(Object.keys(last).sort(), [...ALL].sort(), `sequence ${index}`);
+    for (const [statusContext, [where, state]] of Object.entries(last)) {
+      assert.equal(where, `/repos/o/r/statuses/${HEAD}`, `sequence ${index} ${statusContext}`);
+      assert.equal(state, "pending", `sequence ${index} ${statusContext}`);
+    }
   }
-  assert.deepEqual(states(runs[0].posts), ALL.map((c) => [c, "pending"]));
-  // The side-branch PR writes nothing on a head that a PR to main shares.
-  assert.equal(runs[2].posts.length, 0);
+  // Every write the side PR makes on the shared head is the shared-head marker.
+  for (const post of run(comment, asSide).posts) {
+    assert.equal(post.body.state, "pending");
+    assert.match(post.body.description, /another open PR shares this head/);
+  }
 });
 
 test("a queue carrier keeps its statuses without a default_branch field (F-165)", () => {
@@ -443,12 +463,18 @@ test("a failed PR read marks the event head only for an open PR of this reposito
   }
 });
 
-test("a PR off the default branch writes nothing on a head another open PR shares (F-014)", () => {
+test("a PR off the default branch writes only the shared-head marker on a head another open PR shares (F-014, F-040)", () => {
   const side = { ...eligible, number: 9, base: { ...eligible.base, ref: "feature" } };
   const main = { ...eligible, number: 8 };
+  // F-040: the head's statuses must not stay green while it is shared, so the
+  // side PR clears them; it never writes success or its own base marker there.
   const shared = run(comment, { pr: side, files: addedTest, openPulls: [side, main] });
   assert.equal(shared.code, 0);
-  assert.deepEqual(shared.posts, []);
+  assert.deepEqual(states(shared.posts), ALL.map((c) => [c, "pending"]));
+  for (const post of shared.posts) {
+    assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
+    assert.match(post.body.description, /another open PR shares this head/);
+  }
   // An unread list counts as shared: nothing is written, and the run fails.
   const unread = run(comment, { pr: side, files: addedTest, fail: ["/pulls"] });
   assert.equal(unread.code, 1);
