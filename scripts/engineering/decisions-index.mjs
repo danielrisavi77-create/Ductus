@@ -71,7 +71,11 @@ export function checkTree(tree) {
       continue;
     }
     errors.push(...formatErrors(where, entry.text));
-    if (entry.name === README) continue;
+    if (entry.name === README) {
+      const ids = definedIds(entry.text);
+      if (ids.length > 0) errors.push(`${where} holds a decision record (${ids[0]})`);
+      continue;
+    }
     const m = /^(D-\d{2,})\.md$/.exec(entry.name);
     if (!m || canonicalName(m[1]) !== entry.name) {
       errors.push(`${where}: name is not D-NN.md (two digits at least, no extra leading zero)`);

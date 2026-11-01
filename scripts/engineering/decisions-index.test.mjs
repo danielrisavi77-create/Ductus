@@ -78,6 +78,9 @@ test("A3: a decision record outside the index and docs/odluke/ fails", () => {
   ]) {
     fails(tree({ docs: [{ path: p, text }] }), new RegExp(`${p.replace(".", "\\.")} holds a decision record \\(D-200\\)`));
   }
+  // The README in docs/odluke/ is not a decision file and holds no record either (review, #1179).
+  fails(tree({ entries: [file("README.md", "# Odluke\n\n| D-01 | duplikat |\n")] }), /README\.md holds a decision record \(D-01\)/);
+  fails(tree({ entries: [file("README.md", "# Odluke\n\n## D-01 Naslov\n")] }), /README\.md holds a decision record \(D-01\)/);
   // Spelling of the exempt places follows matchesPath.
   assert.deepEqual(checkTree(tree({ docs: [{ path: "DOCS/ODLUKE/X.md", text: "| D-200 | a |\n" }] })), []);
 });
