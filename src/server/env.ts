@@ -9,10 +9,6 @@ type Env = Readonly<Record<string, string | undefined>>;
 
 const PROTOCOLS = new Set(["postgres:", "postgresql:"]);
 
-export class EnvironmentError extends Error {
-  override name = "EnvironmentError";
-}
-
 /** The problems of the startup environment, by variable name only; empty when it can start. */
 export function environmentProblems(env: Env = process.env): string[] {
   const value = env.APP_DATABASE_URL;
@@ -26,10 +22,4 @@ export function environmentProblems(env: Env = process.env): string[] {
   if (!PROTOCOLS.has(parsed.protocol)) return ["APP_DATABASE_URL is not a postgres URL"];
   if (parsed.hostname === "") return ["APP_DATABASE_URL names no host"];
   return [];
-}
-
-/** Throws before the server takes a request when the environment cannot work. */
-export function assertEnvironment(env: Env = process.env): void {
-  const problems = environmentProblems(env);
-  if (problems.length > 0) throw new EnvironmentError(`Ductus cannot start: ${problems.join("; ")}`);
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { assertEnvironment, EnvironmentError, environmentProblems } from "./env";
+import { environmentProblems } from "./env";
 
 // DAN-299: the startup check. Passwords and hosts below are invented.
 const GOOD = "postgres://ductus_app_local:invented-secret@127.0.0.1:54329/ductus";
@@ -34,31 +34,42 @@ describe("environmentProblems", () => {
   });
 });
 
-describe("assertEnvironment", () => {
-  it("throws an EnvironmentError without the value", () => {
-    expect(() => assertEnvironment({ APP_DATABASE_URL: "invented-secret" })).toThrow(EnvironmentError);
-    expect(() => assertEnvironment({ APP_DATABASE_URL: "invented-secret" })).toThrow(/^Ductus cannot start: APP_DATABASE_URL is not a URL$/);
-    expect(() => assertEnvironment({ APP_DATABASE_URL: GOOD })).not.toThrow();
-  });
-});
-
 describe("instrumentation register()", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("stops a Node server without APP_DATABASE_URL", async () => {
+  // Next.js 15 keeps a process whose register() throws and answers 500, so
+  // register() ends it itself.
+  const exits = () => {
+    const codes: number[] = [];
+    const exit = ((code: number) => {
+      codes.push(code);
+      return undefined as never;
+    }) as (code: number) => never;
+    return { codes, exit };
+  };
+
+  it("ends a Node server without APP_DATABASE_URL with code 1 and names only the variable", async () => {
     vi.stubEnv("NEXT_RUNTIME", "nodejs");
-    vi.stubEnv("APP_DATABASE_URL", "");
+    vi.stubEnv("APP_DATABASE_URL", "invented-secret");
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { codes, exit } = exits();
     const { register } = await import("../../instrumentation");
-    await expect(register()).rejects.toThrow("APP_DATABASE_URL is not set");
+    await register(exit);
+    expect(codes).toEqual([1]);
+    expect(errors).toHaveBeenCalledWith("Ductus cannot start: APP_DATABASE_URL is not a URL");
+    expect(JSON.stringify(errors.mock.calls)).not.toContain("invented-secret");
+    errors.mockRestore();
   });
 
   it("lets a Node server with the variable start and skips the edge runtime", async () => {
     const { register } = await import("../../instrumentation");
+    const { codes, exit } = exits();
     vi.stubEnv("NEXT_RUNTIME", "nodejs");
     vi.stubEnv("APP_DATABASE_URL", GOOD);
-    await expect(register()).resolves.toBeUndefined();
+    await register(exit);
     vi.stubEnv("NEXT_RUNTIME", "edge");
     vi.stubEnv("APP_DATABASE_URL", "");
-    await expect(register()).resolves.toBeUndefined();
+    await register(exit);
+    expect(codes).toEqual([]);
   });
 });
