@@ -18,7 +18,8 @@ const README = "README.md";
 const ID = "D-\\d{2,}";
 const ROW_ID = new RegExp(`^\\| *(${ID}) *\\|`);
 const HEADING_ID = new RegExp(`^#{1,6} +(${ID})(?![0-9])`);
-const LINK = /\[([^\]]*)\]\(([^)\s]+)\)/g;
+// Destination, then an optional CommonMark title ("t", 't' or (t)).
+const LINK = /\[([^\]]*)\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
 const ID_ONLY = new RegExp(`^${ID}$`);
 
 /** "D-05.md" for 5: two digits at least, no other leading zero. */
@@ -134,8 +135,10 @@ export function checkTree(tree) {
 }
 
 // Lines the move adds that are not decision text: blank lines, a file heading,
-// a table header or separator, and an index row that links a decision file.
-const SCAFFOLD = [/^$/, new RegExp(`^# ${ID}$`), /^\| *(?:Broj|ID) *\|/, /^\|(?: *:?-{3,}:? *\|)+$/, /\]\(odluke\/D-\d{2,}\.md\)/];
+// a table header or separator, and an index row whose first cell is the link
+// to that decision's file (a link elsewhere in a line keeps the line compared).
+const INDEX_ROW = /^\| *\[(D-\d{2,})\]\((?:\.\/)?odluke\/\1\.md\) *\|/;
+const SCAFFOLD = [/^$/, new RegExp(`^# ${ID}$`), /^\| *(?:Broj|ID) *\|/, /^\|(?: *:?-{3,}:? *\|)+$/, INDEX_ROW];
 const isScaffold = (line) => SCAFFOLD.some((re) => re.test(line));
 
 function lineCounts(texts) {

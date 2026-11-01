@@ -87,6 +87,10 @@ test("C5: relative links resolve; https, anchors and inline code are not followe
   fails(tree({ index: `${INDEX}Vidi [x](engineering/nema.md).\n` }), /link engineering\/nema\.md points to a missing file/);
   const ok = `${ROW} [a](https://example.invalid/x) [b](#odlučeno) \`[c](odluke/D-NN.md)\` [d](../PRODUCT.md#5)`;
   assert.deepEqual(checkTree(tree({ entries: [decision("D-05", ok)], exists: (p) => p === "docs/PRODUCT.md" })), []);
+  // A link with a CommonMark title is still followed (Codex, #1179).
+  for (const title of [' "Plan"', " 'Plan'", " (Plan)"]) {
+    fails(tree({ entries: [decision("D-05", `${ROW} Vidi [plan](../nema.md${title}).`)] }), /link \.\.\/nema\.md points to a missing file/);
+  }
   // A file in docs/odluke/ resolves only to a plain file listed there, never through the checkout.
   fails(tree({ index: `${INDEX}[r](odluke/sub/x.md)\n`, exists: () => true }), /odluke\/sub\/x\.md points to a missing file/);
 });
@@ -117,6 +121,12 @@ test("B1, B2: a pure move passes; every change of a moved line fails", () => {
   assert.notDeepEqual(checkVerbatim(base, [...moved, `# D-05\n${ROW}\n`]), [], "duplicated");
   assert.notDeepEqual(checkVerbatim(base, [moved[0].replace("Uvod odjeljka.\n", "")]), [], "lost intro");
   assert.notDeepEqual(checkVerbatim(base, [...moved, "Nova rečenica.\n"]), [], "new line");
+  // A full decision that links a moved one stays compared (Codex, #1179).
+  const linking = `| D-06 | Vidi [povezanu odluku](odluke/D-05.md). | Razlog. |`;
+  const withLink = [`${HEADER}${linking}\n`];
+  assert.deepEqual(checkVerbatim(withLink, withLink), []);
+  assert.notDeepEqual(checkVerbatim(withLink, [withLink[0].replace("Razlog.", "Drugi razlog.")]), [], "linking row changed");
+  assert.notDeepEqual(checkVerbatim(base, [moved[0].replace("[D-05](odluke/D-05.md)", "[D-05](odluke/D-06.md)"), moved[1]]), [], "index row to another file");
 });
 
 test("the repository tree passes, with docs/odluke/ present", () => {
