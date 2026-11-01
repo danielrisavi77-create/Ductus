@@ -2,11 +2,9 @@
 
 Verzija 1.2 · 28. 10. 2026. · konačni smjer potvrđen 29. 10. 2026. · issue #960
 
-Ovo je **jedini pisani izvor odobrenog cilja dizajna**: boje, tipografija, oblici, razmaci i pravila. Preuzima punu specifikaciju pripremljenu u postojećem #973, bez nove paralelne palete. Sve druge tablice boja u repou (`docs/design/ductura/README.md` §8, slajdovi #323, stari PR-ovi) su povijest.
+Ovo je **jedini pisani izvor** za izgled aplikacije: boje, tipografiju, oblike, razmake i pravila. Vrijednosti tokena žive u `app/globals.css`; test `src/components/shell/design-doc.test.ts` pada čim se tablica u §3 i `globals.css` raziđu. Sve druge tablice boja u repou (`docs/design/ductura/README.md` §8, slajdovi #323, stari PR-ovi) su povijest.
 
-**Konačni smjer za sve agente, sesije i orkestratora je „papir i grafit”**, prema [Danielovoj potvrdi od 29. 10. 2026.](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007) i D-188. Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato; svijetla ljuska i tamni list ostaju korisnički izbori. Drugi smjer traži novu izričitu vlasnikovu odluku s datumom, izvorom i navodom zamijenjenog dijela. Odobrene kompozicije i funkcionalni ugovori ostaju. Postupak je `docs/SESSIONS.md` §6.
-
-**Stanje provedbe:** `app/globals.css` pokazuje stvarno ugrađene vrijednosti, a tablica §3 odobreni cilj. Postojeći #972 zapisuje D-188; #973 provodi tokene i test `src/components/shell/design-doc.test.ts` koji uspoređuje tablicu i CSS, a #974 zadani gotovo bijeli list. Ovaj dokumentacijski PR ne tvrdi da su ti PR-ovi spojeni, da je taj test na ovoj grani izvršen ili da je nova paleta u produkciji. Razlika cilja i CSS-a je zaostatak provedbe, ne novi dizajnerski smjer. Lokalni demo DAN-360 zadano ima svijetlu ljusku; to ne mijenja zadani izgled aplikacije.
+**Konačni smjer za sve agente, sesije i orkestratora je „papir i grafit”**, prema [Danielovoj potvrdi od 29. 10. 2026.](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007) i D-188. Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato; svijetla ljuska i tamni list ostaju korisnički izbori. Drugi smjer traži novu izričitu vlasnikovu odluku s datumom, izvorom i navodom što zamjenjuje. Postupak izvedbe i provjere je `docs/SESSIONS.md` §6.
 
 ## 1. Redoslijed mjerodavnosti
 
@@ -23,7 +21,7 @@ Nepromjenjiva pravila koja paleta ne dira: WCAG 2.1 AA (D-115), boje podrijetla 
 |---|---|---|
 | 01 | Akademski, ne „AI-tech” | Sadržaj i institucionalna ozbiljnost; suzdržan UI. |
 | 02 | Evidencija, ne sumnja | Stanja opisuju proces, nikad ne ocjenjuju studenta. |
-| 03 | Tamna ljuska, tekst na papiru | Zadana ljuska je tamni grafit; list je papir (D-188). Svijetla ljuska je izbor korisnika. |
+| 03 | Tamna ljuska, tekst na papiru | Ljuska je uvijek tamni grafit; list je papir (D-188). Svijetla ljuska je izbor korisnika. |
 | 04 | Isti jezik za sve uloge | Student, nastavnik i administrator dijele tokene, kartice i stanja. |
 | 05 | Zlato = akcija | Primarna boja (`--accent`) samo za glavni gumb, aktivnu karticu, oznaku odabira, poveznicu i fokus; obrubi, ikone, pomoćni tekst i brojke ostaju sivi. |
 | 06 | Institucionalno spremno | Izgleda kao proizvod kojem fakultet povjerava podatke. |
@@ -32,8 +30,8 @@ Nepromjenjiva pravila koja paleta ne dira: WCAG 2.1 AA (D-115), boje podrijetla 
 
 Četiri opsega u `app/globals.css`:
 
-- **Tamna ljuska** (`:root`, zadano; ne prati postavku sustava): topli grafit (D-188): `#242422` tlo, `#292a28` trake i bočna navigacija, `#2e2e2b` paneli i dijalozi, tekst `#faf9f5`, zlato `#c8aa6e` s grafitnim tekstom na njemu.
-- **Svijetla ljuska** (`[data-theme="light"]` na elementu ljuske, izbor korisnika, D-187): `#f3f2ee` podloga, `#faf9f6` trake i paneli, tekst `#242422`, tamno zlato `#806529`.
+- **Tamna ljuska** (`:root`, zadano i uvijek; ne prati postavku sustava): topli grafit (D-188): `#242422` tlo, `#292a28` trake i bočna navigacija, `#2e2e2b` paneli i dijalozi, tekst `#faf9f5`, zlato `#c8aa6e` s grafitnim tekstom na njemu.
+- **Svijetla ljuska** (`data-theme="light"` na `<html>`, pa vrijedi i za 404, grešku i učitavanje izvan ljuske; izbor korisnika, D-187; Z-13a. Prijava i javna naslovnica zasad ostaju tamne, do #1024 i J-01): `#f3f2ee` podloga, `#faf9f6` trake i paneli, tekst `#242422`, tamno zlato `#806529`.
 - **Tamni list** (`.sheet`): grafitni panel `#2e2e2b` sa svijetlom tintom; drži je i u svijetloj ljusci.
 - **Bijeli list** (`.sheet[data-sheet-theme="light"]`): gotovo bijeli papir `#fcfbf8`, tinta `#242422`, tamno zlato `#806529`; prekidač u editoru, izbor se čuva samo u pregledniku.
 
@@ -162,7 +160,7 @@ Ništa iz ovog odjeljka se ne koristi za novi rad.
 
 - **v0.3, 13. 10. 2026. (D-115, slajdovi #323):** teal `#14B8A6` na `#0A0F0E`, semantičke boje iz Tailwinda. Zamijenjeno D-123.
 - **D-123, 17. 10. 2026. (paket Ductura):** mint `#6FBFA5` na `#0F110E` (`ductura/README.md` §8). Zamijenjeno dizajnom v3 (21. 10., #476), pa #867.
-- **D-179, 26. 10. 2026. (Archivum paket, #915):** ljubičasta `#2b1f38`, trake `#21192a`, tekst `#f7f0fa`, bakar `#f0b573`. Vrijednosti su zatim usklađene D-184, a konačnu paletu određuje D-188.
+- **D-179, 26. 10. 2026. (Archivum paket, #915):** ljubičasta `#2b1f38`, trake `#21192a`, tekst `#f7f0fa`, bakar `#f0b573`. Vrijednosti koje naslovnica ima za istu ulogu zamijenjene D-184, a sve boje D-188; nijedna vrijednost se ne koristi.
 - **D-184, 28. 10. 2026. (paleta naslovnice, #964):** šljiva `#2b1f38`, trake `#21172c`, bakar `#f0b573`, papir `#fffcf5`, svijetli bakar `#8f4f33`. Vrijednosti zamijenjene D-188 (papir i grafit); pravilo jedne palete za naslovnicu i aplikaciju vrijedi.
-- **#867, 26. 10. 2026. (Archivum V3):** bordo, tlo `#19161a`, bakar `#cf9d72`. Zamijenjeno D-179 (#915); svijetla ljuska i bijeli list iz V3 zadržani.
+- **#867, 26. 10. 2026. (Archivum V3):** bordo, tlo `#19161a`, bakar `#cf9d72`. Zamijenjeno D-179 (#915), zatim D-188; vrijednosti svijetle ljuske i bijelog lista iz V3 također su zamijenjene D-188.
 - Mapiranje ekrana v0.3 (landing, editor, replay, predaja, pravila fakulteta, nadzorne ploče, admin, prenosivi zapis) i prioriteti premješteni su u `ductura/INTEGRACIJA.md` i issuee #325 do #342; sadržajna pravila iz toga mapiranja (npr. zabrana teksta „Nema indikacija neautentičnog autorstva”, sortiranje samo po prezimenu) i dalje vrijede preko `PRODUCT.md` i odluka.

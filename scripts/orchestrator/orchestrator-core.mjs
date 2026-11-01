@@ -2,7 +2,7 @@
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
 import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
 import {
-  changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
+  changedPaths, D97_MANUAL_PATHS, D97_PATHS, isD97Path, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
 
 export const GATE_CONTEXT = "Engineering review gate";
@@ -20,7 +20,7 @@ export { changedPaths, D97_MANUAL_PATHS, D97_PATHS };
 const norm = normalizePath;
 
 export function d97Matches(files) {
-  return (files ?? []).map(norm).filter((f) => matchesPath(f, D97_PATHS));
+  return (files ?? []).map(norm).filter((f) => isD97Path(f));
 }
 
 export function d97ManualMatches(files) {
@@ -84,6 +84,12 @@ export function overlapsOf(number, prs, pairs) {
 export function formatOverlaps(list) {
   if (!list) return "?";
   return list.length ? list.map((n) => `#${n}`).join(", ") : "-";
+}
+
+/** One `orch:status` table line; F-010 marks an external PR as VANJSKI. */
+export function formatStatusRow(r) {
+  const flags = `${r.draft ? " DRAFT" : ""}${r.external ? ` VANJSKI (${r.external})` : ""}`;
+  return `#${r.number} ${r.head} ${r.base}${flags} | ${r.agent ?? "-"} | ${r.risk ?? "-"} | ci ${r.ci} | gate ${r.gate} | review ${r.review} | qa ${r.qa} | preklapa: ${formatOverlaps(r.overlaps)}`;
 }
 
 /** Canonical verdict comments of one kind ("review" | "qa"), oldest first. */
@@ -211,6 +217,30 @@ export function pickGate(statuses) {
     .reduce((best, s) => (!best || newer(s, best) ? s : best), null);
 }
 
+// F-010: the installed apps that open PRs here, by login and type together; a
+// person cannot hold a "[bot]" login, and the type alone is not enough.
+const APP_AUTHORS = new Set(["dependabot[bot]", "mergify[bot]"]);
+
+/**
+ * F-010: null for a PR the worker loop may handle (head in `repository`, author
+ * the owner or an installed app), else the reason it waits for the owner to
+ * adopt it. Anything unknown counts as external.
+ */
+export function externalReason(pr, repository, ownerLogin) {
+  const head = pr?.headRepo;
+  if (typeof repository !== "string" || repository === "" || typeof head !== "string" || head !== repository) {
+    return `head is outside ${repository || "this repository"} (${head || "unknown"})`;
+  }
+  // An unknown owner fails closed before the app exception too (QA c.6558998360).
+  if (typeof ownerLogin !== "string" || ownerLogin === "") return "repository owner is unknown";
+  const login = pr?.author?.login;
+  if (APP_AUTHORS.has(login) && pr?.author?.type === "Bot") return null;
+  if (login !== ownerLogin) {
+    return `author ${login || "unknown"} is not the owner`;
+  }
+  return null;
+}
+
 /** Returns [{level: PASS|FAIL|INFO, id, text}]. */
 export function evaluateReady(d) {
   const out = [];
@@ -224,6 +254,8 @@ export function evaluateReady(d) {
   if (ck.total === 0) add("FAIL", "ci", "no CI checks reported");
   else if (ck.bad.length) add("FAIL", "ci", `CI not green: ${ck.bad.map((b) => `${b.name}=${b.state}`).join(", ")}`);
   else add("PASS", "ci", `CI green (${ck.total} checks)`);
+  const external = externalReason(d.pr, d.repository, d.ownerLogin);
+  add(external ? "FAIL" : "PASS", "origin", external ? `external PR, owner must adopt: ${external}` : "owner's PR from this repository");
   add(d.base === "main" ? "PASS" : "FAIL", "base", `base ${d.base}`);
   add(d.mergeable === "MERGEABLE" ? "PASS" : "FAIL", "mergeable", `mergeable ${d.mergeable}`);
   if (d.overlap == null) add("FAIL", "overlap", "main-vs-PR file overlap could not be determined");

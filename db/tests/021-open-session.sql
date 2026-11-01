@@ -15,6 +15,11 @@ INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-00000000000b', 'test-b', 'b.example'),
   ('00000000-0000-4000-8000-00000000000c', 'test-c', NULL),
   ('00000000-0000-4000-8000-00000000000d', 'test-k', 'k.example');
+-- Every fixture institution takes the common issuer (023 tests the issuer
+-- rule itself); test-a also takes a second one, for section 4.
+INSERT INTO identity.institution_issuer (institution_id, oidc_issuer)
+SELECT i.id, 'https://issuer.test' FROM identity.institution i WHERE i.slug IN ('test-a', 'test-b', 'test-c', 'test-k')
+UNION ALL SELECT '00000000-0000-4000-8000-00000000000a', 'https://other-issuer.test';
 
 -- Token hashes stand in for sha256(token); the function never sees a token.
 CREATE FUNCTION pg_temp.h(p_name text) RETURNS bytea

@@ -56,7 +56,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 - W2 Proizvod / Kako radi
 - W3 Za fakultete
 - W4 Sigurnost i privatnost
-- W5 Cijene / pilot / zatraži demo
+- W5 Cijene / pilot / zatraži predstavljanje
 - W6 Kontakt
 - W7 Procurement / institucionalni resursi
 
@@ -123,7 +123,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 
 - hero: “Platforma za dokaziv i transparentan proces akademskog rada.”
 - kratko objašnjenje student → proces → nastavnik → institucija;
-- CTA `Zatraži demo`;
+- CTA `Zatraži predstavljanje`;
 - CTA `Pogledaj proizvod`;
 - preview studentskog editora;
 - preview mentorskog pregleda;
@@ -133,7 +133,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 
 **Glavne akcije:**
 
-- zatraži demo;
+- zatraži predstavljanje;
 - pogledaj proizvod;
 - otvori sigurnost;
 - otvori stranicu za fakultete;
@@ -143,7 +143,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 
 - javno pozicioniranje mora ostati institucionalno, akademsko i transparentno;
 - website ne smije izgledati kao consumer AI writing app;
-- demo zahtjev ide prema vlasniku / sales inboxu.
+- zahtjev za predstavljanje ide prema vlasniku / sales inboxu.
 
 **Ovisnosti:** nijedna kritična backend ovisnost; kontakt forma / CRM može kasnije.
 
@@ -790,7 +790,7 @@ Točna verzija pravila koja je vrijedila u trenutku relevantnog događaja / pred
 
 **OWNER ODLUKA 5. 10. 2026.:** ugrađeni AI Assistant ostaje dio product visiona i dizajna upravo kako je prikazan u mockupovima. Ovaj Product Spec ga ne uklanja niti zamjenjuje.
 
-**Status rollouta:** postojeći D-77 ga i dalje može odgoditi iz prvog FPZG pilota dok se ne promijeni odluka. To je rollout odluka, ne brisanje funkcije iz proizvoda.
+**Status rollouta:** D-77 ga je odgađao iz prvog FPZG pilota; D-194 (31. 10. 2026.) ga uvodi u pilot. To je rollout odluka, ne brisanje funkcije iz proizvoda.
 
 ---
 
@@ -873,7 +873,7 @@ Mogući sukobi s trenutačnim:
 - D-61;
 - D-62;
 - D-01 / C-9 / C-10 za copy o autorstvu;
-- D-77 za timing AI Assistanta;
+- D-77 i D-194 za timing AI Assistanta;
 - D-56 / Constitution Gate za Replay.
 
 ## 18.3 Pravilo za razvoj
@@ -915,7 +915,7 @@ Ako stavka ima REUSE ili UX GAP, ne otvara se drugi backend task s novim accepta
 - E1-03 Za fakultete
 - E1-04 Security / Privacy
 - E1-05 Pricing / Pilot
-- E1-06 Request demo / contact
+- E1-06 Zatraži predstavljanje / kontakt
 - E1-07 Procurement resources
 
 ## E2 — Policy Governance

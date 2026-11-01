@@ -39,6 +39,38 @@ export function matchesPath(file, list) {
   });
 }
 
+// Files an agent loads as instructions: Claude Code CLAUDE.md and CLAUDE.local.md,
+// Codex AGENTS.md and AGENTS.override.md, Gemini CLI GEMINI.md, and GitHub
+// Copilot's copilot-instructions.md and *.instructions.md.
+const AGENT_INSTRUCTIONS_RE =
+  /(?:^|\/)(?:(?:claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$/i;
+// F-039: agent runtime configuration directories and the MCP server list.
+const AGENT_CONTROL_SEGMENTS = new Set([".claude", ".agents", ".codex"]);
+
+/**
+ * True for a file an agent runtime loads as instructions or configuration, at
+ * any depth: an instruction file name, .mcp.json, or a path with a .claude,
+ * .agents or .codex segment. Such a file decides how agents work, so it carries
+ * the critical floor and the owner's merge command like the D-97 paths.
+ */
+export function isAgentControlPath(file) {
+  const segments = normalizePath(file).toLowerCase().split("/");
+  const name = segments.at(-1) ?? "";
+  return (
+    segments.some((segment) => AGENT_CONTROL_SEGMENTS.has(segment)) ||
+    name === ".mcp.json" ||
+    AGENT_INSTRUCTIONS_RE.test(name)
+  );
+}
+
+// F-174: pnpm runs the root pnpmfile as code on every install (CI and every
+// agent worktree), so adding or changing one decides what runs everywhere.
+export const INSTALL_HOOK_PATHS = [".pnpmfile.cjs", ".pnpmfile.mjs"];
+
+/** A D-97 path by path: one of D97_PATHS, an agent control path or a pnpm install hook. */
+export const isD97Path = (file) =>
+  matchesPath(file, D97_PATHS) || isAgentControlPath(file) || matchesPath(file, INSTALL_HOOK_PATHS);
+
 /** Paths of a REST pull-request files list; a rename counts under both names. */
 export function changedPaths(files) {
   const out = new Set();
@@ -72,7 +104,85 @@ export function qaExemption(files) {
   return null;
 }
 
+// D-189 as narrowed for #971 (owner option A, contract issuecomment-6506868494):
+// both review exemptions are allowlists, and the gate, "Merge authorization",
+// "Auto-merge eligible" and the CI profile "tests" read them from here, so the
+// lists cannot drift apart. A path with a segment that starts with a dot
+// (.claude/, .agents/, .github/ at any depth) is never exempt, and neither is a
+// D-97 path.
+const hasDotSegment = (p) => p.split("/").some((segment) => segment.startsWith("."));
+const LOW_DOC_RE = /^(?:docs\/[^/]+\.md|README\.md)$/;
+
+/** Risk low without review: a Markdown file directly in docs/, or the root README.md. */
+export function isLowDocExemptPath(file) {
+  const p = normalizePath(file);
+  return (
+    LOW_DOC_RE.test(p) &&
+    !hasDotSegment(p) &&
+    !AGENT_INSTRUCTIONS_RE.test(p) &&
+    ownerCommandPaths([p]).length === 0
+  );
+}
+
+export function lowReviewExempt(files) {
+  const paths = files ?? [];
+  return paths.length > 0 && paths.every(isLowDocExemptPath);
+}
+
+// Tests only: a *.test.ts or *.spec.ts file under src/ or tests/unit/, where only
+// the test runner reads it. Next.js builds a page or route from a test name too
+// (src/pages/api/x.test.ts answers at /api/x.test, #971 QA), so src/app/ and
+// src/pages/ stay under review, as do e2e/, tests/e2e/, tests/integration/,
+// db/tests/, helpers, fixtures and every other directory.
+const NEW_TEST_RE = /^(?:src|tests\/unit)\/.+\.(?:test|spec)\.ts$/;
+const ROUTE_DIRS = ["src/app/", "src/pages/"];
+export const isNewTestExempt = (file) => {
+  const p = normalizePath(file);
+  return (
+    NEW_TEST_RE.test(p) &&
+    !matchesPath(p, ROUTE_DIRS) &&
+    !hasDotSegment(p) &&
+    !p.split("/").includes("node_modules") &&
+    ownerCommandPaths([p]).length === 0
+  );
+};
+
+// D-196, F-173: the only files a critical PR may change and still merge without
+// the owner's command: application code, its migrations and tests, and the
+// documents of the low-doc allowlist above. Every other file, D-97 or not,
+// keeps the command. An allowlist, never "everything but D-97" (D-190).
+export const OWNER_FREE_DIRS = ["src/", "app/", "db/migrations/", "db/tests/", "tests/", "e2e/"];
+// Documents on the critical floor (CRITICAL_PATHS in pr-metadata-core.mjs takes
+// them from here): the product rules and the forbidden-terms dictionary the
+// scanner checks against. They are never owner-free, though a low doc otherwise.
+export const CRITICAL_DOC_PATHS = ["docs/PRODUCT.md"];
+// Tests on the critical floor inside an owner-free directory: the only test
+// that a production build refuses the fake provider (D-09, F-041 a). Never
+// owner-free either.
+export const CRITICAL_TEST_PATHS = ["e2e/auth.spec.ts"];
+// Exclusions ignore letter case; the allowlist itself matches exact case, so a
+// directory such as SRC/ or Tests/ is not application code here.
+export function isOwnerFreePath(file) {
+  const p = normalizePath(file);
+  if (
+    hasDotSegment(p) ||
+    AGENT_INSTRUCTIONS_RE.test(p) ||
+    p.toLowerCase().split("/").includes("node_modules") ||
+    matchesPath(p, CRITICAL_DOC_PATHS) ||
+    matchesPath(p, CRITICAL_TEST_PATHS) ||
+    ownerCommandPaths([p]).length > 0
+  ) {
+    return false;
+  }
+  return OWNER_FREE_DIRS.some((dir) => p.startsWith(dir)) || isLowDocExemptPath(p);
+}
+/** True when the list is not empty and every file is on the D-196 allowlist. */
+export const ownerFreeCritical = (files) => {
+  const paths = files ?? [];
+  return paths.length > 0 && paths.every(isOwnerFreePath);
+};
+
 /** Files that put a PR under the owner's merge command, by path or by content. */
 export function ownerCommandPaths(files) {
-  return (files ?? []).map(normalizePath).filter((f) => matchesPath(f, [...D97_PATHS, ...D97_MANUAL_PATHS]));
+  return (files ?? []).map(normalizePath).filter((f) => isD97Path(f) || matchesPath(f, D97_MANUAL_PATHS));
 }

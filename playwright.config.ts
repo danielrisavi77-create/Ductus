@@ -41,10 +41,11 @@ function server(
     url: baseUrl,
     // The server under test reaches the compose database as the local
     // application login (.env.example); the application has no default.
+    // F-152: only fixed local values here; a URL set in the environment is inherited.
     env: {
-      APP_DATABASE_URL:
-        process.env.APP_DATABASE_URL ??
-        "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
+      ...(process.env.APP_DATABASE_URL === undefined
+        ? { APP_DATABASE_URL: "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus" }
+        : {}),
       // "Demo prijava" configured on purpose: the production build must refuse
       // it (D-09, e2e/auth.spec.ts). Local-only values from .env.example.
       DUCTUS_AUTH_PROVIDER: "fake-oidc",
@@ -88,9 +89,8 @@ export default defineConfig({
     video: process.env.CI ? "on" : "retain-on-failure",
     trace: "retain-on-failure",
   },
-  // Browser policy (docs/TESTING.md 2, owner decision D-108 d). CI runs the
-  // Chromium projects (`desktop`, `mobile`) on every PR and all four on every
-  // push to main and nightly (.github/workflows/ci.yml).
+  // Browser policy (docs/TESTING.md 2, M0.3). CI runs all four projects on
+  // every PR, every push to main and nightly (.github/workflows/ci.yml).
   // `mobile` is a Chromium viewport: an addition, never a stand-in for WebKit.
   // Every spec runs in every project; locally, `--project desktop` runs one.
   projects: [

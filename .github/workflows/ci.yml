@@ -54,13 +54,14 @@ jobs:
 
   build:
     name: Lint, typecheck, test and build
+    needs: scope
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -82,6 +83,24 @@ jobs:
             build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
       - run: pnpm lint
       - run: pnpm typecheck
+      # D-91 (1): db/migrations.sum matches the files, and no migration of the
+      # base (PR base, or main before this push) changed or disappeared. On a
+      # PR the checkout is the merge commit, so main's newer migrations count.
+      - name: Migration ledger (D-91)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base=""
+          if [ "$EVENT_NAME" = pull_request ]; then base="$PR_BASE"; elif [ "$EVENT_NAME" = push ]; then base="$PUSH_BEFORE"; fi
+          if [ -n "$base" ]; then
+            [[ "$base" =~ ^[a-f0-9]{40}$ ]]
+            git fetch --no-tags --depth=1 origin "$base"
+            node scripts/engineering/migrations-ledger.mjs --base "$base"
+          else
+            node scripts/engineering/migrations-ledger.mjs
+          fi
       - name: Engineering PR metadata
         if: github.event_name == 'pull_request'
         env:
@@ -90,10 +109,18 @@ jobs:
       - run: pnpm test:unit
       - name: Engineering system unit tests
         run: shopt -s failglob; node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
-      - run: pnpm test:property
+      - name: Property tests
+        if: needs.scope.outputs.profile == 'full'
+        run: pnpm test:property
       - name: Demo launcher and fake OIDC account tests
+        if: needs.scope.outputs.profile == 'full'
         run: pnpm test:demo && pnpm test:fake-oidc
-      - run: pnpm build
+      # F-152: the node tests of skill scripts (both skill copies).
+      - name: Skill script tests
+        run: pnpm test:skills
+      - name: Build
+        if: needs.scope.outputs.profile == 'full'
+        run: pnpm build
 
   # Keep the required context stable; skipped/failed dependencies must never
   # silently turn it green. This job does not check out or execute PR code.
@@ -115,7 +142,8 @@ jobs:
         run: |
           case "$SCOPE_RESULT/$PROFILE/$E2E_RESULT/$LOGIN_RESULT/$EVIDENCE_RESULT/$LOGIN_EVIDENCE_RESULT" in
             success/full/success/success/success/success) echo 'Both isolated application stack and browser checks passed.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB and browser tests were not executed. Build, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
             *) echo 'Missing, unsuccessful or unexpected CI scope/stack result.' >&2; exit 1 ;;
           esac
       - name: Reject cancelled stack
@@ -125,11 +153,11 @@ jobs:
   # Separate hosted runners give both E2E suites their own ports and database.
   # The standard suite also retains pgTAP and integration checks.
   stack-e2e:
-    name: Standard E2E and database (${{ matrix.shard }}/2)
+    name: Standard E2E and database (${{ matrix.shard }}/3)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
     runs-on: ubuntu-latest
@@ -152,7 +180,7 @@ jobs:
           fetch-depth: 2
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         with:
           node-version-file: .nvmrc
@@ -174,7 +202,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.event_name == 'pull_request' && 'chromium' || 'all' }}
+          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-all
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       # The login-callback login (db/local/auth-login.sql) gets a random
@@ -199,50 +227,34 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - run: pnpm build
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      # Owner decision D-108 d: Chromium (desktop and mobile viewport) on a
-      # pull request; Chromium, Firefox and WebKit on main and nightly.
+      # M0.3 (DAN-114): Chromium (desktop and mobile viewport), Firefox and
+      # WebKit on every run, pull requests included, so all three engines are
+      # part of the required Local stack status. No retries, no filter.
+      # Firefox and WebKit need the system packages, so this is always the
+      # --with-deps path (the Chromium-only shortcut does not apply).
       - name: Install browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-        env:
-          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
-          PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
-        run: |
-          if [ "$ALL_ENGINES" = "true" ]; then
-            bash scripts/engineering/playwright-install.sh chromium firefox webkit
-          else
-            bash scripts/engineering/playwright-install.sh chromium
-          fi
+        run: bash scripts/engineering/playwright-install.sh chromium firefox webkit
       - name: UI pilot expected test inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
-          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
           PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/ui-pilot-inventory.json
         run: |
           mkdir -p .ci-reports
-          if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm exec playwright test --list --reporter=json
-          else
-            pnpm exec playwright test --list --reporter=json --project=desktop --project=mobile
-          fi
+          pnpm exec playwright test --list --reporter=json
       - name: E2E tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           E2E_NO_BUILD: "1"
           UI_TEST_PILOT: "1"
           E2E_SHARD: ${{ matrix.shard }}
-          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
-        run: |
-          if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm test:e2e --shard="$E2E_SHARD/2"
-          else
-            pnpm test:e2e --project=desktop --project=mobile --shard="$E2E_SHARD/2"
-          fi
+        run: pnpm test:e2e --shard="$E2E_SHARD/3"
       - name: Collect shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         run: cp test-results/ui-pilot-full.json .ci-reports/results.json
       - name: Upload shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-shard-${{ matrix.shard }}
           path: .ci-reports/
@@ -252,7 +264,7 @@ jobs:
       # Screenshots (desktop and mobile), videos and failure traces for the PR.
       - name: Upload Playwright report
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
@@ -278,10 +290,10 @@ jobs:
           persist-credentials: false
           # Both parents are needed by the advisory UI pilot.
           fetch-depth: 2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: e2e-shard-*
           path: .ci-reports/shards
@@ -299,7 +311,7 @@ jobs:
         run: node scripts/engineering/ui-test-pilot.mjs
       - name: Upload combined E2E evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-combined-evidence
           path: |
@@ -310,12 +322,14 @@ jobs:
 
   # Each shard is its own runner with its own stack and database, so the
   # shared demo account stays one worker per database (playwright.login.config.ts).
+  # The shards split the spec files by measured duration (DAN-375,
+  # scripts/engineering/login-shard-plan.mjs); the matrix size is LOGIN_SHARDS.
   stack-login:
-    name: Login E2E (${{ matrix.shard }}/2)
+    name: Login E2E (${{ matrix.shard }}/6)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4, 5, 6]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
     runs-on: ubuntu-latest
@@ -331,7 +345,7 @@ jobs:
           persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         with:
           node-version-file: .nvmrc
@@ -370,24 +384,35 @@ jobs:
         env:
           PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: bash scripts/engineering/playwright-install.sh chromium
+      # F-152: the demo account bootstrap's guards drive a real Chromium, which
+      # only this job installs; each shard runs them (a few seconds).
+      - name: Demo account bootstrap tests
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: pnpm test:demo:browser
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in production); Chromium only (owner decision).
       # The full suite as this runner sees it, before sharding; the inventory
-      # job checks that the two shards ran exactly this.
+      # job checks that the shards together ran exactly this.
       - name: Login E2E inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/inventory.json
         run: pnpm exec playwright test --config playwright.login.config.ts --list --reporter=json
+      # This shard's spec files from the inventory above and the committed
+      # weights; plan.json goes up with the evidence and is recomputed there.
+      - name: Plan login shard
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        env:
+          LOGIN_SHARD: ${{ matrix.shard }}
+        run: node scripts/engineering/login-shard-plan.mjs "$LOGIN_SHARD"
       - name: Full login E2E
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           LOGIN_E2E_JSON: .ci-reports/results.json
-          LOGIN_SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e:login --shard="$LOGIN_SHARD/2"
+        run: pnpm test:e2e:login --test-list .ci-reports/test-list.txt
       - name: Upload login shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: login-shard-${{ matrix.shard }}
           path: .ci-reports/
@@ -396,7 +421,7 @@ jobs:
           retention-days: 14
       - name: Upload login Playwright report
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-login-${{ matrix.shard }}
           path: playwright-report-login/
@@ -420,10 +445,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: login-shard-*
           path: .ci-reports/login

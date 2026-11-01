@@ -1,6 +1,6 @@
 # Predaja dizajna: Ductura
 
-**Aktualni smjer od 29. 10. 2026.:** konačni „papir i grafit” (D-188), prema [zajedničkoj specifikaciji](../DESIGN-SYSTEM.md). Zadana je tamna grafitna ljuska i gotovo bijeli list; svijetla ljuska i tamni list su izbor. Boje i zadana tema iz starog HTML/ZIP paketa i tablice ispod su povijest. Kompozicija ostaje primjenjiva uz novu paletu i aktualni funkcionalni ugovor; prototip nije dokaz implementacije. Postupak je `docs/SESSIONS.md` §6.
+> **Boje: vidi D-188 (28. 10. 2026., papir i grafit; konačna potvrda vlasnika 29. 10. 2026.).** Vrijednosti boja i naglaska u ovom dokumentu (npr. `#6FBFA5`) i u starom HTML/ZIP paketu su povijest; mjerodavni su `docs/design/DESIGN-SYSTEM.md` i `app/globals.css`. Zadana je tamna grafitna ljuska i gotovo bijeli list; svijetla ljuska i tamni list su izbor. Raspored, ekrani i ponašanje vrijede dalje uz aktualni funkcionalni ugovor; prototip nije dokaz implementacije. Postupak je `docs/SESSIONS.md` §6.
 
 ## Korisnikov izvorni paket — 22. 10. 2026.
 
@@ -166,7 +166,7 @@ Lokalna stanja sučelja (otvoreni dijalozi, kartica, sklopljena poglavlja, tema 
 
 ## 8. Povijest tokena izvornog paketa
 
-> **Napomena u repou (23. 10. 2026.):** vrijednosti u aplikaciji sada slijede dizajn v3 (vlasnikova odluka od 21. 10. na #476, `issuecomment-6314381921`; mapiranje u ugovoru `issuecomment-6314723241`). Mjerodavne su vrijednosti u `app/globals.css`; tablica ispod ostaje zapis izvornog paketa.
+> **Povijest, ne koristi se (28. 10. 2026., #960).** Boje i tipografiju određuje `docs/design/DESIGN-SYSTEM.md` v1.2 prema D-188 (papir i grafit); vrijednosti su u `app/globals.css`. Tablica ispod ostaje samo zapis izvornog paketa od 22. 10. 2026. (mint), zamijenjenog dizajnom v3 (#476), zatim #867, D-179, D-184 i D-188.
 
 **Boje (tamna tema)**
 

@@ -6,7 +6,7 @@
 
 ## 1. Podizvršitelji kako ih predlažu dokumenti
 
-Cijeli dobavljački sloj je **PRIJEDLOG D-08, uvjetan**: potvrda tek nakon B0.1 i B0.2, a trošak premašuje D-66 (ARCHITECTURE §9, BACKEND §1, §7). Država sjedišta dobavljača i njegove matične grupe nije navedena u dokumentima; upisuje se iz ugovora i DPA-a, ne iz ovog nacrta. Ništa iz tablice nije izgrađeno: `package.json` nema klijente za pohranu objekata, KMS, e-poštu ni praćenje grešaka.
+Cijeli dobavljački sloj je **PRIJEDLOG D-08, uvjetan**: potvrda tek nakon B0.1 i B0.2, a trošak je premašivao D-66 i stane u proračun D-199 t. 2 (ARCHITECTURE §9, BACKEND §1, §7). Država sjedišta dobavljača i njegove matične grupe nije navedena u dokumentima; upisuje se iz ugovora i DPA-a, ne iz ovog nacrta. Ništa iz tablice nije izgrađeno: `package.json` nema klijente za pohranu objekata, KMS, e-poštu ni praćenje grešaka.
 
 | Subjekt | Namjena | Što može vidjeti | Lokacija obrade u dokumentima | Provjeriti | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -20,7 +20,13 @@ Cijeli dobavljački sloj je **PRIJEDLOG D-08, uvjetan**: potvrda tek nakon B0.1 
 | GlitchTip EU ili Sentry EU | Praćenje grešaka bez tijela zahtjeva | Metapodaci greške; ne smije sadržavati tekst rada (BACKEND §4.9) | "EU" | Odabir; je li canary test dokaz | PRIJEDLOG, nije odabrano |
 | Vanjski uptime monitor | Alarm dostupnosti (BACKEND §4.9) | Samo javnu adresu | Nije određena | Odabir | Nije odabrano |
 
-**Ne ulaze u popis u pilotu:** OpenRouter i svi AI pružatelji (ugrađeni AI izvan pilota, D-77; ARCHITECTURE §5b); GitHub i Linear kao razvojni alati (prema `CLAUDE.md` u njih ne idu stvarni osobni podaci); AAI@EduHr (Srce), koji je izvor identiteta, a ne izvršitelj Ductusa, i čiju uslugu registrira ustanova (ARCHITECTURE §4); Caddy (softver na VM-u). Sam Ductus (izvršitelj, fizička osoba) je u `05` kao otvoreno pitanje.
+**AI pružatelji (D-194, mijenja D-77):** ugrađeni AI pomoćnik je u pilotu, pa svaki AI pružatelj koji student može pokrenuti postaje podizvršitelj i ulazi u popis tek kad ga ustanova odobri (čl. 28. st. 2. GDPR-a). Nijedan još nije izabran ni ugovoren. Isključeni su pružatelj s kineskim sjedištem, model koji je razvila kineska tvrtka (i kad ga poslužuje europski pružatelj) i obrada na kineskim serverima (D-194 t. 2). Za svakog pružatelja treba upisati: ugovornu stranu i matičnu grupu, zemlju obrade i stvarnu regiju, čuvanje sadržaja, treniranje, popis njegovih podizvršitelja, mehanizam prijenosa i dobna ograničenja korisnika. Tko drži račun i potpisuje ugovor o obradi s pružateljem je otvoreno (PRIJEDLOG D-194 t. 6: pravna osoba operatera). OpenRouter nije izabran. Pružatelj koji bi radio samo kao posrednik (npr. OpenRouter) dodatni je podizvršitelj `[ODLUKA]`.
+
+| Subjekt | Namjena | Što može vidjeti | Lokacija obrade u dokumentima | Provjeriti | Status |
+| --- | --- | --- | --- | --- | --- |
+| AI pružatelj (još nije izabran) | Obrada odlomka koji student pošalje pomoćniku; moguće zvuk za transkripciju i alati pružatelja (D-194 t. 4) | Odabrani odlomak i poslužiteljske upute; po zadanom bez identiteta studenta | Nije određena | Država, grupa, regija, čuvanje, treniranje, DPA, podizvršitelji, dob korisnika | PRIJEDLOG, D-194 t. 6 i 7 |
+
+**Ne ulaze u popis u pilotu:** GitHub i Linear kao razvojni alati (prema `CLAUDE.md` u njih ne idu stvarni osobni podaci); AAI@EduHr (Srce), koji je izvor identiteta, a ne izvršitelj Ductusa, i čiju uslugu registrira ustanova (ARCHITECTURE §4); Caddy (softver na VM-u). Sam Ductus (izvršitelj, fizička osoba) je u `05` kao otvoreno pitanje.
 
 ## 2. Atributi prijave
 

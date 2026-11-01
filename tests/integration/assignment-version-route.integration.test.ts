@@ -85,6 +85,8 @@ afterAll(async () => {
       `DELETE FROM institution.assignment_version WHERE assignment_id IN (
          SELECT a.id FROM institution.assignment a JOIN institution.course c ON c.id = a.course_id WHERE c.institution_id = ANY ($1))`, [faculties],
     );
+    // The A10 removals write append-only audit rows that reference the memberships.
+    await cleaner.query("DELETE FROM audit.course_member_event WHERE institution_id = ANY ($1)", [faculties]);
     await cleaner.query("COMMIT");
   } finally {
     cleaner.release();
@@ -94,6 +96,7 @@ afterAll(async () => {
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY ($1)", [faculties]);
   await admin.query("DELETE FROM institution.institution_role WHERE institution_id = ANY ($1)", [faculties]);
   await admin.query("DELETE FROM institution.institution_settings WHERE institution_id = ANY ($1)", [faculties]);
+  await admin.query("DELETE FROM institution.notification WHERE institution_id = ANY ($1)", [faculties]);
   await admin.query("DELETE FROM identity.session WHERE user_id = ANY ($1)", [ids]);
   await admin.query("DELETE FROM identity.user_account WHERE id = ANY ($1)", [ids]);
   await admin.query("DELETE FROM identity.institution WHERE id = ANY ($1)", [faculties]);
@@ -126,6 +129,16 @@ describe("new assignment version: real POST, session and database (DAN-292)", ()
       expect(await response.json()).toEqual({ error: "invalid_input" });
     }
     expect(await versions()).toEqual({ current_version: 2, rows: 2, title: "Izmišljeni esej, druga verzija" });
+    const events = await admin.query(
+      "SELECT recipient_id, kind, target_id, event_key FROM institution.notification WHERE target_id = $1",
+      [assignment],
+    );
+    expect(events.rows).toEqual([{
+      recipient_id: people.student.id,
+      kind: "assignment_version",
+      target_id: assignment,
+      event_key: `assignment_version:${assignment}:2`,
+    }]);
   });
 
   it("lets exactly one of two requests with the same expectedVersion write", async () => {
@@ -133,5 +146,77 @@ describe("new assignment version: real POST, session and database (DAN-292)", ()
     expect(answers.map((answer) => answer.status).sort()).toEqual([201, 409]);
     const winner = answers[0].status === 201 ? "Treća A" : "Treća B";
     expect(await versions()).toEqual({ current_version: 3, rows: 3, title: winner });
+    const events = await admin.query(
+      "SELECT event_key FROM institution.notification WHERE target_id = $1 ORDER BY event_key", [assignment],
+    );
+    expect(events.rows).toEqual([
+      { event_key: `assignment_version:${assignment}:2` },
+      { event_key: `assignment_version:${assignment}:3` },
+    ]);
+  });
+
+  it("takes the recipients when the publishing statement runs (A10, #955)", async () => {
+    // Two more synthetic students on a course of their own. The publishing
+    // transaction starts first; one removal commits on another connection
+    // before the publishing statement, the other after it and before commit.
+    const early = randomUUID(), late = randomUUID();
+    ids.push(early, late);
+    for (const [label, id] of [["early", early], ["late", late]] as const) {
+      await admin.query(
+        `INSERT INTO identity.user_account (id, institution_id, oidc_issuer, oidc_subject, hr_edu_person_unique_id)
+         VALUES ($1, $2, 'https://issuer.example', $3, $4)`,
+        [id, faculties[0], `a10-${label}-${id}`, `a10-${label}-${id}@assignment-version.example`],
+      );
+    }
+    const course = await withActor(people.teacher.token, async (tx) =>
+      (await tx.query<{ id: string }>("SELECT institution.create_course('Izmisljeni kolegij A10', '2026/2027', 'encouraged') AS id")).rows[0].id);
+    for (const id of [early, late]) await admin.query(
+      "INSERT INTO institution.course_member (course_id, user_id, institution_id, role) VALUES ($1, $2, $3, 'student')", [course, id, faculties[0]],
+    );
+    const c = CONTENT;
+    const rest = [c.instructions, c.workType, c.opensAt, c.dueAt, c.aiPolicy, c.aiPurposes, c.evidenceProfile, c.importAllowed, c.wordMin, c.wordMax];
+    const target = await withActor(people.teacher.token, async (tx) => (await tx.query<{ id: string }>(
+      "SELECT institution.create_assignment($1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11, $12) AS id", [course, c.title, ...rest],
+    )).rows[0].id);
+    const remove = (student: string) => withActor(people.teacher.token, async (tx) =>
+      (await tx.query<{ removed: boolean }>("SELECT institution.remove_student($1, $2) AS removed", [course, student])).rows[0].removed);
+
+    // withActor refuses a nested call, so the removals run from the test,
+    // between barriers the open publishing transaction waits on.
+    const barrier = () => {
+      let open!: () => void;
+      const reached = new Promise<void>((resolve) => (open = resolve));
+      return { open, reached };
+    };
+    const begun = barrier(), earlyGone = barrier(), published = barrier(), lateGone = barrier();
+    const publishing = withActor(people.teacher.token, async (tx) => {
+      await tx.query("SELECT 1");
+      begun.open();
+      await earlyGone.reached;
+      await tx.query(
+        "SELECT institution.publish_assignment_version($1, 1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11, $12)",
+        [target, "Izmišljeni esej A10, druga verzija", ...rest],
+      );
+      published.open();
+      await lateGone.reached;
+    });
+    // A failing transaction ends the wait at once instead of a test timeout.
+    await Promise.race([begun.reached, publishing]);
+    expect(await remove(early)).toBe(true);
+    earlyGone.open();
+    await Promise.race([published.reached, publishing]);
+    expect(await remove(late)).toBe(true);
+    lateGone.open();
+    await publishing;
+
+    // Read committed: the statement sees the earlier removal, not the later one.
+    const events = await admin.query(
+      "SELECT recipient_id FROM institution.notification WHERE event_key = $1", [`assignment_version:${target}:2`],
+    );
+    expect(events.rows).toEqual([{ recipient_id: late }]);
+    const open = await admin.query(
+      "SELECT count(*)::int AS n FROM institution.course_member WHERE course_id = $1 AND role = 'student' AND member_to IS NULL", [course],
+    );
+    expect(open.rows[0].n).toBe(0);
   });
 });

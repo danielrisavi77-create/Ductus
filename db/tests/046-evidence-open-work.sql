@@ -24,6 +24,14 @@ LANGUAGE sql AS $$
                          document_hash, head_segment_hash, last_sequence_to, snapshot)
           FROM app.open_student_work(%L::uuid) $q$, p_assignment))
 $$;
+-- The same with an explicit start (DAN-331, F-137).
+CREATE FUNCTION pg_temp.open(p_actor text, p_assignment uuid, p_start boolean) RETURNS text
+LANGUAGE sql AS $$
+  SELECT pg_temp.ask(p_actor, format(
+    $q$ SELECT format('%%s|%%s|%%s|%%s|%%s|%%s|%%s|%%s', outcome, document_id, evidence_profile_id, current_revision,
+                         document_hash, head_segment_hash, last_sequence_to, snapshot)
+          FROM app.open_student_work(%L::uuid, %L::boolean) $q$, p_assignment, p_start))
+$$;
 CREATE FUNCTION pg_temp.context(p_actor text, p_document text, p_key text) RETURNS text
 LANGUAGE sql AS $$
   SELECT pg_temp.ask(p_actor, format(
@@ -105,29 +113,32 @@ SELECT bag_eq(
   $$ VALUES ('app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'),
             ('app.attach_receipt_signature(uuid,text,jsonb)'),
             ('app.request_submission(text,bigint)'), ('app.record_submission(uuid,text)'),
-            ('app.open_student_work(uuid)'), ('app.evidence_commit_context(text,text)'),
+            ('app.open_student_work(uuid,boolean)'), ('app.evidence_commit_context(text,text)'),
             ('app.read_submission_record(uuid)'), ('app.prepare_submission_receipt(uuid,text,text)'),
             ('app.assignment_works(uuid)'), ('app.work_submitted(uuid)'), ('app.fast_path_works(uuid)'),
-            ('app.assignment_submissions(uuid)'),
+            ('app.assignment_submissions(uuid)'), ('app.teacher_assignment_names(uuid)'),
             ('app.attach_submission_receipt(uuid,text,jsonb)'), ('app.read_submission_receipt(uuid)') $$,
   'the web role executes exactly the expected evidence RPCs');
 SELECT is_empty(
   $$ SELECT r || ' ' || p.oid::regprocedure::text FROM pg_proc p
       CROSS JOIN unnest(ARRAY['ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_identity']) AS r
-      WHERE p.oid IN ('app.open_student_work(uuid)'::regprocedure, 'app.evidence_commit_context(text,text)'::regprocedure,
+      WHERE p.oid IN ('app.open_student_work(uuid,boolean)'::regprocedure, 'app.evidence_commit_context(text,text)'::regprocedure,
                       'evidence.revision_zero_document()'::regprocedure, 'evidence.seal_document_checkpoint()'::regprocedure)
         AND has_function_privilege(r, p.oid, 'EXECUTE') $$,
   'no other runtime role executes the new functions');
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
-      WHERE p.oid IN ('app.open_student_work(uuid)'::regprocedure, 'app.evidence_commit_context(text,text)'::regprocedure)
+      WHERE p.oid IN ('app.open_student_work(uuid,boolean)'::regprocedure, 'app.evidence_commit_context(text,text)'::regprocedure)
         AND (NOT p.prosecdef OR p.proowner <> 'ductus_evidence'::regrole OR NOT 'search_path=""' = ANY (p.proconfig)) $$,
   'both RPCs are SECURITY DEFINER functions of the evidence role with an empty search_path');
-SELECT is(pg_get_function_arguments('app.open_student_work(uuid)'::regprocedure), 'p_assignment_id uuid',
-  'opening takes no person or institution: they come from the session');
+SELECT is(pg_get_function_arguments('app.open_student_work(uuid,boolean)'::regprocedure),
+  'p_assignment_id uuid, p_start boolean DEFAULT true',
+  'opening takes no person or institution: they come from the session; only whether to start');
+SELECT hasnt_function('app', 'open_student_work', ARRAY['uuid'],
+  'the one-argument opening is gone; a call with one argument takes the default (DAN-331)');
 SELECT is(pg_get_function_arguments('app.evidence_commit_context(text,text)'::regprocedure),
   'p_document_id text, p_client_transaction_id text', 'the context takes no person or institution');
-SELECT is(pg_get_function_result('app.open_student_work(uuid)'::regprocedure),
+SELECT is(pg_get_function_result('app.open_student_work(uuid,boolean)'::regprocedure),
   'TABLE(outcome text, document_id text, evidence_profile_id text, current_revision bigint, document_hash text, head_segment_hash text, last_sequence_to bigint, snapshot text)',
   'opening returns no package, institution or person');
 
@@ -136,14 +147,26 @@ SELECT is(evidence.revision_zero_document(), pg_temp.val('rev0'), 'revision 0 is
 SELECT is(encode(sha256(convert_to(evidence.revision_zero_document(), 'UTF8')), 'hex'), pg_temp.val('rev0_hash'),
   'revision 0 has the known hash');
 
--- The student owner: the first call creates the work, the second returns it.
+-- DAN-331 (F-137): without a request to start, no work is made and nothing
+-- is written; every refusal keeps its answer and comes first.
 CREATE TEMP TABLE print_before AS SELECT pg_temp.evidence_print() AS v;
+SELECT is(pg_temp.open('ana', pg_temp.id('z1'), false), 'not_started|||||||', 'no work and start false: not_started');
+SELECT is(pg_temp.open('ana', pg_temp.id('z1'), NULL), 'not_started|||||||', 'no work and start NULL: not_started');
+SELECT is(pg_temp.open('dora', pg_temp.id('z1'), false), 'not_accepting|||||||', 'not acknowledged comes before not_started');
+SELECT is(pg_temp.open('vesna', pg_temp.id('z1'), false), 'not_found|||||||', 'not a student of it comes before not_started');
+SELECT is(pg_temp.open('anon', pg_temp.id('z1'), false), 'unauthenticated|||||||', 'no session comes before not_started');
+SELECT is(pg_temp.works('ana'), 0, 'not_started makes no project');
+SELECT is(pg_temp.evidence_print(), (SELECT v FROM print_before), 'and writes nothing in the evidence schema');
+
+-- The student owner: the first call creates the work, the second returns it.
 INSERT INTO ref SELECT 'ana_open', pg_temp.open('ana', pg_temp.id('z1'));
 SELECT matches(pg_temp.val('ana_open'),
   '^opened\|[0-9a-f-]{36}\|standard-v1\|0\|' || pg_temp.val('rev0_hash') || '\|\|0\|',
   'the owner opens the work at revision 0 with no segment yet');
 SELECT is(split_part(pg_temp.val('ana_open'), '|', 8), pg_temp.val('rev0'), 'the answer carries the revision 0 snapshot');
 SELECT is(pg_temp.open('ana', pg_temp.id('z1')), pg_temp.val('ana_open'), 'a second call returns the same work');
+SELECT is(pg_temp.open('ana', pg_temp.id('z1'), false), pg_temp.val('ana_open'), 'an existing work opens the same without start');
+SELECT is(pg_temp.open('ana', pg_temp.id('z1'), true), pg_temp.val('ana_open'), 'and the same with an explicit start');
 SELECT is(pg_temp.works('ana'), 1, 'two calls create one project');
 SELECT is(split_part(pg_temp.val('ana_open'), '|', 2), pg_temp.doc('ana', 'z1'), 'the answer names the stored document');
 SELECT row_eq(
@@ -196,6 +219,8 @@ SELECT pg_temp.publish_z3(3, now() - interval '1 minute');
 INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
 VALUES (pg_temp.id('z3'), 3, pg_temp.id('tomo'), pg_temp.id('fak_b'));
 SELECT is(pg_temp.open('tomo', pg_temp.id('z3')), 'not_configured|||||||', 'an institution without an evidence domain: not_configured');
+SELECT is(pg_temp.open('tomo', pg_temp.id('z3'), false), 'not_started|||||||',
+  'without a request to start, the domain is not looked at: not_started (DAN-331)');
 INSERT INTO evidence.domain (id, institution_id, region) VALUES
   ('00000000-0000-4000-8000-0000000000d2', pg_temp.id('fak_b'), 'eu-central-1'),
   ('00000000-0000-4000-8000-0000000000d3', pg_temp.id('fak_b'), 'eu-west-1');
