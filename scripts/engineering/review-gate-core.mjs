@@ -365,6 +365,7 @@ function latestVerdicts(entries, {
   carriedHeads,
 }) {
   const latest = new Map();
+  const negatives = new Map();
 
   for (const entry of entries) {
     if (!canonicalBlock(entry.body, agentField)) continue;
@@ -401,9 +402,18 @@ function latestVerdicts(entries, {
     const slot = candidate.current ? "current" : "carried";
     if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
     latest.set(key, slots);
+    if (NEGATIVE.has(candidate.verdict) && (!negatives.has(key) || compareOrder(candidate.order, negatives.get(key).order) > 0)) {
+      negatives.set(key, candidate);
+    }
   }
 
-  return new Map([...latest].map(([key, slots]) => [key, prevailing(slots)]));
+  // An edit only holds the principal: it never removes the principal's own
+  // FAIL or BLOCK (Codex on fad70e1, #1152). Without a fresh unedited verdict
+  // the principal's latest negative, current or carried, still stands.
+  return new Map([...latest].map(([key, slots]) => {
+    const current = slots.current?.verdict === "EDITED" && negatives.has(key) ? negatives.get(key) : slots.current;
+    return [key, prevailing({ ...slots, current })];
+  }));
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the

@@ -122,6 +122,34 @@ test("an edit of a principal's later FAIL never brings back its earlier PASS (F-
   );
 });
 
+// Codex on fad70e1 (#1152): an edit holds its principal but never removes the
+// principal's own earlier FAIL or BLOCK, even when another reviewer passed.
+test("an edited comment does not lift its principal's earlier FAIL or BLOCK (F-012)", () => {
+  for (const negative of ["FAIL", "BLOCK"]) {
+    for (const edited of ["maybe", "PASS"]) {
+      const result = evaluate(
+        [
+          review("claude:b:reviewer", negative, HOUR),
+          review("claude:c:reviewer", "PASS", 2 * HOUR),
+          review("claude:b:reviewer", edited, 3 * HOUR, 4 * HOUR),
+        ],
+        "standard",
+      );
+      assert.notEqual(result.state, "success", `${negative} then edited ${edited}`);
+    }
+  }
+  // Control: a fresh unedited PASS of the same principal after the edit counts.
+  const fresh = evaluate(
+    [
+      review("claude:b:reviewer", "FAIL", HOUR),
+      review("claude:b:reviewer", "maybe", 3 * HOUR, 4 * HOUR),
+      review("claude:b:reviewer", "PASS", 5 * HOUR),
+    ],
+    "standard",
+  );
+  assert.equal(fresh.state, "success");
+});
+
 test("an edited QA comment does not bring back the same QA principal's earlier PASS (F-012)", () => {
   const codexApp = (c) => ({ ...c, performed_via_github_app: { slug: "chatgpt-codex-connector" } });
   const qa = (verdict, createdMs, updatedMs) =>
