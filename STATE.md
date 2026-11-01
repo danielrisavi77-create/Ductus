@@ -26,6 +26,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] D-142/D-143 (prikaz uživo, reprodukcija znak po znak; Ustav v1.4 izmijenjen): pravno mišljenje (D-55; biometrija po čl. 4. t. 14. GDPR-a, razmjernost, Prilog III. Akta o UI, uključujući t. 3(d) prema D-151) i DPIA prije pilota sa stvarnim studentima; ne blokira demo. Od ostalih uloga reprodukciju vidi samo mentor, odnosno nastavnik zadatka, jer je to ista uloga (D-154); student vidi istu reprodukciju svog rada (pravilo 5).
 - [ ] FPZG: koordinator pilota, kolegiji/mentori, akademski kalendar, AAI administrator, DPO, D-04, D-29, D-30, D-31, D-35, zamjenski postupak i zahtjev za ispis razgovora.
 - [ ] FPZG AAI: ovlast za AAI@EduHr Lab i kasnije registracija Ductusa kao usluge. Blokira M1, ne demo.
+- [ ] M8 Document Provenance (D-198): do 30. 11. 2026. odluka o Word i Google Docs dodacima (t. 2, PRIJEDLOG; preporuka sesije: sljedeći val); FPZG DPO i pravno mišljenje za rok čuvanja uvezenih verzija (t. 3) i za čitanje verzija iz clouda (t. 1); FPZG IT: admin consent za Microsoft Graph u tenantu fakulteta (DAN-438).
 - [ ] Lekta: licenca/pravo redistribucije prije punog M4 paketa.
 - [ ] Dobavljači: UpCloud, Scaleway i AWS KMS računi + 2FA i uski ključevi. B0.1 je pomaknut naprijed (rok 16. 11. 2026., tri dodatne provjere) i čeka ove račune.
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
