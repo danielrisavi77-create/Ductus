@@ -36,6 +36,9 @@ globalThis.fetch = async (url, options = {}) => {
       html_url: "https://github.com/o/r/pull/7", body: "", ...plan.pr });
   }
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
+  if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
+  if (path.endsWith("/issues/7/events")) return reply(200, plan.timeline ?? []);
+  if (path.endsWith("/pulls/7/reviews")) return reply(200, plan.reviews ?? []);
   if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
@@ -43,7 +46,7 @@ globalThis.fetch = async (url, options = {}) => {
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -58,7 +61,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews }),
       FAKE_LOG: log,
     },
   });
@@ -78,8 +81,8 @@ const pullRequest = {
 test("a failed comment read after the head is known marks the head pending", () => {
   const { code, posts } = run(comment, { fail: ["/issues/7/comments"] });
   assert.equal(code, 1);
-  // Failure path does not compute Auto-merge eligible.
-  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Engineering review gate"]);
+  // The failure path resets all three statuses (QA c.6558749797 on #1117).
+  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Auto-merge eligible", "Engineering review gate"]);
   for (const post of posts) {
     assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
     assert.equal(post.body.state, "pending");
@@ -90,9 +93,10 @@ test("a failed comment read after the head is known marks the head pending", () 
 test("a failed PR read marks the event head pending when the event names one", () => {
   const withHead = run(pullRequest, { fail: ["/pulls/7"] });
   assert.equal(withHead.code, 1);
-  assert.deepEqual(withHead.posts.map((p) => [p.path, p.body.state]), [
-    [`/repos/o/r/statuses/${HEAD}`, "pending"],
-    [`/repos/o/r/statuses/${HEAD}`, "pending"],
+  assert.deepEqual(withHead.posts.map((p) => [p.path, p.body.context, p.body.state]), [
+    [`/repos/o/r/statuses/${HEAD}`, "Merge authorization", "pending"],
+    [`/repos/o/r/statuses/${HEAD}`, "Auto-merge eligible", "pending"],
+    [`/repos/o/r/statuses/${HEAD}`, "Engineering review gate", "pending"],
   ]);
 
   const withoutHead = run(comment, { fail: ["/pulls/7"] });
@@ -209,6 +213,172 @@ test("a renamed human branch, fork, non-draft or different bot is still subject 
     assert.equal(code, 0);
     assert.ok(posts.every((p) => p.body.state !== "success"), JSON.stringify(changed));
   }
+});
+
+// F-013: a PASS written while the base was another branch judged another diff.
+const standard = {
+  ...eligible,
+  body: "Agent: claude:a:platforma\nRisk: standard\nTask: B-1\n",
+};
+const srcFile = [{ filename: "src/a.ts", status: "modified" }];
+const passAt = (at) => ({
+  body: `Agent-Review: claude:b:reviewer\nReview-Head: ${HEAD}\nReview-Verdict: PASS\n`,
+  user: { login: "o" },
+  author_association: "OWNER",
+  performed_via_github_app: { slug: "claude" },
+  created_at: at,
+  updated_at: at,
+});
+const baseChange = (at) => ({ event: "base_ref_changed", created_at: at });
+const gateState = (out) => out.posts.find((p) => p.body.context === "Engineering review gate")?.body.state;
+
+test("control: a review PASS on the head turns the gate green when the base never changed (F-013)", () => {
+  const out = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")] });
+  assert.equal(out.code, 0);
+  assert.equal(gateState(out), "success");
+});
+
+test("a PASS from before the last base change does not count, one after it does (F-013)", () => {
+  const before = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T10:00:00Z")],
+    timeline: [{ event: "commented", created_at: "2026-10-31T09:00:00Z" }, baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.equal(before.code, 0);
+  assert.ok(before.posts.every((p) => p.body.state !== "success"), JSON.stringify(states(before.posts)));
+  // The same second as the change is not after it.
+  const same = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T11:00:00Z")], timeline: [baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.notEqual(gateState(same), "success");
+  // Only the last change counts: a review between two changes is dropped too.
+  const between = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T10:30:00Z")],
+    timeline: [baseChange("2026-10-31T10:00:00Z"), baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.notEqual(gateState(between), "success");
+  const after = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T12:00:00Z")], timeline: [baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.equal(gateState(after), "success");
+});
+
+test("an unreadable timeline or change time fails closed (F-013)", () => {
+  const failed = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")], fail: ["/issues/7/events"] });
+  assert.equal(failed.code, 1);
+  assert.ok(failed.posts.every((p) => p.body.state !== "success"));
+  const noTime = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T12:00:00Z")], timeline: [{ event: "base_ref_changed" }],
+  });
+  assert.notEqual(gateState(noTime), "success");
+});
+
+// QA c.6558749797 on #1117 (1): a PR exempt from review (only a new test)
+// needs no comment, so dropping all comments for an unreadable change time
+// left it green. The run stops and marks all three statuses pending.
+test("a base change without a readable time stops a review-exempt PR too (F-013)", () => {
+  for (const timeline of [[{ event: "base_ref_changed" }], [{ event: "base_ref_changed", created_at: "garbage" }]]) {
+    const out = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], timeline });
+    assert.equal(out.code, 1, JSON.stringify(timeline));
+    assert.deepEqual(states(out.posts), ALL.map((c) => [c, "pending"]), JSON.stringify(timeline));
+    for (const post of out.posts) assert.match(post.body.description, /failed before a verdict/);
+  }
+  // Control: the same PR with a readable change time stays green.
+  const readable = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], timeline: [baseChange("2026-10-31T11:00:00Z")] });
+  assert.equal(readable.code, 0);
+  assert.deepEqual(states(readable.posts), ALL.map((c) => [c, "success"]));
+});
+
+// QA c.6558749797 on #1117 (2): a failed events read must not leave an older
+// green Auto-merge eligible; the failure path writes all three as pending.
+test("a failed events read marks all three statuses pending (F-013)", () => {
+  const out = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], fail: ["/issues/7/events"] });
+  assert.equal(out.code, 1);
+  assert.deepEqual(states(out.posts), ALL.map((c) => [c, "pending"]));
+  // A queue carrier never gets Auto-merge eligible, not even on failure.
+  const carrierFail = run(comment, { pr: carrier, failPostNumber: 1 });
+  assert.equal(carrierFail.code, 1);
+  assert.ok(carrierFail.posts.every((p) => p.body.context !== "Auto-merge eligible"));
+});
+
+// QA c.6561448849 on #1117: the base change filter covers issue comments only.
+// PR reviews reach quota evidence unfiltered, so a review of the exhausted App
+// without a readable time still voids the evidence after a base change.
+const byOwnerAt = (body, at) => ({
+  body, user: { login: "o" }, author_association: "OWNER",
+  performed_via_github_app: { slug: "claude" }, created_at: at, updated_at: at,
+});
+const quotaFallback = [
+  {
+    body: "You have reached your Codex usage limits for code reviews. Ask an admin to raise the limit.",
+    user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, author_association: "NONE",
+    performed_via_github_app: { slug: "chatgpt-codex-connector" },
+    created_at: "2026-10-31T12:00:00Z", updated_at: "2026-10-31T12:00:00Z",
+  },
+  byOwnerAt(`Agent-Review: claude:b:reviewer\nReview-Head: ${HEAD}\nReview-Verdict: PASS\n`, "2026-10-31T12:10:00Z"),
+  byOwnerAt(
+    `QA-Agent: claude:c:qa\nQA-Head: ${HEAD}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\nProvider-Fallback: chatgpt-codex-connector\n`,
+    "2026-10-31T12:20:00Z",
+  ),
+];
+const fallbackPr = { ...eligible, body: "Agent: chatgpt:a:backend\nRisk: critical\nTask: B-1\n" };
+const codexPrReview = (submittedAt) => ({
+  user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, state: "PENDING", body: "Codex Review", submitted_at: submittedAt,
+});
+
+test("a Codex PR review without a readable time voids quota evidence after a base change (F-013)", () => {
+  const input = { pr: fallbackPr, files: srcFile, openPulls: [fallbackPr], comments: quotaFallback, timeline: [baseChange("2026-10-31T11:00:00Z")] };
+  // Control: without the review the fallback holds after the change.
+  assert.equal(gateState(run(comment, input)), "success");
+  for (const submittedAt of [null, undefined, "garbage"]) {
+    const out = run(comment, { ...input, reviews: [codexPrReview(submittedAt)] });
+    assert.equal(out.code, 0, String(submittedAt));
+    assert.equal(gateState(out), "pending", String(submittedAt));
+  }
+  // An old review with a readable time before the change still voids nothing,
+  // as on main: it predates the quota message.
+  assert.equal(gateState(run(comment, { ...input, reviews: [codexPrReview("2026-10-31T10:00:00Z")] })), "success");
+});
+
+// Codex review c.6562680923 on #1117: GitHub retargets a dependent PR after its
+// base branch is deleted and records automatic_base_change_succeeded, not
+// base_ref_changed. That change voids an older PASS and Owner-Command as well.
+const autoChange = (at) => ({ event: "automatic_base_change_succeeded", created_at: at });
+const mergeState = (out) => out.posts.find((p) => p.body.context === "Merge authorization")?.body.state;
+const d97Pr = { ...fallbackPr, body: "Agent: claude:a:platforma\nRisk: critical\nTask: B-1\n" };
+const d97File = [{ filename: "scripts/engineering/review-gate.mjs", status: "modified" }];
+// The owner writes a merge command directly, not through an App.
+const ownerCommandAt = (at) => ({ ...byOwnerAt(`Owner-Command: merge\nCommand-Head: ${HEAD}\n`, at), performed_via_github_app: null });
+
+test("an automatic base change voids an older PASS and Owner-Command, as a manual one does (F-013)", () => {
+  // A review PASS from before the automatic change does not count; one after it does.
+  const stale = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")], timeline: [autoChange("2026-10-31T11:00:00Z")] });
+  assert.equal(stale.code, 0);
+  assert.ok(stale.posts.every((p) => p.body.state !== "success"), JSON.stringify(states(stale.posts)));
+  const fresh = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T12:00:00Z")], timeline: [autoChange("2026-10-31T11:00:00Z")] });
+  assert.equal(gateState(fresh), "success");
+  // The failed variant changes nothing: the PASS keeps counting.
+  const failedAuto = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")],
+    timeline: [{ event: "automatic_base_change_failed", created_at: "2026-10-31T11:00:00Z" }],
+  });
+  assert.equal(gateState(failedAuto), "success");
+  // D-97 PR, verdicts after the change: the owner command from before it does not authorize the merge.
+  const input = { pr: d97Pr, files: d97File, openPulls: [d97Pr], timeline: [autoChange("2026-10-31T11:00:00Z")] };
+  const oldCommand = run(comment, { ...input, comments: [ownerCommandAt("2026-10-31T10:30:00Z"), ...quotaFallback] });
+  assert.equal(oldCommand.code, 0);
+  assert.equal(gateState(oldCommand), "success");
+  assert.equal(mergeState(oldCommand), "pending");
+  const newCommand = run(comment, { ...input, comments: [...quotaFallback, ownerCommandAt("2026-10-31T12:30:00Z")] });
+  assert.equal(mergeState(newCommand), "success");
+  // An automatic change without a readable time stops the run.
+  const noTime = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], timeline: [{ event: "automatic_base_change_succeeded" }] });
+  assert.equal(noTime.code, 1);
+  assert.deepEqual(states(noTime.posts), ALL.map((c) => [c, "pending"]));
 });
 
 // F-014: statuses are per commit. A closed PR, or a PR whose head lives in
