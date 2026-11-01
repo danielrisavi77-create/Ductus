@@ -374,6 +374,11 @@ function renderedStrings(expression: ts.Expression, collect: Collect): void {
       }
       for (const part of parts) if (!isPlainString(part)) renderedStrings(part, collect);
     }
+  } else if (isComposition(expression) && ts.isCallExpression(expression)) {
+    // The parts of `String(x)`, `x.toString()`, `x.concat(…)` and `[…].join(…)`
+    // are pieces of the text they put together (F-024).
+    if (ts.isPropertyAccessExpression(expression.expression)) renderedStrings(expression.expression.expression, collect);
+    for (const argument of expression.arguments) if (!ts.isSpreadElement(argument)) renderedStrings(argument, collect);
   }
 }
 
@@ -548,8 +553,60 @@ function styleMayHide(value: ts.Expression): boolean {
   });
 }
 
-/** A `+` chain or a template with placeholders: text put together from parts. */
-const isComposition = (node: ts.Node): boolean => ts.isTemplateExpression(node) || (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken);
+/** The name of the method a call invokes on an object (`x.join(…)` gives "join"), if it is written as one. */
+const calledMethod = (node: ts.Node): string | undefined =>
+  ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.name) ? node.expression.name.text : undefined;
+
+/** A call of `String(x)`, which renders `x` as text. */
+const isStringCall = (node: ts.Node): node is ts.CallExpression =>
+  ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "String" && node.arguments.length === 1;
+
+/**
+ * A `+` chain, a template with placeholders, or a call that puts text
+ * together from its parts (`[…].join(…)`, `x.concat(…)`, `String(x)`,
+ * `x.toString()`): text put together from parts (F-024).
+ */
+const isComposition = (node: ts.Node): boolean =>
+  ts.isTemplateExpression(node) ||
+  (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) ||
+  isStringCall(node) ||
+  ["join", "concat", "toString"].includes(calledMethod(node) ?? "");
+
+/**
+ * The `const` declarations of a file whose name is declared once in it, by
+ * name: an identifier that names one of them stands for its value wherever it
+ * is used. A name declared twice (a parameter, a `let`, an import or another
+ * `const` of the same name) is left out, since without a type checker the scan
+ * cannot tell which one a use means.
+ */
+function fileConstants(source: ts.SourceFile): Map<string, ts.Expression> {
+  const constants = new Map<string, ts.Expression>();
+  const declared = new Map<string, number>();
+  const count = (name: string): void => void declared.set(name, (declared.get(name) ?? 0) + 1);
+  const names = (binding: ts.BindingName): void => {
+    if (ts.isIdentifier(binding)) count(binding.text);
+    else for (const element of binding.elements) if (!ts.isOmittedExpression(element)) names(element.name);
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) {
+      if (!ts.isBindingElement(node)) names(node.name);
+      const list = ts.isVariableDeclaration(node) ? node.parent : undefined;
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && list && ts.isVariableDeclarationList(list) && list.flags & ts.NodeFlags.Const) {
+        constants.set(node.name.text, node.initializer);
+      }
+    } else if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isEnumDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassExpression(node)) && node.name) {
+      count(node.name.text);
+    } else if (ts.isImportClause(node) && node.name) {
+      count(node.name.text);
+    } else if (ts.isNamespaceImport(node) || ts.isImportSpecifier(node) || ts.isImportEqualsDeclaration(node)) {
+      count(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  for (const name of [...constants.keys()]) if (declared.get(name) !== 1) constants.delete(name);
+  return constants;
+}
 
 /** What holds `node`, looking out through brackets, type assertions and the placeholder of a template. */
 function holder(node: ts.Node): ts.Node {
@@ -573,6 +630,9 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
   let audience: Audience | undefined;
   /** Set when the text being read has more readings than are kept; see `findUnreadableText`. */
   let overflowed = false;
+  /** The values that names stand for (`fileConstants`), and the names being read now, so a cycle ends. */
+  const constants = fileConstants(source);
+  const resolving = new Set<string>();
 
   // Readings of parts that follow one another. A part that would take the
   // count past MAX_READINGS is read as unknown text and its alternatives go to
@@ -635,6 +695,58 @@ function componentText(source: ts.SourceFile, reader: Reader, mode: "component" 
           operands(expression).map((part) => expressionReadings(part, alone)),
           alone,
         );
+      }
+    }
+    // F-024: the same constant folding for a text module and a component. A
+    // name stands for its `const` value, and the calls that put text together
+    // are read as the parts in a row.
+    if (ts.isIdentifier(expression)) {
+      const value = constants.get(expression.text);
+      if (!value || resolving.has(expression.text)) return [UNKNOWN];
+      resolving.add(expression.text);
+      const before = overflowed;
+      try {
+        const readings = expressionReadings(value, alone);
+        // A value with one reading is part of the text around it. A value
+        // with alternatives is checked by itself and stands in the text as
+        // unknown, as a name did before, so legitimate choices between texts
+        // do not take a text past MAX_READINGS.
+        if (readings.length === 1 && overflowed === before) return readings;
+        overflowed = before;
+        alone.push(...readings);
+        return [UNKNOWN];
+      } finally {
+        resolving.delete(expression.text);
+      }
+    }
+    if (isStringCall(expression)) {
+      const [argument] = expression.arguments;
+      return argument && !ts.isSpreadElement(argument) ? expressionReadings(argument, alone) : [UNKNOWN];
+    }
+    if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
+      const method = calledMethod(expression);
+      const target = expression.expression.expression;
+      const args = expression.arguments;
+      const part = (node: ts.Expression): Reading[] => (ts.isSpreadElement(node) ? [UNKNOWN] : expressionReadings(node, alone));
+      if (method === "toString" && args.length === 0) return expressionReadings(target, alone);
+      if (method === "concat") return inSequence([target, ...args].map(part), alone);
+      if (method === "join" && args.length <= 1) {
+        let items: readonly ts.Expression[] | undefined;
+        let array: ts.Expression = target;
+        while (ts.isParenthesizedExpression(array) || ts.isAsExpression(array) || ts.isSatisfiesExpression(array) || ts.isNonNullExpression(array)) array = array.expression;
+        if (ts.isIdentifier(array) && !resolving.has(array.text)) {
+          const value = constants.get(array.text);
+          if (value && ts.isArrayLiteralExpression(value)) array = value;
+        }
+        if (ts.isArrayLiteralExpression(array)) items = array.elements;
+        if (!items) return [UNKNOWN];
+        const separator = args[0] ? part(args[0]) : exactly(",");
+        const parts: Reading[][] = [];
+        items.forEach((item, index) => {
+          if (index > 0) parts.push(separator);
+          parts.push(ts.isOmittedExpression(item) ? [EMPTY] : part(item));
+        });
+        return inSequence(parts, alone);
       }
     }
     return [UNKNOWN];

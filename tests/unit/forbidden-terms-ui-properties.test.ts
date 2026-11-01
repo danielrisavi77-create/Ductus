@@ -75,10 +75,16 @@ describe.each(["src/client/columns.ts", "src/components/Table.tsx"])("UI object 
   it.each([
     'const KEY = "label"; const options = { [KEY]: "Hidden" };',
     'const label = "Hidden"; const options = { label };',
-    'const LABEL = "Hidden"; const options = { label: LABEL };',
     'import { LABEL } from "./tokens"; const options = { label: LABEL };',
   ])("documents an unresolved binding: %s", (source) => {
     expect(entries(file, source)).toEqual([]);
+  });
+
+  // F-024: a name declared once in the file as a `const` stands for its value.
+  it("reads a const declared once in the file as its value", () => {
+    expect(entries(file, 'const LABEL = "Hidden"; const options = { label: LABEL };')).toEqual(["hidden"]);
+    // Declared twice, the scan cannot tell which one is meant, as before.
+    expect(entries(file, 'const LABEL = "Hidden"; const options = { label: LABEL }; function f(LABEL: string) { return LABEL; }')).toEqual([]);
   });
 });
 

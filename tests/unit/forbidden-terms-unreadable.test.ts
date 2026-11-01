@@ -1525,11 +1525,46 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     expect(reasons().map(([, , reason]) => reason)).toEqual([`more than 64 readings of one text (${UNREADABLE_HINTS.readings})`]);
   });
 
-  it("puts text together like that only in a text module", () => {
+  it("puts text together like that only in a text module and where a component renders it", () => {
     // Outside one, a string is checked against the Croatian entries by itself, as before.
     write("src/domain/sync/state.ts", 'export const A = "Hid" + "den";\nexport const B = "Sum" + "njivo";\n');
-    write("src/components/Case.tsx", 'const label = "Kopi" + "rano";\nexport const Case = () => <p>{label}</p>;\n');
     expect(entries()).toEqual([]);
+    // F-024: a component that renders a const put together that way reads it.
+    write("src/components/Case.tsx", 'const label = "Kopi" + "rano";\nexport const Case = () => <p>{label}</p>;\n');
+    expect(entries()).toEqual(["kopirano"]);
+  });
+
+  // F-024 class 3: text put together outside a JSX expression, one constant
+  // folding for a text module and a component.
+  const FOLDED: readonly [string, string, string][] = [
+    ["join in a catalogue", "src/lib/i18n/hr.ts", 'export const A = ["Sum", "njivo"].join("");\n'],
+    ["join of a const array in a catalogue", "src/lib/i18n/hr.ts", 'const PARTS = ["Sum", "njivo"];\nexport const A = PARTS.join("");\n'],
+    ["concat in a text module", "src/domain/sync/labels.ts", 'export const A = "Sum".concat("njivo");\n'],
+    ["concat of a const in a text module", "src/domain/sync/labels.ts", 'const HEAD = "Sum";\nexport const A = HEAD.concat("njivo");\n'],
+    ["String() in a catalogue", "src/lib/i18n/hr.ts", 'export const A = String("Sum") + "njivo";\n'],
+    ["toString() in a catalogue", "src/lib/i18n/hr.ts", 'export const A = "Sum".toString() + "njivo";\n'],
+    ["a const in a template in a catalogue", "src/lib/i18n/hr.ts", 'const HEAD = "Sum";\nexport const A = `${HEAD}njivo`;\n'],
+    ["a const of a const in a catalogue", "src/lib/i18n/hr.ts", 'const H = "Sum";\nconst HEAD = H;\nexport const A = HEAD + "njivo";\n'],
+    ["a const rendered in a component", "src/components/Case.tsx", 'const label = ["Sum", "njivo"].join("");\nexport const Case = () => <p>{label}</p>;\n'],
+    ["a const next to text in a component", "src/components/Case.tsx", 'const head = "Sum";\nexport const Case = () => <p>{head}njivo</p>;\n'],
+    ["join in a component", "src/components/Case.tsx", 'export const Case = () => <p>{["Sum", "njivo"].join("")}</p>;\n'],
+    ["concat in a component", "src/components/Case.tsx", 'export const Case = () => <p>{"Sum".concat("njivo")}</p>;\n'],
+    ["String() next to text in a component", "src/components/Case.tsx", 'export const Case = () => <p>{String("Sum")}njivo</p>;\n'],
+    ["a const in an attribute", "src/components/Case.tsx", 'const label = "Sum" + "njivo";\nexport const Case = () => <img alt={label} />;\n'],
+    ["a const with alternatives, each by itself", "src/components/Case.tsx", 'const label = Math.random() > 0.5 ? "Sum" + "njivo" : "Rok";\nexport const Case = () => <p>{label}</p>;\n'],
+  ];
+
+  it.each(FOLDED)("reads text put together by %s", (_, file, content) => {
+    write(file, content);
+    expect(entries()).toEqual(["sumnjivo"]);
+  });
+
+  it("does not follow a name declared twice, a join it cannot read or a cycle", () => {
+    // Shadowed: the parameter is what the function renders.
+    write("src/components/Case.tsx", 'const head = "Sum";\nexport function Case(head: string) { return <p>{head}njivo</p>; }\n');
+    write("src/lib/i18n/hr.ts", 'const a: string = b + "x";\nconst b: string = a + "y";\nexport const A = a;\nexport const B = [x, y].join(sep);\nexport const C = items.join("");\n');
+    expect(entries()).toEqual([]);
+    expect(reasons()).toEqual([]);
   });
 
   // QA of e11efe6: the program that is asked for syntax errors holds the one
