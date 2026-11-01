@@ -2,7 +2,7 @@
 
 Verzija 0.1 · 31. 10. 2026. · Dopuna `docs/PROGRAM.md` prema D-191 (trag: #87 [c.6524612217](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6524612217); vlasnikovo odobrenje 31. 10. 2026.: „Može, kreni bez datuma”).
 
-Dokument daje redoslijed faza i koraka, **bez datuma**. Novi raspored i datum pilota zasebna su vlasnička odluka (D-191 t. 2, Owner queue u `STATE.md`). Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
+Dokument daje redoslijed faza i koraka, **bez datuma**. Ciljni datumi po fazi i kontrolne točke su u D-199 t. 6 (ODLUČENO 1. 11. 2026.; novi raspored iz D-191 t. 2) i u Linear milestoneovima. Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
 
 ## Kako čitati
 
@@ -334,7 +334,7 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 
 ## Otvorena pitanja za vlasnika
 
-1. Novi raspored i datum pilota (D-191 t. 2; već u Owner queueu).
+1. ~~Novi raspored i datum pilota.~~ Riješeno 1. 11. 2026.: pilot 1. 3. 2027. (D-194 t. 1), raspored D-199 t. 6 (#87 c.6551869348).
 2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno), i to u val 1 (D-199 t. 1). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?

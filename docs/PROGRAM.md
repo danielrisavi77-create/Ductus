@@ -2,7 +2,7 @@
 
 Verzija 0.3 · 30. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
-**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
+**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Novi raspored je D-199 t. 6 (ODLUČENO 1. 11. 2026.): kod vala 1 spreman 22. 2. 2027., pilot 1. 3. 2027.; datumi u odjeljcima ispod koji su stariji od te odluke ostaju povijesni zapis. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
 
 Faze idu redom po ovisnostima. Faza je gotova tek kad je njezin izlazni kriterij dokazan testom ili zapisom, ne kad je kod napisan. Procjene su u večerima rada (oko 3 sata) jedne osobe uz AI agente i služe samo za planiranje.
 
@@ -96,7 +96,7 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
-Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenjuje raniju rečenicu „Bez AI pomoćnika u ovom valu”), ali ga zadatak i dalje ne smije tražiti (D-38). M9 nije u tablici ni u zbroju ispod; raspored koji ga uklapa do 1. 3. 2027. je PRIJEDLOG u D-199 t. 6 (D-191). Dio M8 iz D-198 t. 1 (čitanje verzija iz clouda) prema tom prijedlogu seli iz vala 2 u val 1; dodaci za Word i Google Docs idu u sljedeći val (D-198 t. 2). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenjuje raniju rečenicu „Bez AI pomoćnika u ovom valu”), ali ga zadatak i dalje ne smije tražiti (D-38). M9 nije u tablici ni u zbroju ispod; raspored koji ga uklapa do 1. 3. 2027. je D-199 t. 6 (ODLUČENO, D-191 t. 2). Dio M8 iz D-198 t. 1 (čitanje verzija iz clouda) prema tom rasporedu seli iz vala 2 u val 1; dodaci za Word i Google Docs idu u sljedeći val (D-198 t. 2). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
