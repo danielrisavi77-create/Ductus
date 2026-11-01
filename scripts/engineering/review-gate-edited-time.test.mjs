@@ -96,25 +96,22 @@ test("an edited PASS does not lift an earlier FAIL of the same principal (F-012)
 });
 
 // Review of #1152 (issuecomment-6554110503): PASS at t1, FAIL at t2, and the
-// t2 comment edited at t3. Whatever the edit leaves, the principal's earlier
-// PASS must not count again.
+// t2 comment edited at t3. Whether the edit leaves a PASS or an unreadable
+// verdict on the same head, the principal's earlier PASS must not count again.
+// An edit that moves the comment to another head is outside this PR (rest of
+// F-012).
 test("an edit of a principal's later FAIL never brings back its earlier PASS (F-012)", () => {
-  const other = "b".repeat(40);
-  for (const [name, edited] of [
-    ["edited into PASS", "PASS"],
-    ["edited into an unreadable verdict", "maybe"],
-    ["edited onto another head", null],
-  ]) {
-    const later = edited === null
-      ? byOwner(`Agent-Review: claude:b:reviewer\nReview-Head: ${other}\nReview-Verdict: PASS\n`, 2 * HOUR, 3 * HOUR)
-      : review("claude:b:reviewer", edited, 2 * HOUR, 3 * HOUR);
+  for (const edited of ["PASS", "maybe"]) {
     for (const risk of ["standard", "critical"]) {
-      const result = evaluate([review("claude:b:reviewer", "PASS", HOUR), later], risk);
-      assert.notEqual(result.state, "success", `${name} (${risk})`);
+      const result = evaluate(
+        [review("claude:b:reviewer", "PASS", HOUR), review("claude:b:reviewer", edited, 2 * HOUR, 3 * HOUR)],
+        risk,
+      );
+      assert.notEqual(result.state, "success", `edited into ${edited} (${risk})`);
     }
   }
   // Control: without the edit the later FAIL blocks, and a fresh PASS of the
-  // same principal after the edit counts again (standard, F-023 aside).
+  // same principal after the edit counts again.
   assert.notEqual(evaluate([review("claude:b:reviewer", "PASS", HOUR), review("claude:b:reviewer", "FAIL", 2 * HOUR)], "standard").state, "success");
   assert.equal(
     evaluate([review("claude:b:reviewer", "PASS", HOUR, 3 * HOUR), review("claude:b:reviewer", "PASS", 4 * HOUR)], "standard").state,
@@ -122,8 +119,9 @@ test("an edit of a principal's later FAIL never brings back its earlier PASS (F-
   );
 });
 
-// Codex on fad70e1 (#1152): an edit holds its principal but never removes the
-// principal's own earlier FAIL or BLOCK, even when another reviewer passed.
+// Codex on fad70e1 (#1152): an edit holds its principal but never turns the
+// principal's own earlier FAIL or BLOCK on that head into a mere wait, even
+// when another reviewer passed.
 test("an edited comment does not lift its principal's earlier FAIL or BLOCK (F-012)", () => {
   for (const negative of ["FAIL", "BLOCK"]) {
     for (const edited of ["maybe", "PASS"]) {
@@ -135,19 +133,34 @@ test("an edited comment does not lift its principal's earlier FAIL or BLOCK (F-0
         ],
         "standard",
       );
-      assert.notEqual(result.state, "success", `${negative} then edited ${edited}`);
+      assert.equal(result.state, "pending", `${negative} then edited ${edited}`);
+      assert.match(result.description, new RegExp(`review ${negative.toLowerCase()}`), `${negative} then edited ${edited}`);
     }
   }
-  // Control: a fresh unedited PASS of the same principal after the edit counts.
-  const fresh = evaluate(
-    [
-      review("claude:b:reviewer", "FAIL", HOUR),
-      review("claude:b:reviewer", "maybe", 3 * HOUR, 4 * HOUR),
-      review("claude:b:reviewer", "PASS", 5 * HOUR),
-    ],
-    "standard",
-  );
-  assert.equal(fresh.state, "success");
+});
+
+// Codex review of #1152 (issuecomment-6560893129): the edited comment stays on
+// its own head. On a carried head (clean base merge, D-101) a newer unedited
+// PASS of the same principal on that head replaces it, as on the current head.
+test("an edited comment on a carried head gives way to a newer unedited PASS (F-012)", () => {
+  const earlier = "c".repeat(40);
+  const on = (h, c) => ({ ...c, body: c.body.replaceAll(head, h) });
+  const codexApp = (c) => ({ ...c, performed_via_github_app: { slug: "chatgpt-codex-connector" } });
+  const qa = (verdict, createdMs, updatedMs) =>
+    codexApp(byOwner(`QA-Agent: codex:q:qa\nQA-Head: ${head}\nQA-Verdict: ${verdict}\nQA-Scope: synthetic\n`, createdMs, updatedMs));
+  const comments = [
+    review("claude:b:reviewer", "maybe", HOUR, 2 * HOUR),
+    review("claude:b:reviewer", "PASS", 3 * HOUR),
+    qa("maybe", HOUR, 2 * HOUR),
+    qa("PASS", 3 * HOUR),
+  ];
+  const gate = (list, headSha, carriedHeads) =>
+    evaluateGate({ body: prBody("critical"), headSha, ownerLogin, comments: list, carriedHeads });
+  assert.equal(gate(comments, head, new Set()).state, "success");
+  assert.equal(gate(comments.map((c) => on(earlier, c)), head, new Set([earlier])).state, "success");
+  // The same edit after the newer PASS still holds the carried head.
+  const editedLast = [review("claude:b:reviewer", "PASS", HOUR), review("claude:b:reviewer", "PASS", 2 * HOUR, 3 * HOUR), qa("PASS", 2 * HOUR)];
+  assert.equal(gate(editedLast.map((c) => on(earlier, c)), head, new Set([earlier])).state, "pending");
 });
 
 test("an edited QA comment does not bring back the same QA principal's earlier PASS (F-012)", () => {

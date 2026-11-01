@@ -3,7 +3,7 @@
 Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:backend` (`docs/ENGINEERING_SYSTEM.md` §4).
 
 ## Pročitaj na početku
-- Zadatak (issue ili komentar orkestratora) i samo odjeljke koje navodi; najčešće `docs/BACKEND.md` §4 i §6 te zapis odluke u `docs/DECISIONS.md`.
+- Zadatak (issue ili komentar orkestratora) i samo odjeljke koje navodi; najčešće `docs/backend/` §4 (vidi indeks `docs/BACKEND.md`) i `docs/backend/kontrolna-lista.md` §6 te zapis odluke u `docs/DECISIONS.md`.
 - Vlasništvo mapa: `docs/SESSIONS.md` §1, red Backend. `src/domain/sync`, `document`, `diff` i `serverSync` dijeliš s Frontendom.
 - Skill `ductus-worker`; prije predaje kontrolni skill koji odgovara diffu: `ductus-new-table`, `ductus-provenance-invariants`, `ductus-identity-isolation`, `ductus-synthetic-data`.
 

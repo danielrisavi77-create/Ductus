@@ -380,40 +380,55 @@ function latestVerdicts(entries, {
 
     if (!isAgent(agent, role) || !identity || !identity.principal) continue;
 
-    // F-012: an edited comment of a known principal is that principal's latest
-    // word (its time is the edit time, #129), even when the edit left nothing
-    // countable: a PASS, an unreadable verdict, a missing field or another
-    // head. It then holds the principal on the current head as EDITED, which
-    // is neither a PASS nor a FAIL, so an edit never brings back the
-    // principal's earlier PASS. An edited FAIL or BLOCK on a counted head
-    // keeps its verdict.
+    // F-012: an edited comment never gives a PASS. An edited comment of a known
+    // principal on a counted head is that principal's latest word on that head
+    // (its time is the edit time, #129), even when the edit left a PASS or an
+    // unreadable verdict: it then holds that head's slot as EDITED, which is
+    // neither a PASS nor a FAIL, so an edit never brings back the principal's
+    // earlier PASS on that head. An edited FAIL or BLOCK keeps its verdict. An
+    // edit that moves the comment to another head, removes the block or names
+    // another principal is not covered here (rest of F-012, owner).
     const counted = sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase());
-    const readable = counted && Boolean(verdict) && VERDICTS.has(verdict) && !(extraField && !extra);
+    if (!counted) continue;
+    const readable = Boolean(verdict) && VERDICTS.has(verdict) && !(extraField && !extra);
     const held = entry.edited && !(readable && NEGATIVE.has(verdict));
     if (!readable && !held) continue;
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: held ? headSha.toLowerCase() : head.toLowerCase(), verdict: held ? "EDITED" : verdict,
-      extra, fallback, fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
-      current: held || sameHead(head, headSha) };
+    const candidate = { agent, head: head.toLowerCase(), verdict: held ? "EDITED" : verdict, extra, fallback,
+      fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
+      current: sameHead(head, headSha) };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
     const slot = candidate.current ? "current" : "carried";
     if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
     latest.set(key, slots);
-    if (NEGATIVE.has(candidate.verdict) && (!negatives.has(key) || compareOrder(candidate.order, negatives.get(key).order) > 0)) {
-      negatives.set(key, candidate);
+    if (NEGATIVE.has(candidate.verdict)) {
+      // Carried heads have the same PR diff (only clean base merges since), so
+      // a negative on one of them is kept under one key for all of them.
+      const where = candidate.current ? `${key}|current` : `${key}|carried`;
+      const held = negatives.get(where);
+      if (!held || compareOrder(candidate.order, held.order) > 0) negatives.set(where, candidate);
     }
   }
 
-  // An edit only holds the principal: it never removes the principal's own
-  // FAIL or BLOCK (Codex on fad70e1, #1152). Without a fresh unedited verdict
-  // the principal's latest negative, current or carried, still stands.
-  return new Map([...latest].map(([key, slots]) => {
-    const current = slots.current?.verdict === "EDITED" && negatives.has(key) ? negatives.get(key) : slots.current;
-    return [key, prevailing({ ...slots, current })];
-  }));
+  // F-023 (owner decision #87 issuecomment-6551590871, 1. 11. 2026.): within one
+  // principal, a FAIL or BLOCK on a head is not cleared by a later PASS on that
+  // head. A carried PASS is held by a FAIL or BLOCK on any carried head, since
+  // the gate cannot tell which carried head is newer (review of #1155, F-023-R1).
+  // Only a verdict on the current head (after a new push or a clean base merge,
+  // as before), or the owner's Owner-Override for the exact head, moves past it.
+  // An EDITED slot (F-012) is held the same way, so an edit never turns the
+  // principal's FAIL or BLOCK on that head into a mere wait.
+  const held = (candidate, key) =>
+    candidate && !NEGATIVE.has(candidate.verdict)
+      ? negatives.get(`${key}|${candidate.current ? "current" : "carried"}`) ?? candidate
+      : candidate;
+  return new Map([...latest].map(([key, slots]) => [
+    key,
+    prevailing({ current: held(slots.current, key), carried: held(slots.carried, key) }),
+  ]));
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the

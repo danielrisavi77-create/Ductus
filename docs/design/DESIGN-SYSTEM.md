@@ -1,8 +1,10 @@
 # Ductus: dizajn sustav (mjerodavno)
 
-Verzija 1.2 · 28. 10. 2026. · issue #960
+Verzija 1.2 · 28. 10. 2026. · konačni smjer potvrđen 29. 10. 2026. · issue #960
 
 Ovo je **jedini pisani izvor** za izgled aplikacije: boje, tipografiju, oblike, razmake i pravila. Vrijednosti tokena žive u `app/globals.css`; test `src/components/shell/design-doc.test.ts` pada čim se tablica u §3 i `globals.css` raziđu. Sve druge tablice boja u repou (`docs/design/ductura/README.md` §8, slajdovi #323, stari PR-ovi) su povijest.
+
+**Konačni smjer za sve agente, sesije i orkestratora je „papir i grafit”**, prema [Danielovoj potvrdi od 29. 10. 2026.](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007) i D-188. Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato; svijetla ljuska i tamni list ostaju korisnički izbori. Drugi smjer traži novu izričitu vlasnikovu odluku s datumom, izvorom i navodom što zamjenjuje. Postupak izvedbe i provjere je `docs/SESSIONS.md` §6.
 
 ## 1. Redoslijed mjerodavnosti
 

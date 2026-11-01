@@ -2,6 +2,9 @@ import type { WithActor } from "@/server/db/with-actor";
 import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-request";
 
 export const MAX_COURSE_BODY_BYTES = 2048;
+// A slow client must not hold the request open while it trickles the body
+// (DAN-302 L1); the same limit as the other mutation routes.
+const BODY_TIMEOUT_MS = 5_000;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const POLICIES = new Set(["prohibited", "partially_allowed", "encouraged"]);
@@ -60,7 +63,7 @@ export async function handleCreateCourse(request: Request, deps: CreateCourseDep
     return respond(415, "unsupported_media_type");
   }
 
-  const body = await readBodyWithLimit(request, MAX_COURSE_BODY_BYTES);
+  const body = await readBodyWithLimit(request, MAX_COURSE_BODY_BYTES, BODY_TIMEOUT_MS);
   if (!body.ok) return respond(body.status, body.reason);
 
   let value: unknown;
