@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
+import { THEME_KEY } from "../../src/components/shell/theme";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { SESSION_COOKIE, signIn } from "./support";
 import { localAdminUrl } from "./local-db-url";
@@ -14,17 +15,26 @@ import { localAdminUrl } from "./local-db-url";
 const TEACHER_PAGES = ["/nastavnik", "/nastavnik/zadatak/novi", "/nastavnik/brz-put"] as const;
 const SECOND_TEACHER = "demo-teacher-2@demo.ductus.test";
 
+/**
+ * The theme is the shell's own choice in this browser (theme.ts, D-188), not
+ * the system setting, so each theme is stored and the page reloaded. Shots
+ * finish the drawer's transition after a resize instead of catching it.
+ */
 async function shoot(page: Page, name: string): Promise<void> {
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate(([key, value]) => localStorage.setItem(key, value), [THEME_KEY, theme]);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expectNoAxeViolations(page);
     for (const width of [1440, 400]) {
       await page.setViewportSize({ width, height: 900 });
-      await test.info().attach(`${name}-${colorScheme}-${width}`, {
-        body: await page.screenshot({ fullPage: true }), contentType: "image/png",
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await test.info().attach(`${name}-${theme}-${width}`, {
+        body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png",
       });
     }
   }
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
 
 async function expectNoAxeViolations(page: Page): Promise<void> {
