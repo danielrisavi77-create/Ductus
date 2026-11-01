@@ -131,13 +131,16 @@ export function lowReviewExempt(files) {
 // db/tests/, helpers, fixtures and every other directory.
 const NEW_TEST_RE = /^(?:src|tests\/unit)\/.+\.(?:test|spec)\.ts$/;
 const ROUTE_DIRS = ["src/app/", "src/pages/"];
+// The exclusions ignore letter case (a case-insensitive file system resolves
+// Node_Modules like node_modules; matchesPath already ignores it); the
+// allowlist does not.
 export const isNewTestExempt = (file) => {
   const p = normalizePath(file);
   return (
     NEW_TEST_RE.test(p) &&
     !matchesPath(p, ROUTE_DIRS) &&
     !hasDotSegment(p) &&
-    !p.split("/").includes("node_modules") &&
+    !p.toLowerCase().split("/").includes("node_modules") &&
     ownerCommandPaths([p]).length === 0
   );
 };

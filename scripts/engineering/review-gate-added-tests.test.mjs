@@ -201,6 +201,25 @@ test("a new test file on a path Next.js serves, or outside the test directories,
   }
 });
 
+// The exclusions ignore letter case: a case-insensitive file system (Windows,
+// macOS) resolves Node_Modules or App the same as node_modules or app.
+test("a new test under node_modules or a route directory in any letter case still waits for review", () => {
+  for (const filename of [
+    "src/node_modules/x.test.ts",
+    "src/Node_Modules/x.test.ts",
+    "tests/unit/NODE_MODULES/pkg/x.test.ts",
+    "src/App/x.test.ts",
+    "src/PAGES/api/x.test.ts",
+  ]) {
+    for (const risk of ["standard", "critical"]) {
+      const out = evaluate(risk, [{ filename, status: "added" }]);
+      assert.notEqual(out.result.state, "success", `${risk} ${filename}`);
+      assert.notEqual(out.mergeAuthorization?.state, "success", `${risk} ${filename}`);
+      assert.notEqual(out.autoMergeEligible?.state, "success", `${risk} ${filename}`);
+    }
+  }
+});
+
 test("new unit tests and specs under src/ and tests/unit/ remain exempt", () => {
   const out = run([
     { filename: "tests/unit/auth/new-guard.test.ts", status: "added" },
