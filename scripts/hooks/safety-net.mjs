@@ -213,13 +213,61 @@ export function findRulebookDir(cwd, root) {
     if (parent === dir) break;
     dir = parent;
   }
-  if (bounded) return chain.find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
-  if (!fs.existsSync(path.join(cwd, ...RULEBOOK)) || !root) return null;
+  const found = bounded ? chain.find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) : cwd;
+  if (!found || !fs.existsSync(path.join(found, ...RULEBOOK)) || !root) return null;
+  // Review of #1110 (F-035 a): a `.git` alone does not make a checkout of this
+  // repository. Without the digest check the rules may come only from the top
+  // of a checkout that shares the root's git directory: the root itself, a git
+  // worktree whose admin directory links back to it, or the main checkout.
+  // Any other place (a directory with a planted `.git`, a subdirectory with its
+  // own config, another clone) counts only with the project root's config.
+  if (bounded && found === chain[chain.length - 1] && sameRepository(found, root)) return found;
   try {
-    return treeDigest(path.join(cwd, PROJECT_CONFIG)) === treeDigest(path.join(root, PROJECT_CONFIG)) ? cwd : null;
+    return treeDigest(path.join(found, PROJECT_CONFIG)) === treeDigest(path.join(root, PROJECT_CONFIG)) ? found : null;
   } catch {
     return null;
   }
+}
+
+const samePath = (a, b) => {
+  const norm = (p) => {
+    let real = path.resolve(p);
+    try {
+      real = fs.realpathSync.native(real);
+    } catch {
+      // A path that cannot be resolved is compared as written.
+    }
+    return process.platform === "win32" ? real.toLowerCase() : real;
+  };
+  return norm(a) === norm(b);
+};
+
+// The common git directory of the checkout at `dir`, or null. A `.git` file
+// counts only when its admin directory links back to it (`gitdir`), as git
+// writes it for `git worktree add`.
+function commonGitDir(dir) {
+  const dotGit = path.join(dir, ".git");
+  try {
+    if (fs.statSync(dotGit).isDirectory()) return dotGit;
+    const admin = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotGit, "utf8"))?.[1];
+    if (!admin) return null;
+    const adminDir = path.resolve(dir, admin);
+    const back = fs.readFileSync(path.join(adminDir, "gitdir"), "utf8").trim();
+    if (!samePath(path.resolve(adminDir, back), dotGit)) return null;
+    const common = fs.readFileSync(path.join(adminDir, "commondir"), "utf8").trim();
+    const commonDir = path.resolve(adminDir, common);
+    // The admin directory must be one of the common directory's worktrees.
+    return samePath(path.dirname(adminDir), path.join(commonDir, "worktrees")) ? commonDir : null;
+  } catch {
+    return null;
+  }
+}
+
+function sameRepository(checkout, root) {
+  if (samePath(checkout, root)) return true;
+  const mine = commonGitDir(checkout);
+  const theirs = commonGitDir(root);
+  return Boolean(mine && theirs && samePath(mine, theirs));
 }
 
 // Every input of the package 2.6.1 that can change what it denies, for the key
@@ -443,7 +491,7 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
     );
   };
   if (!rulebookDir && fs.existsSync(path.join(cwd, ...RULEBOOK))) {
-    return noRules(`${cwd} is outside the checkout and its ${PROJECT_CONFIG} differs from the project root's, so it is not accepted as the project rules`);
+    return noRules(`${cwd} is not the top of a checkout of this repository and its ${PROJECT_CONFIG} differs from the project root's, so it is not accepted as the project rules`);
   }
   if (!rulebookDir) {
     return noRules(`no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`);

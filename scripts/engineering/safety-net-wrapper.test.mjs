@@ -351,6 +351,50 @@ test("review: the verdict follows the event cwd; a cwd without the project ruleb
       fs.writeFileSync(rulebook, fs.readFileSync(path.join(tree.root, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json")));
       fs.writeFileSync(path.join(withRules, ".cc-safety-net", "extra.json"), "{}");
       assert.equal(run(tree, "Bash", "git status", withRules).code, 2, "extra config file outside the checkout");
+
+      // Review of #1110 (F-035 a): a planted `.git` does not make a checkout.
+      // A reduced copy that still denies both probes, under a directory with
+      // its own `.git`, a `.git` file without a back link, or in a
+      // subdirectory of such a place, is refused like any other place.
+      // The copy differs from the root's (a changed byte), so only a real
+      // checkout of the same repository may use it.
+      const rootRulebook = path.join(tree.root, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json");
+      fs.writeFileSync(rulebook, fs.readFileSync(rootRulebook, "utf8").replace(/\s*$/, "\n "));
+      fs.rmSync(path.join(withRules, ".cc-safety-net", "extra.json"));
+      const sub = path.join(withRules, "sub");
+      fs.mkdirSync(sub);
+      fs.cpSync(path.join(withRules, ".cc-safety-net"), path.join(sub, ".cc-safety-net"), { recursive: true });
+      for (const plant of [
+        () => fs.mkdirSync(path.join(withRules, ".git")),
+        () => fs.writeFileSync(path.join(withRules, ".git"), `gitdir: ${path.join(tree.root, "nowhere")}\n`),
+      ]) {
+        fs.rmSync(path.join(withRules, ".git"), { recursive: true, force: true });
+        plant();
+        for (const tool of TOOLS) {
+          for (const dir of [withRules, sub]) {
+            const planted = run(tree, tool, "git status", dir);
+            assert.equal(planted.code, 2, `planted .git, ${tool}, ${dir === sub ? "subdirectory" : "top"}`);
+          }
+        }
+      }
+      // Control: the same changed copy at the top of a git worktree of the
+      // root's repository (admin directory linking back) keeps its own rules,
+      // as worktrees did before; a `.git` file pointing at that admin
+      // directory from somewhere else does not.
+      fs.rmSync(path.join(withRules, ".git"), { recursive: true, force: true });
+      const admin = path.join(tree.root, ".git", "worktrees", "w");
+      fs.mkdirSync(admin, { recursive: true });
+      fs.writeFileSync(path.join(admin, "commondir"), "../..\n");
+      fs.writeFileSync(path.join(admin, "gitdir"), `${path.join(withRules, ".git")}\n`);
+      fs.writeFileSync(path.join(withRules, ".git"), `gitdir: ${admin}\n`);
+      for (const tool of TOOLS) {
+        const ok = run(tree, tool, "git add -A", withRules);
+        assert.equal(ok.code, 0, `genuine worktree, ${tool}`);
+        assert.match(ok.stdout, /deny/);
+        assert.equal(run(tree, tool, "git status", sub).code, 2, `subdirectory of a worktree with its own config, ${tool}`);
+      }
+      fs.writeFileSync(path.join(admin, "gitdir"), `${path.join(tree.root, "elsewhere", ".git")}\n`);
+      assert.equal(run(tree, "Bash", "git status", withRules).code, 2, "admin directory linking elsewhere");
     } finally {
       fs.rmSync(bare, { recursive: true, force: true });
       fs.rmSync(withRules, { recursive: true, force: true });
@@ -562,8 +606,14 @@ test("review: every part of the verdict key starts a new probe", { timeout: 1800
       step("listed tool-directory variable", () => (env = { ...env, XDG_CONFIG_HOME: path.join(home, "xdg") }));
       {
         // Same rulebook content in another checkout directory: another state.
+        // The other checkout is a git worktree of the root's repository (its
+        // admin directory links back), since a planted `.git` alone no longer
+        // makes a checkout (review of #1110, F-035 a).
         write(path.join(other, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"), "{}");
-        write(path.join(other, ".git"), "gitdir: elsewhere");
+        const admin = path.join(tree.root, ".git", "worktrees", "other");
+        write(path.join(admin, "commondir"), "../..\n");
+        write(path.join(admin, "gitdir"), `${path.join(other, ".git")}\n`);
+        write(path.join(other, ".git"), `gitdir: ${admin}\n`);
         const before = probes();
         assert.equal(ls(other).code, 0);
         assert.equal(probes() - before, 2, "rulebook directory is part of the key");

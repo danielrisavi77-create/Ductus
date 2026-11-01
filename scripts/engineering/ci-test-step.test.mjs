@@ -129,7 +129,9 @@ test("the required job itself cannot be skipped or made non-blocking (#195 item 
 // term: with `||` the throw still fires whenever the platform is not Windows.
 const MARKERS = ["skip", "todo", "only"].join("|");
 const MARKED = new RegExp(
-  `\\b(?:test|describe|it|t)\\.(?:${MARKERS})\\b|(?:[{,]|^)\\s*(["'\`]?)(?:${MARKERS})\\1\\s*:`,
+  `\\b(?:test|describe|it|t)\\.(?:${MARKERS})\\b|(?:[{,]|^)\\s*(["'\`]?)(?:${MARKERS})\\1\\s*:` +
+    // Review of #1110: a shorthand option key, alone or among others.
+    `|\\{\\s*(?:[^{}]*,\\s*)?(?:${MARKERS})\\s*[,}]|^\\s*(?:${MARKERS})\\s*,?\\s*$`,
 );
 const SKIP_CALL = `(?:return )?t\\.${"skip"}\\("[^"]*"\\);?\\s*$`;
 const GUARDED_ON_LINE = new RegExp(`^\\s*if \\(process\\.platform !== "linux"\\) ${SKIP_CALL}`);
@@ -187,6 +189,10 @@ test("engineering and hook tests carry no marker that turns a case off, except a
     `if (process.platform !== "win32" || a ? b : c) throw error;\n${call("t", "skip", '"x"')}`,
     `if (process.platform !== "win32" || ok()) throw error;\n${call("t", "skip", '"x"')}`,
     `assert.ok(!IN_CI || true, "x");\n${call("t", "skip", '"x"')}`,
+    // Review of #1110: a shorthand option key.
+    `const ${"skip"} = true;\ntest("x", { ${"skip"} }, () => {});`,
+    `test("x", { timeout: 5, ${"only"} }, () => {});`,
+    `test("x", {\n  ${"todo"},\n}, () => {});`,
   ]) assert.notDeepEqual(unguardedMarkers(bad), [], bad);
   // The three forms the scanned tests use stay allowed.
   for (const good of [
