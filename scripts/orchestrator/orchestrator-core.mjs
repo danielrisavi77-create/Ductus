@@ -86,6 +86,12 @@ export function formatOverlaps(list) {
   return list.length ? list.map((n) => `#${n}`).join(", ") : "-";
 }
 
+/** One `orch:status` table line; F-010 marks an external PR as VANJSKI. */
+export function formatStatusRow(r) {
+  const flags = `${r.draft ? " DRAFT" : ""}${r.external ? ` VANJSKI (${r.external})` : ""}`;
+  return `#${r.number} ${r.head} ${r.base}${flags} | ${r.agent ?? "-"} | ${r.risk ?? "-"} | ci ${r.ci} | gate ${r.gate} | review ${r.review} | qa ${r.qa} | preklapa: ${formatOverlaps(r.overlaps)}`;
+}
+
 /** Canonical verdict comments of one kind ("review" | "qa"), oldest first. */
 export function parseVerdicts(comments, kind) {
   const k = KINDS[kind];

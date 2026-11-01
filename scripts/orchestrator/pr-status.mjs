@@ -1,7 +1,7 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
 import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
 import {
-  evaluateChecks, externalReason, formatOverlaps, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
+  evaluateChecks, externalReason, formatStatusRow, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
 } from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
@@ -47,9 +47,7 @@ try {
     console.log(JSON.stringify(rows, null, 2));
   } else {
     for (const r of rows) {
-      console.log(
-        `#${r.number} ${r.head} ${r.base}${r.draft ? " DRAFT" : ""}${r.external ? ` VANJSKI (${r.external})` : ""} |${r.agent ?? "-"} | ${r.risk ?? "-"} | ci ${r.ci} | gate ${r.gate} | review ${r.review} | qa ${r.qa} | preklapa: ${formatOverlaps(r.overlaps)}`,
-      );
+      console.log(formatStatusRow(r));
     }
     if (!rows.length) console.log("no open PRs");
   }

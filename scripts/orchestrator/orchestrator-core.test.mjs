@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   allRequiredPass, compareSnapshots, countCanonical, d97ManualMatches, d97Matches,
-  evaluateChecks, evaluateReady, externalReason, intersectFiles, latestVerdict, parsePushArgs,
+  evaluateChecks, evaluateReady, externalReason, formatStatusRow, intersectFiles, latestVerdict, parsePushArgs,
   pushVerdict, snapshot, summarizeThreads,
 } from "./orchestrator-core.mjs";
 
@@ -210,6 +210,10 @@ test("F-010: only the owner's or an installed app's PR from this repository is i
     ["empty owner", own(), REPO, ""],
     ["unknown repository", own(), undefined, "owner1"],
     ["owner login in other case", own({ author: { login: "Owner1", type: "User" } }), REPO, "owner1"],
+    ["app name without [bot]", bot("dependabot"), REPO, "owner1"],
+    ["app login in other case", bot("Dependabot[bot]"), REPO, "owner1"],
+    ["app login with trailing space", bot("mergify[bot] "), REPO, "owner1"],
+    ["head repo in other case", own({ headRepo: "Owner1/Repo1" }), REPO, "owner1"],
   ]) {
     assert.equal(typeof externalReason(pr, repository, ownerLogin), "string", why);
   }
@@ -233,6 +237,15 @@ test("F-010: readiness fails on an external PR and when origin data is missing",
     assert.match(origin.text, /owner must adopt/);
     assert.equal(allRequiredPass(r), false);
   }
+});
+
+test("F-010: orch:status marks an external PR and keeps the line for an internal one", () => {
+  const r = { number: 7, head: "abc12345", base: "main", draft: false, agent: "claude:b:platforma", risk: "low",
+    ci: "ok", gate: "success", review: "-", qa: "-", overlaps: [] };
+  assert.equal(formatStatusRow({ ...r, external: null }),
+    "#7 abc12345 main | claude:b:platforma | low | ci ok | gate success | review - | qa - | preklapa: -");
+  const reason = externalReason(own({ headRepo: null }), REPO, "owner1");
+  assert.match(formatStatusRow({ ...r, draft: true, external: reason }), /^#7 abc12345 main DRAFT VANJSKI \(head is outside .*\) \| claude/);
 });
 
 test("D-97 and draft are INFO only", () => {
