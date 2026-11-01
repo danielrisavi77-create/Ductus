@@ -4,7 +4,8 @@
 -- what an institution accepts must close the sessions it no longer would:
 --
 -- - a new or removed aai_home_org closes every live session of that
---   institution;
+--   institution; a first value (from NULL) closes nothing, since no login
+--   can have opened a session without one;
 -- - a removed or rewritten institution_issuer row closes the live sessions
 --   of users of that issuer in that institution, and nothing else;
 -- - identity.close_user_sessions(user) lets an operator close every live
@@ -41,7 +42,7 @@ $$;
 
 CREATE TRIGGER close_sessions_on_home_org_change
   AFTER UPDATE OF aai_home_org ON identity.institution
-  FOR EACH ROW WHEN (OLD.aai_home_org IS DISTINCT FROM NEW.aai_home_org)
+  FOR EACH ROW WHEN (OLD.aai_home_org IS NOT NULL AND OLD.aai_home_org IS DISTINCT FROM NEW.aai_home_org)
   EXECUTE FUNCTION identity.close_sessions_on_home_org_change();
 
 -- A row rewritten to the same institution and issuer (created_at alone)

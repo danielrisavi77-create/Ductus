@@ -131,6 +131,12 @@ beforeAll(async () => {
     "INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'admin', now())",
     [facultyA, people.admin.id],
   );
+  // DAN-304: only a person whose last login gave the teacher right can be
+  // confirmed; here the right is written as that login would write it.
+  await admin.query(
+    "INSERT INTO identity.teacher_eligibility (user_id, institution_id) VALUES ($1, $2)",
+    [people.teacher.id, people.teacher.institution],
+  );
 
   withActor = createWithActor(appPool(6));
   await withActor(people.admin.token, (tx) =>
@@ -192,6 +198,7 @@ afterAll(async () => {
   await admin.query("DELETE FROM institution.institution_settings WHERE institution_id = ANY ($1)", [institutions]);
   await admin.query("DELETE FROM institution.notification WHERE institution_id = ANY ($1)", [institutions]);
   await admin.query("DELETE FROM identity.session WHERE user_id = ANY ($1)", [userIds]);
+  await admin.query("DELETE FROM identity.teacher_eligibility WHERE user_id = ANY ($1)", [userIds]);
   await admin.query("DELETE FROM identity.user_account WHERE id = ANY ($1)", [userIds]);
   await admin.query("DELETE FROM identity.institution WHERE id = ANY ($1)", [institutions]);
   await admin.query(`DROP ROLE IF EXISTS ${LOGIN}`);

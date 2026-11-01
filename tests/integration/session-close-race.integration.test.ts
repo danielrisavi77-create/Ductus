@@ -18,7 +18,6 @@ const suffix = randomBytes(4).toString("hex");
 const institution = randomUUID();
 const homeOrg = `race-${suffix}.ductus.test`;
 const issuer = `https://issuer-race-${suffix}.test`;
-const uniqueId = `ana@${homeOrg}`;
 
 const admin = new pg.Pool({ connectionString: ADMIN_URL, max: 2 });
 const clients: pg.Client[] = [];
@@ -38,8 +37,10 @@ const authUrl = () => {
 };
 
 const hash = () => createHash("sha256").update(randomBytes(32)).digest();
-const OPEN = "SELECT identity.open_session($1, $2, $3, $4, $5) AS expires";
-const openArgs = (tokenHash: Buffer, home = homeOrg) => [issuer, `sub-${suffix}`, uniqueId, home, tokenHash];
+// The eight-argument form is the one ductus_auth may call (DAN-304).
+const OPEN = "SELECT identity.open_session($1, $2, $3, $4, $5, $6, $7, $8) AS expires";
+const openArgs = (tokenHash: Buffer, home = homeOrg, person = "ana") =>
+  [issuer, `sub-${person}-${suffix}`, `${person}@${homeOrg}`, home, tokenHash, "Ana", "Testić", false];
 
 /** Resolves once `pending` has settled or backend `pid` waits for a lock; true when it waits. */
 async function settlesOrWaits(pending: Promise<unknown>, pid: number): Promise<boolean> {
@@ -76,6 +77,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(clients.map((c) => c.end().catch(() => {})));
   await admin.query("DELETE FROM identity.session WHERE institution_id = $1", [institution]);
+  await admin.query("DELETE FROM identity.teacher_eligibility WHERE institution_id = $1", [institution]);
+  await admin.query("DELETE FROM identity.person_name WHERE institution_id = $1", [institution]);
   await admin.query("DELETE FROM identity.user_account WHERE institution_id = $1", [institution]);
   await admin.query("DELETE FROM identity.institution_issuer WHERE institution_id = $1", [institution]);
   await admin.query("DELETE FROM identity.institution WHERE id = $1", [institution]);
@@ -142,8 +145,9 @@ describe("institution change and a login in flight", () => {
     const b = hash();
 
     await first.c.query("BEGIN");
+    // Two people: one person's logins share that person's own rows (the name).
     await first.c.query(OPEN, openArgs(a));
-    const other = second.c.query(OPEN, openArgs(b));
+    const other = second.c.query(OPEN, openArgs(b, homeOrg, "iva"));
     const waited = await settlesOrWaits(other, second.pid);
     await first.c.query("COMMIT");
     await other;

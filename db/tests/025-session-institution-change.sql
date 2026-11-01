@@ -9,7 +9,7 @@ GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, duc
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth,
   ductus_migrator, ductus_identity, ductus_test_stranger;
 
-SELECT plan(41);
+SELECT plan(42);
 
 -- A takes idp-1 and idp-2, B takes idp-1. a1 and b1 come through idp-1,
 -- a2 through idp-2.
@@ -122,7 +122,8 @@ UPDATE identity.institution SET aai_home_org = 'a.f36.test' WHERE id = '00000000
 RESET ROLE;
 SET LOCAL ROLE ductus_auth;
 SELECT lives_ok(
-  $$ SELECT identity.open_session('https://idp-1.f36.test', 'sub-a1', 'a1@a.f36.test', 'a.f36.test', pg_temp.h('a1-3')) $$,
+  $$ SELECT identity.open_session('https://idp-1.f36.test', 'sub-a1', 'a1@a.f36.test', 'a.f36.test', pg_temp.h('a1-3'),
+                                  'Ana', 'Testić', false) $$,
   'with the value restored a1 signs in again'
 );
 RESET ROLE;
@@ -144,7 +145,11 @@ SELECT is_empty(
 );
 
 -- 6. The operator function.
+-- A first value (from NULL) closes nothing: no login opens a session without one.
+SELECT pg_temp.live('a2-first', '00000000-0000-4000-8000-0000000025a2');
 UPDATE identity.institution SET aai_home_org = 'a.f36.test' WHERE id = '00000000-0000-4000-8000-0000000025a0';
+SELECT is(pg_temp.state('a2-first'), 'open', 'setting aai_home_org from NULL closes nothing');
+
 SELECT pg_temp.live('a1-4', '00000000-0000-4000-8000-0000000025a1');
 SELECT pg_temp.live('a1-5', '00000000-0000-4000-8000-0000000025a1');
 SELECT pg_temp.live('a2-4', '00000000-0000-4000-8000-0000000025a2');

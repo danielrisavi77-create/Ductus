@@ -98,7 +98,9 @@ describe("login against an AAI@EduHr-shaped provider", () => {
     expect(SCOPES["aai-eduhr"].split(" ")).toStrictEqual(AAI_SCOPES);
   });
 
-  it("A6 A11 opens the session for the array attributes, and the affiliation goes nowhere", async () => {
+  // DAN-304 (#1181, item 21): of the affiliation only the fact of the right
+  // reaches openSession, never a value.
+  it("A6 A11 opens the session for the array attributes, and only the teacher right leaves the affiliation", async () => {
     idp.state.account = { ...ACCOUNT, affiliation: ["djelatnik", "student"] };
     const response = await complete(await begin());
     expect(response.status).toBe(303);
@@ -111,8 +113,10 @@ describe("login against an AAI@EduHr-shaped provider", () => {
       homeOrg: ACCOUNT.homeOrg,
       givenName: ACCOUNT.givenName,
       familyName: ACCOUNT.familyName,
+      teacherEligible: true,
       tokenHash: hashSessionToken(token),
     });
+    expect(JSON.stringify(deps.openSession.mock.calls)).not.toMatch(/djelatnik|student/);
     expect(deps.closeSession).not.toHaveBeenCalled();
   });
 
@@ -143,11 +147,25 @@ describe("login against an AAI@EduHr-shaped provider", () => {
     await expectRefused(await complete(attempt));
   });
 
-  it("A12 signs in the same way when the affiliation scope is not granted", async () => {
+  it("A12 signs in the same way when the affiliation scope is not granted, without the teacher right", async () => {
+    idp.state.account = { ...ACCOUNT, affiliation: ["djelatnik"] };
     const attempt = await begin();
     attempt.authorize.searchParams.set("scope", without("hrEduPersonAffiliation"));
     expect((await complete(attempt)).status).toBe(303);
-    expect(deps.openSession.mock.calls[0][0]).toMatchObject({ uniqueId: ACCOUNT.uniqueId, homeOrg: ACCOUNT.homeOrg });
+    expect(deps.openSession.mock.calls[0][0]).toMatchObject({
+      uniqueId: ACCOUNT.uniqueId,
+      homeOrg: ACCOUNT.homeOrg,
+      teacherEligible: false,
+    });
+  });
+
+  it("DAN-304 gives the teacher right for djelatnik and none for student (#1181, items 1 and 4)", async () => {
+    idp.state.account = { ...ACCOUNT, affiliation: ["djelatnik"] };
+    expect((await complete(await begin())).status).toBe(303);
+    expect(deps.openSession.mock.calls[0][0]).toMatchObject({ teacherEligible: true });
+    idp.state.account = { ...ACCOUNT, affiliation: ["student"] };
+    expect((await complete(await begin())).status).toBe(303);
+    expect(deps.openSession.mock.calls[1][0]).toMatchObject({ teacherEligible: false });
   });
 
   it.each([
