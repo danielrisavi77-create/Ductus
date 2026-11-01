@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
@@ -10,7 +10,7 @@ import { accountPlace, homeHref, navFor, type ShellRole } from "./nav";
 import SessionObserver from "./SessionObserver";
 import ShellLogout from "./ShellLogout";
 import type { ShellSession } from "./shell-session";
-import { readTheme, saveTheme, THEME_SCRIPT } from "./theme";
+import { toggleTheme } from "./theme";
 
 const ICONS = {
   menu: "M3 6h18M3 12h18M3 18h18",
@@ -36,14 +36,16 @@ function Logo() {
   );
 }
 
-/** Flips the theme on the shell element itself, so React never holds a copy that could disagree. */
+/** Flips the theme on `<html>` itself, so React never holds a copy that could disagree. */
 function ThemeToggle() {
-  const toggle = (event: { currentTarget: HTMLElement }) => {
-    const shell = event.currentTarget.closest<HTMLElement>(`.${styles.shell}`);
-    if (!shell) return;
-    const next = shell.getAttribute("data-theme") === "light" ? "dark" : "light";
-    shell.setAttribute("data-theme", next);
-    saveTheme(window.localStorage, next);
+  const toggle = () => {
+    let storage: Storage | undefined;
+    try {
+      storage = window.localStorage;
+    } catch {
+      // Storage blocked: the theme changes on this page only.
+    }
+    toggleTheme(document.documentElement, storage);
   };
   return (
     <button type="button" className={styles.iconButton} aria-label={t.shell.theme} onClick={toggle}>
@@ -91,25 +93,11 @@ export type AppShellProps = {
  */
 export default function AppShell({ role, session, scope, current, crumbs, account, ownMain = false, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
-  const shell = useRef<HTMLDivElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const items = navFor(role);
   const home = homeHref(role);
   const place = accountPlace(scope, account !== undefined);
-
-  // The inline script runs only when the server's HTML is parsed; after a
-  // client-side navigation the new shell reads the saved theme here, before
-  // it is painted.
-  useLayoutEffect(() => {
-    let storage: Storage | undefined;
-    try {
-      storage = window.localStorage;
-    } catch {
-      // Storage blocked: the shell stays dark.
-    }
-    shell.current?.setAttribute("data-theme", readTheme(storage));
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -143,8 +131,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
   };
 
   return (
-    <div ref={shell} className={styles.shell} data-theme="dark" suppressHydrationWarning>
-      <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+    <div className={styles.shell}>
       <SessionObserver tag={session.tag} at={session.at} />
       {/* Without JavaScript ☰ cannot open the drawer, so on a phone the side
           bar, and with it signing out, stays in the page above the content (I5). */}
