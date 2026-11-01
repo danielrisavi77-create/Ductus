@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AccessCard from "@/components/auth/AccessCard";
-import { teacherPageAccess } from "@/components/auth/access-kind";
+import { accessShellScope, teacherPageAccess } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import TeacherSetup from "@/components/teacher/TeacherSetup";
@@ -31,7 +31,7 @@ export default async function TeacherNewAssignmentPage() {
   return (
     <AppShell
       session={shellSession(token)}
-      scope={principal.kind === "signed-in" ? principal.scope : null}
+      scope={accessShellScope(screen, principal)}
       role={screen === "allowed" ? "teacher" : null}
       current="/nastavnik/zadatak/novi"
       crumbs={[t.teacherCourses.title, t.teacher.title]}

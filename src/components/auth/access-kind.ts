@@ -53,3 +53,16 @@ export function coursesAccess(read: TeacherCoursesRead["kind"] | null): TeacherA
   if (read === "not_found") return "denied";
   return read === "ok" ? "allowed" : "unavailable";
 }
+
+/**
+ * The journal scope a teacher page hands its shell. Z-03 and "not signed in"
+ * never offer a sign-out (#1231), so they get none, even when the principal,
+ * read beside the page's own read, still found the session open: the page's
+ * read saw it closed, and a session never reopens (#1242 c.6563600266).
+ */
+export function accessShellScope(
+  screen: "allowed" | "unavailable" | AccessKind, principal: SessionPrincipal,
+): string | null {
+  if (screen === "expired" || screen === "signedOut") return null;
+  return principal.kind === "signed-in" ? principal.scope : null;
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { closedSessionKind, coursesAccess, teacherPageAccess } from "./access-kind";
+import { accountPlace } from "@/components/shell/nav";
+
+import { accessShellScope, closedSessionKind, coursesAccess, teacherPageAccess } from "./access-kind";
 
 const SESSION = "A".repeat(43);
 
@@ -61,5 +63,31 @@ describe("coursesAccess", () => {
     expect(coursesAccess("not_found")).toBe("denied");
     expect(coursesAccess("ok")).toBe("allowed");
     expect(coursesAccess("unavailable")).toBe("unavailable");
+  });
+});
+
+describe("accessShellScope", () => {
+  const open = { kind: "signed-in", scope: "f".repeat(64) } as const;
+
+  it("gives Z-03 and \"not signed in\" no scope, so no sign-out (#1231)", () => {
+    for (const principal of [open, { kind: "signed-out" } as const, { kind: "unverified" } as const]) {
+      expect(accessShellScope("expired", principal)).toBeNull();
+      expect(accessShellScope("signedOut", principal)).toBeNull();
+    }
+  });
+
+  it("a course list refused as closed beside an open principal reads Z-03 without a sign-out (#1242 c.6563600266)", () => {
+    // The principal read the session open, then it closed before the list read (ZD401).
+    const screen = teacherPageAccess(coursesAccess("unauthorized"), open.kind, SESSION);
+    expect(screen).toBe("expired");
+    expect(accessShellScope(screen, open)).toBeNull();
+    expect(accountPlace(accessShellScope(screen, open), false)).toBe("none");
+  });
+
+  it("keeps the signed-in scope on the page, on Z-05 and when the read is unavailable", () => {
+    for (const screen of ["allowed", "denied", "unavailable"] as const) {
+      expect(accessShellScope(screen, open)).toBe(open.scope);
+      expect(accessShellScope(screen, { kind: "signed-out" })).toBeNull();
+    }
   });
 });

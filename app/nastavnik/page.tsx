@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AccessCard from "@/components/auth/AccessCard";
-import { coursesAccess, teacherPageAccess } from "@/components/auth/access-kind";
+import { accessShellScope, coursesAccess, teacherPageAccess } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import TeacherCourses from "@/components/teacher/TeacherCourses";
@@ -60,7 +60,7 @@ export default async function TeacherHomePage() {
   const role = screen === "allowed" ? "teacher" : null;
 
   return (
-    <AppShell session={shellSession(token)} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} current="/nastavnik" crumbs={[t.title]}>
+    <AppShell session={shellSession(token)} role={role} scope={accessShellScope(screen, principal)} current="/nastavnik" crumbs={[t.title]}>
       <div className={`page ${styles.page}`}>
         {card ? null : <div className={styles.head}>
           <div className={styles.heading}>

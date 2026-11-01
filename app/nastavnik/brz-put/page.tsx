@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import AccessCard from "@/components/auth/AccessCard";
-import { teacherPageAccess } from "@/components/auth/access-kind";
+import { accessShellScope, teacherPageAccess } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import { assignmentParam } from "@/components/student/work-context-read";
@@ -28,14 +28,13 @@ export default async function FastPathPage({ searchParams }: { searchParams: Pro
   const { tag, at } = shellSession(token);
   // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
   const { access, principal } = await teacherPageRead(token, withActor);
-  const scope = principal.kind === "signed-in" ? principal.scope : null;
   const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
   const returnTo = assignmentId === null ? "/nastavnik/brz-put" : `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignmentId)}`;
   // An OIDC login: a real navigation, not a prefetchable Link.
   const signInHref = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
   const screen = teacherPageAccess(access, principal.kind, token);
   return (
-    <AppShell session={{ tag, at }} role={screen === "allowed" ? "teacher" : null} scope={scope} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
+    <AppShell session={{ tag, at }} role={screen === "allowed" ? "teacher" : null} scope={accessShellScope(screen, principal)} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
       <div className={`page ${styles.page}`}>
         {screen === "allowed" ? (
           <>
