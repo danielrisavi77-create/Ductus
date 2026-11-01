@@ -101,6 +101,30 @@ jobs:
           else
             node scripts/engineering/migrations-ledger.mjs
           fi
+      # DAN-319: Squawk lints the up part of every migration the base lacks.
+      # The release has no signature; the pin equals the GitHub API digest
+      # (SQUAWK in squawk-migrations.mjs, which checks it again before each run).
+      - name: Squawk lint of new migrations (DAN-319)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/squawk-2.70.0/squawk"
+          mkdir -p "$(dirname "$bin")"
+          curl -fsSL --proto '=https' --retry 3 -o "$bin" https://github.com/sbdchd/squawk/releases/download/v2.70.0/squawk-linux-x64
+          echo "836ba2ab0c0ec30ae02c9f2cec065b341ff853765ceaa3965c22109c2f53eb1c  $bin" | sha256sum -c -
+          chmod +x "$bin"
+          base=""
+          if [ "$EVENT_NAME" = pull_request ]; then base="$PR_BASE"; elif [ "$EVENT_NAME" = push ]; then base="$PUSH_BEFORE"; fi
+          if [ -n "$base" ]; then
+            [[ "$base" =~ ^[a-f0-9]{40}$ ]]
+            git fetch --no-tags --depth=1 origin "$base"
+            node scripts/engineering/squawk-migrations.mjs --squawk "$bin" --base "$base"
+          else
+            node scripts/engineering/squawk-migrations.mjs --squawk "$bin" --no-base
+          fi
       - name: Engineering PR metadata
         if: github.event_name == 'pull_request'
         env:
