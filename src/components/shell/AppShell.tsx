@@ -163,7 +163,9 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
       {/* Without JavaScript ☰ cannot open the drawer, so wherever the side bar
           is one, it and signing out stay in the page above the content (I5). */}
       <noscript>
-        <style>{`${drawer ? "@media all" : "@media (max-width: 799.98px)"} { .${styles.sidebar} { position: static; width: auto; transform: none; visibility: visible; } .${styles.menuButton} { display: none; } }`}</style>
+        {/* In drawer mode the drawer rules are `.drawerShell .x`, so the
+            fallback carries the same prefix to outrank them. */}
+        <style>{`${drawer ? "@media all" : "@media (max-width: 799.98px)"} { ${drawer ? `.${styles.drawerShell} ` : ""}.${styles.sidebar} { position: static; width: auto; transform: none; visibility: visible; } ${drawer ? `.${styles.drawerShell} ` : ""}.${styles.menuButton} { display: none; } }`}</style>
       </noscript>
       {open ? <div className={styles.shade} onClick={close} aria-hidden="true" /> : null}
       <aside ref={sidebar} className={styles.sidebar} data-open={open} aria-label={t.shell.sideNav} id="bocna-navigacija">

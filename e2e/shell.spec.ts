@@ -22,6 +22,26 @@ test.describe("workspace shell", () => {
     await expect(menu).toBeFocused();
   });
 
+  for (const width of [1440, 390]) {
+    // The <noscript> fallback must outrank the drawer rules. /rad streams, so
+    // without JavaScript the page stays in Next's hidden boundary; the check is
+    // on the computed style of the side bar and ☰, not on what is painted.
+    test(`without JavaScript at ${width} px the noscript fallback outranks the drawer`, async ({ browser }) => {
+      const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width, height: 900 } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/rad");
+        const side = page.locator("#bocna-navigacija");
+        await expect(side).toHaveCSS("visibility", "visible");
+        await expect(side).toHaveCSS("position", "static");
+        await expect(side).toHaveCSS("transform", "none");
+        await expect(page.locator("button[aria-controls='bocna-navigacija']")).toHaveCSS("display", "none");
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
