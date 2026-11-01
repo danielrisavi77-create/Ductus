@@ -113,12 +113,18 @@ export function leadingKeyword(text: string): string {
 // with its own transaction: it would commit apart from the outer one and can
 // wait forever for a connection that the outer call holds. The store follows
 // the async context, so a callback on a promise created before fn (a .then on
-// it inside fn) runs outside the store and is not caught here.
-const insideActor = new AsyncLocalStorage<true>();
+// it inside fn) runs outside the store and is not caught here. A
+// continuation made inside fn keeps the store after the call ends, so the
+// store holds a flag that the call clears once its connection is back: a call
+// left behind by fn and run later is a transaction of its own, not nested
+// (F-022). The flag is shared by every pool, because a nested call on another
+// pool would still commit apart from the outer one.
+const insideActor = new AsyncLocalStorage<{ active: boolean }>();
 
 export function createWithActor(pool: Pick<Pool, "connect">): WithActor {
   return async function withActor(token, fn) {
-    if (insideActor.getStore()) throw new Error("withActor: nested call inside a withActor transaction");
+    if (insideActor.getStore()?.active) throw new Error("withActor: nested call inside a withActor transaction");
+    const scope = { active: true };
     const sessionToken = typeof token === "string" && TOKEN_FORMAT.test(token) ? token : "";
     const marker = randomUUID();
     const client = await pool.connect();
@@ -162,7 +168,7 @@ export function createWithActor(pool: Pick<Pool, "connect">): WithActor {
         throw connectionError;
       }
       open = true;
-      const value = await insideActor.run(true, () => fn(tx));
+      const value = await insideActor.run(scope, () => fn(tx));
       open = false;
       const exited = await client.query(EXIT_ACTOR_SQL, [marker, sessionToken]).catch((error: unknown) => {
         // An error that fn swallowed has aborted the transaction.
@@ -207,6 +213,7 @@ export function createWithActor(pool: Pick<Pool, "connect">): WithActor {
       }
       client.removeListener("error", onConnectionError);
       client.release(connectionError);
+      scope.active = false;
     }
   };
 }

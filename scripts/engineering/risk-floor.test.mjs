@@ -24,6 +24,17 @@ const CRITICAL_SAMPLES = [
   ".cc-safety-net/rules/rule.json",
   ".cc-safety-net/rules/ductus-rules/rulebook.json",
   "osv-scanner.toml",
+  "package.json",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".nvmrc",
+  "eslint.config.mjs",
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  ".semgrepignore",
+  ".pnpmfile.cjs",
+  ".pnpmfile.mjs",
+  "pnpm-lock.yaml",
   "STATE.md",
   ".worktreeinclude",
   "plugins/ductura-engineering/plugin.json",
@@ -48,6 +59,7 @@ const CRITICAL_SAMPLES = [
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
+  "e2e/auth.spec.ts",
   "scripts/demo/native/tools.mjs",
   "scripts/demo/native/up.mjs",
   "scripts/demo/native/lib/any.mjs",
@@ -70,6 +82,24 @@ test("every protected path has the critical floor and rejects a lower declared r
     }
     assert.equal(declared("critical", [file]).ok, true, file);
   }
+});
+
+test("F-041 b: a Risk value that names an Object property is refused, not passed", () => {
+  for (const risk of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf", "isPrototypeOf"]) {
+    for (const files of [["db/migrations/20270101000000_x.sql"], ["docs/notes.md"]]) {
+      const result = declared(risk, files);
+      assert.equal(result.ok, false, `${risk} ${files}`);
+      assert.match(result.message, /Risk must be low, standard, or critical/, risk);
+    }
+  }
+  // Case still does not matter for the real values.
+  assert.equal(declared("Critical", ["db/migrations/20270101000000_x.sql"]).ok, true);
+});
+
+test("F-041 a: the D-09 production-refuses-fake-provider test is critical; other E2E specs stay standard", () => {
+  assert.equal(minimumRisk(["e2e/auth.spec.ts"]).risk, "critical");
+  assert.equal(minimumRisk(["E2E/Auth.spec.ts"]).risk, "critical");
+  assert.equal(minimumRisk(["e2e/editor.spec.ts"]).risk, "standard");
 });
 
 test("the critical list contains every owner-command path, so the two cannot drift", () => {
@@ -196,7 +226,7 @@ test("ordinary documentation stays low and ordinary code stays standard", () => 
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "src/pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });
@@ -299,5 +329,23 @@ test("the gate workflow re-evaluates when auto-merge is switched on or off", () 
   const types = workflow.match(/pull_request_target:\s*\n\s*types:\s*\[([^\]]+)\]/)?.[1] ?? "";
   for (const type of ["opened", "synchronize", "reopened", "edited", "ready_for_review", "auto_merge_enabled", "auto_merge_disabled"]) {
     assert.ok(types.split(",").map((t) => t.trim()).includes(type), type);
+  }
+});
+
+// F-174: pnpm runs the root pnpmfile on every install, so it needs the owner's
+// command like the hooks it can replace; the lockfile carries the critical floor.
+test("the pnpm install hook is owner-command and the lockfile is critical", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of [".pnpmfile.cjs", ".pnpmfile.mjs", "./.PNPMFILE.cjs", ".\\.pnpmfile.mjs"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(ownerCommandPaths([file]).length, 1, file);
+    assert.equal(d97Matches([file]).length, 1, file);
+    assert.equal(declared("standard", [file]).ok, false, file);
+  }
+  const added = decide({ risk: "critical", names: [".pnpmfile.cjs"], autoMerge: true });
+  assert.equal(added.state, "pending");
+  for (const file of ["pnpm-lock.yaml", "PNPM-LOCK.yaml"]) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(declared("standard", [file]).ok, false, file);
   }
 });

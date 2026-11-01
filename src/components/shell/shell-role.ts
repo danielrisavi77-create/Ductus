@@ -20,6 +20,17 @@ const NO_ONE: ShellAccount = { role: null, scope: null };
  * the same read.
  */
 export async function readShellAccount(token: string | undefined, withActor: WithActor): Promise<ShellAccount> {
+  return (await readShellAccountOrFailure(token, withActor)) ?? NO_ONE;
+}
+
+/**
+ * `readShellAccount`, except that a failed read is `null` rather than no
+ * one, so a caller can tell a closed session from a database it could not
+ * reach.
+ */
+export async function readShellAccountOrFailure(
+  token: string | undefined, withActor: WithActor,
+): Promise<ShellAccount | null> {
   if (token === undefined || !TOKEN.test(token)) return NO_ONE;
   try {
     const row = await withActor(token, async (tx) => {
@@ -38,7 +49,7 @@ export async function readShellAccount(token: string | undefined, withActor: Wit
     return { role: row.teacher === true ? "teacher" : "student", scope };
   } catch (error) {
     console.error("shell role read failed", error instanceof Error ? error.name : "unknown");
-    return NO_ONE;
+    return null;
   }
 }
 

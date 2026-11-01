@@ -63,9 +63,15 @@ export function latestOnHead(verdicts, head) {
   return [...latest.values()];
 }
 
-/** PRs the stall checks look at: open, not draft, not a Dependabot branch. */
-export const watched = (pr) =>
-  pr.state === "OPEN" && !pr.isDraft && !String(pr.headRefName ?? "").startsWith("dependabot/");
+/**
+ * Dependabot by author, never by branch name: anyone who can push may name a
+ * branch `dependabot/...` (F-041 d). The login alone is not enough either, so
+ * the account must also be a Bot.
+ */
+export const isDependabot = (pr) => pr?.author?.login === "dependabot[bot]" && pr?.author?.type === "Bot";
+
+/** PRs the stall checks look at: open, not draft, not authored by Dependabot. */
+export const watched = (pr) => pr.state === "OPEN" && !pr.isDraft && !isDependabot(pr);
 
 /** (c) review or QA FAIL on the current head with no push for longer than FAIL_STALL_MIN. */
 export function checkFailStalls({ prs, comments, now }) {
