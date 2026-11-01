@@ -231,9 +231,11 @@ export function externalReason(pr, repository, ownerLogin) {
   if (typeof repository !== "string" || repository === "" || typeof head !== "string" || head !== repository) {
     return `head is outside ${repository || "this repository"} (${head || "unknown"})`;
   }
+  // An unknown owner fails closed before the app exception too (QA c.6558998360).
+  if (typeof ownerLogin !== "string" || ownerLogin === "") return "repository owner is unknown";
   const login = pr?.author?.login;
   if (APP_AUTHORS.has(login) && pr?.author?.type === "Bot") return null;
-  if (typeof ownerLogin !== "string" || ownerLogin === "" || login !== ownerLogin) {
+  if (login !== ownerLogin) {
     return `author ${login || "unknown"} is not the owner`;
   }
   return null;

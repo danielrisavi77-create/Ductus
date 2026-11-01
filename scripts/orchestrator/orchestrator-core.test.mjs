@@ -224,6 +224,18 @@ test("F-010: only the owner's or an installed app's PR from this repository is i
   assert.match(externalReason(own({ headRepo: "other/repo1", author: { login: "dependabot[bot]", type: "Bot" } }), REPO, "owner1"), /outside/);
 });
 
+test("F-010: an installed app's PR is external while the repository owner is unknown", () => {
+  for (const login of ["dependabot[bot]", "mergify[bot]"]) {
+    for (const ownerLogin of [undefined, null, ""]) {
+      const pr = own({ author: { login, type: "Bot" } });
+      const why = `${login} with owner ${JSON.stringify(ownerLogin)}`;
+      assert.equal(typeof externalReason(pr, REPO, ownerLogin), "string", why);
+      const origin = evaluateReady(ready({ pr, ownerLogin })).find((x) => x.id === "origin");
+      assert.equal(origin.level, "FAIL", why);
+    }
+  }
+});
+
 test("F-010: readiness fails on an external PR and when origin data is missing", () => {
   assert.equal(evaluateReady(ready()).find((x) => x.id === "origin").level, "PASS");
   for (const over of [
