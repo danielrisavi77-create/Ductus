@@ -10,12 +10,23 @@ const engineeringDir = new URL("./", import.meta.url);
 
 const word = "(?:test|describe|it|suite|t)";
 const mode = "(?:skip|todo|only)";
-// Dotted calls, bracket access with a quoted name, and the node:test option keys.
-const PATTERNS = [
-  new RegExp(String.raw`\b${word}\s*\.\s*${mode}\b`, "g"),
-  new RegExp(String.raw`\b${word}\s*\[\s*["'\x60]${mode}["'\x60]\s*\]`, "g"),
-  new RegExp(String.raw`[{,]\s*["'\x60]?${mode}["'\x60]?\s*[:,}]`, "g"),
-];
+// One alternation, so each site is counted once:
+// - a call of one of the three on any receiver, the test context under any
+//   parameter name included, also through optional chaining (review of #1161);
+// - a dotted reference on a test function or the usual context name, called
+//   or not, optional chaining included;
+// - bracket access with a quoted name, on any receiver or as a computed
+//   literal option key;
+// - the node:test option keys, plain or quoted.
+const PATTERN = new RegExp(
+  [
+    String.raw`(?:[\w$]+\s*)?\??\.\s*${mode}\s*\(`,
+    String.raw`\b${word}\s*\??\.\s*${mode}\b`,
+    String.raw`(?:[\w$]+\s*)?(?:\?\.\s*)?\[\s*["'\x60]${mode}["'\x60]\s*\]`,
+    String.raw`[{,]\s*["'\x60]?${mode}["'\x60]?\s*[:,}]`,
+  ].join("|"),
+  "g",
+);
 
 // Runtime skips that guard a platform the case cannot run on. Each still runs
 // on Linux CI. A new skip site fails this test until it is listed here, so a
@@ -26,11 +37,7 @@ const ALLOWED = new Map([
 ]);
 
 export function skipSites(src) {
-  const sites = [];
-  for (const pattern of PATTERNS) {
-    for (const match of src.matchAll(pattern)) sites.push(match[0]);
-  }
-  return sites;
+  return [...src.matchAll(PATTERN)].map((match) => match[0]);
 }
 
 test("engineering tests are not skipped, todo or focused beyond the listed platform guards", async () => {
@@ -46,7 +53,7 @@ test("engineering tests are not skipped, todo or focused beyond the listed platf
     );
     if (allowed > 0) {
       // A listed site stays a runtime skip on the test context, never a static one.
-      assert.ok(sites.every((s) => /^t\s*\.\s*skip$/.test(s)), `${name}: only a runtime context skip is allowed, got ${sites.join(", ")}`);
+      assert.ok(sites.every((s) => /^t\s*\.\s*skip\s*\(?$/.test(s)),`${name}: only a runtime context skip is allowed, got ${sites.join(", ")}`);
     }
   }
   for (const name of ALLOWED.keys()) assert.ok(names.includes(name), `${name} is listed but missing`);
@@ -72,6 +79,17 @@ test("the scan catches the static, bracket and option forms", () => {
     "test('x', { " + '"todo": true }, fn)',
     "test('x', { " + "`only`: true }, fn)",
     dot("suite", "skip('x')"),
+    // Review of 3ad6b3d7 (#1161): the context under another name, optional
+    // chaining and a computed literal option key.
+    "test('x', (ctx) => { " + dot("ctx", "skip(); })"),
+    "test('x', (c) => " + dot("c", "todo())"),
+    "test('x', (s) => { " + dot("s ", " only(); })"),
+    "test?" + dot("", "skip('x')"),
+    "t?" + dot("", "skip()"),
+    "const f = test?" + dot("", "only;"),
+    "test('x', { [" + "'skip']: true }, fn)",
+    "test('x', { [ " + '"todo" ]: true }, fn)',
+    "ctx[" + "'skip']()",
   ];
   for (const src of hits) assert.ok(skipSites(src).length > 0, src);
   const misses = [
@@ -80,6 +98,8 @@ test("the scan catches the static, bracket and option forms", () => {
     "t.skipped",
     "options.skipList",
     "contest.skip",
+    "ctx.skipped()",
+    "list.onlyOne()",
     "{ skipDocs: true }",
     "{ onlyIf: false }",
   ];
