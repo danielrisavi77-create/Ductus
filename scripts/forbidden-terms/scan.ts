@@ -788,10 +788,54 @@ interface Read {
   readonly texts: Located[];
   readonly units: Unit[];
   readonly imports: Import[];
+  /**
+   * Names that code can show as text (F-024), checked against the Croatian
+   * entries as every other string of a code file is: the pattern of every
+   * regular expression (`.source`), the members of an enum the file indexes
+   * (`E[0]` gives the name), and the keys of the objects and class fields of a
+   * file that reads keys (`Object.keys`, `Object.entries`, `for … in` and the
+   * like). Elsewhere a key is a code, not text, as it always was.
+   */
+  readonly names?: Located[];
 }
 
 const NOTHING_READ: Read = { texts: [], units: [], imports: [] };
 
+/** Calls that hand the keys of an object to the code that called them. */
+const KEY_READERS = new Set(["keys", "entries", "getOwnPropertyNames", "ownKeys", "fromEntries"]);
+
+/** The names of a code file that it can show as text; see `Read.names`. */
+function shownNames(file: string, source: ts.SourceFile): Located[] {
+  const regexes: Located[] = [];
+  const keys: Located[] = [];
+  const enums = new Map<string, Located[]>();
+  const indexed = new Set<string>();
+  let readsKeys = false;
+  const at = (node: ts.Node, text: string): Located => {
+    const start = node.getStart(source);
+    return { file, line: source.getLineAndCharacterOfPosition(start).line + 1, text, start, end: node.getEnd() };
+  };
+  const visit = (node: ts.Node): void => {
+    // A quoted name is a key the string reader leaves out, so it is a name too;
+    // a computed name is an expression, read as a string already.
+    const member = (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node) || ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node)) && ts.isObjectLiteralExpression(node.parent);
+    if (member || (ts.isPropertyDeclaration(node) && ts.isClassLike(node.parent))) {
+      const name = (node as ts.ObjectLiteralElementLike | ts.PropertyDeclaration).name;
+      if (name && (ts.isIdentifier(name) || isPlainString(name))) keys.push(at(name, name.text));
+    } else if (ts.isEnumDeclaration(node)) {
+      enums.set(node.name.text, node.members.filter((m) => ts.isIdentifier(m.name)).map((m) => at(m.name, (m.name as ts.Identifier).text)));
+    } else if (ts.isRegularExpressionLiteral(node)) {
+      regexes.push(at(node, node.text.slice(1, node.text.lastIndexOf("/"))));
+    } else if (ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      indexed.add(node.expression.text);
+    } else if (ts.isForInStatement(node) || (ts.isPropertyAccessExpression(node) && KEY_READERS.has(node.name.text))) {
+      readsKeys = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return [...regexes, ...(readsKeys ? keys : []), ...[...enums].filter(([name]) => indexed.has(name)).flatMap(([, members]) => members)];
+}
 /**
  * The syntax errors of a parsed file, asked for through a program that holds
  * only that file: no library, nothing read from disk and nothing parsed a
@@ -866,7 +910,7 @@ function locate(file: string, content: string, kind: How, readProperties = false
   }
   // A text module also puts text together with `+` and templates; those are read as in JSX.
   if (kind === "catalogue") componentText(source, { text: () => undefined, part: () => undefined, unit }, "catalogue");
-  return { texts, units, imports };
+  return { texts, units, imports, names: shownNames(file, source) };
 }
 
 const withoutSpan = ({ file, line, text }: UiText): UiText => ({ file, line, text });
@@ -1046,6 +1090,7 @@ export function scanUiText(root: string): Finding[] {
       for (const { file, read, others } of scannedFiles(root)) {
         findings.push(...findingsIn(file, read));
         for (const text of others) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
+        for (const name of read.names ?? []) check(withoutSpan(name), findForbiddenTerms(name.text, "hr"));
       }
       return findings;
     },

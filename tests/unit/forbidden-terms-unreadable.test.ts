@@ -1451,6 +1451,32 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     expect(entries()).toEqual([]);
   });
 
+  // F-024 class 6: names that code can show as text are checked against the Croatian entries.
+  const NAMES: readonly [string, string, string][] = [
+    ["a regular expression shown by its source", "src/components/Case.tsx", "export const Case = () => <p>{/Sumnjivo/u.source}</p>;\n"],
+    ["an object key shown by Object.keys", "src/components/Case.tsx", "const o = { Sumnjivo: 1 };\nexport const Case = () => <p>{Object.keys(o)[0]}</p>;\n"],
+    ["a shorthand object key", "src/domain/sync/state.ts", "const Sumnjivo = 1;\nexport const o = Object.entries({ Sumnjivo });\n"],
+    ["a method name of an object", "src/domain/sync/state.ts", "const o = { Sumnjivo() { return 1; } };\nfor (const k in o) console.log(k);\n"],
+    ["an enum member shown by its value", "src/components/Case.tsx", "enum E { Sumnjivo }\nexport const Case = () => <p>{E[0]}</p>;\n"],
+    ["an enum member with a string name", "src/domain/sync/state.ts", 'export enum E { "Sumnjivo" = 1 }\n'],
+  ];
+
+  it.each(NAMES)("reads %s", (_, file, content) => {
+    write(file, content);
+    expect(entries()).toEqual(["sumnjivo"]);
+  });
+
+  it("reads quoted keys and class fields once, and names only against the Croatian entries", () => {
+    write("src/domain/sync/state.ts", 'export const o = { risk: 1, "Sumnjivo": 2, ["Skriveno"]: 3 };\nexport class C { Prepisano = 1; }\nexport const r = /risk/;\nexport const k = Object.keys(o);\n');
+    expect(entries().sort()).toEqual(["prepisano", "skriveno", "sumnjivo"]);
+  });
+
+  it("leaves keys and enum names alone in a file that does not read them, as before", () => {
+    write("src/domain/sync/state.ts", 'export const CODES = { Sumnjivo: 1, "Prepisano": 2 };\nexport enum E { Skriveno }\nexport const x = E.Skriveno;\n');
+    write("src/lib/i18n/hr.json", '{ "Sumnjivo": "Rok" }\n');
+    expect(entries()).toEqual([]);
+  });
+
   it("stops on imported data that is not JSON or not UTF-8, like a catalogue", () => {
     write("src/components/Page.tsx", 'import words from "./words.json";\nexport const all = words;\n');
     write("src/components/words.json", '{ "title": "Rok" ');
