@@ -7,16 +7,16 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 
-// DAN-302 L5 (contract #1091 c.6561682282, Codex finding on #1236): the old
+// DAN-302 L5 (contract narrowed by the owner, #87 c.6562442908): the old
 // checkpoint trigger took now(), so a checkpoint it wrote can be older than
-// its revision. Evidence times are never rewritten: the clock-time migration
-// refuses to run over such a checkpoint and changes nothing, and runs once
-// none is left. pgTAP sees the schema only after every migration; here a
-// database of its own is migrated up to the one before, given old rows, and
-// only then the migration's up section in one transaction, as dbmate runs it.
-// The old rows are written as the compose superuser in replica mode, which
-// skips foreign keys and triggers: only the two tables the migration reads
-// matter. Every identifier and text is random or invented.
+// its revision. The clock-time migration guarantees only checkpoints sealed
+// after it; evidence times are never rewritten, so it runs over such rows
+// and leaves every one of them as it was. pgTAP sees the schema only after
+// every migration; here a database of its own is migrated up to the one
+// before, given old rows, and only then the migration's up section in one
+// transaction, as dbmate runs it. The old rows are written as the compose
+// superuser in replica mode, which skips foreign keys and triggers: only the
+// two tables matter. Every identifier and text is random or invented.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 requireLoopbackDatabaseUrl(ADMIN_URL, "The migration test runs only against a loopback database (DATABASE_URL).");
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
@@ -43,7 +43,7 @@ afterAll(async () => {
 type Checkpoint = { document_id: string; content_hash: string; created_at: string };
 
 describe("the clock-time migration over checkpoints written before it", () => {
-  it("refuses while a checkpoint is older than its revision, rewrites no time, and runs once none is", async () => {
+  it("runs over a checkpoint older than its revision and rewrites no time", async () => {
     await admin.query(`CREATE DATABASE ${name} OWNER ductus_migrator`);
     const url = new URL(ADMIN_URL);
     url.pathname = `/${name}`;
@@ -96,23 +96,10 @@ describe("the clock-time migration over checkpoints written before it", () => {
     expect(await sealSource()).toContain("pg_catalog.now()");
 
     await db.query("SET ROLE ductus_migrator");
-    await expect(db.query(`BEGIN;\n${upSection(TARGET)}\nCOMMIT;`)).rejects.toThrow(/checkpoint is older than its revision/);
-    await db.query("ROLLBACK");
-    await db.query("RESET ROLE");
-    expect(await checkpoints()).toEqual(before);
-    expect(await sealSource()).toContain("pg_catalog.now()");
-    expect(await sealSource()).not.toContain("clock_timestamp");
-
-    // Recreating the database stands in here for removing the older row.
-    await db.query("BEGIN");
-    await db.query("SET LOCAL session_replication_role = replica");
-    await db.query("DELETE FROM evidence.document_checkpoint WHERE document_id = $1", [older.document]);
-    await db.query("COMMIT");
-
-    await db.query("SET ROLE ductus_migrator");
     await db.query(`BEGIN;\n${upSection(TARGET)}\nCOMMIT;`);
     await db.query("RESET ROLE");
-    expect(await checkpoints()).toEqual(before.filter((row) => row.document_id === level.document));
+    expect(await checkpoints()).toEqual(before);
     expect(await sealSource()).toContain("pg_catalog.clock_timestamp()");
+    expect(await sealSource()).not.toContain("pg_catalog.now()");
   });
 });
