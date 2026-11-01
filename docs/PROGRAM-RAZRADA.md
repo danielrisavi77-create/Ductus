@@ -2,7 +2,7 @@
 
 Verzija 0.1 · 31. 10. 2026. · Dopuna `docs/PROGRAM.md` prema D-191 (trag: #87 [c.6524612217](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6524612217); vlasnikovo odobrenje 31. 10. 2026.: „Može, kreni bez datuma”).
 
-Dokument daje redoslijed faza i koraka, **bez datuma**. Novi raspored i datum pilota zasebna su vlasnička odluka (D-191 t. 2, Owner queue u `STATE.md`). Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
+Dokument daje redoslijed faza i koraka, **bez datuma**. Ciljni datumi po fazi i kontrolne točke su u D-199 t. 6 (ODLUČENO 1. 11. 2026.; novi raspored iz D-191 t. 2) i u Linear milestoneovima. Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
 
 ## Kako čitati
 
@@ -225,13 +225,19 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M8.1 | Lokalni sintetički spike čitanja DOCX-a | B | | DAN-242 |
+| M8.1 | Lokalni sintetički spike čitanja DOCX-a (D-198 t. 5) | B | M8.8 | DAN-242 |
 | M8.2 | Uvoz DOCX-a kao događaj s izvorom „uvoz” | B, F | M8.1, M3.1 | DAN-396 |
 | M8.3 | Uvoz PDF-a kao događaj s izvorom | B, F | M8.2 | DAN-397 |
 | M8.4 | Izvoz DOCX-a u obliku fakulteta | B | M4.3, M5.4 | DAN-398 |
 | M8.5 | Izvoz PDF-a u obliku fakulteta | B | M8.4 | DAN-399 |
 | M8.6 | Izvoz predanog rada, potvrde za referadu (R-06) i paket za Merlin (R-05); provjerljiv izvozni paket (D-173) | B, F | M7.1 | DAN-316, DAN-341 |
-| M8.7 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom (S-09) te provjera doslovnog citata u učitanom PDF-u (A-03) | F, B | M5.1, M5.9, M8.3 | novo |
+| M8.7 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom (S-09) te provjera doslovnog citata u učitanom PDF-u (A-03) | F, B | M5.1, M5.9, M8.3 | DAN-441 |
+| M8.8 | Paket, lockfile, OSV skeniranje i testovi za `spikes/docx-provenance` | P | | DAN-435 |
+| M8.9 | Ugovor provenance i manifest uz `import_event`; `evidence-receipt-v2` se ne mijenja (D-198 t. 7) | B | M8.1, M8.2 | DAN-436 |
+| M8.10 | Tragovi u PDF-u i ODT-u, bez povijesti pisanja | B | M8.3, M8.9 | DAN-437 |
+| M8.11 | Čitanje spremljenih verzija iz OneDrivea, SharePointa i Google Drivea za odabranu datoteku (D-198 t. 1; granica podataka i opseg dozvola po D-198 t. 5) | B, F | M8.2, M8.9 | DAN-438 |
+| M8.12 | Word i Google Docs dodaci, sljedeći val, ne pilot (D-198 t. 2; uvjet U-7) | B, F | M8.11 | DAN-439 |
+| M8.13 | Ekran „Povijest dokumenta”: popis „uvezeno, tvrdnja iz datoteke”, isti za obje uloge (D-198 t. 6) | F | M8.2, M8.9 | DAN-440 |
 
 **Ekrani:** S-19 uvoz teksta, S-20 izvoz, N-18 izvoz predanog rada i paket za Merlin.
 
@@ -239,7 +245,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 ## M9 AI pomoćnik
 
-**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela.
+**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela; ulazi u val 1 (D-199 t. 1).
 
 **Gotovo na mainu:** pravilo AI-ja i dopuštene svrhe na kolegiju i zadatku (#943). **Nema:** posrednika prema pružatelju ni sučelja pomoćnika.
 
@@ -318,6 +324,7 @@ Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.654
 | U-4 | dio M9.6 | Oznaka „podudara se s odgovorom AI pomoćnika” ostaje oznaka mjesta, ne tvrdnja o autoru. | pravilo 1 (C-9, C-10); D-194 |
 | U-5 | M10.9 | Tekst paketa i QR provjere ne smije tvrditi autorstvo; dokument izlazi izvan sustava. | pravilo 9, C-13 |
 | U-6 | M10.10 | Agregati bez rizika, ranga i ocjena; isti prag od najmanje 5 studenata kao N-11. | pravilo 2 |
+| U-7 | M8.12 | Dodaci idu u sljedeći val, ne u pilot (D-198 t. 2, ODLUČENO 1. 11. 2026.). Prije gradnje pisana potvrda FPZG-a, pravno mišljenje, DPIA i provjera ograničenja Microsofta i Googlea. Do tada vrijede D-79 i D-80. | D-79, D-80 |
 
 Planer (M5.15) i „Moj rad u brojkama” (M7.13) više nisu uvjetni prema odluci vlasnika o D-63 („1. da 2. da”, #87), ali izričiti izuzetak u PRODUCT §5 pravilu 4 (napredak po poglavlju, dani do roka, napredak iz verzija) upisuje tek docs PR #1030: **M5.15 i M7.13 ne počinju prije spajanja #1030.** A-08 (dnevni vremenski žig kod vanjskog pružatelja) ostaje izvan rasporeda.
 
@@ -327,8 +334,8 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 
 ## Otvorena pitanja za vlasnika
 
-1. Novi raspored i datum pilota (D-191 t. 2; već u Owner queueu).
-2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
+1. ~~Novi raspored i datum pilota.~~ Riješeno 1. 11. 2026.: pilot 1. 3. 2027. (D-194 t. 1), raspored D-199 t. 6 (#87 c.6551869348).
+2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno), i to u val 1 (D-199 t. 1). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
 5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik). Djelomično riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md` kao okvir. **Smještaj i naziv ostaju otvoreni:** pitanja 1, 2, 3 i 9 iz te specifikacije čekaju vlasnika i nijedan korak M5.14 ne počinje prije odgovora.
@@ -337,3 +344,4 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 8. RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).
 9. ~~Izlazni kriterij M0 „isti broj testova kao u izvoru”.~~ Riješeno 31. 10. 2026. odlukom vlasnika (#87 c.6547174354): umjesto broja vrijedi zapis jednakovrijednosti za svaki neprenesen izvorni slučaj (`docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`); nepokriveno se vraća kao test.
 10. Sastav backend dodatka (otvoreno pitanje uz D-99) gubi rok 16. 11. 2026. s rasporedom po valovima; rješava li se uz novi raspored.
+11. M8 Document Provenance (D-198): rok čuvanja uvezenih verzija uz FPZG DPO i pravno mišljenje (t. 3). Dodaci za Word i Google Docs odlučeni su za sljedeći val (t. 2, U-7).
