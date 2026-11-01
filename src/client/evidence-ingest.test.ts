@@ -178,6 +178,18 @@ describe("F-8 3c: the open route", () => {
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ assignmentId: "11111111-1111-4111-8111-111111111111" });
   });
 
+  // DAN-331 (F-137): start goes on the wire only when the caller asks for it.
+  it.each([
+    [undefined, { assignmentId: "x" }],
+    [{}, { assignmentId: "x" }],
+    [{ start: false }, { assignmentId: "x" }],
+    [{ start: true }, { assignmentId: "x", start: true }],
+  ] as const)("with options %j sends %j", async (options, sent) => {
+    const { calls, fetchImpl } = scripted(json(200, openBody()));
+    await openWork("x", fetchImpl, options);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual(sent);
+  });
+
   it.each([
     ["an unknown key", openBody({ package: "x" })],
     ["a missing key", Object.fromEntries(Object.entries(openBody()).filter(([key]) => key !== "headSegmentHash"))],
@@ -225,6 +237,7 @@ describe("F-8 3c: the open route", () => {
     [401, { status: "unauthenticated" }, "unauthenticated"],
     [404, { status: "not_found" }, "not_found"],
     [409, { status: "not_accepting" }, "not_accepting"],
+    [409, { status: "not_started" }, "unavailable"],
     [426, { status: "upgrade_required" }, "upgrade_required"],
     [503, { status: "unavailable", stage: "context" }, "unavailable"],
     [200, { status: "opened" }, "unavailable"],
