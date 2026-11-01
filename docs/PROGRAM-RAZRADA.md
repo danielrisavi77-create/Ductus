@@ -45,6 +45,8 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Gotovo na mainu:** vlastiti OIDC klijent (`src/server/auth/`, `app/api/auth/{login,callback,logout}`) s PKCE, `state` i `nonce`; sesije u bazi; jedinstvenost (`oidc_issuer`, `hr_edu_person_unique_id`) bez spajanja po e-pošti (`db/migrations/20261003210100_identity_session.sql`, D-73), čime je D-104 pokriven na razini sheme; test da produkcijski build nema lažnog pružatelja (`tests/unit/auth/build-mode.test.ts`); pgTAP 020 do 022; ekran `/prijava`. **Nema:** prijave na stvarnom AAI@EduHr Labu.
 
+**Odluke plana M1:** atributi, istek sesije, adapter, odjava, proba na Labu, nositelj Test resursa i svježina podobnosti (P1 do P7) su D-200 u `docs/DECISIONS.md` (ODLUČENO 1. 11. 2026.).
+
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M1.1 | Ovlast za AAI@EduHr Lab i registracija usluge | V | FPZG, Srce | DAN-196, DAN-198 |
