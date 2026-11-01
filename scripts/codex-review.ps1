@@ -58,6 +58,15 @@ if ($LASTEXITCODE -ne 0) { throw "git diff against origin/main failed; refusing 
 $instructions = @($changed | Where-Object {
     $_ -match '(?i)(^|/)((claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$' -or $_ -match '(?i)(^|/)(\.claude|\.agents|\.codex)(/|$)|(^|/)\.mcp\.json$' -or $_.StartsWith('"')
 })
+#    AGENTS.md and CLAUDE.md also tell the reviewer to read further documents
+#    (STATE.md, docs/ENGINEERING_SYSTEM-SAZETAK.md and others), so a document
+#    that main's copy of either names in backticks is refused as well.
+$entryDocs = @(foreach ($entry in 'AGENTS.md', 'CLAUDE.md') {
+    $text = (git show "origin/main:$entry" 2>$null) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or -not $text) { throw "origin/main:$entry could not be read; refusing to run" }
+    [regex]::Matches($text, '`([A-Za-z0-9_./-]+\.md)`') | ForEach-Object { $_.Groups[1].Value }
+})
+$instructions += @($changed | Where-Object { $entryDocs -contains $_ })
 if ($instructions.Count -gt 0) {
     throw "the branch changes agent instructions ($($instructions -join ', ')); Codex would follow them, review it another way"
 }

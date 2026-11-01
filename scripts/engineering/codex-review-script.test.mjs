@@ -77,6 +77,21 @@ test("changed names are read unquoted and NUL-separated, so a non-ASCII control 
   }
 });
 
+test("a document that AGENTS.md or CLAUDE.md names as reading is refused too (Codex r4433772598)", () => {
+  const block = src.slice(at("$entryDocs = @(foreach ($entry in 'AGENTS.md', 'CLAUDE.md')"), codexCall);
+  assert.ok(block.includes('git show "origin/main:$entry"'), "the list comes from main");
+  assert.ok(block.includes("could not be read; refusing to run"), "an unreadable entry file stops the run");
+  assert.ok(block.includes("[regex]::Matches($text, '`([A-Za-z0-9_./-]+\\.md)`')"), "named documents pattern");
+  assert.ok(block.includes("$instructions += @($changed | Where-Object { $entryDocs -contains $_ })"));
+  assert.ok(at("$instructions += ") < at("if ($instructions.Count -gt 0)"), "added before the refusal");
+  const named = new Set();
+  for (const entry of ["AGENTS.md", "CLAUDE.md"]) {
+    const text = readFileSync(new URL(`../../${entry}`, import.meta.url), "utf8");
+    for (const m of text.matchAll(/`([A-Za-z0-9_./-]+\.md)`/g)) named.add(m[1]);
+  }
+  for (const p of ["STATE.md", "docs/ENGINEERING_SYSTEM-SAZETAK.md", "docs/ENGINEERING_SYSTEM.md", "docs/SESSIONS.md"]) assert.ok(named.has(p), p);
+});
+
 test("a review that looks like it carries a credential is never posted", () => {
   const check = at("looks like it contains a credential");
   assert.ok(check > codexCall && check < post);
