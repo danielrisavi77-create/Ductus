@@ -7,6 +7,11 @@
 BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
+-- DAN-304: only a person whose last login gave the teacher right can be
+-- confirmed; the candidates confirmed below have it. A candidate without it
+-- is refused in 024-teacher-eligibility.sql.
+INSERT INTO identity.teacher_eligibility (user_id, institution_id)
+SELECT id, institution_id FROM identity.user_account WHERE id IN (pg_temp.id('nina'), pg_temp.id('boris'), pg_temp.id('marko'), pg_temp.id('vesna'));
 
 SELECT plan(282);
 
