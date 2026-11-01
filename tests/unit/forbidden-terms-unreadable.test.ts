@@ -1464,6 +1464,9 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     ["a module by a path with backslashes", "src/components/Page.tsx", 'import { TEXT } from "..\\\\..\\\\ui\\\\text";'],
     ["the repository root itself", "src/index.ts", 'import all from "..";'],
     ["a module outside the repository", "src/components/Page.tsx", 'import { TEXT } from "../../../outside/text";'],
+    // Codex review of e458c450 (#1169): the alias leaves src/ through "..".
+    ["a module through the alias out of src", "app/page.tsx", 'import { TEXT } from "@/../ui/text";'],
+    ["a module through the alias out of the repository", "app/page.tsx", 'import { TEXT } from "@/../../ui/text";'],
   ];
 
   it.each(OUTSIDE)("reports the import of %s", (_, file, line) => {

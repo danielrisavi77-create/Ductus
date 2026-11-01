@@ -1075,12 +1075,17 @@ function importedData(root: string, file: string, name: string): string | null |
 /**
  * Whether an import in `file` names a module of the repository outside `app/`
  * and `src/`, which the scan does not read (F-024). A `.json` file is read
- * wherever it is (`importedData`). A name that is not a path from the file is
- * a package or `@/`, which the project sets to `src/`.
+ * wherever it is (`importedData`). `@/` is followed from `src/`, as the
+ * project sets it; any other name that is not a path from the file is a package.
  */
 function importedOutside(file: string, name: string): boolean {
-  if (!name.startsWith(".") || name.toLowerCase().endsWith(".json")) return false;
-  const target = path.posix.join(path.posix.dirname(file), name.replaceAll("\\", "/"));
+  if (name.toLowerCase().endsWith(".json")) return false;
+  const written = name.replaceAll("\\", "/");
+  // The alias is followed like a path from src/, so "@/../ui/text" leaves it.
+  let target: string;
+  if (written.startsWith("@/")) target = path.posix.normalize(`src/${written.slice(2)}`);
+  else if (written.startsWith(".")) target = path.posix.join(path.posix.dirname(file), written);
+  else return false;
   return !SCANNED_DIRS.some((dir) => target === dir || target.startsWith(`${dir}/`));
 }
 
