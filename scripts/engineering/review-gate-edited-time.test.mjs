@@ -95,6 +95,42 @@ test("an edited PASS does not lift an earlier FAIL of the same principal (F-012)
   assert.equal(result.state, "pending");
 });
 
+// Review of #1152 (issuecomment-6554110503): PASS at t1, FAIL at t2, and the
+// t2 comment edited at t3. Whatever the edit leaves, the principal's earlier
+// PASS must not count again.
+test("an edit of a principal's later FAIL never brings back its earlier PASS (F-012)", () => {
+  const other = "b".repeat(40);
+  for (const [name, edited] of [
+    ["edited into PASS", "PASS"],
+    ["edited into an unreadable verdict", "maybe"],
+    ["edited onto another head", null],
+  ]) {
+    const later = edited === null
+      ? byOwner(`Agent-Review: claude:b:reviewer\nReview-Head: ${other}\nReview-Verdict: PASS\n`, 2 * HOUR, 3 * HOUR)
+      : review("claude:b:reviewer", edited, 2 * HOUR, 3 * HOUR);
+    for (const risk of ["standard", "critical"]) {
+      const result = evaluate([review("claude:b:reviewer", "PASS", HOUR), later], risk);
+      assert.notEqual(result.state, "success", `${name} (${risk})`);
+    }
+  }
+  // Control: without the edit the later FAIL blocks, and a fresh PASS of the
+  // same principal after the edit counts again (standard, F-023 aside).
+  assert.notEqual(evaluate([review("claude:b:reviewer", "PASS", HOUR), review("claude:b:reviewer", "FAIL", 2 * HOUR)], "standard").state, "success");
+  assert.equal(
+    evaluate([review("claude:b:reviewer", "PASS", HOUR, 3 * HOUR), review("claude:b:reviewer", "PASS", 4 * HOUR)], "standard").state,
+    "success",
+  );
+});
+
+test("an edited QA comment does not bring back the same QA principal's earlier PASS (F-012)", () => {
+  const codexApp = (c) => ({ ...c, performed_via_github_app: { slug: "chatgpt-codex-connector" } });
+  const qa = (verdict, createdMs, updatedMs) =>
+    codexApp(byOwner(`QA-Agent: codex:q:qa\nQA-Head: ${head}\nQA-Verdict: ${verdict}\nQA-Scope: synthetic\n`, createdMs, updatedMs));
+  const reviewPass = review("claude:b:reviewer", "PASS", HOUR);
+  assert.equal(evaluate([reviewPass, qa("PASS", 2 * HOUR)]).state, "success");
+  assert.equal(evaluate([reviewPass, qa("PASS", 2 * HOUR), qa("PASS", 3 * HOUR, 4 * HOUR)]).state, "pending");
+});
+
 test("an edited FAIL or BLOCK still blocks (F-012)", () => {
   for (const verdict of ["FAIL", "BLOCK"]) {
     const result = evaluate(

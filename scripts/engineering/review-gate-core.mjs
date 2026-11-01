@@ -377,22 +377,24 @@ function latestVerdicts(entries, {
     const fallback = fallbackSlug(fallbackLine);
     const identity = verifiedCommentIdentity(entry, agent);
 
-    if (
-      !isAgent(agent, role) ||
-      !identity ||
-      !identity.principal ||
-      !(sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) ||
-      !verdict ||
-      !VERDICTS.has(verdict) ||
-      (extraField && !extra) ||
-      (entry.edited && verdict === "PASS")
-    ) {
-      continue;
-    }
+    if (!isAgent(agent, role) || !identity || !identity.principal) continue;
+
+    // F-012: an edited comment of a known principal is that principal's latest
+    // word (its time is the edit time, #129), even when the edit left nothing
+    // countable: a PASS, an unreadable verdict, a missing field or another
+    // head. It then holds the principal on the current head as EDITED, which
+    // is neither a PASS nor a FAIL, so an edit never brings back the
+    // principal's earlier PASS. An edited FAIL or BLOCK on a counted head
+    // keeps its verdict.
+    const counted = sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase());
+    const readable = counted && Boolean(verdict) && VERDICTS.has(verdict) && !(extraField && !extra);
+    const held = entry.edited && !(readable && NEGATIVE.has(verdict));
+    if (!readable && !held) continue;
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
-      cli: entry.cliChannel != null, order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+    const candidate = { agent, head: held ? headSha.toLowerCase() : head.toLowerCase(), verdict: held ? "EDITED" : verdict,
+      extra, fallback, fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
+      current: held || sameHead(head, headSha) };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
