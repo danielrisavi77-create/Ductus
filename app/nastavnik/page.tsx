@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import AccessCard from "@/components/auth/AccessCard";
+import { coursesAccess, teacherPageAccess } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import TeacherCourses from "@/components/teacher/TeacherCourses";
@@ -21,8 +23,9 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 
 // Z3 (A), #476 6289158306: the teacher's entry. The courses come from the
 // same read as GET /api/teacher/courses, under the session cookie only; the
-// database decides whose. A refused session or a person who is not a teacher
-// both read "no courses", without saying which.
+// database decides whose. DAN-378: no session reads "not signed in", a
+// closed one Z-03 and a person who is not a teacher Z-05, none of them a
+// course or whether one exists.
 export default async function TeacherHomePage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const [read, principal] = await Promise.all([
@@ -39,18 +42,12 @@ export default async function TeacherHomePage() {
     ids.map((id) => [id, answer?.kind === "ok" ? answer.submissions.get(id.toLowerCase()) ?? [] : null]),
   );
 
+  const screen = teacherPageAccess(coursesAccess(read?.kind ?? null), principal.kind, token);
+  const card = screen === "expired" || screen === "signedOut" || screen === "denied";
   let body;
-  if (read === null) {
-    body = (
-      <>
-        <p role="status">{messagesHr.teacher.signedOut}</p>
-        <p>
-          {/* An OIDC login: a real navigation, not a prefetchable Link. */}
-          <a href="/api/auth/login?returnTo=%2Fnastavnik">{messagesHr.teacher.signIn}</a>
-        </p>
-      </>
-    );
-  } else if (read.kind === "unavailable") {
+  if (card) {
+    body = <AccessCard kind={screen} returnTo="/nastavnik" what="courses" />;
+  } else if (screen === "unavailable") {
     body = (
       <>
         <p role="alert" className={styles.alert}>{t.unavailable}</p>
@@ -58,19 +55,20 @@ export default async function TeacherHomePage() {
       </>
     );
   } else {
-    body = <TeacherCourses courses={read.kind === "ok" ? read.courses : []} works={works} />;
+    body = <TeacherCourses courses={read?.kind === "ok" ? read.courses : []} works={works} />;
   }
+  const role = read?.kind === "ok" ? "teacher" : screen === "denied" ? "student" : null;
 
   return (
-    <AppShell session={shellSession(token)} role={read?.kind === "ok" ? "teacher" : null} scope={principal.kind === "signed-in" ? principal.scope : null} current="/nastavnik" crumbs={[t.title]}>
+    <AppShell session={shellSession(token)} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} current="/nastavnik" crumbs={[t.title]}>
       <div className={`page ${styles.page}`}>
-        <div className={styles.head}>
+        {card ? null : <div className={styles.head}>
           <div className={styles.heading}>
             <h1>{t.title}</h1>
             <p className={styles.lead}>{t.lead}</p>
           </div>
           {listed ? <Link className="btn" href="/nastavnik/zadatak/novi">{t.newCourse}</Link> : null}
-        </div>
+        </div>}
         {body}
       </div>
     </AppShell>
