@@ -8,7 +8,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(14);
+SELECT plan(17);
 
 -- Application schemas: everything outside the system schemas and public.
 CREATE TEMP VIEW app_relation AS
@@ -21,15 +21,17 @@ CREATE TEMP VIEW app_relation AS
 -- 1. Tables are read by the owner roles and by ductus_app alone. Every other
 -- role holds no right on any application relation: the worker, retention,
 -- the login callback and the migrator act through functions, and PUBLIC gets
--- nothing. Roles that inherit ductus_app (its logins) are held by the write
--- guard of 010 and the matrices. The has_*_privilege functions resolve
--- groups and PUBLIC, so a right reached either way shows here.
+-- nothing. Every role is read, whatever its name, so a role a later
+-- migration adds outside the Ductus roles is covered too. Superusers and the
+-- predefined pg_* roles hold every right by design and are left out; 010
+-- keeps the Ductus roles out of them. Roles that inherit ductus_app (its
+-- logins) are held by the write guard of 010 and the matrices. The
+-- has_*_privilege functions resolve groups and PUBLIC, so a right reached
+-- either way shows here.
 CREATE TEMP VIEW stray_privilege AS
   SELECT r.rolname || ': ' || p.privilege || ' on ' || a.name AS found
   FROM (SELECT rolname::text FROM pg_roles x
-        WHERE (x.rolname LIKE 'ductus\_%'
-               OR EXISTS (SELECT 1 FROM pg_auth_members m
-                          WHERE m.member = x.oid AND pg_get_userbyid(m.roleid) LIKE 'ductus\_%'))
+        WHERE NOT x.rolsuper AND x.rolname NOT LIKE 'pg\_%'
           AND x.rolname NOT IN ('ductus_identity', 'ductus_evidence')
           AND NOT pg_has_role(x.oid, 'ductus_app', 'USAGE')
         UNION ALL SELECT 'public') AS r (rolname)
@@ -45,20 +47,30 @@ GRANT SELECT ON institution.course TO ductus_worker;
 SELECT set_eq('SELECT found FROM stray_privilege', ARRAY['ductus_worker: SELECT on institution.course'],
   'a table right granted to ductus_worker is noticed');
 REVOKE SELECT ON institution.course FROM ductus_worker;
+CREATE ROLE test_reporting NOLOGIN;
+GRANT SELECT ON institution.course TO test_reporting;
+SELECT set_eq('SELECT found FROM stray_privilege', ARRAY['test_reporting: SELECT on institution.course'],
+  'a table right granted to a role outside the Ductus roles is noticed');
+REVOKE SELECT ON institution.course FROM test_reporting;
+DROP ROLE test_reporting;
 GRANT SELECT (id) ON evidence.segment TO PUBLIC;
 SELECT isnt_empty($$ SELECT found FROM stray_privilege WHERE found = 'public: SELECT on evidence.segment' $$,
   'a column right granted to PUBLIC is noticed');
 REVOKE SELECT (id) ON evidence.segment FROM PUBLIC;
 SELECT is_empty('SELECT found FROM stray_privilege', 'the relations are clean again once the controls are taken back');
 
--- 2. A policy that lets every row through (USING or WITH CHECK true) is the
--- owner policy of a table and names an owner role alone; no policy applies
--- to PUBLIC.
+-- 2. A policy that lets every row through is the owner policy of a table and
+-- names an owner role alone; no policy applies to PUBLIC. A policy lets every
+-- row through when USING or WITH CHECK is true, and also when the expression
+-- its command needs is missing: USING for every command but INSERT, and the
+-- check for INSERT, UPDATE and ALL, where WITH CHECK falls back to USING.
 CREATE TEMP VIEW open_policy AS
   SELECT schemaname || '.' || tablename || '.' || policyname AS found
   FROM pg_policies
   WHERE schemaname NOT LIKE 'pg\_%' AND schemaname NOT IN ('information_schema', 'public')
-    AND (qual = 'true' OR with_check = 'true')
+    AND (qual = 'true' OR with_check = 'true'
+         OR (cmd <> 'INSERT' AND qual IS NULL)
+         OR (cmd IN ('INSERT', 'UPDATE', 'ALL') AND coalesce(with_check, qual) IS NULL))
     AND NOT roles <@ ARRAY['ductus_identity', 'ductus_evidence']::name[];
 CREATE TEMP VIEW public_policy AS
   SELECT schemaname || '.' || tablename || '.' || policyname AS found
@@ -72,6 +84,14 @@ CREATE POLICY test_open ON institution.course FOR SELECT TO ductus_app USING (tr
 SELECT set_eq('SELECT found FROM open_policy', ARRAY['institution.course.test_open'],
   'a policy for ductus_app that passes every row is noticed');
 DROP POLICY test_open ON institution.course;
+CREATE POLICY test_no_using ON institution.course FOR SELECT TO ductus_app;
+SELECT set_eq('SELECT found FROM open_policy', ARRAY['institution.course.test_no_using'],
+  'a SELECT policy for ductus_app without USING is noticed');
+DROP POLICY test_no_using ON institution.course;
+CREATE POLICY test_no_check ON institution.course FOR INSERT TO ductus_app;
+SELECT set_eq('SELECT found FROM open_policy', ARRAY['institution.course.test_no_check'],
+  'an INSERT policy for ductus_app without WITH CHECK is noticed');
+DROP POLICY test_no_check ON institution.course;
 CREATE POLICY test_public ON institution.course FOR SELECT USING (false);
 SELECT set_eq('SELECT found FROM public_policy', ARRAY['institution.course.test_public'],
   'a policy without a role, which applies to PUBLIC, is noticed');
