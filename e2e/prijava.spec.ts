@@ -50,6 +50,26 @@ test("/prijava carries a path of this application as returnTo", async ({ page })
   );
 });
 
+// D-183: the whole page with both help sections open, in both themes at 1440 and 400 px.
+// The sign-in is dark only (D-115) until the light choice reaches it, so the light shot shows that too.
+for (const theme of ["dark", "light"] as const) {
+  test(`/prijava with its help open in the ${theme} theme at 1440 and 400 px`, async ({ page }, testInfo) => {
+    await page.addInitScript((value) => localStorage.setItem("ductura.theme", value), theme);
+    for (const width of [1440, 400]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/prijava");
+      await page.getByText("Trebate pomoć?").click();
+      await page.getByText("Prvi dolazak ili imate kod zadatka?").click();
+      await expect(page.getByRole("link", { name: "Službena pomoć AAI@EduHr" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Prijava sustavom AAI@EduHr" })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      if (testInfo.project.name === "desktop") {
+        await testInfo.attach(`prijava-${theme}-${width}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+      }
+    }
+  });
+}
+
 for (const returnTo of ["https://example.test/rad", "//example.test", "/api/auth/logout"]) {
   test(`/prijava drops returnTo ${returnTo}`, async ({ page }) => {
     await page.goto(`/prijava?returnTo=${encodeURIComponent(returnTo)}`);

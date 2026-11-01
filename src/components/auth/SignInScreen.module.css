@@ -55,7 +55,8 @@
   line-height: 1.6;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: var(--accent);
+  /* Grey: gold is for actions only (D-188, DESIGN-SYSTEM §2 point 05). */
+  color: var(--ink-3);
 }
 
 .title {
@@ -68,11 +69,11 @@
   letter-spacing: -0.025em;
 }
 
+/* The italic keeps the heading's colour: it is not an action (D-188). */
 .accent {
   font-family: var(--ff-display);
   font-style: italic;
   font-weight: 400;
-  color: var(--accent);
 }
 
 .lead {
