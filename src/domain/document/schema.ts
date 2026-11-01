@@ -15,6 +15,16 @@
 /** Schema version stamped on every canonical document produced in F1. */
 export const DOCUMENT_SCHEMA_VERSION = 1;
 
+/**
+ * The version of the first new node (DAN-453; contract on #1091). Reserved,
+ * not accepted: no node needs it yet, so a document that names it is refused
+ * like any unknown version. It is accepted only from the change that brings
+ * its first node; when a document moves to it is open (K4 on #1091). Until
+ * then, and after, a v1 document never changes version on load,
+ * normalisation or sync: `schemaVersion` is in the hashed bytes.
+ */
+export const DOCUMENT_SCHEMA_VERSION_V2 = 2;
+
 declare const nodeIdBrand: unique symbol;
 
 /**
@@ -148,6 +158,19 @@ export type PlainBlockType = (typeof PLAIN_BLOCK_TYPES)[number];
 
 export function isPlainBlockType(value: unknown): value is PlainBlockType {
   return (PLAIN_BLOCK_TYPES as readonly unknown[]).includes(value);
+}
+
+/**
+ * The block types each accepted document version takes, and the only list of
+ * accepted versions. A version is accepted only with its own entry here; a
+ * new node joins the version that brings it, never v1.
+ */
+export const DOCUMENT_BLOCK_TYPES_BY_VERSION: ReadonlyMap<number, ReadonlySet<string>> = new Map([
+  [DOCUMENT_SCHEMA_VERSION, new Set<string>(["heading", ...PLAIN_BLOCK_TYPES])],
+]);
+
+export function isAcceptedDocumentSchemaVersion(value: unknown): value is typeof DOCUMENT_SCHEMA_VERSION {
+  return typeof value === "number" && DOCUMENT_BLOCK_TYPES_BY_VERSION.has(value);
 }
 
 /**
