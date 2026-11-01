@@ -16,8 +16,10 @@ export const INDEX = "docs/DECISIONS.md";
 export const DIR = "docs/odluke";
 const README = "README.md";
 const ID = "D-\\d{2,}";
-const ROW_ID = new RegExp(`^\\| *(${ID}) *\\|`);
-const HEADING_ID = new RegExp(`^#{1,6} +(${ID})(?![0-9])`);
+// Up to three spaces of indentation are still a heading or a table row in
+// CommonMark and GFM; four make a code block (QA, #1179).
+const ROW_ID = new RegExp(`^ {0,3}\\| *(${ID}) *\\|`);
+const HEADING_ID = new RegExp(`^ {0,3}#{1,6}[ \\t]+(${ID})(?![0-9])`);
 // Destination, then an optional CommonMark title ("t", 't' or (t)).
 const LINK = /\[([^\]]*)\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
 const ID_ONLY = new RegExp(`^${ID}$`);
@@ -43,16 +45,17 @@ function formatErrors(name, text) {
   return errors;
 }
 
-/** Relative link targets of a text outside inline code (no scheme, no pure anchor), with their link text. */
-function relativeLinks(text) {
+/** Link targets of a text outside inline code, with their link text; `relative` is false for a scheme or a pure anchor. */
+function links(text) {
   const out = [];
   for (const m of text.replace(/`[^`\n]*`/g, "").matchAll(LINK)) {
     const target = m[2];
-    if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue;
-    out.push({ label: m[1], target: target.split("#")[0] });
+    const relative = !(/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#"));
+    out.push({ label: m[1], target: relative ? target.split("#")[0] : target, relative });
   }
   return out;
 }
+const relativeLinks = (text) => links(text).filter((l) => l.relative);
 
 /**
  * Errors of a tree. `tree` = { dir: "missing" | "symlink" | "dir", entries:
@@ -101,8 +104,11 @@ export function checkTree(tree) {
   }
   const indexRows = new Set(definedIds(tree.index));
   const linked = new Map();
-  for (const { label, target } of relativeLinks(tree.index)) {
-    const resolved = path.posix.normalize(path.posix.join("docs", target));
+  // A link labelled with a decision ID must reach its file, so an external
+  // address or an anchor is checked too, before it could be skipped (QA, #1179).
+  for (const { label, target, relative } of links(tree.index)) {
+    if (!relative && !ID_ONLY.test(label)) continue;
+    const resolved = relative ? path.posix.normalize(path.posix.join("docs", target)) : target;
     if (ID_ONLY.test(label)) {
       if (resolved !== `${DIR}/${canonicalName(label)}`) {
         errors.push(`${INDEX}: link ${label} points to ${target}, not odluke/${canonicalName(label)}`);
@@ -130,8 +136,15 @@ export function checkTree(tree) {
     }
   }
 
+  // Only the index and docs/odluke/ as spelled here are checked above. Another
+  // spelling (docs/Odluke/, docs/decisions.md) is distinct on Linux, so a file
+  // there is refused whatever it holds (QA, #1179).
   for (const doc of tree.docs) {
-    if (matchesPath(doc.path, [INDEX, `${DIR}/`])) continue;
+    if (doc.path === INDEX || doc.path.startsWith(`${DIR}/`)) continue;
+    if (matchesPath(doc.path, [INDEX, `${DIR}/`])) {
+      errors.push(`${doc.path} is another spelling of ${INDEX} or ${DIR}/`);
+      continue;
+    }
     const ids = definedIds(doc.text);
     if (ids.length > 0) errors.push(`${doc.path} holds a decision record (${ids[0]}) outside ${INDEX} and ${DIR}/`);
   }

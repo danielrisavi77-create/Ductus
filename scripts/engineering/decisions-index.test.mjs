@@ -66,6 +66,10 @@ test("A3: a decision link must point into docs/odluke/ under its canonical name"
   for (const target of ["D-05.md", "privacy/D-05.md", "odluke/D-5.md", "Odluke/D-05.md", "../odluke/D-05.md"]) {
     fails(tree({ index: INDEX.replace("(odluke/D-05.md)", `(${target})`) }), /link D-05 points to/);
   }
+  // An external address or an anchor under a decision ID is no way around the file (QA, #1179).
+  for (const target of ["https://example.invalid/missing.md", "#d-05", "mailto:x@example.invalid"]) {
+    fails(tree({ index: `${INDEX.replace("| [D-05](odluke/D-05.md) | Naslov | 1. 1. 2026. | ODLUČENO |\n", "")}| [D-999](${target}) | x |\n`, entries: [file("README.md", "# Odluke\n")] }), /link D-999 points to/);
+  }
   assert.deepEqual(checkTree(tree({ index: INDEX.replace("(odluke/D-05.md)", "(./odluke/D-05.md)") })), []);
 });
 
@@ -81,8 +85,18 @@ test("A3: a decision record outside the index and docs/odluke/ fails", () => {
   // The README in docs/odluke/ is not a decision file and holds no record either (review, #1179).
   fails(tree({ entries: [file("README.md", "# Odluke\n\n| D-01 | duplikat |\n")] }), /README\.md holds a decision record \(D-01\)/);
   fails(tree({ entries: [file("README.md", "# Odluke\n\n## D-01 Naslov\n")] }), /README\.md holds a decision record \(D-01\)/);
-  // Spelling of the exempt places follows matchesPath.
-  assert.deepEqual(checkTree(tree({ docs: [{ path: "DOCS/ODLUKE/X.md", text: "| D-200 | a |\n" }] })), []);
+  // Indentation of up to three spaces is still a heading or a row; four is code (QA, #1179).
+  for (const text of [" ## D-999: Nova odluka\n", "   # D-999\n", "  | D-999 | a | b |\n", "#\tD-999 tab\n"]) {
+    fails(tree({ docs: [{ path: "docs/nova-odluka.md", text }] }), /nova-odluka\.md holds a decision record \(D-999\)/);
+  }
+  fails(tree({ index: `${INDEX}  | D-06 | uvučeno | opet |\n` }), /2 rows for D-06/);
+  assert.deepEqual(checkTree(tree({ docs: [{ path: "docs/kod.md", text: "    ## D-999 u bloku koda\n" }] })), []);
+  // Only the exact spelling of the index and docs/odluke/ is exempt; another spelling is refused (QA, #1179).
+  for (const p of ["docs/Odluke/D-999.md", "DOCS/ODLUKE/X.md", "docs/decisions.md"]) {
+    fails(tree({ docs: [{ path: p, text: "# D-999\n" }] }), new RegExp(`${p.replace(".", "\\.")} is another spelling`));
+    fails(tree({ docs: [{ path: p, text: "bez zapisa\n" }] }), /is another spelling/);
+  }
+  assert.deepEqual(checkTree(tree({ docs: [{ path: "docs/odluke/D-05.md", text: "# D-05\n" }, { path: "docs/DECISIONS.md", text: INDEX }] })), []);
 });
 
 test("C5: relative links resolve; https, anchors and inline code are not followed", () => {
