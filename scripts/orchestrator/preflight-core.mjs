@@ -235,7 +235,7 @@ const RUNNING_STATES = new Set(["PENDING", "QUEUED", "IN_PROGRESS"]);
 /**
  * Preflight verdict for one PR. Every check is PASS or FAIL; there is no
  * "unknown counts as pass". Input:
- *   pr        toPr() shape (state, isDraft, headRefOid, baseRefName, body)
+ *   pr        toPr() shape (state, isDraft, headRefOid, baseRefName, body, mergeable)
  *   mainSha   main head the PR is compared against
  *   compare   REST compare of mainSha...head ({status, behind_by}) or null when unread
  *   mainPaths paths changed by the main commits the head lacks (compare head...main), or null
@@ -265,17 +265,19 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
   if (!SHA_RE.test(String(mainSha ?? ""))) add(false, "main", "main head could not be read");
   else if (!compare || !Number.isInteger(compare.behind_by)) add(false, "main", `head vs main ${mainSha.slice(0, 8)} could not be compared`);
   else if (compare.behind_by > 0) {
-    // D-101 (Daniel, orchestrator session 24. 10. 2026.; #87 issuecomment-6384612548): for every
-    // risk, critical and D-97 included, a lagging head may enter review when no missing main
-    // commit touches a file of the PR, because the verdict carries over a clean main merge.
-    // Unreadable file lists fail.
+    // D-101 and the owner's decision of 31. 10. 2026. (#87 issuecomment-6549357009, point 1;
+    // D-197 point 2): for every risk, critical and D-97 included, a lagging head may enter
+    // review unless it conflicts with main. Only GitHub's mergeability decides; a file that
+    // main also changed is reported, not refused. An undecided mergeability fails closed.
     const lack = `head lacks ${compare.behind_by} commit(s) of main ${mainSha.slice(0, 8)}`;
-    if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
-      add(false, "main", `${lack} and the changed-file lists could not be read: merge main first`);
+    if (pr.mergeable === "CONFLICTING") add(false, "main", `${lack} and conflicts with main: merge main first`);
+    else if (pr.mergeable !== "MERGEABLE") add(false, "main", `${lack} and whether it merges cleanly could not be read: run preflight again`);
+    else if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
+      add(true, "main", `${lack}, without a conflict`);
     } else {
       const mine = new Set(prPaths);
       const shared = mainPaths.filter((p) => mine.has(p));
-      if (shared.length > 0) add(false, "main", `${lack} and main changed ${shared.length} file(s) of this PR (${names(shared.slice(0, 3))}): merge main first`);
+      if (shared.length > 0) add(true, "main", `${lack}; main changed ${shared.length} file(s) of this PR, without a conflict (${names(shared.slice(0, 3))})`);
       else add(true, "main", `${lack}, but none of its ${mainPaths.length} changed file(s) is in this PR`);
     }
   }
@@ -353,7 +355,12 @@ export function requiredStatusChecks(statusChecks) {
   return [...new Map(configured.map((item) => [`${item.context}\n${item.appId ?? "*"}`, item])).values()];
 }
 
+// Reads that only add detail to the "main" check: since the owner's decision of
+// 31. 10. 2026. (#87 issuecomment-6549357009) mergeability decides it, so a
+// failed or capped file list never turns the run into a read error.
+export const INFORMATIONAL_READS = new Set(["PR file list", "main file list"]);
+
 export function preflightExitCode(checks, readErrors = []) {
-  if (readErrors.length > 0) return 2;
+  if (readErrors.some((name) => !INFORMATIONAL_READS.has(name))) return 2;
   return preflightPass(checks) ? 0 : 1;
 }
