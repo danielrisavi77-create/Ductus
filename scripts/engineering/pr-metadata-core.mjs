@@ -1,5 +1,14 @@
 import { field } from "./metadata-parser.mjs";
-import { D97_MANUAL_PATHS, D97_PATHS, isAgentControlPath, matchesPath, normalizePath } from "./protected-paths.mjs";
+import {
+  CRITICAL_DOC_PATHS,
+  CRITICAL_TEST_PATHS,
+  D97_MANUAL_PATHS,
+  D97_PATHS,
+  INSTALL_HOOK_PATHS,
+  isAgentControlPath,
+  matchesPath,
+  normalizePath,
+} from "./protected-paths.mjs";
 
 // No prototype: `"constructor" in RISK_RANK` must be false (F-041 b).
 const RISK_RANK = Object.freeze(Object.assign(Object.create(null), { low: 0, standard: 1, critical: 2 }));
@@ -13,16 +22,30 @@ const AGENT_RE =
 // directory and its runner configuration carry the floor of the guards.
 export const CRITICAL_PATHS = [
   ...D97_PATHS,
-  "docs/PRODUCT.md",
+  ...CRITICAL_DOC_PATHS,
   "STATE.md",
   ".worktreeinclude",
   "osv-scanner.toml",
+  // F-033: what installs, runs or pins the toolchain, the lint rules and the
+  // scanner exceptions.
+  "package.json",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".nvmrc",
+  "eslint.config.mjs",
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  ".semgrepignore",
+  // F-174: the pnpm install hook runs on every install; the lockfile decides
+  // which package code the hooks and tools run.
+  ...INSTALL_HOOK_PATHS,
+  "pnpm-lock.yaml",
   "vitest.config.ts",
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
   // The only test that a production build refuses the fake provider (D-09, F-041 a).
-  "e2e/auth.spec.ts",
+  ...CRITICAL_TEST_PATHS,
   ".cc-safety-net/",
   "plugins/",
   "scripts/forbidden-terms/",

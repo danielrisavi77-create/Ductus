@@ -812,7 +812,11 @@ export const hr = {
   // and PRODUCT §5 rules 4 and 7; D-24 and D-81 for the 30-second steps.
   // AssignmentNotice renders recorded, notRecorded and teacher in key order.
   // Live view and replay are not built yet, so the notice says what will happen
-  // in this assignment; D-63 for the skipped long pauses of the replay.
+  // in this assignment. D-63 as corrected on 31. 10. 2026. (#87 c.6544361788,
+  // PRODUCT §5 rule 4 exception): the replay neither skips nor marks pauses.
+  // The notice names the P-01 sessions as the one measure taken from time.
+  // recorded.live also names the input mark the mentor sees (D-54, D-127,
+  // src/editor/source.ts).
   student: {
     title: "Zadatak",
     // DAN-344 (Archivum S03): the way back from the notice to /zadaci, verbatim from the package.
@@ -904,13 +908,13 @@ export const hr = {
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
-      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To će služiti samo prikazu uživo i reprodukciji.",
+      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. Uz svaku promjenu bilježit će se i način unosa, pa će nastavnik (mentor) vidjeti oznaku kad uređivač uz unos nije vidio pritisak tipke ni lijepljenje, na primjer kod diktiranja, nekih tipkovnica na mobitelu ili pomoćnih alata. Oznaka govori samo kako je tekst ušao u uređivač, ne tko ga je napisao. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodate.",
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
-      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, ritam ni bilo kakva mjera. Reprodukcija preskače duge stanke i ne navodi koliko su trajale.",
+      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena ne računaju se brzina, ritam ni bilo kakva mjera, osim sesija: sesije se određuju prekidom dužim od praga P-01. Reprodukcija neće preskakati ni isticati stanke.",
       outside: "Druge aplikacije i kartice preglednika, kamera, mikrofon i zaslon.",
       device: "IP adresa i podaci o uređaju.",
     },
@@ -1049,16 +1053,39 @@ export const hr = {
   // the one way in; nothing here describes what is recorded (the notice of
   // each assignment does, PRODUCT §5 rule 6).
   prijava: {
+    // Archivum sign-in (owner's design package of 26 Oct 2026, DAN-344).
     title: "Prijava",
-    titleAccent: "u radni prostor",
-    lead: `${APP_NAME} je prostor u kojem pišeš seminarske, završne i diplomske radove, a mentor ih prati od prve rečenice do predaje.`,
-    motto: `${APP_NAME} ne piše umjesto tebe. Pomaže ti da napišeš svoj rad i pokažeš kako je nastao.`,
-    cardTitle: "Za studente i nastavnike",
-    cardBody: "Prijavi se korisničkim računom AAI@EduHr, istim kojim se prijavljuješ u Studomat i Merlin.",
+    back: "Na naslovnicu",
+    // D-181: the reader is addressed with "Vi" (Codex P2 on #879, 6ea3ced8).
+    eyebrow: "Vaš akademski prostor",
+    heading: "Dobro došli",
+    headingMore: "u svoj",
+    headingAccent: "prostor.",
+    lead: "Jedan ulaz za studente i nastavnike.",
+    leadMore: "Pisanje, povratna informacija i razgovor o radu.",
+    paperMeta: `${APP_NAME} / akademski rad`,
+    paperTitle: "Prije prve",
+    paperTitleAccent: "rečenice.",
+    paperNote: "Jasne upute. Povezan razgovor.",
+    paperStudent: "Student piše.",
+    paperTeacher: "Nastavnik usmjerava.",
+    cardEyebrow: "Prijava",
+    cardTitle: "Vaš akademski",
+    cardTitleAccent: "identitet.",
+    cardBody: "Prijavite se korisničkim računom AAI@EduHr, istim kojim se prijavljujete u Studomat i Merlin. Studenti i nastavnici koriste isti ulaz.",
     button: "Prijava sustavom AAI@EduHr",
-    passwordNote: "Lozinku upisuješ samo kod AAI@EduHr.",
-    codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
-    help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
+    passwordNote: "Lozinku upisujete samo kod AAI@EduHr.",
+    roleTitle: "Jedan ulaz. Vaš prostor.",
+    roleBody: "Nakon prijave otvara se vaš prostor prema dodijeljenoj ulozi. Ulogu nastavnika potvrđuje administrator fakulteta.",
+    codeSummary: "Prvi dolazak ili imate kod zadatka?",
+    codeNote: "Prvo se prijavite sustavom AAI@EduHr. Kod zadatka od nastavnika upisujete nakon prijave.",
+    footer: "Identitet AAI@EduHr · pristup prema dodijeljenoj ulozi",
+    helpSummary: "Trebate pomoć?",
+    helpAaiTitle: "Ne možete se prijaviti računom AAI@EduHr?",
+    helpAaiBody: "Za zaboravljenu korisničku oznaku ili lozinku obratite se službi svoje matične ustanove.",
+    helpAaiLink: "Službena pomoć AAI@EduHr",
+    helpAccessTitle: "Prijava je uspjela, ali nemate pristup?",
+    helpAccessBody: "Javite se koordinatoru na svojoj ustanovi.",
   },
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
   errorPage: {

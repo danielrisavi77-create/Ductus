@@ -3,24 +3,6 @@ import type { SigningKeyProvider } from "@/application/ports/signing-key-provide
 import { evidencePayloadReader, type ProcessEvidencePayloads } from "./payload-reader";
 import { createEvidenceReceiptSigner } from "./receipt-signer";
 
-type Env = Readonly<Record<string, string | undefined>>;
-
-/**
- * The origin every mutation route expects: that of the configured OIDC
- * callback (as the comment and summary routes). Null when it is not set or
- * is not an http(s) origin; the route then answers 503.
- */
-export function applicationOrigin(env: Env = process.env): string | null {
-  const callback = env.OIDC_REDIRECT_URI;
-  if (!callback) return null;
-  try {
-    const origin = new URL(callback).origin;
-    return origin === "null" ? null : origin;
-  } catch {
-    return null;
-  }
-}
-
 let signer: SigningKeyProvider | undefined;
 
 /**

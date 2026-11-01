@@ -207,3 +207,106 @@ describe("pg dynamic import final-review regressions", () => {
     ]);
   });
 });
+
+// DAN-50: a static path into an installed copy of the driver is the driver.
+const NODE_MODULES_PG = [
+  "../../node_modules/pg/lib/index.js",
+  "../../node_modules/pg",
+  "../node_modules/PG-boss/src/index.js",
+  "../../node_modules/.pnpm/pg@8.13.1/node_modules/pg/lib/index.js",
+  "..\\..\\node_modules\\pg\\lib\\index.js",
+  "/srv/app/node_modules/pg-cursor",
+];
+const NODE_MODULES_NONFAMILY = ["./node_modules-like/pg", "../pgx", "../../node_modules/pgx", "../../node_modules/@types/pg"];
+
+function nodeModulesCases(files: string[], specifiers: string[]) {
+  return files.flatMap((filePath) => specifiers.map((specifier) => [filePath, specifier] as const));
+}
+
+describe("pg boundary through node_modules paths (DAN-50)", () => {
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG))(
+    "rejects %s importing %s dynamically",
+    async (filePath, specifier) => {
+      await expectDynamicBoundary(filePath, importSource(JSON.stringify(specifier)));
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG))(
+    "rejects %s importing %s statically",
+    async (filePath, specifier) => {
+      expect(await lint(filePath, `import pg from ${JSON.stringify(specifier)};\nexport const probe = pg;\n`)).toEqual([
+        expect.objectContaining({
+          ruleId: "no-restricted-imports",
+          severity: 2,
+          message: expect.stringContaining(BOUNDARY_MESSAGE),
+        }),
+      ]);
+    },
+  );
+
+  it.each(nodeModulesCases(EXCEPTION_FILES, NODE_MODULES_PG))(
+    "allows %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import pg from ${JSON.stringify(specifier)};\nexport const a = pg;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_NONFAMILY))(
+    "allows nonfamily %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import x from ${JSON.stringify(specifier)};\nexport const a = x;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+});
+// Review of #1172 (c.6554355576, c.6557930881): a path with an empty, "." or
+// "x/.." segment reaches the same driver. Statically the custom rule reports
+// it, since no-restricted-imports reads only the raw text.
+const NODE_MODULES_PG_UNNORMALIZED = [
+  "../../node_modules//pg/lib/index.js",
+  "../../node_modules/./pg/lib/index.js",
+  "../../node_modules/x/../pg/lib/index.js",
+  "../../node_modules/.pnpm//pg@8.13.1/node_modules/./pg",
+  "file:///D:/Ductus/node_modules/./pg/lib/index.js",
+  "..\\..\\node_modules\\.\\pg",
+];
+const NODE_MODULES_NONFAMILY_UNNORMALIZED = ["../../node_modules/./pgx", "../../node_modules/x/../@types/pg", "./x/../pg-like"];
+
+describe("pg boundary through unnormalized node_modules paths (review of #1172)", () => {
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG_UNNORMALIZED))(
+    "rejects %s importing %s dynamically",
+    async (filePath, specifier) => {
+      await expectDynamicBoundary(filePath, importSource(JSON.stringify(specifier)));
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG_UNNORMALIZED))(
+    "rejects %s importing %s statically, once",
+    async (filePath, specifier) => {
+      for (const code of [
+        `import pg from ${JSON.stringify(specifier)};\nexport const probe = pg;\n`,
+        `export * from ${JSON.stringify(specifier)};\n`,
+        `export { default as probe } from ${JSON.stringify(specifier)};\n`,
+      ]) {
+        await expectDynamicBoundary(filePath, code);
+      }
+    },
+  );
+
+  it.each(nodeModulesCases(EXCEPTION_FILES, NODE_MODULES_PG_UNNORMALIZED))(
+    "allows %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import pg from ${JSON.stringify(specifier)};\nexport const a = pg;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_NONFAMILY_UNNORMALIZED))(
+    "allows nonfamily %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import x from ${JSON.stringify(specifier)};\nexport const a = x;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+});

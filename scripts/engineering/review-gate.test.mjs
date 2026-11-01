@@ -403,16 +403,24 @@ test("latest verdict from one reviewer replaces its earlier PASS", () => {
   assert.equal(result.state, "pending");
 });
 
-test("later PASS can resolve an earlier FAIL from the same reviewer", () => {
-  const result = evaluate({
-    body: prBody(),
-    headSha: head,
-    comments: [
-      review({ verdict: "FAIL" }),
-      review({ verdict: "PASS" }),
-    ],
-  });
-  assert.equal(result.state, "success");
+// F-023 (owner decision 31. 10. 2026.): a later PASS on the same head does not
+// resolve an earlier FAIL or BLOCK of the same reviewer; a PASS on a new head does.
+test("a later PASS on the same head does not resolve an earlier FAIL from the same reviewer (F-023)", () => {
+  for (const negative of ["FAIL", "BLOCK"]) {
+    const same = evaluate({
+      body: prBody(),
+      headSha: head,
+      comments: [review({ verdict: negative }), review({ verdict: "PASS" })],
+    });
+    assert.equal(same.state, "pending", negative);
+    const newHead = "c".repeat(40);
+    const pushed = evaluate({
+      body: prBody(),
+      headSha: newHead,
+      comments: [review({ verdict: negative }), review({ verdict: "PASS", sha: newHead })],
+    });
+    assert.equal(pushed.state, "success", negative);
+  }
 });
 
 test("any current independent reviewer BLOCK holds the gate", () => {

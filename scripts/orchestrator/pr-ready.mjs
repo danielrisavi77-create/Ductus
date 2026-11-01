@@ -37,6 +37,9 @@ try {
   const threadNodes = await attempt(() => reviewThreads(n));
   const checks = evaluateReady({
     head: pr.headRefOid,
+    pr,
+    repository: `${owner}/${repo}`,
+    ownerLogin: owner,
     gate: await readGate(pr.headRefOid),
     rollup,
     base: pr.baseRefName,
