@@ -38,6 +38,7 @@ globalThis.fetch = async (url, options = {}) => {
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
   if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
   if (path.endsWith("/issues/7/events")) return reply(200, plan.timeline ?? []);
+  if (path.endsWith("/pulls/7/reviews")) return reply(200, plan.reviews ?? []);
   if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
@@ -45,7 +46,7 @@ globalThis.fetch = async (url, options = {}) => {
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -60,7 +61,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews }),
       FAKE_LOG: log,
     },
   });
@@ -302,6 +303,45 @@ test("a failed events read marks all three statuses pending (F-013)", () => {
   const carrierFail = run(comment, { pr: carrier, failPostNumber: 1 });
   assert.equal(carrierFail.code, 1);
   assert.ok(carrierFail.posts.every((p) => p.body.context !== "Auto-merge eligible"));
+});
+
+// QA c.6561448849 on #1117: the base change filter covers issue comments only.
+// PR reviews reach quota evidence unfiltered, so a review of the exhausted App
+// without a readable time still voids the evidence after a base change.
+const byOwnerAt = (body, at) => ({
+  body, user: { login: "o" }, author_association: "OWNER",
+  performed_via_github_app: { slug: "claude" }, created_at: at, updated_at: at,
+});
+const quotaFallback = [
+  {
+    body: "You have reached your Codex usage limits for code reviews. Ask an admin to raise the limit.",
+    user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, author_association: "NONE",
+    performed_via_github_app: { slug: "chatgpt-codex-connector" },
+    created_at: "2026-10-31T12:00:00Z", updated_at: "2026-10-31T12:00:00Z",
+  },
+  byOwnerAt(`Agent-Review: claude:b:reviewer\nReview-Head: ${HEAD}\nReview-Verdict: PASS\n`, "2026-10-31T12:10:00Z"),
+  byOwnerAt(
+    `QA-Agent: claude:c:qa\nQA-Head: ${HEAD}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\nProvider-Fallback: chatgpt-codex-connector\n`,
+    "2026-10-31T12:20:00Z",
+  ),
+];
+const fallbackPr = { ...eligible, body: "Agent: chatgpt:a:backend\nRisk: critical\nTask: B-1\n" };
+const codexPrReview = (submittedAt) => ({
+  user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, state: "PENDING", body: "Codex Review", submitted_at: submittedAt,
+});
+
+test("a Codex PR review without a readable time voids quota evidence after a base change (F-013)", () => {
+  const input = { pr: fallbackPr, files: srcFile, openPulls: [fallbackPr], comments: quotaFallback, timeline: [baseChange("2026-10-31T11:00:00Z")] };
+  // Control: without the review the fallback holds after the change.
+  assert.equal(gateState(run(comment, input)), "success");
+  for (const submittedAt of [null, undefined, "garbage"]) {
+    const out = run(comment, { ...input, reviews: [codexPrReview(submittedAt)] });
+    assert.equal(out.code, 0, String(submittedAt));
+    assert.equal(gateState(out), "pending", String(submittedAt));
+  }
+  // An old review with a readable time before the change still voids nothing,
+  // as on main: it predates the quota message.
+  assert.equal(gateState(run(comment, { ...input, reviews: [codexPrReview("2026-10-31T10:00:00Z")] })), "success");
 });
 
 // F-014: statuses are per commit. A closed PR, or a PR whose head lives in

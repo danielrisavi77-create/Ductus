@@ -105,7 +105,7 @@ async function main() {
     console.log(QUEUE_CARRIER_STATUS.description);
     return;
   }
-  const [allComments, changedFiles, allReviews, reviewComments, openPulls, issueEvents] = await Promise.all([
+  const [allComments, changedFiles, reviews, reviewComments, openPulls, issueEvents] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
     // Only for quota evidence (#128): a PR review of the exhausted App voids it.
@@ -125,7 +125,9 @@ async function main() {
   // marks all three statuses pending.
   if (cutoff === Infinity) throw new Error("A base change has no readable time; the gate cannot tell which verdicts count.");
   const comments = sinceBaseChange(allComments, cutoff, "created_at", { codexEdits: true });
-  const reviews = sinceBaseChange(allReviews, cutoff, "submitted_at");
+  // PR reviews stay unfiltered, as before F-013: a review of the exhausted App
+  // without a readable time must still void quota evidence (QA c.6561448849).
+  // Filtering them by base change is a separate ticket.
   if (!targetsDefaultBranch(pr)) {
     // F-014: another open PR on this head owns its statuses; a pending marker
     // here would overwrite them. An unread list counts as shared.
