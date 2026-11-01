@@ -518,3 +518,22 @@ test("a PR off the default branch writes only the shared-head marker on a head a
   const alone = run(comment, { pr: side, files: addedTest, openPulls: [side] });
   assert.deepEqual(states(alone.posts), ALL.map((c) => [c, "pending"]));
 });
+
+// F-040 (QA c.6565224257): the PR to main left three green statuses on the
+// head; the side PR's run cleared one and then a write returned HTTP 500.
+test("a failed status write of a side-base PR leaves no green status on the shared head (F-040)", () => {
+  const side = { ...eligible, number: 9, base: { ...eligible.base, ref: "feature" } };
+  const main = { ...eligible, number: 8 };
+  const green = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible] });
+  assert.deepEqual(states(green.posts), ALL.map((c) => [c, "success"]));
+  for (const failPostNumber of [1, 2, 3]) {
+    const failed = run(comment, { pr: side, files: addedTest, openPulls: [side, main], failPostNumber });
+    assert.equal(failed.code, 1, `POST ${failPostNumber}`);
+    const last = finalStates([green, failed]);
+    for (const c of ALL) {
+      assert.equal(last[c][0], `/repos/o/r/statuses/${HEAD}`, `POST ${failPostNumber} ${c}`);
+      assert.equal(last[c][1], "pending", `POST ${failPostNumber} ${c}`);
+    }
+    assert.ok(failed.posts.every((p) => p.body.state === "pending"), `POST ${failPostNumber}`);
+  }
+});

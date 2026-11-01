@@ -134,6 +134,10 @@ async function main() {
     // c.6564729651), so the run clears them with the shared-head marker. It
     // never writes success there. An unread list counts as shared.
     const marker = sharesHeadWithOpenPr(pr, openPulls) ? SHARED_HEAD : NOT_DEFAULT_BASE;
+    // F-040 (QA c.6565224257): once these writes start, a failed one must not
+    // leave older green statuses beside the new pending ones, so the failure
+    // path marks all three pending, as it does for a PR to main.
+    knownHead = { repository, sha: pr.head.sha, url: pr.html_url, carrier: false };
     for (const statusContext of [authorizationContext, autoMergeContext, context]) {
       await setStatus(repository, pr.head.sha, marker, pr.html_url, statusContext);
     }
