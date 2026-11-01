@@ -114,7 +114,7 @@ jobs:
           bin="$RUNNER_TEMP/squawk-2.70.0/squawk"
           mkdir -p "$(dirname "$bin")"
           curl -fsSL --proto '=https' --retry 3 -o "$bin" https://github.com/sbdchd/squawk/releases/download/v2.70.0/squawk-linux-x64
-          echo "836ba2ab0c0ec30ae02c9f2cec065b341ff853765ceaa3965c22109c2f53eb10  $bin" | sha256sum -c -
+          echo "836ba2ab0c0ec30ae02c9f2cec065b341ff853765ceaa3965c22109c2f53eb1c  $bin" | sha256sum -c -
           chmod +x "$bin"
           base=""
           if [ "$EVENT_NAME" = pull_request ]; then base="$PR_BASE"; elif [ "$EVENT_NAME" = push ]; then base="$PUSH_BEFORE"; fi
