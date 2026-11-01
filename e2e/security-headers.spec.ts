@@ -108,8 +108,8 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
     // Finding N-3: a static redirect carries s-maxage; it holds no personal data.
     const response = await request.get("/nastavnik/kolegiji", { maxRedirects: 0 });
     expect(response.status()).toBe(307);
-    expect(response.headers()["location"]).toMatch(/\/nastavnik$/);
+    expect(response.headers()["location"]).toBe("/nastavnik");
     expectConfigHeaders(response);
-    expect(response.headers()["cache-control"]).toMatch(/s-maxage=31536000/);
+    expect(response.headers()["cache-control"]).toBe("s-maxage=31536000");
   });
 });
