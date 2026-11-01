@@ -30,6 +30,28 @@ describe("DevelopmentEd25519SigningKeyProvider", () => {
     });
   });
 
+  // F-020: an allowlist, so an unset, empty or misspelt NODE_ENV is production.
+  it.each([undefined, "", "Production", "production ", "staging", "prod"])(
+    "refuses construction when NODE_ENV is %j",
+    (nodeEnv) => {
+      vi.stubEnv("NODE_ENV", nodeEnv);
+      try {
+        expect(() => new DevelopmentEd25519SigningKeyProvider()).toThrow("prohibited in production");
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+
+  it.each(["development", "test"])("may be constructed when NODE_ENV is %s", (nodeEnv) => {
+    vi.stubEnv("NODE_ENV", nodeEnv);
+    try {
+      expect(new DevelopmentEd25519SigningKeyProvider()).toBeInstanceOf(DevelopmentEd25519SigningKeyProvider);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("refuses construction in production mode", () => {
     vi.stubEnv("NODE_ENV", "production");
     try {
