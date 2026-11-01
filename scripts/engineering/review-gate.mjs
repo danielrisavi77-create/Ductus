@@ -79,7 +79,12 @@ async function main() {
   // A side-base head can be shared with a PR to main, whose statuses it would
   // overwrite, so only a PR to the default branch gets the failure marker.
   if (event.pull_request?.head?.sha && ownsHead(event.pull_request, repository) && targetsDefaultBranch(event.pull_request)) {
-    knownHead = { repository, sha: event.pull_request.head.sha, url: event.pull_request.html_url };
+    knownHead = {
+      repository,
+      sha: event.pull_request.head.sha,
+      url: event.pull_request.html_url,
+      carrier: isMergifyQueuePr(event.pull_request, repository),
+    };
   }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
   if (!ownsHead(pr, repository)) {
@@ -88,7 +93,7 @@ async function main() {
     return;
   }
   knownHead = targetsDefaultBranch(pr) || isMergifyQueuePr(pr, repository)
-    ? { repository, sha: pr.head.sha, url: pr.html_url }
+    ? { repository, sha: pr.head.sha, url: pr.html_url, carrier: isMergifyQueuePr(pr, repository) }
     : null;
   // Only an authenticated, open draft owned by Mergify is a CI carrier.
   // It cannot enqueue itself (-draft). No review/owner verdict is fabricated:
@@ -114,6 +119,11 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/issues/${number}/events`),
   ]);
   const cutoff = lastBaseChange(issueEvents);
+  // F-013 (QA c.6558749797): a base change without a readable time stops the
+  // run. Dropping every comment is not enough, since a PR exempt from review
+  // (only new tests) needs none and would still turn green. The failure path
+  // marks all three statuses pending.
+  if (cutoff === Infinity) throw new Error("A base change has no readable time; the gate cannot tell which verdicts count.");
   const comments = sinceBaseChange(allComments, cutoff, "created_at", { codexEdits: true });
   const reviews = sinceBaseChange(allReviews, cutoff, "submitted_at");
   if (!targetsDefaultBranch(pr)) {
@@ -161,6 +171,10 @@ main().catch(async (error) => {
   if (!knownHead) return;
   try {
     await setStatus(knownHead.repository, knownHead.sha, RUN_FAILED, knownHead.url, authorizationContext);
+    // An older green Auto-merge eligible must not outlive a failed run either
+    // (QA c.6558749797). A queue carrier never gets this status, so none is
+    // written for it.
+    if (!knownHead.carrier) await setStatus(knownHead.repository, knownHead.sha, RUN_FAILED, knownHead.url, autoMergeContext);
     await setStatus(knownHead.repository, knownHead.sha, RUN_FAILED, knownHead.url);
   } catch (statusError) {
     console.error(`Could not mark the head pending after the failure: ${statusError.message}`);

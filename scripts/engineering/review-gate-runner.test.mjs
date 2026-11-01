@@ -80,8 +80,8 @@ const pullRequest = {
 test("a failed comment read after the head is known marks the head pending", () => {
   const { code, posts } = run(comment, { fail: ["/issues/7/comments"] });
   assert.equal(code, 1);
-  // Failure path does not compute Auto-merge eligible.
-  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Engineering review gate"]);
+  // The failure path resets all three statuses (QA c.6558749797 on #1117).
+  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Auto-merge eligible", "Engineering review gate"]);
   for (const post of posts) {
     assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
     assert.equal(post.body.state, "pending");
@@ -92,9 +92,10 @@ test("a failed comment read after the head is known marks the head pending", () 
 test("a failed PR read marks the event head pending when the event names one", () => {
   const withHead = run(pullRequest, { fail: ["/pulls/7"] });
   assert.equal(withHead.code, 1);
-  assert.deepEqual(withHead.posts.map((p) => [p.path, p.body.state]), [
-    [`/repos/o/r/statuses/${HEAD}`, "pending"],
-    [`/repos/o/r/statuses/${HEAD}`, "pending"],
+  assert.deepEqual(withHead.posts.map((p) => [p.path, p.body.context, p.body.state]), [
+    [`/repos/o/r/statuses/${HEAD}`, "Merge authorization", "pending"],
+    [`/repos/o/r/statuses/${HEAD}`, "Auto-merge eligible", "pending"],
+    [`/repos/o/r/statuses/${HEAD}`, "Engineering review gate", "pending"],
   ]);
 
   const withoutHead = run(comment, { fail: ["/pulls/7"] });
@@ -273,6 +274,34 @@ test("an unreadable timeline or change time fails closed (F-013)", () => {
     comments: [passAt("2026-10-31T12:00:00Z")], timeline: [{ event: "base_ref_changed" }],
   });
   assert.notEqual(gateState(noTime), "success");
+});
+
+// QA c.6558749797 on #1117 (1): a PR exempt from review (only a new test)
+// needs no comment, so dropping all comments for an unreadable change time
+// left it green. The run stops and marks all three statuses pending.
+test("a base change without a readable time stops a review-exempt PR too (F-013)", () => {
+  for (const timeline of [[{ event: "base_ref_changed" }], [{ event: "base_ref_changed", created_at: "garbage" }]]) {
+    const out = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], timeline });
+    assert.equal(out.code, 1, JSON.stringify(timeline));
+    assert.deepEqual(states(out.posts), ALL.map((c) => [c, "pending"]), JSON.stringify(timeline));
+    for (const post of out.posts) assert.match(post.body.description, /failed before a verdict/);
+  }
+  // Control: the same PR with a readable change time stays green.
+  const readable = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], timeline: [baseChange("2026-10-31T11:00:00Z")] });
+  assert.equal(readable.code, 0);
+  assert.deepEqual(states(readable.posts), ALL.map((c) => [c, "success"]));
+});
+
+// QA c.6558749797 on #1117 (2): a failed events read must not leave an older
+// green Auto-merge eligible; the failure path writes all three as pending.
+test("a failed events read marks all three statuses pending (F-013)", () => {
+  const out = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], fail: ["/issues/7/events"] });
+  assert.equal(out.code, 1);
+  assert.deepEqual(states(out.posts), ALL.map((c) => [c, "pending"]));
+  // A queue carrier never gets Auto-merge eligible, not even on failure.
+  const carrierFail = run(comment, { pr: carrier, failPostNumber: 1 });
+  assert.equal(carrierFail.code, 1);
+  assert.ok(carrierFail.posts.every((p) => p.body.context !== "Auto-merge eligible"));
 });
 
 // F-014: statuses are per commit. A closed PR, or a PR whose head lives in
