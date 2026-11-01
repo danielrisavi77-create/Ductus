@@ -1,6 +1,6 @@
 # Zaštitne mjere za dbmate (D-91): stanje na mainu
 
-Korak M0.2 iz `docs/PROGRAM-RAZRADA.md`, Linear DAN-71. Ovaj zapis nije izvor pravila: mjere su odlučene u `docs/DECISIONS.md` D-91 i razrađene u `docs/BACKEND.md` §4.8 (točke 1 do 7). Ovdje je samo stanje svake mjere na `main` 31. 10. 2026. (`origin/main` 0cdffe5f), s datotekom i retkom koji ga dokazuju. Mjere 4 i 6 dopunjene su 1. 11. 2026. nakon spajanja #1073 i #1077.
+Korak M0.2 iz `docs/PROGRAM-RAZRADA.md`, Linear DAN-71. Ovaj zapis nije izvor pravila: mjere su odlučene u `docs/DECISIONS.md` D-91 i razrađene u `docs/BACKEND.md` §4.8 (točke 1 do 7). Ovdje je samo stanje svake mjere na `main` 31. 10. 2026. (`origin/main` 0cdffe5f), s datotekom i retkom koji ga dokazuju. Mjera 6 dopunjena je 1. 11. 2026. nakon spajanja #1077; mjera 4 čeka #1073.
 
 | # | Mjera (D-91) | Stanje | Dokaz na mainu | Što nedostaje |
 | --- | --- | --- | --- | --- |
