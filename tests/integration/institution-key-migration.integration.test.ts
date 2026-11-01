@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // The institution key migration (DAN-83) over rows that predate it, against
 // the compose stack (pnpm stack:up, pnpm db:migrate). pgTAP sees the schema
 // only after every migration; here each case gets a database of its own,
@@ -13,6 +15,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 // the up section in one transaction, as ductus_migrator. Every institution,
 // person and assignment is random or invented.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
+requireLoopbackDatabaseUrl(ADMIN_URL, "The migration test runs only against a loopback database (DATABASE_URL).");
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
 const TARGET = "20261011100000_institution_assignment_key.sql";
 

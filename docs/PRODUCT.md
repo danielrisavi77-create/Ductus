@@ -73,7 +73,9 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 
 **[ODLUČENO D-09]** Studenti se prijavljuju isključivo AAI@EduHr računom. Drugog načina prijave za studente nema.
 
-**[PRIJEDLOG D-16]** Isto pravilo vrijedi za nastavnike, mentore i administratore fakulteta.
+**[ODLUČENO D-16, 25. 10. 2026.]** Isto pravilo vrijedi za nastavnike, mentore i administratore fakulteta.
+
+Zabilježeni pristup podrške operatera (D-199 t. 3, dopunjuje D-172) traži pristanak fakulteta za konkretan slučaj, razlog, najuži opseg, istek i revizijski trag; pojedinosti zaključuje ADR prije izgradnje.
 
 - Protokol: OpenID Connect Authorization Code s PKCE-om prema AAI@EduHr. Prijava i sesije provode se vlastitim server-side OIDC tokom; Supabase Auth nije odabran. Biblioteka/adapter ostaju otvoreni do M1 spikea (D-73 i `BACKEND.md` §4.3). Lažni OIDC pružatelj služi samo lokalno i u CI-ju.
 - Identitet korisnika je `hrEduPersonUniqueID`, nikad e-mail.
