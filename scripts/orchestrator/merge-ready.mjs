@@ -7,10 +7,9 @@
 // Exit (--all): 0 when every PR was read, 2 when any is UNREAD.
 import { pathToFileURL } from "node:url";
 
-import { codexOnHead } from "../engineering/review-gate-core.mjs";
 import { checkRollup, ghJson, ghList, readOpenPrs, repoId, reviewThreads, toPr, withRetry } from "./gh.mjs";
 import { AUTHORIZATION_CONTEXT, EXIT_CODES, evaluateMergeReady, pickStatus } from "./merge-ready-core.mjs";
-import { GATE_CONTEXT, parseAgentRisk, summarizeThreads } from "./orchestrator-core.mjs";
+import { GATE_CONTEXT, summarizeThreads } from "./orchestrator-core.mjs";
 import { requiredStatusChecks } from "./preflight-core.mjs";
 
 const why = (e) => String(e?.stderr || e?.message || e).trim().split("\n")[0];
@@ -29,8 +28,6 @@ export async function readiness(n, required) {
   const head = pr.headRefOid;
   const statuses = await read(() => ghList(`repos/{owner}/{repo}/commits/${head}/statuses?per_page=100`));
   const pick = (context) => (statuses.error ? statuses : pickStatus(statuses, context));
-  const comments = await read(() => ghList(`repos/{owner}/{repo}/issues/${n}/comments?per_page=100`));
-  const reviews = await read(() => ghList(`repos/{owner}/{repo}/pulls/${n}/reviews?per_page=100`));
   const threads = await read(async () => summarizeThreads(await reviewThreads(n)));
   return {
     pr,
@@ -42,15 +39,22 @@ export async function readiness(n, required) {
       rollup: await read(() => checkRollup(head)),
       required,
       threads,
-      codex: comments.error || reviews.error ? null : codexOnHead({ comments, prReviews: reviews, headSha: head }),
-      critical: parseAgentRisk(pr.body).risk === "critical",
     }),
   };
 }
 
-export async function requiredOfMain() {
-  const { owner, repo } = await repoId();
-  const main = await read(() => ghJson(["api", `repos/${owner}/${repo}/branches/main`]));
+/** Required checks of main; null (so every PR is UNREAD) when a read still fails after retries. */
+export async function requiredOfMain({ repo = repoId, json = ghJson, retry = withRetry } = {}) {
+  const tryRead = async (fn) => {
+    try {
+      return await retry(fn);
+    } catch (e) {
+      return { error: why(e) };
+    }
+  };
+  const id = await tryRead(() => repo());
+  if (id.error) return null;
+  const main = await tryRead(() => json(["api", `repos/${id.owner}/${id.repo}/branches/main`]));
   return main.error ? null : requiredStatusChecks(main?.protection?.required_status_checks);
 }
 

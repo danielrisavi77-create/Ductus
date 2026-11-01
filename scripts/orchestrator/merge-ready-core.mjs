@@ -62,11 +62,9 @@ const unread = (v) => v === undefined || Boolean(v?.error);
  *   rollup         checkRollup(head), or {error}
  *   required       required status contexts of main ([{context}] or strings), or null
  *   threads        summarizeThreads() result ({count, authors}), or {error}
- *   codex          true/false: Codex reviewed this exact head (codexOnHead); null when not read
- *   critical       the PR declares Risk: critical
  * Returns {state, reason, checks: [{level: PASS|FAIL|WAIT|OWNER|UNREAD|INFO, id, text}]}.
  */
-export function evaluateMergeReady({ pr, mergeState, gate, authorization, rollup, required = null, threads, codex = null, critical = false }) {
+export function evaluateMergeReady({ pr, mergeState, gate, authorization, rollup, required = null, threads }) {
   const checks = [];
   const add = (level, id, text) => checks.push({ level, id, text });
   const head = short(pr?.headRefOid);
@@ -134,9 +132,8 @@ export function evaluateMergeReady({ pr, mergeState, gate, authorization, rollup
   else if (ms === "DRAFT") add("FAIL", "merge-state", "GitHub sees a draft");
   else add("INFO", "merge-state", `GitHub merge state ${ms}${ms === "BEHIND" ? " (the merge queue refreshes the branch)" : ""}`);
 
-  // Codex: the gate decides whether a head needs it (a carried verdict may not), so it is shown, not counted.
-  if (codex === null) add("INFO", "codex", "Codex proof on the head not read");
-  else add("INFO", "codex", codex ? `Codex review on ${head} (the gate's rule)` : `no Codex review on ${head}${critical ? "; the gate decides whether the carried verdicts need one" : ""}`);
+  // Codex is not read here: whether a head needs a Codex review is the gate's rule, and the gate's
+  // status above already carries it. Reading it twice could only disagree (Codex CLI #1197).
 
   const first = (level) => checks.find((c) => c.level === level);
   const order = [["UNREAD", "UNREAD"], ["FAIL", "BLOCKED"], ["WAIT", "WAITING"], ["OWNER", "WAITS_OWNER"]];

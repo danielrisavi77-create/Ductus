@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { openPrNumbers, readOpenPrs, transientError, withRetry } from "./gh.mjs";
+import { openPrNumbers, readOpenPrs, repoId, transientError, withRetry } from "./gh.mjs";
+import { requiredOfMain } from "./merge-ready.mjs";
 
 const gh = (stderr) => Object.assign(new Error("Command failed: gh api"), { stderr });
 
@@ -62,4 +63,26 @@ test("readOpenPrs: numbers first, then one PR at a time with retries; an unreada
   assert.deepEqual(order, [3, 5, 5, 7, 7, 7], "one PR at a time, in order, retried");
   // A failed number list is a failure, never an empty list.
   await assert.rejects(readOpenPrs(async () => "x", { numbers: async () => { throw gh("HTTP 404"); }, retry }));
+});
+
+test("Codex CLI #1197: a failed repo read is not cached, and required checks of main are retried, then null", async () => {
+  // repoId: a 502 is not kept, so the retry asks GitHub again and gets the answer.
+  await assert.rejects(repoId({ json: async () => { throw gh("HTTP 502"); } }), /gh api/);
+  assert.deepEqual(await repoId({ json: async () => ({ owner: { login: "o" }, name: "r" }) }), { owner: "o", repo: "r" });
+
+  const retry = (fn) => withRetry(fn, { sleep: async () => {}, waitMs: 0, tries: 3 });
+  const protection = { protection: { required_status_checks: { checks: [{ context: "Security scanners", app_id: 15368 }], contexts: ["Security scanners"] } } };
+  // One 502 on the repo read and one on the branch read: both retried, the list is read.
+  let repoCalls = 0;
+  let mainCalls = 0;
+  const required = await requiredOfMain({
+    retry,
+    repo: async () => { repoCalls += 1; if (repoCalls === 1) throw gh("HTTP 502"); return { owner: "o", repo: "r" }; },
+    json: async (args) => { mainCalls += 1; assert.equal(args[1], "repos/o/r/branches/main"); if (mainCalls === 1) throw gh("HTTP 504"); return protection; },
+  });
+  assert.deepEqual(required, [{ context: "Security scanners", appId: 15368 }]);
+  assert.deepEqual([repoCalls, mainCalls], [2, 2]);
+  // Still failing after the retries: null (every PR then reads UNREAD), not a thrown exit.
+  assert.equal(await requiredOfMain({ retry, repo: async () => { throw gh("HTTP 502"); }, json: async () => protection }), null);
+  assert.equal(await requiredOfMain({ retry, repo: async () => ({ owner: "o", repo: "r" }), json: async () => { throw gh("HTTP 403"); } }), null);
 });

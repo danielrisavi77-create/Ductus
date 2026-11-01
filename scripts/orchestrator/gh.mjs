@@ -180,11 +180,15 @@ export async function readGate(sha, { read = gateStatus, tries = 2 } = {}) {
 }
 
 let cachedRepo;
-export function repoId() {
-  cachedRepo ??= ghJson(["api", "repos/{owner}/{repo}"]).then((r) => ({
-    owner: r.owner.login,
-    repo: r.name,
-  }));
+export function repoId({ json = ghJson } = {}) {
+  // A failed read is not cached: the next call (a retry) asks GitHub again (Codex CLI #1197).
+  cachedRepo ??= json(["api", "repos/{owner}/{repo}"]).then(
+    (r) => ({ owner: r.owner.login, repo: r.name }),
+    (e) => {
+      cachedRepo = undefined;
+      throw e;
+    },
+  );
   return cachedRepo;
 }
 

@@ -16,14 +16,15 @@ const green = REQUIRED_NAMES.map((name) => run(name));
 const GATE_CARRIED = { state: "success", description: "Review PASS and QA PASS (carried from 61f205dd, D-101)." };
 const NEEDS_OWNER = { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 const OWNER_OK = { state: "success", description: "Owner merge command names this head." };
-const ready = (over = {}) => ({ pr: pr(), mergeState: "CLEAN", gate: GATE_CARRIED, authorization: OWNER_OK, rollup: green, required: REQUIRED, threads: { count: 0, authors: [] }, codex: true, ...over });
+const ready = (over = {}) => ({ pr: pr(), mergeState: "CLEAN", gate: GATE_CARRIED, authorization: OWNER_OK, rollup: green, required: REQUIRED, threads: { count: 0, authors: [] }, ...over });
 const level = (r, id) => r.checks.find((c) => c.id === id)?.level;
 
 test("a carried gate pass (D-101) with no QA verdict on the head is ready: the gate decides, not a recount", () => {
-  const r = evaluateMergeReady(ready({ codex: false, critical: true }));
+  const r = evaluateMergeReady(ready());
   assert.equal(r.state, STATES.READY, r.reason);
   assert.match(r.checks.find((c) => c.id === "gate").text, /carried/);
-  assert.equal(level(r, "codex"), "INFO", "Codex is shown, never counted against the gate");
+  // Codex is the gate's rule and is not read twice: no check of its own (Codex CLI #1197).
+  assert.equal(level(r, "codex"), undefined);
 });
 
 test("#1041: gate passed by carry, one unresolved thread, GitHub BLOCKED -> BLOCKED with the thread as reason", () => {
