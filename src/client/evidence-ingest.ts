@@ -167,9 +167,16 @@ export function openedWorkFrom(value: unknown): OpenedWork | null {
   };
 }
 
-/** Opens (and on the first call makes) the student's work for one assignment. */
-export async function openWork(assignmentId: string, fetchImpl: FetchLike = fetch): Promise<OpenOutcome> {
-  const response = await post(fetchImpl, "/api/evidence/open", { assignmentId });
+/**
+ * Opens the student's work for one assignment. Only `start: true`, sent from
+ * the student's own "Započni rad", makes a work that does not exist yet
+ * (DAN-331, F-137); without it the server answers 409 `not_started`, which
+ * is `unavailable` here.
+ */
+export async function openWork(
+  assignmentId: string, fetchImpl: FetchLike = fetch, options: { start?: boolean } = {},
+): Promise<OpenOutcome> {
+  const response = await post(fetchImpl, "/api/evidence/open", options.start === true ? { assignmentId, start: true } : { assignmentId });
   if (response === null) return { status: "unavailable" };
   const body = await jsonOf(response);
   const status = isObject(body) ? body.status : undefined;
