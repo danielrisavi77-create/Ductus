@@ -115,6 +115,7 @@ test("Codex runs with its own minimal CODEX_HOME and the script never posts (F-1
     const work = path.join(root, "work");
     execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin]);
     execFileSync("git", ["clone", "-q", origin, work]);
+    sh(work, "symbolic-ref", "HEAD", "refs/heads/main");
     for (const [k, v] of [["user.email", "t@example.invalid"], ["user.name", "t"], ["core.autocrlf", "false"]]) sh(work, "config", k, v);
     const script = readFileSync(new URL("../codex-review.ps1", import.meta.url));
     mkdirSync(path.join(work, "scripts"));
