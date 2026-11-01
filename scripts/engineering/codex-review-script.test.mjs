@@ -58,7 +58,7 @@ test("changed names are read unquoted and NUL-separated, so a non-ASCII control 
   assert.match(line, /git -c core\.quotePath=false diff --name-only -z origin\/main\.\.\.HEAD/);
   assert.ok(src.includes(`$_.StartsWith('"')`), "a quoted name is refused");
   const re = /\$_ -match '([^']+)' -or \$_ -match '([^']+)'/.exec(src);
-  const patterns = [re[1], re[2]].map((p) => new RegExp(p.replace("(?i)", ""), "i"));
+  const patterns = [new RegExp(re[1].replace("(?i)", ""), "i"), new RegExp(re[2].replace("(?i)", ""), "i")];
   const dir = mkdtempSync(path.join(tmpdir(), "codex-review-names-"));
   try {
     const git = (...args) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" });
