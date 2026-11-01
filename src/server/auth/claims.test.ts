@@ -65,12 +65,19 @@ describe("identityFromClaims", () => {
     ["a line break", "ana\n@demo-fakultet.test"],
     ["a lone surrogate", "ana\ud800@demo-fakultet.test"],
     ["a number", 42],
-    ["an array", ["ana"]],
+    // A one-member array is AAI's form of the hrEdu claims (below); a nested
+    // one is refused for all three, and `sub` refuses any array.
+    ["a nested array", [["ana"]]],
   ])("refuses an identifier with %s, without echoing it", (_label, value) => {
     for (const claim of ["sub", "hrEduPersonUniqueID", "hrEduPersonHomeOrg"]) {
       const result = identityFromClaims({ ...ANA, [claim]: value });
       expect(result).toStrictEqual({ ok: false, reason: "invalid_claim" });
     }
+  });
+
+  it("refuses a subject given as an array, also of one member", () => {
+    expect(identityFromClaims({ ...ANA, sub: [ANA.sub] })).toStrictEqual({ ok: false, reason: "invalid_claim" });
+    expect(identityFromClaims(ANA, { sub: [ANA.sub] })).toStrictEqual({ ok: false, reason: "subject_mismatch" });
   });
 
   it("accepts 255 code points, the bound of the database", () => {
@@ -121,5 +128,71 @@ describe("identityFromClaims", () => {
     ["one display name only", { name: "Ana Testić" }],
   ])("logs in without a name when there is %s, never refusing", (_label, names) => {
     expect(identityFromClaims({ ...ANA, ...names })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
+  });
+});
+
+// DAN-196 (plan #1104, A6 to A10): AAI@EduHr releases the hrEdu claims as
+// JSON arrays, single-valued ones too (Srce wiki, page 59867172).
+describe("identityFromClaims with AAI@EduHr arrays", () => {
+  const AAI = { sub: ANA.sub, hrEduPersonUniqueID: [ANA.hrEduPersonUniqueID], hrEduPersonHomeOrg: [ANA.hrEduPersonHomeOrg] };
+  const KEYS = ["hrEduPersonUniqueID", "hrEduPersonHomeOrg"] as const;
+
+  it("A6 gives the same identity for one-member arrays as for strings, from either token", () => {
+    const expected = { ok: true, identity: ANA_IDENTITY };
+    expect(identityFromClaims(AAI)).toStrictEqual(expected);
+    expect(identityFromClaims({ sub: ANA.sub }, AAI)).toStrictEqual(expected);
+    expect(identityFromClaims({ ...ANA, hrEduPersonHomeOrg: [ANA.hrEduPersonHomeOrg] })).toStrictEqual(expected);
+  });
+
+  it.each([
+    ["empty", []],
+    ["two values", ["ana.demo@demo-fakultet.test", "ivo.demo@demo-fakultet.test"]],
+    ["the same value twice", ["ana.demo@demo-fakultet.test", "ana.demo@demo-fakultet.test"]],
+    ["a nested array", [["ana.demo@demo-fakultet.test"]]],
+    ["a null member", [null]],
+    ["an undefined member", [undefined]],
+    ["a number member", [42]],
+    ["an object member", [{}]],
+    ["an empty member", [""]],
+    ["a hole", Array(1)],
+    ["a NUL byte", ["ana\u0000@demo-fakultet.test"]],
+    ["a zero-width space", ["ana​@demo-fakultet.test"]],
+    ["a bidi override", ["ana\u202e@demo-fakultet.test"]],
+    ["a line break", ["ana\n@demo-fakultet.test"]],
+    ["a lone surrogate", ["\ud800"]],
+    ["256 code points", ["😀".repeat(256)]],
+  ])("A7 A8 refuses an array with %s, from either token", (_label, value) => {
+    for (const key of KEYS) {
+      expect(identityFromClaims({ ...AAI, [key]: value })).toStrictEqual({ ok: false, reason: "invalid_claim" });
+      expect(identityFromClaims({ sub: ANA.sub }, { ...AAI, [key]: value })).toStrictEqual({ ok: false, reason: "invalid_claim" });
+    }
+  });
+
+  it("A8 accepts one member of 255 code points", () => {
+    for (const key of KEYS) expect(identityFromClaims({ ...AAI, [key]: ["😀".repeat(255)] }).ok).toBe(true);
+  });
+
+  it("A9 never falls back to a valid ID token when the userinfo array is invalid", () => {
+    for (const key of KEYS) {
+      for (const bad of [[], ["a.demo@demo-fakultet.test", "b.demo@demo-fakultet.test"], [null]]) {
+        expect(identityFromClaims(AAI, { ...AAI, [key]: bad })).toStrictEqual({ ok: false, reason: "invalid_claim" });
+        expect(identityFromClaims(ANA, { ...AAI, [key]: bad })).toStrictEqual({ ok: false, reason: "invalid_claim" });
+      }
+    }
+  });
+
+  it("keeps the userinfo value as sent, without changing its case", () => {
+    const result = identityFromClaims(AAI, { ...AAI, hrEduPersonUniqueID: ["Ana.Demo@DEMO-fakultet.test"] });
+    expect(result.ok && result.identity.uniqueId).toBe("Ana.Demo@DEMO-fakultet.test");
+  });
+
+  it("A11 A12 leaves hrEduPersonAffiliation out of the identity, whatever its value", () => {
+    for (const affiliation of [["djelatnik"], ["employee"], ["student", "djelatnik"], [], "djelatnik", 42, undefined]) {
+      expect(identityFromClaims({ ...AAI, hrEduPersonAffiliation: affiliation })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
+    }
+  });
+
+  it("A13 logs in without a name when the names come as arrays (known limit, #757)", () => {
+    expect(identityFromClaims({ ...AAI, givenName: ["Ana"], sn: ["Testić"] })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
   });
 });
