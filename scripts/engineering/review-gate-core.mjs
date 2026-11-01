@@ -179,8 +179,12 @@ const lastActivity = (item) => {
   return Number.isNaN(updated) ? created : Math.max(created || 0, updated);
 };
 
-function quotaEvidence(items, reviews = []) {
-  const appComments = (items ?? [])
+// F-013: evidence counts only from `items` (after the last base change), but
+// activity that voids it is read from `activityItems`, the full history, so a
+// summary created before the change and edited after the quota message still
+// voids the evidence.
+function quotaEvidence(items, reviews = [], activityItems = items) {
+  const readApp = (list) => (list ?? [])
     .map((item, index) => {
       const slug = item?.performed_via_github_app?.slug ?? null;
       const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
@@ -194,6 +198,8 @@ function quotaEvidence(items, reviews = []) {
       };
     })
     .filter(Boolean);
+  const appComments = readApp(items);
+  const appActivity = activityItems === items ? appComments : [...appComments, ...readApp(activityItems)];
   // A PR review carries no App slug, only the App's bot account.
   const appReviews = (reviews ?? [])
     .map((review) => {
@@ -202,7 +208,7 @@ function quotaEvidence(items, reviews = []) {
       return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
     })
     .filter(Boolean);
-  const activity = [...appComments, ...appReviews];
+  const activity = [...appActivity, ...appReviews];
   return appComments.filter(
     (item) =>
       item.exhausted &&
@@ -590,7 +596,7 @@ function evaluateGateCore({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments, prReviews);
+    const evidence = quotaEvidence(comments, prReviews, historyComments ?? comments);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
