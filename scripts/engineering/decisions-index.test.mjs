@@ -134,6 +134,36 @@ test("C5: relative links resolve; https, anchors and inline code are not followe
   fails(tree({ index: `${INDEX}[r](odluke/sub/x.md)\n`, exists: () => true }), /odluke\/sub\/x\.md points to a missing file/);
 });
 
+test("C5: links with spaces, <...> destinations and escapes are read, not skipped (review and QA, #1179)", () => {
+  const empty = [file("README.md", "# Odluke\n")];
+  const only = (row) => tree({ index: `${HEADER}${row}\n`, entries: empty });
+  fails(only("| [D-999](<odluke/nema odluke.md>) | Nova odluka |"), /link D-999 points to odluke\/nema odluke\.md/);
+  fails(only("| [D-999]( odluke/D-999.md ) | x |"), /link odluke\/D-999\.md points to a missing file/);
+  fails(only("| [D-999](\todluke/D-999.md \"t\" ) | x |"), /link odluke\/D-999\.md points to a missing file/);
+  fails(only("Vidi [plan](<../nema plana.md>)."), /link \.\.\/nema plana\.md points to a missing file/);
+  fails(only("| [D\\-999](odluke/D-999.md) | x |"), /link odluke\/D-999\.md points to a missing file/);
+  fails(only("| [**D-999**](odluke/D-999.md) | x |"), /link odluke\/D-999\.md points to a missing file/);
+  // What the pattern cannot read, and an HTML link, are refused.
+  fails(only("| [D-999](odluke/a(b(c)).md) | x |"), /link in .* is not understood/);
+  fails(only('| <a href="odluke/D-999.md">D-999</a> | x |'), /HTML link .* is refused/);
+  // The same forms reaching a real file pass, as entry and as reference.
+  const forms = `${HEADER}| [D-05](<odluke/D-05.md>) | Naslov |\n| D-06 | Vidi [D-05]( ./odluke/D-05.md "t" ) i [plan](<PRODUCT.md>). | R. |\n`;
+  assert.deepEqual(checkTree(tree({ index: forms, exists: (p) => p === "docs/PRODUCT.md" })), []);
+});
+
+test("C5: a reference in a decision file reaches the canonical file of its ID (QA, #1179)", () => {
+  const index = `${INDEX.replace("| D-06 | Puni tekst. | Razlog. |\n", "")}| [D-06](odluke/D-06.md) | Druga | 1. 1. 2026. | ODLUČENO |\n`;
+  const pair = (ref) => tree({ index, entries: [file("README.md", "# Odluke\n"), decision("D-05", `${ROW} Vidi ${ref}.`), decision("D-06")] });
+  assert.deepEqual(checkTree(pair("[D-06](D-06.md)")), []);
+  assert.deepEqual(checkTree(pair("[D-06](<./D-06.md#razlog>)")), []);
+  fails(pair("[D-06](D-05.md)"), /D-05\.md: link D-06 points to D-05\.md, not D-06\.md/);
+  fails(pair("[D-999](https://example.invalid/missing)"), /D-05\.md: link D-999 points to https:\/\/example\.invalid\/missing/);
+  fails(pair("[D-06](#d-06)"), /D-05\.md: link D-06 points to #d-06/);
+  fails(pair("[D-06](../DECISIONS.md#d-06)"), /D-05\.md: link D-06 points to \.\.\/DECISIONS\.md/);
+  fails(pair("[D-999](D-999.md)"), /D-05\.md: link D-999\.md points to a missing file/);
+  fails(pair("[D\\-06]( D-05.md )"), /D-05\.md: link D-06 points to D-05\.md/);
+});
+
 test("file format: BOM, CR and a missing final newline fail, in files and in the index", () => {
   fails(tree({ entries: [file("D-05.md", `﻿# D-05\n${ROW}\n`)] }), /D-05\.md starts with a BOM/);
   fails(tree({ entries: [file("D-05.md", `# D-05\r\n${ROW}\r\n`)] }), /D-05\.md has a CR/);

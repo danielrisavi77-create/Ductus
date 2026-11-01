@@ -20,10 +20,32 @@ const ID = "D-\\d{2,}";
 // CommonMark and GFM; four make a code block (QA, #1179).
 const ROW_ID = new RegExp(`^ {0,3}\\| *(${ID}) *\\|`);
 const HEADING_ID = new RegExp(`^ {0,3}#{1,6}[ \\t]+(${ID})(?![0-9])`);
-// Destination, then an optional CommonMark title ("t", 't' or (t)).
-const LINK_SOURCE = String.raw`\[([^\]]*)\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
+// A CommonMark inline link: optional spaces, a destination that is <...> (spaces
+// allowed) or a run without spaces with one level of balanced parentheses, an
+// optional title ("t", 't' or (t)), optional spaces (review and QA, #1179).
+const DEST = String.raw`<(?:[^<>\n\\]|\\.)*>|(?:[^\s()<\\]|\\.|\([^\s()]*\))(?:[^\s()\\]|\\.|\([^\s()]*\))*`;
+const LINK_SOURCE = String.raw`\[([^\]]*)\]\(\s*(${DEST})?(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
 const LINK = new RegExp(LINK_SOURCE, "g");
 const ID_ONLY = new RegExp(`^${ID}$`);
+// Backslash escapes and numeric character references, as GitHub renders them.
+const unescape = (s) =>
+  s
+    .replace(/\\([!-/:-@[-`{-~])/g, "$1")
+    .replace(/&#(\d{1,7});|&#[xX]([0-9a-fA-F]{1,6});/g, (all, d, h) => {
+      const n = d ? Number(d) : parseInt(h, 16);
+      return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : all;
+    })
+    .replace(/&amp;/g, "&");
+// The label as shown: escapes decoded, emphasis marks and outer spaces dropped.
+const shownLabel = (s) => unescape(s).replace(/[*_~]/g, "").trim();
+function decodeTarget(raw) {
+  const t = unescape(raw.startsWith("<") ? raw.slice(1, -1) : raw);
+  try {
+    return decodeURIComponent(t);
+  } catch {
+    return t;
+  }
+}
 // An index entry is a table row whose first cell is only a link labelled with a
 // decision ID; a link in the text of a decision is a reference, not an entry (#1179).
 const FIRST_CELL = /^ {0,3}\|([^|]*)\|/;
@@ -58,20 +80,31 @@ function formatErrors(name, text) {
 function links(text) {
   const out = [];
   for (const m of stripCode(text).matchAll(LINK)) {
-    const target = m[2];
+    const target = decodeTarget(m[2] ?? "");
     const relative = !(/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#"));
-    out.push({ label: m[1], target: relative ? target.split("#")[0] : target, relative });
+    out.push({ label: shownLabel(m[1]), target: relative ? target.split("#")[0] : target, relative });
   }
   return out;
 }
-const relativeLinks = (text) => links(text).filter((l) => l.relative);
+
+// What the link pattern does not read is refused rather than skipped: a "](" left
+// after the links are removed, or an HTML link (review and QA, #1179).
+function unreadLinkErrors(name, text) {
+  const errors = [];
+  const rest = stripCode(text).replace(LINK, "");
+  for (const line of rest.split("\n")) {
+    if (line.includes("](")) errors.push(`${name}: link in ${JSON.stringify(line.trim())} is not understood`);
+    if (/<a\s[^>]*href/i.test(line)) errors.push(`${name}: HTML link in ${JSON.stringify(line.trim())} is refused, use a Markdown link`);
+  }
+  return errors;
+}
 
 /** IDs of the index entries, once per entry row (labels as written). */
 function entryIds(text) {
   const ids = [];
   for (const line of stripCode(text).split("\n")) {
     const m = CELL_LINK.exec(FIRST_CELL.exec(line)?.[1].trim() ?? "");
-    if (m && ID_ONLY.test(m[1])) ids.push(m[1]);
+    if (m && ID_ONLY.test(shownLabel(m[1]))) ids.push(shownLabel(m[1]));
   }
   return ids;
 }
@@ -131,33 +164,31 @@ export function checkTree(tree) {
     if (indexRows.has(id)) errors.push(`${id} is both full text in ${INDEX} and a file in ${DIR}/`);
   }
   // Every link labelled with a decision ID, entry or reference, must reach its
-  // file, so an external address or an anchor is checked too (QA, #1179).
-  for (const { label, target, relative } of links(tree.index)) {
-    if (!relative && !ID_ONLY.test(label)) continue;
-    const resolved = relative ? path.posix.normalize(path.posix.join("docs", target)) : target;
-    if (ID_ONLY.test(label)) {
-      if (resolved !== `${DIR}/${canonicalName(label)}`) {
-        errors.push(`${INDEX}: link ${label} points to ${target}, not odluke/${canonicalName(label)}`);
-        continue;
+  // canonical file, so an external address or an anchor is checked too; the same
+  // holds in the index and in every file of docs/odluke/ (QA, #1179).
+  const linkErrors = (name, base, text) => {
+    const out = unreadLinkErrors(name, text);
+    for (const { label, target, relative } of links(text)) {
+      const id = ID_ONLY.test(label) ? label : null;
+      if (!relative && !id) continue;
+      const resolved = relative ? path.posix.normalize(path.posix.join(base, target)) : target;
+      const canonical = id && `${DIR}/${canonicalName(id)}`;
+      if (id && resolved !== canonical) {
+        out.push(`${name}: link ${id} points to ${target}, not ${path.posix.relative(base, canonical)}`);
+      } else if (!has(resolved)) {
+        out.push(`${name}: link ${target} points to a missing file`);
       }
     }
-    if (!has(resolved)) {
-      errors.push(`${INDEX}: link ${target} points to a missing file`);
-    }
-  }
+    return out;
+  };
+  errors.push(...linkErrors(INDEX, "docs", tree.index));
   for (const [name, id] of files) {
     const n = linked.get(id) ?? 0;
     if (n !== 1) errors.push(`${DIR}/${name} is linked ${n} times from ${INDEX}, not once`);
   }
 
   for (const entry of tree.entries) {
-    if (entry.kind !== "file") continue;
-    for (const { target } of relativeLinks(entry.text)) {
-      const resolved = path.posix.normalize(path.posix.join(DIR, target));
-      if (!has(resolved)) {
-        errors.push(`${DIR}/${entry.name}: link ${target} points to a missing file`);
-      }
-    }
+    if (entry.kind === "file") errors.push(...linkErrors(`${DIR}/${entry.name}`, DIR, entry.text));
   }
 
   // Only the index and docs/odluke/ as spelled here are checked above. Another
