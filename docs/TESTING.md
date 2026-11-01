@@ -114,6 +114,8 @@ U projektima `mobile`, `firefox` i `webkit` V1 i V2 provjeravaju samo ARIA struk
 - **Važenje:** pikselni baselineovi (V1 do V3) vrijede samo na CI runneru. Drugi stroj drukčije rasterizira fontove, pa razlika u antialiasingu rubova glifova izvan CI-ja nije kvar (#1224): ARIA dio prolazi, a raspored je isti. Takav pad ne popravljaj mijenjanjem slike, praga ili maske.
 - Tri reference ne dokazuju puni FPZG probni prolaz; za to su DAN-232 i `e2e/login/demo-flow.spec.ts`.
 
+Ovi baselineovi provjeravaju regresiju prema prethodno pregledanoj izvedbi, ne podudarnost s vlasnikovom dizajnerskom slikom. Za vidljivu promjenu prvo slijedi `docs/SESSIONS.md` §6: original i stvarni prikaz u istim uvjetima, uključujući promijenjeni shell izvan `main`, usporedba i ispravci. Tek tako pregledan actual prihvaća se kao novi baseline po gornjem CI postupku; zeleni test sam ne odobrava izgled. Široke/mobilne i hr/en snimke za predaju ostaju obveza iz §6, i kad nisu pokrivene ovim trima regresijskim testovima.
+
 ## 3. Obvezni adversarial scenariji prije pilota
 
 Svaki scenarij dobiva test ili zapis ručne probe.
