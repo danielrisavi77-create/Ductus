@@ -3,7 +3,7 @@
 // Usage: node preflight.mjs <number> [--head <sha>]
 //   exit 0 = every check PASS, 1 = at least one FAIL, 2 = usage or read error
 import { checkRollup, ghJson, mainPathsSince, prPaths as readPrPaths, prView, repoId } from "./gh.mjs";
-import { evaluatePreflight, preflightExitCode, requiredStatusChecks } from "./preflight-core.mjs";
+import { evaluatePreflight, INFORMATIONAL_READS, preflightExitCode, requiredStatusChecks } from "./preflight-core.mjs";
 
 const args = process.argv.slice(2);
 const n = Number(args[0]);
@@ -37,7 +37,8 @@ try {
   const compare = mainSha && pr.headRefOid
     ? await attempt("main comparison", () => ghJson(["api", `repos/${owner}/${repo}/compare/${mainSha}...${pr.headRefOid}`]))
     : null;
-  // Only a lagging head needs the file lists; they decide whether main touched this PR's files.
+  // Only a lagging head needs the file lists. They only name the files main also
+  // changed; mergeability decides, so their read errors are informational.
   const behind = Number.isInteger(compare?.behind_by) && compare.behind_by > 0;
   const prPaths = behind ? await attempt("PR file list", () => readPrPaths(n)) : null;
   const mainPaths = behind ? await attempt("main file list", () => mainPathsSince(pr.headRefOid, mainSha)) : null;
@@ -45,7 +46,10 @@ try {
   const checks = evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead, mainPaths, prPaths });
   console.log(`PR #${n} head ${String(pr.headRefOid ?? "?").slice(0, 8)} main ${String(mainSha ?? "?").slice(0, 8)}`);
   for (const c of checks) console.log(`${c.level.padEnd(4)} ${c.text}`);
-  if (readErrors.length) console.error(`PREFLIGHT READ ERROR: retry GitHub reads (${readErrors.join(", ")})`);
+  const blocking = readErrors.filter((name) => !INFORMATIONAL_READS.has(name));
+  const detail = readErrors.filter((name) => INFORMATIONAL_READS.has(name));
+  if (blocking.length) console.error(`PREFLIGHT READ ERROR: retry GitHub reads (${blocking.join(", ")})`);
+  if (detail.length) console.error(`preflight note: not read, informational only (${detail.join(", ")})`);
   const exitCode = preflightExitCode(checks, readErrors);
   console.log(exitCode === 0 ? "PREFLIGHT PASS: review or QA may start" : "PREFLIGHT FAIL: do not start review or QA");
   process.exit(exitCode);

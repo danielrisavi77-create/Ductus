@@ -2,7 +2,7 @@
 
 Verzija 0.3 · 30. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
-**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
+**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Novi raspored je D-199 t. 6 (ODLUČENO 1. 11. 2026.): kod vala 1 spreman 22. 2. 2027., pilot 1. 3. 2027.; datumi u odjeljcima ispod koji su stariji od te odluke ostaju povijesni zapis. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
 
 Faze idu redom po ovisnostima. Faza je gotova tek kad je njezin izlazni kriterij dokazan testom ili zapisom, ne kad je kod napisan. Procjene su u večerima rada (oko 3 sata) jedne osobe uz AI agente i služe samo za planiranje.
 
@@ -96,7 +96,7 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
-Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tražiti, D-38); u koji val pilota ulazi M9 (D-194) odlučuje novi raspored prema datumu pilota 1. 3. 2027. Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenjuje raniju rečenicu „Bez AI pomoćnika u ovom valu”), ali ga zadatak i dalje ne smije tražiti (D-38). M9 nije u tablici ni u zbroju ispod; raspored koji ga uklapa do 1. 3. 2027. je D-199 t. 6 (ODLUČENO, D-191 t. 2). Dio M8 iz D-198 t. 1 (čitanje verzija iz clouda) prema tom rasporedu seli iz vala 2 u val 1; dodaci za Word i Google Docs idu u sljedeći val (D-198 t. 2). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tra
 | M4 osnovno | Lekta paket: FPZG citatni stil, opseg, naslovna stranica | 4 do 6 |
 | M5 osnovno | Naslovi, citiranje, bibliografija, DOI i ISBN (S-08), opseg po poglavlju (D-60), pravopis po jeziku rada (S-07), navodnici, traži i zamijeni, osnovna bilježnica izvora (D-59) | 9 do 12 |
 | M6 osnovno | Pogled na rad u nastajanju, komentari, prijedlozi | 6 do 8 |
-| M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 bez AI dijela, produljenje roka | 8 do 10 |
+| M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 s AI dijelom (D-199 t. 1), produljenje roka | 8 do 10 |
 | M10 osnovno | Klase podataka, brisanje po roku, pravno zadržavanje (F-02) | 2 do 3 |
 | M11 | GO uvjeti, sučelje na engleskom (D-70), pristupačnost (F-03), statusna stranica (F-10) | 5 do 6 |
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
@@ -125,7 +125,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tra
 | B5 | Dnevni korijen i žig, CLI verifikator (D-72) | 4 do 5 |
 | **Ukupno** | | **28 do 38** |
 
-Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad.
+Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad. M9 ide u val 1 (D-199 t. 1), pa zbroj vala 1 i oba vala zajedno bez M9 podcjenjuje potreban rad.
 
 Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se pomiče prema kraju semestra; ne skraćuje se val 1.
 
