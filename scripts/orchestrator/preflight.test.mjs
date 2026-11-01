@@ -319,24 +319,41 @@ test("description and check-name text is never echoed unfiltered", () => {
 
 const BEHIND = { status: "diverged", behind_by: 3 };
 const riskBody = (risk) => BODY.replace("Risk: critical", risk === null ? "Reviewer: none" : `Risk: ${risk}`);
-const lag = (over = {}) => input({ compare: BEHIND, prPaths: ["scripts/a.mjs", "docs/x.md"], mainPaths: ["src/b.ts"], ...over, pr: { body: riskBody("standard"), ...over.pr } });
+const lag = (over = {}) => input({ compare: BEHIND, prPaths: ["scripts/a.mjs", "docs/x.md"], mainPaths: ["src/b.ts"], ...over, pr: { body: riskBody("standard"), mergeable: "MERGEABLE", ...over.pr } });
 
 test("a head behind main passes when no missing main commit touches a file of the PR (#87 6265641655)", () => {
   assert.deepEqual(fails(evaluatePreflight(lag())), []);
   assert.deepEqual(fails(evaluatePreflight(lag({ mainPaths: [] }))), []);
 });
 
-test("a head behind main fails when main changed at least one file of the PR", () => {
+// Owner decision #87 issuecomment-6549357009 (1), D-197 (2): behind main, only
+// a real conflict asks for a main merge; a shared file without one does not.
+test("a head behind main passes when main changed a file of the PR without a conflict", () => {
   const checks = evaluatePreflight(lag({ mainPaths: ["src/b.ts", "docs/x.md"] }));
-  assert.deepEqual(fails(checks), ["main"]);
-  assert.match(checks.find((c) => c.id === "main").text, /merge main first/);
+  assert.deepEqual(fails(checks), []);
+  assert.match(checks.find((c) => c.id === "main").text, /changed 1 file\(s\) of this PR, without a conflict/);
 });
 
-test("a head behind main fails closed when a file list cannot be read", () => {
-  assert.deepEqual(fails(evaluatePreflight(lag({ mainPaths: null }))), ["main"]);
-  assert.deepEqual(fails(evaluatePreflight(lag({ prPaths: null }))), ["main"]);
-  assert.deepEqual(fails(evaluatePreflight(lag({ prPaths: [] }))), ["main"]);
-  assert.deepEqual(fails(evaluatePreflight(lag({ mainPaths: undefined, prPaths: undefined }))), ["main"]);
+test("a head behind main fails when it conflicts with main, whatever the file lists say", () => {
+  for (const over of [{ mainPaths: ["docs/x.md"] }, { mainPaths: [] }, { mainPaths: null }, { prPaths: null }]) {
+    const checks = evaluatePreflight(lag({ ...over, pr: { mergeable: "CONFLICTING" } }));
+    assert.deepEqual(fails(checks), ["main"], JSON.stringify(over));
+    assert.match(checks.find((c) => c.id === "main").text, /conflicts with main: merge main first/);
+  }
+});
+
+test("a head behind main fails closed when GitHub has not decided whether it merges cleanly", () => {
+  for (const mergeable of ["UNKNOWN", undefined, null, "", "mergeable", true]) {
+    const checks = evaluatePreflight(lag({ pr: { mergeable } }));
+    assert.deepEqual(fails(checks), ["main"], String(mergeable));
+    assert.match(checks.find((c) => c.id === "main").text, /could not be read: run preflight again/);
+  }
+});
+
+test("a head behind main without a conflict passes even when a file list cannot be read", () => {
+  for (const over of [{ mainPaths: null }, { prPaths: null }, { prPaths: [] }, { mainPaths: undefined, prPaths: undefined }]) {
+    assert.deepEqual(fails(evaluatePreflight(lag(over))), [], JSON.stringify(over));
+  }
 });
 
 test("a head that contains main passes as before, whatever the file lists say", () => {
@@ -354,14 +371,28 @@ test("D-101: every risk, critical and D-97 included, may enter review behind mai
   }
 });
 
-test("D-101: the same critical or D-97 PR still fails when main changed one of its files or a list is unread", () => {
+test("a critical or D-97 PR behind main fails only on a conflict or an unknown merge state", () => {
   for (const risk of ["critical", "standard"]) {
-    const pr = { body: riskBody(risk) };
-    const hit = evaluatePreflight(lag({ pr, prPaths: ["docs/DECISIONS.md", "docs/x.md"], mainPaths: ["docs/DECISIONS.md"] }));
+    const shared = { prPaths: ["docs/DECISIONS.md", "docs/x.md"], mainPaths: ["docs/DECISIONS.md"] };
+    assert.deepEqual(fails(evaluatePreflight(lag({ ...shared, pr: { body: riskBody(risk) } }))), [], risk);
+    const hit = evaluatePreflight(lag({ ...shared, pr: { body: riskBody(risk), mergeable: "CONFLICTING" } }));
     assert.deepEqual(fails(hit), ["main"], risk);
     assert.match(hit.find((c) => c.id === "main").text, /merge main first/);
-    assert.deepEqual(fails(evaluatePreflight(lag({ pr, mainPaths: null }))), ["main"], risk);
-    assert.deepEqual(fails(evaluatePreflight(lag({ pr, prPaths: null }))), ["main"], risk);
-    assert.deepEqual(fails(evaluatePreflight(lag({ pr, prPaths: [] }))), ["main"], risk);
+    assert.deepEqual(fails(evaluatePreflight(lag({ ...shared, pr: { body: riskBody(risk), mergeable: "UNKNOWN" } }))), ["main"], risk);
+  }
+});
+
+// #1098 Codex review: a file list that cannot be read (or is capped) is detail
+// only, so the run's exit code follows the checks, not that read.
+test("an unread file list behind main is not a read error; every other read still is", () => {
+  for (const over of [{ mainPaths: null }, { prPaths: null }]) {
+    const checks = evaluatePreflight(lag(over));
+    for (const errors of [["main file list"], ["PR file list"], ["PR file list", "main file list"]]) {
+      assert.equal(preflightExitCode(checks, errors), 0, `${JSON.stringify(over)} ${errors}`);
+    }
+    assert.equal(preflightExitCode(evaluatePreflight(lag({ ...over, pr: { mergeable: "CONFLICTING" } })), ["main file list"]), 1);
+  }
+  for (const name of ["main branch", "main comparison", "head checks", "file list", "Main file list"]) {
+    assert.equal(preflightExitCode(evaluatePreflight(lag()), [name, "main file list"]), 2, name);
   }
 });
