@@ -96,6 +96,29 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
     expectConfigHeaders(response);
   });
 
+  test("/api/auth/callback is never stored and its referrer policy is overwritten by the config", async ({ request }) => {
+    // Same finding N-1 as the login route: the production build refuses the
+    // callback with a 503 that is never stored.
+    const response = await request.get("/api/auth/callback", { maxRedirects: 0 });
+    expect(response.status()).toBe(503);
+    expect(response.headers()["cache-control"]).toBe("no-store");
+    expectConfigHeaders(response);
+  });
+
+  test("POST /api/auth/logout is never stored and its referrer policy is overwritten by the config", async ({ request }) => {
+    const response = await request.post("/api/auth/logout", { maxRedirects: 0 });
+    expect(response.status()).toBe(503);
+    expect(response.headers()["cache-control"]).toBe("no-store");
+    expectConfigHeaders(response);
+  });
+
+  test("/favicon.ico is public but revalidated on every use", async ({ request }) => {
+    const response = await request.get("/favicon.ico");
+    expect(response.status()).toBe(200);
+    expectConfigHeaders(response);
+    expect(response.headers()["cache-control"]).toBe("public, max-age=0, must-revalidate");
+  });
+
   test("a method an API route does not handle gets no Cache-Control", async ({ request }) => {
     // Finding N-2: the framework 405 bypasses the route's own no-store.
     const response = await request.delete("/api/health");
