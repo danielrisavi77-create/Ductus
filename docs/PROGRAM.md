@@ -96,7 +96,7 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
-Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenjuje raniju rečenicu „Bez AI pomoćnika u ovom valu”), ali ga zadatak i dalje ne smije tražiti (D-38). M9 nije u tablici ni u zbroju ispod; raspored koji ga uklapa do 1. 3. 2027. dio je novog rasporeda (D-191). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenjuje raniju rečenicu „Bez AI pomoćnika u ovom valu”), ali ga zadatak i dalje ne smije tražiti (D-38). M9 nije u tablici ni u zbroju ispod; raspored koji ga uklapa do 1. 3. 2027. je PRIJEDLOG u D-199 t. 6 (D-191). Dio M8 iz D-198 t. 1 (čitanje verzija iz clouda) prema tom prijedlogu seli iz vala 2 u val 1; dodaci za Word i Google Docs idu u sljedeći val (D-198 t. 2). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenju
 | M4 osnovno | Lekta paket: FPZG citatni stil, opseg, naslovna stranica | 4 do 6 |
 | M5 osnovno | Naslovi, citiranje, bibliografija, DOI i ISBN (S-08), opseg po poglavlju (D-60), pravopis po jeziku rada (S-07), navodnici, traži i zamijeni, osnovna bilježnica izvora (D-59) | 9 do 12 |
 | M6 osnovno | Pogled na rad u nastajanju, komentari, prijedlozi | 6 do 8 |
-| M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 bez AI dijela, produljenje roka | 8 do 10 |
+| M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 s AI dijelom (D-199 t. 1), produljenje roka | 8 do 10 |
 | M10 osnovno | Klase podataka, brisanje po roku, pravno zadržavanje (F-02) | 2 do 3 |
 | M11 | GO uvjeti, sučelje na engleskom (D-70), pristupačnost (F-03), statusna stranica (F-10) | 5 do 6 |
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
