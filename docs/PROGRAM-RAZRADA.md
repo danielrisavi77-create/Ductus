@@ -245,7 +245,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 ## M9 AI pomoćnik
 
-**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela.
+**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela; ulazi u val 1 (D-199 t. 1).
 
 **Gotovo na mainu:** pravilo AI-ja i dopuštene svrhe na kolegiju i zadatku (#943). **Nema:** posrednika prema pružatelju ni sučelja pomoćnika.
 
@@ -335,7 +335,7 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 ## Otvorena pitanja za vlasnika
 
 1. Novi raspored i datum pilota (D-191 t. 2; već u Owner queueu).
-2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
+2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno), i to u val 1 (D-199 t. 1). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
 5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik). Djelomično riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md` kao okvir. **Smještaj i naziv ostaju otvoreni:** pitanja 1, 2, 3 i 9 iz te specifikacije čekaju vlasnika i nijedan korak M5.14 ne počinje prije odgovora.

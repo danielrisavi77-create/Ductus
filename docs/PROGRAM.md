@@ -96,7 +96,7 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
-Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tražiti, D-38); u koji val pilota ulazi M9 (D-194) odlučuje novi raspored prema datumu pilota 1. 3. 2027. Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenjuje raniju rečenicu „Bez AI pomoćnika u ovom valu”), ali ga zadatak i dalje ne smije tražiti (D-38). M9 nije u tablici ni u zbroju ispod; raspored koji ga uklapa do 1. 3. 2027. dio je novog rasporeda (D-191). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
@@ -125,7 +125,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tra
 | B5 | Dnevni korijen i žig, CLI verifikator (D-72) | 4 do 5 |
 | **Ukupno** | | **28 do 38** |
 
-Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad.
+Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad. M9 ide u val 1 (D-199 t. 1), pa zbroj vala 1 i oba vala zajedno bez M9 podcjenjuje potreban rad.
 
 Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se pomiče prema kraju semestra; ne skraćuje se val 1.
 
