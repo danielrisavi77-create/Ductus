@@ -17,9 +17,10 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const CODE_EXT = "mjs|cjs|js|ts|mts|cts|ps1|sh|py";
 // A repo path to a script, with or without the $CLAUDE_PROJECT_DIR prefix.
 const SCRIPT_RE = new RegExp(`(?:\\$\\{?CLAUDE_PROJECT_DIR\\}?/)?((?:[\\w.-]+/)+[\\w.-]+\\.(?:${CODE_EXT}))\\b`, "g");
-// Relative code specifiers: static and dynamic import, require, new URL.
+// Relative code specifiers: static import with or without bindings (`import "./x.mjs"`),
+// export-from, dynamic import, require, new URL.
 const IMPORT_RE = new RegExp(
-  `(?:\\bfrom\\s*|\\bimport\\s*\\(\\s*|\\brequire\\s*\\(\\s*|\\bnew\\s+URL\\s*\\(\\s*)["'](\\.{1,2}/[^"'?#]+\\.(?:${CODE_EXT}))(?:[?#][^"']*)?["']`,
+  `(?:\\bfrom\\s*|\\bimport\\s*|\\bimport\\s*\\(\\s*|\\brequire\\s*\\(\\s*|\\bnew\\s+URL\\s*\\(\\s*)["'](\\.{1,2}/[^"'?#]+\\.(?:${CODE_EXT}))(?:[?#][^"']*)?["']`,
   "g",
 );
 
@@ -43,10 +44,15 @@ const lefthookText = (yaml) =>
     .filter((line) => !/^\s*#/.test(line))
     .join("\n");
 
+// Resolve "." and ".." segments before the D-97 check: scripts/hooks/../../src/x.mjs
+// is src/x.mjs. A path that leaves the repo keeps its leading "..", which no
+// D-97 entry matches.
+const canonical = (p) => path.posix.normalize(normalizePath(p));
+
 /** Repo scripts named in hook text. */
 function entryScripts(texts) {
   const found = new Set();
-  for (const text of texts) for (const m of text.matchAll(SCRIPT_RE)) found.add(normalizePath(m[1]));
+  for (const text of texts) for (const m of text.matchAll(SCRIPT_RE)) found.add(canonical(m[1]));
   return [...found].sort();
 }
 
@@ -65,7 +71,7 @@ function reachableFiles(entries, read) {
       continue;
     }
     for (const m of src.matchAll(IMPORT_RE)) {
-      stack.push(path.posix.normalize(path.posix.join(path.posix.dirname(file), m[1])));
+      stack.push(canonical(path.posix.join(path.posix.dirname(file), m[1])));
     }
   }
   return { files: [...seen].sort(), missing: missing.sort() };
@@ -133,6 +139,28 @@ test("a D-97 hook script that imports a module outside D-97 is reported", () => 
   const { offenders, missing } = hookFiles({ settings, lefthook: "", read });
   assert.deepEqual(offenders, ["scripts/demo/c.mjs", "src/d.mjs"]);
   assert.deepEqual(missing, []);
+});
+
+test("a side-effect import without bindings is followed (Codex #1164)", () => {
+  const settings = { hooks: { Stop: [{ hooks: [{ command: "node scripts/hooks/a.mjs" }] }] } };
+  const sources = { "scripts/hooks/a.mjs": 'import "../../src/unprotected.mjs";\nimport\'./b.mjs\';', "scripts/hooks/b.mjs": "", "src/unprotected.mjs": "" };
+  const read = (f) => (Object.hasOwn(sources, f) ? sources[f] : null);
+  const { offenders, files } = hookFiles({ settings, lefthook: "", read });
+  assert.deepEqual(files, ["scripts/hooks/a.mjs", "scripts/hooks/b.mjs", "src/unprotected.mjs"]);
+  assert.deepEqual(offenders, ["src/unprotected.mjs"]);
+});
+
+test("dot segments are resolved before the D-97 check (Codex #1164)", () => {
+  const settings = {
+    hooks: {
+      Stop: [{ hooks: [{ command: "node scripts/hooks/../../src/unguarded.mjs" }] }],
+      PreToolUse: [{ hooks: [{ command: 'node "$CLAUDE_PROJECT_DIR/scripts/hooks/./../engineering/x.mjs"' }] }],
+    },
+  };
+  const lefthook = "pre-push:\n  commands:\n    t:\n      run: node scripts/engineering/../../../outside.mjs\n";
+  const { offenders, files } = hookFiles({ settings, lefthook, read: () => "" });
+  assert.deepEqual(files, ["../outside.mjs", "scripts/engineering/x.mjs", "src/unguarded.mjs"]);
+  assert.deepEqual(offenders, ["../outside.mjs", "src/unguarded.mjs"]);
 });
 
 test("a hook naming a file that does not exist is reported as missing", () => {
