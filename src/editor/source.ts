@@ -30,9 +30,16 @@ import { isHistoryTransaction } from "@tiptap/pm/history";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { ReplaceAroundStep, ReplaceStep } from "@tiptap/pm/transform";
 
-import type { EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSource } from "@/domain/forensics/evidence-segment-v2";
 
 import { changeOf, type EvidenceRecorder } from "./capture";
+
+/**
+ * Marks the one transaction the Literatura form writes (DAN-343, contract on
+ * #866 `issuecomment-6423076996`): its change is `citation-form`, an event of
+ * its own. Only `writeSource` sets it, after a trusted click.
+ */
+export const CITATION_FORM_META = new PluginKey<boolean>("citationForm");
 
 /** Sources that are always an event of their own (contract §1 c). */
 export const STANDALONE_SOURCES = ["paste", "cut", "drop"] as const;
@@ -279,11 +286,13 @@ export class SourceObserver {
 export function sourceOfChange(
   transactions: readonly Transaction[],
   observation: SourceObservation,
-): EvidenceSourceV2 {
+): EvidenceSource {
   // 1. Undo and Redo, by key, toolbar or command (P3).
   if (transactions.some((tr) => isHistoryTransaction(tr))) return "unattributed";
-  // 2 and 3. A paste, cut or drop counts only with a trusted event of its kind.
   const uiEvent = transactions.map((tr) => tr.getMeta("uiEvent") as unknown).find(isStandalone);
+  // 1a. The Literatura form, unless a clipboard event claims the same change.
+  if (uiEvent === undefined && transactions.some((tr) => tr.getMeta(CITATION_FORM_META) === true)) return "citation-form";
+  // 2 and 3. A paste, cut or drop counts only with a trusted event of its kind.
   if (uiEvent !== undefined) return observation.clipboard === uiEvent ? uiEvent : "unattributed";
   // 4. Spelling or autocorrect of the browser.
   if (observation.replacement) return "system-replacement";
@@ -305,10 +314,11 @@ export function recordWithSource(
   transactions: readonly Transaction[],
   observation: SourceObservation,
   at: number,
-): EvidenceSourceV2 | null {
+): EvidenceSource | null {
   if (!transactions.some((tr) => tr.docChanged)) return null;
   const source = sourceOfChange(transactions, observation);
-  const standalone = isStandalone(source);
+  // The form's text is never one event with typing before or after it.
+  const standalone = isStandalone(source) || source === "citation-form";
   if (standalone) recorder.close();
   recorder.record(changeOf(transactions, source, at));
   if (standalone) recorder.close();

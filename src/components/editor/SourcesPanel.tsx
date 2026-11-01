@@ -16,7 +16,7 @@ import { useId, useRef, useState } from "react";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
-import { useLocalEditor } from "./LocalDocument";
+import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
 import {
   citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, writeSource,
   type SourceField, type SourceFields, type SourceKind,
@@ -28,7 +28,18 @@ const pageTooLong = t.pageTooLong.replace("{n}", String(PAGE_MAX));
 
 type Added = { entry: string; source: Extract<ReturnType<typeof sourceFromFields>, { ok: true }>["source"] };
 
+// Contract on #866: the form writes only on a trusted click or key; a script's click writes nothing.
+const trusted = (action: () => void) => (event: { isTrusted: boolean }) => {
+  if (event.isTrusted) action();
+};
+
 export default function SourcesPanel() {
+  const signedOut = useLocalSignedOut();
+  // The panel keeps nobody's sources or form after the session ends (as CommentPanel).
+  return signedOut ? <div className={styles.panel}><p className={styles.note}>{t.readOnly}</p></div> : <SourcesForm />;
+}
+
+function SourcesForm() {
   const editor = useLocalEditor();
   const editable = useEditorState({
     editor, selector: ({ editor: e }) => e !== null && !e.isDestroyed && e.isEditable,
@@ -88,7 +99,7 @@ export default function SourcesPanel() {
       type="button"
       className={primary ? styles.primary : styles.secondary}
       aria-disabled={editable ? undefined : "true"}
-      onClick={onClick}
+      onClick={trusted(onClick)}
     >
       {label}
     </button>
@@ -173,7 +184,7 @@ export default function SourcesPanel() {
                     className={styles.secondary}
                     aria-label={`${t.cite}: ${item.entry}`}
                     aria-disabled={editable ? undefined : "true"}
-                    onClick={() => cite(item)}
+                    onClick={trusted(() => cite(item))}
                   >
                     {t.cite}
                   </button>

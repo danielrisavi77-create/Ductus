@@ -1,5 +1,7 @@
 import type { Editor } from "@tiptap/core";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import type { Node as PMNode, NodeType } from "@tiptap/pm/model";
+
+import { CITATION_FORM_META } from "@/editor/source";
 
 import {
   formatBibliographyEntry, formatInText, fpzgCitationStyle,
@@ -126,10 +128,13 @@ export function bibliographyPlan(blocks: readonly Block[], entry: string): Bibli
   if (start === -1) return { kind: "insert", index: blocks.length, heading: true };
   let end = start + 1;
   while (end < blocks.length && blocks[end]!.type !== "heading") end++;
+  // The whole section first: a student may have reordered the entries by hand.
+  for (let i = start + 1; i < end; i++) {
+    if (blocks[i]!.text.trim() === entry) return { kind: "duplicate" };
+  }
   let index = start + 1;
   for (let i = start + 1; i < end; i++) {
     const text = blocks[i]!.text.trim();
-    if (text === entry) return { kind: "duplicate" };
     if (text === "") continue;
     if (compareEntries(entry, text) < 0) return { kind: "insert", index: i, heading: false };
     index = i + 1;
@@ -158,16 +163,31 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
   if (!writable(editor)) return false;
   // No focus(): a keyboard user stays in the panel they clicked in.
   return editor.chain().command(({ tr, state }) => {
+    // Evidence: this change is `citation-form`, an event of its own (src/editor/source.ts).
+    tr.setMeta(CITATION_FORM_META, true);
     if (citation !== null) tr.insertText(citation, tr.selection.to);
     if (entry === null) return true;
     const plan = bibliographyPlan(blocksOf(tr.doc), entry);
     if (plan.kind === "duplicate") return true;
     const { schema } = state;
-    const nodes = [schema.nodes.paragraph!.create(null, schema.text(entry))];
-    if (plan.heading) nodes.unshift(schema.nodes.heading!.create({ level: 1 }, schema.text(BIBLIOGRAPHY_HEADING)));
+    const blocks: [NodeType, Record<string, unknown> | null, string][] = [[schema.nodes.paragraph!, null, entry]];
+    if (plan.heading) blocks.unshift([schema.nodes.heading!, { level: 1 }, BIBLIOGRAPHY_HEADING]);
     let pos = 0;
     for (let i = 0; i < plan.index; i++) pos += tr.doc.child(i).nodeSize;
-    tr.insert(pos, nodes);
+    if (!tr.doc.child(plan.index - 1).isTextblock) {
+      // After a list or a quote no split is possible; the evidence log refuses this change.
+      tr.insert(pos, blocks.map(([type, attrs, text]) => type.create(attrs, schema.text(text))));
+      return true;
+    }
+    // The evidence format writes a new block only as a split at the end of the
+    // block before, as Enter does (src/editor/capture-rewrite.ts), never as a
+    // closed block after another.
+    for (const [type, attrs, text] of blocks) {
+      const end = pos - 1;
+      tr.split(end, 1, [{ type, attrs }]);
+      tr.insertText(text, end + 2);
+      pos = end + 3 + text.length;
+    }
     return true;
   }).run();
 }

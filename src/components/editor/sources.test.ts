@@ -120,6 +120,8 @@ describe("bibliographyPlan", () => {
 
   it("does not add the same entry twice", () => {
     expect(bibliographyPlan([heading, p("Cvitan")], "Cvitan")).toEqual({ kind: "duplicate" });
+    // Codex on #866: entries reordered by hand; the same entry later in the section is still found.
+    expect(bibliographyPlan([heading, p("Zorić"), p("Babić")], "Babić")).toEqual({ kind: "duplicate" });
   });
 });
 
