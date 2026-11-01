@@ -332,4 +332,29 @@ test("a verdict on the current head beats a later carried verdict of the same pr
   // A carried PASS still counts when the principal has nothing on the current head.
   const carried = evaluateGate({ body: body("critical"), headSha: head, comments: [review(earlier), qa(head)], ownerLogin, carriedHeads: new Set([earlier]) });
   assert.equal(carried.state, "success");
+  // Review of #1155 (F-023-R1): a later PASS of the same principal on another
+  // carried head does not lift its FAIL or BLOCK on a carried head either. All
+  // carried heads carry the same PR diff, so none of them is a new push.
+  const older = "c".repeat(40);
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    for (const [negativeOn, passOn] of [[earlier, older], [older, earlier]]) {
+      const result = evaluateGate({
+        body: body("critical"),
+        headSha: head,
+        comments: [review(negativeOn, verdict), review(passOn, "PASS"), qa(head)],
+        ownerLogin,
+        carriedHeads: new Set([earlier, older]),
+      });
+      assert.equal(result.state, "pending", `${verdict} on ${negativeOn.slice(0, 1)}, then PASS on ${passOn.slice(0, 1)}`);
+    }
+    // Control: a PASS on the current head after the carried negative lifts it.
+    const current = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(older, verdict), review(earlier, "PASS"), review(head, "PASS"), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier, older]),
+    });
+    assert.equal(current.state, "success", `${verdict} carried, then PASS on the current head`);
+  }
 });

@@ -387,16 +387,24 @@ function latestVerdicts(entries, {
     if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
     latest.set(key, slots);
     if (NEGATIVE.has(verdict)) {
-      const held = negatives.get(`${key}|${candidate.head}`);
-      if (!held || compareOrder(candidate.order, held.order) > 0) negatives.set(`${key}|${candidate.head}`, candidate);
+      // Carried heads have the same PR diff (only clean base merges since), so
+      // a negative on one of them is kept under one key for all of them.
+      const where = candidate.current ? `${key}|current` : `${key}|carried`;
+      const held = negatives.get(where);
+      if (!held || compareOrder(candidate.order, held.order) > 0) negatives.set(where, candidate);
     }
   }
 
-  // F-023 (owner decision 31. 10. 2026.): within one principal, a FAIL or BLOCK
-  // on a head is not cleared by a later PASS on the same head. Only a new head
-  // (a new push) or the owner (Owner-Override for the exact head) moves past it.
+  // F-023 (owner decision #87 issuecomment-6551590871, 1. 11. 2026.): within one
+  // principal, a FAIL or BLOCK on a head is not cleared by a later PASS on that
+  // head. A carried PASS is held by a FAIL or BLOCK on any carried head, since
+  // the gate cannot tell which carried head is newer (review of #1155, F-023-R1).
+  // Only a verdict on the current head (after a new push or a clean base merge,
+  // as before), or the owner's Owner-Override for the exact head, moves past it.
   const held = (candidate, key) =>
-    candidate && candidate.verdict === "PASS" ? negatives.get(`${key}|${candidate.head}`) ?? candidate : candidate;
+    candidate && candidate.verdict === "PASS"
+      ? negatives.get(`${key}|${candidate.current ? "current" : "carried"}`) ?? candidate
+      : candidate;
   return new Map([...latest].map(([key, slots]) => [
     key,
     prevailing({ current: held(slots.current, key), carried: held(slots.carried, key) }),
