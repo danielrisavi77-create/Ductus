@@ -136,6 +136,44 @@ describe("F-8 3d-1: a captured segment replays on the server's replayer", () => 
     await replays(t.initial, built);
   });
 
+  // M0.1 process-capture #2: whole code points outside the BMP (emoji, a skin
+  // tone modifier) and the Croatian letters replay to the exact text.
+  it("Croatian letters and emoji are recorded as typed and replay to the same text", async () => {
+    const t = setup("Početak");
+    t.editor.commands.setTextSelection(t.editor.state.doc.content.size - 1);
+    const typed = " čćžšđ ČĆŽŠĐ 😀👍🏽 kraj";
+    t.type(typed);
+    t.editor.view.dispatch(t.editor.state.tr.insertText(" 🎓"));
+    t.recorder.close();
+    const built = (await t.recorder.takeSegment(CONTEXT))!;
+    await replays(t.initial, built);
+    const text = `Početak${typed} 🎓`;
+    expect(t.editor.state.doc.textContent).toBe(text);
+    const snapshot = await verifyDocumentSnapshot(built.document);
+    expect(snapshot.ok && JSON.stringify(snapshot.document)).toContain(JSON.stringify(text).slice(1, -1));
+  });
+
+  // M0.1 process-capture #8: what a transaction holds after it was recorded
+  // does not reach the evidence; the recorder keeps its own copy.
+  it("a transaction changed after it was recorded does not change the segment", async () => {
+    const t = setup("Prvi");
+    const seen: Transaction[] = [];
+    t.editor.on("transaction", ({ transaction }) => { seen.push(transaction); });
+    t.editor.commands.setTextSelection(5);
+    t.type(" drugi");
+    const expected = canonical(t.editor);
+    for (const tr of seen) {
+      (tr.steps as Step[]).length = 0;
+      (tr.docs as unknown[]).length = 0;
+    }
+    t.recorder.close();
+    const built = (await t.recorder.takeSegment(CONTEXT))!;
+    await replays(t.initial, built);
+    const snapshot = await verifyDocumentSnapshot(built.document);
+    expect(snapshot.ok && snapshot.document).toEqual(expected);
+    expect(built.segment.events.flatMap((e) => e.steps)).toHaveLength(6);
+  });
+
   // Inside a block, Tiptap copies the id onto the new block, so ProseMirror
   // writes the split with the id twice; the format takes it with `null` on
   // the new block and the `attr` step that follows (edit-step.test.ts).

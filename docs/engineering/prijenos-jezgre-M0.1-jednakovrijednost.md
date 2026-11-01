@@ -22,9 +22,9 @@ Ishodi:
 | --- | --- | --- | --- | --- |
 | `src/lib/journal/journal.test.ts` | 100 | 39 | 14 | 47 |
 | `src/lib/journal/lock.test.ts` | 9 | 3 | 2 | 4 |
-| `src/lib/journal/recovery.test.ts` | 17 | 4 | 1 | 12 |
-| `src/lib/sync/drainRunner.test.ts` | 40 | 24 | 3 | 13 |
-| `src/editor/process-capture.test.ts` | 17 | 10 | 3 | 4 |
+| `src/lib/journal/recovery.test.ts` | 17 | 5 | 0 | 12 |
+| `src/lib/sync/drainRunner.test.ts` | 40 | 27 | 0 | 13 |
+| `src/editor/process-capture.test.ts` | 17 | 13 | 0 | 4 |
 | `src/editor/process-capture-nodeids.test.ts` | 6 | 0 | 0 | 6 |
 | `src/editor/process-capture-checkpoint.test.ts` | 2 | 1 | 0 | 1 |
 | `src/lib/process-ledger/process-ledger.test.ts` | 8 | 5 | 0 | 3 |
@@ -38,8 +38,8 @@ Ishodi:
 | `src/domain/forensics/verified-object-activity.test.ts` | 2 | 0 | 0 | 2 |
 | `src/domain/forensics/verified-object-binding.test.ts` | 6 | 0 | 0 | 6 |
 | `src/domain/forensics/verified-process-history.test.ts` | 4 | 2 | 0 | 2 |
-| `src/lib/document/queries.test.ts` | 8 | 7 | 1 | 0 |
-| **Ukupno** | **273** | **100** | **24** | **149** |
+| `src/lib/document/queries.test.ts` | 8 | 8 | 0 | 0 |
+| **Ukupno** | **273** | **108** | **16** | **149** |
 
 ## Karta po datotekama
 
@@ -167,7 +167,7 @@ Ishodi:
 | # | Izvorni test | Ishod | Ductus test | Napomena |
 | --- | --- | --- | --- | --- |
 | 1 | offers both versions when the journal still reads and the server answers | pokriveno | `src/domain/sync/recovery.test.ts`: always returns both options, in recommended-first order | Pokriveno samo planiranje (planRecovery). Ductus nema I/O omotač attemptJournalRecovery koji čita journal i poslužitelj. |
-| 2 | offers the server's version only when the store cannot be opened at all | nedostaje test | – | planRecovery podržava nečitljiv journal uz odgovor poslužitelja, ali nijedan test ne spaja to dvoje i ne traži preporuku adopt-server. |
+| 2 | offers the server's version only when the store cannot be opened at all | pokriveno | `src/domain/sync/recovery.test.ts`: offers only the server's version, and recommends it, when the journal cannot be read at all | Vraćeno u #1185. Pokriveno samo planiranje (planRecovery), kao u retku 1. |
 | 3 | still salvages the queue when the snapshot table throws | nema koda | – | Ductus čita journal u jednoj transakciji (AtomicDexieJournal.read); nema djelomičnog čitanja po tablici. Pokvaren sadržaj snimke pokriva "salvages the newest pending transaction when the snapshot is corrupt". |
 | 4 | still salvages the snapshot when the pending table throws | nema koda | – | Nema djelomičnog čitanja po tablici. Pokvaren red u redu čekanja pokriva "falls back to the snapshot when the queued transaction is corrupt" u src/domain/sync/recovery.test.ts. |
 | 5 | reports an entirely unreadable store as unreadable, not as empty | pokriveno | `src/domain/sync/recovery.test.ts`: reports an unreadable journal as unreadable, never as empty | Preporuka null za isti ulaz je u "recommends nothing when neither version can be offered". |
@@ -198,13 +198,13 @@ Ishodi:
 | 8 | books 1s, 2s then 4s after consecutive transport errors | pokriveno | `src/domain/sync/drain.txid-reused.test.ts`: 7: a lost answer waits, the wait grows, and a new EDIT does not reset it | Niz 1s, 2s, 4s… je u drain.test.ts "doubles: 1s, 2s, 4s, 8s, 16s". Runner poštuje raspored (drain-runner.test.ts, stanje "waiting"). |
 | 9 | keeps the queue while the server is unreachable | pokriveno | `src/lib/sync/evidence-drain.test.ts`: 2: a lost answer replays row 1 with the same key and bytes; row 2 waits for its receipt | – |
 | 10 | treats a commit that throws as a transport error, not a crash | pokriveno | `src/lib/sync/drain-runner.test.ts`: a lost answer replays the same key after the backoff, never a newer row | Transport baca Error("offline"); runner daje ERROR i ponavlja bez ručnog koraka. |
-| 11 | resets the backoff after a success | nedostaje test | – | scheduleAfterOutcome u src/domain/sync/drain.ts briše raspored kad potvrda skine zadržavanje, ali nijedan test ne provjerava da sljedeći neuspjeh opet kreće od 1s. |
+| 11 | resets the backoff after a success | pokriveno | `src/lib/sync/drain-runner.test.ts`: after a success the backoff starts again from 1s, not from where the last failures left it | Vraćeno u #1185. |
 | 12 | a new local save preempts a long backoff instead of waiting it out | nema koda | – | Namjerno suprotno: novo spremanje ne resetira čekanje (scheduleAfterOutcome u drain.ts; test "7: a lost answer waits, the wait grows, and a new EDIT does not reset it"). |
 | 13 | stops on a stale base and leaves the queue for the author to resolve | pokriveno | `src/lib/sync/evidence-drain.test.ts`: 11: %s is CONFLICT; the row stays and nothing more is sent | – |
 | 14 | stays stopped after a stale base even when the author keeps saving | pokriveno | `src/components/editor/evidence-session.test.ts`: 13: a 409 stale_base is CONFLICT; nothing more is saved or sent | U Ductusu se u stanju CONFLICT ni ne sprema novi red. |
 | 15 | stops on a non-retryable server answer and books no retry | pokriveno | `src/components/editor/evidence-session.test.ts`: 16: 413 and 426 are sent once in ten simulated minutes | Na razini runnera: drain-runner.test.ts "a fatal answer waits for a manual retry; a fresh runner after reload tries once by itself". |
-| 16 | tries again once the author has saved something new after a fatal answer | nedostaje test | – | Odluku pokriva samo planDrain (drain.lost-response.test.ts "11b: ... lets a new version out"). Nema testa runnera za too_large pa novo spremanje. |
-| 17 | still drains content saved while a fatal attempt was in flight | nedostaje test | – | Samo planDrain u "11b" ima noviji red u redu čekanja. Nema testa runnera ni sesije za spremanje tijekom slanja koje završi kobnom greškom. |
+| 16 | tries again once the author has saved something new after a fatal answer | pokriveno | `src/lib/sync/drain-runner.test.ts`: after a fatal answer a new local save goes out by itself, without a manual retry | Vraćeno u #1185. Odluku i dalje tvrdi i planDrain (drain.lost-response.test.ts "11b: ... lets a new version out"). |
+| 17 | still drains content saved while a fatal attempt was in flight | pokriveno | `src/lib/sync/drain-runner.test.ts`: a local save made while a fatal attempt is in flight still goes out after the refusal | Vraćeno u #1185. |
 | 18 | does not resume mid-flight saves after a stale base — the author decides | pokriveno | `src/lib/sync/drain-runner.test.ts`: stale_base and txid_reused stop the drain until the author decides | U Ductusu zastoj ovisi o stanju CONFLICT, a ne o oznaci spremanja tijekom slanja. Nema testa baš sa spremanjem tijekom slanja. |
 | 19 | never drains a document the journal records as being in CONFLICT | pokriveno | `src/domain/sync/drain.test.ts`: refuses to drain while the document is in CONFLICT | – |
 | 20 | coalesces a burst of local saves into one drain | pokriveno | `src/lib/sync/drain-runner.test.ts`: older rows behind the newest one are superseded and never sent | Šalje se samo najnoviji red. Ductus runner nema timer za spajanje; dokazi (segmenti) se namjerno ne spajaju. |
@@ -234,15 +234,15 @@ Ishodi:
 | # | Izvorni test | Ishod | Ductus test | Napomena |
 | --- | --- | --- | --- | --- |
 | 1 | starts from the existing snapshot without inventing typing events | pokriveno | `src/lib/journal/atomic-dexie-journal.evidence.test.ts`: 13: startEvidence sets snapshot, revision and head; again only on an empty queue | Postojeći tekst je snimka s otvaranja; glava je prazna (localSeq 0, segmentHash null), nema izmišljenih događaja. |
-| 2 | records exact committed text steps, including Croatian and emoji text | nedostaje test | `src/editor/source.test.ts`: a trusted keydown and insertText %j is editor | Hrvatska slova su pokrivena (check() reproducira dokument točno). Nema testa koji snimi i reproducira unos emojija; emoji se testira samo kao odbijanje pola surogatnog para. |
+| 2 | records exact committed text steps, including Croatian and emoji text | pokriveno | `src/editor/capture.test.ts`: Croatian letters and emoji are recorded as typed and replay to the same text | Snima hrvatska slova, emoji izvan BMP-a i modifikator boje kože, reproducira ih na replayeru poslužitelja i provjerava tekst snimke. Hrvatska slova pokriva i `src/editor/source.test.ts`: a trusted keydown and insertText %j is editor. |
 | 3 | distinguishes observed paste from unknown-origin editor changes | pokriveno | `src/editor/source.test.ts`: a spelling replacement and a paste are taken by their first change only; a program's transaction and a toolbar click are unattributed | Ductus razlikuje paste od unattributed. |
 | 4 | records a composition transaction without labelling it human authorship | pokriveno | `src/editor/source.test.ts`: IME composition and its end are keyless-input, never composition | Ductus kompoziciju svjesno bilježi kao keyless-input; zatvoren skup izvora bez procjene autorstva (evidence-segment-v2.test.ts: has a closed set of sources...). |
 | 5 | replays deletions, marks, paragraph splits and actual undo/redo steps | pokriveno | `src/editor/capture.test.ts`: typing, Enter, deleting, joining, bold and a heading; `src/editor/capture.property.test.ts`: 200 seeds of 30 actions | Svojstveni test uključuje Undo i Redo i uspoređuje reproducirani dokument s uređivačem. |
 | 6 | captures appended transactions rather than silently losing them | pokriveno | `src/editor/source.test.ts`: three paragraphs and a heading with bold and italic, without ids, are one paste event with the appended steps | Također capture.test.ts: a block made by Enter gets its id through an attr step of the same change. |
 | 7 | ignores selection-only transactions | pokriveno | `src/editor/source.test.ts`: a selection change takes nothing, and the data is dropped with the change | recordWithSource vraća null bez docChanged; test traži samo jedan izvor nakon dviju promjena odabira. |
-| 8 | serializes immediately so later transaction mutation cannot change evidence | nedostaje test | – | changeOf (src/editor/capture.ts) kopira korake u novi niz, ali nijedan test ne mijenja transakciju nakon snimanja. |
+| 8 | serializes immediately so later transaction mutation cannot change evidence | pokriveno | `src/editor/capture.test.ts`: a transaction changed after it was recorded does not change the segment | Drukčiji dizajn: Ductus ne serijalizira odmah, nego changeOf kopira korake i dokumente u vlastite nizove; koraci ProseMirrora su nepromjenjivi. Test nakon snimanja isprazni nizove transakcija, a segment se i dalje reproducira u isti dokument. |
 | 9 | rejects a missing transaction instead of re-starting history | pokriveno | `src/editor/capture.test.ts`: a change that does not start where the last one ended is a gap, and nothing more is recorded | Također evidence-session.test.ts: 3: a gap saves uncovered once; later saves never take, chain, start or send. |
-| 10 | checks the actual document at stop, even if the missing change was last | nedostaje test | – | Kod postoji (evidence-session.ts redak 443 uspoređuje zadnji dokument s uređivačem i sprema bez dokaza kao gap). Test 3 ima neviđenu promjenu u sredini, a ne na kraju. |
+| 10 | checks the actual document at stop, even if the missing change was last | pokriveno | `src/components/editor/evidence-session.test.ts`: 3b: a change the recorder never saw, made last before the save, is a gap as well | Provjera je pri spremanju (evidence-session.ts uspoređuje zadnji dokument lanca s uređivačem), a ne pri zaustavljanju. Neviđena promjena je zadnja prije spremanja. |
 | 11 | fails visibly at the event budget without silently trimming | nema koda | – | Ductus nema granicu broja događaja po sesiji; dijeli na segmente (MAX_SEGMENT_EVENTS 5000, 30 s, D-96). Podjela na 5000 događaja nema test; granica veličine je u testu too_large. |
 | 12 | bounds queued snapshots while hashing is delayed | nema koda | – | Ductus nema red snimaka koje čekaju sažetak; sažetak se računa tek u takeSegment (capture.ts). |
 | 13 | does not let a broken UI observer abort the editor transaction | nema koda | – | EvidenceRecorder nema povratni poziv za sučelje (onChange); stanje se čita iz sesije. |
@@ -408,7 +408,7 @@ Ishodi:
 | 4 | reports an unparseable answer rather than guessing | pokriveno | `src/server/evidence/open-route.test.ts`: maps %s; `src/client/evidence-ingest.test.ts`: refuses %s | Nepoznat ishod, kriva revizija ili snimka bez teksta daju unavailable; klijent odbija odgovor koji nije zatvorenog oblika (openedWorkFrom). |
 | 5 | maps not_found to the same answer for a foreign and a missing project | pokriveno | `src/server/evidence/open-route.test.ts`: maps %s; `tests/integration/work-document-read.integration.test.ts`: answers the same none for another course, another institution and no assignment (A2), and to the teacher (A7) | Slučaj "not a student of it, or no such assignment" daje isti 404 not_found. |
 | 6 | redirects to /prijava when the RPC reports no session | pokriveno | `src/server/evidence/open-route.test.ts`: maps %s; `src/client/evidence-ingest.test.ts`: HTTP %i → %s | Odgovor bez sesije prepoznat je (401 unauthenticated). Umjesto preusmjeravanja /rad prikazuje poveznicu za prijavu (app/rad/page.tsx). |
-| 7 | reports a stored document the canonical model cannot read | nedostaje test | – | startEvidence provjerava snimku iz odgovora otvaranja (verifyDocumentSnapshot); snapshot.test.ts odbija nevaljan dokument, ali nijedan test ne šalje takvu snimku s ispravnim hashom kroz startEvidence. |
+| 7 | reports a stored document the canonical model cannot read | pokriveno | `src/lib/journal/atomic-dexie-journal.evidence.test.ts`: 13: startEvidence refuses a stored document the canonical model cannot read, even under its own hash | Journal odbija takvu snimku s invalid_input i ništa ne zapisuje. Hash odgovara bajtovima, pa odbija samo kanonski model. |
 | 8 | accepts revision 0, the revision of a document with no commit yet | pokriveno | `src/client/evidence-ingest.test.ts`: reads the work, its snapshot bytes and the domain of its receipt keys; `tests/integration/open-student-work.integration.test.ts`: creates one work when two tabs open it at once; the second gets the same | Odgovor otvaranja s currentRevision 0 se čita; prvo otvaranje u bazi vraća reviziju 0. |
 
 ## Poznate granice
