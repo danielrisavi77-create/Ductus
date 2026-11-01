@@ -42,9 +42,21 @@ test("C1, C2: the linted part is dbmate's up block, never the down block", () =>
   assert.ok(forward.includes("CREATE TABLE a"));
   assert.ok(!forward.includes("DROP COLUMN"));
   assert.equal(forward.slice(forward.indexOf("-- migrate:up")).trimEnd(), dbmateUp(text).trimEnd());
-  // Line numbers stay those of the file: the header is kept as comments.
+  // Line numbers stay those of the file: the header is kept as empty lines.
+  assert.equal(forward.split("\n")[0], "");
   assert.equal(forward.split("\n")[2], "CREATE TABLE a (id bigint);");
   assert.equal(upSection(text.replaceAll("\n", "\r\n")), forward);
+});
+
+test("C1: a header with a bare CR cannot open a block comment that hides the up block", () => {
+  // Squawk ends a -- comment at a bare CR; dbmate drops the header and runs
+  // the ALTER TABLE. The linted text must not contain the header at all.
+  const text = "-- header\r/*\n-- migrate:up\nALTER TABLE public.t DROP COLUMN c;\n-- */\n-- migrate:down\nSELECT 1;\n";
+  const forward = upSection(text);
+  assert.ok(!forward.includes("/*"), forward);
+  assert.ok(!forward.includes("header"), forward);
+  assert.equal(forward, "\n-- migrate:up\nALTER TABLE public.t DROP COLUMN c;\n-- */\n");
+  assert.equal(forward.split("\n")[2], "ALTER TABLE public.t DROP COLUMN c;");
 });
 
 test("C2: every migration in db/migrations parses, and the part equals dbmate's up block", () => {

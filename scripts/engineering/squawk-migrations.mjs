@@ -71,7 +71,8 @@ const DIRECTIVE_LIKE = /--\s*migrate:/gi;
  * than one up or down, down before up, options such as `transaction:false`,
  * a statement before up, or any mention of "squawk" other than a listed
  * `-- squawk-ignore` line (Squawk reads comment directives such as
- * squawk-ignore-file and squawk-disable-assume-in-transaction).
+ * squawk-ignore-file and squawk-disable-assume-in-transaction). The header
+ * before up is returned as empty lines: dbmate does not run it.
  */
 export function upSection(text) {
   const lines = text.split("\n").map((line) => line.replace(/\r$/, ""));
@@ -87,7 +88,10 @@ export function upSection(text) {
   for (const line of lines.slice(0, up[0])) {
     if (!/^\s*$/.test(line) && !/^\s*--/.test(line)) throw new Error(`has a statement before "${UP}"`);
   }
-  const forward = lines.slice(0, down[0]);
+  // dbmate drops the header before up; Squawk would read it, and its comments
+  // end at a bare CR, so a header could open a block comment that hides SQL
+  // dbmate runs. Blank lines keep the file's line numbers.
+  const forward = [...lines.slice(0, up[0]).fill(""), ...lines.slice(up[0], down[0])];
   const mentions = forward.join("\n").match(/squawk/gi)?.length ?? 0;
   const ignores = forward.map((line) => IGNORE_LINE.exec(line)).filter(Boolean);
   if (mentions !== ignores.length) {
