@@ -47,13 +47,25 @@ test("every gh rule has a blocked case and the rulebook has allowed controls", (
 // Claude Code permission rules: `Tool(pattern)`, where `*` matches any run of
 // characters and everything else is literal. This mirrors that reading to
 // check the patterns below; Claude Code itself is the enforcer.
+function globMatch(pattern, text) {
+  const [first, ...rest] = pattern.split("*");
+  if (rest.length === 0) return text === first;
+  if (!text.startsWith(first)) return false;
+  const last = rest.pop();
+  let at = first.length;
+  for (const part of rest) {
+    const found = text.indexOf(part, at);
+    if (found === -1) return false;
+    at = found + part.length;
+  }
+  return text.length - last.length >= at && text.endsWith(last);
+}
+
 function denied(tool, command) {
-  return settings.permissions.deny.some((rule) => {
-    const m = /^(\w+)\((.*)\)$/s.exec(rule);
-    if (!m || m[1] !== tool) return false;
-    const source = m[2].split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
-    return new RegExp(`^${source}$`, "s").test(command);
-  });
+  const prefix = `${tool}(`;
+  return settings.permissions.deny.some(
+    (rule) => rule.startsWith(prefix) && rule.endsWith(")") && globMatch(rule.slice(prefix.length, -1), command),
+  );
 }
 
 const SHA = "a".repeat(40);
@@ -73,6 +85,19 @@ const API_WRITES = [
   "gh api -X PATCH repos/o/r/branches/main/protection/required_status_checks -F strict=false",
   "gh api repos/o/r/branches/main/protection/enforce_admins -X DELETE",
   "gh api --method PATCH repos/o/r/branches/main/protection/required_pull_request_reviews --input r.json",
+  // -i is gh api's only boolean shorthand, so it is the only flag that can
+  // lead a cluster such as -iX, -if or -iF.
+  "gh api -iX DELETE repos/o/r/rulesets/7",
+  "gh api repos/o/r/rulesets/7 -iX DELETE",
+  "gh api -iX DELETE repos/o/r/branches/main/protection",
+  `gh api repos/o/r/statuses/${SHA} -if state=success`,
+  `gh api -iF state=success repos/o/r/statuses/${SHA}`,
+  "gh api -iiX PUT repos/o/r/branches/main/protection --input p.json",
+  // GraphQL mutations on branch protection rules and rulesets.
+  "gh api graphql -f query='mutation { deleteBranchProtectionRule(input: {branchProtectionRuleId: \"x\"}) { clientMutationId } }'",
+  "gh api -f query='mutation { updateBranchProtectionRule(input: {branchProtectionRuleId: \"x\"}) { clientMutationId } }' graphql",
+  "gh api graphql -F query=@m.graphql -f q='createRepositoryRuleset'",
+  "gh api graphql -f query='mutation { deleteRepositoryRuleset(input: {repositoryRulesetId: \"x\"}) { clientMutationId } }'",
 ];
 const ROUTINE = [
   "gh api repos/o/r/pulls/7",
@@ -97,6 +122,10 @@ for (const tool of ["Bash", "PowerShell"]) {
     assert.ok(!denied(tool, "gh api repos/o/r/rulesets"));
     assert.ok(!denied(tool, "gh api repos/o/r/branches/main/protection"));
     assert.ok(denied(tool, "gh api -X GET repos/o/r/rulesets"));
+    // The -i rule also blocks a read with --include on these endpoints, and
+    // the GraphQL rule a typed read of a ruleset; docs/SESSIONS.md 4a names both.
+    assert.ok(denied(tool, "gh api --include repos/o/r/rulesets"));
+    assert.ok(!denied(tool, "gh api graphql -f query='query { repository(owner: \"o\", name: \"r\") { branchProtectionRules(first: 5) { nodes { pattern } } } }'"));
   });
 
   test(`settings.json repeats the rulebook's admin merge and token denies (${tool})`, () => {
