@@ -143,6 +143,21 @@ describe("writeSource", () => {
     editor.destroy();
   });
 
+  it("keeps the cursor after the citation when the bibliography is added below it", () => {
+    // Codex on #866: a second "Dodaj i citiraj" must cite in the text, not in the first entry.
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+    const book = sourceOf(BOOK);
+    const article = sourceOf(ARTICLE);
+    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(true);
+    expect(writeSource(editor, citationText(article, ""), entryText(article))).toBe(true);
+    const cited = `Prvi odlomak.${citationText(book, "")}${citationText(article, "")}`;
+    expect(texts(editor)[0]).toBe(`paragraph:${cited}`);
+    expect(editor.state.selection.empty).toBe(true);
+    expect(editor.state.selection.head).toBe(1 + cited.length);
+    editor.destroy();
+  });
+
   it("never writes over selected text", () => {
     const editor = editorWith([{ text: "Ostaje." }]);
     editor.commands.setTextSelection({ from: 1, to: 8 });

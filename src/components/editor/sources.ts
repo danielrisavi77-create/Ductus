@@ -1,5 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import type { Node as PMNode, NodeType } from "@tiptap/pm/model";
+import type { Selection, Transaction } from "@tiptap/pm/state";
 
 import { CITATION_FORM_META } from "@/editor/source";
 
@@ -169,6 +170,10 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     if (entry === null) return true;
     const plan = bibliographyPlan(blocksOf(tr.doc), entry);
     if (plan.kind === "duplicate") return true;
+    // The cursor stays in the student's text (Codex on #866): a split at the end
+    // of the block the cursor ends would otherwise carry it into the new heading.
+    const kept = tr.selection;
+    const from = tr.mapping.maps.length;
     const { schema } = state;
     const blocks: [NodeType, Record<string, unknown> | null, string][] = [[schema.nodes.paragraph!, null, entry]];
     if (plan.heading) blocks.unshift([schema.nodes.heading!, { level: 1 }, BIBLIOGRAPHY_HEADING]);
@@ -177,6 +182,7 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     if (!tr.doc.child(plan.index - 1).isTextblock) {
       // After a list or a quote no split is possible; the evidence log refuses this change.
       tr.insert(pos, blocks.map(([type, attrs, text]) => type.create(attrs, schema.text(text))));
+      tr.setSelection(keepBefore(kept, tr, from));
       return true;
     }
     // The evidence format writes a new block only as a split at the end of the
@@ -188,6 +194,17 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
       tr.insertText(text, end + 2);
       pos = end + 3 + text.length;
     }
+    tr.setSelection(keepBefore(kept, tr, from));
     return true;
   }).run();
+}
+
+// The selection mapped over the bibliography steps only, leaning back, so a
+// position at a split stays in the block it was in.
+function keepBefore(selection: Selection, tr: Transaction, from: number): Selection {
+  const steps = tr.mapping.slice(from);
+  return selection.map(tr.doc, {
+    map: (pos) => steps.map(pos, -1),
+    mapResult: (pos) => steps.mapResult(pos, -1),
+  });
 }
