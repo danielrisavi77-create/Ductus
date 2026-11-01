@@ -69,7 +69,9 @@ const DIRECTIVE_LIKE = /--\s*migrate:/gi;
  * any shape where that could differ from dbmate's own parse: a directive in
  * another spelling, case or place (also inside a $$ body or a string), more
  * than one up or down, down before up, options such as `transaction:false`,
- * a statement before up, or an inline squawk-ignore.
+ * a statement before up, or any mention of "squawk" other than a listed
+ * `-- squawk-ignore` line (Squawk reads comment directives such as
+ * squawk-ignore-file and squawk-disable-assume-in-transaction).
  */
 export function upSection(text) {
   const lines = text.split("\n").map((line) => line.replace(/\r$/, ""));
@@ -86,10 +88,10 @@ export function upSection(text) {
     if (!/^\s*$/.test(line) && !/^\s*--/.test(line)) throw new Error(`has a statement before "${UP}"`);
   }
   const forward = lines.slice(0, down[0]);
-  const mentions = forward.join("\n").match(/squawk-ignore/gi)?.length ?? 0;
+  const mentions = forward.join("\n").match(/squawk/gi)?.length ?? 0;
   const ignores = forward.map((line) => IGNORE_LINE.exec(line)).filter(Boolean);
   if (mentions !== ignores.length) {
-    throw new Error('has a squawk-ignore in another form; only a line "-- squawk-ignore <rule>[, <rule>]" is allowed');
+    throw new Error('mentions squawk in another form (any other Squawk comment directive, e.g. squawk-disable-assume-in-transaction, changes how the linter reads the migration); only a line "-- squawk-ignore <rule>[, <rule>]" is allowed');
   }
   for (const rule of ignores.flatMap((match) => match[1].split(", "))) {
     if (!Object.hasOwn(INLINE_RULES, rule)) throw new Error(`ignores ${rule}, which is not in INLINE_RULES`);

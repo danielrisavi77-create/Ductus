@@ -97,6 +97,23 @@ test("D4: only the listed squawk-ignore form and rules are accepted", () => {
   assert.throws(() => upSection(migration(`-- squawk-ignore constructor\n${drop}`)));
 });
 
+test("D4: no Squawk comment directive other than the listed squawk-ignore line is accepted", () => {
+  const tx = "BEGIN;\nSELECT 1;\nCOMMIT;";
+  const idx = "SET LOCAL ROLE ductus_migrator;\nCREATE INDEX CONCURRENTLY i ON t (c);";
+  const refused = {
+    "line comment, transaction-nesting": `-- squawk-disable-assume-in-transaction\n${tx}`,
+    "block comment, transaction-nesting": `/* squawk-disable-assume-in-transaction */\n${tx}`,
+    "line comment, concurrent index": `-- squawk-disable-assume-in-transaction\n${idx}`,
+    "upper case": `-- SQUAWK-DISABLE-ASSUME-IN-TRANSACTION\n${tx}`,
+    "enable counterpart": `-- squawk-enable-assume-in-transaction\n${tx}`,
+    "after the statement": `${tx}\n-- squawk-disable-assume-in-transaction`,
+    "next to a listed ignore": `-- squawk-ignore ban-drop-function\n-- squawk-disable-assume-in-transaction\nDROP FUNCTION f(bigint);`,
+    "unknown squawk directive": `-- squawk-whatever\n${tx}`,
+  };
+  for (const [label, up] of Object.entries(refused)) assert.throws(() => upSection(migration(up)), Error, label);
+  assert.doesNotThrow(() => upSection(migration(tx)));
+});
+
 test("D4: the exception lists are disjoint, each with a reason, and the canary rule is not excluded", () => {
   for (const [rule, reason] of [...Object.entries(EXCLUDED_RULES), ...Object.entries(INLINE_RULES)]) {
     assert.match(rule, /^[a-z-]+$/);

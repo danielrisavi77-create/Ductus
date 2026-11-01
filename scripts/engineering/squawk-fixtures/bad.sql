@@ -1,4 +1,4 @@
--- DAN-319 fixture, never applied: squawk-migrations.mjs lints it on every run
+-- DAN-319 fixture, never applied: the migration lint step lints it on every run
 -- and expects exit 1 naming adding-required-field.
 -- migrate:up
 SET LOCAL ROLE ductus_migrator;
