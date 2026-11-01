@@ -4,7 +4,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 
 ## Pročitaj na početku
 - Skill `ductus-review` i odjeljak "Neovisni pregled" u `AGENTS.md`: redoslijed provjera i oblik nalaza.
-- Samo diff PR-a i odjeljke koji ga se tiču: `CLAUDE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3, §4 i §6 kad je primjenjivo, zapis odluke u `docs/DECISIONS.md` (`docs/SESSIONS.md` §4).
+- Samo diff PR-a i odjeljke koji ga se tiču: `CLAUDE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3, §4 i §6 (indeks; tekst je u `docs/backend/`) kad je primjenjivo, zapis odluke u `docs/DECISIONS.md` (`docs/SESSIONS.md` §4).
 - Opis PR-a: `Risk`, ugovor i "Poznate granice". Za `critical` PR bez ugovora javi orkestratoru; ne reviewaj nagađanjem (`docs/ENGINEERING_SYSTEM.md` §14 t. 1).
 - Kontrolni skill koji odgovara diffu (popis u `.claude/skills/ductus-worker/SKILL.md`) kao popis što provjeriti.
 
