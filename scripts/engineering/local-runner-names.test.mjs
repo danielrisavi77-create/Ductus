@@ -37,6 +37,14 @@ test("no workflow uses a retired name", () => {
   for (const file of files) assert.deepEqual(retiredIn(read(`.github/workflows/${file}`)), [], file);
 });
 
+// Codex on #1059: the run instructions name the same commands, so a stale
+// name there sends the reader to a script that no longer exists.
+const RUN_DOCS = ["docs/DEMO-UP.md", "docs/DEMO-TEACHER-BOOTSTRAP.md", "docs/DEMO-SUHI-PROLAZ.md", "docs/PLAN-DEMO.md", "docs/engineering/d91-mjere.md"];
+
+test("no run instruction uses a retired name", () => {
+  for (const file of RUN_DOCS) assert.deepEqual(retiredIn(read(file)), [], file);
+});
+
 test("the guard catches each retired name", () => {
   for (const sample of ["node scripts/demo/up.mjs", "pnpm demo:up", "pnpm demo:prepare", "pnpm demo:bootstrap-accounts", "pnpm test:demo:browser", "demo-native.yml", "--no-demo-data"]) {
     assert.notDeepEqual(retiredIn(sample), [], sample);

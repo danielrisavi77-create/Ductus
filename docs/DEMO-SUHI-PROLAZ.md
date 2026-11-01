@@ -25,7 +25,7 @@ New-Item -ItemType Directory -Force $dir | Out-Null
 
 Prolaz kreće od praznih podataka. Stare podatke ne briši nego ih odmakni sa strane, da se prethodni prolaz može pregledati:
 
-- nativni runner: zaustavi ga (`pnpm demo:up:native --stop`) pa preimenuj `%LOCALAPPDATA%\Ductus\native-data` u `native-data.<datum>-<vrijeme>`;
+- nativni runner: zaustavi ga (`pnpm local:up:native --stop`) pa preimenuj `%LOCALAPPDATA%\Ductus\native-data` u `native-data.<datum>-<vrijeme>`;
 - Docker: `docker compose down -v` briše volumene lokalnog stoga.
 
 Obriši i izlaze prethodnog pokretanja u repou: `test-results-login\` i `playwright-report-login\`.
@@ -37,7 +37,7 @@ Port 3000 mora biti slobodan. Ako ga drži tuđi proces (npr. E2E druge sesije),
 **Windows bez Dockera (nativni runner).** U prvom prozoru:
 
 ```powershell
-pnpm demo:up:native *> "$dir\runner.log"
+pnpm local:up:native *> "$dir\runner.log"
 ```
 
 Kad zapis pokaže `Ready`, u drugom prozoru:
@@ -49,14 +49,14 @@ $env:E2E_DEMO_NATIVE = "1"    # nastavnik se potvrđuje kroz nativnu bazu
 pnpm exec playwright test --config playwright.login.config.ts e2e/login/demo-flow.spec.ts --timeout 300000 *> "$dir\flow.log"
 ```
 
-**Docker.** `pnpm demo:prepare`, pa ista naredba za spec, ali bez `E2E_REUSE_SERVER` i `E2E_DEMO_NATIVE`: konfiguracija sama pokreće `pnpm dev`, a `AUTH_DATABASE_URL` mora biti postavljen (`.env.example`). Tako prolaz izvodi i posao Login E2E u CI-ju, čiji se video za isti SHA čuva uz nativni (§3).
+**Docker.** `pnpm local:prepare`, pa ista naredba za spec, ali bez `E2E_REUSE_SERVER` i `E2E_DEMO_NATIVE`: konfiguracija sama pokreće `pnpm dev`, a `AUTH_DATABASE_URL` mora biti postavljen (`.env.example`). Tako prolaz izvodi i posao Login E2E u CI-ju, čiji se video za isti SHA čuva uz nativni (§3).
 
 Zašto te vrijednosti:
 
 - `CI=1` u `playwright.login.config.ts` mijenja samo dvije stvari: video se čuva za cijeli prolaz (inače samo uz pad) i ispis testa ostaje zadani. Ništa drugo u tom prolazu ne čita `CI`.
 - `--timeout 300000`: `next dev` prevodi svaku rutu pri prvom zahtjevu. Na Windowsima to u prvom prolazu nakon pokretanja troši više od zadanih 90 s za cijeli test, pa prolaz pada na prevođenju, ne na proizvodu (probni prolaz 26. 10.).
 
-Na kraju Ctrl+C u prvom prozoru, ili `pnpm demo:up:native --stop`.
+Na kraju Ctrl+C u prvom prozoru, ili `pnpm local:up:native --stop`.
 
 ## 3. Što se čuva i gdje
 
