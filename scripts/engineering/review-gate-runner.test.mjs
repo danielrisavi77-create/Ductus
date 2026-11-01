@@ -22,6 +22,7 @@ const reply = (status, body) => ({
   text: async () => JSON.stringify(body),
 });
 let statusCount = 0;
+let pullListReads = 0;
 globalThis.fetch = async (url, options = {}) => {
   const path = new URL(url).pathname;
   if ((options.method ?? "GET") === "POST" && path.includes("/statuses/")) {
@@ -39,14 +40,18 @@ globalThis.fetch = async (url, options = {}) => {
   if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
   if (path.endsWith("/issues/7/events")) return reply(200, plan.timeline ?? []);
   if (path.endsWith("/pulls/7/reviews")) return reply(200, plan.reviews ?? []);
-  if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
+  if (path.endsWith("/pulls")) {
+    pullListReads++;
+    if (pullListReads > 1 && plan.failListReread) throw new TypeError("fetch failed");
+    return reply(200, (pullListReads > 1 ? plan.openPullsReread : undefined) ?? plan.openPulls ?? []);
+  }
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
   return reply(200, []);
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -61,7 +66,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread }),
       FAKE_LOG: log,
     },
   });
@@ -237,6 +242,24 @@ test("F-040 regression: no green gate status in the registered case", () => {
     assert.equal(post.body.state, "pending");
     assert.match(post.body.description, /another open PR shares this head/);
   }
+});
+
+// F-040 (QA c.6564767686): the run of the PR to main read the open PRs before
+// another PR on its head was opened, and that PR's run wrote pending first.
+test("a green run re-reads the open PRs and clears its statuses when the head is now shared (F-040)", () => {
+  const other = { ...eligible, number: 8 };
+  const raced = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], openPullsReread: [eligible, other] });
+  assert.equal(raced.code, 0);
+  const last = finalStates([raced]);
+  for (const c of ALL) assert.equal(last[c][1], "pending", c);
+  for (const post of raced.posts.slice(-3)) assert.match(post.body.description, /another open PR shares this head/);
+  // A failed re-read fails the run closed.
+  const unread = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], failListReread: true });
+  assert.equal(unread.code, 1);
+  for (const c of ALL) assert.equal(finalStates([unread])[c][1], "pending", c);
+  // Control: a head still alone keeps its three green statuses.
+  const alone = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], openPullsReread: [eligible] });
+  assert.deepEqual(states(alone.posts), ALL.map((c) => [c, "success"]));
 });
 
 test("a queue carrier keeps its statuses without a default_branch field (F-165)", () => {

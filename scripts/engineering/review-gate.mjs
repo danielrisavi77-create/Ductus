@@ -160,6 +160,18 @@ async function main() {
   const eligible = shared ? SHARED_HEAD : (autoMergeEligible ?? { state: "pending", description: "Not eligible for auto-merge." });
   await setStatus(repository, pr.head.sha, eligible, pr.html_url, autoMergeContext);
   await setStatus(repository, pr.head.sha, gate, pr.html_url);
+  // F-040 (QA c.6564767686): runs of two PRs can overlap, so the list read
+  // above may predate a PR opened on this head since. After any green write
+  // the run reads the list again; a PR opened later sees this one in its own
+  // run. A failed re-read fails the run, which marks the head pending.
+  const wroteGreen = !shared && [mergeAuthorization, eligible, gate].some((status) => status?.state === "success");
+  if (wroteGreen && sharesHeadWithOpenPr(pr, await apiAll(`/repos/${owner}/${repo}/pulls?state=open`))) {
+    for (const statusContext of [authorizationContext, autoMergeContext, context]) {
+      await setStatus(repository, pr.head.sha, SHARED_HEAD, pr.html_url, statusContext);
+    }
+    console.log(`${context}: pending — ${SHARED_HEAD.description}`);
+    return;
+  }
   console.log(`${context}: ${gate.state} — ${gate.description}`);
   if (metadata?.ok) {
     console.log(`Risk: declared=${metadata.risk}, minimum=${metadata.minimumRisk}`);
