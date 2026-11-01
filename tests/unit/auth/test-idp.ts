@@ -30,8 +30,34 @@ interface Grant {
   nonce: string;
   challenge: string;
   redirectUri: string;
+  scopes: string[];
   used: boolean;
 }
+
+/**
+ * "fake": the local fake provider, which answers every login with string
+ * attributes. "aai": the documented shape of AAI@EduHr (Srce wiki, page
+ * 59867172), released in UserInfo only to the access token of that login and
+ * only for the scopes it asked for: each hrEdu scope gives the claim of the
+ * same name as a JSON array, and `profile` gives given_name (from givenName)
+ * and family_name (from sn) as strings, never a hrEdu attribute. What a
+ * registered client really receives is not yet verified (plan #1104).
+ */
+export type IdpShape = "fake" | "aai";
+
+/** An invented account; the names and the affiliation are used by the AAI shape. */
+export interface TestAccount {
+  sub: string;
+  uniqueId: string;
+  homeOrg: string;
+  givenName?: string;
+  familyName?: string;
+  /** hrEduPersonAffiliation; may hold several values, which nothing parses. */
+  affiliation?: string[];
+}
+
+/** What the AAI shape releases per scope; the values are filled in per account. */
+export const AAI_ATTRIBUTE_SCOPES = ["hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"] as const;
 
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
@@ -45,12 +71,14 @@ function rsaKey(): { privateKey: KeyObject; jwk: Record<string, unknown> } {
  * token and the callback; its endpoints stay under ISSUER.
  */
 export function createTestIdp(
-  account = { sub: "sub-demo-1", uniqueId: "ana@demo.ductus.test", homeOrg: "demo.ductus.test" },
+  account: TestAccount = { sub: "sub-demo-1", uniqueId: "ana@demo.ductus.test", homeOrg: "demo.ductus.test" },
   spelledIssuer: string = ISSUER,
+  shape: IdpShape = "fake",
 ) {
   const key = rsaKey();
   const foreign = rsaKey();
   const grants = new Map<string, Grant>();
+  const accessTokens = new Map<string, Grant>();
   const tokenRequests: URLSearchParams[] = [];
   const state = { next: {} as Misbehaviour, account };
 
@@ -113,7 +141,9 @@ export function createTestIdp(
           return json({ error: "invalid_grant" }, 400);
         }
         grant.used = true;
-        return json({ access_token: "at-" + randomBytes(8).toString("hex"), token_type: "Bearer", expires_in: 300, id_token: idToken(grant) });
+        const accessToken = "at-" + randomBytes(8).toString("hex");
+        accessTokens.set(accessToken, grant);
+        return json({ access_token: accessToken, token_type: "Bearer", expires_in: 300, id_token: idToken(grant) });
       }
       case "/me": {
         if (state.next.userinfoBody) {
@@ -124,6 +154,22 @@ export function createTestIdp(
           hrEduPersonUniqueID: state.account.uniqueId,
           hrEduPersonHomeOrg: state.account.homeOrg,
         };
+        if (shape === "aai") {
+          const bearer = (new Headers(init.headers).get("authorization") ?? "").match(/^Bearer (.+)$/)?.[1];
+          const grant = bearer === undefined ? undefined : accessTokens.get(bearer);
+          if (!grant) return json({ error: "invalid_token" }, 401);
+          const values: Record<(typeof AAI_ATTRIBUTE_SCOPES)[number], string[]> = {
+            hrEduPersonUniqueID: [state.account.uniqueId],
+            hrEduPersonHomeOrg: [state.account.homeOrg],
+            hrEduPersonAffiliation: state.account.affiliation ?? ["student"],
+          };
+          body = { sub: state.account.sub };
+          for (const scope of AAI_ATTRIBUTE_SCOPES) if (grant.scopes.includes(scope)) body[scope] = values[scope];
+          if (grant.scopes.includes("profile")) {
+            if (state.account.givenName !== undefined) body.given_name = state.account.givenName;
+            if (state.account.familyName !== undefined) body.family_name = state.account.familyName;
+          }
+        }
         if (state.next.userinfo) body = state.next.userinfo(body);
         return json(body);
       }
@@ -147,6 +193,7 @@ export function createTestIdp(
         nonce: p.get("nonce") ?? "",
         challenge: p.get("code_challenge") ?? "",
         redirectUri: p.get("redirect_uri") ?? "",
+        scopes: (p.get("scope") ?? "").split(" ").filter(Boolean),
         used: false,
       });
       const callback = new URL(callbackBase);

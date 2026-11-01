@@ -91,7 +91,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
 
   // The real open route makes the work, as the click on "Započni rad" does (DAN-330).
   const response = await student.request.post("/api/evidence/open", {
-    headers: { origin: ORIGIN, "ductus-protocol": DUCTUS_PROTOCOL_VERSION }, data: { assignmentId },
+    headers: { origin: ORIGIN, "ductus-protocol": DUCTUS_PROTOCOL_VERSION }, data: { assignmentId, start: true },
   });
   expect(response.status()).toBe(200);
   const body = await response.json() as { status?: unknown; documentId?: unknown };
