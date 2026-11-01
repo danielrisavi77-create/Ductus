@@ -6,6 +6,13 @@ const compat = new FlatCompat({
   baseDirectory: dirname(fileURLToPath(import.meta.url)),
 });
 
+// The pg family by package name (pg, pg/lib/..., pg-cursor, pg-boss), or a
+// static path into an installed copy of it (../../node_modules/pg, the pnpm
+// store node_modules/.pnpm/pg@x/..., either slash), DAN-50. Not relative paths
+// like ./pg-like. Both rules below use this one pattern, case-insensitively.
+const PG_SPECIFIER = String.raw`^pg(?:$|/|-)|(?:^|[\\/])node_modules[\\/](?:\.pnpm[\\/])?pg(?:$|[\\/@+-])`;
+const PG_SPECIFIER_RE = new RegExp(PG_SPECIFIER, "iu");
+
 const databaseBoundaryPlugin = {
   rules: {
     "no-restricted-dynamic-imports": {
@@ -40,7 +47,7 @@ const databaseBoundaryPlugin = {
             // Arbitrary computed specifiers cannot be resolved by this static
             // guard. Variables and interpolated templates are not inspected.
             // Match the static rule's default case-insensitive Unicode semantics.
-            if (typeof specifier === "string" && /^pg(?:$|\/|-)/iu.test(specifier)) {
+            if (typeof specifier === "string" && PG_SPECIFIER_RE.test(specifier)) {
               context.report({ node: source, messageId: "restrictedPg" });
             }
           },
@@ -77,8 +84,7 @@ const eslintConfig = [
         {
           patterns: [
             {
-              // pg, pg/lib/..., pg-cursor, pg-boss; not relative paths like ./pg-like.
-              regex: "^pg(?:$|/|-)",
+              regex: PG_SPECIFIER,
               message: "Database access goes through src/server/db only.",
             },
           ],
