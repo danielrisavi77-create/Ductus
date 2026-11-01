@@ -2842,12 +2842,18 @@ BEGIN
   -- queries, not equal duration. With no institution the issuer lookup
   -- still reads the table, under the nil id that gen_random_uuid never
   -- gives; a match there could not open a session anyway.
-  SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org;
-  v_issuer_ok := EXISTS (
-    SELECT 1 FROM identity.institution_issuer ii
-    WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)
-      AND ii.oidc_issuer = p_issuer COLLATE "C"
-  );
+  --
+  -- Both rows are read FOR SHARE and stay locked until the login commits
+  -- (F-036, DAN-169). A change to aai_home_org or to the issuer row then
+  -- waits for this login, and its trigger closes the session it opened; a
+  -- change committed first is seen here, under READ COMMITTED the row is
+  -- read again, and the login gets the same ZD503. Shared locks do not
+  -- block each other, so logins do not wait for one another.
+  SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org FOR SHARE;
+  SELECT true INTO v_issuer_ok FROM identity.institution_issuer ii
+  WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)
+    AND ii.oidc_issuer = p_issuer COLLATE "C"
+  FOR SHARE;
   IF v_institution IS NULL OR v_shape_ok IS NOT TRUE OR v_issuer_ok IS NOT TRUE THEN
     RAISE EXCEPTION 'institution not set up' USING ERRCODE = 'ZD503';
   END IF;
