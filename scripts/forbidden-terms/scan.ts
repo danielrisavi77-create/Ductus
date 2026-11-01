@@ -1018,9 +1018,13 @@ function* everyFile(root: string): Generator<string> {
 }
 
 // The only test files under app/ and src/ a runner collects (vitest.config.ts:
-// "src/**/*.test.ts", the property project included). Any other test-named
-// file there is an ordinary module that nothing runs and the scan skips.
+// "src/**/*.test.ts", the property project included). The unit project
+// excludes "**/*.integration.test.ts" and the integration project reads only
+// tests/integration, so an integration test under src/ is collected by none.
+// Any other test-named file there is an ordinary module that nothing runs and
+// the scan skips.
 const COLLECTED_TEST = /^src\/(?:.+\/)?[^/]+\.test\.ts$/;
+const UNCOLLECTED_TEST = /\.integration\.test\.ts$/;
 // Files that hold no interface text: style sheets, data that a module imports
 // (read through that import), declarations, and binary fonts and images.
 const NO_UI_TEXT = /\.(?:css|json|d\.[cm]?ts|woff2?|ico|png|jpe?g|gif|webp|avif)$/;
@@ -1031,7 +1035,9 @@ const FONT_NOTICE = /^app\/fonts\/(?:OFL-[A-Za-z]+\.txt|SOURCE\.md)$/;
 function isUnread(file: string): boolean {
   if (file.split("/").some((segment) => SKIPPED_DIRS.has(segment))) return true;
   const name = file.slice(file.lastIndexOf("/") + 1);
-  if (/\.(?:test|spec)\./.test(name)) return !COLLECTED_TEST.test(file);
+  // The same test-file pattern `sourceFiles` skips by: a module with `.test.`
+  // or `.spec.` only inside its name is read like any other module.
+  if (TEST_FILE.test(name)) return !COLLECTED_TEST.test(file) || UNCOLLECTED_TEST.test(file);
   if (isCode(file) || scanKind(file) !== null) return false;
   if (NO_UI_TEXT.test(file) || FONT_NOTICE.test(file)) return false;
   return true;

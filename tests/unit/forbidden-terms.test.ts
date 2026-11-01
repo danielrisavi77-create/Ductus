@@ -1867,6 +1867,15 @@ describe("source files the scan does not read", () => {
     write("app/site.webmanifest.txt", "Sumnjivo\n");
     write("src/node_modules/pkg/index.ts", "export const x = \"Sumnjivo\";\n");
     write("src/.next/chunk.js", "x;\n");
+    // QA of #1166 (c.6557762902): an integration test under src/ is collected
+    // by no runner (unit excludes it, integration reads only tests/integration).
+    write("src/lib/banner.integration.test.ts", "export const x = \"Sumnjivo\";\n");
+    // Collected: a unit test and a property test under src/ are not reported.
+    write("src/lib/ok.test.ts", "export const x = 1;\n");
+    write("src/lib/ok.property.test.ts", "export const x = 1;\n");
+    // A module with .test. or .spec. inside its name is read like any module.
+    write("src/components/Banner.test.helper.tsx", "export const B = () => <p>Dobro došli</p>;\n");
+    write("src/lib/spec.helpers.ts", "export const x = 1;\n");
     expect(findUnreadSourceFiles(root)).toEqual([
       "app/flag.test.ts",
       "app/fonts/README.txt",
@@ -1876,6 +1885,7 @@ describe("source files the scan does not read", () => {
       "src/.next/chunk.js",
       "src/components/Banner.spec.tsx",
       "src/components/Banner.test.tsx",
+      "src/lib/banner.integration.test.ts",
       "src/lib/notes.md",
       "src/lib/strings.yaml",
       "src/lib/x.spec.ts",
