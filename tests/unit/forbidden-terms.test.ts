@@ -1903,6 +1903,29 @@ describe("source files the scan does not read", () => {
     expect(findUnreadSourceFiles(root)).toEqual(["src/.integration.test.ts"]);
   });
 
+  // Review c.6560765960 of #1166: the unit project skips everything inside a
+  // directory named like a property or integration test, and only a property
+  // test there is collected (by the property project).
+  it("reports a unit test inside a directory the unit project skips", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("src/group.integration.test.ts/banner.test.ts", "export const x = \"Sumnjivo\";\n");
+    write("src/group.property.test.ts/banner.test.ts", "export const x = \"Sumnjivo\";\n");
+    write("src/group.integration.test.ts/ok.property.test.ts", "export {};\n");
+    write("src/group.property.test.ts/ok.property.test.ts", "export {};\n");
+    write("src/group.test.ts/ok.test.ts", "export {};\n");
+    expect(findUnreadSourceFiles(root)).toEqual([
+      "src/group.integration.test.ts/banner.test.ts",
+      "src/group.property.test.ts/banner.test.ts",
+    ]);
+  });
+
+  // QA c.6560837365 of #1166: next/font/local takes TTF, OTF and EOT as well.
+  it("does not report a font in any format next/font/local takes", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    for (const ext of ["woff", "woff2", "ttf", "otf", "eot"]) write(`app/fonts/Regular.${ext}`, "\u0000\u0001\u0000\u0000");
+    expect(findUnreadSourceFiles(root)).toEqual([]);
+  });
+
   // QA c.6558759318 of #1166: the scan does not look behind a link, so a link
   // under app/ or src/ is reported whatever its name says.
   it("reports a link under app/ or src/, to a directory or to a file", () => {

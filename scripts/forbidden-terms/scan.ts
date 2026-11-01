@@ -1024,13 +1024,25 @@ function* everyFile(root: string): Generator<{ file: string; link: boolean }> {
 // "src/**/*.test.ts", the property project included). The unit project
 // excludes "**/*.integration.test.ts" and the integration project reads only
 // tests/integration, so an integration test under src/ is collected by none.
-// Any other test-named file there is an ordinary module that nothing runs and
-// the scan skips.
+// The unit project also skips every file inside a directory whose name
+// matches one of its excludes, while the property project reads a property
+// test wherever it is (review c.6560765960 of #1166, checked with
+// `vitest list --filesOnly`). Any other test-named file there is an ordinary
+// module that nothing runs and the scan skips.
 const COLLECTED_TEST = /^src\/(?:.+\/)?[^/]*\.test\.ts$/;
 const UNCOLLECTED_TEST = /\.integration\.test\.ts$/;
+const PROPERTY_TEST = /\.property\.test\.ts$/;
+const UNIT_EXCLUDED_DIR = /\.(?:property|integration)\.test\.ts$/;
+
+/** True when a runner collects the test-named file `file` under `app/` or `src/`. */
+function isCollectedTest(file: string): boolean {
+  if (!COLLECTED_TEST.test(file) || UNCOLLECTED_TEST.test(file)) return false;
+  return PROPERTY_TEST.test(file) || !file.split("/").slice(0, -1).some((dir) => UNIT_EXCLUDED_DIR.test(dir));
+}
 // Files that hold no interface text: style sheets, data that a module imports
-// (read through that import), declarations, and binary fonts and images.
-const NO_UI_TEXT = /\.(?:css|json|d\.[cm]?ts|woff2?|ico|png|jpe?g|gif|webp|avif)$/;
+// (read through that import), declarations, and binary fonts and images. The
+// fonts are every format next/font/local takes (QA c.6560837365 of #1166).
+const NO_UI_TEXT = /\.(?:css|json|d\.[cm]?ts|woff2?|ttf|otf|eot|ico|png|jpe?g|gif|webp|avif)$/;
 // The font licences and their source note, shipped with the fonts as they are.
 const FONT_NOTICE = /^app\/fonts\/(?:OFL-[A-Za-z]+\.txt|SOURCE\.md)$/;
 
@@ -1040,7 +1052,7 @@ function isUnread(file: string): boolean {
   const name = file.slice(file.lastIndexOf("/") + 1);
   // The same test-file pattern `sourceFiles` skips by: a module with `.test.`
   // or `.spec.` only inside its name is read like any other module.
-  if (TEST_FILE.test(name)) return !COLLECTED_TEST.test(file) || UNCOLLECTED_TEST.test(file);
+  if (TEST_FILE.test(name)) return !isCollectedTest(file);
   if (isCode(file) || scanKind(file) !== null) return false;
   if (NO_UI_TEXT.test(file) || FONT_NOTICE.test(file)) return false;
   return true;
