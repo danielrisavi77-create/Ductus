@@ -104,6 +104,14 @@ test("a review that looks like it carries a credential is never posted", () => {
   for (const fine of ["Review-Verdict: PASS", "token budget", "src/server/auth/session.ts:12"]) assert.ok(!secretRe.test(fine), fine);
 });
 
+test("every level runs at effort high, critical included (D-192, #87 c.6549030612 item 4)", () => {
+  const tiers = src.slice(at("$tiers = @{"), at("$tier = if"));
+  assert.match(tiers, /light\s+= @\{ Model = 'gpt-6\.1-terra';\s+Effort = 'high' \}/);
+  assert.match(tiers, /standard\s+= @\{ Model = 'gpt-6\.1-sol';\s+Effort = 'high' \}/);
+  assert.match(tiers, /critical\s+= @\{ Model = 'gpt-6\.1-sol';\s+Effort = 'high' \}/);
+  assert.doesNotMatch(tiers, /ultra|xhigh|max/);
+});
+
 test("the review scripts are D-97 paths", () => {
   for (const p of ["scripts/codex-review.ps1", "scripts/grok-review.ps1"]) {
     assert.ok(D97_PATHS.includes(p), p);
