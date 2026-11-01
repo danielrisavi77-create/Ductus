@@ -23,7 +23,7 @@ import { readBase, readMigrations } from "./migrations-ledger.mjs";
 export const SQUAWK = Object.freeze({
   version: "2.70.0",
   asset: "squawk-linux-x64",
-  sha256: "836ba2ab0c0ec30ae02c9f2cec065b341ff853765ceaa3965c22109c2f53eb1c",
+  sha256: "836ba2ab0c0ec30ae02c9f2cec065b341ff853765ceaa3965c22109c2f53eb10",
 });
 // The major version of DUCTUS_POSTGRES_IMAGE in ci.yml (a test compares them).
 export const PG_VERSION = "17.0";
