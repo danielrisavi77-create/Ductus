@@ -438,6 +438,9 @@ function evaluateGateCore({
   headSha,
   ownerLogin,
   comments = [],
+  // F-013: every comment, also from before the last base change, for the
+  // D-139 rule that a QA session never reviewed this PR. Defaults to comments.
+  historyComments = null,
   prReviews = [],
   reviewComments = null,
   authorLogin = null,
@@ -614,7 +617,7 @@ function evaluateGateCore({
     // answered. The QA head is the current head or one carried through clean
     // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
     // does not void it.
-    const everReviewers = reviewerPrincipals(trusted);
+    const everReviewers = reviewerPrincipals(historyComments ? trustedComments(historyComments, trustedLogins, ownerLogin) : trusted);
     const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
     const secondSession = separateAppPass || fallbackPass
       ? null
@@ -939,7 +942,7 @@ export function evaluateMergeAuthorization({
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
 
-export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -964,6 +967,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
     headSha: pr.head.sha,
     ownerLogin,
     comments,
+    historyComments,
     prReviews,
     reviewComments,
     authorLogin: pr.user?.login ?? null,

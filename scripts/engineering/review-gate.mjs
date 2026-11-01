@@ -111,6 +111,7 @@ async function main() {
     pr,
     files: changedFiles,
     comments,
+    historyComments: allComments,
     prReviews: reviews,
     reviewComments,
     ownerLogin: owner,
