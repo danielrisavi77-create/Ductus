@@ -183,6 +183,20 @@ export async function signInAccount(browser, db, account, origins = [APP, OIDC],
   }
 }
 
+/**
+ * Where a demo logout may send the browser: home, or the fake provider's
+ * end_session with exactly the client and the home page as the way back
+ * (DAN-212, RP-initiated logout).
+ */
+export function isLogoutLocation(location, origins = [APP, OIDC]) {
+  if (location === `${origins[0]}/`) return true;
+  let url;
+  try { url = new URL(location ?? ""); } catch { return false; }
+  const params = [...url.searchParams];
+  return url.origin === origins[1] && url.pathname === "/session/end" && !url.hash && params.length === 2 &&
+    url.searchParams.get("post_logout_redirect_uri") === `${origins[0]}/` && url.searchParams.get("client_id") === "ductus-local";
+}
+
 export async function closeSession(state, db, origins = [APP, OIDC]) {
   if (state.closed) return;
   try {
@@ -196,7 +210,7 @@ export async function closeSession(state, db, origins = [APP, OIDC]) {
       const response = await state.context.request.post(`${origins[0]}/api/auth/logout`, {
         headers: { origin: origins[0] }, maxRedirects: 0, timeout: 10_000,
       });
-      if (response.status() !== 303 || response.headers().location !== `${origins[0]}/`) fail("Demo logout failed.");
+      if (response.status() !== 303 || !isLogoutLocation(response.headers().location, origins)) fail("Demo logout failed.");
       const rows = await db.session(state.tokenHash);
       if (rows.length !== 1 || !rows[0].closed_at || rows[0].close_reason !== "logout") fail("Demo session remains open after logout.");
     }

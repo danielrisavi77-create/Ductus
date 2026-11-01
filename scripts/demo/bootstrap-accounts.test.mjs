@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "@playwright/test";
 
-import { assertLocalUrl, bootstrap, localResponse, verifyLocalCompose } from "./bootstrap-accounts.mjs";
+import { assertLocalUrl, bootstrap, isLogoutLocation, localResponse, verifyLocalCompose } from "./bootstrap-accounts.mjs";
 
 const servers = [];
 after(async () => { for (const server of servers) await new Promise((done) => server.close(done)); });
@@ -32,6 +32,21 @@ test("the HTTP preflight never follows a redirect outside its two local origins"
   withUserinfo.password = "synthetic-password";
   assert.throws(() => assertLocalUrl(withUserinfo.href));
   await assert.rejects(localResponse(target, fetch, [target, other]), /two fixed localhost origins/);
+});
+
+test("a demo logout ends at home or at the fake provider's end_session, nowhere else (DAN-212)", () => {
+  const end = "http://localhost:8090/session/end";
+  const back = encodeURIComponent("http://localhost:3000/");
+  assert.equal(isLogoutLocation("http://localhost:3000/"), true);
+  assert.equal(isLogoutLocation(`${end}?post_logout_redirect_uri=${back}&client_id=ductus-local`), true);
+  for (const location of [
+    undefined, "", "/", "http://localhost:3000/rad", "https://outside.example/session/end",
+    `http://localhost:3001/session/end?post_logout_redirect_uri=${back}&client_id=ductus-local`,
+    `${end}?post_logout_redirect_uri=${encodeURIComponent("https://outside.example/")}&client_id=ductus-local`,
+    `${end}?post_logout_redirect_uri=${back}&client_id=other`,
+    `${end}?post_logout_redirect_uri=${back}&client_id=ductus-local&id_token_hint=x`,
+    `${end}?post_logout_redirect_uri=${back}&client_id=ductus-local#x`,
+  ]) assert.equal(isLogoutLocation(location), false, String(location));
 });
 
 test("the Docker preflight refuses a remote context and foreign or public containers", () => {
