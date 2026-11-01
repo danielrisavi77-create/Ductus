@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
 import { commandOnHead, parseArgs, patchId } from "./merge-loop.mjs";
 import { commandProblem, EXIT, newMemory, ownerCommandText, step, unfilled, zagrebDate } from "./merge-loop-core.mjs";
+import { evaluateMergeReady } from "./merge-ready-core.mjs";
 
 const H1 = "1".repeat(40);
 const H2 = "2".repeat(40);
@@ -137,6 +138,25 @@ test("CLI: patch-id is git diff merge-base..head through git patch-id --stable; 
   assert.equal(calls[3][1], "diff --git a/x b/x\n", "the diff is piped into patch-id");
   assert.equal(patchId(1041, H1, () => { throw new Error("fetch failed"); }), null);
   assert.equal(patchId(1041, H1, (args) => (args[0] === "patch-id" ? "" : `${H2}\n`)), null, "an empty diff has no patch-id");
+});
+
+test("#1162/#1182: a queue posted before the owner's command does not stop the Owner-Command (real evaluateMergeReady)", () => {
+  // "@Mergifyio queue" came first, so Mergify Merge Queue is pending; everything else waits only for the owner.
+  const ACTIONS = 15368;
+  const names = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"];
+  const run = (name, appId, appSlug, status, conclusion) => ({ workflowName: name, name, appId, appSlug, status, conclusion, startedAt: "2026-11-01T10:00:00Z" });
+  const rollup = [...names.map((n) => run(n, ACTIONS, "github-actions", "COMPLETED", "SUCCESS")), run("Mergify Merge Queue", 10562, "mergify", "IN_PROGRESS", "")];
+  const result = evaluateMergeReady({
+    pr: { number: 1162, state: "OPEN", isDraft: false, headRefOid: H1, baseRefName: "main", mergeable: "MERGEABLE" },
+    mergeState: "BLOCKED",
+    gate: { state: "success", description: "Review PASS and QA PASS." },
+    authorization: { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." },
+    rollup,
+    required: names.map((context) => ({ context, appId: ACTIONS })),
+    threads: { count: 0, authors: [] },
+  });
+  assert.equal(result.state, "WAITS_OWNER", result.reason);
+  assert.equal(step(mem(), obs({ readiness: result })).action, "post-command");
 });
 
 test("every exit code is distinct", () => {
