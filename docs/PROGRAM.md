@@ -91,7 +91,8 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 - Val 1 prema tablici niže: 56 do 74 bez backend dodatka; s dodatkom od 18 do 25 večeri (`docs/BACKEND.md` §8) **74 do 99**.
 - Val 2 prema tablici niže: **28 do 38**.
 - Val 1 i val 2 zajedno: **102 do 137**, naspram oko 130 nominalnih večeri do 22. 2. 2027. Raniji tekst navodio je 94 do 124, a tablice bez backend dodatka davale su 84 do 112.
-- Do kontrolne točke 15. 12. 2026. ima oko 75 nominalnih večeri; val 1 bez M11 (5 do 6) traži **69 do 93**.
+- **Nakon D-203 (1. 11. 2026., NEPROVJERENO):** val 1 **84 do 113**, val 2 **19 do 28**, zajedno **103 do 141**, sve bez M9 i uz neprocijenjeni V11. Zbrojevi iznad ostaju kao zapis D-99.
+- Do kontrolne točke 15. 12. 2026. (povijesno; zamijenjena točkom 20. 12. 2026., D-203 t. 5) ima oko 75 nominalnih večeri; val 1 bez M11 (5 do 6) traži **69 do 93**.
 - Faktor prekoračenja: M0 je procijenjen na 2 do 3 večeri, a 10. 10. 2026. `STATE.md` ga i dalje vodi kao trenutnu fazu. Na svakoj kontrolnoj točki zapisuju se stvarno utrošene jedinice po fazi i iz njih se izvodi faktor prekoračenja, umjesto pretpostavljenih 40 % s kojima računa tablica kapaciteta gore.
 - **Otvoreno pitanje: sastav backend dodatka (riješiti prije provjere 16. 11. 2026.).** Dodatak od 18 do 25 večeri nije razložen po koracima ni po fazama. Retci s procjenom u `docs/BACKEND.md` §8 zajedno daju 26 do 39 večeri. Među njima je B5 (4 do 5), koji ima i vlastiti redak u valu 2, i B9 (3 do 4), koji pripada M11. Ako dodatak sadrži B5, zbroj 102 do 137 broji ga dvaput; ako sadrži B9, "val 1 bez M11" (69 do 93) sadrži dio M11. Brojke 74 do 99, 102 do 137 i 69 do 93 prihvaćene su u D-99 i ovdje se ne mijenjaju, ali ovise o ovom pitanju.
 
@@ -115,7 +116,7 @@ Prema D-203 (ODLUČENO 1. 11. 2026.) val 1 dobiva i: izvoz DOCX, PDF i PDF/A (A3
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
 | Backend dodatak | Okomiti rez kroz faze vala 1 prema `docs/BACKEND.md` §8 (D-99) | 18 do 25 |
 | **Ukupno** | | **74 do 99** |
-| M6 nastavničke izmjene (D-203 B1) | Prijedlog koji primjenjuje studentov klijent, jedan pisac (D-34): ovlasti, pripisivanje, povijest, prikaz, scenariji sukoba i neuspjeha | 3 do 4, NEPROVJERENO |
+| M6 nastavničke izmjene (D-203 B1) | Prijedlog koji primjenjuje studentov klijent, jedan pisac (D-34): ovlasti, pripisivanje, povijest, prikaz, scenariji sukoba i neuspjeha; dijelom se preklapa s „prijedlozima” u retku M6 osnovno | 3 do 4, NEPROVJERENO |
 | M8 izvoz (D-203 A3) | Izvoz DOCX, PDF i PDF/A; provjera oblika FPZG-a kad stigne licenca Lekte (t. 2) | 3 do 5, NEPROVJERENO |
 | B5 (D-203 C2) | Dnevni korijen i žig, CLI verifikator (D-72), seli iz vala 2 | 4 do 5 |
 | Shema v2 i V11 vala 1 (D-201, D-203 t. 6) | Proširenje kanonske sheme (DAN-453) i funkcije V11 za osnovni editor, komentare, D-34 i izvoz | nije procijenjeno |
@@ -126,12 +127,12 @@ Prema D-203 (ODLUČENO 1. 11. 2026.) val 1 dobiva i: izvoz DOCX, PDF i PDF/A (A3
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
 | M5 ostatak | Fusnote, tablice, slike, pozivi na prikaze | 5 do 7 |
-| M6 ostatak | Izravne izmjene (D-21; tok po D-34 seli u val 1, D-203 B1), zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | 8 do 11 |
+| M6 ostatak | Zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05); izravne izmjene (D-21) po toku D-34 sele u val 1 (D-203 B1) | 5 do 8, NEPROVJERENO (prije D-203: 8 do 11) |
 | M7 ostatak | Karta podrijetla (D-57), otvorena mjesta (D-61), pravila zadatka i kontrolni popis (D-62) | 5 do 7 |
 | M8 | Uvoz DOCX-a; izvoz seli u val 1 (D-203 A3) | 2 do 3, NEPROVJERENO |
 | Izjava o vanjskom AI-ju | Ispis razgovora iz vanjskog alata uz izjavu po čl. 15, kao izjavljeno (D-77) | 2 do 3 |
 | B5 | Seli u val 1 (D-203 C2) | 0 |
-| **Ukupno** | | **22 do 31** (prije D-203: 28 do 38) |
+| **Ukupno** | | **19 do 28** (prije D-203: 28 do 38) |
 
 Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad. M9 ide u val 1 (D-199 t. 1), pa zbroj vala 1 i oba vala zajedno bez M9 podcjenjuje potreban rad.
 
@@ -155,7 +156,7 @@ Zamjenjuje kontrolnu točku 15. 12. 2026. (D-203 t. 5). Kontrolne točke 30. 11.
 - **Ako ne stane, ništa se ne reže samo.** Orkestrator vlasniku predaje 2 do 3 varijante, a vlasnik bira (D-203 t. 1). Isto vrijedi na kontrolnim točkama 30. 11. 2026. i 15. 1. 2027. Rezovi iz popisa niže mogući su sadržaj varijante, ne okidač. Rez 1 (prijedlozi u val 2) proturječi B1, pa varijanta koja ga sadrži mora izričito navesti da mijenja B1.
 - Puna tehnička proba nakon 22. 2. 2027. ne skraćuje se radi datuma (E3).
 
-**Kapacitet nakon D-203, NEPROVJERENO.** D-199 t. 6 računa val 1 s M9, dijelom M8 iz D-198 i AI dijelom izjave na oko 93 do 126 nominalnih jedinica. D-203 dodaje B5 (4 do 5), izvoz M8 (3 do 5) i nastavničke izmjene po D-34 (3 do 4), dakle oko **103 do 140**, uz neprocijenjenu shemu v2 i funkcije V11 vala 1. Stari model (10 jedinica tjedno, 14 radnih tjedana od 2. 11. 2026. do 22. 2. 2027., prekoračenje 40 %) daje oko 100. Opseg ne stane ni na donjoj granici. Ako backend dodatak već sadrži B5 (otvoreno pitanje iz „Provjera zbroja”), raspon je oko 99 do 135, što uz neprocijenjeni V11 također ne stane. Stvarna brzina rada agenata još nije izmjerena (D-199 t. 6). Opseg se ne reže; vlasnik bira varijantu (D-203 t. 1), a prve varijante su u opisu PR-a koji je upisao D-203.
+**Kapacitet nakon D-203, NEPROVJERENO.** D-199 t. 6 računa val 1 s M9, dijelom M8 iz D-198 i AI dijelom izjave na oko 93 do 126 nominalnih jedinica. D-203 dodaje B5 (4 do 5), izvoz M8 (3 do 5) i nastavničke izmjene po D-34 (3 do 4), dakle oko **103 do 140**, uz neprocijenjenu shemu v2 i funkcije V11 vala 1. Stari model (10 jedinica tjedno, 14 radnih tjedana od 2. 11. 2026. do 22. 2. 2027., prekoračenje 40 %) daje oko 100. Opseg ne stane ni na donjoj granici. Ako backend dodatak već sadrži B5 (otvoreno pitanje iz „Provjera zbroja”), raspon je oko 99 do 135, što uz neprocijenjeni V11 također ne stane. Isto vrijedi ako je redak D-34 potpuno sadržan u „prijedlozima” iz M6 osnovno: tada je raspon oko 100 do 136. Stvarna brzina rada agenata još nije izmjerena (D-199 t. 6). Opseg se ne reže; vlasnik bira varijantu (D-203 t. 1), a prve varijante su u opisu PR-a koji je upisao D-203.
 
 ### Kontrolna točka 15. 12. 2026.
 
