@@ -897,14 +897,31 @@ export function lastBaseChange(events) {
   return last;
 }
 
-/** Items stamped strictly after the cutoff; an unreadable stamp drops the item once a cutoff exists. */
-export function sinceBaseChange(items, cutoff, stamp = "created_at") {
+/**
+ * Items stamped strictly after the cutoff; an unreadable stamp drops the item
+ * once a cutoff exists. With `codexEdits`, a Codex App review summary that was
+ * created earlier but edited after the cutoff is kept too: Codex edits one
+ * summary in place, and that summary is no verdict (only its head-bound clean
+ * state counts as Codex evidence, D-139), so keeping it never revives an old
+ * verdict and it can only void quota evidence (Codex r4434170872).
+ */
+export function sinceBaseChange(items, cutoff, stamp = "created_at", { codexEdits = false } = {}) {
   const list = Array.isArray(items) ? items : [];
   if (cutoff === -Infinity) return list;
-  return list.filter((item) => {
-    const at = Date.parse(item?.[stamp] ?? "");
+  const after = (value) => {
+    const at = Date.parse(value ?? "");
     return Number.isFinite(at) && at > cutoff;
-  });
+  };
+  return list.filter(
+    (item) =>
+      after(item?.[stamp]) ||
+      (codexEdits &&
+        isCodexBot(item?.user) &&
+        item?.performed_via_github_app?.slug === CODEX_APP_SLUG &&
+        typeof item?.body === "string" &&
+        item.body.startsWith(CODEX_SUMMARY_MARKER) &&
+        after(item?.updated_at)),
+  );
 }
 
 // F-165: Auto-merge eligible is refused while another open PR shares the head;

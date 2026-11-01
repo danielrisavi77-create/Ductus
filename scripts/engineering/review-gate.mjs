@@ -114,7 +114,7 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/issues/${number}/events`),
   ]);
   const cutoff = lastBaseChange(issueEvents);
-  const comments = sinceBaseChange(allComments, cutoff);
+  const comments = sinceBaseChange(allComments, cutoff, "created_at", { codexEdits: true });
   const reviews = sinceBaseChange(allReviews, cutoff, "submitted_at");
   if (!targetsDefaultBranch(pr)) {
     // F-014: another open PR on this head owns its statuses; a pending marker
