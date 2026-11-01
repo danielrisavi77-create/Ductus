@@ -184,7 +184,7 @@ Pravila:
     - popis dopuštenih alata drži poslužitelj po zadatku; zahtjev klijenta ga ne proširuje, a zahtjev s alatom izvan popisa se odbija;
     - nema odlaznog dohvaćanja adrese koju bira model ili koja dolazi iz teksta rada ili uvezene datoteke; izvršavanje koda je bez mrežnog pristupa;
     - rezultat alata je nepouzdan podatak kao tekst rada: šalje se omeđen, s ograničenjem veličine, i nikad ne mijenja pravila zadatka ni upute.
-    - PRIJEDLOG izvedbe, do potvrde vlasnika: alati su po zadanom isključeni i uključuje ih nastavnik po zadatku, kao namjene razine 2 iz D-64.
+    - **Odlučeno 1. 11. 2026. (Daniel; https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6551403710):** alati su po zadanom isključeni, a nastavnik ih uključuje za svaki zadatak posebno, kao namjene razine 2 iz D-64. Pravila iznad vrijede i kad je alat uključen.
     - Testovi: podmetnuta uputa u uvezenom DOCX-u ne uključuje alat i ne izaziva odlazni dohvat; alat koji zadatak ne dopušta se odbija; rezultat alata iznad granice veličine se reže.
 - Uvoz DOCX i PDF: parsira se **u pregledniku ili u izoliranom poslu** s ograničenjem veličine i vremena (zip bombe, XXE), nikad u web procesu.
 
