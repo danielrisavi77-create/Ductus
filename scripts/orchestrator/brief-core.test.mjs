@@ -108,7 +108,7 @@ test("brief: a complete backend brief has every template line and the real owner
     "Lokalne provjere prije pusha", "Plan napada", "Privremene datoteke", "Ovisi o",
   ]);
   assert.ok(r.text.includes(ownership.backend));
-  assert.ok(r.text.includes(PLAN_URL));
+  assert.ok(r.text.split("\n").includes(`Plan napada: ${PLAN_URL}`));
   assert.ok(r.text.includes(TEMP_DECISION_URL));
   assert.match(r.text, /pisac-backend\.md/);
   assert.match(r.text, /docs\/BACKEND\.md §6/);
