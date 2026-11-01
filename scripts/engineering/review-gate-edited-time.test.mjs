@@ -55,9 +55,12 @@ test("a fallback QA created inside the window and edited outside it does not pas
   assert.equal(result.state, "pending");
 });
 
-test("an edit inside the window keeps the fallback valid (#129)", () => {
+// F-012 (owner decision 1. 11. 2026.) replaces the #129 case "an edit inside
+// the window keeps the fallback valid": an edited PASS never counts, inside the
+// window or not. The unedited control above still passes.
+test("an edited fallback QA PASS does not pass, even inside the window (F-012)", () => {
   const result = evaluate([codexQuota(0), review("claude:b:reviewer", "PASS", HOUR), fallbackQa(60_000, 2 * HOUR)]);
-  assert.equal(result.state, "success");
+  assert.equal(result.state, "pending");
 });
 
 test("the newest verdict of a principal is the one edited last (#129)", () => {
@@ -73,4 +76,46 @@ test("the newest verdict of a principal is the one edited last (#129)", () => {
 test("a comment without updated_at keeps its created_at (#129)", () => {
   const result = evaluate([review("claude:b:reviewer", "PASS", HOUR)], "standard");
   assert.equal(result.state, "success");
+});
+
+// F-012: the App is fixed when a comment is created, its text is not. An edited
+// comment never gives a PASS; an edited FAIL or BLOCK still holds.
+test("an edited review PASS does not count; the same comment unedited does (F-012)", () => {
+  assert.equal(evaluate([review("claude:b:reviewer", "PASS", HOUR)], "standard").state, "success");
+  assert.equal(evaluate([review("claude:b:reviewer", "PASS", HOUR, HOUR)], "standard").state, "success");
+  assert.equal(evaluate([review("claude:b:reviewer", "PASS", HOUR, HOUR + 1)], "standard").state, "pending");
+  assert.equal(evaluate([review("claude:b:reviewer", "PASS", HOUR, 5 * HOUR)], "standard").state, "pending");
+});
+
+test("an edited PASS does not lift an earlier FAIL of the same principal (F-012)", () => {
+  const result = evaluate(
+    [review("claude:b:reviewer", "FAIL", HOUR), review("claude:b:reviewer", "PASS", 2 * HOUR, 3 * HOUR)],
+    "standard",
+  );
+  assert.equal(result.state, "pending");
+});
+
+test("an edited FAIL or BLOCK still blocks (F-012)", () => {
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    const result = evaluate(
+      [review("claude:b:reviewer", "PASS", HOUR), review("claude:c:reviewer", verdict, 2 * HOUR, 3 * HOUR)],
+      "standard",
+    );
+    assert.notEqual(result.state, "success", verdict);
+  }
+});
+
+test("an edited QA PASS on a critical PR leaves the gate pending (F-012)", () => {
+  const qa = (updatedMs) =>
+    byOwner(`QA-Agent: codex:q:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: synthetic\n`, 2 * HOUR, updatedMs);
+  const codexApp = (c) => ({ ...c, performed_via_github_app: { slug: "chatgpt-codex-connector" } });
+  assert.equal(evaluate([review("claude:b:reviewer", "PASS", HOUR), codexApp(qa(2 * HOUR))]).state, "success");
+  assert.equal(evaluate([review("claude:b:reviewer", "PASS", HOUR), codexApp(qa(4 * HOUR))]).state, "pending");
+});
+
+test("an edit time without a readable creation time counts as an edit (F-012)", () => {
+  const noCreated = { ...review("claude:b:reviewer", "PASS", HOUR), created_at: "garbage", updated_at: iso(5 * HOUR) };
+  assert.equal(evaluate([noCreated], "standard").state, "pending");
+  // No edit time at all keeps the creation time (#129) and counts.
+  assert.equal(evaluate([review("claude:b:reviewer", "PASS", HOUR)], "standard").state, "success");
 });

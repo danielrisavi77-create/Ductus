@@ -162,9 +162,22 @@ function trustedComments(items, logins, ownerLogin = null) {
       appSlug: commentAppSlug(item, ownerLogin),
       cliChannel: cliChannel(item, ownerLogin),
       createdAt: commentTime(item) || index,
+      edited: wasEdited(item),
       index,
     }))
     .filter((entry) => entry.body);
+}
+
+// F-012: the App a comment was posted through is fixed at creation, while its
+// text can be changed later by any session holding the author's token. A
+// comment whose last edit is later than its creation therefore never gives a
+// PASS; a FAIL or BLOCK still holds, so an edit can only keep a PR waiting.
+function wasEdited(item) {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  // Fails closed: an edit time without a readable creation time is an edit.
+  if (Number.isNaN(updated)) return false;
+  return Number.isNaN(created) || updated > created;
 }
 
 // Evidence holds only while the exhausted App shows nothing else (#128): a
@@ -371,7 +384,8 @@ function latestVerdicts(entries, {
       !(sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) ||
       !verdict ||
       !VERDICTS.has(verdict) ||
-      (extraField && !extra)
+      (extraField && !extra) ||
+      (entry.edited && verdict === "PASS")
     ) {
       continue;
     }
