@@ -217,5 +217,15 @@ export async function logout(request: Request, deps: AuthDeps): Promise<Response
       logFailure("logout", errorCode(error));
     }
   }
-  return redirect(new URL(DEFAULT_RETURN_TO, deps.config.redirectUri.origin).href, [clearedSession]);
+  // Only then the provider (DAN-212), also without a live Ductus session: the
+  // provider's own may still be open (D-200 P2). Without an endpoint, or when
+  // the provider fails, the local logout stands and "/" follows as before.
+  let location = new URL(DEFAULT_RETURN_TO, deps.config.redirectUri.origin).href;
+  try {
+    const endSession = await deps.oidc.endSessionUrl();
+    if (endSession) location = endSession.href;
+  } catch (error) {
+    logFailure("end_session", errorCode(error));
+  }
+  return redirect(location, [clearedSession]);
 }
