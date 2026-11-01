@@ -262,6 +262,50 @@ test("T7 a deadline spent during the control probe blocks the install command to
   withTree({ bin: "silent" }, (tree) => assert.equal(run(tree, "Bash", "pnpm install").code, 0));
 });
 
+// Review and QA on #1194 (c1d5c9e3): a remembered probe returned success after the deadline,
+// and the configuration read's own time limit went through the install way out.
+test("T8 a deadline spent while the remembered probe is read blocks, it never passes", () => {
+  for (const command of ["git status", ...INSTALLS]) {
+    withTree({ bin: "allow" }, (tree) => {
+      assert.equal(run(tree, "Bash", command).code, 0, "warm-up remembers the probe");
+      const before = fs.readFileSync(tree.calls, "utf8");
+      const realNow = Date.now;
+      // Everything inside the probe runs on time; once it returned (the remembered verdict), the deadline is past.
+      Date.now = () => {
+        const ranAgain = fs.readFileSync(tree.calls, "utf8").length > before.length;
+        return realNow() + (ranAgain && !/\bat probe\b/.test(new Error().stack) ? 600000 : 0);
+      };
+      let result;
+      try {
+        result = decide({ root: tree.root, input: event("Bash", command), deadline: Date.now() + 60000 });
+      } finally {
+        Date.now = realNow;
+      }
+      assert.equal(fs.readFileSync(tree.calls, "utf8"), `${before}x`, "the probe was remembered, not run again");
+      assert.equal(result.code, 2, `${command}: ${result.stderr}`);
+      assert.equal(result.stdout, "", command);
+      assert.match(result.stderr, /ran out of time at the control probe/, command);
+    });
+  }
+});
+
+test("T9 the configuration read running out of its own time blocks the install command too", () => {
+  for (const command of INSTALLS) {
+    withTree({ bin: "allow" }, (tree) => {
+      // maxMs -1: the configuration read is over its own time at once, the overall deadline is far.
+      const result = decide({ root: tree.root, input: event("Bash", command), limits: { maxMs: -1 }, deadline: Date.now() + 60000 });
+      assert.equal(result.code, 2, `${command}: ${result.stderr}`);
+      assert.equal(result.stdout, "", command);
+      assert.match(result.stderr, /too large or too slow to read \(more than -1 ms\)/, command);
+      assert.match(result.stderr, /--body-file/, command);
+    });
+  }
+  // A configuration that is too large (not slow) still leaves the install way out open, as before.
+  withTree({ bin: "allow" }, (tree) => {
+    assert.equal(decide({ root: tree.root, input: event("Bash", "pnpm install"), limits: { maxEntries: 0 }, deadline: Date.now() + 60000 }).code, 0);
+  });
+});
+
 test("T5 real package: a routine command passes far inside the budget once the probe is remembered", { timeout: 60000 }, async () => {
   const { ANALYSIS_TIMEOUT_MS } = await import("../hooks/safety-net.mjs");
   assert.equal(decide({ input: event("Bash", "git status") }).code, 0, "warm-up (probe)");

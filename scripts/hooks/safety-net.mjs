@@ -94,6 +94,8 @@ const fingerprint = (file) => {
 // of being read to the end. A caller that gets the error must block.
 export const DEFAULT_LIMITS = { maxEntries: 5000, maxBytes: 8 * 1024 * 1024, maxMs: 5000 };
 export class LimitError extends Error {}
+// The walk ran out of its time (its own maxMs or the overall deadline): slow, not too large.
+export class TimeLimitError extends LimitError {}
 // `cap` is the wrapper's overall deadline: the walk never outlives it.
 export const newBudget = (limits = DEFAULT_LIMITS, cap = Infinity) => ({
   ...DEFAULT_LIMITS,
@@ -111,7 +113,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
   }
   const check = () => {
     if (++budget.entries > budget.maxEntries) throw new LimitError(`more than ${budget.maxEntries} entries`);
-    if (Date.now() > budget.deadline) throw new LimitError(`more than ${budget.maxMs} ms`);
+    if (Date.now() > budget.deadline) throw new TimeLimitError(`more than ${budget.maxMs} ms`);
   };
   const hash = createHash("sha256");
   const seen = new Set();
@@ -341,11 +343,10 @@ function probe(root, rulebookDir, deadline, env, limits) {
     key = stateKey(root, rulebookDir, env, limits, deadline);
   } catch (error) {
     if (!(error instanceof LimitError)) throw error;
-    if (deadline - Date.now() <= 0) return timedOut("the safety check ran out of time reading the configuration for the control probe");
-    return failure(
-      `the safety check cannot verify the configuration it depends on: .cc-safety-net under ${rulebookDir} or the user's .cc-safety-net is too large or too slow to read (${error.message}), for example a link to a big directory or file`,
-      "Remove or shrink what the links in those directories point to, then retry",
-    );
+    const problem = `the safety check cannot verify the configuration it depends on: .cc-safety-net under ${rulebookDir} or the user's .cc-safety-net is too large or too slow to read (${error.message}), for example a link to a big directory or file`;
+    // Out of its own time (or the overall deadline): a time-out, so the install way out stays shut.
+    if (error instanceof TimeLimitError || deadline - Date.now() <= 0) return { ...timedOut(problem), hint: `Remove or shrink what the links in those directories point to, then retry. ${SLOW_HINT} ${RECOVERY}` };
+    return failure(problem, "Remove or shrink what the links in those directories point to, then retry");
   }
   const dir = markDir();
   if (dir && hasVerdict(dir, key)) return null;
@@ -480,6 +481,8 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   const refused = probe(root, rulebookDir, deadline, env, limits);
   if (refused?.timedOut) return blockedFor(refused.problem, refused.hint);
   if (refused) return unusable(refused.problem, refused.hint);
+  // A remembered probe or a configuration read can end past the deadline: that is a time-out too.
+  if (deadline - Date.now() <= 0) return outOfTime("at the control probe");
 
   // Run 2: in a subdirectory the project rules live in a parent the package does not search.
   if (rulebookDir !== cwd && !denies(first.stdout)) {
