@@ -1,4 +1,4 @@
-﻿// F-033 (DAN-166): every repo script that an agent hook (.claude/settings.json)
+// F-033 (DAN-166): every repo script that an agent hook (.claude/settings.json)
 // or a git hook (lefthook.yml) names, and every module those scripts load by a
 // relative path, must be a D-97 path. Such code runs in every session,
 // including the owner's, so a change to it needs the owner's merge command.
@@ -8,6 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isD97Path, normalizePath } from "./protected-paths.mjs";
@@ -33,6 +34,14 @@ const IMPORT_RE = new RegExp(
   `(?:\\bfrom\\s*|\\bimport\\s*|\\bimport\\s*\\(\\s*|\\brequire\\s*\\(\\s*|\\bnew\\s+URL\\s*\\(\\s*)["'\`](\\.{1,2}/[^"'\`?#]+\\.(?:${CODE_EXT}))(?:[?#][^"'\`]*)?["'\`]`,
   "g",
 );
+// A shell or PowerShell script that loads another file into itself (`source x`,
+// `. x`) at a command position: the start of a line or after ; & | ( then do.
+// The argument is any word, quoted or not; a literal one resolves against the
+// hook's working directory (the repo root, since a hook that changes directory
+// is refused above), a computed one ($VAR, $(...), `...`) cannot be followed
+// and is reported (Codex #1164).
+const SHELL_EXT = /\.(?:sh|ps1)$/;
+const SOURCE_RE = /(?:^|[;&|(]|\bthen\b|\bdo\b)[ \t]*(?:source|\.)[ \t]+("[^"\n]*"|'[^'\n]*'|[^\s;&|)]+)/gm;
 
 /** Command text of every hook in a parsed settings.json. */
 function settingsHookTexts(settings) {
@@ -72,15 +81,27 @@ function entryScripts(texts) {
 /** Hook texts (lefthook.yml as one text, settings.json per hook) that change directory. */
 const changesDirectory = (texts) => texts.filter((text) => CD_RE.test(text));
 
-/** Entry scripts plus every module they reach by relative imports; `read(file)` returns source or null. */
-function reachableFiles(entries, read) {
+/**
+ * Entry scripts plus every file they reach by relative imports or by `source`;
+ * `read(file)` returns source or null, `resolve(file)` the repo path of the
+ * file's real target (itself unless it is a link).
+ */
+function reachableFiles(entries, read, resolve) {
   const seen = new Set();
   const missing = [];
+  const unfollowed = [];
   const stack = [...entries];
   while (stack.length > 0) {
-    const file = stack.pop();
-    if (seen.has(file)) continue;
-    seen.add(file);
+    const named = stack.pop();
+    if (seen.has(named)) continue;
+    seen.add(named);
+    // A link runs its target: the target is checked too, and imports resolve
+    // from the target's directory, as Node resolves them (Codex #1164).
+    const file = resolve(named);
+    if (file !== named) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+    }
     const src = read(file);
     if (src === null) {
       missing.push(file);
@@ -89,26 +110,45 @@ function reachableFiles(entries, read) {
     for (const m of src.matchAll(IMPORT_RE)) {
       stack.push(canonical(path.posix.join(path.posix.dirname(file), m[1])));
     }
+    if (!SHELL_EXT.test(file)) continue;
+    for (const m of src.matchAll(SOURCE_RE)) {
+      const arg = m[1].replace(/^(["'])(.*)\1$/, "$2");
+      if (/[$`]/.test(arg)) unfollowed.push(`${file}: ${m[0].trim()}`);
+      else stack.push(canonical(arg));
+    }
   }
-  return { files: [...seen].sort(), missing: missing.sort() };
+  return { files: [...seen].sort(), missing: missing.sort(), unfollowed: unfollowed.sort() };
 }
 
-/** Files a hook runs or loads, those missing, and those that are not D-97. */
-function hookFiles({ settings, lefthook, read }) {
+/** Files a hook runs or loads, those missing, those that are not D-97, and loads it cannot follow. */
+function hookFiles({ settings, lefthook, read, resolve = (f) => f }) {
   const texts = [...settingsHookTexts(settings), lefthookText(lefthook)];
-  const { files, missing } = reachableFiles(entryScripts(texts), read);
-  return { files, missing, offenders: files.filter((f) => !isD97Path(f)), changesDir: changesDirectory(texts) };
+  const { files, missing, unfollowed } = reachableFiles(entryScripts(texts), read, resolve);
+  return { files, missing, unfollowed, offenders: files.filter((f) => !isD97Path(f)), changesDir: changesDirectory(texts) };
 }
 
-const readRepo = (file) => {
-  const full = path.join(repo, file);
+const readIn = (root) => (file) => {
+  const full = path.join(root, file);
   return fs.existsSync(full) && fs.statSync(full).isFile() ? fs.readFileSync(full, "utf8") : null;
 };
+// The repo path of a file's real target; outside the repo it keeps its leading
+// "..", which no D-97 entry matches. A missing file is left as named.
+const resolveIn = (root) => (file) => {
+  try {
+    const realRoot = fs.realpathSync(root);
+    return canonical(path.relative(realRoot, fs.realpathSync(path.join(root, file))));
+  } catch {
+    return file;
+  }
+};
+const readRepo = readIn(repo);
+const resolveRepo = resolveIn(repo);
 
 test("every repo file an agent or git hook runs or imports is a D-97 path", () => {
   const settings = JSON.parse(fs.readFileSync(path.join(repo, ".claude/settings.json"), "utf8"));
   const lefthook = fs.readFileSync(path.join(repo, "lefthook.yml"), "utf8");
-  const { files, missing, offenders, changesDir } = hookFiles({ settings, lefthook, read: readRepo });
+  const { files, missing, offenders, changesDir, unfollowed } = hookFiles({ settings, lefthook, read: readRepo, resolve: resolveRepo });
+  assert.deepEqual(unfollowed, [], "a hook script sources a computed path that this check cannot follow");
   assert.deepEqual(changesDir, [], "a hook changes directory, so its script paths cannot be checked");
   // The extraction must find the known hooks, or an empty result would pass silently.
   for (const known of [
@@ -215,6 +255,68 @@ test("an import quoted with a backtick is followed (review of #1164)", () => {
   const sources = { "scripts/hooks/a.mjs": "const m = await import(`../../src/t.mjs`);", "src/t.mjs": "" };
   const read = (f) => (Object.hasOwn(sources, f) ? sources[f] : null);
   assert.deepEqual(hookFiles({ settings, lefthook: "", read }).offenders, ["src/t.mjs"]);
+});
+
+// Codex #1164 (r4435543005): a shell script that sources another file runs it.
+test("a file a hook script sources is followed; a computed source is reported (Codex #1164)", () => {
+  const settings = { hooks: { Stop: [{ hooks: [{ command: "bash scripts/hooks/a.sh" }, { command: "pwsh -File scripts/hooks/p.ps1" }] }] } };
+  const sources = {
+    "scripts/hooks/a.sh": [
+      "#!/usr/bin/env bash",
+      "source ./tools/unguarded.sh",
+      'if true; then . "scripts/hooks/b.sh"; fi',
+      "x=1 && . 'tools/env'",
+      'source "$HOME/x.sh"',
+      "echo done. ok # a dot in text is not a load",
+    ].join("\n"),
+    "scripts/hooks/b.sh": "",
+    "scripts/hooks/p.ps1": ". ./tools/helper.ps1\n. $PSScriptRoot/q.ps1\n",
+    "tools/unguarded.sh": "",
+    "tools/env": "",
+    "tools/helper.ps1": "",
+  };
+  const read = (f) => (Object.hasOwn(sources, f) ? sources[f] : null);
+  const { files, offenders, missing, unfollowed } = hookFiles({ settings, lefthook: "", read });
+  assert.deepEqual(files, ["scripts/hooks/a.sh", "scripts/hooks/b.sh", "scripts/hooks/p.ps1", "tools/env", "tools/helper.ps1", "tools/unguarded.sh"]);
+  assert.deepEqual(offenders, ["tools/env", "tools/helper.ps1", "tools/unguarded.sh"]);
+  assert.deepEqual(missing, []);
+  assert.deepEqual(unfollowed, ['scripts/hooks/a.sh: source "$HOME/x.sh"', "scripts/hooks/p.ps1: . $PSScriptRoot/q.ps1"]);
+  // Control: a JavaScript file is not read for `source`.
+  const js = { "scripts/hooks/a.mjs": "source ./tools/unguarded.sh\n" };
+  const jsSettings = { hooks: { Stop: [{ hooks: [{ command: "node scripts/hooks/a.mjs" }] }] } };
+  assert.deepEqual(hookFiles({ settings: jsSettings, lefthook: "", read: (f) => js[f] ?? null }).files, ["scripts/hooks/a.mjs"]);
+});
+
+// Codex #1164 (r4435543013): a D-97 name that links to a file elsewhere runs
+// that file, so the target is checked and its imports are followed.
+test("a hook script that is a link is checked at its real target (Codex #1164)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-hook-link-"));
+  try {
+    fs.mkdirSync(path.join(dir, "scripts"));
+    fs.mkdirSync(path.join(dir, "src"));
+    fs.writeFileSync(path.join(dir, "src", "a.mjs"), 'import "./dep.mjs";\n');
+    fs.writeFileSync(path.join(dir, "src", "dep.mjs"), "");
+    // A directory link: a junction on Windows needs no privilege, CI (Linux)
+    // uses a directory symlink. scripts/hooks/a.mjs then runs src/a.mjs.
+    fs.symlinkSync(path.join(dir, "src"), path.join(dir, "scripts", "hooks"), process.platform === "win32" ? "junction" : "dir");
+    const settings = { hooks: { PreToolUse: [{ hooks: [{ command: "node scripts/hooks/a.mjs" }] }] } };
+    const { files, offenders, missing } = hookFiles({ settings, lefthook: "", read: readIn(dir), resolve: resolveIn(dir) });
+    assert.deepEqual(files, ["scripts/hooks/a.mjs", "src/a.mjs", "src/dep.mjs"]);
+    assert.deepEqual(offenders, ["src/a.mjs", "src/dep.mjs"]);
+    assert.deepEqual(missing, []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a link that leaves the repo is an offender (Codex #1164)", () => {
+  const settings = { hooks: { Stop: [{ hooks: [{ command: "node scripts/hooks/a.mjs" }] }] } };
+  const resolve = (f) => (f === "scripts/hooks/a.mjs" ? "../elsewhere/x.mjs" : f);
+  const read = (f) => (f === "../elsewhere/x.mjs" ? "" : null);
+  const { files, offenders, missing } = hookFiles({ settings, lefthook: "", read, resolve });
+  assert.deepEqual(files, ["../elsewhere/x.mjs", "scripts/hooks/a.mjs"]);
+  assert.deepEqual(offenders, ["../elsewhere/x.mjs"]);
+  assert.deepEqual(missing, []);
 });
 
 test("a hook naming a file that does not exist is reported as missing", () => {
