@@ -7,13 +7,16 @@
 --
 -- Rows that exist before this migration start their idle time now, but never
 -- after expires_at, so no session lives past its twelve hours and a closed
--- one stays closed. New rows take now() from the column default, because
--- open_session names no last_seen_at in its INSERT.
+-- one stays closed. now() is the start of this transaction: a login committed
+-- after it and before the ALTER below has a later created_at, so the backfill
+-- never goes below created_at (expires_at is always later still). New rows
+-- take now() from the column default, because open_session names no
+-- last_seen_at in its INSERT.
 GRANT CREATE ON SCHEMA identity, app TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
 ALTER TABLE identity.session ADD COLUMN last_seen_at timestamptz;
-UPDATE identity.session SET last_seen_at = LEAST(now(), expires_at);
+UPDATE identity.session SET last_seen_at = GREATEST(created_at, LEAST(now(), expires_at));
 ALTER TABLE identity.session
   ALTER COLUMN last_seen_at SET DEFAULT now(),
   ALTER COLUMN last_seen_at SET NOT NULL,
