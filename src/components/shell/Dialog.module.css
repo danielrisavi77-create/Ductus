@@ -1,0 +1,136 @@
+/*
+ * The shared dialog base (Z-08, #923): a native modal <dialog> on the design
+ * tokens of app/globals.css (DESIGN-SYSTEM.md §3 and §5, D-188). A dialog's
+ * own module takes these classes with `composes` and adds only its parts.
+ * Measures follow design demo-tok-v2 ("Odjava").
+ */
+.dialog {
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  margin: 80px auto auto;
+  padding: 0;
+  border: 1px solid var(--raised-rule);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: var(--lift);
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.text,
+.note,
+.error {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.text {
+  font-size: 13px;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* The text says what failed; the mark and the tint only point at it (colour never carries meaning alone). */
+.error {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border: 1px solid var(--error);
+  border-radius: var(--radius-control);
+  background: var(--error-soft);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.error::before {
+  content: "!";
+  content: "!" / "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--error);
+  color: var(--error-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.primary,
+.secondary,
+.quiet {
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.secondary {
+  border: 1px solid var(--rule);
+  background: none;
+  color: var(--ink);
+}
+
+.quiet {
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+}
+
+.quiet:hover,
+.secondary:hover {
+  color: var(--ink);
+}
+
+.primary:disabled,
+.secondary:disabled,
+.quiet:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* A part set apart inside the dialog, such as a kept copy. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+}
