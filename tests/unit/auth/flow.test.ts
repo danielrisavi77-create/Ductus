@@ -347,6 +347,10 @@ describe("logout", () => {
     ["cross-site", { "sec-fetch-site": "cross-site", origin: "https://zlo.test" }],
     ["same-site", { "sec-fetch-site": "same-site", origin: "https://sub.ductus.test" }],
     ["none (typed or bookmarked)", { "sec-fetch-site": "none" }],
+    ["none over this Origin", { "sec-fetch-site": "none", origin: APP }],
+    ["same-site over this Origin", { "sec-fetch-site": "same-site", origin: APP }],
+    ["Sec-Fetch-Site same-origin without Origin (DAN-302 L2)", { "sec-fetch-site": "same-origin" }],
+    ["Sec-Fetch-Site same-origin over another Origin (DAN-302 L2)", { "sec-fetch-site": "same-origin", origin: "https://zlo.test" }],
     ["another Origin", { origin: "https://zlo.test" }],
     ["Origin null", { origin: "null" }],
     ["neither header", {}],
@@ -359,7 +363,7 @@ describe("logout", () => {
 
   it("clears the cookie even when the database is unavailable", async () => {
     deps.closeSession.mockRejectedValueOnce(Object.assign(new Error("down"), { code: "ECONNREFUSED" }));
-    const response = await post({ "sec-fetch-site": "same-origin" });
+    const response = await post({ "sec-fetch-site": "same-origin", origin: APP });
     expect(response.status).toBe(303);
     expect(setCookies(response).get(SESSION_COOKIE_NAME)).toMatch(/Max-Age=0$/);
   });

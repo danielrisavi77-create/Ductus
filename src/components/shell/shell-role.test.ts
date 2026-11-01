@@ -56,6 +56,7 @@ describe("readHome", () => {
     const home = await readHome(TOKEN, teacher.withActor);
     expect(home.path).toBe("/nastavnik");
     expect(home.scope).not.toBeNull();
+    expect(home.closed).toBe(false);
     expect(teacher.withActor).toHaveBeenCalledTimes(1);
     const student = actor({ signed_in: true, teacher: false, user_id: USER, institution_id: INSTITUTION } as never);
     expect((await readHome(TOKEN, student.withActor)).path).toBe("/rad");
@@ -65,17 +66,19 @@ describe("readHome", () => {
   it("guesses nothing without an open session, and asks nothing without a well-formed cookie", async () => {
     const { withActor } = actor({ signed_in: true, teacher: true });
     for (const token of [undefined, "", "kratko", `${TOKEN}!`]) {
-      expect(await readHome(token, withActor)).toEqual({ path: null, scope: null });
+      expect(await readHome(token, withActor)).toEqual({ path: null, scope: null, closed: true });
     }
     expect(withActor).not.toHaveBeenCalled();
-    expect(await readHome(TOKEN, actor({ signed_in: false, teacher: false }).withActor)).toEqual({ path: null, scope: null });
+    expect(await readHome(TOKEN, actor({ signed_in: false, teacher: false }).withActor)).toEqual({ path: null, scope: null, closed: true });
   });
 
   it("guesses nothing when the database does not answer as expected", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const outage = vi.fn(async () => { throw new Error("connection refused"); }) as unknown as WithActor;
-    expect(await readHome(TOKEN, outage)).toEqual({ path: null, scope: null });
-    expect(await readHome(TOKEN, actor(undefined).withActor)).toEqual({ path: null, scope: null });
+    // #1231: a database that could not be read is not a closed session.
+    expect(await readHome(TOKEN, outage)).toEqual({ path: null, scope: null, closed: false });
+    // No row from current_actor() is no open session.
+    expect(await readHome(TOKEN, actor(undefined).withActor)).toEqual({ path: null, scope: null, closed: true });
     error.mockRestore();
   });
 });

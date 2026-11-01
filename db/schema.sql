@@ -2557,7 +2557,7 @@ CREATE FUNCTION evidence.seal_document_checkpoint() RETURNS trigger
     AS $$
 BEGIN
   NEW.content_hash := pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(NEW.body, 'UTF8')), 'hex');
-  NEW.created_at := pg_catalog.now();
+  NEW.created_at := pg_catalog.clock_timestamp();
   RETURN NEW;
 END
 $$;
@@ -6900,4 +6900,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261101010000'),
     ('20261101150000'),
     ('20261101160000'),
+    ('20261101180000'),
     ('20261101200000');

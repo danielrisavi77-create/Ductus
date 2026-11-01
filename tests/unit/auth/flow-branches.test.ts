@@ -257,7 +257,7 @@ describe("finishLogin when the session ports fail", () => {
 
 describe("logout", () => {
   it("clears the cookie without calling the database when there is no session", async () => {
-    const response = await logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers: { "sec-fetch-site": "same-origin" } }), deps);
+    const response = await logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers: { "sec-fetch-site": "same-origin", origin: APP } }), deps);
     expect(response.status).toBe(303);
     expect(deps.closeSession).not.toHaveBeenCalled();
     expect(setCookies(response).get(SESSION_COOKIE_NAME)).toMatch(/Max-Age=0$/);
@@ -268,10 +268,14 @@ describe("isSameOrigin", () => {
   const request = (headers: Record<string, string>) => new Request(`${APP}/api/auth/logout`, { method: "POST", headers });
 
   it.each([
-    ["Sec-Fetch-Site same-origin over a foreign Origin", { "sec-fetch-site": "same-origin", origin: "https://zlo.test" }, true],
+    ["Sec-Fetch-Site same-origin over this Origin", { "sec-fetch-site": "same-origin", origin: APP }, true],
+    ["this Origin without Sec-Fetch-Site", { origin: APP }, true],
+    ["Sec-Fetch-Site same-origin over a foreign Origin (DAN-302 L2)", { "sec-fetch-site": "same-origin", origin: "https://zlo.test" }, false],
+    ["Sec-Fetch-Site same-origin without Origin (DAN-302 L2)", { "sec-fetch-site": "same-origin" }, false],
+    ["Sec-Fetch-Site none over this Origin", { "sec-fetch-site": "none", origin: APP }, false],
     ["Sec-Fetch-Site cross-site over this Origin", { "sec-fetch-site": "cross-site", origin: APP }, false],
     ["an empty Sec-Fetch-Site over this Origin", { "sec-fetch-site": "", origin: APP }, false],
-    ["Sec-Fetch-Site in capitals", { "sec-fetch-site": "Same-Origin" }, false],
+    ["Sec-Fetch-Site in capitals", { "sec-fetch-site": "Same-Origin", origin: APP }, false],
     ["this Origin with a trailing slash", { origin: `${APP}/` }, false],
     ["this Origin over http", { origin: APP.replace("https", "http") }, false],
   ])("decides on %s", (_name, headers, expected) => {

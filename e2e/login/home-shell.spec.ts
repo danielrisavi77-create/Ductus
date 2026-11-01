@@ -69,23 +69,25 @@ test("QA (3): a student on a teacher page with an empty journal signs out withou
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
 });
 
+// DAN-378 (#1231): a cookie whose session is closed reads Z-03 on "/", with
+// one way to sign in again and no shell with only a sign-out; a new sign-in
+// replaces the cookie and leads on by role.
 for (const width of WIDTHS) {
-  test(`a cookie without an open session gets the home in the shell, Početna and the plain sign-out at ${width} px`, async ({ page, context }) => {
+  test(`a cookie without an open session gets Z-03 in the shell, and a new sign-in leads on, at ${width} px`, async ({ page, context }) => {
     await page.setViewportSize({ width, height: width < 800 ? 844 : 900 });
     await closedSessionCookie(page);
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: t.home.welcome })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: t.home.workTitle })).toBeVisible();
-    await expect(page.getByRole("link", { name: t.home.openWorkspace })).toHaveAttribute("href", "/rad");
-    await expect(page.getByRole("link", { name: t.home.openTeacher })).toHaveAttribute("href", "/nastavnik");
-    await expect(page.getByRole("link", { name: t.home.enroll, exact: true })).toHaveAttribute("href", "/upis");
-    await expect(homeCrumbOf(page)).toHaveAttribute("aria-current", "page");
-    await snapshot(page, `home-signed-in-${width}`);
-    await expectSignOut(page, width);
-    await signOutOf(page).click();
-    await page.waitForURL("http://localhost:3000/");
-    expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
-    await expect(page.getByRole("link", { name: t.landing.enter }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: t.access.expiredTitle })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: t.home.welcome })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: t.shell.workNav })).toHaveCount(0);
+    await expect(signOutOf(page)).toHaveCount(0);
+    const signInAgain = page.getByRole("link", { name: t.prijava.button });
+    await expect(signInAgain).toHaveAttribute("href", "/api/auth/login?returnTo=%2F");
+    await snapshot(page, `home-closed-session-${width}`);
+    await signInAgain.click();
+    await page.getByRole("button", { name: "Demo studentica" }).click();
+    await page.waitForURL("http://localhost:3000/rad");
+    expect((await appCookie(context, SESSION_COOKIE))?.value).not.toBe("Z".repeat(43));
   });
 }
 
