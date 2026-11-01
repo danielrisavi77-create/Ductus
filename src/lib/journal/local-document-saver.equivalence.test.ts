@@ -65,6 +65,31 @@ describe("M0.1 saver: failures", () => {
     expect(await real.read(DOC)).toEqual({ snapshot: null, pending: [], meta: null });
   });
 
+  // The source mapped these four to `corrupt`; Ductus gives `unknown`. Which
+  // one is right is open with the code owner: this records today's behaviour.
+  const storeErrors = ["DataError", "NotFoundError", "VersionError", "UpgradeError"];
+
+  it.each(storeErrors)("3: maps %s to unknown, plain or wrapped, never to corrupt", (name) => {
+    expect(failureOf(named(name))).toBe("unknown");
+    expect(failureOf(Object.assign(new Error("wrapped"), { name: "AbortError", inner: { name } }))).toBe("unknown");
+  });
+
+  it.each(storeErrors)("18: a %s during the write is ERROR unknown and writes nothing", async (name) => {
+    const real = kit.open();
+    let writes = 0;
+    const target = new LocalDocumentSaver(patched(real, {
+      saveLocal: async () => {
+        writes += 1;
+        throw named(name);
+      },
+    }), DOC, ids);
+    await target.load();
+    await type(target, "pokušaj");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unknown" });
+    expect(writes).toBe(1);
+    expect(await real.read(DOC)).toEqual({ snapshot: null, pending: [], meta: null });
+  });
+
   it("47, 86: a journal that recorded ERROR loads, saves, and the save clears the ERROR", async () => {
     const scope = kit.nextScope();
     const first = kit.open(scope);
