@@ -56,7 +56,10 @@ type Outcome = { error?: string; before: unknown; after: unknown };
 async function attempt(setup: string[], as: string | null, sql: string): Promise<Outcome> {
   const client = await admin.connect();
   try {
-    await client.query("BEGIN");
+    // One snapshot for the whole case: other integration tests create and
+    // drop their own logins (members of ductus_app) and temporary tables
+    // meanwhile, and READ COMMITTED would let the two snapshots differ.
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
     for (const statement of setup) await client.query(statement);
     const before = (await client.query(SNAPSHOT)).rows[0];
     if (as !== null) await client.query(`SET LOCAL ROLE ${as}`);
