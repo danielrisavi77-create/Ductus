@@ -128,6 +128,37 @@ describe("database logging check", () => {
     }
   });
 
+  // F-036, review and QA on f237a08b. The server log is not readable from
+  // here, so the test reads what the database attaches to the error itself:
+  // the same CONTEXT goes to the log. With log_min_error_statement = panic
+  // the bound value is still there, and the check refuses.
+  it("refuses parameters written on error even when the STATEMENT line is off", async () => {
+    await setOnLogin({ log_parameter_max_length_on_error: "-1", log_min_error_statement: "panic" });
+    try {
+      const seen = await withLoginPool(async (pool) => {
+        const client = await pool.connect();
+        try {
+          await client.query("SELECT pg_catalog.set_config('statement_timeout', '50', false)");
+          const marker = randomBytes(16).toString("hex");
+          const error = await client.query("SELECT pg_catalog.pg_sleep(5), $1::text AS t", [marker]).then(
+            () => null,
+            (e: { code?: string; where?: string }) => e,
+          );
+          return { marker, code: error?.code, where: error?.where ?? "" };
+        } finally {
+          client.release();
+        }
+      });
+      expect(seen.code).toBe("57014");
+      expect(seen.where).toContain(seen.marker);
+      await withLoginPool(async (pool) => {
+        await expect(assertNoParameterLogging(pool)).rejects.toThrow("(log_parameter_max_length_on_error)");
+      });
+    } finally {
+      await setOnLogin({ log_parameter_max_length_on_error: null, log_min_error_statement: null });
+    }
+  });
+
   it("starts no withActor transaction while the login would log the token", async () => {
     await setOnLogin({ log_min_duration_statement: "0" });
     try {

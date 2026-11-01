@@ -58,8 +58,9 @@ export function parameterLoggingSetting(settings: ReadonlyMap<string, string>): 
   for (const name of ["debug_print_parse", "debug_print_rewritten", "debug_print_plan"] as const) {
     if (isOn(get(name))) return name;
   }
-  // A statement written on error carries its parameters up to this limit.
-  if (get("log_min_error_statement") !== "panic" && parametersLogged(get("log_parameter_max_length_on_error"))) {
+  // An error carries the bound values in its CONTEXT up to this limit,
+  // whatever log_min_error_statement says about the STATEMENT line.
+  if (parametersLogged(get("log_parameter_max_length_on_error"))) {
     return "log_parameter_max_length_on_error";
   }
   if (parametersLogged(get("log_parameter_max_length"))) {

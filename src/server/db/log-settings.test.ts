@@ -53,9 +53,16 @@ describe("parameterLoggingSetting", () => {
     { log_statement: "all", log_parameter_max_length: "0" },
     { log_min_duration_statement: "0", log_parameter_max_length: "0" },
     { log_min_duration_sample: "0", log_statement_sample_rate: "0" },
-    { log_parameter_max_length_on_error: "-1", log_min_error_statement: "panic" },
   ])("passes %o, which logs no parameter of a SELECT", (over) => {
     expect(parameterLoggingSetting(settings(over))).toBeNull();
+  });
+
+  // F-036, review and QA on f237a08b: the error CONTEXT carries the
+  // parameters whatever threshold controls the STATEMENT line.
+  it("refuses parameters written on error even with log_min_error_statement = panic", () => {
+    expect(
+      parameterLoggingSetting(settings({ log_parameter_max_length_on_error: "-1", log_min_error_statement: "panic" })),
+    ).toBe("log_parameter_max_length_on_error");
   });
 
   it("refuses a value it cannot read rather than guess", () => {
