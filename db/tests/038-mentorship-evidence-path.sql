@@ -98,6 +98,21 @@ LANGUAGE sql VOLATILE AS $$
     CROSS JOIN LATERAL heap_page_items(get_raw_page('institution.mentorship', (m.ctid::text::point)[0]::integer)) i
    WHERE m.id = pg_temp.id('ms1') AND i.lp = (m.ctid::text::point)[1]::integer
 $$;
+-- The same for the teacher role row of Ana's mentor (SEC-947-01).
+CREATE FUNCTION pg_temp.role_lock() RETURNS text
+LANGUAGE sql VOLATILE AS $$
+  SELECT CASE WHEN i.t_infomask & 4096 <> 0 THEN (
+                SELECT CASE WHEN bool_or(x.mode = 'sh') THEN 'share'
+                            WHEN bool_or(x.mode = 'keysh') THEN 'key share'
+                            ELSE 'none' END
+                  FROM pg_get_multixact_members(i.t_xmax) x)
+              WHEN i.t_infomask & 80 = 80 THEN 'share'
+              WHEN i.t_infomask & 80 = 16 THEN 'key share'
+              ELSE 'none' END
+    FROM institution.institution_role r
+    CROSS JOIN LATERAL heap_page_items(get_raw_page('institution.institution_role', (r.ctid::text::point)[0]::integer)) i
+   WHERE r.user_id = pg_temp.id('marko') AND r.role = 'teacher' AND i.lp = (r.ctid::text::point)[1]::integer
+$$;
 
 -- Catalogue: the same two functions, owners, definer rights and grants.
 SELECT is(
@@ -138,6 +153,7 @@ RESET ROLE;
 -- SHARE apart (a non-key UPDATE keeps it too). The lock mode is in the
 -- tuple's infomask, read with pageinspect inside this rolled-back test.
 SELECT is(pg_temp.ms_lock(), 'key share', 'before any call only the fixture''s foreign key holds Ana''s mentorship');
+SELECT is(pg_temp.role_lock(), 'none', 'before any call nothing holds the teacher role of Ana''s mentor');
 
 -- 1: Ana opens her mentorship's work.
 SELECT is(pg_temp.open('ana', 'zm1'), 'opened', 'the student of an open mentorship opens its work');
@@ -146,14 +162,19 @@ SELECT is((SELECT count(*)::integer FROM evidence.project WHERE assignment_id = 
   'one project for the mentorship''s assignment, under its own assignment_id');
 -- 9: the authority row stays locked until the caller commits (as 047 shows for the key).
 SELECT is(pg_temp.ms_lock(), 'share', 'the mentorship row is held FOR SHARE by the call, so ending it waits');
+SELECT is(pg_temp.role_lock(), 'share', 'the mentor''s teacher role is held FOR SHARE too, so revoking it waits');
 INSERT INTO ref SELECT 'doc_m1', pg_temp.doc('ana', 'zm1');
 INSERT INTO ref SELECT 'pkg_m1', id FROM evidence.package WHERE document_id = pg_temp.doc('ana', 'zm1');
 
 -- 2 to 5: every other caller, the same refusals as for a course; nothing written.
 CREATE TEMP TABLE print_before AS SELECT pg_temp.evidence_print() AS v;
+-- 2: Nina's role confirmed for this check only, so Boris reaches the notice.
+UPDATE institution.institution_role SET confirmed_at = now() WHERE user_id = pg_temp.id('nina');
 SELECT is(pg_temp.open('boris', 'zm3'), 'not_accepting', 'the student of an open mentorship who has not acknowledged its rules');
+UPDATE institution.institution_role SET confirmed_at = NULL WHERE user_id = pg_temp.id('nina');
 SELECT is(pg_temp.open(c.actor, c.assignment), 'not_found', c.why)
 FROM (VALUES
+  ('boris', 'zm3', 'the student of a mentorship whose mentor has no confirmed teacher role'),
   ('dora', 'zm2', 'the student of an ended mentorship'),
   ('ana', 'zm2', 'a student of another, ended mentorship'),
   ('ana', 'zm3', 'a student of another, open mentorship'),
@@ -223,8 +244,23 @@ UPDATE institution.institution_role SET revoked_at = now() WHERE user_id = pg_te
 SELECT is(pg_temp.works('marko', 'zm1'), 'none', 'a revoked mentor lists nothing');
 SELECT is(pg_temp.subs('marko', 'zm1'), 'none', 'a revoked mentor sees no submission');
 SELECT is(pg_temp.fast('marko', 'zm1'), 'empty', 'a revoked mentor gets no fast path');
+-- SEC-947-01: the revoked role closes the student's path as well (#916, invariant 3).
+CREATE TEMP TABLE print_revoked AS SELECT pg_temp.evidence_print() AS v;
+SELECT is(pg_temp.call('ana', pg_temp.val('pkg_m1'), 'm-request-r',
+    pg_temp.descriptor(p_package => pg_temp.val('pkg_m1'), p_document => pg_temp.val('doc_m1'), p_segment => 'segment-m-2',
+                       p_sequence_from => 2, p_sequence_to => 2, p_hash => repeat('c', 64), p_predecessor => repeat('b', 64)),
+    1, repeat('d', 64), repeat('e', 64), repeat('c', 64)),
+  'unauthorized', 'the next segment is refused while the mentor has no confirmed teacher role');
+SELECT is(pg_temp.ask('ana', format('SELECT outcome FROM app.request_submission(%L, 1)', pg_temp.val('doc_m1'))),
+  'unauthorized', 'a submission request is refused while the mentor has no confirmed teacher role');
+SELECT is(pg_temp.ask('ana', format('SELECT outcome FROM app.prepare_submission_receipt(%L::uuid, %L, %L)',
+    pg_temp.val('sub_m1'), 'key-m', '1')),
+  'unauthorized', 'no new receipt attempt while the mentor has no confirmed teacher role');
+SELECT is(pg_temp.open('ana', 'zm1'), 'not_found', 'the work does not open while the mentor has no confirmed teacher role');
+SELECT is(pg_temp.evidence_print(), (SELECT v FROM print_revoked), 'the refusals while the role is revoked wrote nothing');
 UPDATE institution.institution_role SET revoked_at = NULL WHERE user_id = pg_temp.id('marko');
 SELECT is(pg_temp.works('marko', 'zm1'), 'ana/' || pg_temp.val('doc_m1'), 'the role restored, the list is back');
+SELECT is(pg_temp.open('ana', 'zm1'), 'opened', 'the role restored, the student''s work opens again');
 
 -- 8: the mentorship ends after Ana opened her work: every path closes as for
 -- a student removed from a course (044, 063).

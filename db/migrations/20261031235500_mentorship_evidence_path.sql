@@ -13,7 +13,8 @@ SET LOCAL ROLE ductus_identity;
 -- As 20261017130000, with the mentorship as the second authority row: a
 -- course's assignment locks the caller's open student membership, a
 -- mentorship's assignment locks the mentorship, which must be open, of the
--- assignment's institution and have the caller as its student. Both FOR SHARE
+-- assignment's institution and have the caller as its student, and the
+-- confirmed teacher role of its mentor. Both FOR SHARE
 -- until the caller commits, so ending the mentorship (the operator's UPDATE)
 -- waits for an acceptance in progress, as a removal from a course does, and
 -- an acceptance that waited re-reads the committed row. No row: not the
@@ -42,7 +43,14 @@ BEGIN
        AND m.user_id = v_actor.user_id AND m.role = 'student' AND m.member_to IS NULL
      FOR SHARE;
   ELSE
+    -- Only while the mentor holds the teacher role, confirmed and not revoked
+    -- (#916, invariant 3): a mentor without it closes the student's path as
+    -- it closes the mentor's lists. The role row is held FOR SHARE with the
+    -- mentorship, so revoking the role waits for an acceptance in progress.
     PERFORM 1 FROM institution.mentorship s
+      JOIN institution.institution_role r
+        ON r.user_id = s.mentor_id AND r.institution_id = s.institution_id AND r.role = 'teacher'
+       AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
      WHERE s.id = v_assignment.mentorship_id AND s.institution_id = v_actor.institution_id
        AND s.student_id = v_actor.user_id AND s.ended_at IS NULL
      FOR SHARE;
