@@ -1,180 +1,374 @@
 /*
- * Prijava v5 (docs/design/ductura/prijava-v5.dc.html) laid out on the v3
- * tokens of app/globals.css (owner 21. 10. 2026. on #476, #732 items 1 and 2):
- * the card is a --sheet like every panel of the shell and the button is the
- * flat --accent of the other primary actions, without the prototype's own
- * gradients and colours. The shell is dark only (D-115). Small quiet text
- * uses --ink-3.
+ * Archivum sign-in (owner's design package of 26 Oct 2026, DAN-344): the
+ * prototype's composition, type and spacing, coloured only with the existing
+ * tokens of app/globals.css. No colour of its own (sign-in-tokens.test.ts):
+ * the prototype's purple and bronze become --ground, --raised and --accent,
+ * so the screen follows the palette main has. The decorative paper is the
+ * editor's light sheet (.sheet[data-sheet-theme="light"]). Dark only (D-115).
  */
 
 .screen {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 }
 
-.screen::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  left: -20%;
-  top: -30%;
-  width: 90%;
-  height: 110%;
-  background: radial-gradient(closest-side, var(--accent-soft), transparent);
-  opacity: 0.5;
-  pointer-events: none;
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--accent);
 }
 
 .main {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   align-items: center;
   gap: clamp(32px, 7vw, 120px);
   width: 100%;
-  max-width: 1180px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 48px clamp(16px, 5vw, 72px);
+  padding: clamp(32px, 6vw, 72px) clamp(16px, 4.2vw, 68px);
 }
 
 .main:focus {
   outline: none;
 }
 
-.hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  text-align: center;
+.intro {
   min-width: 0;
 }
 
+.eyebrow {
+  margin: 0 0 22px;
+  font-family: var(--ff-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  /* Grey: gold is for actions only (D-188, DESIGN-SYSTEM §2 point 05). */
+  color: var(--ink-3);
+}
+
 .title {
-  margin: 0;
+  margin: 0 0 28px;
+  max-width: 11ch;
   font-family: var(--ff-display);
-  font-size: clamp(48px, 7.4vw, 98px);
-  font-weight: 300;
-  line-height: 0.95;
+  font-size: clamp(44px, 6.4vw, 92px);
+  font-weight: 400;
+  line-height: 0.98;
   letter-spacing: -0.025em;
 }
 
+/* The italic keeps the heading's colour: it is not an action (D-188). */
 .accent {
-  display: block;
+  font-family: var(--ff-display);
   font-style: italic;
   font-weight: 400;
-  color: var(--accent);
 }
 
 .lead {
   margin: 0;
-  max-width: 40ch;
+  max-width: 46ch;
   font-size: 15.5px;
-  line-height: 1.6;
+  line-height: 1.75;
   color: var(--ink-2);
-  text-wrap: pretty;
 }
 
-.motto {
+/* The paper stack: decoration only, gone on narrow screens. */
+.book {
+  position: relative;
+  width: min(370px, 100%);
+  margin-top: 40px;
+}
+
+.stack {
+  position: relative;
+}
+
+.bookBack {
+  position: absolute;
+  inset: 8px -8px -6px 6px;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  transform: rotate(-4deg);
+}
+
+.intro .paper {
+  position: relative;
+  max-width: none;
   margin: 0;
-  max-width: 42ch;
+  padding: 26px 30px 24px;
+  border-radius: 2px;
+  transform: rotate(1.5deg);
+}
+
+.paperMeta {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.paperTitle {
+  margin: 0 0 20px;
+  font-family: var(--ff-display);
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.inkLines {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.inkLines i {
+  display: block;
+  height: 1px;
+  background: var(--rule);
+}
+
+.inkLines i:last-child {
+  width: 60%;
+}
+
+.paperNote {
+  margin: 0;
   font-family: var(--ff-display);
   font-style: italic;
-  font-size: 17px;
-  line-height: 1.5;
+  font-size: 14px;
   color: var(--ink-2);
-  text-wrap: pretty;
 }
 
-.card {
-  justify-self: center;
+.bookCaption {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 22px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: min(430px, 100%);
-  padding: 30px 30px 24px;
-  text-align: center;
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: var(--lift);
+  gap: 18px;
+  min-width: 0;
+  padding: clamp(28px, 3vw, 40px) clamp(20px, 2.5vw, 34px);
+  background: var(--raised);
+  border-block: 1px solid var(--rule);
 }
 
-.cardTitle {
+.panel .eyebrow {
+  margin-bottom: 4px;
+}
+
+.panelTitle {
   margin: 0;
   font-family: var(--ff-display);
-  font-size: 24px;
+  font-size: clamp(32px, 3.2vw, 44px);
   font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
 }
 
-.cardBody {
+.body {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.65;
   color: var(--ink-2);
 }
 
 .button {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 14px 18px;
-  border-radius: var(--radius-sm);
+  gap: 16px;
+  min-height: 56px;
+  margin-top: 6px;
+  padding: 10px 20px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
   text-decoration: none;
-  transition:
-    transform 0.15s,
-    background-color 0.15s;
+  transition: background-color 0.15s;
 }
 
 .button:hover {
   background: var(--accent-hover);
   color: var(--accent-ink);
-  transform: translateY(-1px);
+}
+
+.aai {
+  padding-right: 16px;
+  border-right: 1px solid currentColor;
+  font-family: var(--ff-display);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.buttonLabel {
+  flex: 1;
 }
 
 .note {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin: -6px 0 0;
-  font-size: 12px;
+  gap: 8px;
+  margin: -4px 0 0;
+  font-size: 12.5px;
   color: var(--ink-3);
 }
 
-.rule {
-  width: 100%;
-  height: 1px;
-  margin: 4px 0;
-  border: 0;
-  background: linear-gradient(90deg, transparent, var(--rule), transparent);
+.role {
+  padding-top: 22px;
+  border-top: 1px solid var(--rule);
+}
+
+.roleTitle {
+  margin: 0 0 8px;
+  font-family: var(--ff-display);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .small {
   margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+.details {
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.details summary,
+.help summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.details summary {
+  min-height: 32px;
+}
+
+/* A display:flex summary loses its triangle; this one turns when open. */
+.details summary::before,
+.help summary::before {
+  content: "▸";
+  transition: transform 0.15s;
+}
+
+.details[open] summary::before,
+.help[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.details summary::-webkit-details-marker,
+.help summary::-webkit-details-marker {
+  display: none;
+}
+
+.details[open] summary {
+  margin-bottom: 8px;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 24px;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 14px clamp(16px, 4.2vw, 68px) 22px;
+  border-top: 1px solid var(--rule);
+}
+
+.footerNote {
+  margin: 0;
+  padding-top: 12px;
   font-size: 12.5px;
-  line-height: 1.5;
   color: var(--ink-3);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .button {
-    transition: none;
+.help {
+  max-width: 460px;
+}
+
+.help summary {
+  justify-content: flex-end;
+}
+
+.helpBody {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0 4px;
+}
+
+.helpBody .roleTitle {
+  margin: 10px 0 0;
+  font-size: 18px;
+}
+
+.link {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+@media (max-width: 899.98px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 28px;
   }
 
-  .button:hover {
-    transform: none;
+  .title {
+    margin-bottom: 20px;
+  }
+
+  /* On a phone the paper goes, so the sign-in stays near the top. */
+  .book {
+    display: none;
+  }
+
+  .help summary {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .details summary::before,
+  .help summary::before {
+    transition: none;
   }
 }

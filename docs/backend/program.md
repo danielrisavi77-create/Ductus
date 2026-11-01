@@ -41,12 +41,12 @@ Riješeno 3. 10. 2026.: cijena KMS-a (službeni cjenik), uvjeti besplatnih TSA-o
 | **Ukupno** | **oko 460 do 600** | |
 | **S PDV-om (oko +25 %)** | **oko 575 do 750** | PDV se naplaćuje fizičkoj osobi bez obrta u sustavu PDV-a; potvrditi sa računovođom |
 
-To je **iznad D-66** (infrastruktura 300 do 500 plus domena i e-pošta 50 do 100) i troši rezervu. Zato je odluka vlasnika:
+To je bilo **iznad D-66** (infrastruktura 300 do 500 plus domena i e-pošta 50 do 100). Od 1. 11. 2026. proračun pilota je 10.000 EUR (D-199 t. 2), a PRIJEDLOG raspodjele daje infrastrukturi oko 1.000 EUR, pa obje varijante stanu bez rezanja sigurnosne stavke. Izbor varijante i dalje je odluka vlasnika nakon B0.1:
 
-- **Varijanta A (preporuka ako B0.1 prođe):** gore opisano. Dodatni trošak pokriva rezerva (100 do 200) i stavka "sigurnost" (0 do 200) iz D-66 se smanjuje.
+- **Varijanta A (preporuka ako B0.1 prođe):** gore opisano. Ranije je dodatni trošak trebala pokriti rezerva iz D-69 uz smanjenje stavke "sigurnost"; uz D-199 to više nije potrebno.
 - **Varijanta B:** Hetzner VM (ako se CX tip stvarno može naručiti; CPX32 dodaje oko 280 EUR godišnje) + PostgreSQL s WAL-G na vlastitom VM-u, bez upravljane baze. Jeftinija, ali PITR, nadogradnje i proba povrata postaju tvoj posao; baza ima javnu adresu ili tunel.
 - Rezanje po potrebi: FINA tek s ugovorom, staging samo u zadnjim tjednima, replika bucketa na jeftiniji spremnik, jedan KMS ključ za prvi mjesec.
-- Pri 5 puta većem broju korisnika procjena je 160 do 300 EUR mjesečno, izvan budžeta; to je tada pitanje financiranja.
+- Pri 5 puta većem broju korisnika procjena je 160 do 300 EUR mjesečno, iznad stavke infrastrukture iz D-199 t. 2; to je tada pitanje financiranja.
 
 ## 8. Program backenda
 

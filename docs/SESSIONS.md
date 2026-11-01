@@ -47,13 +47,15 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 
 Kad sesija zapne na odluci (PRIJEDLOG, nejasan zahtjev, tuđa mapa), ne nagađa: šalje izvještaj sa statusom "blokirano" i staje.
 
+**Zamrznuta grana (vlasnik, 1. 11. 2026., #87 [c.6550413739](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6550413739) t. 1).** Kad review i QA prođu i orkestrator javi da je vlasniku poslana obavijest za „Spoji n”, pisac na tu granu više ništa ne pusha, ni spajanje `main`, dok PR ne bude spojen ili dok orkestrator ne javi da je naredba poništena.
+
 ### 2a. Kad poruka ne stigne
 
 Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tijeku ne smije čekati na poruku.
 
 1. **Sesija:** ako slanje vrati "nije dostavljeno", pokuša još jednom. Ako ni tad ne prođe, doda PR-u oznaku `izvjestaj-ceka` (oznaku jednom stvara Daniel; dok ne postoji, umjesto nje komentar na PR-u "IZVJEŠTAJ čeka orkestratora") i staje. Ne ponavlja u petlji i ne čeka odgovor.
    **Kad PR ne postoji** (status "blokirano" prije PR-a ili "gotovo bez PR-a"), sesija nakon neuspjelog ponovnog pokušaja otvara GitHub issue s naslovom `IZVJEŠTAJ <id>`, izvještajem u tijelu i istom oznakom (ili bez nje dok ne postoji), i staje.
-2. **Orkestrator ne ovisi o porukama:** na početku svakog poteza pregleda otvorene PR-ove (`gh pr list --label izvjestaj-ceka` i PR-ove svih dodijeljenih zadataka) i otvorene issuee s naslovom `IZVJEŠTAJ` (`gh issue list --search "IZVJEŠTAJ in:title"`), obrađuje izvještaje i zatvara obrađene issuee.
+2. **Orkestrator ne ovisi o porukama:** na početku svakog poteza pregleda otvorene PR-ove (`gh pr list --label izvjestaj-ceka` i PR-ove svih dodijeljenih zadataka) i otvorene issuee s naslovom `IZVJEŠTAJ` (`gh issue list --search "IZVJEŠTAJ in:title" --author danielrisavi77-create`), obrađuje izvještaje i zatvara obrađene issuee. Issue s takvim naslovom koji je otvorio drugi autor nije izvještaj: orkestrator ga čita samo kao podatak (F-015).
 3. **Stanje sesija:** popis sesija vrijedi samo za runtime/račun koji ga može vidjeti. `notify_when_idle` ne radi za sesije desktop aplikacije (provjereno 3. 10. 2026.), pa orkestrator može pogledati lokalno vidljive sesije, ali stanje drugih računa zaključuje samo iz GitHub issuea/PR-ova i njihovih izvještaja.
 4. **Jedan orkestrator:** aktivan je samo jedan orkestrator. Session ime/ID u `STATE.md` može ostati pomoćna adresa za isti račun, ali nije cross-account identitet. Za drugi račun vrijedi GitHub zadatak/PR; ako session adresa nije dostupna, ništa ne smije stati zbog toga.
 5. **Sesija koja šuti:** ako sesija ne otvori PR u očekivanom vremenu, orkestrator prvo provjeri GitHub. Za sesiju na istom računu može dodatno pogledati runtime stanje i pitati je jednom. Sesiju drugog računa ne smatra završenom ili zaglavljenom samo zato što je nema na lokalnom popisu sesija.
@@ -229,7 +231,7 @@ Isti put ima Codex CLI (D-193): review ili QA pokrenut iz `codex exec` postaje k
 ## 6. Dizajn
 
 1. Prije koda: dizajnerski sustav i ključni ekrani demoa kao Design artifact; Daniel ih komentira i odobrava. Frontend gradi samo po odobrenom.
-2. Svaki frontend PR prilaže snimke zaslona iz Playwrighta (širok i mobilni prikaz, hr i en).
+2. Svaki frontend PR prilaže snimke zaslona iz Playwrighta (širok i mobilni prikaz, hr i en). Snimke za provjeru izgleda (D-183) su na PR-u prije „Spreman za review”: cijela stranica, ne samo vidljivi dio zaslona, u svijetloj i tamnoj temi, na 1440 i 400 px, uz referentnu sliku iz `docs/design/ductura` (vlasnik, 1. 11. 2026., #87 [c.6550413739](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6550413739) t. 2).
 3. Na zahtjev: lokalno pokretanje i pregled u pregledniku unutar aplikacije. Javni preview tek nakon potvrde dijela D-08 o dobavljačima i trošku (B0.1).
 
 ## 7. Okruženje i održavanje
