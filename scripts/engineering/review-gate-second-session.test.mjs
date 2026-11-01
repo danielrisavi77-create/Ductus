@@ -47,8 +47,8 @@ const reply = (id, to, user = { login: ownerLogin, type: "User" }, association =
 });
 
 const AUTHOR = "Agent: claude:a:platforma\nRisk: critical\nTask: B-1\n";
-const evaluate = ({ comments, prReviews = [codexReview()], reviewComments = [], body = AUTHOR } = {}) =>
-  evaluateGate({ body, headSha: head, ownerLogin, comments, prReviews, reviewComments });
+const evaluate = ({ comments, historyComments, prReviews = [codexReview()], reviewComments = [], body = AUTHOR } = {}) =>
+  evaluateGate({ body, headSha: head, ownerLogin, comments, historyComments, prReviews, reviewComments });
 const ok = [reviewPass(), qa()];
 
 test("control: Claude review and Claude QA without the D-139 evidence stay pending", () => {
@@ -226,4 +226,15 @@ Review-Head: ${other}
 Review-Verdict: PASS
 `, 1 * MIN);
   assert.equal(evaluate({ comments: [oldPass, ...ok] }).state, "pending");
+});
+
+// F-013 (Codex r4433736292): verdicts from before a base change no longer
+// count, but the QA session's earlier review there still disqualifies it.
+test("an earlier review dropped by a base change still bars the QA session (F-013)", () => {
+  const before = byOwner(`Agent-Review: claude:c:reviewer
+Review-Head: ${other}
+Review-Verdict: PASS
+`, 1 * MIN);
+  assert.equal(evaluate({ comments: ok }).state, "success");
+  assert.equal(evaluate({ comments: ok, historyComments: [before, ...ok] }).state, "pending");
 });

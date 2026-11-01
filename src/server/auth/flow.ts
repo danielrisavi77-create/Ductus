@@ -193,13 +193,16 @@ export async function finishLogin(request: Request, deps: AuthDeps): Promise<Res
 }
 
 /**
- * The request comes from a page of this origin: Sec-Fetch-Site when the
- * browser sends it, Origin otherwise. A request with neither is refused.
+ * The request comes from a page of this origin, by the rule of
+ * checkMutationRequest (DAN-302 L2): Origin is required and must be this
+ * origin, and Sec-Fetch-Site, when the browser sends it, must also say
+ * same-origin. Browsers send Origin on every POST, so a request without it
+ * is not from our page, whatever Sec-Fetch-Site says.
  */
 export function isSameOrigin(request: Request, origin: string): boolean {
+  if (request.headers.get("origin") !== origin) return false;
   const site = request.headers.get("sec-fetch-site");
-  if (site !== null) return site === "same-origin";
-  return request.headers.get("origin") === origin;
+  return site === null || site === "same-origin";
 }
 
 /** POST /api/auth/logout */
