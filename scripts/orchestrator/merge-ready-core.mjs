@@ -2,7 +2,7 @@
 // gh/git; merge-ready.mjs does the reads. The gate's own statuses decide (they
 // already include the D-101 carry of verdicts across clean main merges), so this
 // never recounts verdicts on the head and never disagrees with the gate about them.
-import { evaluateChecks, GATE_CONTEXT } from "./orchestrator-core.mjs";
+import { evaluateChecks, GATE_CONTEXT, latestChecks } from "./orchestrator-core.mjs";
 
 export const AUTHORIZATION_CONTEXT = "Merge authorization";
 // Statuses the gate workflow posts itself; they are not CI.
@@ -31,6 +31,14 @@ export function pickStatus(statuses, context) {
     if (!best || at(s) > at(best) || (at(s) === at(best) && (s.id ?? 0) > (best.id ?? 0))) best = s;
   }
   return best;
+}
+
+/** Required contexts other than the gate's own statuses, as {context, appId}; null when unread. */
+function requiredChecks(required) {
+  if (!Array.isArray(required) || required.length === 0) return null;
+  return required
+    .map((r) => (typeof r === "string" ? { context: r, appId: null } : { context: r?.context, appId: Number.isInteger(r?.appId) ? r.appId : null }))
+    .filter((r) => typeof r.context === "string" && r.context && !GATE_STATUSES.has(r.context));
 }
 
 const short = (sha) => String(sha ?? "?").slice(0, 8);
@@ -76,8 +84,16 @@ export function evaluateMergeReady({ pr, mergeState, gate, authorization, rollup
   } else if (authorization.state === "pending") add("WAIT", "authorization", `Merge authorization pending${said(authorization)}`);
   else add("FAIL", "authorization", `Merge authorization ${authorization.state}${said(authorization)}`);
 
+  // Every required context of main (branch protection; the same list Mergify's queue
+  // conditions name, besides Merge authorization) must be reported on the head: a check
+  // that never started is not green (Codex #1197). Context and App as in evaluatePreflight.
+  const req = requiredChecks(required);
   if (!Array.isArray(rollup)) add("UNREAD", "ci", `CI checks could not be read${rollup?.error ? ` (${rollup.error})` : ""}`);
+  else if (req === null) add("UNREAD", "ci", "required checks of main could not be read");
   else {
+    const reported = latestChecks(rollup);
+    const missing = req.filter((r) => !reported.some((c) => (c.name ?? c.context) === r.context && (r.appId == null || c.appId === r.appId)));
+    if (missing.length) add("WAIT", "required", `required check(s) not reported on the head yet: ${missing.map((r) => r.context).join(", ")}`);
     const ck = evaluateChecks(rollup.filter((c) => !GATE_STATUSES.has(c?.name ?? c?.context)));
     const running = ck.bad.filter((c) => RUNNING.has(c.state));
     const failing = ck.bad.filter((c) => !RUNNING.has(c.state));

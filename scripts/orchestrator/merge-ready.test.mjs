@@ -6,15 +6,17 @@ import { EXIT_CODES, evaluateMergeReady, pickStatus, STATES } from "./merge-read
 
 const HEAD = "23db58e9709afc5fcb3c77194aacd52def04b9ce";
 const pr = (over = {}) => ({ number: 1041, state: "OPEN", isDraft: false, headRefOid: HEAD, baseRefName: "main", mergeable: "MERGEABLE", ...over });
-const green = [
-  { workflowName: "1", name: "CI", status: "COMPLETED", conclusion: "SUCCESS", startedAt: "2026-11-01T10:00:00Z" },
-  { workflowName: "2", name: "Local stack", status: "COMPLETED", conclusion: "SUCCESS", startedAt: "2026-11-01T10:00:00Z" },
-];
+// The required contexts of main's branch protection as GitHub returns them (1. 11. 2026.).
+const ACTIONS = 15368;
+const REQUIRED_NAMES = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"];
+const REQUIRED = [...REQUIRED_NAMES, "Engineering review gate"].map((context) => ({ context, appId: ACTIONS }));
+const run = (name, conclusion = "SUCCESS", appId = ACTIONS, i = name) => ({ workflowName: String(i), name, appId, status: "COMPLETED", conclusion, startedAt: "2026-11-01T10:00:00Z" });
+const green = REQUIRED_NAMES.map((name) => run(name));
 // The fixed descriptions of review-gate-core (evaluateMergeAuthorization) and a carried gate pass.
 const GATE_CARRIED = { state: "success", description: "Review PASS and QA PASS (carried from 61f205dd, D-101)." };
 const NEEDS_OWNER = { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 const OWNER_OK = { state: "success", description: "Owner merge command names this head." };
-const ready = (over = {}) => ({ pr: pr(), mergeState: "CLEAN", gate: GATE_CARRIED, authorization: OWNER_OK, rollup: green, threads: { count: 0, authors: [] }, codex: true, ...over });
+const ready = (over = {}) => ({ pr: pr(), mergeState: "CLEAN", gate: GATE_CARRIED, authorization: OWNER_OK, rollup: green, required: REQUIRED, threads: { count: 0, authors: [] }, codex: true, ...over });
 const level = (r, id) => r.checks.find((c) => c.id === id)?.level;
 
 test("a carried gate pass (D-101) with no QA verdict on the head is ready: the gate decides, not a recount", () => {
@@ -38,9 +40,9 @@ test("everything passes but the owner's command: WAITS_OWNER, naming the PR", ()
 });
 
 test("GitHub BLOCKED with nothing visible to explain it is BLOCKED, never READY", () => {
-  const r = evaluateMergeReady(ready({ mergeState: "BLOCKED", required: [{ context: "CI" }, "Security scanners"] }));
+  const r = evaluateMergeReady(ready({ mergeState: "BLOCKED" }));
   assert.equal(r.state, STATES.BLOCKED);
-  assert.match(r.reason, /no status, check or thread read here explains it \(required: CI, Security scanners\)/);
+  assert.match(r.reason, /no status, check or thread read here explains it \(required: Lint, typecheck, test and build, Local stack \(compose\.yaml\), Security scanners, Dependency review, Engineering review gate\)/);
 });
 
 test("every failed read is UNREAD, and UNREAD wins over everything else", () => {
@@ -97,6 +99,22 @@ test("CI: failing blocks, running waits, none reported waits; the gate's own sta
   assert.equal(evaluateMergeReady(ready({ rollup: [] })).state, STATES.WAITING);
   const gateOnly = [...green, { context: "Engineering review gate", state: "PENDING" }, { context: "Merge authorization", state: "PENDING" }, { context: "Auto-merge eligible", state: "PENDING" }];
   assert.equal(evaluateMergeReady(ready({ rollup: gateOnly })).state, STATES.READY);
+});
+
+test("Codex #1197: a required check that was never reported is not green, so the PR is not READY", () => {
+  // The finding's scenario: BEHIND, gate and authorization success, only Security scanners reported.
+  const r = evaluateMergeReady(ready({ mergeState: "BEHIND", rollup: [run("Security scanners")] }));
+  assert.equal(r.state, STATES.WAITING);
+  assert.match(r.reason, /required check\(s\) not reported on the head yet: Lint, typecheck, test and build, Local stack \(compose\.yaml\), Dependency review$/);
+  // The same name from another App does not stand in for the required one.
+  const otherApp = evaluateMergeReady(ready({ rollup: [...green.slice(1), run(REQUIRED_NAMES[0], "SUCCESS", 999)] }));
+  assert.equal(otherApp.state, STATES.WAITING);
+  // A required list given as plain strings matches by name only; the gate's own context is never asked of CI.
+  assert.equal(evaluateMergeReady(ready({ required: [...REQUIRED_NAMES, "Engineering review gate", "Merge authorization"] })).state, STATES.READY);
+  // An unread or empty required list is UNREAD, never "nothing required".
+  for (const required of [null, undefined, []]) assert.equal(evaluateMergeReady(ready({ required })).state, STATES.UNREAD, JSON.stringify(required));
+  // A required check that failed still blocks, also when another is missing.
+  assert.equal(evaluateMergeReady(ready({ rollup: [run("Security scanners", "FAILURE")] })).state, STATES.BLOCKED);
 });
 
 test("conflict, draft, closed, other base and an uncomputed merge state", () => {
