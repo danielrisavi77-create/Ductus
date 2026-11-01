@@ -1,0 +1,61 @@
+{
+  "rulebook_version": 2,
+  "name": "ductus-gh",
+  "version": "1.0.0",
+  "description": "Ductus GitHub CLI rules (F-011): no admin merge and no token printed. Tokens are matched literally, so the rules list every spelling they block. Writes through gh api are denied in .claude/settings.json. See docs/SESSIONS.md 4a.",
+  "author": "Ductus",
+  "allowed_commands": [
+    "gh"
+  ],
+  "rules": [
+    {
+      "name": "block-gh-pr-merge-admin",
+      "command": "gh",
+      "match": {
+        "command_path": ["pr", "merge"],
+        "any_args": ["--admin", "--admin=true", "--admin=1"]
+      },
+      "reason": "--admin merges past branch protection and the required statuses; Ductus PRs merge only through the gate and the owner's command.",
+      "intent": "hard_stop"
+    },
+    {
+      "name": "block-gh-auth-token",
+      "command": "gh",
+      "match": {
+        "command_path": ["auth", "token"]
+      },
+      "reason": "gh auth token prints the session's GitHub token; a token never goes into a transcript or a command.",
+      "intent": "hard_stop"
+    },
+    {
+      "name": "block-gh-auth-status-token",
+      "command": "gh",
+      "match": {
+        "command_path": ["auth", "status"],
+        "any_args": ["-t", "--show-token", "--show-token=true", "--show-token=1"]
+      },
+      "reason": "gh auth status with -t or --show-token prints the GitHub token; plain gh auth status is enough.",
+      "intent": "use_alternative"
+    }
+  ],
+  "tests": [
+    {"command": "gh pr merge 7 --admin --squash", "expect": "blocked", "rule": "block-gh-pr-merge-admin"},
+    {"command": "gh pr merge --admin 7", "expect": "blocked", "rule": "block-gh-pr-merge-admin"},
+    {"command": "gh pr merge 7 --squash --admin=true", "expect": "blocked", "rule": "block-gh-pr-merge-admin"},
+    {"command": "bash -c \"gh pr merge 7 --admin\"", "expect": "blocked", "rule": "block-gh-pr-merge-admin"},
+    {"command": "git fetch origin && gh pr merge 7 --admin", "expect": "blocked", "rule": "block-gh-pr-merge-admin"},
+    {"command": "gh pr merge 7 --squash", "expect": "allowed"},
+    {"command": "gh pr merge 7 --squash --auto", "expect": "allowed"},
+    {"command": "gh pr view 7 --json title --jq '.title | contains(\"--admin\")'", "expect": "allowed"},
+    {"command": "gh auth token", "expect": "blocked", "rule": "block-gh-auth-token"},
+    {"command": "gh auth token --hostname github.com", "expect": "blocked", "rule": "block-gh-auth-token"},
+    {"command": "echo $(gh auth token)", "expect": "blocked", "rule": "block-gh-auth-token"},
+    {"command": "gh auth status -t", "expect": "blocked", "rule": "block-gh-auth-status-token"},
+    {"command": "gh auth status --show-token", "expect": "blocked", "rule": "block-gh-auth-status-token"},
+    {"command": "gh auth status --hostname github.com --show-token", "expect": "blocked", "rule": "block-gh-auth-status-token"},
+    {"command": "gh auth status", "expect": "allowed"},
+    {"command": "gh auth status --hostname github.com", "expect": "allowed"},
+    {"command": "gh api repos/o/r/pulls/7", "expect": "allowed"},
+    {"command": "gh pr checks 7", "expect": "allowed"}
+  ]
+}
