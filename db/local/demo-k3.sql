@@ -37,6 +37,9 @@ DECLARE
   c_issuer constant text := 'http://localhost:8090';
   c_home_org constant text := 'demo.ductus.test';
   c_subjects constant text[] := ARRAY['demo-teacher', 'demo-student', 'demo-student-2'];
+  -- Their given and family names, in the same order, as the provider releases them.
+  c_given constant text[] := ARRAY['Petar', 'Lucija', 'Marko'];
+  c_family constant text[] := ARRAY['Kranjčec', 'Đaković', 'Ljubić'];
   -- The idempotency key of the teacher's one create request; a rerun repeats it.
   c_request constant uuid := 'c3b20000-0000-4000-8000-000000000001';
   c_course constant text := 'Lokalne javne politike (izmišljeni kolegij)';
@@ -58,12 +61,17 @@ BEGIN
   -- 1. Sign-in: the function the login callback calls after the OIDC check,
   -- with the callback's role. The account is created on the first call. A
   -- token has the cookie's format and never leaves this transaction.
+  -- DAN-304: the eight-argument form is the only one the login role keeps.
+  -- The provider's "employee" gives no teacher right (#1181, item 28), so,
+  -- as in the callback, none of the three gets one; the demo teacher's role
+  -- is the operator grant of step 2.
   SET LOCAL ROLE ductus_auth_local;
-  FOREACH v_subject IN ARRAY c_subjects LOOP
+  FOR i IN 1 .. cardinality(c_subjects) LOOP
+    v_subject := c_subjects[i];
     v_tokens := v_tokens || rtrim(translate(encode(
       sha256(uuid_send(gen_random_uuid()) || uuid_send(gen_random_uuid())), 'base64'), '+/', '-_'), '=');
     PERFORM identity.open_session(c_issuer, v_subject, v_subject || '@' || c_home_org, c_home_org,
-                                  sha256(convert_to(v_tokens[cardinality(v_tokens)], 'UTF8')));
+                                  sha256(convert_to(v_tokens[i], 'UTF8')), c_given[i], c_family[i], false);
   END LOOP;
   RESET ROLE;
 

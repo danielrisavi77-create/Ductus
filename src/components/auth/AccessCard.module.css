@@ -1,0 +1,86 @@
+/*
+ * DAN-378 (M1.8): Z-03 and Z-05 inside the shell, after the expired state
+ * of docs/design/ductura/prijava-v5.dc.html: one raised panel with a title,
+ * the reason and one next step. Only the tokens of app/globals.css, so it
+ * follows the light and the dark theme of the shell.
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 560px;
+  margin: clamp(16px, 6vh, 64px) auto 0;
+  padding: clamp(24px, 3vw, 36px) clamp(20px, 2.5vw, 32px);
+  background: var(--raised);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-lg);
+}
+
+.card h1 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 400;
+  line-height: 1.12;
+}
+
+.card p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+.next {
+  padding-top: 14px;
+  border-top: 1px solid var(--rule-2);
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 52px;
+  margin-top: 4px;
+  padding: 10px 20px;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+
+.button:hover {
+  background: var(--accent-hover);
+  color: var(--accent-ink);
+}
+
+.aai {
+  padding-right: 16px;
+  border-right: 1px solid currentColor;
+  font-family: var(--ff-display);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.label {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

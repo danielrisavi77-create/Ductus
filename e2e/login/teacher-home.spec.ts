@@ -54,16 +54,20 @@ async function snapshot(page: Page, name: string): Promise<void> {
   await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 }
 
-test("anonymous visitor is asked to sign in; a student reads only that there are no courses", async ({ page }) => {
+// DAN-378: Z-05 tells the student the page is not theirs and offers no new sign-in (#1233).
+test("anonymous visitor is asked to sign in; a student reads that the page is not theirs", async ({ page }) => {
   await page.goto("/nastavnik");
-  await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
-  await expect(page.getByText(messagesHr.teacher.signedOut)).toBeVisible();
-  await expect(page.getByRole("link", { name: messagesHr.teacher.signIn }))
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.signedOutTitle })).toBeVisible();
+  await expect(page.getByText(messagesHr.access.signedOutBody.replace("{what}", messagesHr.access.what.courses))).toBeVisible();
+  await expect(page.getByRole("link", { name: messagesHr.prijava.button }))
     .toHaveAttribute("href", "/api/auth/login?returnTo=%2Fnastavnik");
 
   await signIn(page, "/nastavnik", "Demo studentica");
-  await expect(page.getByRole("heading", { level: 2, name: t.empty })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: t.empty })).toHaveCount(0);
   await expect(page.getByText(t.noAssignments)).toHaveCount(0);
+  await expect(page.locator('a[href^="/api/auth/login"]')).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("link", { name: messagesHr.access.backToOwn })).toHaveAttribute("href", "/");
 });
 
 // DAN-325: a confirmed teacher, with or without courses, lands on the list from "/" and from /prijava.
@@ -180,7 +184,7 @@ test("without JavaScript a teacher on a phone still reaches signing out in the s
     await signOut.click();
     await noScript.waitForLoadState();
     await noScript.goto("/nastavnik");
-    await expect(noScript.getByText(messagesHr.teacher.signedOut)).toBeVisible();
+    await expect(noScript.getByRole("heading", { level: 1, name: messagesHr.access.signedOutTitle })).toBeVisible();
   } finally {
     await context.close();
   }

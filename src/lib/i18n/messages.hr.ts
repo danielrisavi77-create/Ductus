@@ -316,7 +316,6 @@ export const hr = {
   teacher: {
     title: "Novi kolegij i zadatak",
     signedOut: "Prijavite se nastavničkim računom.",
-    denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
     unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušajte ponovno.",
     signIn: "Prijavi se",
     backHome: "Na početnu",
@@ -487,7 +486,6 @@ export const hr = {
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
-    denied: "Ovaj prikaz vidi samo nastavnik.",
     loading: "Učitavanje radova…",
     unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
     // F-11 (#757, contract c.6397637802 §3; owner c.6397679688).
@@ -1086,6 +1084,26 @@ export const hr = {
     helpAaiLink: "Službena pomoć AAI@EduHr",
     helpAccessTitle: "Prijava je uspjela, ali nemate pristup?",
     helpAccessBody: "Javite se koordinatoru na svojoj ustanovi.",
+  },
+  // DAN-378 (M1.8): Z-03, a closed session behind the cookie; signed out,
+  // with no session ever shown; Z-05, signed in without the role (UX pass
+  // DAN-450, #1091 c.6561627758). Z-05 speaks of the own account only.
+  access: {
+    expiredTitle: "Sesija je istekla",
+    expiredBody: "Zbog neaktivnosti odjavljeni ste. Prijavite se ponovno i nastavite gdje ste stali.",
+    signedOutTitle: "Niste prijavljeni.",
+    signedOutBody: "Prijavite se da vidite {what}.",
+    what: {
+      courses: "svoje kolegije",
+      newCourse: "obrazac za novi kolegij i zadatak",
+      fastPath: "brz put kroz radove",
+      home: "svoj prostor",
+    },
+    deniedTitle: "Nemate pristup ovom prikazu",
+    deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
+    deniedPending: "Ulogu nastavnika potvrđuje administrator fakulteta. Dok se ne potvrdi, ovaj prikaz nije dostupan.",
+    deniedNext: "Javite se koordinatoru na svojoj ustanovi.",
+    backToOwn: "Natrag na moj prostor",
   },
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
   errorPage: {

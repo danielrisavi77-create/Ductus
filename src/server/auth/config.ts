@@ -16,6 +16,12 @@ export interface AuthConfig {
   clientId: string;
   clientSecret: string;
   redirectUri: URL;
+  /**
+   * Where the provider sends the browser after its own logout (DAN-212): the
+   * configured value only, never one taken from a request. Same origin as
+   * `redirectUri`.
+   */
+  postLogoutRedirectUri: URL;
   /** True only for the fake provider over http on a loopback host. */
   allowInsecureRequests: boolean;
   /** Pinned ID token algorithm; anything else, `none` included, is refused. */
@@ -129,6 +135,35 @@ function redirectUriOf(env: Env, production: boolean): URL {
 }
 
 /**
+ * OIDC_POST_LOGOUT_REDIRECT_URI (DAN-212): "/" on the origin of
+ * OIDC_REDIRECT_URI when unset. It must share that origin and pass the same
+ * rule as OIDC_REDIRECT_URI, so it is the address registered with the provider
+ * and nothing in a request can move it.
+ */
+function postLogoutRedirectUriOf(env: Env, production: boolean, redirectUri: URL): URL {
+  const name = "OIDC_POST_LOGOUT_REDIRECT_URI";
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === "") return new URL("/", redirectUri.origin);
+  const value = url(env, name);
+  if (production) {
+    if (!isPlainHttpsUrl(value, raw)) {
+      throw new AuthConfigError(`${name} must be an https URL of a public host in production`);
+    }
+  } else if (
+    (value.protocol !== "http:" && value.protocol !== "https:") ||
+    value.username !== "" ||
+    value.password !== "" ||
+    /[?#]/.test(raw)
+  ) {
+    throw new AuthConfigError(`${name} must be an http(s) URL with nothing beside the path`);
+  }
+  if (value.origin !== redirectUri.origin) {
+    throw new AuthConfigError(`${name} must have the origin of OIDC_REDIRECT_URI`);
+  }
+  return value;
+}
+
+/**
  * The one origin that login and every state-changing route expect (DAN-302
  * L3): that of OIDC_REDIRECT_URI, checked as loadAuthConfig checks it, never
  * one taken from Request.url or a Host header. Null when the value is missing
@@ -194,6 +229,7 @@ export function loadAuthConfig(env: Env = process.env): AuthConfig {
     clientId: required(env, "OIDC_CLIENT_ID").trim(),
     clientSecret: required(env, "OIDC_CLIENT_SECRET"),
     redirectUri,
+    postLogoutRedirectUri: postLogoutRedirectUriOf(env, production, redirectUri),
     allowInsecureRequests: !production && insecure,
     idTokenAlg: alg as IdTokenAlg,
     clockToleranceSeconds: tolerance,
