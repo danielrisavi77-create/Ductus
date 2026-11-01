@@ -25,8 +25,6 @@ export const LOG_SETTINGS = [
   "debug_print_plan",
   // Extensions: present only when the library is loaded for this login.
   "auto_explain.log_min_duration",
-  "auto_explain.log_parameter_max_length",
-  "pgaudit.log",
   "pgaudit.log_parameter",
 ] as const;
 
@@ -75,11 +73,15 @@ export function parameterLoggingSetting(settings: ReadonlyMap<string, string>): 
     }
     if (rateLogs(get("log_transaction_sample_rate"))) return "log_transaction_sample_rate";
   }
-  if (settings.has("auto_explain.log_min_duration") && durationLogs(get("auto_explain.log_min_duration"))
-      && parametersLogged(get("auto_explain.log_parameter_max_length"))) {
-    return "auto_explain.log_parameter_max_length";
+  // A logged plan can hold the bound token as a constant (a verbose plan of a
+  // custom plan), whatever log_parameter_max_length says, so auto_explain
+  // that logs at all is refused.
+  if (settings.has("auto_explain.log_min_duration") && durationLogs(get("auto_explain.log_min_duration"))) {
+    return "auto_explain.log_min_duration";
   }
-  if (settings.has("pgaudit.log_parameter") && isOn(get("pgaudit.log_parameter")) && get("pgaudit.log") !== "none") {
+  // Object audit (pgaudit.role) logs with parameters even when pgaudit.log is
+  // none, so the parameter switch alone decides.
+  if (settings.has("pgaudit.log_parameter") && isOn(get("pgaudit.log_parameter"))) {
     return "pgaudit.log_parameter";
   }
   return null;

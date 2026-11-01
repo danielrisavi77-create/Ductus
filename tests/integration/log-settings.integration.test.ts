@@ -107,6 +107,27 @@ describe("database logging check", () => {
     }
   });
 
+  // Codex r4437430867: auto_explain, here really loaded for the login, logs
+  // plans that can hold the token, so it is refused even without parameters.
+  it("refuses auto_explain loaded for the login, even with its parameter limit at 0", async () => {
+    await setOnLogin({
+      session_preload_libraries: "auto_explain",
+      "auto_explain.log_min_duration": "0",
+      "auto_explain.log_parameter_max_length": "0",
+    });
+    try {
+      await withLoginPool(async (pool) => {
+        await expect(assertNoParameterLogging(pool)).rejects.toThrow("(auto_explain.log_min_duration)");
+      });
+    } finally {
+      await setOnLogin({
+        session_preload_libraries: null,
+        "auto_explain.log_min_duration": null,
+        "auto_explain.log_parameter_max_length": null,
+      });
+    }
+  });
+
   it("starts no withActor transaction while the login would log the token", async () => {
     await setOnLogin({ log_min_duration_statement: "0" });
     try {

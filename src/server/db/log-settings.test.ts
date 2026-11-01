@@ -70,13 +70,29 @@ describe("parameterLoggingSetting", () => {
 
   it("checks auto_explain and pgaudit only when they are loaded", () => {
     expect(parameterLoggingSetting(settings({ "auto_explain.log_min_duration": "-1" }))).toBeNull();
-    expect(parameterLoggingSetting(settings({ "auto_explain.log_min_duration": "0" }))).toBe("auto_explain.log_parameter_max_length");
+    expect(parameterLoggingSetting(settings({ "auto_explain.log_min_duration": "0" }))).toBe("auto_explain.log_min_duration");
+    expect(parameterLoggingSetting(settings({ "pgaudit.log_parameter": "on" }))).toBe("pgaudit.log_parameter");
+    expect(parameterLoggingSetting(settings({ "pgaudit.log_parameter": "off" }))).toBeNull();
+  });
+
+  // Codex r4437430867: a verbose plan holds the token whatever the parameter limit.
+  it("refuses auto_explain that logs, even with log_parameter_max_length 0 and log_verbose", () => {
     expect(
-      parameterLoggingSetting(settings({ "auto_explain.log_min_duration": "0", "auto_explain.log_parameter_max_length": "0" })),
-    ).toBeNull();
-    expect(parameterLoggingSetting(settings({ "pgaudit.log": "read", "pgaudit.log_parameter": "on" }))).toBe("pgaudit.log_parameter");
-    expect(parameterLoggingSetting(settings({ "pgaudit.log": "none", "pgaudit.log_parameter": "on" }))).toBeNull();
-    expect(parameterLoggingSetting(settings({ "pgaudit.log": "all", "pgaudit.log_parameter": "off" }))).toBeNull();
+      parameterLoggingSetting(
+        settings({
+          "auto_explain.log_min_duration": "250",
+          "auto_explain.log_parameter_max_length": "0",
+          "auto_explain.log_verbose": "on",
+        }),
+      ),
+    ).toBe("auto_explain.log_min_duration");
+  });
+
+  // Codex r4437430872: object audit through pgaudit.role logs parameters with pgaudit.log none.
+  it("refuses pgaudit.log_parameter even when pgaudit.log is none", () => {
+    expect(
+      parameterLoggingSetting(settings({ "pgaudit.log": "none", "pgaudit.role": "auditor", "pgaudit.log_parameter": "on" })),
+    ).toBe("pgaudit.log_parameter");
   });
 });
 
