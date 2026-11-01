@@ -2247,6 +2247,7 @@ CREATE FUNCTION collaboration.reply_comment(p_thread_id uuid, p_body text) RETUR
 DECLARE
   actor record;
   t record;
+  v_last integer;
   v_comment uuid;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
@@ -2257,9 +2258,12 @@ BEGIN
   IF t.state = 'resolved' THEN
     RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
   END IF;
+  SELECT max(c.position) INTO v_last FROM collaboration.comment c WHERE c.thread_id = t.thread_id;
+  IF v_last >= 10000 THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
   INSERT INTO collaboration.comment (thread_id, institution_id, position, author_id, author_role, body)
-  SELECT t.thread_id, actor.institution_id, max(c.position) + 1, actor.user_id, t.role, p_body
-  FROM collaboration.comment c WHERE c.thread_id = t.thread_id
+  VALUES (t.thread_id, actor.institution_id, v_last + 1, actor.user_id, t.role, p_body)
   RETURNING id INTO v_comment;
   UPDATE collaboration.comment_thread c
   SET state = CASE WHEN t.role = 'student' THEN 'answered' ELSE 'open' END, updated_at = now()
@@ -6818,4 +6822,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261031120000'),
     ('20261031200000'),
     ('20261101010000'),
-    ('20261101150000');
+    ('20261101150000'),
+    ('20261101160000');
