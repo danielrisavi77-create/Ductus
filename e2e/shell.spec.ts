@@ -22,6 +22,25 @@ test.describe("workspace shell", () => {
     await expect(menu).toBeFocused();
   });
 
+  for (const width of [1440, 390]) {
+    test.describe(`without JavaScript at ${width} px`, () => {
+      test.use({ viewport: { width, height: 900 }, javaScriptEnabled: false });
+
+      // ☰ cannot open the drawer without JavaScript, so the <noscript> rules
+      // must win over the drawer rules (Codex, 3ff456f7). /rad streams, so
+      // the page may sit in Next's hidden frame: the computed style is read,
+      // not the visibility of the whole page.
+      test("the side bar is in the page and ☰ is not offered", async ({ page }) => {
+        await page.goto("/rad");
+        const side = page.locator("#bocna-navigacija");
+        expect(await side.evaluate((el) => getComputedStyle(el).visibility)).toBe("visible");
+        expect(await side.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+        const menu = page.locator('button[aria-controls="bocna-navigacija"]');
+        expect(await menu.evaluate((el) => getComputedStyle(el).display)).toBe("none");
+      });
+    });
+  }
+
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
