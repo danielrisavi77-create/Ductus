@@ -9,6 +9,7 @@ Dopuna zapisa `docs/engineering/prijenos-jezgre-M0.1.md`, skupina C. Vlasnik je 
 - Izvor: `pisac-editor@6cd0b75`, samo čitan. Slučaj je svaki poziv `it`/`test` u datoteci, i kad je u istom retku s `describe` (zato 273, a ne 271 kao u prvom brojanju po recima).
 - Za svaki slučaj pročitano je tijelo izvornog testa i otvoren Ductus test na `main` (`0cdffe5f`). Za svaki redak „pokriveno” provjereno je da navedena datoteka postoji i da sadrži navedeno ime testa.
 - Ime Ductus testa je tekst iz `it(...)`/`test(...)`; za pgTAP opis tvrdnje. Kad je ime predložak (`%s`, `${...}`), naveden je predložak.
+- Retci `journal.test.ts` i `lock.test.ts` osvježeni su 1. 11. 2026. na `main` (`c5a3f9b3`). Za svaki vraćeni slučaj mutacija je primijenjena lokalno, pokrenut je samo navedeni test (vitest, za bravu Playwright projekti desktop i mobile), test je pao, a datoteka je vraćena. Mutacija je opisana u napomeni retka.
 
 Ishodi:
 
@@ -20,8 +21,8 @@ Ishodi:
 
 | Izvorna datoteka | Slučajeva | Pokriveno | Nedostaje test | Nema koda |
 | --- | --- | --- | --- | --- |
-| `src/lib/journal/journal.test.ts` | 100 | 39 | 14 | 47 |
-| `src/lib/journal/lock.test.ts` | 9 | 3 | 2 | 4 |
+| `src/lib/journal/journal.test.ts` | 100 | 53 | 0 | 47 |
+| `src/lib/journal/lock.test.ts` | 9 | 5 | 0 | 4 |
 | `src/lib/journal/recovery.test.ts` | 17 | 4 | 1 | 12 |
 | `src/lib/sync/drainRunner.test.ts` | 40 | 24 | 3 | 13 |
 | `src/editor/process-capture.test.ts` | 17 | 10 | 3 | 4 |
@@ -49,7 +50,7 @@ Ishodi:
 | --- | --- | --- | --- | --- |
 | 1 | opens the journal when IndexedDB is available | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: writes snapshot, pending, sequence and LOCAL_DURABLE atomically | Ductus nema openJournal; journal se otvara implicitno pri prvom pozivu i test to koristi. |
 | 2 | reports 'unavailable' instead of throwing when IndexedDB is missing | pokriveno | `src/lib/journal/local-document-saver.test.ts`: 6: IndexedDB unavailable at load leaves the saver inert, never writing | Test simulira MissingAPIError (ono što Dexie baca bez IndexedDB-a), ne briše globalni indexedDB. |
-| 3 | maps %s to %s | nedostaje test | `src/lib/journal/local-document-saver.test.ts`: maps journal and browser errors to visible reasons | Djelomično: Quota i DatabaseClosed su testirani; InvalidState nije. DataError, NotFound, Version i Upgrade u failureOf daju unknown, ne corrupt. |
+| 3 | maps %s to %s | pokriveno | `src/lib/journal/local-document-saver.equivalence.test.ts`: 3: maps %s to unavailable; 3: maps %s to unknown, plain or wrapped, never to corrupt | Vraćeno u #1094 i #1184. Ductus DataError, NotFound, Version i Upgrade namjerno mapira u unknown, ne corrupt. Mutacija: iz regexa u failureOf (src/lib/journal/local-document-saver.ts) izbačen InvalidState; pada „3: maps InvalidStateError to unavailable”. |
 | 4 | looks inside Dexie's wrapper (`inner`) | pokriveno | `src/lib/journal/local-document-saver.test.ts`: 5: a full quota is ERROR, stays visible while typing on, and a later save recovers | AbortError s inner QuotaExceededError daje failure quota. |
 | 5 | follows a `cause` chain | nema koda | – | failureOf čita samo grešku i njezin inner; lanac cause se ne prati (src/lib/journal/local-document-saver.ts). |
 | 6 | does not guess 'corrupt' for an unrecognised error | pokriveno | `src/lib/journal/local-document-saver.test.ts`: maps journal and browser errors to visible reasons | Provjereni null i nepoznati JournalError; string i undefined nisu u testu, ali idu istim putem. |
@@ -61,16 +62,16 @@ Ishodi:
 | 12 | records LOCAL_DURABLE, never SYNCED — nothing reached a server | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: writes snapshot, pending, sequence and LOCAL_DURABLE atomically | – |
 | 13 | stores the base revision, not an invented server revision | pokriveno | `src/lib/journal/local-document-saver.test.ts`: the next write carries the revision the loaded snapshot holds (#206 qa206j MANJE) | – |
 | 14 | replaces the snapshot but appends to the queue | pokriveno | `src/lib/journal/local-document-saver.test.ts`: 2, 3: a burst of saves never races its own sequence, and the newest text wins | Snimka je zadnji tekst, a red raste; broj snimki se ne broji izravno. |
-| 15 | mints a fresh client transaction id per write (idempotency key) | nedostaje test | – | Journal odbija ponovljeni ključ (atomic-dexie-journal.test.ts), ali nijedan test ne provjerava da spremač bez ubrizganog generatora daje novi ključ za svaki zapis. |
+| 15 | mints a fresh client transaction id per write (idempotency key) | pokriveno | `src/lib/journal/local-document-saver.equivalence.test.ts`: 15: without an injected generator every write gets its own fresh transaction id | Vraćeno u #1094. Mutacija: crypto.randomUUID() u spremaču zamijenjen stalnim UUID-om; test pada. |
 | 16 | builds a REPLACE_DOCUMENT transaction — the only F1 mutation | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: rejects invalid documents, timestamps, base revisions and transaction kinds | saveLocal odbija drugu vrstu transakcije; EVIDENCE_SEGMENT ide kroz saveSegment. |
-| 17 | clears a stale lastError once a write succeeds | nedostaje test | – | saveLocal piše meta iznova bez lastError, ali nijedan test to ne provjerava. |
-| 18 | maps a %s during the write to '%s' | nedostaje test | `src/lib/journal/local-document-saver.test.ts`: 5: a full quota is ERROR, stays visible while typing on, and a later save recovers | Djelomično: quota i unknown su pokriveni; InvalidState pri pisanju nije testiran; DataError u Ductusu daje unknown, ne corrupt. |
+| 17 | clears a stale lastError once a write succeeds | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 17: a successful write clears a stale lastError and a recorded ERROR (47, 86) | Vraćeno u #1094. Mutacija: saveLocal u meta zadržava prijašnji lastError; test pada. |
+| 18 | maps a %s during the write to '%s' | pokriveno | `src/lib/journal/local-document-saver.equivalence.test.ts`: 18: an InvalidStateError during the write is ERROR unavailable, writes nothing and halts saving; 18: a %s during the write is ERROR unknown and writes nothing | Vraćeno u #1094 i #1184. DataError pri pisanju u Ductusu daje unknown, ne corrupt. Mutacija: iz regexa u failureOf izbačen InvalidState; pada prvi test. |
 | 19 | writes nothing at all when the transaction fails | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: rolls back the snapshot when pending.put fails after the first write | – |
 | 20 | caps the pending queue at the newest PENDING_LIMIT rows | nema koda | – | Ductus nikad ne briše dugovane retke; na granici staje fail-closed (local-document-saver.test.ts "7: the queue stops fail-closed at its bound..."). |
 | 21 | keeps the local sequence advancing past the cap | nema koda | – | Nema obrezivanja reda, pa nema ni slijeda preko granice; red staje na granici. |
 | 22 | trims only the document being written | nema koda | – | Nema obrezivanja reda ni u jednom dokumentu. |
 | 23 | leaves a queue under the cap alone | pokriveno | `src/lib/journal/local-document-saver.test.ts`: 7: the queue stops fail-closed at its bound and says so before it gets there | Ispod granice svi retci ostaju (5 od 5). |
-| 24 | saves a 200-paragraph document ten times well inside a coarse ceiling | nedostaje test | `src/lib/journal/local-document-saver.test.ts`: 8: one save of ${count} words stays well inside the debounce window | Djelomično: Ductus mjeri jedno veliko spremanje; deset uzastopnih spremanja (trošak po pisanju) nije mjereno. |
+| 24 | saves a 200-paragraph document ten times well inside a coarse ceiling | pokriveno | `src/lib/journal/local-document-saver.equivalence.test.ts`: 24: ten saves of a 200-paragraph document stay well inside a coarse ceiling | Vraćeno u #1094. Mutacija: čekanje od 600 ms prije upisa snimke u saveLocal; test pada. |
 | 25 | leaves the previous durable state intact when a later write aborts | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: rejects a reused transaction ID without changing the durable state | Kasnije neuspjelo pisanje ostavlja prethodno stanje; prekid usred transakcije pokriva "rolls back the snapshot when pending.put fails after the first write". |
 | 26 | returns empty contents for a document that was never saved | pokriveno | `src/lib/journal/local-document-saver.test.ts`: an empty journal loads as an empty document without writing | – |
 | 27 | round-trips the snapshot, the queue and meta | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: survives a close/reopen while retaining the owed transaction | – |
@@ -81,7 +82,7 @@ Ishodi:
 | 32 | is a no-op when nothing is acknowledged yet | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: pending signature keeps the hold and the row | – |
 | 33 | is idempotent for a repeated ACK | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: a late answer for a settled row neither deletes, releases nor moves the base back | – |
 | 34 | keeps the local sequence as a high-water mark | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: a later local save keeps the acknowledged base instead of the editor's older one | Posredno: spremanje s očekivanim localSeq 1 nakon praznog reda uspije samo ako slijed nije vraćen. |
-| 35 | never touches another document's queue | nedostaje test | – | recordAnswer briše samo retke svog dokumenta, ali nijedan sync test nema drugi dokument. |
+| 35 | never touches another document's queue | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 35: an acknowledged row never touches another document's queue | Vraćeno u #1094. Mutacija: recordAnswer pri potvrdi briše retke svih dokumenata do potvrđenog localSeq; test pada. |
 | 36 | leaves the snapshot in place | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: a verified receipt deletes the row, moves the base and allows SYNCED | – |
 | 37 | maps a failure to a typed reason | nema koda | – | Ductus journal baca JournalError ili izvornu grešku; ne vraća tipizirani razlog za ovu operaciju. |
 | 38 | records a state for a document with no journal rows yet | nema koda | – | Nema markState; stanje se piše samo uz spremanje ili odgovor, a dokument bez zapisa daje not_queued. |
@@ -89,20 +90,20 @@ Ishodi:
 | 40 | clears lastError when no reason is given | nema koda | – | Nema markState, a journal sam nikad ne upisuje lastError. |
 | 41 | does not touch the snapshot or the queue | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: SYNCED is refused without a verified receipt, and nothing is deleted | Promjena stanja (SYNCING) ostavlja red i reviziju snimke. |
 | 42 | maps a failure to a typed reason | nema koda | – | Nema markState; operacije stanja bacaju grešku umjesto tipiziranog razloga. |
-| 43 | brings %s back after the tab is closed and re-opened | nedostaje test | `src/lib/journal/atomic-dexie-journal.test.ts`: keeps sticky CONFLICT and RECOVERY_REQUIRED until explicit recovery | Djelomično: ljepljivo stanje i ponovno otvaranje testirani su odvojeno; nijedan test ne zatvara i ponovno otvara journal u CONFLICT ili RECOVERY_REQUIRED. |
+| 43 | brings %s back after the tab is closed and re-opened | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 43: %s comes back after the journal is closed and opened again, and still refuses a save; `src/lib/journal/local-document-saver.equivalence.test.ts`: 43: %s survives closing the tab: a new saver loads it as sticky recovery and writes nothing | Vraćeno u #1094. Mutacija: sticky() u journalu uvijek vraća false; padaju oba slučaja (CONFLICT, RECOVERY_REQUIRED) journal testa. |
 | 44 | does not downgrade a recorded conflict to LOCAL_DURABLE | pokriveno | `src/domain/sync/restore.test.ts`: keeps %s sticky whatever else the journal holds | – |
 | 45 | resumes LOCAL_DURABLE after an ordinary save | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: writes snapshot, pending, sequence and LOCAL_DURABLE atomically | – |
 | 46 | starts a never-saved document in EDITING | pokriveno | `src/lib/journal/local-document-saver.test.ts`: an empty journal loads as an empty document without writing | – |
-| 47 | lets a successful save clear a recorded ERROR | nedostaje test | – | saveLocal upisuje LOCAL_DURABLE i preko spremljenog ERROR, ali nema testa sa zapisanim ERROR pa spremanjem. |
+| 47 | lets a successful save clear a recorded ERROR | pokriveno | `src/lib/journal/local-document-saver.equivalence.test.ts`: 47, 86: a journal that recorded ERROR loads, saves, and the save clears the ERROR | Vraćeno u #1094. Isto tvrdi i journal test 17. Mutacija: saveLocal zadržava zapisani ERROR umjesto LOCAL_DURABLE; test pada. |
 | 48 | moves the snapshot onto the revision the server named | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: a verified receipt deletes the row, moves the base and allows SYNCED | markSynced je u Ductusu recordAnswer s potpisanom potvrdom. |
-| 49 | leaves the candidate itself untouched | nedostaje test | – | recordAnswer mijenja samo reviziju snimke, ali nijedan test ne provjerava da tekst snimke ostaje isti. |
+| 49 | leaves the candidate itself untouched | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 49: an acknowledgement moves only the revision; the saved text stays as it was | Vraćeno u #1094. Mutacija: recordAnswer pri upisu snimke mijenja i savedAt; test pada. |
 | 50 | refuses to claim SYNCED while rows are still owed to the server | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: with newer rows queued the prefix goes, the hold is released and SYNCED is refused | – |
 | 51 | keeps the local sequence as a high-water mark | pokriveno | `src/lib/journal/atomic-dexie-journal.sync.test.ts`: a later local save keeps the acknowledged base instead of the editor's older one | Posredno preko CAS-a na localSeq. |
-| 52 | refuses a revision that is not a whole, safe number | nedostaje test | – | Revizija dolazi iz provjerene potvrde (ackedRevision); nema testa da journal odbija reviziju 1.5 ili -1. |
+| 52 | refuses a revision that is not a whole, safe number | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 52: a committed revision %s is no acknowledgement: SYNCED is refused and nothing leaves | Vraćeno u #1094. Revizija se provjerava prije journala (src/domain/sync/drain.ts). Mutacija: izbačena provjera Number.isSafeInteger u drain.ts; padaju slučajevi 1.5 i MAX_SAFE_INTEGER + 2 (0 i -1 odbija druga provjera). |
 | 53 | writes meta even when nothing was ever journalled locally | nema koda | – | recordAnswer traži zapis dokumenta (not_queued); SYNCED se piše samo uz brisanje potvrđenog retka. |
 | 54 | maps a failing store to a reason instead of throwing | nema koda | – | recordAnswer baca grešku; nema tipiziranog rezultata. |
 | 55 | adds `conflicts` to an existing v1 journal without losing its rows | nema koda | – | Ductus nema spremište conflicts; čuvanje v1 redaka pokriva atomic-dexie-journal.logout.test.ts "upgrades a populated v1 journal without losing snapshot and pending queue". |
-| 56 | opens a fresh journal straight at v2 with all four stores | nedostaje test | – | Ductus je na verziji 4 s drugim spremištima; nijedan test ne provjerava verziju i popis spremišta svježeg journala (evidence test 8 provjerava samo nadogradnju). |
+| 56 | opens a fresh journal straight at v2 with all four stores | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 56: a fresh journal opens straight at version 4 with all six stores | Vraćeno u #1094. Ductus je na verziji 4 sa šest spremišta. Mutacija: version(4) u shemi promijenjen u version(5); test pada. |
 | 57 | stores a conflict and reads it back unresolved | nema koda | – | Ductus ne sprema zapise sukoba u journal; ConflictRecord postoji samo u src/domain/sync/conflict.ts i nigdje se ne koristi. |
 | 58 | returns null when the document has no conflict | nema koda | – | Nema spremišta sukoba ni čitanja neriješenog sukoba. |
 | 59 | keeps conflicts of different documents apart | nema koda | – | Nema spremišta sukoba. |
@@ -126,13 +127,13 @@ Ishodi:
 | 77 | does not resurrect a resolved conflict | nema koda | – | Nema spremišta sukoba. |
 | 78 | replaces the snapshot, empties the queue and records SYNCED | pokriveno | `src/lib/sync/evidence-recovery.test.ts`: 2: a confirmed take: the server's text, revision and head, the local text kept, nothing owed | U Ductusu samo za dokument s dokazima (adoptServerEvidence). |
 | 79 | keeps the local sequence as a high-water mark | pokriveno | `src/lib/sync/evidence-recovery.test.ts`: 2: a confirmed take: the server's text, revision and head, the local text kept, nothing owed | Ductus slijed povećava za 1, ne vraća ga. |
-| 80 | refuses a revision that is not a whole, non-negative number | nedostaje test | – | verifyOpening odbija necijelu i negativnu reviziju, ali test provjerava samo reviziju iza snimke. |
-| 81 | leaves another document's queue alone | nedostaje test | – | adoptServerEvidence briše samo retke svog dokumenta, ali nema testa s drugim dokumentom. |
+| 80 | refuses a revision that is not a whole, non-negative number | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 80: a server revision %s is refused and writes nothing | Vraćeno u #1094. Mutacija: u verifyOpening validSeq(currentRevision) zamijenjen provjerom typeof number; pada slučaj NaN (1.5 i -1 odbija druga provjera). |
+| 81 | leaves another document's queue alone | pokriveno | `src/lib/journal/atomic-dexie-journal.equivalence.test.ts`: 81: taking the server's version leaves another document's queue alone | Vraćeno u #1094. Mutacija: adoptServerEvidence briše cijeli red umjesto redaka svog dokumenta; test pada. |
 | 82 | maps a failing store to a reason instead of throwing | nema koda | – | adoptServerEvidence baca grešku; povrat stanja pri kvaru pokriva evidence-recovery.test.ts "6: a failure writing %s leaves the document in CONFLICT with its rows". |
 | 83 | refuses an ordinary candidate while meta records CONFLICT | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: keeps sticky CONFLICT and RECOVERY_REQUIRED until explicit recovery | – |
 | 84 | writes nothing at all when it refuses | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: keeps sticky CONFLICT and RECOVERY_REQUIRED until explicit recovery | – |
 | 85 | refuses while meta records RECOVERY_REQUIRED too | pokriveno | `src/lib/journal/atomic-dexie-journal.test.ts`: keeps sticky CONFLICT and RECOVERY_REQUIRED until explicit recovery | – |
-| 86 | allows ordinary candidates in every other state | nedostaje test | – | Djelomično: spremanje nakon SYNCING i SYNCED je testirano; nakon zapisanog ERROR nije. |
+| 86 | allows ordinary candidates in every other state | pokriveno | `src/lib/journal/local-document-saver.equivalence.test.ts`: 47, 86: a journal that recorded ERROR loads, saves, and the save clears the ERROR | Vraćeno u #1094. Spremanje nakon SYNCING i SYNCED i dalje tvrde postojeći testovi. Mutacija: sticky() uključuje i ERROR; test pada. |
 | 87 | lets rebaseLocal through: the rebase IS the decision | nema koda | – | Journal nema rebaseLocal; jedini izlaz iz ljepljivog stanja je adoptServerEvidence. |
 | 88 | maps a genuinely failing store to a reason, not to 'state-locked' | pokriveno | `src/lib/journal/local-document-saver.test.ts`: maps journal and browser errors to visible reasons | Quota daje quota, sticky_state daje corrupt. |
 | 89 | gives a second conflict in the same millisecond its own row | nema koda | – | Nema spremišta sukoba. |
@@ -152,11 +153,11 @@ Ishodi:
 
 | # | Izvorni test | Ishod | Ductus test | Napomena |
 | --- | --- | --- | --- | --- |
-| 1 | namespaces the lock per document | nedostaje test | – | Ime brave ductus-journal:{scope}:{documentId} postoji u src/components/editor/LocalDocument.tsx, ali ga nijedan test ne provjerava. |
+| 1 | namespaces the lock per document | pokriveno | `e2e/local-editor.spec.ts`: the journal lock is named for this scope and this document, and the editor holds exactly that one | Vraćeno u #1185. Mutacija: iz imena brave u src/components/editor/LocalDocument.tsx izbačen :{documentId}; test pada (desktop i mobile). |
 | 2 | grants the lock to the first caller | pokriveno | `e2e/local-editor.spec.ts`: 4: a second tab is read-only and blocked, and takes over once the first closes | Prva kartica dobiva bravu i piše u journal. |
 | 3 | refuses a second holder instead of queueing behind the first | pokriveno | `e2e/local-editor.spec.ts`: 4: a second tab is read-only and blocked, and takes over once the first closes | Druga kartica odmah dobiva odbijenicu (ifAvailable) i stanje blocked. Razlika: Ductus nakon toga namjerno čeka bravu. |
 | 4 | hands the lock on once the holder releases it | pokriveno | `e2e/local-editor.spec.ts`: 4: a second tab is read-only and blocked, and takes over once the first closes | Kad se prva kartica zatvori, druga preuzima bravu i piše. |
-| 5 | keeps different documents independent | nedostaje test | – | Brava je po dokumentu u LocalDocument.tsx, ali nema testa s dva dokumenta otvorena istodobno. |
+| 5 | keeps different documents independent | pokriveno | `e2e/local-editor.spec.ts`: a lock held for another document neither blocks this one nor is taken by it | Vraćeno u #1185. Mutacija: ista kao u retku 1; test pada jer brava drugog dokumenta postaje i brava ovog (desktop i mobile). |
 | 6 | falls back to writing when the API is missing | nema koda | – | Ductus bez Web Locks ne piše nego prikazuje unavailable (LocalDocument.tsx, provjera navigator.locks); namjerno fail-closed. |
 | 7 | falls back to writing when the manager rejects | nema koda | – | Ductus kod odbijene brave prikazuje unavailable i ne piše; suprotno ponašanje testira e2e/local-editor.spec.ts "a refused wait for the lock tells the author instead of staying blocked". |
 | 8 | survives a repeated release | nema koda | – | Ductus nema zaseban omotač brave s release(); bravu drži izvorni navigator.locks callback u LocalDocument.tsx. |
