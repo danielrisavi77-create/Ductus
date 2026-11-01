@@ -284,7 +284,7 @@ test("D-196 exclusions ignore letter case and separators; the allowlist is exact
     "src/CLAUDE.local.md", "src/x.instructions.md", "src/.codex/config.toml",
   ];
   for (const p of excluded) {
-    for (const variant of [p, p.toUpperCase(), p.replace(/^src\//, "src/").replace(/node_modules/, "Node_Modules"), p.replaceAll("/", "\\")]) {
+    for (const variant of [p, p.toUpperCase(), p.replace(/node_modules/, "Node_Modules"), p.replaceAll("/", "\\")]) {
       assert.equal(isOwnerFreePath(variant), false, variant);
     }
   }
