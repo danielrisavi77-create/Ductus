@@ -330,13 +330,18 @@ function runPackage(root, input, timeout, env) {
 // rulebook applies. The verdict is remembered per state key, so the extra runs
 // happen once per state.
 const failure = (problem, hint) => ({ problem, hint });
+// A probe that ran out of time is not an unusable package: it blocks every
+// command, the install command too (the install way out is for a broken
+// package, not for a slow one).
+const timedOut = (problem) => ({ problem, hint: SLOW_HINT + " " + RECOVERY, timedOut: true });
 function probe(root, rulebookDir, deadline, env, limits) {
-  if (deadline - Date.now() <= 0) return failure("the safety check ran out of time before the control probe", SLOW_HINT + " " + RECOVERY);
+  if (deadline - Date.now() <= 0) return timedOut("the safety check ran out of time before the control probe");
   let key;
   try {
     key = stateKey(root, rulebookDir, env, limits, deadline);
   } catch (error) {
     if (!(error instanceof LimitError)) throw error;
+    if (deadline - Date.now() <= 0) return timedOut("the safety check ran out of time reading the configuration for the control probe");
     return failure(
       `the safety check cannot verify the configuration it depends on: .cc-safety-net under ${rulebookDir} or the user's .cc-safety-net is too large or too slow to read (${error.message}), for example a link to a big directory or file`,
       "Remove or shrink what the links in those directories point to, then retry",
@@ -346,9 +351,10 @@ function probe(root, rulebookDir, deadline, env, limits) {
   if (dir && hasVerdict(dir, key)) return null;
   for (const command of PROBES) {
     const left = deadline - Date.now();
-    if (left <= 0) return failure("the control probe ran out of time");
+    if (left <= 0) return timedOut("the control probe ran out of time");
     const event = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd: rulebookDir, tool_input: { command } });
     const run = runPackage(root, event, left, env);
+    if (run.error?.code === "ETIMEDOUT" || deadline - Date.now() <= 0) return timedOut(`the control probe "${command}" ran out of time`);
     let decision;
     try {
       decision = JSON.parse(run.stdout || "{}").hookSpecificOutput?.permissionDecision;
@@ -472,6 +478,7 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   // Any clean answer is checked once per state, not only a silent one: a stub
   // that prints "{}" or an allow decision is as useless as one that prints nothing.
   const refused = probe(root, rulebookDir, deadline, env, limits);
+  if (refused?.timedOut) return blockedFor(refused.problem, refused.hint);
   if (refused) return unusable(refused.problem, refused.hint);
 
   // Run 2: in a subdirectory the project rules live in a parent the package does not search.

@@ -207,6 +207,61 @@ test("T4 the first run, the control probe and the second run all end by the one 
   }
 });
 
+// Review and QA on #1194 (45c3dcec): a deadline spent at the control probe went through the
+// install way out, so `pnpm install` passed. Every time-out blocks, the install command too.
+const INSTALLS = ["pnpm install", "pnpm install --frozen-lockfile"];
+// The clock jumps past the deadline once the fake package logged `mark` ("x" = the first run, "p" = a probe).
+function withClockJump(tree, mark, fn) {
+  const realNow = Date.now;
+  Date.now = () => {
+    let log = "";
+    try {
+      log = fs.readFileSync(tree.calls, "utf8");
+    } catch {
+      // nothing ran yet
+    }
+    return realNow() + (log.includes(mark) ? 600000 : 0);
+  };
+  try {
+    return fn();
+  } finally {
+    Date.now = realNow;
+  }
+}
+
+test("T6 a deadline spent before the control probe blocks the install command too", () => {
+  for (const command of INSTALLS) {
+    withTree({ bin: "allow" }, (tree) => {
+      const result = withClockJump(tree, "x", () => decide({ root: tree.root, input: event("Bash", command), deadline: Date.now() + 60000 }));
+      assert.equal(result.code, 2, `${command}: ${result.stderr}`);
+      assert.equal(result.stdout, "", command);
+      assert.match(result.stderr, /ran out of time before the control probe/, command);
+      assert.match(result.stderr, /--body-file/, command);
+      assert.equal(fs.readFileSync(tree.calls, "utf8"), "x", "the probe never ran");
+    });
+  }
+});
+
+test("T7 a deadline spent during the control probe blocks the install command too", { timeout: 30000 }, () => {
+  for (const command of INSTALLS) {
+    // The clock passes the deadline right after the first probe answered.
+    withTree({ bin: "allow" }, (tree) => {
+      const result = withClockJump(tree, "p", () => decide({ root: tree.root, input: event("Bash", command), deadline: Date.now() + 60000 }));
+      assert.equal(result.code, 2, `${command}: ${result.stderr}`);
+      assert.match(result.stderr, /control probe .*ran out of time/, command);
+    });
+    // A probe that really hangs until the deadline kills it.
+    withTree({ bin: "hangprobe" }, (tree) => {
+      const result = decide({ root: tree.root, input: event("Bash", command), deadline: Date.now() + 1500 });
+      assert.equal(result.code, 2, `${command}: ${result.stderr}`);
+      assert.equal(result.stdout, "", command);
+      assert.match(result.stderr, /control probe .*ran out of time/, command);
+    });
+  }
+  // A package that is broken, not slow, still leaves the install way out open.
+  withTree({ bin: "silent" }, (tree) => assert.equal(run(tree, "Bash", "pnpm install").code, 0));
+});
+
 test("T5 real package: a routine command passes far inside the budget once the probe is remembered", { timeout: 60000 }, async () => {
   const { ANALYSIS_TIMEOUT_MS } = await import("../hooks/safety-net.mjs");
   assert.equal(decide({ input: event("Bash", "git status") }).code, 0, "warm-up (probe)");
