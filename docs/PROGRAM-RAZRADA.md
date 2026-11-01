@@ -1,8 +1,8 @@
 # Ductus: razrada faza M0 do M11
 
-Verzija 0.1 · 31. 10. 2026. · Dopuna `docs/PROGRAM.md` prema D-191 (trag: #87 [c.6524612217](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6524612217); vlasnikovo odobrenje 31. 10. 2026.: „Može, kreni bez datuma”).
+Verzija 0.2 · 1. 11. 2026. · Dopuna `docs/PROGRAM.md` prema D-191 (trag: #87 [c.6524612217](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6524612217); vlasnikovo odobrenje 31. 10. 2026.: „Može, kreni bez datuma”).
 
-Dokument daje redoslijed faza i koraka, **bez datuma**. Ciljni datumi po fazi i kontrolne točke su u D-199 t. 6 (ODLUČENO 1. 11. 2026.; novi raspored iz D-191 t. 2) i u Linear milestoneovima. Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
+Dokument daje redoslijed faza i koraka, **bez datuma**. Ciljni datumi po fazi i kontrolne točke su u D-199 t. 6 (ODLUČENO 1. 11. 2026.; novi raspored iz D-191 t. 2), kako ga mijenja D-203 (datum pilota E3, kontrolna točka 20. 12. 2026., osnovica M3 C2), i u Linear milestoneovima. Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
 
 ## Kako čitati
 
@@ -17,7 +17,7 @@ Dokument daje redoslijed faza i koraka, **bez datuma**. Ciljni datumi po fazi i 
 
 ## Redoslijed
 
-M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka licencu Lekte) i M8 → M10 → M9 → M11. M4 i M8 dijele izvoz u obliku fakulteta, pa izvoz DOCX-a ide nakon M4. M9 ne blokira nijednu drugu fazu. Koraci vezani uz vanjske račune (B0.1) i AAI Lab ne zaustavljaju ostale korake.
+M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka licencu Lekte) i M8 → M10 → M9 → M11. Izvoz DOCX-a, PDF-a i PDF/A (M8.4, M8.5, M8.14) ulazi u val 1 i ne čeka M4: radi bez paketa pravila Lekte, a provjera oblika FPZG-a uključuje se kad stigne licenca (D-203 A3, t. 2). Tehnički M1 ne čeka Lab; prijava na Labu uvjet je prije stvarne uporabe (D-203 t. 4). Shema v2 (DAN-453) ide prije funkcija V11 (D-201 t. 2), a funkcije V11 raspoređene su po fazama M5 do M9 (D-203 t. 6). M9 ne blokira nijednu drugu fazu. Koraci vezani uz vanjske račune (B0.1) i AAI Lab ne zaustavljaju ostale korake.
 
 ## M0 Temelj
 
@@ -60,7 +60,11 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Ekrani:** S-01 prijava, Z-03 sesija istekla, Z-05 nema ovlasti.
 
-**Uvjet završetka:** zapisan uspješan prolaz prijave na Labu; `app_user` vezan uz `hrEduPersonUniqueID`; test da drugi izdavatelj s istim identifikatorom ne dobiva isti račun (D-104); CI test bez lažnog pružatelja u produkciji zelen; nalazi iz M1.7 zatvoreni.
+Napomena (D-203 t. 4): M1.3 i M1.4 ovise o M1.2 samo za provjeru na Labu. Za tehnički M1 grade se i testiraju uz lažni pružatelj, a prolaz na Labu dodaje se kad Lab bude dostupan.
+
+**Uvjet završetka (tehnički M1, D-203 t. 4):** spojeni koraci M1.3 do M1.8; `app_user` vezan uz `hrEduPersonUniqueID`; test da drugi izdavatelj s istim identifikatorom ne dobiva isti račun (D-104); CI test bez lažnog pružatelja u produkciji zelen; nalazi iz M1.7 zatvoreni.
+
+**Prije stvarne uporabe:** zapisan uspješan prolaz prijave na Labu (M1.1, M1.2), uz staging M11.4 i GO uvjete. Lažni OIDC i CI nisu dokaz stvarnog AAI toka (D-203 D1).
 
 ## M2 Model fakulteta
 
@@ -114,6 +118,8 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Uvjet završetka:** izlazni kriterij M3 iz `docs/PROGRAM.md` (property testovi, idempotentno ponovno slanje, oporavak prekida između Storagea, RPC-a i potpisa, izmjereno CPU vrijeme rekonstrukcije doktorskog rada u zapisu B0.2); potvrdu potpisuje worker; B5 prolazi known-answer vektor i negativne slučajeve iz `docs/BACKEND.md` §8; nalazi iz M3.7 zatvoreni.
 
+**Osnovica 20. 12. 2026. (D-203 C2):** spremanje, worker koji potpisuje (M3.2), potpisane potvrde, rekonstrukcija (M3.3) i oporavak. Osnovica se mjeri na kontrolnoj točki 20. 12. i ne zatvara M3. Puni B5 (M3.9) i ostali dijelovi uvjeta završetka prihvaćaju se prije nastavnog pilota; B5 se ne prebacuje iza pilota bez posebne odluke.
+
 ## M4 Paket pravila Lekte
 
 **Cilj:** pravila akademskog pisanja FPZG-a dolaze iz verzioniranog paketa Lekte, a Ductus ih samo čita i provjerava (D-117, pravilo 12).
@@ -136,6 +142,8 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 **Cilj:** student u Ductusu napiše cijeli akademski rad u obliku fakulteta, sa svakim novim elementom zapisanim u evidenciji.
 
 **Gotovo na mainu:** shema s odlomkom, naslovom, stavkom popisa i blok-citatom (`src/domain/document/schema.ts`); popis naslova; opseg u traci stanja; identitet blokova; format odsječka v3 s izvorom citata (#904). **U tijeku:** citati i literatura (#866), traka alata (#976), ljuska editora (#980). **Nema:** fusnota, tablica, slika, sadržaja, naslovne stranice, citata i bibliografije kao čvorova, provjere DOI-ja, opsega po poglavlju, bilježnice izvora, traži i zamijeni, fokusa.
+
+**V11 (D-201, D-203 t. 6):** prvo shema v2 (DAN-453, `Risk: critical`, ugovor i plan napada prije koda), s rezerviranim mjestom u formatu zapisa za prijedloge i izravne izmjene po D-34. U val 1 ulaze funkcije V11 koje pripadaju osnovnom editoru, komentarima, D-34 i izvozu; ostale idu u val 2 i 3 prema fazama M5 do M9. Koraci za funkcije V11 dodaju se s tiketima koje otvara orkestrator.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
@@ -176,7 +184,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M6.1 | Prikaz uživo: predani rad prikazan kao predan; mentorski prikaz s komentarom | F, B | | DAN-332 (#911), DAN-215 |
 | M6.2 | Reprodukcija znak po znak za mentora, odnosno nastavnika zadatka, i za studenta (D-143, D-154) | F | M3.1 | DAN-344 (#932) |
 | M6.3 | Prijedlozi izmjena s prihvaćanjem kao zasebnom promjenom s izvorom | B, F | M5.1 | DAN-419 |
-| M6.4 | Izravne izmjene nastavnika s pripisivanjem i postavkom vidljivom na radu (D-21, D-34) | B, F | M6.3 | DAN-420 |
+| M6.4 | Izravne izmjene nastavnika s pripisivanjem i postavkom vidljivom na radu (D-21, D-34); val 1, cijeli tok po D-34 (D-203 B1) | B, F | M6.3 | DAN-420 |
 | M6.5 | Zahtjev za doradu i odgovor studenta (D-45), uključujući „promijenjeno nakon prihvaćanja” | B, F | | DAN-314, DAN-266 |
 | M6.6 | Obavijesti u aplikaciji i e-poštom, podsjetnici o roku (N-01, N-02) | B, F | | DAN-305 (#950) |
 | M6.7 | Odgođeno objavljivanje komentara (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | F, B | | DAN-421 |
@@ -230,7 +238,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M8.1 | Lokalni sintetički spike čitanja DOCX-a (D-198 t. 5) | B | M8.8 | DAN-242 |
 | M8.2 | Uvoz DOCX-a kao događaj s izvorom „uvoz” | B, F | M8.1, M3.1 | DAN-396 |
 | M8.3 | Uvoz PDF-a kao događaj s izvorom | B, F | M8.2 | DAN-397 |
-| M8.4 | Izvoz DOCX-a u obliku fakulteta | B | M4.3, M5.4 | DAN-398 |
+| M8.4 | Izvoz DOCX-a u obliku fakulteta | B | M5.4 (provjera oblika: M4.3, D-203 t. 2) | DAN-398 |
 | M8.5 | Izvoz PDF-a u obliku fakulteta | B | M8.4 | DAN-399 |
 | M8.6 | Izvoz predanog rada, potvrde za referadu (R-06) i paket za Merlin (R-05); provjerljiv izvozni paket (D-173) | B, F | M7.1 | DAN-316, DAN-341 |
 | M8.7 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom (S-09) te provjera doslovnog citata u učitanom PDF-u (A-03) | F, B | M5.1, M5.9, M8.3 | DAN-441 |
@@ -240,10 +248,13 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M8.11 | Čitanje spremljenih verzija iz OneDrivea, SharePointa i Google Drivea za odabranu datoteku (D-198 t. 1; granica podataka i opseg dozvola po D-198 t. 5) | B, F | M8.2, M8.9 | DAN-438 |
 | M8.12 | Word i Google Docs dodaci, sljedeći val, ne pilot (D-198 t. 2; uvjet U-7) | B, F | M8.11 | DAN-439 |
 | M8.13 | Ekran „Povijest dokumenta”: popis „uvezeno, tvrdnja iz datoteke”, isti za obje uloge (D-198 t. 6) | F | M8.2, M8.9 | DAN-440 |
+| M8.14 | Izvoz PDF/A; profil i način dokaza valjanosti još nisu određeni, a obični PDF se ne označava kao PDF/A (D-203 A3) | B | M8.5; profil PDF/A (istraživanje dodjeljuje orkestrator, odluka vlasnika, D-203 t. 3) | novo |
+
+Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 **Ekrani:** S-19 uvoz teksta, S-20 izvoz, N-18 izvoz predanog rada i paket za Merlin.
 
-**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil).
+**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvoz DOCX-a, PDF-a i PDF/A prihvaćen prije nastavnog pilota, PDF/A prema profilu koji odredi vlasnik; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil kad stigne licenca, D-203 t. 2).
 
 ## M9 AI pomoćnik
 
@@ -336,7 +347,7 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 
 ## Otvorena pitanja za vlasnika
 
-1. ~~Novi raspored i datum pilota.~~ Riješeno 1. 11. 2026.: pilot 1. 3. 2027. (D-194 t. 1), raspored D-199 t. 6 (#87 c.6551869348).
+1. ~~Novi raspored i datum pilota.~~ Riješeno 1. 11. 2026.: pilot 1. 3. 2027. (D-194 t. 1), raspored D-199 t. 6 (#87 c.6551869348). Izmijenjeno D-203 E3: kod vala 1 spreman 22. 2. 2027., zatim proba od oko četiri tjedna; nastavna aktivacija oko 22. 3. 2027. ili poslije, uz prihvat i suglasnost FPZG-a. Datum 1. 3. 2027. ostaje kao trag.
 2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno), i to u val 1 (D-199 t. 1). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
