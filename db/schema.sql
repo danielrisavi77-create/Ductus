@@ -890,10 +890,24 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
-  PERFORM 1 FROM institution.course_member m
-   WHERE m.course_id = v_assignment.course_id AND m.institution_id = v_actor.institution_id
-     AND m.user_id = v_actor.user_id AND m.role = 'student' AND m.member_to IS NULL
-   FOR SHARE;
+  IF v_assignment.course_id IS NOT NULL THEN
+    PERFORM 1 FROM institution.course_member m
+     WHERE m.course_id = v_assignment.course_id AND m.institution_id = v_actor.institution_id
+       AND m.user_id = v_actor.user_id AND m.role = 'student' AND m.member_to IS NULL
+     FOR SHARE;
+  ELSE
+    -- Only while the mentor holds the teacher role, confirmed and not revoked
+    -- (#916, invariant 3): a mentor without it closes the student's path as
+    -- it closes the mentor's lists. The role row is held FOR SHARE with the
+    -- mentorship, so revoking the role waits for an acceptance in progress.
+    PERFORM 1 FROM institution.mentorship s
+      JOIN institution.institution_role r
+        ON r.user_id = s.mentor_id AND r.institution_id = s.institution_id AND r.role = 'teacher'
+       AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+     WHERE s.id = v_assignment.mentorship_id AND s.institution_id = v_actor.institution_id
+       AND s.student_id = v_actor.user_id AND s.ended_at IS NULL
+     FOR SHARE;
+  END IF;
   IF NOT FOUND THEN
     RETURN;
   END IF;
@@ -909,10 +923,10 @@ $$;
 
 
 --
--- Name: open_student_work(uuid); Type: FUNCTION; Schema: app; Owner: -
+-- Name: open_student_work(uuid, boolean); Type: FUNCTION; Schema: app; Owner: -
 --
 
-CREATE FUNCTION app.open_student_work(p_assignment_id uuid) RETURNS TABLE(outcome text, document_id text, evidence_profile_id text, current_revision bigint, document_hash text, head_segment_hash text, last_sequence_to bigint, snapshot text)
+CREATE FUNCTION app.open_student_work(p_assignment_id uuid, p_start boolean DEFAULT true) RETURNS TABLE(outcome text, document_id text, evidence_profile_id text, current_revision bigint, document_hash text, head_segment_hash text, last_sequence_to bigint, snapshot text)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -947,6 +961,13 @@ BEGIN
    WHERE p.assignment_id = p_assignment_id AND p.institution_id = v_actor.institution_id
      AND p.principal_id = v_actor.user_id;
   IF NOT FOUND THEN
+    -- F-137: only a request that asks to start makes the work; any other
+    -- call opens an existing work and writes nothing.
+    IF p_start IS NOT TRUE THEN
+      RETURN QUERY SELECT 'not_started'::text, NULL::text, NULL::text, NULL::bigint, NULL::text, NULL::text,
+        NULL::bigint, NULL::text;
+      RETURN;
+    END IF;
     SELECT pg_catalog.array_agg(d.id) INTO v_domains FROM evidence.domain d
      WHERE d.institution_id = v_actor.institution_id;
     IF pg_catalog.cardinality(v_domains) IS DISTINCT FROM 1 THEN
@@ -1685,6 +1706,13 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
     JOIN institution.course_member m ON m.course_id = s.course_id AND m.institution_id = s.institution_id
    WHERE m.role = 'student' AND m.member_to IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+  UNION ALL
+  SELECT t.student_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.mentorship t ON t.id = s.mentorship_id AND t.institution_id = s.institution_id
+   WHERE t.ended_at IS NULL
      AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
 $$;
 
@@ -2690,6 +2718,7 @@ DECLARE
   v_local text;
   v_realm text;
   v_shape_ok boolean;
+  v_issuer_ok boolean;
 BEGIN
   IF p_issuer IS NULL OR pg_catalog.length(p_issuer) NOT BETWEEN 1 AND 255
      OR p_subject IS NULL OR pg_catalog.length(p_subject) NOT BETWEEN 1 AND 255
@@ -2714,11 +2743,19 @@ BEGIN
                    '\U000E0001\U000E0020-\U000E007F]+$' COLLATE "C")
     AND v_realm = v_home_org COLLATE "C";
 
-  -- The lookup runs on every path, so a refused shape or realm and an
-  -- unknown institution run the same query before the same ZD503. That is
-  -- the boundary: equal outcome and equal queries, not equal duration.
+  -- Both lookups run on every path, so a refused shape or realm, an unknown
+  -- institution and an issuer not recorded for it run the same queries
+  -- before the same ZD503. That is the boundary: equal outcome and equal
+  -- queries, not equal duration. With no institution the issuer lookup
+  -- still reads the table, under the nil id that gen_random_uuid never
+  -- gives; a match there could not open a session anyway.
   SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org;
-  IF v_institution IS NULL OR v_shape_ok IS NOT TRUE THEN
+  v_issuer_ok := EXISTS (
+    SELECT 1 FROM identity.institution_issuer ii
+    WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)
+      AND ii.oidc_issuer = p_issuer COLLATE "C"
+  );
+  IF v_institution IS NULL OR v_shape_ok IS NOT TRUE OR v_issuer_ok IS NOT TRUE THEN
     RAISE EXCEPTION 'institution not set up' USING ERRCODE = 'ZD503';
   END IF;
 
@@ -4026,6 +4063,20 @@ ALTER TABLE ONLY identity.institution FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: institution_issuer; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.institution_issuer (
+    institution_id uuid NOT NULL,
+    oidc_issuer text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT institution_issuer_oidc_issuer_check CHECK (((char_length(oidc_issuer) <= 255) AND (oidc_issuer ~ ('^https?://[!-~]+$'::text COLLATE "C"))))
+);
+
+ALTER TABLE ONLY identity.institution_issuer FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: person_name; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -4742,6 +4793,14 @@ ALTER TABLE ONLY evidence.submission
 
 ALTER TABLE ONLY identity.institution
     ADD CONSTRAINT institution_aai_home_org_key UNIQUE (aai_home_org);
+
+
+--
+-- Name: institution_issuer institution_issuer_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.institution_issuer
+    ADD CONSTRAINT institution_issuer_pkey PRIMARY KEY (institution_id, oidc_issuer);
 
 
 --
@@ -5841,6 +5900,14 @@ ALTER TABLE ONLY evidence.submission
 
 
 --
+-- Name: institution_issuer institution_issuer_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.institution_issuer
+    ADD CONSTRAINT institution_issuer_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES identity.institution(id);
+
+
+--
 -- Name: person_name person_name_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -6408,6 +6475,19 @@ ALTER TABLE evidence.submission_request ENABLE ROW LEVEL SECURITY;
 ALTER TABLE identity.institution ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: institution_issuer; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.institution_issuer ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: institution_issuer institution_issuer_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY institution_issuer_owner ON identity.institution_issuer TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: institution institution_owner; Type: POLICY; Schema: identity; Owner: -
 --
 
@@ -6735,4 +6815,7 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261028121000'),
     ('20261028140000'),
     ('20261028150000'),
-    ('20261031120000');
+    ('20261031120000'),
+    ('20261031200000'),
+    ('20261101010000'),
+    ('20261101150000');
