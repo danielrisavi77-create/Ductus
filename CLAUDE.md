@@ -1,8 +1,12 @@
 # Ductus: pravila za AI agente
 
+**Konačni vizualni smjer Ducture je „papir i grafit”** (D-188; potvrda vlasnika 29. 10. 2026.). Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato. Specifikacija je u `docs/design/DESIGN-SYSTEM.md`, postupak u `docs/SESSIONS.md` §6. Drugi smjer traži novu izričitu Danielovu odluku; starije palete su povijest.
+
 Prije svakog rada pročitaj `STATE.md`; SessionStart hook ga učitava ako nije predug, inače ga pročitaj sam. Razvojni governance, risk razine, review i QA gateovi su u `docs/ENGINEERING_SYSTEM.md`: prvo čitaj `docs/ENGINEERING_SYSTEM-SAZETAK.md`, a puni dokument samo u sekcijama koje zadatak traži. Runtime-neutral pravila za više Claude/ChatGPT računa su u `docs/MULTI-ACCOUNT.md`; čitaj ga kod predaje posla ili rotacije sesije. Projektni Claude skillovi su u `.claude/skills/` i moraju ostati tanki adapteri na kanonske dokumente. Sesija s dodijeljenom ulogom (pisac Backend, Frontend ili Platforma, reviewer, QA) na početku čita svoju karticu u `.claude/uloge/`; pravila po putanjama u `.claude/rules/` učitavaju se sama. Oboje su podsjetnici koji upućuju na ove dokumente, ne nova pravila.
 
 ## Mjerodavni izvori
+
+Za zadavanje, izvedbu ili pregled vidljive promjene obvezno pročitaj `docs/SESSIONS.md` §6. Ondje su vizualni ugovor, usporedba s odobrenom slikom i dokaz za predaju drugoj sesiji; vrijede za sve runtimee i uloge.
 
 - **Linear Ductus projekt i issue:** identitet zadatka, razlog, prioritet, nositelj, rok i trenutačni status.
 - **Repo:** prihvaćene produktne i tehničke odluke, arhitektura, opseg, kriteriji i razvojne upute. Za proizvod čitaj `docs/PRODUCT.md`, za tehniku `docs/ARCHITECTURE.md` i `docs/BACKEND.md` (BACKEND ima prednost u pojedinostima), za odluke `docs/DECISIONS.md`, za funkcije `docs/FEATURES.md`, a za faze i GO uvjete `docs/PROGRAM.md` i `docs/PLAN-DEMO.md`.

@@ -10,9 +10,10 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ORKESTRATOR.md`; uz svaku st
 
 ## Kad stigne PR
 
-- Spaja (squash) samo uz cijelu tablicu provjera; među njima: CI zelen, review vrijedi za aktualni head (`critical` i QA PASS, osim PR-a sa samo testovima ili samo dokumentima, `ENGINEERING_SYSTEM.md` §5), baza `main` bez sukoba, veličina, polja ugovora za `critical`, ažurnost prema ENGINEERING_SYSTEM §10 (DAN-263), Linear issue, PR ne čeka Daniela (§2).
+- Spaja (squash) tek kad prolazi cijela tablica: CI, aktualni review/QA po riziku i izuzećima iz `ENGINEERING_SYSTEM.md` §5, baza `main`, veličina, ugovor, ažurnost, Linear i odluke vlasnika (§2).
 - Što ne prolazi vraća se sesiji jednom porukom s točnim razlogom. Tuđe grane ne mijenja (§2).
 - Diff čitaju CI i reviewer; orkestrator gleda metapodatke i popis datoteka, osim kad se reviewer i autor ne slažu ili risk traži njegovu odluku (§2).
+- Konačni smjer: „papir i grafit” (D-188); ugovor, usporedba i predaja prema `SESSIONS.md` §6 (§2, §8).
 
 ## Nakon spajanja
 
