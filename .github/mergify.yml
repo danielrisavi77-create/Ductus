@@ -1,72 +1,10 @@
-# Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
-# developer machine. Mergify sees only statuses, not the risk (F-114), so it
-# never puts a PR into the queue by itself: the rule "auto-queue low and
-# test-only PRs" (D-189, #971) is off since F-165 until the owner decides
-# D-189 (5). A PR enters the queue only by the owner's `@Mergifyio queue` command
-# (restricted to the owner below), and only when both statuses the gate
-# publishes are green (D-161 (h)):
-#   - "Engineering review gate": independent review and QA for the head;
-#   - "Merge authorization": green in one of four cases: the PR declares Risk
-#     low or standard and touches no D-97 path; or it declares Risk critical,
-#     changes only files on the D-196 allowlist, comes from a head branch in
-#     this repository and the gate counted App verdicts (a QA PASS from another
-#     App than every review, or a review PASS when QA-exempt), not an override
-#     or an owner-account CLI comment (D-196, trial to 14 Nov 2026); or it only adds new test files
-#     from the allowlist in ENGINEERING_SYSTEM section 5, from a head branch in
-#     this repository and with no D-97 path (D-189, critical included); or the
-#     owner's `Owner-Command: merge` comment names this head (D-97,
-#     docs/ORKESTRATOR.md section 2).
-# Other merges are manual, through `pr-ready`. Mergify reads neither the PR
-# description nor labels nor file names: the gate decides with the same parser
-# that checks the declared risk, so an edited description cannot change what
-# Mergify sees.
-# DAN-263: serial speculative checks run on Mergify-owned draft PRs; original
-# heads keep their review/QA/owner approvals.
-# DAN-447 (owner, 1 Nov 2026; replaces D-177's three checks of three): one
-# check at a time, each a batch of up to five PRs (one CI run for the batch),
-# formed after at most three minutes of waiting. A failed batch is split until
-# the failing PR is isolated (no batch_max_failure_resolution_attempts), so the
-# others still merge, each as its own squash commit. A PR leaves the queue
-# only when it failed alone, or as the last PR of a failed batch whose earlier
-# parts all passed (Mergify does not retest it: main plus those parts passed,
-# main plus them plus this PR failed). No checks_timeout (a timeout is split
-# like a failure) and no retries (ENGINEERING_SYSTEM section 10).
-# DAN-449 (owner, 1 Nov 2026): two queues with the same conditions. `critical`
-# comes first, so `@Mergifyio queue` without a name lands there; its batches
-# hold at most two PRs, so a failure costs one more run and one round, and a
-# PR dropped as last had exactly one partner, which passed alone. Low and
-# standard PRs go to `@Mergifyio queue main` (batches of up to five). Mergify
-# sees no risk (F-114), so a wrong route costs only throughput: both queues
-# require Merge authorization. Batches never mix queues. No queue uses
-# batch_size 1, which would check in place and move the original head. Every PR in a batch must
-# meet all six queue conditions on its own head, Merge authorization included. All six
-# conditions remain mandatory on originals AND CI carriers. The gate recognizes
-# carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
-# a branch prefix alone. Mergify revalidates admission and rejects external edits
-# of queue branches. See docs/engineering/mergify-rollout.md before activation.
-# External merges reset the queue (`reset_on_external_merge: always`): the
-# batch in flight was tested on a `main` without that commit, so it is rebuilt
-# on the new `main` before anything merges; with one check that is one CI run.
-# DAN-447: Mergify no longer updates a PR that waits for the owner's command
-# when `main` moves (each update started full CI on it). The carrier tests the
-# PR on current `main`, so its head need not be current; a command names that
-# head and stays valid while it does not change. When a PR must be brought
-# up to date (a conflict, or before a manual merge), it is updated once, at
-# merge time, and the command carries over a clean update-branch (D-156, D-101).
-# No rule here updates, labels or queues a PR.
-# Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
-# neither may exist (mergify-config.test.mjs), and Mergify applies the
-# configuration of the default branch only, so a PR cannot change the queue
-# before it is merged.
-# scripts/engineering/mergify-config.test.mjs keeps the contexts below equal to
-# the required statuses of `main` plus "Merge authorization".
-
+# queue rule 'critical': `allow_queue_branch_edit` was removed. It was already set to `false`, the default, and the option is being retired.
+# queue rule 'main': `allow_queue_branch_edit` was removed. It was already set to `false`, the default, and the option is being retired.
 queue_rules:
   - name: critical
     batch_size: 2
     batch_max_wait_time: 3 min
     max_checks_retries: 0
-    allow_queue_branch_edit: false
     branch_protection_injection_mode: queue
     queue_conditions: &required
       - base=main
@@ -84,7 +22,6 @@ queue_rules:
     batch_size: 5
     batch_max_wait_time: 3 min
     max_checks_retries: 0
-    allow_queue_branch_edit: false
     branch_protection_injection_mode: queue
     queue_conditions: *required
     merge_conditions: *required
