@@ -41,6 +41,21 @@ function check(value: unknown): Checked {
   return { value };
 }
 
+/**
+ * AAI@EduHr releases its special hrEdu claims as JSON arrays, also the
+ * single-valued ones (Srce wiki, page 59867172); the local fake provider
+ * sends strings. An array counts only with exactly one member, which must
+ * itself pass `check`: of several values none is picked, and nothing is
+ * coerced. An array that holds no value (`[]`, `[null]`) is invalid, never
+ * missing, so it cannot read as an absent attribute.
+ */
+function checkSingleValued(value: unknown): Checked {
+  if (!Array.isArray(value)) return check(value);
+  if (value.length !== 1 || !Object.hasOwn(value, 0)) return { error: "invalid_claim" };
+  const only = check(value[0]);
+  return "error" in only ? { error: "invalid_claim" } : only;
+}
+
 // Which claim names AAI@EduHr OIDC uses for the two names is not yet
 // confirmed (#757): the OIDC profile names or the LDAP attribute names. Each
 // pair is taken whole, the OIDC one first, so a name never mixes the two.
@@ -71,8 +86,9 @@ export function identityFromClaims(idToken: Claims, userinfo?: Claims): ClaimsRe
   }
   const merged = { ...idToken, ...userinfo };
   const subject = check(idToken.sub);
-  const uniqueId = check(merged.hrEduPersonUniqueID);
-  const homeOrg = check(merged.hrEduPersonHomeOrg);
+  // `sub` is a standard claim and stays a plain string (OIDC Core 2).
+  const uniqueId = checkSingleValued(merged.hrEduPersonUniqueID);
+  const homeOrg = checkSingleValued(merged.hrEduPersonHomeOrg);
   for (const c of [subject, uniqueId, homeOrg]) if ("error" in c && c.error === "missing_claim") return { ok: false, reason: c.error };
   if (!("value" in subject) || !("value" in uniqueId) || !("value" in homeOrg)) {
     return { ok: false, reason: "invalid_claim" };
