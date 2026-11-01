@@ -908,7 +908,7 @@ export const hr = {
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
-      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. Uz svaku promjenu bilježit će se i način unosa, pa će nastavnik (mentor) vidjeti oznaku kad tekst nije unesen tipkovnicom ni lijepljenjem, na primjer diktiranjem. To će služiti samo prikazu uživo i reprodukciji.",
+      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. Uz svaku promjenu bilježit će se i način unosa, pa će nastavnik (mentor) vidjeti oznaku kad uređivač uz unos nije vidio pritisak tipke ni lijepljenje, na primjer kod diktiranja, nekih tipkovnica na mobitelu ili pomoćnih alata. Oznaka govori samo kako je tekst ušao u uređivač, ne tko ga je napisao. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodate.",
     },
