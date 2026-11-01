@@ -9,8 +9,10 @@ import { signIn } from "./support";
 // route (#363).
 test("anonymous visitor never sees the teacher-only course and assignment form", async ({ page }) => {
   await page.goto("/nastavnik/zadatak/novi");
-  await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
-  await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
+  // DAN-378: no session reads "not signed in", never "expired" (#1234).
+  await expect(page.getByRole("heading", { level: 1, name: t.access.signedOutTitle })).toBeVisible();
+  await expect(page.getByText(t.access.signedOutBody.replace("{what}", t.access.what.newCourse))).toBeVisible();
+  await expect(page.getByText(t.access.expiredTitle)).toHaveCount(0);
   await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
 });
 
@@ -18,18 +20,22 @@ test("anonymous visitor never sees the teacher-only course and assignment form",
 test("the old teacher address forwards to the course list, signed in or not", async ({ page }) => {
   await page.goto("/nastavnik/kolegiji");
   await expect(page).toHaveURL("http://localhost:3000/nastavnik");
-  await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: t.access.signedOutTitle })).toBeVisible();
 
   await signIn(page, "/", "Demo studentica");
   await page.goto("/nastavnik/kolegiji");
   await expect(page).toHaveURL("http://localhost:3000/nastavnik");
-  await expect(page.getByText(t.teacherCourses.empty)).toBeVisible();
+  // DAN-378 (Z-05): a student reads that the page is not theirs, not "no courses".
+  await expect(page.getByRole("heading", { level: 1, name: t.access.deniedTitle })).toBeVisible();
+  await expect(page.getByText(t.teacherCourses.empty)).toHaveCount(0);
 });
 
 test("signed-in demo student cannot create a course", async ({ page }) => {
   await signIn(page, "/nastavnik/zadatak/novi", "Demo studentica");
-  await expect(page.getByText(t.teacher.denied)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: t.access.deniedTitle })).toBeVisible();
   await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
+  // Z-05 offers no new sign-in (#1233).
+  await expect(page.locator('a[href^="/api/auth/login"]')).toHaveCount(0);
 });
 
 test("does not start the OIDC login without a click", async ({ page }) => {
@@ -41,8 +47,8 @@ test("does not start the OIDC login without a click", async ({ page }) => {
     }
   });
   await page.goto("/nastavnik/zadatak/novi");
-  await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
-  const login = page.getByRole("link", { name: t.teacher.signIn });
+  await expect(page.getByRole("heading", { level: 1, name: t.access.signedOutTitle })).toBeVisible();
+  const login = page.getByRole("link", { name: t.prijava.button });
   await expect(login).toBeVisible();
   expect(loginRequests).toHaveLength(0);
 

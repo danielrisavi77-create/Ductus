@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import AccessCard from "@/components/auth/AccessCard";
+import { accessShellScope, teacherPageAccess } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import TeacherSetup from "@/components/teacher/TeacherSetup";
-import { teacherAccess } from "@/components/teacher/teacher-access";
+import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
-import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -18,39 +19,32 @@ export const metadata = { title: `${t.teacher.title} · ${t.app.name}` };
 
 // FE-D10 (screen 10, design demo-tok-v2 step 2). Server access check is only
 // a UX boundary; both POST routes recheck every write in the database under
-// the authenticated principal.
+// the authenticated principal. DAN-378: in place of the form, Z-03 for a
+// closed session, "not signed in" without one and Z-05 for a signed-in
+// person without the teacher role, who is offered no new sign-in.
 export default async function TeacherNewAssignmentPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [access, principal] = await Promise.all([teacherAccess(token, withActor), sessionPrincipal(token, withActor)]);
+  // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
+  const { access, principal } = await teacherPageRead(token, withActor);
+  const screen = teacherPageAccess(access, principal.kind, token);
+  const card = screen === "expired" || screen === "signedOut" || screen === "denied";
   return (
     <AppShell
       session={shellSession(token)}
-      scope={principal.kind === "signed-in" ? principal.scope : null}
-      role={access === "allowed" ? "teacher" : null}
+      scope={accessShellScope(screen, principal)}
+      role={screen === "allowed" ? "teacher" : null}
       current="/nastavnik/zadatak/novi"
       crumbs={[t.teacherCourses.title, t.teacher.title]}
     >
       <div className={`page ${styles.page}`}>
-        <h1 className={styles.title}>{t.teacher.title}</h1>
-        {access === "allowed" ? (
-          <TeacherSetup />
+        {card ? (
+          <AccessCard kind={screen} returnTo="/nastavnik/zadatak/novi" what="newCourse" />
         ) : (
-          <>
-            <p role="status">
-              {t.teacher[access]}
-            </p>
-            {access !== "unavailable" ? (
-              <p>
-                {/* This API route starts an OIDC login. Use a real navigation
-                    rather than Next's prefetchable client-side Link. */}
-                <a href="/api/auth/login?returnTo=%2Fnastavnik%2Fzadatak%2Fnovi">
-                  {t.teacher.signIn}
-                </a>
-              </p>
-            ) : null}
-          </>
+          <h1 className={styles.title}>{t.teacher.title}</h1>
         )}
-        <p><Link href="/nastavnik">{t.teacher.backCourses}</Link></p>
+        {screen === "allowed" ? <TeacherSetup /> : null}
+        {screen === "unavailable" ? <p role="status">{t.teacher.unavailable}</p> : null}
+        {screen === "denied" ? null : <p><Link href="/nastavnik">{t.teacher.backCourses}</Link></p>}
       </div>
     </AppShell>
   );
