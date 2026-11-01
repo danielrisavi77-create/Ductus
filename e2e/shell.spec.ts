@@ -4,8 +4,24 @@ import { expect, test } from "@playwright/test";
 // (#476 6314969336, "Pisanje"): three columns on a wide screen; up to 1250 px
 // the structure rail folds under the sheet, up to 1050 px the panel too
 // (design v3 breakpoints with the shell's 236 px side bar; was README §5.1,
-// FE-D2; DAN-131).
+// FE-D2; DAN-131). Since 1. 11. 2026. the shell's side bar is a drawer behind
+// ☰ on /rad at every width (owner), so the workspace takes the whole width.
 test.describe("workspace shell", () => {
+  test("wide: no side bar beside the workspace, the drawer opens behind ☰", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const side = page.getByRole("complementary", { name: "Bočna navigacija", includeHidden: true });
+    await expect(side).toBeHidden();
+    const rail = await page.getByRole("complementary", { name: "Struktura rada" }).boundingBox();
+    expect(rail!.x).toBeLessThan(236);
+    const menu = page.getByRole("button", { name: "Otvori navigaciju" });
+    await menu.click();
+    await expect(side).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(side).toBeHidden();
+    await expect(menu).toBeFocused();
+  });
+
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");

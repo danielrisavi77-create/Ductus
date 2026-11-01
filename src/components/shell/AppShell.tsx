@@ -82,6 +82,12 @@ export type AppShellProps = {
   account?: ReactNode;
   /** The page brings its own `<main id="sadrzaj">` (the workspace, FE-D1). */
   ownMain?: boolean;
+  /**
+   * The side bar is a drawer behind ☰ at every width, so the page takes the
+   * whole width (the workspace, owner 1. 11. 2026.). Navigation and signing
+   * out stay one press away.
+   */
+  drawer?: boolean;
   children: ReactNode;
 };
 
@@ -91,7 +97,7 @@ export type AppShellProps = {
  * (I2); signing out is the same POST as everywhere and works without
  * JavaScript (I5). Below 800 px the side bar is a drawer behind ☰.
  */
-export default function AppShell({ role, session, scope, current, crumbs, account, ownMain = false, children }: AppShellProps) {
+export default function AppShell({ role, session, scope, current, crumbs, account, ownMain = false, drawer = false, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -115,7 +121,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
   // From 800 px the side bar is no drawer, so an open one must not leave the
   // shade and an inert page behind.
   useEffect(() => {
-    if (!open) return;
+    if (!open || drawer) return;
     const wide = window.matchMedia("(min-width: 800px)");
     const onChange = () => {
       if (wide.matches) setOpen(false);
@@ -123,20 +129,41 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
     onChange();
     wide.addEventListener("change", onChange);
     return () => wide.removeEventListener("change", onChange);
-  }, [open]);
+  }, [open, drawer]);
 
   const close = () => {
     setOpen(false);
     menuButton.current?.focus();
   };
 
+  // Rendered once: in the side bar, or in the top bar where the side bar is a
+  // closed drawer, so signing out stays one press away (D-118).
+  const accountBlock = place === "own" ? (
+    <div className={styles.account}>
+      {role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
+      {account}
+    </div>
+  ) : place === "signOut" ? (
+    // A signed-in person always has a way out, also without a role
+    // read for this page (#802 part B); the role label only with one.
+    <ShellLogout
+      scope={scope}
+      session={session.tag === null ? null : { tag: session.tag, at: session.at }}
+      className={styles.account}
+      buttonClassName={styles.signOut}
+      lead={role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
+    >
+      <Icon name="logout" />
+    </ShellLogout>
+  ) : null;
+
   return (
-    <div className={styles.shell}>
+    <div className={drawer ? `${styles.shell} ${styles.drawerShell}` : styles.shell}>
       <SessionObserver tag={session.tag} at={session.at} />
-      {/* Without JavaScript ☰ cannot open the drawer, so on a phone the side
-          bar, and with it signing out, stays in the page above the content (I5). */}
+      {/* Without JavaScript ☰ cannot open the drawer, so wherever the side bar
+          is one, it and signing out stay in the page above the content (I5). */}
       <noscript>
-        <style>{`@media (max-width: 799.98px) { .${styles.sidebar} { position: static; width: auto; transform: none; visibility: visible; } .${styles.menuButton} { display: none; } }`}</style>
+        <style>{`${drawer ? "@media all" : "@media (max-width: 799.98px)"} { .${styles.sidebar} { position: static; width: auto; transform: none; visibility: visible; } .${styles.menuButton} { display: none; } }`}</style>
       </noscript>
       {open ? <div className={styles.shade} onClick={close} aria-hidden="true" /> : null}
       <aside ref={sidebar} className={styles.sidebar} data-open={open} aria-label={t.shell.sideNav} id="bocna-navigacija">
@@ -170,24 +197,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
             <strong>{t.shell.demoBadge}</strong>
             {t.shell.demoNote}
           </p>
-          {place === "own" ? (
-            <div className={styles.account}>
-              {role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
-              {account}
-            </div>
-          ) : place === "signOut" ? (
-            // A signed-in person always has a way out, also without a role
-            // read for this page (#802 part B); the role label only with one.
-            <ShellLogout
-              scope={scope}
-              session={session.tag === null ? null : { tag: session.tag, at: session.at }}
-              className={styles.account}
-              buttonClassName={styles.signOut}
-              lead={role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
-            >
-              <Icon name="logout" />
-            </ShellLogout>
-          ) : null}
+          {drawer ? null : accountBlock}
         </div>
       </aside>
       <div className={styles.area}>
@@ -223,6 +233,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
           <div className={styles.actions}>
             <span className={styles.demo}>{t.shell.demoBadge}</span>
             <ThemeToggle />
+            {drawer ? accountBlock : null}
           </div>
         </header>
         {ownMain ? (
