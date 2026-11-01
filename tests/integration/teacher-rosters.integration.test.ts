@@ -7,15 +7,17 @@ import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { readAssignmentStudentNames } from "@/server/evidence/assignment-names";
 import { readCourseStudents } from "@/server/institution/course-students";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // DAN-344 R-2 (#923, contract c.6434766713 points 2 and 3): both readers over
 // withActor and a real ductus_app login against the compose stack, so the
 // statements the readers send are the ones the functions answer. Rows are
 // written by the operator here; pgTAP (090) covers every refusal. Every
 // person, institution, course and name is random or invented.
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(ADMIN_URL).hostname)) {
-  throw new Error("The roster test runs only against a loopback database (DATABASE_URL).");
-}
+const ADMIN_URL = requireLoopbackDatabaseUrl(
+  process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus",
+  "The roster test runs only against a loopback database (DATABASE_URL).",
+);
 const suffix = randomBytes(4).toString("hex");
 const LOGIN = `it_rosters_${suffix}`;
 const password = randomBytes(24).toString("hex");
