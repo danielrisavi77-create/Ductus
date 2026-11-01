@@ -407,10 +407,22 @@ const denies = (stdout) => {
   }
 };
 
+// An agent command that names the skip variable, in any case, is refused
+// before the package runs, also when the package is unusable.
+export const SECRET_SCAN_SKIP = /DUCTUS_ALLOW_SECRET_SCAN_SKIP/i;
+const SECRET_SCAN_SKIP_BLOCK = {
+  code: 2,
+  stdout: "",
+  stderr:
+    "Safety hook blocked this command: DUCTUS_ALLOW_SECRET_SCAN_SKIP is for a human only (lefthook.yml). An agent without a secret scanner stops and reports instead.\n",
+};
+
 // Pure decision: { code, stdout, stderr }. `input` is the raw hook stdin.
 export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS, env = process.env, limits }) {
   const deadline = Date.now() + timeoutMs;
   const command = commandOf(input);
+  // F-017: the secret-scan skip in lefthook.yml is for a human only.
+  if (typeof command === "string" && SECRET_SCAN_SKIP.test(command)) return SECRET_SCAN_SKIP_BLOCK;
   // The exact install command is the way out of an unusable package.
   const unusable = (problem, hint) => (isInstallCommand(command) ? { code: 0, stdout: "", stderr: "" } : blockedFor(problem, hint));
   const problem = packageProblem(root);

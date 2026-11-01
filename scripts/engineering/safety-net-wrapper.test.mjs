@@ -243,6 +243,24 @@ for (const tool of TOOLS) {
     assert.equal(result.code, 0);
     assert.match(result.stdout, /"permissionDecision":\s*"deny"/);
   });
+
+  test(`F-017 a command that names the secret-scan skip is blocked, before and without the package (${tool})`, () => {
+    const name = "DUCTUS_ALLOW_SECRET_SCAN_SKIP";
+    for (const command of [
+      `${name}=$(git write-tree) git commit -m x`,
+      `export ${name}=abc; git commit -m x`,
+      `$env:${name} = (git write-tree); git commit -m x`,
+      `env ${name.toLowerCase()}=1 git commit -m x`,
+      `echo ${name}`,
+    ]) {
+      const result = decide({ input: event(tool, command) });
+      assert.equal(result.code, 2, command);
+      assert.match(result.stderr, /for a human only/, command);
+      // A root without the package would otherwise only allow the install command.
+      assert.equal(decide({ root: path.join(os.tmpdir(), "no-such-ductus-root"), input: event(tool, command) }).code, 2, command);
+    }
+    assert.equal(decide({ input: event(tool, "git commit -m 'secret scan passed'") }).code, 0);
+  });
 }
 
 for (const tool of TOOLS) {
