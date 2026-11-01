@@ -21,8 +21,17 @@ const ID = "D-\\d{2,}";
 const ROW_ID = new RegExp(`^ {0,3}\\| *(${ID}) *\\|`);
 const HEADING_ID = new RegExp(`^ {0,3}#{1,6}[ \\t]+(${ID})(?![0-9])`);
 // Destination, then an optional CommonMark title ("t", 't' or (t)).
-const LINK = /\[([^\]]*)\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
+const LINK_SOURCE = String.raw`\[([^\]]*)\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
+const LINK = new RegExp(LINK_SOURCE, "g");
 const ID_ONLY = new RegExp(`^${ID}$`);
+// An index entry is a table row whose first cell is only a link labelled with a
+// decision ID; a link in the text of a decision is a reference, not an entry (#1179).
+const FIRST_CELL = /^ {0,3}\|([^|]*)\|/;
+const CELL_LINK = new RegExp(`^${LINK_SOURCE}$`);
+// A link reference definition ("[x]: target"), also inside a quote or a list
+// item, is refused: only inline links are checked (QA, #1179). A footnote is not one.
+const REF_DEF = /^(?:\s*(?:>|[-*+]|\d{1,9}[.)]))*\s*\[(?!\^)[^\]]+\]:/;
+const stripCode = (text) => text.replace(/`[^`\n]*`/g, "");
 
 /** "D-05.md" for 5: two digits at least, no other leading zero. */
 export const canonicalName = (id) => `D-${String(Number(id.slice(2))).padStart(2, "0")}.md`;
@@ -48,7 +57,7 @@ function formatErrors(name, text) {
 /** Link targets of a text outside inline code, with their link text; `relative` is false for a scheme or a pure anchor. */
 function links(text) {
   const out = [];
-  for (const m of text.replace(/`[^`\n]*`/g, "").matchAll(LINK)) {
+  for (const m of stripCode(text).matchAll(LINK)) {
     const target = m[2];
     const relative = !(/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#"));
     out.push({ label: m[1], target: relative ? target.split("#")[0] : target, relative });
@@ -56,6 +65,19 @@ function links(text) {
   return out;
 }
 const relativeLinks = (text) => links(text).filter((l) => l.relative);
+
+/** IDs of the index entries, once per entry row (labels as written). */
+function entryIds(text) {
+  const ids = [];
+  for (const line of stripCode(text).split("\n")) {
+    const m = CELL_LINK.exec(FIRST_CELL.exec(line)?.[1].trim() ?? "");
+    if (m && ID_ONLY.test(m[1])) ids.push(m[1]);
+  }
+  return ids;
+}
+
+const refErrors = (name, text) =>
+  text.split("\n").filter((line) => REF_DEF.test(line)).map((line) => `${name}: reference link definition ${JSON.stringify(line)} is refused, use an inline link`);
 
 /**
  * Errors of a tree. `tree` = { dir: "missing" | "symlink" | "dir", entries:
@@ -73,7 +95,7 @@ export function checkTree(tree) {
       errors.push(`${where} is not a plain file`);
       continue;
     }
-    errors.push(...formatErrors(where, entry.text));
+    errors.push(...formatErrors(where, entry.text), ...refErrors(where, entry.text));
     if (entry.name === README) {
       const ids = definedIds(entry.text);
       if (ids.length > 0) errors.push(`${where} holds a decision record (${ids[0]})`);
@@ -94,7 +116,7 @@ export function checkTree(tree) {
   const plain = new Set(tree.entries.filter((e) => e.kind === "file").map((e) => `${DIR}/${e.name}`));
   const has = (p) => plain.has(p) || (!p.startsWith(`${DIR}/`) && tree.exists(p));
 
-  errors.push(...formatErrors(INDEX, tree.index));
+  errors.push(...formatErrors(INDEX, tree.index), ...refErrors(INDEX, tree.index));
   // A section may open with a heading and repeat its ID in a table row (D-177),
   // so a duplicate is counted per kind.
   for (const [kind, re] of [["row", ROW_ID], ["heading", HEADING_ID]]) {
@@ -104,8 +126,12 @@ export function checkTree(tree) {
   }
   const indexRows = new Set(definedIds(tree.index));
   const linked = new Map();
-  // A link labelled with a decision ID must reach its file, so an external
-  // address or an anchor is checked too, before it could be skipped (QA, #1179).
+  for (const id of entryIds(tree.index)) {
+    linked.set(id, (linked.get(id) ?? 0) + 1);
+    if (indexRows.has(id)) errors.push(`${id} is both full text in ${INDEX} and a file in ${DIR}/`);
+  }
+  // Every link labelled with a decision ID, entry or reference, must reach its
+  // file, so an external address or an anchor is checked too (QA, #1179).
   for (const { label, target, relative } of links(tree.index)) {
     if (!relative && !ID_ONLY.test(label)) continue;
     const resolved = relative ? path.posix.normalize(path.posix.join("docs", target)) : target;
@@ -114,8 +140,6 @@ export function checkTree(tree) {
         errors.push(`${INDEX}: link ${label} points to ${target}, not odluke/${canonicalName(label)}`);
         continue;
       }
-      linked.set(label, (linked.get(label) ?? 0) + 1);
-      if (indexRows.has(label)) errors.push(`${label} is both full text in ${INDEX} and a file in ${DIR}/`);
     }
     if (!has(resolved)) {
       errors.push(`${INDEX}: link ${target} points to a missing file`);
@@ -158,24 +182,62 @@ const INDEX_ROW = /^\| *\[(D-\d{2,})\]\((?:\.\/)?odluke\/\1\.md\) *\|/;
 const SCAFFOLD = [/^$/, new RegExp(`^# ${ID}$`), /^\| *(?:Broj|ID) *\|/, /^\|(?: *:?-{3,}:? *\|)+$/, INDEX_ROW];
 const isScaffold = (line) => SCAFFOLD.some((re) => re.test(line));
 
+const canonicalId = (id) => canonicalName(id).slice(0, -3);
+const HEADING = /^ {0,3}(#{1,6})[ \t]/;
+
+/**
+ * [owner, line] for each line. A decision file belongs to its ID. In the index
+ * a row belongs to its ID and any other line to the nearest heading with an ID
+ * above it, down to the next heading that has an ID or is not deeper; "" is
+ * outside every decision (review and QA, #1179).
+ */
+function ownedLines(text, fileId) {
+  const out = [];
+  let section = null;
+  for (const line of text.split("\n")) {
+    const h = fileId ? null : HEADING.exec(line);
+    if (h) {
+      const m = HEADING_ID.exec(line);
+      if (m) section = { id: canonicalId(m[1]), level: h[1].length };
+      else if (!section || h[1].length <= section.level) section = null;
+    }
+    const row = fileId ? null : ROW_ID.exec(line);
+    out.push([fileId ? canonicalId(fileId) : row ? canonicalId(row[1]) : (section?.id ?? ""), line]);
+  }
+  return out;
+}
+
 function lineCounts(texts) {
   const counts = new Map();
-  for (const text of texts) {
-    for (const line of text.split("\n")) if (!isScaffold(line)) counts.set(line, (counts.get(line) ?? 0) + 1);
+  for (const { id, text } of texts) {
+    for (const [owner, line] of ownedLines(text, id)) {
+      if (isScaffold(line)) continue;
+      const key = JSON.stringify([owner, line]);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
   }
   return counts;
 }
 
-/** B1, B2: every non-scaffold line of the base is in the head exactly as often, byte for byte, and no new one. */
+const describe = (key) => {
+  const [owner, line] = JSON.parse(key);
+  return `${owner || "outside a decision"}: ${JSON.stringify(line)}`;
+};
+
+/**
+ * B1, B2: every non-scaffold line of the base is in the head exactly as often,
+ * byte for byte and in the same decision, and no new one. A text is { id, text }:
+ * id is the decision of a file in docs/odluke/, null for the index.
+ */
 export function checkVerbatim(baseTexts, headTexts) {
   const base = lineCounts(baseTexts);
   const head = lineCounts(headTexts);
   const errors = [];
-  for (const [line, n] of base) {
-    const m = head.get(line) ?? 0;
-    if (m !== n) errors.push(`line occurs ${n} times in the base and ${m} in the head: ${JSON.stringify(line)}`);
+  for (const [key, n] of base) {
+    const m = head.get(key) ?? 0;
+    if (m !== n) errors.push(`line occurs ${n} times in the base and ${m} in the head, ${describe(key)}`);
   }
-  for (const [line, m] of head) if (!base.has(line)) errors.push(`new line in the head (${m}): ${JSON.stringify(line)}`);
+  for (const [key, m] of head) if (!base.has(key)) errors.push(`new line in the head (${m}), ${describe(key)}`);
   return errors;
 }
 
@@ -212,7 +274,8 @@ export function readTree(root = ".") {
 function readBaseTexts(sha) {
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`--verbatim needs a full commit SHA, got "${sha}"`);
   const names = git(["ls-tree", "-z", "--name-only", `${sha}^{commit}`, `${DIR}/`]).split("\0").filter(Boolean);
-  return [INDEX, ...names.filter((n) => !n.endsWith(`/${README}`))].map((p) => git(["show", `${sha}:${p}`]));
+  const files = names.filter((n) => !n.endsWith(`/${README}`)).map((p) => ({ id: path.posix.basename(p, ".md"), text: git(["show", `${sha}:${p}`]) }));
+  return [{ id: null, text: git(["show", `${sha}:${INDEX}`]) }, ...files];
 }
 
 function main(argv) {
@@ -222,7 +285,8 @@ function main(argv) {
   const tree = readTree();
   const errors = checkTree(tree);
   if (argv[0] === "--verbatim") {
-    const head = [tree.index, ...tree.entries.filter((e) => e.kind === "file" && e.name !== README).map((e) => e.text)];
+    const files = tree.entries.filter((e) => e.kind === "file" && e.name !== README);
+    const head = [{ id: null, text: tree.index }, ...files.map((e) => ({ id: e.name.slice(0, -3), text: e.text }))];
     errors.push(...checkVerbatim(readBaseTexts(argv[1]), head));
   }
   for (const error of errors) console.error(error);

@@ -62,6 +62,28 @@ test("C1: wrong heading, a file holding another decision, index and files disagr
   assert.deepEqual(checkTree(tree({ index: `${INDEX}## D-06: odjeljak\n` })), []);
 });
 
+test("C1: only the first cell of an index row is an entry; a reference in a decision's text is not (review and QA, #1179)", () => {
+  const ref = `${INDEX}| D-07 | Vidi [D-05](odluke/D-05.md). | Razlog. |\n## D-08: odjeljak\n\nKao [D-05](odluke/D-05.md \"naslov\").\n`;
+  assert.deepEqual(checkTree(tree({ index: ref })), []);
+  // A reference still has to reach the canonical file of a moved decision.
+  fails(tree({ index: `${INDEX}| D-07 | Vidi [D-05](odluke/D-5.md). | R. |\n` }), /link D-05 points to odluke\/D-5\.md/);
+  fails(tree({ index: `${INDEX}| D-07 | Vidi [D-06](odluke/D-06.md). | R. |\n` }), /link odluke\/D-06\.md points to a missing file/);
+  // References never stand in for the entry, and a second entry row still counts.
+  const noEntry = ref.replace("| [D-05](odluke/D-05.md) | Naslov | 1. 1. 2026. | ODLUČENO |\n", "");
+  fails(tree({ index: noEntry }), /D-05\.md is linked 0 times/);
+  fails(tree({ index: `${ref}  | [D-05](odluke/D-05.md) | opet |\n` }), /D-05\.md is linked 2 times/);
+});
+
+test("C5: a reference link definition is refused, in the index and in a decision file (QA, #1179)", () => {
+  const empty = [file("README.md", "# Odluke\n")];
+  for (const text of ["| [D-999][missing] | x |\n\n[missing]: odluke/D-999.md\n", "[D-999]\n\n   [D-999]: odluke/D-999.md \"t\"\n", "> [x]: odluke/D-999.md\n", "- [x]: ../nema.md\n"]) {
+    fails(tree({ index: text, entries: empty }), /DECISIONS\.md: reference link definition .* is refused/);
+  }
+  fails(tree({ entries: [decision("D-05", `${ROW} [plan][p]\n\n[p]: ../nema.md`)] }), /D-05\.md: reference link definition "\[p\]: \.\.\/nema\.md" is refused/);
+  // A footnote and an inline link are not definitions.
+  assert.deepEqual(checkTree(tree({ index: `${INDEX}Tekst[^1].\n\n[^1]: Bilješka.\n` })), []);
+});
+
 test("A3: a decision link must point into docs/odluke/ under its canonical name", () => {
   for (const target of ["D-05.md", "privacy/D-05.md", "odluke/D-5.md", "Odluke/D-05.md", "../odluke/D-05.md"]) {
     fails(tree({ index: INDEX.replace("(odluke/D-05.md)", `(${target})`) }), /link D-05 points to/);
@@ -119,9 +141,12 @@ test("file format: BOM, CR and a missing final newline fail, in files and in the
   fails(tree({ index: INDEX.trimEnd() }), /DECISIONS\.md does not end with a newline/);
 });
 
+const ix = (text) => ({ id: null, text });
+const df = (id, text) => ({ id, text });
+
 test("B1, B2: a pure move passes; every change of a moved line fails", () => {
-  const base = [`# Registar\n\nUvod odjeljka.\n\n${HEADER}${ROW}\n`];
-  const moved = [`# Registar\n\nUvod odjeljka.\n\n${HEADER}| [D-05](odluke/D-05.md) | Naslov | ODLUČENO |\n`, `# D-05\n\n${HEADER}${ROW}\n`];
+  const base = [ix(`# Registar\n\nUvod odjeljka.\n\n${HEADER}${ROW}\n`)];
+  const moved = [ix(`# Registar\n\nUvod odjeljka.\n\n${HEADER}| [D-05](odluke/D-05.md) | Naslov | ODLUČENO |\n`), df("D-05", `# D-05\n\n${HEADER}${ROW}\n`)];
   assert.deepEqual(checkVerbatim(base, moved), []);
   const variants = {
     "trailing space": `${ROW} `,
@@ -133,17 +158,32 @@ test("B1, B2: a pure move passes; every change of a moved line fails", () => {
     "split line": ROW.replace(" za test.", "\nza test."),
   };
   for (const [kind, line] of Object.entries(variants)) {
-    assert.notDeepEqual(checkVerbatim(base, [moved[0], `# D-05\n\n${line}\n`]), [], kind);
+    assert.notDeepEqual(checkVerbatim(base, [moved[0], df("D-05", `# D-05\n\n${line}\n`)]), [], kind);
   }
-  assert.notDeepEqual(checkVerbatim(base, [...moved, `# D-05\n${ROW}\n`]), [], "duplicated");
-  assert.notDeepEqual(checkVerbatim(base, [moved[0].replace("Uvod odjeljka.\n", "")]), [], "lost intro");
-  assert.notDeepEqual(checkVerbatim(base, [...moved, "Nova rečenica.\n"]), [], "new line");
+  assert.notDeepEqual(checkVerbatim(base, [...moved, df("D-05", `# D-05\n${ROW}\n`)]), [], "duplicated");
+  assert.notDeepEqual(checkVerbatim(base, [ix(moved[0].text.replace("Uvod odjeljka.\n", ""))]), [], "lost intro");
+  assert.notDeepEqual(checkVerbatim(base, [...moved, df("D-05", "Nova rečenica.\n")]), [], "new line");
   // A full decision that links a moved one stays compared (Codex, #1179).
   const linking = `| D-06 | Vidi [povezanu odluku](odluke/D-05.md). | Razlog. |`;
-  const withLink = [`${HEADER}${linking}\n`];
+  const withLink = [ix(`${HEADER}${linking}\n`)];
   assert.deepEqual(checkVerbatim(withLink, withLink), []);
-  assert.notDeepEqual(checkVerbatim(withLink, [withLink[0].replace("Razlog.", "Drugi razlog.")]), [], "linking row changed");
-  assert.notDeepEqual(checkVerbatim(base, [moved[0].replace("[D-05](odluke/D-05.md)", "[D-05](odluke/D-06.md)"), moved[1]]), [], "index row to another file");
+  assert.notDeepEqual(checkVerbatim(withLink, [ix(withLink[0].text.replace("Razlog.", "Drugi razlog."))]), [], "linking row changed");
+  assert.notDeepEqual(checkVerbatim(base, [ix(moved[0].text.replace("[D-05](odluke/D-05.md)", "[D-05](odluke/D-06.md)")), moved[1]]), [], "index row to another file");
+});
+
+test("B1: text is compared per decision; swapping two decisions' paragraphs fails (review and QA, #1179)", () => {
+  const base = [ix(`# Registar\n\n## D-05: Prva\n\nOdlomak A.\n\n## D-06: Druga\n\nOdlomak B.\n\n## Ostalo\n\nOpći tekst.\n`)];
+  const index = ix(`# Registar\n\n${HEADER}| [D-05](odluke/D-05.md) | Prva |\n| [D-06](odluke/D-06.md) | Druga |\n\n## Ostalo\n\nOpći tekst.\n`);
+  const move = (a, b) => [index, df("D-05", `# D-05\n\n## D-05: Prva\n\n${a}\n`), df("D-06", `# D-06\n\n## D-06: Druga\n\n${b}\n`)];
+  assert.deepEqual(checkVerbatim(base, move("Odlomak A.", "Odlomak B.")), []);
+  const swapped = checkVerbatim(base, move("Odlomak B.", "Odlomak A."));
+  assert.ok(swapped.some((e) => /D-05: "Odlomak A\."/.test(e)) && swapped.some((e) => /D-06: "Odlomak B\."/.test(e)), JSON.stringify(swapped));
+  // A row swapped into the other decision's file, or general text moved into a file, fails too.
+  assert.notDeepEqual(checkVerbatim([ix(`${HEADER}${ROW}\n| D-06 | Druga. | R. |\n`)], [ix(""), df("D-06", `# D-06\n${ROW}\n`), df("D-05", "# D-05\n| D-06 | Druga. | R. |\n")]), []);
+  assert.notDeepEqual(checkVerbatim(base, [ix(index.text.replace("Opći tekst.\n", "")), ...move("Odlomak A.", "Odlomak B.\nOpći tekst.").slice(1)]), []);
+  // A subheading without an ID stays in its decision's section.
+  const sub = [ix("## D-05: Prva\n\n### Razlog\n\nJer.\n")];
+  assert.deepEqual(checkVerbatim(sub, [ix(""), df("D-05", "# D-05\n\n## D-05: Prva\n\n### Razlog\n\nJer.\n")]), []);
 });
 
 test("the repository tree passes, with docs/odluke/ present", () => {
