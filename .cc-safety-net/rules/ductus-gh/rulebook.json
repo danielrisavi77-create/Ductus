@@ -32,7 +32,7 @@
       "command": "gh",
       "match": {
         "command_path": ["auth", "status"],
-        "any_args": ["-t", "--show-token", "--show-token=true", "--show-token=1"]
+        "any_args": ["-t", "-at", "-ta", "-th", "-ath", "-tah", "-aat", "-att", "-tt", "--show-token", "--show-token=true", "--show-token=1"]
       },
       "reason": "gh auth status with -t or --show-token prints the GitHub token; plain gh auth status is enough.",
       "intent": "use_alternative"
@@ -53,7 +53,11 @@
     {"command": "gh auth status -t", "expect": "blocked", "rule": "block-gh-auth-status-token"},
     {"command": "gh auth status --show-token", "expect": "blocked", "rule": "block-gh-auth-status-token"},
     {"command": "gh auth status --hostname github.com --show-token", "expect": "blocked", "rule": "block-gh-auth-status-token"},
+    {"command": "gh auth status -at", "expect": "blocked", "rule": "block-gh-auth-status-token"},
+    {"command": "gh auth status -ta", "expect": "blocked", "rule": "block-gh-auth-status-token"},
+    {"command": "gh auth status -th github.com", "expect": "blocked", "rule": "block-gh-auth-status-token"},
     {"command": "gh auth status", "expect": "allowed"},
+    {"command": "gh auth status -a", "expect": "allowed"},
     {"command": "gh auth status --hostname github.com", "expect": "allowed"},
     {"command": "gh api repos/o/r/pulls/7", "expect": "allowed"},
     {"command": "gh pr checks 7", "expect": "allowed"}

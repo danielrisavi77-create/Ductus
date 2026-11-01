@@ -98,6 +98,11 @@ const API_WRITES = [
   "gh api -f query='mutation { updateBranchProtectionRule(input: {branchProtectionRuleId: \"x\"}) { clientMutationId } }' graphql",
   "gh api graphql -F query=@m.graphql -f q='createRepositoryRuleset'",
   "gh api graphql -f query='mutation { deleteRepositoryRuleset(input: {repositoryRulesetId: \"x\"}) { clientMutationId } }'",
+  // Codex #1186 (r4435481077): gh takes a subcommand's flags before its name.
+  "gh --hostname github.com api -X DELETE repos/o/r/rulesets/7",
+  `gh --hostname github.com api repos/o/r/statuses/${SHA} -f state=success`,
+  "gh --hostname=github.com api -X DELETE repos/o/r/branches/main/protection",
+  "gh --hostname github.com api graphql -f query='mutation { deleteBranchProtectionRule(input: {}) { clientMutationId } }'",
 ];
 const ROUTINE = [
   "gh api repos/o/r/pulls/7",
@@ -129,9 +134,29 @@ for (const tool of ["Bash", "PowerShell"]) {
   });
 
   test(`settings.json repeats the rulebook's admin merge and token denies (${tool})`, () => {
-    for (const command of ["gh pr merge 7 --admin", "gh pr merge --admin 7 --squash", "gh auth token", "gh auth status -t", "gh auth status --show-token"]) {
+    for (const command of [
+      "gh pr merge 7 --admin",
+      "gh pr merge --admin 7 --squash",
+      "gh auth token",
+      "gh auth status -t",
+      "gh auth status --show-token",
+      // Codex #1186: short flag clusters (r4435481073) and flags before the
+      // subcommand name (r4435481077).
+      "gh auth status -at",
+      "gh auth status -ta",
+      "gh auth status -aat",
+      "gh auth status -th github.com",
+      "gh --hostname github.com auth token",
+      "gh --hostname github.com auth status -t",
+      "gh -R o/r pr merge 7 --admin",
+      "gh --repo o/r pr merge 7 --squash --admin",
+    ]) {
       assert.ok(denied(tool, command), `${tool}: ${command}`);
     }
-    for (const command of ["gh pr merge 7 --squash", "gh auth status"]) assert.ok(!denied(tool, command), `${tool}: ${command}`);
+    for (const command of ["gh pr merge 7 --squash", "gh -R o/r pr merge 7 --squash", "gh auth status"]) {
+      assert.ok(!denied(tool, command), `${tool}: ${command}`);
+    }
+    // docs/SESSIONS.md 4a names this false block: any flag on gh auth status.
+    assert.ok(denied(tool, "gh auth status --hostname github.com"));
   });
 }
