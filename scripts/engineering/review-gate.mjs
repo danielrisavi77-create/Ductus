@@ -115,7 +115,7 @@ async function main() {
     // F-165: statuses are per head, so the gate reads which open PRs share it.
     apiAll(`/repos/${owner}/${repo}/pulls?state=open`),
     // F-013: verdicts and commands from before the last base change do not count.
-    // base_ref_changed is listed by the issue events endpoint, not the timeline.
+    // Base change events are listed by the issue events endpoint, not the timeline.
     apiAll(`/repos/${owner}/${repo}/issues/${number}/events`),
   ]);
   const cutoff = lastBaseChange(issueEvents);

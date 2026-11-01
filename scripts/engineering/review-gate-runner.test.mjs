@@ -344,6 +344,43 @@ test("a Codex PR review without a readable time voids quota evidence after a bas
   assert.equal(gateState(run(comment, { ...input, reviews: [codexPrReview("2026-10-31T10:00:00Z")] })), "success");
 });
 
+// Codex review c.6562680923 on #1117: GitHub retargets a dependent PR after its
+// base branch is deleted and records automatic_base_change_succeeded, not
+// base_ref_changed. That change voids an older PASS and Owner-Command as well.
+const autoChange = (at) => ({ event: "automatic_base_change_succeeded", created_at: at });
+const mergeState = (out) => out.posts.find((p) => p.body.context === "Merge authorization")?.body.state;
+const d97Pr = { ...fallbackPr, body: "Agent: claude:a:platforma\nRisk: critical\nTask: B-1\n" };
+const d97File = [{ filename: "scripts/engineering/review-gate.mjs", status: "modified" }];
+// The owner writes a merge command directly, not through an App.
+const ownerCommandAt = (at) => ({ ...byOwnerAt(`Owner-Command: merge\nCommand-Head: ${HEAD}\n`, at), performed_via_github_app: null });
+
+test("an automatic base change voids an older PASS and Owner-Command, as a manual one does (F-013)", () => {
+  // A review PASS from before the automatic change does not count; one after it does.
+  const stale = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")], timeline: [autoChange("2026-10-31T11:00:00Z")] });
+  assert.equal(stale.code, 0);
+  assert.ok(stale.posts.every((p) => p.body.state !== "success"), JSON.stringify(states(stale.posts)));
+  const fresh = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T12:00:00Z")], timeline: [autoChange("2026-10-31T11:00:00Z")] });
+  assert.equal(gateState(fresh), "success");
+  // The failed variant changes nothing: the PASS keeps counting.
+  const failedAuto = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")],
+    timeline: [{ event: "automatic_base_change_failed", created_at: "2026-10-31T11:00:00Z" }],
+  });
+  assert.equal(gateState(failedAuto), "success");
+  // D-97 PR, verdicts after the change: the owner command from before it does not authorize the merge.
+  const input = { pr: d97Pr, files: d97File, openPulls: [d97Pr], timeline: [autoChange("2026-10-31T11:00:00Z")] };
+  const oldCommand = run(comment, { ...input, comments: [ownerCommandAt("2026-10-31T10:30:00Z"), ...quotaFallback] });
+  assert.equal(oldCommand.code, 0);
+  assert.equal(gateState(oldCommand), "success");
+  assert.equal(mergeState(oldCommand), "pending");
+  const newCommand = run(comment, { ...input, comments: [...quotaFallback, ownerCommandAt("2026-10-31T12:30:00Z")] });
+  assert.equal(mergeState(newCommand), "success");
+  // An automatic change without a readable time stops the run.
+  const noTime = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], timeline: [{ event: "automatic_base_change_succeeded" }] });
+  assert.equal(noTime.code, 1);
+  assert.deepEqual(states(noTime.posts), ALL.map((c) => [c, "pending"]));
+});
+
 // F-014: statuses are per commit. A closed PR, or a PR whose head lives in
 // another repository, may share its head SHA with an open PR of this
 // repository, so the gate writes nothing for it, on any path.

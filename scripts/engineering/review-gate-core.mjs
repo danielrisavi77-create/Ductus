@@ -904,14 +904,18 @@ export function targetsDefaultBranch(pr) {
 
 // F-013: a verdict judged the diff against the base of its time. After the base
 // changes, the same head carries another diff, so nothing written before the
-// last base change counts. Time of the last `base_ref_changed` issue event;
-// -Infinity when the base never changed, Infinity (drop everything) when the
-// events were not read or an event has no readable time.
+// last base change counts. Time of the last base change issue event: a manual
+// `base_ref_changed` or GitHub's `automatic_base_change_succeeded`, which
+// retargets a dependent PR after its base branch is deleted (Codex review
+// c.6562680923 on #1117); -Infinity when the base never changed, Infinity
+// (drop everything) when the events were not read or an event has no readable
+// time. A failed automatic change leaves the base as it was.
+export const BASE_CHANGE_EVENTS = new Set(["base_ref_changed", "automatic_base_change_succeeded"]);
 export function lastBaseChange(events) {
   if (!Array.isArray(events)) return Infinity;
   let last = -Infinity;
   for (const event of events) {
-    if (event?.event !== "base_ref_changed") continue;
+    if (!BASE_CHANGE_EVENTS.has(event?.event)) continue;
     const at = Date.parse(event?.created_at ?? "");
     last = Math.max(last, Number.isNaN(at) ? Infinity : at);
   }
