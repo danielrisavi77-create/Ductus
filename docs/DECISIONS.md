@@ -446,6 +446,18 @@ Vlasnička odluka iz sesije orkestratora `claude:b` o pitanjima iz plana M1, odj
 | --- | --- | --- |
 | D-200 | **ODLUČENO 1. 11. 2026. (Daniel: „Slažem se za sve tvoje preporuke oko M1 plana”; #87 c.6560920390). Odlučeno prema preporukama:** **P1 atributi:** afilijacija da; `profile` da (nastavnik vidi ime studenta); e-pošta samo za obavijesti, nikad za identitet ni spajanje računa. **P2 sesija:** istek nakon 2 h neaktivnosti uz postojeći maksimum 12 h; istek nije odjava, lokalni rad ostaje. Definicija aktivnosti, limit istodobnih sesija i čuvanje starih zapisa određuju se u ugovoru DAN-296 i idu vlasniku na potvrdu. **P3 D-73:** potvrđuje se postojeći mali adapter nad pinanim `openid-client`. **P4 odjava:** čuva se najmanji potreban podatak za back-channel (hint ili `sid`) uz čišćenje; ako Lab ne podrži back-channel, to je poznata granica i ulazi u DPIA. **P5 proba na Labu:** dopuštena testna adresa uz postojeći staging ugovor; localhost samo ako ga Srce izričito potvrdi. **P6 nositelj Test resursa:** FPZG odmah, kasniji prijenos uz njihovo odobrenje. **P7 svježina podobnosti:** nestanak afilijacije kod već potvrđenog nastavnika ne opoziva ulogu automatski; administrator dobiva oznaku za pregled. **Ne mijenja** D-09, D-16, D-104 ni `docs/PRODUCT.md` §5. U P2 ostaju otvoreni definicija aktivnosti, limit istodobnih sesija i čuvanje starih zapisa (vlasnikova potvrda ugovora DAN-296) | Vlasnik je prihvatio sve preporuke orkestratora iz plana M1 |
 
+## Dopuna D-200: P2 sesija i zatečeni checkpointi starog okidača (1. 11. 2026.)
+
+**ODLUČENO 1. 11. 2026.** Vlasnik u sesiji orkestratora `claude:b:orchestrator` (~20:12Z): „Može svo troje. C da”; zapis je [#87 c.6563144249](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6563144249). Dopuna zatvara otvorene točke P2 iz D-200 i ne mijenja nijednu drugu odluku.
+
+**1. D-200 P2, istek neaktivne sesije** (DAN-296 B4, ugovor b296 [#1091 c.6562824740](https://github.com/danielrisavi77-create/Ductus/issues/1091#issuecomment-6562824740)). Prihvaćene su sve tri vrijednosti:
+
+- **Aktivnost** je korisnikova radnja koju poslužitelj prihvati: prikaz zaštićene stranice uz otvorenu sesiju i svaki POST koji prođe `checkMutationRequest`, uključujući prihvaćen zapis evidencije. GET čitanja koja se sama osvježavaju (prikaz uživo, replay), provjera zdravlja i odbijeni zahtjevi se ne računaju. Vrijeme daje sat baze, a zapisuje se najviše jednom u 60 s.
+- **Limit istodobnih sesija:** 5 otvorenih po računu. Šesta prijava zatvara sesiju koja je najdulje bez aktivnosti (`superseded`) i ne odbija se.
+- **Čuvanje:** redak sesije briše se 30 dana nakon završetka sesije. Redak ne sadrži IP, preglednik ni uređaj.
+
+**2. Zatečeni checkpointi starog okidača** (#1236 OSTATAK, [#1091 c.6562806214](https://github.com/danielrisavi77-create/Ductus/issues/1091#issuecomment-6562806214)): izabrano je (c). Granica ostaje trajna, jer do pilota postoje samo sintetički podaci. Prije prve migracije baze sa stvarnim podacima granica se ponovno provjerava.
+
 ## Dopuna D-192: Codex za `critical` na razini high (1. 11. 2026.)
 
 **ODLUČENO 1. 11. 2026.** Daniel u sesiji orkestratora `claude:b`: „High vrijedi” (odgovor 2 u „1 main u D:ductus 2. High vrijedi 3. Da 4 osvježi. 5. Može, napravi to.”; trag: #87 [c.6560908220](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6560908220)). Zapis: „Codex za critical review i QA ide na razinu high, ne ultra. To mijenja tekst D-192 na mainu”.
