@@ -17,8 +17,15 @@ const homeCrumbOf = (page: Page) =>
   page.getByRole("navigation", { name: t.shell.breadcrumb }).getByRole("link", { name: t.shell.homeCrumb, exact: true });
 const signOutOf = (page: Page) => page.getByRole("button", { name: t.shell.signOut, exact: true });
 
-/** The sign-out: in the side bar from 800 px, behind ☰ on a phone. */
-async function expectSignOut(page: Page, width: number): Promise<void> {
+/**
+ * The sign-out: in the side bar from 800 px, behind ☰ on a phone. On /rad
+ * the side bar is a drawer at every width, so the sign-out is in the top bar.
+ */
+async function expectSignOut(page: Page, width: number, path: string): Promise<void> {
+  if (path === "/rad") {
+    await expect(page.getByRole("banner").getByRole("button", { name: t.shell.signOut, exact: true })).toBeVisible();
+    return;
+  }
   if (width < 800) {
     await expect(signOutOf(page)).toBeHidden();
     await page.getByRole("button", { name: t.shell.openNav }).click();
@@ -45,7 +52,7 @@ for (const width of WIDTHS) {
     for (const path of PAGES) {
       await page.goto(path);
       await expect(homeCrumbOf(page), path).toBeVisible();
-      await expectSignOut(page, width);
+      await expectSignOut(page, width, path);
     }
   });
 }
@@ -81,7 +88,7 @@ for (const width of WIDTHS) {
     await expect(page.getByRole("link", { name: t.home.enroll, exact: true })).toHaveAttribute("href", "/upis");
     await expect(homeCrumbOf(page)).toHaveAttribute("aria-current", "page");
     await snapshot(page, `home-signed-in-${width}`);
-    await expectSignOut(page, width);
+    await expectSignOut(page, width, "/");
     await signOutOf(page).click();
     await page.waitForURL("http://localhost:3000/");
     expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();

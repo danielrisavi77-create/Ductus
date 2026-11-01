@@ -94,10 +94,11 @@ test.describe("workspace shell", () => {
       expect(outline).not.toBe("none");
     }
     // Without an assignment the teacher view has no address: it is a stop, but says so.
-    // The shell's brand, the top bar's Početna (#802) and the theme switch come
-    // first (no session: no navigation).
+    // On /rad the side bar is a closed drawer, so ☰ comes in place of the
+    // brand, then the top bar's Početna (#802) and the theme switch (no
+    // session: no navigation).
     expect(stops).toEqual([
-      "Preskoči na sadržaj", "Ductura, početna", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
+      "Preskoči na sadržaj", "Otvori navigaciju", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
       "Kako vidi nastavnik samo uz zadatak",
     ]);
   });
@@ -451,6 +452,10 @@ test.describe("workspace shell", () => {
   test("the brand link on the workspace is a comfortable target", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
+    // The brand is in the drawer on /rad; ☰ in the top bar opens it.
+    const menu = await page.getByRole("button", { name: "Otvori navigaciju" }).boundingBox();
+    expect(menu!.height).toBeGreaterThanOrEqual(32);
+    await page.getByRole("button", { name: "Otvori navigaciju" }).click();
     const box = await page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(32);
   });

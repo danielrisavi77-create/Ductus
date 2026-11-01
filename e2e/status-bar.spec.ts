@@ -40,10 +40,12 @@ test.describe("editor top bar and status bar (FE-D6)", () => {
       await expect(bar).not.toContainText("Kolegij A");
       await expect(bar).not.toContainText("Zadatak 1");
     }
-    // The brand and the demo label live in the design v3 shell around the workspace.
-    await expect(page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ })).toBeVisible();
+    // The demo label lives in the design v3 shell's top bar; the brand is in
+    // its drawer on /rad, one press of ☰ away.
     await expect(page.getByRole("banner").getByText("Demo · izmišljeni podaci")).toBeVisible();
     await test.info().attach("rad-gornja-traka-bez-zadatka", { body: await page.screenshot(), contentType: "image/png" });
+    await page.getByRole("banner").getByRole("button", { name: "Otvori navigaciju" }).click();
+    await expect(page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ })).toBeVisible();
   });
 
   test("status bar: words without a range, pages, a selection, never the server", async ({ page }) => {
