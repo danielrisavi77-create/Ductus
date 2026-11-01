@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AuthConfigError, loadAuthConfig } from "./config";
+import { AuthConfigError, expectedOrigin, loadAuthConfig } from "./config";
 
 // Synthetic values only (plan of attack #154, item 27).
 const LOCAL = {
@@ -192,5 +192,62 @@ describe("loadAuthConfig", () => {
 
   it("trims the client ID", () => {
     expect(loadAuthConfig({ ...LOCAL, OIDC_CLIENT_ID: " ductus-local\n" }).clientId).toBe("ductus-local");
+  });
+
+  it("refuses a redirect URI that is not http(s) outside production too (DAN-302 L3)", () => {
+    for (const redirect of ["file:///tmp/callback", "ftp://localhost/cb", "javascript:alert(1)"]) {
+      expect(refusal({ ...LOCAL, OIDC_REDIRECT_URI: redirect }).message).toBe("OIDC_REDIRECT_URI must be an http(s) URL");
+    }
+  });
+});
+
+// DAN-302 L3: one origin for login and every state-changing route.
+describe("expectedOrigin", () => {
+  const only = (nodeEnv: string | undefined, redirect: string | undefined) => ({
+    NODE_ENV: nodeEnv,
+    OIDC_REDIRECT_URI: redirect,
+  });
+
+  it.each([
+    [undefined, null],
+    ["", null],
+    [" ", null],
+    ["ne-url", null],
+    ["file:///tmp/callback", null],
+    ["ftp://localhost/cb", null],
+    ["http://localhost:3000/api/auth/callback", "http://localhost:3000"],
+    ["https://127.0.0.1:3000/api/auth/callback", "https://127.0.0.1:3000"],
+  ])("takes the origin of OIDC_REDIRECT_URI %j outside production", (redirect, origin) => {
+    expect(expectedOrigin(only("test", redirect))).toBe(origin);
+    expect(expectedOrigin(only("development", redirect))).toBe(origin);
+  });
+
+  it("is the origin of the redirect URI that login loads", () => {
+    for (const env of [LOCAL, PRODUCTION]) {
+      expect(expectedOrigin(env)).toBe(loadAuthConfig(env).redirectUri.origin);
+    }
+    expect(expectedOrigin(PRODUCTION)).toBe("https://ductus.example.hr");
+  });
+
+  // Each value loadAuthConfig refuses in production, so no route accepts an
+  // origin that login would never redirect to.
+  it.each([
+    "http://localhost:3000/api/auth/callback",
+    "http://ductus.example.hr/api/auth/callback",
+    "https://localhost./cb",
+    "https://10.0.0.5/cb",
+    "https://ductus.example.hr:8443/api/auth/callback",
+    "https://ductus.example.hr/api/auth/callback?",
+    "https://u:p@ductus.example.hr/api/auth/callback",
+    "https://ductus.corp/api/auth/callback",
+  ])("is null in production for %s, which login refuses", (redirect) => {
+    expect(refusal({ ...PRODUCTION, OIDC_REDIRECT_URI: redirect }).message).toMatch(/OIDC_REDIRECT_URI/);
+    for (const nodeEnv of ["production", undefined, "", "staging"]) {
+      expect(expectedOrigin(only(nodeEnv, redirect))).toBeNull();
+    }
+  });
+
+  it("needs no other login variable", () => {
+    expect(expectedOrigin(only("production", PRODUCTION.OIDC_REDIRECT_URI))).toBe("https://ductus.example.hr");
   });
 });
