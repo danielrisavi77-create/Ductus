@@ -820,9 +820,62 @@ export function isolatedHost(source: ts.SourceFile): ts.CompilerHost {
   };
 }
 
+/** A CSS escape: a backslash and one to six hex digits with one optional space after them, or a backslash and any other character. */
+const CSS_ESCAPE = /\\(?:([0-9a-fA-F]{1,6})(?:\r\n|[ \t\r\n\f])?|([^\r\n\f0-9a-fA-F]))/g;
+
+function decodeCssEscapes(text: string): string {
+  return text.replace(CSS_ESCAPE, (_, hex: string | undefined, other: string | undefined) => {
+    if (other !== undefined) return other;
+    const value = Number.parseInt(hex!, 16);
+    return value === 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff) ? "�" : String.fromCodePoint(value);
+  });
+}
+
+/**
+ * The text of a style sheet that the page shows (F-024): the value of every
+ * `content` declaration and of every custom property (`--name: "…"`, which
+ * `content: var(--name)` shows), with comments left out. Strings next to
+ * each other are joined as CSS joins them; anything else in the value
+ * (`attr()`, `counter()`, `var()`) is unknown and keeps a phrase apart.
+ * Escapes are decoded, so `\53 umnjivo` is read as the word it shows.
+ */
+function cssTexts(file: string, content: string): Located[] {
+  const texts: Located[] = [];
+  const blank = (match: string): string => match.replace(/[^\n]/g, " ");
+  // Comments become spaces of the same length, so positions and lines stay.
+  const css = content.replace(/\/\*[\s\S]*?(?:\*\/|$)/g, blank);
+  const lineAt = (at: number): number => css.slice(0, at).split("\n").length;
+  const declaration = /(?:^|[;{\s])(content|--[\w-]+)\s*:((?:"(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*'|[^;{}"'])*)/gi;
+  for (const match of css.matchAll(declaration)) {
+    const value = match[2]!;
+    const valueStart = match.index! + match[0].length - value.length;
+    const pieces: string[] = [];
+    let unknown = false;
+    let first: number | undefined;
+    for (const token of value.matchAll(/"((?:[^"\\\n]|\\[\s\S])*)"|'((?:[^'\\\n]|\\[\s\S])*)'|[^\s"']+/g)) {
+      const string = token[1] ?? token[2];
+      if (string === undefined) {
+        if (!/^!important$/i.test(token[0])) unknown = true;
+        continue;
+      }
+      first ??= valueStart + token.index!;
+      if (unknown && pieces.length > 0) pieces.push(PHRASE_BREAK);
+      unknown = false;
+      pieces.push(decodeCssEscapes(string));
+    }
+    if (first === undefined) continue;
+    const check = pieces.join("");
+    if (check.replaceAll(PHRASE_BREAK, "").trim() === "") continue;
+    const text = check.replaceAll(PHRASE_BREAK, " ");
+    texts.push({ file, line: lineAt(first), text, start: first, end: valueStart + value.length, ...(check !== text && { check }) });
+  }
+  return texts;
+}
+
 function locate(file: string, content: string, kind: How, readProperties = false): Read {
   const texts: Located[] = [];
   const units: Unit[] = [];
+  if (file.endsWith(".css")) return { texts: cssTexts(file, content), units, imports: [] };
   if (file.toLowerCase().endsWith(".json") || file.endsWith(".webmanifest")) {
     const lines = content.split("\n");
     const walk = (value: unknown): void => {
@@ -1028,6 +1081,8 @@ function scanKind(file: string): Kind | null {
     return file.startsWith("app/") ? "component" : null;
   }
   if (file.endsWith(".json") && file.startsWith(CATALOGUE_DIR)) return "catalogue";
+  // A style sheet shows the text of its content declarations (F-024).
+  if (file.endsWith(".css")) return "catalogue";
   return MANIFEST_FILE.test(file) ? "catalogue" : null;
 }
 

@@ -1451,6 +1451,31 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     expect(entries()).toEqual([]);
   });
 
+  // F-024: a style sheet shows the text of its content declarations.
+  const CSS: readonly [string, string][] = [
+    ["a content string", 'p::after { content: "Sumnjivo"; }\n'],
+    ["strings next to each other", "p::after { content: 'Sum' \"njivo\"; }\n"],
+    ["a custom property", ":root { --label: \"Sumnjivo\"; }\np::after { content: var(--label); }\n"],
+    ["an escape", 'p::after { content: "\\53 umnjivo"; }\n'],
+    ["an escape without a space", 'p::after { content: "Sum\\6ejivo"; }\n'],
+    ["a content after a comment", "/* x */ p::after{content:\"Sumnjivo\" !important}\n"],
+    ["a module style sheet", 'p::before {\n  content:\n    "Sumnjivo";\n}\n'],
+  ];
+
+  it.each(CSS)("reads %s in a style sheet", (_, css) => {
+    write("src/components/Case.module.css", css);
+    expect(entries()).toEqual(["sumnjivo"]);
+  });
+
+  it("does not read a comment, other declarations or an unknown part as text", () => {
+    write(
+      "app/globals.css",
+      '/* content: "Sumnjivo"; */\np { justify-content: space-between; font-family: "Sumnjivo Sans"; }\np::after { content: "Sum" attr(data-x) "njivo"; }\nq::after { content: "\\2713\\00a0"; }\nr::after { content: counter(row); }\n',
+    );
+    expect(entries()).toEqual([]);
+    expect(reasons()).toEqual([]);
+  });
+
   it("stops on imported data that is not JSON or not UTF-8, like a catalogue", () => {
     write("src/components/Page.tsx", 'import words from "./words.json";\nexport const all = words;\n');
     write("src/components/words.json", '{ "title": "Rok" ');
