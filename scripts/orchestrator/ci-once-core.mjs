@@ -73,6 +73,15 @@ export async function runCiOnce({ n, expectHead = null, gh, requiredOf }) {
   }
 }
 
+/**
+ * The GitHub reads ci-once.mjs hands to runCiOnce. `prView` of gh.mjs waits
+ * and reads again while GitHub still computes mergeability; ci-once needs only
+ * the head, so its reads never wait (QA of #1081, c.6557763346).
+ */
+export function noWaitGh({ prView, ...rest }) {
+  return { ...rest, prView: (n) => prView(n, { waitMs: 0 }) };
+}
+
 /** The lines ci-once.mjs prints; the first one carries the verdict. */
 export function ciOnceLines(n, head, result) {
   const short = String(head).slice(0, 8);

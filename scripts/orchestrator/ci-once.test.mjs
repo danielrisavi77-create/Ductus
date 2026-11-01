@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { ciOnce, ciOnceLines, EXIT, GATE_CONTEXTS, runCiOnce } from "./ci-once-core.mjs";
+import { ciOnce, ciOnceLines, EXIT, GATE_CONTEXTS, noWaitGh, runCiOnce } from "./ci-once-core.mjs";
+import { prView } from "./gh.mjs";
 import { requiredStatusChecks } from "./preflight-core.mjs";
 
 const REQUIRED = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"]
@@ -141,4 +142,27 @@ test("a required check with an invalid context is a read error (exit 2), not a d
   const contexts = { ...PROTECTION, contexts: [...PROTECTION.contexts, ""] };
   assert.equal((await cli({ heads: [A, A], protection: contexts })).exit, 2);
   assert.equal((await cli({ heads: [A, A], protection: { ...PROTECTION, checks: {} } })).exit, 2);
+});
+
+// QA of #1081 (c.6557763346): with mergeability still unknown, gh.mjs prView
+// waits and reads again. ci-once reads only the head, so through noWaitGh the
+// real prView never waits, and the CLI hands that wrapper to runCiOnce.
+test("the CLI's PR reads never wait while GitHub computes mergeability", async () => {
+  let reads = 0;
+  const json = async () => {
+    reads += 1;
+    return { number: 5, state: "open", head: { sha: A }, mergeable: null, user: {}, base: { ref: "main" } };
+  };
+  const gh = noWaitGh({ ...fakeGh({ heads: [A] }), prView: (n, opts) => prView(n, { ...opts, json }) });
+  const started = Date.now();
+  const r = await runCiOnce({ n: 5, expectHead: A, gh, requiredOf: requiredStatusChecks });
+  assert.equal(r.exit, 0, r.err.join("\n"));
+  assert.ok(Date.now() - started < 1000, `took ${Date.now() - started} ms`);
+  assert.ok(reads <= 4, `${reads} reads`);
+  // Every view goes out with waitMs 0, whatever the wrapped reader is.
+  const seen = [];
+  const recorded = noWaitGh({ ...fakeGh({ heads: [A] }), prView: async (n, opts) => (seen.push(opts), { headRefOid: A }) });
+  await runCiOnce({ n: 5, expectHead: A, gh: recorded, requiredOf: requiredStatusChecks });
+  assert.deepEqual(seen, [{ waitMs: 0 }, { waitMs: 0 }]);
+  assert.match(readFileSync(new URL("./ci-once.mjs", import.meta.url), "utf8"), /gh: noWaitGh\(\{ prView,/);
 });
