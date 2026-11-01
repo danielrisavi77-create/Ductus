@@ -227,6 +227,8 @@ Orkestrator radi dok je sesija otvorena; bude ga pozadinske provjere koje je sam
 6. **Zapiši:** Linear status odmah; `STATE.md` skupno po §3.
 7. **Miruj** do sljedećeg signala (završen worker, CI na poznatom PR-u). Bez pozadinskih petlji koje drže sesiju zauzetom (§1).
 
+**Pomoć pri koraku 5 (`pnpm orch:next`, `pnpm orch:brief`).** `pnpm orch:next --done <ID-evi>` iz `PLAN-DEMO.md` §4 ispisuje zadatke čije su ovisnosti u popisu `--done` i redoslijed po broju ovisnih zadataka. `pnpm orch:brief <ID> --task DAN-<n>` popunjava polja ZADATAK iz `SESSIONS.md` §3 iz istog dokumenta i tablice vlasništva mapa u `SESSIONS.md` §1. Okidač: korak 5 poteza. Vlasnik: orkestrator. Obje naredbe samo čitaju datoteke, ništa ne dodjeljuju, ne pokreću sesiju ni ne pišu na GitHub ili u Linear. Repo nema strojno čitljivo stanje "gotovo" (stanje je u Linearu), pa popis `--done` daje orkestrator. Brief odbija izradu bez `DAN-` oznake, s nespojenim ovisnostima, za Danielove zadatke, ispod praga rizika, za `critical` bez poveznice na plan napada i za frontend bez vizualnog ugovora. Rezultat je savjetodavan: orkestrator ga čita, dopunjuje i na #87 bilježi točan tekst koji šalje (§8). Ne generira se uputa za review ni QA, jer ona mora ostati neutralna (§8). Ovo je dokaz za praksu orkestratora, ne vrata koja stroj provodi.
+
 Kašnjenje u odnosu na `PLAN-DEMO.md` §3 orkestrator prijavljuje s prijedlogom reza iz §5; rez odlučuje Daniel.
 
 ## 10. Provjera zastoja (`pnpm orch:health`)

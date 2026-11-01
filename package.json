@@ -52,6 +52,8 @@
     "orch:evidence": "node scripts/orchestrator/evidence.mjs",
     "orch:override": "node scripts/orchestrator/override-block.mjs",
     "orch:preflight": "node scripts/orchestrator/preflight.mjs",
+    "orch:brief": "node scripts/orchestrator/brief.mjs",
+    "orch:next": "node scripts/orchestrator/next.mjs",
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
     "agents:lint": "pnpm dlx --allow-build=agnix agnix@0.57.0 .",
     "tokens:report": "node scripts/engineering/token-report.mjs",

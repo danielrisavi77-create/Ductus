@@ -7,6 +7,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ORKESTRATOR.md`; uz svaku st
 - Korak 0 poteza: `pnpm orch:health` (§10).
 - Potez: stanje (četiri jeftine provjere bez čitanja diffova), spoji što prolazi, vrati ili zamijeni, review prije pisanja, dodijeli s kritičnog puta, zapiši, miruj (§1, §9).
 - U pozadini čeka samo konkretan CI, Codex ili status gatea na poznatom PR-u (§1, §8).
+- Savjet: `pnpm orch:next`, `pnpm orch:brief`, samo čitanje (§9).
 
 ## Kad stigne PR
 
