@@ -10,6 +10,18 @@ import { fileURLToPath } from "node:url";
 
 import { GuardError, assertDeletable, clean, defaultExec, parseArgs, removeTree } from "./worktree-clean.mjs";
 
+// rmSync in Node 24 throws EPERM at once on Windows and ignores maxRetries (#1141),
+// so a directory a finished child still holds for a moment is retried here, bounded.
+function removeDir(dir, deadlineMs = 10000) {
+  const start = Date.now();
+  for (;;) {
+    try { return rmSync(dir, { recursive: true, force: true }); } catch (error) {
+      if (!["EPERM", "EBUSY", "ENOTEMPTY"].includes(error?.code) || Date.now() - start >= deadlineMs) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+
 const SCRIPT = fileURLToPath(new URL("./worktree-clean.mjs", import.meta.url));
 // Drop inherited GIT_* (set inside git hooks) so every command stays in the temp repos.
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toUpperCase().startsWith("GIT_")));
@@ -24,7 +36,7 @@ const link = (target, path) => symlinkSync(target, path, "junction"); // junctio
 /** Bare remote + main checkout `work` with helpers; everything under one temp directory. */
 function setup(t, workName = "work") {
   const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "orch-clean-")));
-  t.after(() => rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }));
+  t.after(() => removeDir(tmp));
   const remote = join(tmp, "remote.git");
   git(tmp, "init", "-q", "--bare", "-b", "main", remote);
   const work = join(tmp, workName);
