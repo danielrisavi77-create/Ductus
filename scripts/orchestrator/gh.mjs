@@ -278,7 +278,7 @@ export async function reviewThreads(n, { graphql = graphqlThreads, ccr = ccrThre
 // GitHub answers a busy API with 502, 503 or 504 (and the network sometimes
 // drops the connection); those reads are worth repeating. Anything else, such
 // as 404 or a refused permission, is not.
-const TRANSIENT_RE = /\bHTTP (?:502|503|504)\b|\b(?:502|503|504) (?:Bad Gateway|Service Unavailable|Gateway Time-?out)\b|ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up/i;
+const TRANSIENT_RE = /\bHTTP (?:502|503|504)\b|\b(?:502|503|504) (?:Bad Gateway|Service Unavailable|Gateway Time-?out)\b|ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up|TLS handshake timeout|connection reset by peer/i;
 export const transientError = (e) => TRANSIENT_RE.test(`${e?.stderr ?? ""} ${e?.message ?? e ?? ""}`);
 
 /** fn() again on a transient error, at most `tries` times in all, waiting waitMs, 2*waitMs, ... */

@@ -15,6 +15,21 @@ test("transient GitHub errors are told apart from errors worth no retry", () => 
   }
 });
 
+test("Codex CLI #1197 (1042d636): gh's Go network errors are transient and retried", async () => {
+  // As gh prints them (cli/cli#1761).
+  const tls = gh('Post "https://api.github.com/graphql": net/http: TLS handshake timeout');
+  const reset = gh("read tcp 192.0.2.1:50000->140.82.112.6:443: read: connection reset by peer");
+  for (const e of [tls, reset]) assert.equal(transientError(e), true, e.stderr);
+  let calls = 0;
+  const value = await withRetry(async () => {
+    calls += 1;
+    if (calls === 1) throw tls;
+    if (calls === 2) throw reset;
+    return "ok";
+  }, { sleep: async () => {}, waitMs: 0 });
+  assert.deepEqual([value, calls], ["ok", 3]);
+});
+
 test("withRetry repeats a 502/504 up to the limit with growing waits, and stops at once on a 404", async () => {
   const waits = [];
   const sleep = async (ms) => waits.push(ms);
