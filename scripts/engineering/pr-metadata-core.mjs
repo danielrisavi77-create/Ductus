@@ -1,6 +1,7 @@
 import { field } from "./metadata-parser.mjs";
 import {
   CRITICAL_DOC_PATHS,
+  CRITICAL_TEST_PATHS,
   D97_MANUAL_PATHS,
   D97_PATHS,
   isAgentControlPath,
@@ -29,7 +30,7 @@ export const CRITICAL_PATHS = [
   "playwright.login.config.ts",
   "test-output.ts",
   // The only test that a production build refuses the fake provider (D-09, F-041 a).
-  "e2e/auth.spec.ts",
+  ...CRITICAL_TEST_PATHS,
   ".cc-safety-net/",
   "plugins/",
   "scripts/forbidden-terms/",

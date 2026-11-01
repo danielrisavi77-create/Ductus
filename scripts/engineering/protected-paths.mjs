@@ -151,6 +151,10 @@ export const OWNER_FREE_DIRS = ["src/", "app/", "db/migrations/", "db/tests/", "
 // them from here): the product rules and the forbidden-terms dictionary the
 // scanner checks against. They are never owner-free, though a low doc otherwise.
 export const CRITICAL_DOC_PATHS = ["docs/PRODUCT.md"];
+// Tests on the critical floor inside an owner-free directory: the only test
+// that a production build refuses the fake provider (D-09, F-041 a). Never
+// owner-free either.
+export const CRITICAL_TEST_PATHS = ["e2e/auth.spec.ts"];
 // Exclusions ignore letter case; the allowlist itself matches exact case, so a
 // directory such as SRC/ or Tests/ is not application code here.
 export function isOwnerFreePath(file) {
@@ -160,6 +164,7 @@ export function isOwnerFreePath(file) {
     AGENT_INSTRUCTIONS_RE.test(p) ||
     p.toLowerCase().split("/").includes("node_modules") ||
     matchesPath(p, CRITICAL_DOC_PATHS) ||
+    matchesPath(p, CRITICAL_TEST_PATHS) ||
     ownerCommandPaths([p]).length > 0
   ) {
     return false;

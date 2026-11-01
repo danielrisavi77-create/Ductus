@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { carriedHeadCandidates, evaluateMergeAuthorization, evaluatePullRequest } from "./review-gate-core.mjs";
 import { CRITICAL_PATHS, evaluateMetadata } from "./pr-metadata-core.mjs";
-import { changedPaths, CRITICAL_DOC_PATHS, D97_MANUAL_PATHS, D97_PATHS, isOwnerFreePath, qaExemption } from "./protected-paths.mjs";
+import { changedPaths, CRITICAL_DOC_PATHS, CRITICAL_TEST_PATHS, D97_MANUAL_PATHS, D97_PATHS, isOwnerFreePath, qaExemption } from "./protected-paths.mjs";
 
 // D-161 (h): the merge queue reads one status, "Merge authorization", computed
 // by the gate with the same parser that checks the declared risk.
@@ -279,7 +279,7 @@ test("no critical-floor control file is owner-free, only the app floor is (F-173
 // separator, and the allowlist matches exact case only.
 test("D-196 exclusions ignore letter case and separators; the allowlist is exact case (QA-1079-01)", () => {
   const excluded = [
-    ...[...D97_PATHS, ...D97_MANUAL_PATHS, ...CRITICAL_DOC_PATHS].map((p) => (p.endsWith("/") ? `${p}x.md` : p)),
+    ...[...D97_PATHS, ...D97_MANUAL_PATHS, ...CRITICAL_DOC_PATHS, ...CRITICAL_TEST_PATHS].map((p) => (p.endsWith("/") ? `${p}x.md` : p)),
     "src/node_modules/x/index.js", "tests/node_modules/x.test.ts", "src/.hidden/x.ts", "src/AGENTS.override.md",
     "src/CLAUDE.local.md", "src/x.instructions.md", "src/.codex/config.toml",
   ];
