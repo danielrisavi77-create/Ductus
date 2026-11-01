@@ -7,6 +7,8 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { findRefusedLabels, MIGRATION, readRule, report } from "@/server/db/plain-label-check";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // The check before the deploy of the stricter is_plain_label (#446), against
 // the compose stack (pnpm stack:up, pnpm db:migrate). Each case gets a
 // database of its own, migrated up to the one before that migration, with
@@ -14,6 +16,7 @@ import { findRefusedLabels, MIGRATION, readRule, report } from "@/server/db/plai
 // runs, and then the migration itself, as dbmate runs it. Every institution,
 // person, course and title is random or invented.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
+requireLoopbackDatabaseUrl(ADMIN_URL, "The migration test runs only against a loopback database (DATABASE_URL).");
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
 const MIGRATION_TEXT = readFileSync(`${MIGRATIONS}${MIGRATION}`, "utf8");
 
