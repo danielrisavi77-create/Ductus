@@ -28,6 +28,9 @@ const DEFAULT_CONTEXT = 24;
 /** More occurrences of the quote than this in one paragraph give no place. */
 export const MAX_MATCHES = 1000;
 
+const isHighSurrogate = (text: string, i: number) => { const c = text.charCodeAt(i); return c >= 0xd800 && c <= 0xdbff; };
+const isLowSurrogate = (text: string, i: number) => { const c = text.charCodeAt(i); return c >= 0xdc00 && c <= 0xdfff; };
+
 export function createTextAnchor(input: CreateTextAnchorInput): TextAnchor {
   const { nodeId, nodeText, start, end } = input;
   const contextLength = input.contextLength ?? DEFAULT_CONTEXT;
@@ -37,11 +40,18 @@ export function createTextAnchor(input: CreateTextAnchorInput): TextAnchor {
   if (!Number.isSafeInteger(contextLength) || contextLength < 0) {
     throw new Error("createTextAnchor: invalid context length");
   }
+  // The context is measured in UTF-16 units, but a cut must never fall inside
+  // a surrogate pair: a lone half is not valid text and the server refuses it.
+  // The cut moves inward, so the context is one unit shorter, never longer.
+  let prefixStart = Math.max(0, start - contextLength);
+  if (prefixStart > 0 && prefixStart < start && isLowSurrogate(nodeText, prefixStart)) prefixStart += 1;
+  let suffixEnd = Math.min(nodeText.length, end + contextLength);
+  if (suffixEnd < nodeText.length && suffixEnd > end && isHighSurrogate(nodeText, suffixEnd - 1)) suffixEnd -= 1;
   return {
     nodeId,
     quote: nodeText.slice(start, end),
-    prefix: nodeText.slice(Math.max(0, start - contextLength), start),
-    suffix: nodeText.slice(end, Math.min(nodeText.length, end + contextLength)),
+    prefix: nodeText.slice(prefixStart, start),
+    suffix: nodeText.slice(end, suffixEnd),
     startHint: start,
     endHint: end,
   };

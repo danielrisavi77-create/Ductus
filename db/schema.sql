@@ -3290,6 +3290,73 @@ $$;
 
 
 --
+-- Name: can(text, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.can(p_action text, p_document_id text) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_scope record;
+  v_confirmed boolean;
+  v_relation text;
+  v_teacher boolean;
+  v_owner boolean;
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('read', 'comment', 'open_fast_path', 'write', 'propose') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  IF v_user IS NULL OR p_document_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT s.institution_id, s.assignment_id, s.principal_id INTO v_scope
+  FROM collaboration.document_scope(p_document_id) s;
+  IF v_scope.institution_id IS DISTINCT FROM v_institution THEN
+    RETURN false;
+  END IF;
+
+  v_confirmed := EXISTS (
+    SELECT 1 FROM institution.institution_role r
+    WHERE r.user_id = v_user AND r.institution_id = v_institution AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  );
+
+  -- The actor's relation to the assignment of the work: through the course,
+  -- or through the mentorship. An assignment has exactly one of the two.
+  SELECT CASE
+           WHEN a.course_id IS NOT NULL THEN (
+             SELECT m.role FROM institution.course_member m
+             WHERE m.course_id = a.course_id AND m.institution_id = v_institution
+               AND m.user_id = v_user AND m.member_to IS NULL)
+           ELSE (
+             SELECT CASE WHEN ms.mentor_id = v_user THEN 'teacher'
+                         WHEN ms.student_id = v_user THEN 'student' END
+             FROM institution.mentorship ms
+             WHERE ms.id = a.mentorship_id AND ms.institution_id = v_institution AND ms.ended_at IS NULL)
+         END
+  INTO v_relation
+  FROM institution.assignment a
+  WHERE a.id = v_scope.assignment_id AND a.institution_id = v_institution;
+
+  v_teacher := v_relation IS NOT DISTINCT FROM 'teacher' AND v_confirmed;
+  v_owner := v_relation IS NOT DISTINCT FROM 'student' AND v_scope.principal_id = v_user;
+
+  RETURN CASE p_action
+           WHEN 'read' THEN v_teacher OR v_owner
+           WHEN 'write' THEN v_owner
+           ELSE v_teacher
+         END;
+END
+$$;
+
+
+--
 -- Name: check_mentorship_version(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -7753,4 +7820,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261102150000'),
     ('20261102160000'),
     ('20261102190000'),
-    ('20261102200000');
+    ('20261102200000'),
+    ('20261102210000');

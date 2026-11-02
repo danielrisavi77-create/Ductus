@@ -84,6 +84,8 @@ type Overrides = {                         // prilagodbe mentora za jedan rad
 
 ## 4. Provjere
 
+> **Djelomično zamijenjeno D-221 (2. 11. 2026.; [`docs/DECISIONS.md`](../../DECISIONS.md), [#87 c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6578722946)).** Provjeravaju se samo formalna pravila sa službenim izvorom (D-126). Sadržajne provjere iz ovog odjeljka, npr. stavka kontrolnog popisa „Tezna rečenica” iz primjera profila u §2, ne grade se. Tekst ispod ostaje kao trag.
+
 Svaka provjera je čista funkcija `(chapter, doc, profile) → Finding[]`, bez stanja i bez mreže.
 
 ```ts
@@ -129,6 +131,8 @@ Sprema po radu:
 
 Sažetak se šalje uz spremanje. Iz njega nastavnički i ustanovni pogled grade preglede bez ponovnog računanja.
 
+> **Zamijenjeno D-221 (2. 11. 2026.; [`docs/DECISIONS.md`](../../DECISIONS.md), [#87 c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6578722946)):** sažetak nalaza i pregledi koji iz njega grade nastavnički i ustanovni pogled. Student i nastavnik vide isti prikaz „S-11 — Panel Upute i provjera oblika”, bez sažetka broja nalaza po radovima (D-62). Ostatak odjeljka vrijedi; tekst iznad ostaje kao trag.
+
 Pri predaji poslužitelj pokreće isti paket provjera nad spremljenim dokumentom. Rezultat je mjerodavan: ne oslanja se na ono što je javio preglednik.
 
 ## 6a. Rokovi i vidljivost
@@ -143,6 +147,8 @@ Pri predaji poslužitelj pokreće isti paket provjera nad spremljenim dokumentom
 - Kartica pod mišem prikazuje službeni rok, a ispod njega studentov vlastiti, ako postoji.
 
 ## 6b. Prilagodbe mentora
+
+> **Zamijenjeno D-220 (2. 11. 2026.; [`docs/DECISIONS.md`](../../DECISIONS.md), [#87 c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6578722946)).** Mentor ne mijenja pravila za pojedini rad. Nastavnik smije samo suziti raspon riječi i opseg po poglavlju na verziji zadatka, unutar granica paketa (D-60, D-117, pravilo 14). Tekst ispod ostaje kao trag.
 
 Mentor za pojedini rad može promijeniti ili isključiti pravilo iz profila: npr. drugačiji opseg, ublažena granica odlomka ili dodatni obavezni dio.
 
@@ -230,7 +236,7 @@ Tisuću istodobnih radova znači tisuću preglednika koji računaju za sebe. Pos
 ## 9. Odluke
 
 1. Profil se potvrđuje na temelju službenih pravila fakulteta.
-2. Mentor smije prilagoditi pravila za pojedini rad (§6b).
+2. Mentor smije prilagoditi pravila za pojedini rad (§6b). **Zamijenjeno D-220 (2. 11. 2026.); vidi oznaku u §6b.**
 3. Što ustanova ne propisuje, to se ne računa i ne prikazuje.
 4. Nastavnik vidi službene rokove, student svoje. Student može uključiti da nastavnik vidi i njegove rokove (§6a).
 
