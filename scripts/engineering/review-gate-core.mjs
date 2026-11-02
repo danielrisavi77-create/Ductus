@@ -367,10 +367,11 @@ function prevailing({ current, carried }) {
 // Letters and digits bound the word, not `\b`, so markdown such as `_` around
 // it still reads as FAIL or BLOCK.
 const NEGATIVE_WORD_RE = /(?<![A-Z0-9])(FAIL|BLOC?K)[A-Z]*(?![A-Z0-9])/;
-// One literal pattern per verdict field, with markdown or spaces around its name.
+// One literal pattern per verdict field, with markdown or spaces around its
+// name, a heading (`#` to `######`, with or without a space) included.
 const VERDICT_LINE_RE = new Map([
-  ["Review-Verdict", /^[\s*_`>~+-]*Review-Verdict[\s*_`>~+-]*:(.*)$/i],
-  ["QA-Verdict", /^[\s*_`>~+-]*QA-Verdict[\s*_`>~+-]*:(.*)$/i],
+  ["Review-Verdict", /^[\s*_`>~+#-]*Review-Verdict[\s*_`>~+#-]*:(.*)$/i],
+  ["QA-Verdict", /^[\s*_`>~+#-]*QA-Verdict[\s*_`>~+#-]*:(.*)$/i],
 ]);
 function negativeWord(body, name) {
   const line = VERDICT_LINE_RE.get(name);
@@ -395,7 +396,7 @@ function negativeHead(value, headSha, carriedHeads) {
   const sha = headSha.toLowerCase();
   const named = readableHead(value);
   if (!named || sha.startsWith(named)) return { head: sha, current: true };
-  const onCarried = [...carriedHeads].find((carriedSha) => carriedSha.toLowerCase().startsWith(named));
+  const onCarried = [...carriedHeads, ...(carriedHeads.heldNegatives ?? [])].find((carriedSha) => carriedSha.toLowerCase().startsWith(named));
   return onCarried ? { head: onCarried.toLowerCase(), current: false } : null;
 }
 
@@ -810,6 +811,19 @@ export function carriedHeadCandidates(comments, headSha, path) {
     return { heads: [], reason: `more than ${MAX_CARRIED_HEADS} verdict heads behind base merges` };
   }
   return { heads, reason: null };
+}
+
+/**
+ * F-027: the named heads that `path` already reached behind base merges only,
+ * whether or not the walk finished. The runner keeps them for a FAIL or BLOCK
+ * when the carry-over check cannot finish; they never carry a PASS.
+ */
+export function foundCarryHeads(comments, headSha, path) {
+  const named = [...namedCarryHeads(comments, headSha)];
+  const steps = path ?? [];
+  return steps
+    .map((commit) => commit?.sha?.toLowerCase())
+    .filter((sha) => sha && named.some((head) => sha.startsWith(head)) && onlyBaseMerges(steps, sha));
 }
 
 /**

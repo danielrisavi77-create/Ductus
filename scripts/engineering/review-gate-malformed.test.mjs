@@ -348,3 +348,131 @@ for (const kind of ["review", "qa"]) {
     }
   });
 }
+
+// p06e, finding 1 of c.6586075014: a negative verdict line written as a
+// markdown heading is still a negative, for review and QA alike.
+for (const kind of ["review", "qa"]) {
+  test(`${kind}: a negative verdict written as a heading blocks beside a valid PASS (c.6586075014, 1)`, () => {
+    const slot = kind === "review" ? "r2" : "q2";
+    for (const line of [
+      (V) => `# ${V}: FAIL`,
+      (V) => `## ${V}: BLOCK`,
+      (V) => `###### ${V}: FAIL`,
+      (V) => `###${V}: FAIL`,
+      (V) => `### ${V}: FAIL ###`,
+      (V) => `### ${V} ###: BLOCK`,
+      (V) => `> ### ${V}: BLOCK`,
+      (V) => `\`### ${V}: FAIL\``,
+    ]) {
+      const { comments, risk } = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, line(V)]));
+      assert.notEqual(gate(comments, { risk }).state, "success", line(KINDS[kind].V));
+    }
+    // A heading inside a code block is a quote (metadataLines), as before.
+    const { comments, risk } = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, "```", `### ${V}: FAIL`, "```"]));
+    assert.equal(gate(comments, { risk }).state, "success");
+    // A PASS written as a heading is not a PASS, as before.
+    const onlyPass = kind === "review"
+      ? [block("review", "r1", ({ H, V }) => [`${H}: ${head}`, `### ${V}: PASS`])]
+      : [exact("review", "r1"), block("qa", "q1", ({ H, V }) => [`${H}: ${head}`, `### ${V}: PASS`])];
+    assert.notEqual(gate(onlyPass, { risk }).state, "success");
+  });
+}
+
+// p06e, finding 2 of c.6586075014: the walk ends at a head named by a prefix,
+// and an error or an expired budget behind a head already found never drops a
+// negative on it. The carried head is itself a merge of main.
+const mergeHead = "c0ffee1234560000000000000000000000000000";
+const twinA = "abcdef1111111111111111111111111111111111";
+const twinB = "abcdef1222222222222222222222222222222222";
+const behind = "b".repeat(40);
+const mainParent2 = "5".repeat(40);
+const walkApi = (parents, { broken = new Set(), hanging = new Set(), asked = [] } = {}) =>
+  createApi({
+    baseUrl: "https://api.test",
+    token: "t",
+    timeoutMs: 5000,
+    fetchImpl: async (url) => {
+      const path = url.replace("https://api.test", "");
+      const sha = path.match(/\/commits\/([0-9a-f]{40})$/)?.[1];
+      let value;
+      if (sha) {
+        asked.push(sha);
+        if (broken.has(sha)) throw new Error(`broken ${sha}`);
+        if (hanging.has(sha)) return new Promise(() => {});
+        if (!parents[sha]) throw new Error(`unexpected ${path}`);
+        value = { sha, parents: parents[sha].map((p) => ({ sha: p })) };
+      } else if (/\/compare\/main\.\.\.(9{40}|5{40})/.test(path)) value = { status: "behind", files: [] };
+      else if (path.includes(`/compare/${prBase}...`)) value = prChange;
+      else throw new Error(`unexpected ${path}`);
+      return { ok: true, status: 200, json: async () => value, text: async () => JSON.stringify(value) };
+    },
+  });
+const chain = { [head]: [mergeHead, mainParent], [mergeHead]: [behind, mainParent2] };
+const walkWith = (comments, opts, budgetMs) =>
+  walkCarriedHeads(walkApi(opts.parents ?? chain, opts), "o", "r", mergedPr, comments, { log: () => {}, budgetMs });
+const passesFor = (kind) => (kind === "review" ? [exact("review", "r1")] : [exact("review", "r1"), exact("qa", "q1")]);
+const riskFor = (kind) => (kind === "review" ? "standard" : "critical");
+const negativeAt = (kind, named, verdict = "FAIL") =>
+  block(kind, kind === "review" ? "r2" : "q2", ({ H, V }) => [`${H}: ${named}`, `${V}: ${verdict}`]);
+
+for (const kind of ["review", "qa"]) {
+  test(`${kind}: the walk ends at a merge head named by a prefix and an error behind it keeps the negative (c.6586075014, 2)`, async () => {
+    for (const named of [mergeHead, mergeHead.slice(0, 7), mergeHead.slice(0, 12)]) {
+      const asked = [];
+      const comments = [...passesFor(kind), negativeAt(kind, named)];
+      const heads = await walkWith(comments, { broken: new Set([behind]), asked });
+      assert.deepEqual([...heads], [mergeHead], named);
+      assert.ok(!asked.includes(behind), `${named}: no call behind the found head`);
+      assert.notEqual(gate(comments, { risk: riskFor(kind), carriedHeads: heads }).state, "success", named);
+    }
+  });
+}
+
+test("an expired budget behind a merge head named by a prefix keeps the negative (c.6586075014, 2)", async () => {
+  const comments = [...passesFor("qa"), negativeAt("qa", mergeHead.slice(0, 7), "BLOCK")];
+  const heads = await walkWith(comments, { hanging: new Set([behind]) }, 300);
+  assert.deepEqual([...heads], [mergeHead]);
+  assert.notEqual(gate(comments, { risk: "critical", carriedHeads: heads }).state, "success");
+});
+
+test("an error behind a found head while another name is pending keeps only the negative (c.6586075014, 2)", async () => {
+  const pending = exact("review", "r3", "PASS", other);
+  const negative = negativeAt("review", mergeHead.slice(0, 7));
+  const heads = await walkWith([...passesFor("review"), pending, negative], { broken: new Set([behind]) });
+  assert.equal(heads.size, 0, "nothing carries a PASS");
+  assert.notEqual(gate([...passesFor("review"), pending, negative], { carriedHeads: heads }).state, "success");
+  // A PASS on the found head is not carried by the kept head.
+  const carriedPass = [exact("review", "r1", "PASS", mergeHead), pending];
+  const passHeads = await walkWith(carriedPass, { broken: new Set([behind]) });
+  assert.notEqual(gate(carriedPass, { carriedHeads: passHeads }).state, "success");
+});
+
+test("an ambiguous prefix ends the walk at its newest match, and a prefix of nothing changes nothing (c.6586075014, 2)", async () => {
+  const parents = { [head]: [twinA, mainParent], [twinA]: [twinB, mainParent2], [twinB]: [behind, mainParent2] };
+  const asked = [];
+  const comments = [...passesFor("review"), negativeAt("review", twinA.slice(0, 7))];
+  const heads = await walkWith(comments, { parents, broken: new Set([behind]), asked });
+  assert.deepEqual([...heads], [twinA]);
+  assert.ok(!asked.includes(twinB) && !asked.includes(behind));
+  assert.notEqual(gate(comments, { carriedHeads: heads }).state, "success");
+  // A prefix that names nothing on the walk: the walk reaches a non-merge
+  // commit as before and the negative names no head of this PR.
+  const nothing = [...passesFor("review"), negativeAt("review", "deadbee")];
+  const none = await walkWith(nothing, { parents: { ...chain, [behind]: ["4".repeat(40)] } });
+  assert.equal(none.size, 0);
+  assert.equal(gate(nothing, { carriedHeads: none }).state, "success");
+});
+
+// Istodobnost: a new push lands between reading the comments and the walk. A
+// negative already names the new head by a prefix; the walk runs from the head
+// the comments were read with, never asks for the new one, and the negative on
+// the carried head still blocks although the new name keeps the walk going.
+test("a push between reading the comments and the walk keeps the carried negative (c.6586075014, 2)", async () => {
+  const asked = [];
+  const comments = [...passesFor("review"), negativeAt("review", newer.slice(0, 7)), negativeAt("review", mergeHead.slice(0, 7))];
+  const parents = { ...chain, [newer]: [head] };
+  const heads = await walkWith(comments, { parents, broken: new Set([behind]), asked });
+  assert.ok(!asked.includes(newer), "the walk never asks for the new head");
+  assert.equal(asked[0], head);
+  assert.notEqual(gate(comments, { carriedHeads: heads }).state, "success");
+});

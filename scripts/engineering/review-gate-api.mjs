@@ -6,7 +6,7 @@
 // shared budget (CARRY_BUDGET_MS). Running out of either means nothing carries;
 // the gate itself is still computed from verdicts on the current head.
 
-import { MAX_MERGE_STEPS, carriedByCompare, carriedHeadCandidates, namedCarryHeads } from "./review-gate-core.mjs";
+import { MAX_MERGE_STEPS, carriedByCompare, carriedHeadCandidates, foundCarryHeads, namedCarryHeads } from "./review-gate-core.mjs";
 
 export const API_CALL_TIMEOUT_MS = 15_000;
 export const CARRY_BUDGET_MS = 60_000;
@@ -82,9 +82,10 @@ async function inBase(api, owner, repo, baseRef, sha, signal) {
 // second parent is in the base branch (#231, question 1); an octopus merge is
 // never checked and never carries.
 // With `stopAt` (lower-case SHAs), the walk also ends once it has passed every
-// one of them (F-148): nothing named lies further back.
-export async function firstParentPath(api, owner, repo, head, signal, baseRef, stopAt) {
-  const path = [];
+// one of them (F-148): nothing named lies further back. A name may be a prefix
+// (F-027): the first walked SHA that starts with it ends the wait for it.
+// With `path`, the steps walked so far stay readable after an error.
+export async function firstParentPath(api, owner, repo, head, signal, baseRef, stopAt, path = []) {
   const pending = stopAt ? new Set(stopAt) : null;
   let sha = head;
   for (let step = 0; step <= MAX_MERGE_STEPS && sha; step += 1) {
@@ -96,19 +97,28 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
         ? await inBase(api, owner, repo, baseRef, parents[1].sha, signal)
         : false;
     path.push({ sha: commit.sha, parents, mergesBase });
-    pending?.delete(String(commit.sha).toLowerCase());
+    const walked = String(commit.sha).toLowerCase();
+    for (const name of pending ?? []) if (walked.startsWith(name)) pending.delete(name);
     if (parents.length < 2) break;
     sha = parents[0]?.sha;
   }
   return path;
 }
 
+// F-027: heads the walk found behind base merges only, kept when the check
+// could not finish, so a FAIL or BLOCK on them still blocks. They never carry a
+// PASS, an override or a command: only `negativeHead` reads them.
+const holdNegatives = (carried, heads) => Object.defineProperty(carried, "heldNegatives", { value: new Set(heads) });
+
 // D-101: earlier heads whose verdicts still hold because only base merges
 // followed and the PR diff is unchanged. Any API error, a timed-out call or an
-// exhausted budget carries nothing.
+// exhausted budget carries nothing, except that a negative on a head already
+// found stays (`holdNegatives`).
 export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = CARRY_BUDGET_MS, log = console.log } = {}) {
   const signal = AbortSignal.timeout(budgetMs);
   const compare = (range) => api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`, { signal });
+  const path = [];
+  const found = () => foundCarryHeads(comments, pr.head.sha, path);
   let candidates;
   let current;
   try {
@@ -116,16 +126,25 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
     // could carry, so the walk and its API calls are skipped (F-148).
     const named = namedCarryHeads(comments, pr.head.sha);
     if (named.size === 0) return new Set();
-    const path = await firstParentPath(api, owner, repo, pr.head.sha, signal, pr.base?.ref, named);
+    await firstParentPath(api, owner, repo, pr.head.sha, signal, pr.base?.ref, named, path);
     const { heads, reason } = carriedHeadCandidates(comments, pr.head.sha, path);
-    if (reason) log(`Carry-over refused: ${reason}.`);
+    if (reason) {
+      log(`Carry-over refused: ${reason}.`);
+      return holdNegatives(new Set(), found());
+    }
     candidates = heads;
     if (candidates.length === 0) return new Set();
     current = await compare(`${pr.base.sha}...${pr.head.sha}`);
   } catch (error) {
     log(`Carry-over check failed closed: ${error.message}`);
-    return new Set();
+    return holdNegatives(new Set(), found());
   }
   log(`Carry-over compares ${pr.base.sha}...<head> with ${pr.base.sha}...${pr.head.sha}.`);
-  return carriedByCompare(candidates, current, (sha) => compare(`${pr.base.sha}...${sha}`), log);
+  let failed = false;
+  const compareHead = (sha) => compare(`${pr.base.sha}...${sha}`).catch((error) => {
+    failed = true;
+    throw error;
+  });
+  const carried = await carriedByCompare(candidates, current, compareHead, log);
+  return failed ? holdNegatives(carried, found()) : carried;
 }
