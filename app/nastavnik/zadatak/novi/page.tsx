@@ -59,7 +59,7 @@ export default async function TeacherNewAssignmentPage({ searchParams }: {
         )}
         {screen === "allowed" && choice.kind === "missing" ? <p role="alert">{t.teacher.existingCourse.missing}</p> : null}
         {screen === "allowed" && choice.kind === "unavailable" ? <p role="status">{t.teacher.existingCourse.unavailable}</p> : null}
-        {screen === "allowed" && (choice.kind === "new" || existing) ? <TeacherSetup existingCourse={existing} /> : null}
+        {screen === "allowed" && (choice.kind === "new" || existing) ? <TeacherSetup key={existing?.id ?? "new"} existingCourse={existing} /> : null}
         {screen === "unavailable" ? <p role="status">{t.teacher.unavailable}</p> : null}
         {screen === "denied" ? null : <p><Link href="/nastavnik">{t.teacher.backCourses}</Link></p>}
       </div>

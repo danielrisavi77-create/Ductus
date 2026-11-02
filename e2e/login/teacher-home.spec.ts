@@ -243,6 +243,18 @@ test("a teacher adds a second assignment to an existing course from the course l
   await page.goto("/nastavnik");
   await expect(page.getByRole("region", { name: courseName }).locator("li").filter({ hasText: /izmišljeni zadatak/u }))
     .toHaveCount(2);
+
+  // Codex review on #1275: leaving the course for the sidebar's new-course
+  // form on the same route must not keep the course chosen a moment ago.
+  await page.getByRole("region", { name: courseName }).getByRole("link", { name: e.link }).click();
+  await expect(page.getByRole("heading", { level: 1, name: e.title })).toBeVisible();
+  await page.getByRole("link", { name: messagesHr.shell.nav.newCourse, exact: true }).click();
+  await expect(page).toHaveURL(/\/nastavnik\/zadatak\/novi$/);
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.teacher.title })).toBeVisible();
+  const name = page.getByLabel(messagesHr.teacher.course.name);
+  await expect(name).toBeEnabled();
+  await expect(name).toHaveValue("");
+  await expect(page.getByText(courseName)).toHaveCount(0);
 });
 
 // DAN-310, T001 to T004 for the new entry: no session, no teacher role and a
