@@ -1765,7 +1765,7 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
     JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
    WHERE g.valid_to IS NULL
-     AND institution.actor_assignment_role(p_assignment_id) IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
      AND institution.actor_group_student(s.course_id, g.user_id)
 $$;
 
@@ -1788,9 +1788,6 @@ BEGIN
   END IF;
   -- Decided once per call, in the session's institution (actor_course_role).
   v_role := institution.actor_course_role(p_course_id);
-  IF v_role IS NOT NULL AND v_role <> 'teacher' THEN
-    RETURN;
-  END IF;
   -- One open membership per student and course, so one row per student.
   RETURN QUERY
   SELECT m.user_id, n.given_name, n.family_name
@@ -2018,7 +2015,7 @@ CREATE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id 
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
     WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
     WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
-    WHEN institution.actor_assignment_role(p_assignment_id) IS NULL AND EXISTS (
+    WHEN EXISTS (
            SELECT 1 FROM institution.assignment s
             WHERE s.id = p_assignment_id AND s.institution_id = a.institution_id
               AND institution.actor_group_student(s.course_id, p_owner_id)) THEN 'teacher'
@@ -3191,6 +3188,7 @@ CREATE FUNCTION institution.actor_group_student(p_course_id uuid, p_student_id u
        AND g.user_id = p_student_id AND g.valid_to IS NULL
       JOIN institution.course_member m ON m.course_id = p_course_id AND m.institution_id = a.institution_id
        AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+     WHERE p_student_id IS DISTINCT FROM a.user_id
   )
 $$;
 
@@ -3367,14 +3365,21 @@ BEGIN
 
   -- The actor's relation to the assignment of the work: through the course,
   -- or through the mentorship. An assignment has exactly one of the two.
-  -- Without a membership of the course, through a seminar group of it whose
-  -- teacher the actor is and whose member the owner is.
+  -- Unless a teacher of the course, through a seminar group of it whose
+  -- teacher the actor is and whose member the owner is, also when the actor
+  -- is a student of the course; never for the actor's own work (as
+  -- actor_role).
   SELECT CASE
-           WHEN a.course_id IS NOT NULL THEN coalesce(
-             (SELECT m.role FROM institution.course_member m
-              WHERE m.course_id = a.course_id AND m.institution_id = v_institution
-                AND m.user_id = v_user AND m.member_to IS NULL),
-             CASE WHEN institution.actor_group_student(a.course_id, v_scope.principal_id) THEN 'teacher' END)
+           WHEN a.course_id IS NOT NULL THEN (
+             SELECT CASE
+                      WHEN m.role = 'teacher' THEN 'teacher'
+                      WHEN institution.actor_group_student(a.course_id, v_scope.principal_id) THEN 'teacher'
+                      ELSE m.role
+                    END
+             FROM (SELECT) one
+             LEFT JOIN institution.course_member m
+               ON m.course_id = a.course_id AND m.institution_id = v_institution
+              AND m.user_id = v_user AND m.member_to IS NULL)
            ELSE (
              SELECT CASE WHEN ms.mentor_id = v_user THEN 'teacher'
                          WHEN ms.student_id = v_user THEN 'student' END
