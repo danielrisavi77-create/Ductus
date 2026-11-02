@@ -1,3 +1,4 @@
+import { request as httpRequest, type IncomingHttpHeaders } from "node:http";
 import { expect, test, type APIResponse } from "@playwright/test";
 
 // DAN-296 (M1.6, part one) and DAN-489 (M1.6b): the security headers the
@@ -204,4 +205,88 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
     expectConfigHeaders(response, "page");
     expect(response.headers()["cache-control"]).toBe("private, no-cache, no-store, max-age=0, must-revalidate");
   });
+});
+
+// DAN-498 (#1369): the Next.js router answers some requests before
+// next.config.ts `headers()` and middleware.ts run: a 308 for `//` or `\` in
+// the path or for a trailing slash, and an HTML 400 for a path it cannot
+// decode. instrumentation.ts puts the same headers on those answers, with the
+// no-load policy. Each row pins its status, so the row proves it is the early
+// answer; the control rows next to them already went the normal way.
+// Requests go through node:http, because a URL parser would turn `\` into `/`
+// and `//host` into another host before the request leaves.
+
+type EarlyRow = { method: string; path: string; status: number; location?: string; csp: Csp | "floor" };
+
+const EARLY_ROWS: EarlyRow[] = [
+  // double slash
+  { method: "GET", path: "/prijava//x", status: 308, location: "/prijava/x", csp: "floor" },
+  { method: "GET", path: "//", status: 308, csp: "floor" },
+  { method: "GET", path: "//evil.example", status: 308, csp: "floor" },
+  { method: "GET", path: "/api//health", status: 308, csp: "floor" },
+  { method: "GET", path: "/_next//static/x", status: 308, csp: "floor" },
+  // backslash
+  { method: "GET", path: "/prijava\\x", status: 308, csp: "floor" },
+  { method: "GET", path: "/\\prijava", status: 308, csp: "floor" },
+  // trailing slash
+  { method: "GET", path: "/prijava/", status: 308, location: "/prijava", csp: "floor" },
+  { method: "GET", path: "/rad/", status: 308, csp: "floor" },
+  { method: "GET", path: "/api/health/", status: 308, csp: "floor" },
+  { method: "GET", path: "/favicon.ico/", status: 308, csp: "floor" },
+  // encoded characters: a path Next.js cannot decode is an HTML 400
+  { method: "GET", path: "/api/%", status: 400, csp: "floor" },
+  { method: "GET", path: "/api/%E0%A4%A", status: 400, csp: "floor" },
+  { method: "GET", path: "/api/comments/%", status: 400, csp: "floor" },
+  { method: "GET", path: "/zadatak/%", status: 400, csp: "floor" },
+  { method: "GET", path: "/zadatak/%E0%A4%A", status: 400, csp: "floor" },
+  // encoded characters that decode: the normal way, with the page policy
+  { method: "GET", path: "/prijava%2F%2Fx", status: 404, csp: "page" },
+  { method: "GET", path: "/prijava%5Cx", status: 404, csp: "page" },
+  { method: "GET", path: "/%", status: 404, csp: "page" },
+  // upper and lower case
+  { method: "GET", path: "/Prijava//X", status: 308, csp: "floor" },
+  { method: "GET", path: "/PRIJAVA", status: 404, csp: "page" },
+  // query
+  { method: "GET", path: "/prijava//x?a=b", status: 308, location: "/prijava/x?a=b", csp: "floor" },
+  { method: "GET", path: "/prijava/?a=%zz", status: 308, csp: "floor" },
+  { method: "GET", path: "/prijava?%", status: 200, csp: "page" },
+  // other methods
+  { method: "HEAD", path: "/prijava//x", status: 308, csp: "floor" },
+  { method: "POST", path: "/prijava//x", status: 308, csp: "floor" },
+  { method: "OPTIONS", path: "/prijava//x", status: 308, csp: "floor" },
+  { method: "POST", path: "/api/health/", status: 308, csp: "floor" },
+  { method: "HEAD", path: "/api/%", status: 400, csp: "floor" },
+  { method: "POST", path: "/api/%", status: 400, csp: "floor" },
+];
+
+function rawRequest(baseURL: string, method: string, path: string) {
+  const { hostname, port } = new URL(baseURL);
+  return new Promise<{ status: number; headers: IncomingHttpHeaders; raw: string[] }>((resolve, reject) => {
+    const req = httpRequest({ host: hostname, port, method, path }, (res) => {
+      res.resume();
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, headers: res.headers, raw: res.rawHeaders }));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+test.describe("security headers on the router's early answers (DAN-498)", () => {
+  for (const row of EARLY_ROWS) {
+    test(`${row.method} ${row.path} is a ${row.status} with every security header`, async ({ baseURL }) => {
+      const { status, headers, raw } = await rawRequest(baseURL!, row.method, row.path);
+      const label = `${row.method} ${row.path}`;
+      expect(status, label).toBe(row.status);
+      if (row.location) expect(headers["location"], label).toBe(row.location);
+      for (const [name, value] of Object.entries(EVERY_RESPONSE)) {
+        expect(headers[name], `${label} ${name}`).toBe(value);
+        // Once: the floor never doubles a header the config already set.
+        expect(raw.filter((h, i) => i % 2 === 0 && h.toLowerCase() === name), `${label} ${name}`).toHaveLength(1);
+      }
+      for (const name of NOT_SENT_YET) expect(headers[name], `${label} ${name}`).toBeUndefined();
+      const policy = headers["content-security-policy"];
+      if (row.csp === "page") expect(policy, `${label} csp`).toMatch(PAGE_CSP);
+      else expect(policy, `${label} csp`).toBe(row.csp === "api" ? API_CSP : STATIC_CSP);
+    });
+  }
 });
