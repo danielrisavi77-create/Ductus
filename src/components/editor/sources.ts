@@ -218,6 +218,35 @@ function lead(plain: string, lettered: string): string {
   return plain.slice(0, at);
 }
 
+// What an entry of the author starts with in the bibliography: "Horvat, " for a person.
+function listHead(author: Source["authors"][number]): string {
+  return author.kind === "person" ? `${author.family}, ` : author.name;
+}
+
+/**
+ * Whether an entry would be cited in the text as `work` is: the same family
+ * names in the same order and the same year, with or without a letter. The
+ * year is read at its place, in the first bracket after the first author that
+ * opens with four digits, never in a title, place, publisher or journal such
+ * as "Analiza (2021)" (QA on #1407, c.6586313749).
+ */
+function sharesCitation(text: string, work: Source): boolean {
+  const [first, second] = work.authors;
+  const head = listHead(first!);
+  if (!text.startsWith(head)) return false;
+  const year = /\((\d{4})([^)]*)\)/.exec(text.slice(head.length));
+  if (year === null || year[1] !== String(work.year) || !/^[a-z]?$/.test(year[2]!)) return false;
+  // What stands between the first author and the year: a given name, or more authors.
+  const authors = text.slice(head.length, head.length + year.index);
+  const { authorJoiner } = fpzgCitationStyle.bibliography;
+  if (second === undefined) {
+    // "Horvat, Marko i Kovač, Luka (2021)" is cited "(Horvat i Kovač, 2021)", not "(Horvat, 2021)".
+    const joined = authors.indexOf(authorJoiner);
+    return joined === -1 || !authors.includes(", ", joined + authorJoiner.length);
+  }
+  return authors.includes(`${authorJoiner}${listHead(second)}`);
+}
+
 /**
  * DAN-484: the letter a work takes in the year of its citation and entry
  * (FPZG rule "same-year": 2021a, 2021b). The entries of the same authors and
@@ -264,20 +293,13 @@ export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
   if (unlettered.length === 1) {
     const citeHead = lead(citationText(base, ""), citationText({ ...base, yearSuffix: "a" }, ""));
     const { pageSeparator, close } = fpzgCitationStyle.inText;
-    // Another entry of the first author and year (another given name, another
-    // second author) could be what "(Horvat, 2021)" points to: then the
-    // in-text citations stay as the student wrote them.
-    const first = base.authors[0]!;
-    const family = first.kind === "person" ? `${first.family}, ` : first.name;
-    // The year is read at its place, in the first bracket after the authors,
-    // never in a title such as "Analiza (2021)" (QA on #1407).
-    const year = String(base.year);
-    const sameForm = blocks.slice(range.start + 1, range.end).some((b, i) => {
-      const text = b.text.trim();
-      if (range.start + 1 + i === unlettered[0]!.index || !text.startsWith(family)) return false;
-      const open = text.indexOf("(", family.length);
-      return open !== -1 && text.startsWith(year, open + 1) && !/[0-9]/.test(text.charAt(open + 1 + year.length));
-    });
+    // Another entry outside the group cited in the same form (another given
+    // name, the same year with or without a letter) could be what
+    // "(Horvat, 2021)" points to: then the in-text citations stay as the
+    // student wrote them. Works of the group are told apart by their letters.
+    const group = new Set(members.map((m) => m.index));
+    const sameForm = blocks.slice(range.start + 1, range.end)
+      .some((b, i) => !group.has(range.start + 1 + i) && sharesCitation(b.text.trim(), base));
     if (!sameForm) {
       blocks.forEach((block, index) => {
         if (index > range.start && index < range.end) return;

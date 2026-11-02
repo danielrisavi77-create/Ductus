@@ -470,6 +470,60 @@ describe("the letter of the year, class by class", () => {
   });
 });
 
+// DAN-484, QA on #1407 (c.6586313749), contract #1091 c.6586570245: whether
+// another entry X shares the in-text form of the entry that becomes "a". Only
+// then do the in-text citations stay as written. A year counts only at its
+// place after the authors, never in a title, place, publisher or journal.
+describe("sameForm, class by class", () => {
+  const SECOND: SourceFields = { ...BOOK, title: "Druga izmišljena knjiga" };
+  const TWO: SourceFields = { ...BOOK, family2: "Kovač", given2: "Luka", title: "Zajednička knjiga" };
+  const TWO_SECOND: SourceFields = { ...TWO, title: "Druga zajednička knjiga" };
+  const entry = (f: SourceFields, l = "") => entryText(l === "" ? sourceOf(f) : { ...sourceOf(f), yearSuffix: l });
+  const MARKO: SourceFields = { ...BOOK, given: "Marko", title: "Markova knjiga" };
+  const ONE = { first: BOOK, work: SECOND, cited: "T. (Horvat, 2021) i (Horvat, 2021: 9)." };
+  const PAIR = { first: TWO, work: TWO_SECOND, cited: "T. (Horvat i Kovač, 2021) i (Horvat i Kovač, 2021: 9)." };
+
+  type Row = { klass: string; base: typeof ONE; others: string[]; promoted: boolean; letter?: string };
+  const rows: Row[] = [
+    { klass: "G1 the year in a title", base: ONE, others: [entry({ ...BOOK, year: "2020", title: "Analiza (2021)" })], promoted: true },
+    { klass: "G2 the year in a subtitle", base: ONE, others: [entry({ ...BOOK, year: "2020", title: "Analiza: pregled (2021)" })], promoted: true },
+    { klass: "G3 the year in the place and the publisher", base: ONE,
+      others: [entry({ ...BOOK, year: "2020", title: "Treća", place: "Zagreb (2021)", publisher: "Naklada (2021)" })], promoted: true },
+    { klass: "G4 the year in a journal", base: ONE,
+      others: [entry({ ...ARTICLE, family: "Horvat", given: "Ana", family2: "", given2: "", year: "2020", journal: "Godišnjak (2021)" })], promoted: true },
+    { klass: "G5 the same year at its place, another given name", base: ONE, others: [entry(MARKO)], promoted: false },
+    { klass: "G6 the same year at its place with a letter", base: ONE, others: [entry(MARKO, "a")], promoted: false },
+    { klass: "G7 a range written by hand at the place of the year", base: ONE, others: ["Horvat, Marko (2021-2022) Ručni unos."], promoted: true },
+    { klass: "G8 a bracket in the name before the year", base: ONE, others: ["Horvat, Marko (ur.) (2021) Zbornik. Zagreb: Primjer."], promoted: false },
+    { klass: "A1 another first author of the same year", base: ONE,
+      others: [entry({ ...BOOK, family: "Kovač", title: "Treća" }), entry({ ...BOOK, family: "Horvatić", title: "Četvrta" })], promoted: true },
+    { klass: "A2 the same first author with a second, against one author", base: ONE,
+      others: [entry({ ...MARKO, family2: "Kovač", given2: "Luka" })], promoted: true },
+    { klass: "A3 the first author alone, against two authors", base: PAIR, others: [entry(MARKO)], promoted: true },
+    { klass: "A4 the same two authors with other given names", base: PAIR,
+      others: [entry({ ...MARKO, family2: "Kovač", given2: "Ivo" })], promoted: false },
+    { klass: "A5 the same two authors in reverse order", base: PAIR,
+      others: [entry({ ...MARKO, family: "Kovač", given: "Luka", family2: "Horvat", given2: "Marko" })], promoted: true },
+    { klass: "A6 the same first author with another second", base: PAIR,
+      others: [entry({ ...MARKO, family2: "Babić", given2: "Iva" })], promoted: true },
+    { klass: "S1 a letter already taken in the group", base: ONE,
+      others: [entry({ ...BOOK, title: "Lettered by hand" }, "b")], promoted: true, letter: "c" },
+    { klass: "S2 no other entry", base: ONE, others: [], promoted: true },
+  ];
+
+  it.each(rows)("class $klass", ({ base, others, promoted, letter = "b" }) => {
+    const editor = editorWith([{ text: base.cited }, { type: "heading", text: "Literatura" }, { text: entry(base.first) }, ...others.map((text) => ({ text }))]);
+    atFirstEnd(editor);
+    expect(writeSource(editor, sourceOf(base.work), null, true)?.yearSuffix).toBe(letter);
+    const lines = texts(editor).map((line) => line.replace(/^\w+:/, ""));
+    expect(lines[0]).toBe(promoted ? base.cited.replaceAll(", 2021", ", 2021a") : base.cited);
+    expect(lines).toContain(entry(base.first, "a"));
+    expect(lines).toContain(entry(base.work, letter));
+    for (const other of others) expect(lines).toContain(other);
+    editor.destroy();
+  });
+});
+
 // DAN-484 point 2: what the form names live (tried = false) and after a click,
 // over every field of both kinds. A limit counts code points; nothing is cut.
 describe("the form's errors, field by field", () => {
