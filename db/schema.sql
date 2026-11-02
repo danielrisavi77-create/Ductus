@@ -3657,6 +3657,23 @@ $$;
 
 
 --
+-- Name: end_course_editor(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.end_course_editor(p_course_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  PERFORM institution.require_course_teacher(p_course_id);
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  UPDATE institution.course_editor e SET valid_to = greatest(now(), e.valid_from)
+   WHERE e.course_id = p_course_id AND e.valid_to IS NULL;
+END
+$$;
+
+
+--
 -- Name: end_group_assignment(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3673,6 +3690,25 @@ BEGIN
    WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
   UPDATE institution.seminar_group_member s SET valid_to = greatest(now(), s.valid_from)
    WHERE s.group_id = p_group_id AND s.user_id = p_user_id AND s.valid_to IS NULL;
+END
+$$;
+
+
+--
+-- Name: end_team_substitution(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.end_team_substitution(p_substitution_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_course uuid;
+BEGIN
+  SELECT s.course_id INTO v_course FROM institution.team_substitution s WHERE s.id = p_substitution_id;
+  PERFORM institution.require_course_teacher(v_course);
+  UPDATE institution.team_substitution s SET ended_at = greatest(now(), s.valid_from)
+   WHERE s.id = p_substitution_id AND s.ended_at IS NULL;
 END
 $$;
 
@@ -3842,6 +3878,41 @@ CREATE FUNCTION institution.is_confirmed_teacher(p_user_id uuid, p_course_id uui
     WHERE c.id = p_course_id AND r.user_id = p_user_id AND r.role = 'teacher'
       AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
   )
+$$;
+
+
+--
+-- Name: is_course_team_member(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_course_team_member(p_user_id uuid, p_course_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT institution.is_confirmed_teacher(p_user_id, p_course_id)
+     AND (EXISTS (SELECT 1 FROM institution.course_member m
+                  WHERE m.course_id = p_course_id AND m.user_id = p_user_id AND m.role = 'teacher'
+                    AND m.member_to IS NULL)
+          OR EXISTS (SELECT 1 FROM institution.seminar_group_teacher t
+                     WHERE t.course_id = p_course_id AND t.user_id = p_user_id AND t.valid_to IS NULL))
+     AND NOT EXISTS (SELECT 1 FROM institution.course_member m
+                     WHERE m.course_id = p_course_id AND m.user_id = p_user_id AND m.role = 'student'
+                       AND m.member_to IS NULL)
+$$;
+
+
+--
+-- Name: is_course_team_teacher(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_course_team_teacher(p_user_id uuid, p_course_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT institution.is_course_team_member(p_user_id, p_course_id)
+     AND EXISTS (SELECT 1 FROM institution.course_member m
+                 WHERE m.course_id = p_course_id AND m.user_id = p_user_id AND m.role = 'teacher'
+                   AND m.member_to IS NULL)
 $$;
 
 
@@ -4153,6 +4224,37 @@ $$;
 
 
 --
+-- Name: set_course_editor(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_course_editor(p_course_id uuid, p_editor_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_ended timestamptz;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF NOT institution.is_course_team_teacher(p_editor_id, p_course_id) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- Two changes of the same course wait for each other here.
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  IF EXISTS (SELECT 1 FROM institution.course_editor e
+             WHERE e.course_id = p_course_id AND e.user_id = p_editor_id AND e.valid_to IS NULL) THEN
+    RETURN;
+  END IF;
+  UPDATE institution.course_editor e SET valid_to = greatest(now(), e.valid_from)
+   WHERE e.course_id = p_course_id AND e.valid_to IS NULL
+  RETURNING e.valid_to INTO v_ended;
+  INSERT INTO institution.course_editor (course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_course_id, actor.institution_id, p_editor_id, actor.user_id, greatest(now(), v_ended));
+END
+$$;
+
+
+--
 -- Name: set_course_holder(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4187,6 +4289,42 @@ $$;
 
 
 --
+-- Name: set_team_substitution(uuid, uuid, uuid, timestamp with time zone); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_team_substitution(p_course_id uuid, p_absent_id uuid, p_substitute_id uuid, p_valid_to timestamp with time zone) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_id uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF p_absent_id IS NOT DISTINCT FROM p_substitute_id
+     OR NOT institution.is_course_team_member(p_absent_id, p_course_id)
+     OR NOT institution.is_course_team_member(p_substitute_id, p_course_id)
+     OR p_valid_to IS NULL OR p_valid_to <= now() OR p_valid_to > now() + interval '1 year' THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  SELECT s.id INTO v_id FROM institution.team_substitution s
+   WHERE s.course_id = p_course_id AND s.absent_id = p_absent_id AND s.ended_at IS NULL
+     AND s.substitute_id = p_substitute_id AND s.valid_to = p_valid_to;
+  IF v_id IS NOT NULL THEN
+    RETURN v_id;
+  END IF;
+  UPDATE institution.team_substitution s SET ended_at = greatest(now(), s.valid_from)
+   WHERE s.course_id = p_course_id AND s.absent_id = p_absent_id AND s.ended_at IS NULL;
+  INSERT INTO institution.team_substitution (course_id, institution_id, absent_id, substitute_id, assigned_by, valid_to)
+  VALUES (p_course_id, actor.institution_id, p_absent_id, p_substitute_id, actor.user_id, p_valid_to)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END
+$$;
+
+
+--
 -- Name: teachers_without_affiliation(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4215,6 +4353,48 @@ BEGIN
     )
   ORDER BY r.confirmed_at, r.user_id;
 END
+$$;
+
+
+--
+-- Name: team_notification_recipients(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.team_notification_recipients(p_course_id uuid, p_student_id uuid) RETURNS SETOF uuid
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  WITH candidate (level, user_id) AS (
+    SELECT 1, t.user_id
+    FROM institution.seminar_group_member g
+    JOIN institution.seminar_group_teacher t ON t.group_id = g.group_id AND t.valid_to IS NULL
+    WHERE g.course_id = p_course_id AND g.user_id = p_student_id AND g.valid_to IS NULL
+      AND institution.is_course_team_member(t.user_id, p_course_id)
+    UNION ALL
+    SELECT 2, e.user_id FROM institution.course_editor e
+    WHERE e.course_id = p_course_id AND e.valid_to IS NULL AND institution.is_course_team_teacher(e.user_id, p_course_id)
+    UNION ALL
+    SELECT 3, h.user_id FROM institution.course_holder h
+    WHERE h.course_id = p_course_id AND h.valid_to IS NULL AND institution.is_course_team_teacher(h.user_id, p_course_id)
+    UNION ALL
+    SELECT 4, m.user_id FROM institution.course_member m
+    WHERE m.course_id = p_course_id AND m.role = 'teacher' AND m.member_to IS NULL
+      AND institution.is_course_team_member(m.user_id, p_course_id)
+  ),
+  chosen AS (
+    SELECT c.user_id FROM candidate c
+    WHERE c.level = (SELECT min(level) FROM candidate)
+      AND EXISTS (SELECT 1 FROM institution.course_member m
+                  WHERE m.course_id = p_course_id AND m.user_id = p_student_id AND m.role = 'student'
+                    AND m.member_to IS NULL)
+  )
+  SELECT DISTINCT coalesce(
+    (SELECT s.substitute_id FROM institution.team_substitution s
+     WHERE s.course_id = p_course_id AND s.absent_id = c.user_id AND s.ended_at IS NULL
+       AND s.valid_from <= now() AND now() < s.valid_to
+       AND institution.is_course_team_member(s.substitute_id, p_course_id)),
+    c.user_id)
+  FROM chosen c
 $$;
 
 
@@ -4859,6 +5039,24 @@ ALTER TABLE ONLY institution.course FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: course_editor; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.course_editor (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT course_editor_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.course_editor FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: course_enrollment_code; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -5098,6 +5296,28 @@ CREATE TABLE institution.seminar_group_teacher (
 );
 
 ALTER TABLE ONLY institution.seminar_group_teacher FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: team_substitution; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.team_substitution (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    absent_id uuid NOT NULL,
+    substitute_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone NOT NULL,
+    ended_at timestamp with time zone,
+    CONSTRAINT team_substitution_check CHECK ((absent_id <> substitute_id)),
+    CONSTRAINT team_substitution_check1 CHECK ((valid_to > valid_from)),
+    CONSTRAINT team_substitution_check2 CHECK ((ended_at >= valid_from))
+);
+
+ALTER TABLE ONLY institution.team_substitution FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5662,6 +5882,14 @@ ALTER TABLE ONLY institution.assignment_version
 
 
 --
+-- Name: course_editor course_editor_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: course_enrollment_code course_enrollment_code_code_hash_key; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -5854,6 +6082,14 @@ ALTER TABLE ONLY institution.seminar_group_teacher
 
 
 --
+-- Name: team_substitution team_substitution_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6030,6 +6266,13 @@ CREATE UNIQUE INDEX assignment_mentorship_idx ON institution.assignment USING bt
 
 
 --
+-- Name: course_editor_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX course_editor_open_idx ON institution.course_editor USING btree (course_id) WHERE (valid_to IS NULL);
+
+
+--
 -- Name: course_enrollment_code_active_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
@@ -6118,6 +6361,13 @@ CREATE UNIQUE INDEX seminar_group_member_open_idx ON institution.seminar_group_m
 --
 
 CREATE UNIQUE INDEX seminar_group_teacher_open_idx ON institution.seminar_group_teacher USING btree (group_id, user_id) WHERE (valid_to IS NULL);
+
+
+--
+-- Name: team_substitution_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX team_substitution_open_idx ON institution.team_substitution USING btree (course_id, absent_id) WHERE (ended_at IS NULL);
 
 
 --
@@ -6901,6 +7151,30 @@ ALTER TABLE ONLY institution.course
 
 
 --
+-- Name: course_editor course_editor_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_editor course_editor_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: course_editor course_editor_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: course_enrollment_code course_enrollment_code_course_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -7130,6 +7404,38 @@ ALTER TABLE ONLY institution.seminar_group_teacher
 
 ALTER TABLE ONLY institution.seminar_group_teacher
     ADD CONSTRAINT seminar_group_teacher_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_absent_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_absent_id_institution_id_fkey FOREIGN KEY (absent_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_substitute_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_substitute_id_institution_id_fkey FOREIGN KEY (substitute_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -7607,6 +7913,26 @@ CREATE POLICY assignment_version_read ON institution.assignment_version FOR SELE
 ALTER TABLE institution.course ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: course_editor; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.course_editor ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: course_editor course_editor_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_editor_owner ON institution.course_editor TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: course_editor course_editor_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_editor_read ON institution.course_editor FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
 -- Name: course_enrollment_code; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -7860,6 +8186,26 @@ CREATE POLICY seminar_group_teacher_read ON institution.seminar_group_teacher FO
 
 
 --
+-- Name: team_substitution; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.team_substitution ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: team_substitution team_substitution_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY team_substitution_owner ON institution.team_substitution TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: team_substitution team_substitution_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY team_substitution_read ON institution.team_substitution FOR SELECT TO ductus_app USING (((absent_id = ( SELECT app.current_user_id() AS current_user_id)) OR (substitute_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -7938,4 +8284,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261102190000'),
     ('20261102200000'),
     ('20261102210000'),
-    ('20261102220000');
+    ('20261102220000'),
+    ('20261103000000');

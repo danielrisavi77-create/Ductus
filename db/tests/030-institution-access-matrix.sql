@@ -6,7 +6,7 @@ BEGIN;
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(1091);
+SELECT plan(1219);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
@@ -15,8 +15,9 @@ SELECT bag_eq(
      WHERE c.relnamespace = 'institution'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f') $$,
   ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
         'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
-        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member'],
-  'the institution schema holds exactly the sixteen tables of this matrix'
+        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
+        'course_editor', 'team_substitution'],
+  'the institution schema holds exactly the eighteen tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -53,7 +54,9 @@ SELECT bag_eq(
     'ductus_app SELECT course_holder',
     'ductus_app SELECT seminar_group',
     'ductus_app SELECT seminar_group_teacher',
-    'ductus_app SELECT seminar_group_member'
+    'ductus_app SELECT seminar_group_member',
+    'ductus_app SELECT course_editor',
+    'ductus_app SELECT team_substitution'
   ],
   'besides the owner only ductus_app holds a privilege on an institution table, and only SELECT'
 );
@@ -96,7 +99,11 @@ SELECT bag_eq(
     'seminar_group_teacher: seminar_group_teacher_owner ALL to ductus_identity',
     'seminar_group_teacher: seminar_group_teacher_read SELECT to ductus_app',
     'seminar_group_member: seminar_group_member_owner ALL to ductus_identity',
-    'seminar_group_member: seminar_group_member_read SELECT to ductus_app'
+    'seminar_group_member: seminar_group_member_read SELECT to ductus_app',
+    'course_editor: course_editor_owner ALL to ductus_identity',
+    'course_editor: course_editor_read SELECT to ductus_app',
+    'team_substitution: team_substitution_owner ALL to ductus_identity',
+    'team_substitution: team_substitution_read SELECT to ductus_app'
   ],
   'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
@@ -159,7 +166,14 @@ SELECT bag_eq(
     'assign_group_teacher(p_group_id uuid, p_teacher_id uuid) definer app',
     'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
     'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app',
-    'can(p_action text, p_document_id text) definer app'
+    'can(p_action text, p_document_id text) definer app',
+    'is_course_team_member(p_user_id uuid, p_course_id uuid)',
+    'is_course_team_teacher(p_user_id uuid, p_course_id uuid)',
+    'set_course_editor(p_course_id uuid, p_editor_id uuid) definer app',
+    'end_course_editor(p_course_id uuid) definer app',
+    'set_team_substitution(p_course_id uuid, p_absent_id uuid, p_substitute_id uuid, p_valid_to timestamp with time zone) definer app',
+    'end_team_substitution(p_substitution_id uuid) definer app',
+    'team_notification_recipients(p_course_id uuid, p_student_id uuid)'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
@@ -214,7 +228,8 @@ FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_aut
 CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code',
                         'course_member', 'enrollment_attempt', 'assignment', 'assignment_version',
                         'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
-                        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member']) WITH ORDINALITY AS t (tbl, n)
+                        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
+                        'course_editor', 'team_substitution']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(
