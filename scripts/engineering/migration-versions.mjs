@@ -107,6 +107,11 @@ async function pages(api, url, maxPages) {
  * Files of one PR, read between two reads of its head. The list counts only
  * when the head did not move, the last page was short and it holds at least
  * changed_files entries; a moved head is read once more, anything else throws.
+ * Known limit (owner narrowing, #87 c.6588026589): `/files` is not bound to a
+ * commit SHA. Equal heads before and after do not prove the list belongs to
+ * that head; a base or head that changes and is restored (ABA) between reads
+ * is not detected. The guarantee holds for PRs with a stable head and base
+ * during the check.
  */
 export async function readPull(api, base, number) {
   for (let read = 1; read <= READS; read += 1) {
@@ -125,7 +130,8 @@ export async function readPull(api, base, number) {
  * One state of the repository: main's SHA and every PR, read oldest first
  * (`state=all`, so a PR that closes or merges between two pages stays in place
  * and shifts no page; new PRs come last). `key` compares two states: main and
- * every open PR with its head.
+ * every open PR with its head. The key does not include a PR's base; a base or
+ * head that moves and returns between two inventories gives an equal key (ABA).
  */
 export async function inventory(api, base) {
   const main = (await api(`${base}/git/ref/heads/main`))?.object?.sha;
@@ -141,6 +147,12 @@ export async function inventory(api, base) {
  * every open PR between two reads of the inventory. A result counts only when
  * both inventories are equal and every PR was read open at its listed head;
  * otherwise everything is read once more, and a second change throws.
+ *
+ * Known limit (owner narrowing, #87 c.6588026589): the guarantee covers PRs
+ * with a stable head and base during the check. ABA, where another PR changes
+ * its head or base between reads and restores it, is not detected, because the
+ * file list is not bound to a SHA. Mitigation: Mergify reruns CI on main+PR
+ * before merging, so a collision that slipped through is caught there.
  */
 export async function checkPullRequest({ api, owner, repo, number, headSha }) {
   const base = `/repos/${owner}/${repo}`;
