@@ -280,6 +280,27 @@ test("read: the PR's own files are read once, not again as an open PR", async ()
 
 // Istodobnost: the QA scenario (c.6585887022). B has 101 files with the
 // migration on page 2; after page 1 B pushes a head that drops the 100 others.
+// #1399 QA c.6585887022: B pushes between two pages of its file list. Page 1
+// holds 100 old non-migrations, page 2 comes back empty after the push.
+test("checkPullRequest rereads another PR that pushed between two pages of its files", async () => {
+  const old = Array.from({ length: 100 }, (_, i) => ({ filename: `src/f${i}.ts`, status: "added", sha: "s" }));
+  let pushed = false;
+  const { api } = fakeApi([
+    [/^\/repos\/o\/r\/pulls\/1$/, pr(1)],
+    [/^\/repos\/o\/r\/pulls\/1\/files\?/, (m) => page([add(A)], m)],
+    [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=main$/, MAIN.map((f) => ({ ...f, type: "file" }))],
+    [/^\/repos\/o\/r\/pulls\?state=open/, (m) => page([pr(1), pr(7)], m)],
+    [/^\/repos\/o\/r\/pulls\/7$/, () => (pushed ? pr(7, { head: { sha: "b".repeat(40) } }) : pr(7, { head: { sha: "a".repeat(40) }, changed_files: 101 }))],
+    [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => {
+      const n = Number(new URLSearchParams(m.input.split("?")[1]).get("page"));
+      if (!pushed && n === 1) { pushed = true; return old; }
+      return page([add(B)], m);
+    }],
+  ]);
+  const collisions = await checkPullRequest({ api, owner: "o", repo: "r", number: 1, headSha: "h".repeat(40) });
+  assert.deepEqual(by(collisions), [`${M(A)}|7`]);
+});
+
 const pushAfterFirstPage = (s, n) => {
   if (n !== 1) return;
   s.head = s.head === H1 ? H2 : H1;
