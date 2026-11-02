@@ -373,3 +373,34 @@
     transition: transform 0.2s, visibility 0s;
   }
 }
+
+/* Without JavaScript ☰ cannot open the drawer, so wherever the side bar is
+   one, it and signing out stay in the page above the content (I5). On /rad
+   the drawer rules are `.drawerShell .sidebar`, so the fallback carries one
+   class more. A media query, not a <noscript><style>: the page policy
+   (style-src 'self', DAN-489) refuses an inline style. */
+@media (scripting: none) {
+  .shell.drawerShell .sidebar {
+    position: static;
+    width: auto;
+    transform: none;
+    visibility: visible;
+  }
+
+  .shell.drawerShell .menuButton {
+    display: none;
+  }
+}
+
+@media (scripting: none) and (max-width: 799.98px) {
+  .sidebar {
+    position: static;
+    width: auto;
+    transform: none;
+    visibility: visible;
+  }
+
+  .menuButton {
+    display: none;
+  }
+}

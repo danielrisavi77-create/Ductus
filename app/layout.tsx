@@ -8,6 +8,7 @@ import { fontVariables } from "./fonts";
 
 import "./fonts/fonts.css";
 import "./globals.css";
+import "./prosemirror.css";
 
 export const metadata = {
   title: t.app.name,
