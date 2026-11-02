@@ -7,6 +7,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { cleanUpAssignmentWork, openAssignmentWork } from "./assignment-work";
 import { type DemoAccount, signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // F2 (#711, DAN-89): the teacher reaches a student's work from /nastavnik by
 // a link, without typing an id. The work is the student's own document of an
@@ -53,7 +54,7 @@ test.describe("teacher reaches a work by navigation", () => {
     const { documentId } = await openAssignmentWork(student);
     const live = work(SENTENCE);
     const put = await student.request.put(`/api/live/${documentId}`, {
-      headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
+      headers: { origin: APP_ORIGIN, "content-type": "application/json", "if-none-match": "*" }, data: live.body,
     });
     expect(put.status()).toBe(200);
 

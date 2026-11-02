@@ -56,8 +56,15 @@ test("every run, pull requests included, installs all three engines and runs eve
   assert.match(playwright, /^ {2}retries: 0,$/m);
 });
 
-test("the isolated login job runs the full Chromium suite and preserves both reports", () => {
+test("the isolated login job runs the full Chromium suite, the WebKit sign-in specs and preserves both reports", () => {
   assert.match(step("Install login browser", "stack-login"), /^ {8}run: bash scripts\/engineering\/playwright-install\.sh chromium$/m);
+  // DAN-232: WebKit takes the sign-in specs over https; its system packages are
+  // installed (no PLAYWRIGHT_TRY_WITHOUT_DEPS, which only serves a lone chromium).
+  const webkit = step("Install login WebKit", "stack-login");
+  assert.match(webkit, /^ {8}run: bash scripts\/engineering\/playwright-install\.sh webkit$/m);
+  assert.match(webkit, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
+  assert.doesNotMatch(webkit, /PLAYWRIGHT_TRY_WITHOUT_DEPS|continue-on-error|\|\| true/);
+  assert.match(step("Restore Playwright browsers", "stack-login"), /^ {10}key: pw-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('pnpm-lock\.yaml'\) \}\}-chromium-webkit$/m);
   const login = step("Full login E2E", "stack-login");
   // The whole suite, split over the matrix by the duration plan (DAN-375); the
   // inventory job (login-shards.mjs) proves each shard ran its plan and the

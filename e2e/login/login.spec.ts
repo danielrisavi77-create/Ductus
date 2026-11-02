@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { appCookie, LOGIN_COOKIE, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { APP_ORIGIN, APP_ORIGIN_PATTERN } from "./origin";
 
 // The full login through the fake provider against `next dev`
 // (playwright.login.config.ts); the helpers are in ./support.ts.
@@ -77,7 +78,7 @@ test("a callback with another state ends on the neutral page without a session",
     let response = await route.fetch({ maxRedirects: 0 });
     for (let hop = 0; hop < 5; hop++) {
       const location = new URL(response.headers()["location"] ?? "", "http://localhost:8090");
-      if (location.href.startsWith("http://localhost:3000/api/auth/callback?")) {
+      if (location.href.startsWith(`${APP_ORIGIN}/api/auth/callback?`)) {
         location.searchParams.set("state", "x".repeat(43));
         return route.fulfill({ status: 303, headers: { location: location.href } });
       }
@@ -87,7 +88,7 @@ test("a callback with another state ends on the neutral page without a session",
   });
   await page.goto("/api/auth/login");
   await page.getByRole("button", { name: "Demo studentica" }).click();
-  await page.waitForURL(/^http:\/\/localhost:3000\/api\/auth\/callback\?/);
+  await page.waitForURL(new RegExp(`^${APP_ORIGIN_PATTERN}\\/api\\/auth\\/callback\\?`));
   await expectNeutralPage(page);
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
   expect(await appCookie(context, LOGIN_COOKIE)).toBeUndefined();

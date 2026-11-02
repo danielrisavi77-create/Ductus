@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { appCookie, SESSION_COOKIE, signIn, signOutWithoutDialog } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // #802 part B (DAN-325): every signed-in page in the shell has "Početna" in
 // the top bar and a sign-out, at 1440 and 390 px; the signed-in home is in
@@ -66,7 +67,7 @@ test("QA (2) and (4): a student's Početna and brand lead to S01 on /zadaci; on 
   await expect(homeCrumbOf(page)).toHaveAttribute("href", "/zadaci");
   await expect(page.getByRole("link", { name: t.shell.home })).toHaveAttribute("href", "/zadaci");
   await homeCrumbOf(page).click();
-  await page.waitForURL("http://localhost:3000/zadaci");
+  await page.waitForURL(`${APP_ORIGIN}/zadaci`);
 
   await page.goto("/nastavnik/brz-put");
   await expect(homeCrumbOf(page)).toHaveAttribute("href", "/");
@@ -97,7 +98,7 @@ for (const width of WIDTHS) {
     await snapshot(page, `home-closed-session-${width}`);
     await signInAgain.click();
     await page.getByRole("button", { name: "Demo studentica" }).click();
-    await page.waitForURL("http://localhost:3000/rad");
+    await page.waitForURL(`${APP_ORIGIN}/rad`);
     expect((await appCookie(context, SESSION_COOKIE))?.value).not.toBe("Z".repeat(43));
   });
 }

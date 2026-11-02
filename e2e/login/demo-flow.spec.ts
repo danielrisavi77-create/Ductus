@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
+import { expect, test as base, type BrowserContext, type Page, type Request } from "@playwright/test";
 import pg from "pg";
 
 import { formatBibliographyEntry, formatInText } from "../../src/domain/citation/format";
@@ -29,11 +29,13 @@ import {
 } from "./support";
 import { localAdminUrl } from "./local-db-url";
 import { caretAtEnd as caretAtEndOf } from "../support/caret";
+import { demoLaunchOptions } from "./launch-options";
+import { APP_ORIGIN } from "./origin";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
 // steps attach a screenshot each, so the playwright-report-login artifact of
-// the run holds both. Chromium only (D-98 addition).
+// the run holds both. Chromium and WebKit (D-98 addition, DAN-232).
 //
 // The test grows with the demo: the steps below run what main already shows
 // (F-5 sign-in and sign-out, local offline recovery and account isolation). The screens of
@@ -49,11 +51,15 @@ import { caretAtEnd as caretAtEndOf } from "../support/caret";
 // form showed "mm/dd/yyyy" and "11/02/2026, 09:00 AM". The browser of this file
 // starts in Croatian, as a Croatian teacher's browser would, so the demo
 // screenshots show the dates as the teacher sees them.
-const BROWSER_ENV = Object.fromEntries(
-  Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-);
-test.use({
-  launchOptions: { args: ["--lang=hr-HR"], env: { ...BROWSER_ENV, LANG: "hr_HR.UTF-8", LANGUAGE: "hr" } },
+// `--lang` is a Chromium argument; WebKit refuses to start with it, so the
+// options depend on the engine (e2e/login/launch-options.ts, DAN-232).
+const test = base.extend({
+  launchOptions: [
+    async ({ browserName }, use) => {
+      await use(demoLaunchOptions(browserName, process.env));
+    },
+    { scope: "worker" },
+  ],
 });
 
 const run = promisify(execFile);
@@ -177,7 +183,7 @@ async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
   if (held) await signOutHoweverHeld(page);
   else await signOutWithoutDialog(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   await forgetProviderLogin(page.context());
@@ -462,7 +468,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await page.goto(`/api/auth/login?returnTo=${encodeURIComponent("/rad")}`);
     await expect(page.getByRole("heading", { level: 1, name: "Demo prijava" })).toBeVisible();
     await page.getByRole("button", { name: "Demo studentica" }).click();
-    await page.waitForURL("http://localhost:3000/rad");
+    await page.waitForURL(`${APP_ORIGIN}/rad`);
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     expect(await sessionRow(token)).toMatchObject({
       institution: "demo-fakultet",
@@ -528,7 +534,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
   await test.step("2. F-7: studentica potvrđuje obavijest zadatka iz koraka 1 i otvara ga u radu", async () => {
     expect(k4Assignment).not.toBeNull();
     const id = k4Assignment!;
-    await expect(page).toHaveURL(`http://localhost:3000/zadatak/${id}`);
+    await expect(page).toHaveURL(`${APP_ORIGIN}/zadatak/${id}`);
     const { rows: [current] } = await withAdmin((client) => client.query<{ version: number }>(
       "SELECT current_version AS version FROM institution.assignment WHERE id = $1", [id]));
     const confirm = page.getByRole("button", { name: t.student.confirm });
@@ -545,7 +551,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
         WHERE n.assignment_id = $1 AND u.hr_edu_person_unique_id = $2`, [id, STUDENT_ID]));
     expect(rows).toEqual([{ version_no: current!.version }]);
     await page.getByRole("link", { name: t.student.openEditor }).click();
-    await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
+    await page.waitForURL(`${APP_ORIGIN}/rad?zadatak=${id}`);
     // DAN-330: the work starts on the student's click.
     await page.getByRole("button", { name: t.workspace.startWork }).click();
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
@@ -576,7 +582,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     page.on("request", observe);
     try {
       await page.goto(`/rad?zadatak=${assignment!.id}`);
-      await page.waitForURL(`http://localhost:3000${noticePath}`);
+      await page.waitForURL(`${APP_ORIGIN}${noticePath}`);
       await expect(page.getByRole("heading", { name: t.student.recordedHeading })).toBeVisible();
       await expect(editorOf(page)).toHaveCount(0);
       const confirm = page.getByRole("button", { name: t.student.confirm });
@@ -610,7 +616,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       page.off("request", observe);
     }
     await page.getByRole("link", { name: t.student.openEditor }).click();
-    await page.waitForURL(`http://localhost:3000/rad?zadatak=${assignment!.id}`);
+    await page.waitForURL(`${APP_ORIGIN}/rad?zadatak=${assignment!.id}`);
     // #711 F1: the fixture's document has the fixed local id, which a signed-in
     // student never writes into: the same neutral sheet as any other refusal.
     await expect(page.locator(".sheet-area")).toContainText(t.workspace.unavailable);
@@ -688,7 +694,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       const body = canonicalizeJcs((await localCheckpoint(page)).snapshot!.document);
       const etag = `"${createHash("sha256").update(body, "utf8").digest("hex")}"`;
       const published = await page.request.put(livePath(), {
-        headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: body,
+        headers: { origin: APP_ORIGIN, "content-type": "application/json", "if-none-match": "*" }, data: body,
       });
       expect(published.status()).toBe(200);
       expect(await published.json()).toMatchObject({ outcome: "accepted" });
@@ -1098,7 +1104,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
     // Demo point 4: the way in is the workspace's own link.
     await page.getByRole("link", { name: t.workspace.submitLink, exact: true }).click();
-    await page.waitForURL(`http://localhost:3000/rad/${k4Assignment!}/predaja`);
+    await page.waitForURL(`${APP_ORIGIN}/rad/${k4Assignment!}/predaja`);
     await expect(page.getByRole("heading", { level: 1, name: s.title })).toBeVisible();
     const steps = page.getByRole("list", { name: s.title });
     await expect(steps.getByRole("listitem").filter({ hasText: s.steps.submit })).toHaveAttribute("aria-current", "step");

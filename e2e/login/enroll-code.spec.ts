@@ -10,6 +10,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
 import { localAdminUrl, localAppUrl } from "./local-db-url";
+import { APP_ORIGIN } from "./origin";
 
 // F-7 and FE-D4 (#476 row 4): enrollment by code, then straight to the notice
 // of the open assignment (PRODUCT §5 rule 6). The real path uses fake OIDC,
@@ -33,7 +34,7 @@ async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
 
 /** Only the local operator confirms the invented teacher; product RPCs create the fixture. */
 async function seedCourse(browser: Browser, withAssignment: boolean): Promise<{ course: string; code: string; assignment: string | null }> {
-  const teacherPage = await browser.newPage({ baseURL: "http://localhost:3000" });
+  const teacherPage = await browser.newPage({ baseURL: APP_ORIGIN });
   const pool = new pg.Pool({ connectionString: localAppUrl() });
   try {
     await signIn(teacherPage, "/", "Demo nastavnik");
