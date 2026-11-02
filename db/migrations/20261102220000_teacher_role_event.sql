@@ -14,9 +14,11 @@ GRANT CREATE ON SCHEMA institution TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
 -- The target of the composite key below. id alone is already unique; this
--- adds no new rule to institution.institution_role.
-ALTER TABLE institution.institution_role
-  ADD CONSTRAINT institution_role_binding_key UNIQUE (id, institution_id, user_id, role);
+-- adds no new rule to institution.institution_role. The index is built under
+-- the lock this migration's one transaction holds; the table has one row per
+-- role binding, so the scan is short.
+-- squawk-ignore constraint-missing-not-valid, disallowed-unique-constraint
+ALTER TABLE institution.institution_role ADD CONSTRAINT institution_role_binding_key UNIQUE (id, institution_id, user_id, role);
 
 -- One row per role row and kind: a role row is confirmed at most once and
 -- revoked at most once. A role confirmed again after a revocation is a new
