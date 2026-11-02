@@ -157,7 +157,8 @@ SELECT bag_eq(
     'create_seminar_group(p_course_id uuid, p_name text) definer app',
     'assign_group_teacher(p_group_id uuid, p_teacher_id uuid) definer app',
     'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
-    'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app'
+    'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app',
+    'can(p_action text, p_document_id text) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
