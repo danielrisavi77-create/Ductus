@@ -147,3 +147,27 @@ for (const [width, min] of [[1440, 12], [390, 13]] as const) {
     expect(small).toEqual([]);
   });
 }
+
+// #1325: widening from a phone to a wide screen puts the side bar in place at
+// once, in both themes; no drawer slide over an empty column. Read without
+// waiting, because a retrying assertion would wait the slide out.
+for (const theme of ["dark", "light"] as const) {
+  test(`${theme}: widening from 400 to 1440 px shows the side bar at once`, async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 900 });
+    await page.goto(PATH);
+    if (theme === "light") {
+      await page.getByRole("button", { name: t.shell.theme }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const place = await page.locator("#bocna-navigacija").evaluate((aside) => {
+      const brand = aside.querySelector("a")!.getBoundingClientRect();
+      return { left: aside.getBoundingClientRect().left, brand: brand.left, visibility: getComputedStyle(aside).visibility };
+    });
+    expect(place.left).toBe(0);
+    expect(place.visibility).toBe("visible");
+    expect(place.brand).toBeGreaterThanOrEqual(0);
+    const aside = page.getByRole("complementary", { name: t.shell.sideNav });
+    await expect(aside.getByRole("link", { name: t.shell.home })).toBeInViewport({ ratio: 1 });
+  });
+}
