@@ -51,7 +51,7 @@ Neuspjelo čitanje na oba zaslona nikad se ne prikazuje kao prazan popis ni kao 
 | `snimke/a03-svijetla-1440.png` | A-03 | 1440 | svijetla |
 | `snimke/a03-svijetla-400.png` | A-03 | 400 | svijetla |
 
-Snimljeno Playwrightovim Chromiumom, cijela stranica, `deviceScaleFactor` 1. Svijetla tema je `data-theme="light"` na `<html>`. Prije snimanja čekaju se fontovi (`document.fonts.ready`). Na svakoj snimci provjereno je `scrollWidth <= clientWidth` (nema vodoravnog pomicanja), a na obje širine svaki vidljivi gumb, izbornik i poveznica u traci visok je najmanje 44 px.
+Snimljeno Playwrightovim Chromiumom, cijela stranica, `deviceScaleFactor` 1. Svijetla tema je `data-theme="light"` na `<html>`. Prije snimanja čekaju se fontovi (`document.fonts.ready`). Na svakoj snimci provjereno je `scrollWidth <= clientWidth` (nema vodoravnog pomicanja), a na obje širine svaki vidljivi gumb, izbornik, poveznica u traci i radnja u poruci o grešci velik je najmanje 44 × 44 px, a `elementFromPoint` u njegovu središtu pogađa sam element.
 
 ## Granice
 

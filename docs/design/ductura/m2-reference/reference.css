@@ -62,6 +62,8 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .btn { font: 600 13.5px/1 var(--ff-ui); min-height: 44px; padding: 0 14px; border-radius: 5px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; white-space: nowrap; }
 .btn.secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
 .btn.quiet { background: transparent; color: var(--accent); border-color: transparent; padding: 0 6px; }
+a.btn { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; text-decoration: none; vertical-align: middle; }
+.alert a.btn { display: flex; width: fit-content; margin-top: 8px; }
 
 .dialog { background: var(--raised); border: 1px solid var(--raised-rule); border-radius: 10px; padding: 20px 22px; display: grid; gap: 10px; max-width: 560px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.28); }
 .dialog h3 { font-size: 21px; }
