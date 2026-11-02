@@ -1208,9 +1208,15 @@ export const hr = {
     copyDiscardConfirm: "Da, odbaci kopiju",
     copyKeep: "Zadrži kopiju",
     copyDiscardFailed: "Kopija nije odbačena i ostaje na ovom uređaju. Pokušajte ponovno.",
-    logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjerite vezu i pokušajte ponovno.",
+    // #1330 (D-118): without the server's answer the sign-out still ends on
+    // this device; the server's part follows once the connection is back.
+    logoutDevice:
+      "Odjava je na ovom uređaju gotova. Poslužitelj trenutačno ne odgovara, pa se ondje odjava dovršava čim se veza vrati.",
+    logoutClose: "Zatvori",
+    // #1336: a tab whose session has ended, whatever ended it, shows no text.
     signedOutElsewhere:
-      "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitajte stranicu.",
+      "Prijava više ne vrijedi, pa ova kartica više ne prikazuje rad. Rad nastavljate kad se ponovno prijavite.",
+    signInAgain: "Prijavi se",
   },
   // FE-D3 (DAN-222): /prijava, Prijava v5 of the design handoff without the
   // e-mail sign-in and the "Što Ductura čuva" panel (D-09, #476). AAI@EduHr is

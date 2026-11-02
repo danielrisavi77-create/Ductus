@@ -42,6 +42,16 @@ function readEnded(store: MarkStore): string[] {
   }
 }
 
+/** The session the browser recorded last, or null when none is current. */
+export function currentSession(store: MarkStore | null): SessionMark | null {
+  if (!store) return null;
+  try {
+    return readCurrent(store);
+  } catch {
+    return null;
+  }
+}
+
 /** Whether a page rendered under `mark` belongs to a session that has ended. */
 export function hasEnded(store: MarkStore | null, mark: SessionMark): boolean {
   if (!store) return false;
