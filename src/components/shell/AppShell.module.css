@@ -350,13 +350,26 @@
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
+/* The slide belongs to the drawer only. On a wide screen the side bar has no
+   transition, so widening the window past 800 px puts it in place at once
+   instead of sliding it in over an empty column (#1325). */
+@media (prefers-reduced-motion: no-preference) and (max-width: 799.98px) {
   .sidebar {
     transition: transform 0.2s, visibility 0.2s;
   }
 
   /* Visible at once on opening, so focus can move into the drawer. */
   .sidebar[data-open="true"] {
+    transition: transform 0.2s, visibility 0s;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .drawerShell .sidebar {
+    transition: transform 0.2s, visibility 0.2s;
+  }
+
+  .drawerShell .sidebar[data-open="true"] {
     transition: transform 0.2s, visibility 0s;
   }
 }
