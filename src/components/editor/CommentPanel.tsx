@@ -20,6 +20,7 @@ import {
 import { announceCommentsLoaded, showInText } from "@/client/comments-bridge";
 import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
 import type { SessionMark } from "@/client/session-marks";
+import { limitBody } from "@/domain/collaboration";
 import {
   commentHighlightKey, commentHighlightPlugin, createAnchorPlacer, type CommentRange,
 } from "@/editor/comment-anchor";
@@ -102,9 +103,8 @@ function ThreadCard({ documentId, placed, editor, current, onReplied }: {
             rows={2}
             aria-label={t.replyLabel}
             placeholder={t.replyPlaceholder}
-            maxLength={2000}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => setDraft(limitBody(event.target.value))}
             onKeyDown={onKey}
           />
           <button type="submit" className={styles.send} disabled={sending || draft.trim() === ""}>
