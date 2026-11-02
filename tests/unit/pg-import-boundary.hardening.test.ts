@@ -374,7 +374,7 @@ describe("pg boundary through query and fragment suffixes (DAN-448)", () => {
   it.each(nodeModulesCases(EXCEPTION_FILES, SUFFIXED_PG))(
     "allows %s importing %s",
     async (filePath, specifier) => {
-      const code = `${staticForms(specifier)[0]}export const b = () => import(${JSON.stringify(specifier)});\n`;
+      const code = `import pg from ${JSON.stringify(specifier)};\nexport const a = pg;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
       expect(await lint(filePath, code)).toEqual([]);
     },
   );
