@@ -95,7 +95,7 @@ test("a student of the course reads the live view and the replay of D-154 before
     await page.goto(`/zadatak/${seeded.assignment}`);
     await expect(page.getByRole("heading", { name: t.student.teacherHeading })).toBeVisible();
     for (const text of [t.student.recorded.live, t.student.notRecorded.inputs, t.student.teacher.state,
-      t.student.teacher.replay, t.student.teacher.purpose]) {
+      t.student.teacher.replay, t.student.teacher.purpose, t.student.teacher.workingNotes]) {
       await expect(page.getByText(text, { exact: true })).toBeVisible();
     }
     await expect(page.getByText(t.student.checkbox)).toBeVisible();

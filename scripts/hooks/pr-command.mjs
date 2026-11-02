@@ -12,8 +12,17 @@ export function readInput() {
   }
 }
 
+// Cheap pre-filter (DAN-481): false means the command cannot be a PR command
+// or a push, so the hooks exit before loading their heavy modules. It is
+// deliberately looser than prAction (any `gh` followed later by `pr`, any
+// `git` followed later by `push`), so it can only let extra commands through
+// to the full check, never skip one.
+export function mayConcernPr(command) {
+  return /\bgh\b[\s\S]*\bpr\b/.test(command) || /\bgit\b[\s\S]*\bpush\b/.test(command);
+}
+
 export function prAction(command) {
-  return command.match(/\bgh\s+pr\s+(create|edit)\b/)?.[1] ?? null;
+  return command.match(/\bgh(?:\.exe)?["']?\s+pr\s+(create|edit)\b/)?.[1] ?? null;
 }
 
 // Returns the body text, or null when the command does not set one.

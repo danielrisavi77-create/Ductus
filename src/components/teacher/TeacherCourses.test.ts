@@ -149,6 +149,16 @@ describe("TeacherCourses (Z3 A)", () => {
     });
   });
 
+  // DAN-310 (M2.4-P01): every course, with or without assignments, offers a further one in itself.
+  it("links each course to a new assignment in that course", () => {
+    const html = render(COURSES);
+    for (const course of COURSES) {
+      expect(html).toContain(`href="/nastavnik/zadatak/novi?kolegij=${course.id}"`);
+    }
+    expect(html.split(messagesHr.teacher.existingCourse.link).length - 1).toBe(COURSES.length);
+    expect(render([])).not.toContain("?kolegij=");
+  });
+
   it("uses no forbidden term", () => {
     const works = { "00000000-0000-4000-8000-0000000000a2": [row("00000000-0000-4000-8000-0000000000e1", "d"),
       row("00000000-0000-4000-8000-0000000000e2", "e", false), row("00000000-0000-4000-8000-0000000000e3", "f", true)],
