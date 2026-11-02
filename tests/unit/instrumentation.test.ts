@@ -1,3 +1,5 @@
+import { ServerResponse } from "node:http";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { register } from "../../instrumentation";
@@ -41,6 +43,16 @@ describe("instrumentation register()", () => {
     const exit = exitSpy();
     await register(exit);
     expect(exit).not.toHaveBeenCalled();
+  });
+
+  it("puts the security header floor on Node responses once it starts (DAN-498)", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    vi.stubEnv("APP_DATABASE_URL", "postgres://user:invented-secret@127.0.0.1:5432/ductus");
+    await register(exitSpy());
+    const installed = ServerResponse.prototype.writeHead;
+    expect(installed.name).toBe("writeHeadWithFloor");
+    await register(exitSpy());
+    expect(ServerResponse.prototype.writeHead).toBe(installed);
   });
 
   it("checks nothing outside the Node runtime", async () => {
