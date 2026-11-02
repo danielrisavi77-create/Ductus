@@ -43,6 +43,10 @@ describe("navFor", () => {
     expect(student.slice(0, 2)).toEqual(["/zadaci", "/zadaci/kolegiji"]);
   });
 
+  it("gives a teacher, from DAN-492 (N-16), the works the teacher mentors", () => {
+    expect(navFor("teacher")).toContainEqual({ href: "/nastavnik/mentorstva", label: "Radovi uz mentora" });
+  });
+
   it("gives a student, from DAN-309 (B2), her works right after her courses", () => {
     const student = navFor("student").map((item) => item.href);
     expect(student.slice(0, 3)).toEqual(["/zadaci", "/zadaci/kolegiji", "/zadaci/radovi"]);
