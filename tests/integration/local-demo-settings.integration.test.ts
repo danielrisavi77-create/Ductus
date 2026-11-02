@@ -143,6 +143,16 @@ it("seeds only the local demo settings and preserves configuration and enrollmen
       await admin.query("DELETE FROM institution.course WHERE id = $1", [courseId]);
     }
     await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = ANY($1)", [users]);
+    // DAN-497: the confirmation above left an append-only audit row; only a replica session removes it.
+    const cleaner = await admin.connect();
+    try {
+      await cleaner.query("BEGIN");
+      await cleaner.query("SET LOCAL session_replication_role = replica");
+      await cleaner.query("DELETE FROM audit.teacher_role_event WHERE teacher_id = ANY($1)", [users]);
+      await cleaner.query("COMMIT");
+    } finally {
+      cleaner.release();
+    }
     await admin.query("DELETE FROM institution.institution_role WHERE user_id = ANY($1)", [users]);
     await admin.query("DELETE FROM identity.session WHERE user_id = ANY($1)", [users]);
     await admin.query("DELETE FROM identity.teacher_eligibility WHERE user_id = ANY($1)", [users]);
