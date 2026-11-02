@@ -45,9 +45,14 @@ const KEYWORDS_BEFORE_EXPRESSION = new Set(
     " ",
   ),
 );
+// JavaScript line terminators; a line comment or a regular expression ends on any.
+const LINE_END = "\n\r\u2028\u2029";
 const ID_START = /[A-Za-z_$\u0080-￿]/;
 const ID_PART = /[A-Za-z0-9_$\u0080-￿]/;
 
+// The cooked text of a string or template, or null when an escape is invalid
+// (allowed in a tagged template such as String.raw`\u{110000}`).
+const HEX = /^[0-9A-Fa-f]+$/;
 function decode(raw) {
   let out = "";
   for (let i = 0; i < raw.length; i++) {
@@ -62,16 +67,17 @@ function decode(raw) {
       if (n === "\r" && raw[i + 1] === "\n") i++;
       continue;
     }
-    if (n === "x") {
-      out += String.fromCharCode(parseInt(raw.slice(i + 1, i + 3), 16));
-      i += 2;
-    } else if (n === "u" && raw[i + 1] === "{") {
-      const end = raw.indexOf("}", i);
-      out += String.fromCodePoint(parseInt(raw.slice(i + 2, end), 16));
-      i = end;
+    if (n === "x" || (n === "u" && raw[i + 1] !== "{")) {
+      const hex = raw.slice(i + 1, i + (n === "x" ? 3 : 5));
+      if (hex.length !== (n === "x" ? 2 : 4) || !HEX.test(hex)) return null;
+      out += String.fromCharCode(parseInt(hex, 16));
+      i += hex.length;
     } else if (n === "u") {
-      out += String.fromCharCode(parseInt(raw.slice(i + 1, i + 5), 16));
-      i += 4;
+      const end = raw.indexOf("}", i);
+      const hex = end === -1 ? "" : raw.slice(i + 2, end);
+      if (!HEX.test(hex) || parseInt(hex, 16) > 0x10ffff) return null;
+      out += String.fromCodePoint(parseInt(hex, 16));
+      i = end;
     } else
       out +=
         { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", v: "\v", 0: "\0" }[n] ??
@@ -94,7 +100,13 @@ export function tokenize(src) {
   const regexAllowed = () => {
     const t = last();
     if (!t) return true;
-    if (t.type === "id") return KEYWORDS_BEFORE_EXPRESSION.has(t.value);
+    // A keyword is one only outside member position: `o.of / 2` divides.
+    const before = tokens[tokens.length - 2];
+    if (t.type === "id")
+      return (
+        KEYWORDS_BEFORE_EXPRESSION.has(t.value) &&
+        !(before?.type === "punct" && [".", "?."].includes(before.value))
+      );
     // A regular expression cannot follow `++` or `--`, so `/` there divides.
     if (t.type === "punct")
       return ![")", "]", "}", "++", "--"].includes(t.value);
@@ -130,7 +142,8 @@ export function tokenize(src) {
       i++;
     }
   };
-  if (src.startsWith("#!")) while (i < src.length && src[i] !== "\n") i++;
+  if (src.startsWith("#!"))
+    while (i < src.length && !LINE_END.includes(src[i])) i++;
   while (i < src.length) {
     const c = src[i];
     if (c === "\n") {
@@ -138,7 +151,7 @@ export function tokenize(src) {
       i++;
     } else if (/\s/.test(c)) i++;
     else if (c === "/" && src[i + 1] === "/")
-      while (i < src.length && src[i] !== "\n") i++;
+      while (i < src.length && !LINE_END.includes(src[i])) i++;
     else if (c === "/" && src[i + 1] === "*") {
       const end = src.indexOf("*/", i + 2);
       const stop = end === -1 ? src.length : end + 2;
@@ -164,7 +177,7 @@ export function tokenize(src) {
       let j = i + 1;
       let inClass = false;
       let ok = false;
-      for (; j < src.length && src[j] !== "\n"; j++) {
+      for (; j < src.length && !LINE_END.includes(src[j]); j++) {
         if (src[j] === "\\") j++;
         else if (src[j] === "[") inClass = true;
         else if (src[j] === "]") inClass = false;
@@ -280,7 +293,9 @@ export function markers(src) {
       (keyAt(prev) ||
         (["get", "set", "async"].includes(prev?.value) &&
           keyAt(tokens[k - 2])) ||
-        (prev?.value === "*" && keyAt(tokens[k - 2]))) &&
+        (prev?.value === "*" &&
+          (keyAt(tokens[k - 2]) ||
+            (tokens[k - 2]?.value === "async" && keyAt(tokens[k - 3]))))) &&
       bodyAfter(tokens, k + 1)
     )
       found.add(t.line);
@@ -387,6 +402,12 @@ const POSITIVE = [
   ['test("x", { *skip() {} }, () => {});', [1]],
   ['n++ / 2; t.skip("r"); /x/.test("x");', [1]],
   ["n-- / 2; t.todo(); /x/;", [1]],
+  ['o.of / 2; t.skip("r"); /x/.test("x");', [1]],
+  ["o?.in / 2; t.todo(); /x/;", [1]],
+  ['test("x", { async *skip() {} }, () => {});', [1]],
+  ['// c\rt.skip("r");', [1]],
+  ["// c\u2028t.todo();", [1]],
+  ["// c\u2029t.only();", [1]],
 ];
 const NEGATIVE = [
   "// t.skip() in a comment",
@@ -405,6 +426,8 @@ const NEGATIVE = [
   "if (x) { only(1) }",
   "const \\u0073kipped = 1;",
   "a = b + +/skip/.source;",
+  "const m = String.raw`\\u{110000}`;",
+  "const m = String.raw`\\xZZ \\u12`;",
 ];
 
 test("F-035 c: the scanner finds every marker form and nothing else", () => {
