@@ -28,8 +28,13 @@ GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
 -- logout_all comes from 20261101200000_session_idle.sql (DAN-296), which
--- landed first; this CHECK keeps it.
+-- landed first; this CHECK keeps it. The drop and the new CHECK replace one
+-- constraint in the migration's one transaction: there is no window without
+-- it, and validating it at once only scans identity.session under the lock
+-- this transaction already holds.
+-- squawk-ignore ban-drop-constraint
 ALTER TABLE identity.session DROP CONSTRAINT session_close_reason_check;
+-- squawk-ignore constraint-missing-not-valid
 ALTER TABLE identity.session ADD CONSTRAINT session_close_reason_check CHECK (
   close_reason IN ('logout', 'backchannel_logout', 'logout_all', 'institution_changed', 'issuer_removed', 'operator')
 );
