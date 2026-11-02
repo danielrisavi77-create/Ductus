@@ -98,6 +98,9 @@ export default function TeacherCourses({ courses, works = {} }: {
                   countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
                 h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
                   messagesHr.shell.nav.fastPath),
+                // DAN-310 (M2.4-P02): the next version of this assignment.
+                h(Link, { className: styles.version, href: `/nastavnik/zadatak/${encodeURIComponent(assignment.id)}/uredi`, prefetch: false },
+                  messagesHr.teacher.newVersion.link),
                 h(Works, { works: works[assignment.id] })))))),
     h("p", { className: styles.note }, t.countNote));
 }
