@@ -299,6 +299,26 @@ describe("3d-2c2 evidence session: stops never patch the chain", () => {
     expect(start).not.toHaveBeenCalled();
     expect(again.session.snapshot().state).toBe("LOCAL_DURABLE");
   });
+
+  // M0.1 process-capture #10: the check at save compares the editor with the
+  // last document the chain covers, so an unseen change is caught even when
+  // nothing recorded follows it.
+  it("3b: a change the recorder never saw, made last before the save, is a gap as well", async () => {
+    const net = server();
+    const { session, journal } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    sheet.wiring.muted = true;
+    sheet.type("skriveno");
+    sheet.wiring.muted = false;
+    const doc = await sheet.save();
+    const stored = await journal.readEvidence(DOC);
+    expect(stored.meta?.evidenceStopped).toBe("gap");
+    expect(canonicalizeJcs(stored.snapshot!.document)).toBe(canonicalizeJcs(doc));
+    expect(JSON.stringify(doc)).toContain("askriveno");
+    expect(session.snapshot().state).toBe("LOCAL_DURABLE");
+  });
 });
 
 describe("3d-2c2 evidence session: SYNCED only with a verified receipt", () => {

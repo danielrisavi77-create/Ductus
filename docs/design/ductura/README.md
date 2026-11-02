@@ -1,6 +1,6 @@
 # Predaja dizajna: Ductura
 
-> **Boje: vidi D-188 (28. 10. 2026., papir i grafit).** Vrijednosti boja i naglaska u ovom dokumentu (npr. `#6FBFA5`) su povijest; mjerodavni su `docs/design/DESIGN-SYSTEM.md` i `app/globals.css`. Raspored, ekrani i ponašanje vrijede dalje.
+> **Boje: vidi D-188 (28. 10. 2026., papir i grafit; konačna potvrda vlasnika 29. 10. 2026.).** Vrijednosti boja i naglaska u ovom dokumentu (npr. `#6FBFA5`) i u starom HTML/ZIP paketu su povijest; mjerodavni su `docs/design/DESIGN-SYSTEM.md` i `app/globals.css`. Zadana je tamna grafitna ljuska i gotovo bijeli list; svijetla ljuska i tamni list su izbor. Raspored, ekrani i ponašanje vrijede dalje uz aktualni funkcionalni ugovor; prototip nije dokaz implementacije. Postupak je `docs/SESSIONS.md` §6.
 
 ## Korisnikov izvorni paket — 22. 10. 2026.
 
@@ -164,7 +164,7 @@ Popis zapisa uz rad, tko piše i tko vidi: **`PROVJERE.md` §6c, §6d i §6e** (
 
 Lokalna stanja sučelja (otvoreni dijalozi, kartica, sklopljena poglavlja, tema lista) vidi `state = { … }` u klasi editora.
 
-## 8. Tokeni
+## 8. Povijest tokena izvornog paketa
 
 > **Povijest, ne koristi se (28. 10. 2026., #960).** Boje i tipografiju određuje `docs/design/DESIGN-SYSTEM.md` v1.2 prema D-188 (papir i grafit); vrijednosti su u `app/globals.css`. Tablica ispod ostaje samo zapis izvornog paketa od 22. 10. 2026. (mint), zamijenjenog dizajnom v3 (#476), zatim #867, D-179, D-184 i D-188.
 
@@ -198,8 +198,8 @@ Bijeli list: tekst i oznake u `<helmet><style>` editora, selektori `.ed[data-she
 
 ## 9. Otvorena pitanja prije gradnje
 
-1. **Boje**: prototip koristi boje odobrenih demo ekrana; PR #386 (D-115) uvodi svoje tokene. F-4 traži podudaranje s odobrenim dizajnom: odluči koje vrijede i mapiraj tablicu iz §8. *(Riješeno: D-188 i `docs/design/DESIGN-SYSTEM.md` v1.2, #960.)*
-2. **Ime**: Ductura ili Ductus u sučelju.
+1. **Boje — riješeno:** konačni smjer je D-188, papir i grafit; vrijednosti iz §8 su povijest. Aktivni izvor je [zajednička specifikacija](../DESIGN-SYSTEM.md), a stanje izvedbe provjerava se odvojeno.
+2. **Ime — riješeno D-186:** proizvod je Ductura; repo, paket i identifikatori ostaju ductus.
 3. **Zapis unosa i istraga**: pravno mišljenje i procjena učinka (GDPR čl. 35) prije gradnje; tekst obavijesti S3 i „Što Ductura čuva” mora ostati usklađen s §6e.
 4. **Profil FPZG**: granice (opseg, Sažetak 150–300 riječi, 3–5 ključnih riječi, kontrolni popisi) treba potvrditi prema službenim Uputama prije nego uđu u `fpzg.json`.
 

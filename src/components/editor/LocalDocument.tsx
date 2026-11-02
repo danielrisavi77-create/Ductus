@@ -626,6 +626,21 @@ async function postLogout(): Promise<boolean> {
 }
 
 /**
+ * After a successful `postLogout`: the same POST once more, natively, so the
+ * browser follows the route's redirect on to the provider's logout (DAN-212);
+ * the fetch cannot follow it. It arrives without the cookie, so it closes
+ * nothing twice. A form of its own, so it holds while the page re-renders.
+ */
+function followLogoutNatively(): void {
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = "/api/auth/logout";
+  form.hidden = true;
+  document.body.append(form);
+  form.submit();
+}
+
+/**
  * After sign-out, from a tab that does not write the document: deletes the
  * journal if no other tab holds the document and nothing is unconfirmed.
  * Anything else leaves it to this person's next sign-in.
@@ -830,7 +845,7 @@ export function LocalLogout() {
       setWorking(false);
     };
     void signOut().then((done) => {
-      if (done) window.location.assign("/");
+      if (done) followLogoutNatively();
       else failure();
     }, failure);
   };

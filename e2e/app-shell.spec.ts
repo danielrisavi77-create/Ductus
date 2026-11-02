@@ -14,7 +14,7 @@ test("a signed-out visitor gets the shell without navigation or account", async 
   await expect(page.getByRole("navigation", { name: t.shell.workNav })).toHaveCount(0);
   await expect(page.getByRole("button", { name: t.shell.signOut })).toHaveCount(0);
   await expect(page.locator("main#sadrzaj")).toHaveCount(1);
-  await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: t.access.signedOutTitle })).toBeVisible();
 });
 
 // Cut (b): the student screens outside /rad get the same shell; signed out,
@@ -119,7 +119,7 @@ test.describe("at 390 px without JavaScript", () => {
     await expect(aside).toBeVisible();
     await expect(aside.getByRole("link", { name: t.shell.home })).toBeInViewport();
     await expect(page.getByRole("button", { name: t.shell.openNav })).toBeHidden();
-    await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: t.access.signedOutTitle })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });

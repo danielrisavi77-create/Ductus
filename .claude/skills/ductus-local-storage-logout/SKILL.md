@@ -5,7 +5,7 @@ description: Pre-handoff checklist for a Ductus PR that changes logout, deletion
 
 Popis provjera prije predaje PR-a koji mijenja odjavu, brisanje lokalne pohrane preglednika ili rukovanje zastarjelim tabovima. Ne uvodi pravila: svaka stavka upućuje na odjeljak koji je pravilo ili opisuje kako dokazati da je ispunjeno. Ako se popis i dokument razilaze, vrijedi dokument, a nesklad ide u IZVJEŠTAJ. Za scenarije oporavka koristiti `ductus-offline-recovery`.
 
-Pročitati `docs/PRODUCT.md` §13 t. 13, `docs/BACKEND.md` §4.3, `docs/ARCHITECTURE.md` §10, `docs/TESTING.md` §2 i §3 (t. 1, 5 i 6) i `STATE.md` "Ne smije se izgubiti". Svaka stavka traži test:
+Pročitati `docs/PRODUCT.md` §13 t. 13, `docs/backend/prijava-i-ovlasti.md` §4.3, `docs/ARCHITECTURE.md` §10, `docs/TESTING.md` §2 i §3 (t. 1, 5 i 6) i `STATE.md` "Ne smije se izgubiti". Svaka stavka traži test:
 
 1. Odjava uvijek zatvara sesiju i kolačić, i s nesinkroniziranim promjenama (D-118). Nepredani zapis ostaje vezan uz tog studenta: druga osoba ga ne vidi, a nastavlja se pri ponovnoj prijavi istog studenta. Provjera i brisanje sinkroniziranog zapisa u istoj su transakciji, da upis između njih ne može biti izgubljen.
 2. Zastarjeli tab ne stvara ponovno obrisanu bazu, ni kad mu preglednik sam zatvori vezu (`versionchange`, `pagehide`, `onclose`).

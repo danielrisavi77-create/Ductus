@@ -101,6 +101,30 @@ jobs:
           else
             node scripts/engineering/migrations-ledger.mjs
           fi
+      # DAN-319: Squawk lints the up part of every migration the base lacks.
+      # The release has no signature; the pin equals the GitHub API digest
+      # (SQUAWK in squawk-migrations.mjs, which checks it again before each run).
+      - name: Squawk lint of new migrations (DAN-319)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/squawk-2.70.0/squawk"
+          mkdir -p "$(dirname "$bin")"
+          curl -fsSL --proto '=https' --retry 3 -o "$bin" https://github.com/sbdchd/squawk/releases/download/v2.70.0/squawk-linux-x64
+          echo "836ba2ab0c0ec30ae02c9f2cec065b341ff853765ceaa3965c22109c2f53eb1c  $bin" | sha256sum -c -
+          chmod +x "$bin"
+          base=""
+          if [ "$EVENT_NAME" = pull_request ]; then base="$PR_BASE"; elif [ "$EVENT_NAME" = push ]; then base="$PUSH_BEFORE"; fi
+          if [ -n "$base" ]; then
+            [[ "$base" =~ ^[a-f0-9]{40}$ ]]
+            git fetch --no-tags --depth=1 origin "$base"
+            node scripts/engineering/squawk-migrations.mjs --squawk "$bin" --base "$base"
+          else
+            node scripts/engineering/squawk-migrations.mjs --squawk "$bin" --no-base
+          fi
       - name: Engineering PR metadata
         if: github.event_name == 'pull_request'
         env:
@@ -216,6 +240,21 @@ jobs:
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+      # D-91 (4): db:migrate built a fresh database with dbmate --no-dump-schema
+      # up --strict; it is dumped to a temporary file and compared with
+      # db/schema.sql from Git HEAD before any test touches it. The dump is
+      # kept as the db-schema-<shard> artifact for the author to commit.
+      - name: Schema matches db/schema.sql (D-91)
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: node scripts/engineering/db-schema.mjs --out "$RUNNER_TEMP/db-schema/schema.sql"
+      - name: Upload the dumped schema
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: db-schema-${{ matrix.shard }}
+          path: ${{ runner.temp }}/db-schema/schema.sql
+          if-no-files-found: ignore
+          retention-days: 7
       - name: pgTAP (pg_prove)
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: pnpm test:db

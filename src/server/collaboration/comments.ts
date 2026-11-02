@@ -3,6 +3,9 @@ import type { WithActor } from "@/server/db/with-actor";
 import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-request";
 
 export const MAX_COMMENT_BODY_BYTES = 16 * 1024;
+// A slow client must not hold the request open while it trickles the body
+// (DAN-302 L1); the same limit as the other mutation routes.
+const BODY_TIMEOUT_MS = 5_000;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const SQLSTATE = /^[0-9A-Z]{5}$/;
@@ -142,7 +145,7 @@ export async function handleCommentRequest(
     return respond(415, { error: "unsupported_media_type" });
   }
 
-  const raw = await readBodyWithLimit(request, MAX_COMMENT_BODY_BYTES);
+  const raw = await readBodyWithLimit(request, MAX_COMMENT_BODY_BYTES, BODY_TIMEOUT_MS);
   if (!raw.ok) return respond(raw.status, { error: raw.reason });
 
   let value: unknown;

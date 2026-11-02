@@ -304,6 +304,41 @@
   }
 }
 
+/* The workspace (/rad): the side bar is a drawer behind ☰ at every width, so
+   the editor and its panels take the whole width (owner, 1. 11. 2026.). */
+.drawerShell .sidebar {
+  width: 248px;
+  transform: translateX(-100%);
+  visibility: hidden;
+}
+
+.drawerShell .sidebar[data-open="true"] {
+  transform: none;
+  visibility: visible;
+}
+
+.drawerShell .area {
+  margin-left: 0;
+}
+
+.drawerShell .menuButton {
+  display: inline-flex;
+}
+
+/* The account place moves into the top bar, beside the theme switch. */
+.drawerShell .actions .account {
+  padding: 0;
+  border-top: 0;
+}
+
+/* On a phone the top bar keeps ☰, the way home, the theme and Odjava; the
+   role label stays in the drawer's space line. */
+@media (max-width: 640px) {
+  .drawerShell .actions .who {
+    display: none;
+  }
+}
+
 /* The interface floor: 12 px, and 13 px on a phone (app/globals.css). */
 @media (max-width: 640px) {
   .space,

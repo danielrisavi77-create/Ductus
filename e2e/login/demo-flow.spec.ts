@@ -417,7 +417,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     roleGrantedByThisTest = !(await teacherRoleActive());
     if (roleGrantedByThisTest) {
       await page.goto("/nastavnik/zadatak/novi");
-      await expect(page.getByText(t.teacher.denied)).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: t.access.deniedTitle })).toBeVisible();
       await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
     }
     // DAN-346: against `pnpm demo:up:native` the same command uses the native

@@ -125,6 +125,30 @@ export function isEvidenceSegmentSchema(value: unknown): value is EvidenceSegmen
   return value === EVIDENCE_SEGMENT_SCHEMA_V2 || value === EVIDENCE_SEGMENT_SCHEMA_V3;
 }
 
+/**
+ * Reserved once, together, before the first real evidence (D-34 and D-132;
+ * DAN-453 PR 0, contract on #1091, attack plan #1258 G1 and G2). Nothing
+ * here is accepted by any version: a segment that carries one of these
+ * values is refused like any unknown value, and lifting a reservation needs
+ * a new format version with its own vectors, so v2 and v3 keep their bytes.
+ *
+ * - `applied-suggestion` (D-34): text the student applied from a teacher's
+ *   suggestion, carried with `suggestionId`, the id of the suggestion the
+ *   server stored under the teacher's session.
+ * - `own-variant` (D-132): a switch to the student's own variant of a
+ *   paragraph, one event carried with `variantId`; the variant itself is a
+ *   record of its own kind, `ductus-evidence-variant-v1`, never a segment.
+ */
+export const RESERVED_EVIDENCE_SOURCES = ["applied-suggestion", "own-variant"] as const;
+
+/** Event fields reserved with the sources above, in the same order. */
+export const RESERVED_EVIDENCE_EVENT_FIELDS = ["suggestionId", "variantId"] as const;
+
+/** Record kinds reserved for D-132, never a segment schema. */
+export const RESERVED_EVIDENCE_RECORD_SCHEMAS = ["ductus-evidence-variant-v1"] as const;
+
+const RESERVED_SOURCES: ReadonlySet<unknown> = new Set(RESERVED_EVIDENCE_SOURCES);
+
 export type EvidenceSegmentDigestV2 = {
   canonical: string;
   byteLength: number;
@@ -259,6 +283,9 @@ function isEvent(
   if (
     value.sequence !== expectedSequence ||
     typeof value.source !== "string" ||
+    // Before the closed set, so that a version that took a reserved source
+    // into its set by mistake still refuses it (D-34, D-132).
+    RESERVED_SOURCES.has(value.source) ||
     !sources.has(value.source) ||
     !areSteps(value.steps) ||
     !isSha256(value.beforeDocumentHash) ||

@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 
+import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
-import { applicationOrigin } from "@/server/evidence/ingest-deps";
 import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ export const revalidate = 0;
 export async function POST(request: NextRequest): Promise<Response> {
   return handleEvidenceOpenRequest(request, {
     withActor,
-    expectedOrigin: applicationOrigin(),
+    expectedOrigin: expectedOrigin(),
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }

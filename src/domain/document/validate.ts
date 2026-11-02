@@ -13,7 +13,9 @@
  */
 
 import {
+  DOCUMENT_BLOCK_TYPES_BY_VERSION,
   DOCUMENT_SCHEMA_VERSION,
+  isAcceptedDocumentSchemaVersion,
   isHeadingLevel,
   isMark,
   isPlainBlockType,
@@ -93,9 +95,14 @@ export function validateDocument(doc: unknown): ValidationOutcome {
 
   checkUnknownFields(doc, DOCUMENT_FIELDS, "$", errors);
 
-  if (doc.schemaVersion !== DOCUMENT_SCHEMA_VERSION) {
+  if (!isAcceptedDocumentSchemaVersion(doc.schemaVersion)) {
     errors.push({ path: "$.schemaVersion", code: "SCHEMA_VERSION_INVALID" });
   }
+  // The nodes of a document with a version not accepted are still read, by
+  // the rules of v1, so that every error is reported; the document is refused.
+  const blockTypes = DOCUMENT_BLOCK_TYPES_BY_VERSION.get(
+    isAcceptedDocumentSchemaVersion(doc.schemaVersion) ? doc.schemaVersion : DOCUMENT_SCHEMA_VERSION,
+  )!;
 
   if (!Array.isArray(doc.nodes)) {
     errors.push({ path: "$.nodes", code: "NODES_NOT_ARRAY" });
@@ -112,7 +119,7 @@ export function validateDocument(doc: unknown): ValidationOutcome {
   // Array.from turns holes into `undefined`, so a sparse array fails validation
   // instead of being skipped by forEach.
   Array.from(doc.nodes).forEach((rawNode, index) => {
-    const node = validateNode(rawNode, `$.nodes[${index}]`, seenIds, errors);
+    const node = validateNode(rawNode, `$.nodes[${index}]`, blockTypes, seenIds, errors);
     if (node) {
       nodes.push(node);
     }
@@ -128,6 +135,7 @@ export function validateDocument(doc: unknown): ValidationOutcome {
 function validateNode(
   raw: unknown,
   path: string,
+  blockTypes: ReadonlySet<string>,
   seenIds: Set<string>,
   errors: ValidationError[],
 ): DocumentNode | null {
@@ -137,7 +145,7 @@ function validateNode(
   }
 
   const type = raw.type;
-  if (type !== "heading" && !isPlainBlockType(type)) {
+  if (typeof type !== "string" || !blockTypes.has(type) || (type !== "heading" && !isPlainBlockType(type))) {
     errors.push({ path: `${path}.type`, code: "NODE_TYPE_INVALID" });
     return null;
   }

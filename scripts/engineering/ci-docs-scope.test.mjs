@@ -154,7 +154,7 @@ test("scope bootstrap and non-PR events select full without running PR code", (t
   }
 });
 
-test("required stack accepts only both full successes or both trusted docs skips", () => {
+test("required stack accepts only both full successes or both trusted docs skips", (t) => {
   const stack = job("stack");
   assert.match(stack, /^ {4}name: Local stack \(compose.yaml\)$/m);
   assert.match(stack, /^ {4}needs: \[scope, stack-e2e, stack-login, stack-e2e-results, stack-login-results\]$/m);
@@ -198,13 +198,23 @@ test("required stack accepts only both full successes or both trusted docs skips
   for (const result of ["failure", "cancelled", "success", ""]) {
     cases.push([false, "success", "docs", "skipped", "skipped", "skipped", result]);
   }
-  for (const [ok, result, profile, e2e, login, evidence = profile === "docs" ? "skipped" : "success", loginEvidence = profile === "docs" ? "skipped" : "success"] of cases) {
+  // DAN-369 (#1216): the summary is a real file in a temporary directory, one per
+  // case, never NUL (Git Bash on Windows creates a file of that name in the
+  // repository) nor /dev/null (where nothing could be checked).
+  const summaries = mkdtempSync(join(tmpdir(), "ductus-ci-summary-"));
+  t.after(() => rmSync(summaries, { recursive: true, force: true }));
+  for (const [index, [ok, result, profile, e2e, login, evidence = profile === "docs" ? "skipped" : "success", loginEvidence = profile === "docs" ? "skipped" : "success"]] of cases.entries()) {
+    const summary = join(summaries, `${index}.md`);
+    writeFileSync(summary, "");
     const run = spawnSync("bash", ["-e", "-c", script], { encoding: "utf8", env: {
       ...process.env, SCOPE_RESULT: result, PROFILE: profile, E2E_RESULT: e2e,
       LOGIN_RESULT: login, EVIDENCE_RESULT: evidence, LOGIN_EVIDENCE_RESULT: loginEvidence,
-      GITHUB_STEP_SUMMARY: process.platform === "win32" ? "NUL" : "/dev/null",
+      GITHUB_STEP_SUMMARY: summary,
     } });
-    assert.equal(run.status === 0, ok, `${result}/${profile}/${e2e}/${login}/${evidence}/${loginEvidence}: ${run.stderr}`);
+    const label = `${result}/${profile}/${e2e}/${login}/${evidence}/${loginEvidence}`;
+    assert.equal(run.status === 0, ok, `${label}: ${run.stderr}`);
+    // An accepted result writes the summary; a rejected one writes nothing there.
+    assert.equal(readFileSync(summary, "utf8").trim() !== "", ok, `${label}: summary`);
   }
   const reject = step(stack, "Reject cancelled stack");
   assert.match(reject, /^ {8}if: cancelled\(\)$/m);

@@ -146,6 +146,8 @@ test("a tab that never heard the session end starts empty when the next person's
   // cookie (the assignment is not the next person's, #711 F1). While it waits
   // for the journal, the sheet already shows nothing of before.
   // The side bar's item, not the top bar's Početna, which also leads to /rad (#802).
+  // On /rad the side bar is a drawer behind ☰.
+  await page.getByRole("button", { name: t.shell.openNav }).click();
   await page.getByRole("navigation", { name: t.shell.workNav }).locator('a[href="/rad"]').click();
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "blocked");
   await expect(editorOf(page)).toHaveText("");

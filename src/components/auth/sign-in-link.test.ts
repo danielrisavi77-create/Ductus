@@ -56,3 +56,30 @@ describe("signedInRedirect", () => {
     }
   });
 });
+
+// #1231: a session-shaped cookie on /prijava goes on to the page asked for,
+// so a closed session lands on that page's Z-03 rather than on "/" for all.
+describe("signedInRedirect with a page to come back to", () => {
+  const token = "A".repeat(43);
+
+  it("forwards to a safe page of this application", () => {
+    expect(signedInRedirect(token, "/nastavnik")).toBe("/nastavnik");
+    expect(signedInRedirect(token, "/nastavnik/brz-put?zadatak=x")).toBe("/nastavnik/brz-put?zadatak=x");
+  });
+
+  it("never forwards back to the sign-in page itself", () => {
+    for (const raw of ["/prijava", "/prijava/", "/PRIJAVA?x=1", "/prijava#a", "/%70rijava", "/prijava%"]) {
+      expect(signedInRedirect(token, raw), raw).toBe("/");
+    }
+  });
+
+  it("falls back to the home page for another origin or an API route", () => {
+    for (const raw of ["//example.test", "https://example.test/rad", "/api/auth/logout", ["/rad"]]) {
+      expect(signedInRedirect(token, raw), String(raw)).toBe("/");
+    }
+  });
+
+  it("keeps the sign-in screen without a session-shaped cookie, whatever the page", () => {
+    expect(signedInRedirect(undefined, "/nastavnik")).toBeNull();
+  });
+});

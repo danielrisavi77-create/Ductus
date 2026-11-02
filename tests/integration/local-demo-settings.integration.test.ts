@@ -96,6 +96,8 @@ it("seeds only the local demo settings and preserves configuration and enrollmen
     await admin.query(
       "INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'admin', now())",
       [demoId, users[0]]);
+    // DAN-304: the teacher right of the last login, as that login writes it.
+    await admin.query("INSERT INTO identity.teacher_eligibility (user_id, institution_id) VALUES ($1, $2)", [users[1], demoId]);
     await withActor(tokens[0], (tx) => tx.query("SELECT institution.confirm_teacher_role($1)", [users[1]]));
     courseId = (await withActor(tokens[1], async (tx) =>
       (await tx.query<{ id: string }>(
@@ -143,6 +145,7 @@ it("seeds only the local demo settings and preserves configuration and enrollmen
     await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = ANY($1)", [users]);
     await admin.query("DELETE FROM institution.institution_role WHERE user_id = ANY($1)", [users]);
     await admin.query("DELETE FROM identity.session WHERE user_id = ANY($1)", [users]);
+    await admin.query("DELETE FROM identity.teacher_eligibility WHERE user_id = ANY($1)", [users]);
     await admin.query("DELETE FROM identity.user_account WHERE id = ANY($1)", [users]);
     if (demoId) {
       await admin.query("DELETE FROM institution.institution_settings WHERE institution_id = $1", [demoId]);

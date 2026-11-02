@@ -44,7 +44,7 @@ Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paraleln
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.
 - Iznimka samo za demo (D-98 dopuna, 10. 10. 2026.): demo spec K-4 obvezan je do 1. 11. samo na Chromiumu; Firefox i WebKit prolaze informativno i ne blokiraju spajanje. Pravilo za pilot se ne mijenja.
 - Mobilni viewport je dodatak, ne zamjena za WebKit.
-- Iznimka po odluci vlasnika: puni tok prijave preko lažnog OIDC-a („Demo prijava”, `e2e/login/`, `pnpm test:e2e:login`) radi nad `next dev`, jer produkcijski build lažnog pružatelja odbija (D-09), i obvezan je samo na Chromiumu. Odbijanje u produkcijskom buildu (`e2e/auth.spec.ts`) i dalje prolazi sva tri enginea. Pokretanje: složaj iz `compose.yaml` (baza i lažni pružatelj na 8090), `pnpm db:migrate`, `pnpm db:seed` i `AUTH_DATABASE_URL` iz `.env.example`.
+- Iznimka po odluci vlasnika: puni tok prijave preko lažnog OIDC-a („Demo prijava”, `e2e/login/`, `pnpm test:e2e:login`) radi nad `next dev`, jer produkcijski build lažnog pružatelja odbija (D-09), i obvezan je samo na Chromiumu, namjerno (DAN-232). WebKit lokalno ne pokreće taj spec iz dva uzroka (#1223): ne prihvaća argument `--lang=hr-HR` i ne sprema `Secure` kolačić na `http://localhost`. Produkcija je na https-u i nije pogođena. WebKit put za prijavu ide u M1.6 (DAN-296). Odbijanje u produkcijskom buildu (`e2e/auth.spec.ts`) i dalje prolazi sva tri enginea. Pokretanje: složaj iz `compose.yaml` (baza i lažni pružatelj na 8090), `pnpm db:migrate`, `pnpm db:seed` i `AUTH_DATABASE_URL` iz `.env.example`.
 
 ### Informativni UI/design odabir testova (DAN-241)
 
@@ -111,7 +111,10 @@ U projektima `mobile`, `firefox` i `webkit` V1 i V2 provjeravaju samo ARIA struk
   
   Pragovi se ne šire i maske se ne dodaju. Promjena palete ili rasporeda (npr. #867) mijenja referencu u istom PR-u, s pregledanim slikama u opisu.
 - **Lokalno (Windows):** reference su `-linux`, pa V1 do V3 lokalno nemaju svoju referencu. Slike `-win32.png` koje lokalni prolaz pritom zapiše ne commitaju se. `--ignore-snapshots` preskače i piksele i ARIA snimke (`toMatchAriaSnapshot` u Playwrightu 1.63 poštuje istu zastavicu). Za ARIA strukturu i piksele mjerodavan je CI.
+- **Važenje:** pikselni baselineovi (V1 do V3) vrijede samo na CI runneru. Drugi stroj drukčije rasterizira fontove, pa razlika u antialiasingu rubova glifova izvan CI-ja nije kvar (#1224): ARIA dio prolazi, a raspored je isti. Takav pad ne popravljaj mijenjanjem slike, praga ili maske.
 - Tri reference ne dokazuju puni FPZG probni prolaz; za to su DAN-232 i `e2e/login/demo-flow.spec.ts`.
+
+Ovi baselineovi provjeravaju regresiju prema prethodno pregledanoj izvedbi, ne podudarnost s vlasnikovom dizajnerskom slikom. Za vidljivu promjenu prvo slijedi `docs/SESSIONS.md` §6: original i stvarni prikaz u istim uvjetima, uključujući promijenjeni shell izvan `main`, usporedba i ispravci. Tek tako pregledan actual prihvaća se kao novi baseline po gornjem CI postupku; zeleni test sam ne odobrava izgled. Široke/mobilne i hr/en snimke za predaju ostaju obveza iz §6, i kad nisu pokrivene ovim trima regresijskim testovima.
 
 ## 3. Obvezni adversarial scenariji prije pilota
 

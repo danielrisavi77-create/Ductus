@@ -5,9 +5,9 @@ description: Pre-handoff checklist for a Ductus PR that changes sync states, ACK
 
 Popis provjera prije predaje PR-a koji mijenja stanja sinkronizacije, obradu potvrda, drain ili oporavak. Ne uvodi pravila: svaka stavka upućuje na odjeljak koji je pravilo ili opisuje kako dokazati da je ispunjeno. Ako se popis i dokument razilaze, vrijedi dokument, a nesklad ide u IZVJEŠTAJ.
 
-Pročitati `STATE.md` "Ne smije se izgubiti" (F-3/F-8, B-8), `docs/ARCHITECTURE.md` §5, `docs/BACKEND.md` §3 pravilo 3, `docs/PRODUCT.md` §5 pravilo 10 i `docs/TESTING.md` §2 i §3. Za scenarije oporavka koristiti `ductus-offline-recovery`.
+Pročitati `STATE.md` "Ne smije se izgubiti" (F-3/F-8, B-8), `docs/ARCHITECTURE.md` §5, `docs/backend/pregled.md` §3 pravilo 3, `docs/PRODUCT.md` §5 pravilo 10 i `docs/TESTING.md` §2 i §3. Za scenarije oporavka koristiti `ductus-offline-recovery`.
 
-Pravilo je jedno: stanje "spremljeno na poslužitelju" (SYNCED) nastaje tek kad klijent dobije potpisanu potvrdu (ARCHITECTURE §5 t. 5; BACKEND §3 pravilo 3; `STATE.md` F-3/F-8). Stavke niže su provjere izvedbe; svaka traži test koji pada kad se uvjet ukloni.
+Pravilo je jedno: stanje "spremljeno na poslužitelju" (SYNCED) nastaje tek kad klijent dobije potpisanu potvrdu (ARCHITECTURE §5 t. 5; `backend/pregled.md` §3 pravilo 3; `STATE.md` F-3/F-8). Stavke niže su provjere izvedbe; svaka traži test koji pada kad se uvjet ukloni.
 
 1. Svaki put koji emitira SYNCED prolazi kroz provjeru potpisane potvrde. Test: odgovor bez potpisa, s `pending_signature` ili s neispravnim potpisom ne daje SYNCED.
 2. Parser odgovora ne odbacuje potvrdu: test ide od sirovog odgovora do stanja, ne od već složenog objekta.

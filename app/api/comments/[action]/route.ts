@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { handleCommentRequest, type CommentAction } from "@/server/collaboration/comments";
 import { withActor } from "@/server/db";
@@ -24,18 +25,11 @@ export async function POST(
 ): Promise<Response> {
   const { action } = await context.params;
   if (!ACTIONS.has(action)) return unavailable(404);
-  const callback = process.env.OIDC_REDIRECT_URI;
-  if (!callback) return unavailable();
-  let expectedOrigin: string;
-  try {
-    expectedOrigin = new URL(callback).origin;
-    if (expectedOrigin === "null") throw new Error("invalid application origin");
-  } catch {
-    return unavailable();
-  }
+  const origin = expectedOrigin();
+  if (!origin) return unavailable();
   return handleCommentRequest(action as CommentAction, request, {
     withActor,
-    expectedOrigin,
+    expectedOrigin: origin,
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }

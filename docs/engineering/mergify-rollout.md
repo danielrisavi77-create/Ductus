@@ -9,7 +9,26 @@ najviše tri minute; grupa koja padne dijeli se dok se ne izdvoji PR koji ju je 
 Od DAN-447 (vlasnikov zahtjev 1. 11. 2026.) profil je `serial`/1/5: u svakom trenutku
 radi samo jedna spekulativna provjera, a ona testira grupu do pet PR-ova (jedan CI za
 cijelu grupu). Čekanje grupe i dijeljenje grupe koja padne ostaju isti. S jednom
-provjerom grupa se dijeli na dva dijela po krugu.
+provjerom prvih n − 1 PR-ova grupe reže se na dva dijela koji se provjeravaju jedan
+za drugim, svaki na vrhu prethodnog. Zadnji PR se ne testira ponovno. Ako svi
+dijelovi prođu, on je srušio grupu i izlazi iz reda. Prvi dio koji padne dijeli se
+dalje, a PR-ovi iza njega vraćaju se u red. Broj krugova nije ograničen
+(`batch_max_failure_resolution_attempts` nije postavljen). Uz ograničenje bi red s
+jednom provjerom u zadnjem krugu provjerio samo prvi dio, a sve iza njega izbacio
+neprovjereno. Nema ni `checks_timeout`, jer se istek dijeli kao pad.
+
+Od DAN-449 (vlasnik, 1. 11. 2026.) postoje dva reda s istim uvjetima i postavkama.
+Prvi je `critical` s `batch_size: 2`, a drugi `main` s `batch_size: 5`. Naredba
+`@Mergifyio queue` bez imena ide u prvi red čiji uvjeti vrijede, dakle u
+`critical`. Za low i standard piše se `@Mergifyio queue main`. Grupa od dva ima
+jedan krug dijeljenja: prvi PR se provjerava sam. Ako padne, izlazi, a drugi se
+vraća u red. Ako prođe, spaja se, a drugi izlazi eliminacijom. Tako je 1. 11. 2026.
+izašao #1073 iz grupe s #1213 („round 1/1”, poruka „Not proven to be this pull
+request's failure”). #1073 je i sam pao na istom headu, pa je bio kriv. Grupa
+critical reda košta jedan CI kad je zelena, a kad padne, točno još jedan. Grupa od
+pet u najgorem slučaju traži nekoliko uzastopnih carriera. `batch_size: 1` se ne
+koristi jer znači provjeru na mjestu. Retry (`max_checks_retries`) se ne koristi
+(ENGINEERING_SYSTEM §10). Kod sumnje na nestabilan test u grupi vlasnik ručno piše `@Mergifyio requeue`.
 
 Mergify više ne osvježava PR koji čeka vlasnikovu naredbu na svaki pomak maina
 (svako osvježavanje pokretalo je puni CI na tom PR-u). Carrier testira PR na
@@ -62,6 +81,12 @@ za cijelu grupu, a ne do tri kao prije.
 - Dokazati da neuspješan CI na kombinaciji blokira spajanje te da uspješan kasniji
   rezultat ne preskače raniji neuspjeh (`skip_intermediate_results: false`).
 - D-177 i DAN-447: na prvoj grupi od dva do pet PR-ova zabilježiti jedan draft carrier za cijelu grupu i zaseban squash commit za svaki izvorni PR. Ako grupa padne, zabilježiti dijeljenje i koji je PR izdvojen. Critical ili D-97 PR u grupi mora imati svoju naredbu na točnom headu.
+- DAN-449: prvi PR u redu `critical` dati naredbom bez imena i zabilježiti da je
+  završio u `critical`, a ne u `main`. Potvrditi da njegov carrier ima granu oblika
+  `mergify/merge-queue/` + deset hex znakova i oba carrier statusa
+  (`mergify-queue-pr.mjs`). Ako ih nema, carrier čeka bez isteka. Tada pauzirati
+  red i ne nastavljati. Zabilježiti i da low PR naredbom `queue main` ide u grupu
+  do pet, te da grupa nikad ne miješa PR-ove dvaju redova.
 - Potvrditi redoslijed squash mergeova i zelen main. Kod neočekivanog ponašanja
   odmah pauzirati red; sačuvati status/logove prije povratka.
 
@@ -85,6 +110,9 @@ Mergifyja. Nakon potvrde in-place provjera Daniel vraća prethodno dogovoreni
 strict profil. Carrier prepoznavanje može ostati: običan PR nema izuzeće.
 
 Dokumentacija pružatelja:
+- https://docs.mergify.com/merge-queue/batches
+- https://docs.mergify.com/merge-queue/priority
+- https://docs.mergify.com/commands/queue
 - https://docs.mergify.com/merge-queue/draft-pull-requests
 - https://docs.mergify.com/merge-queue/queue-modes
 - https://docs.mergify.com/merge-queue/github-rulesets

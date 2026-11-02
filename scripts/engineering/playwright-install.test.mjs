@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { rmSync } from "node:fs";
 import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -13,6 +14,34 @@ import { fileURLToPath } from "node:url";
 // slash before the drive letter, which fs reads as D:\D:\...
 const script = fileURLToPath(new URL("./playwright-install.sh", import.meta.url));
 const source = await readFile(script, "utf8");
+
+// DAN-369 (#1143): on Windows `bash` in PATH may be WSL (System32), which exits
+// 1 before the script starts, and System32 has its own `timeout.exe` in front of
+// GNU timeout. So the script runs under the bash that `sh` finds (Git Bash), as
+// session-start-hooks.test.mjs does, with that bash's own tools after the fakes.
+// No usable bash fails the tests; nothing is skipped.
+const windows = process.platform === "win32";
+function findBash() {
+  if (!windows) return "bash";
+  const posix = spawnSync("sh", ["-c", "command -v bash"], { encoding: "utf8" });
+  const native = posix.status === 0 ? spawnSync("cygpath", ["-w", posix.stdout.trim()], { encoding: "utf8" }) : null;
+  const found = native?.status === 0 ? native.stdout.trim() : "";
+  assert.ok(found, "no Git Bash on this Windows machine: sh and cygpath must find bash");
+  return found;
+}
+const bash = findBash();
+const tools = windows ? [path.dirname(bash)] : [];
+
+// rmSync in Node 24 throws EPERM at once on Windows and ignores maxRetries (#1141).
+function removeDir(dir, deadlineMs = 10000) {
+  const start = Date.now();
+  for (;;) {
+    try { return rmSync(dir, { recursive: true, force: true }); } catch (error) {
+      if (!["EPERM", "EBUSY", "ENOTEMPTY"].includes(error?.code) || Date.now() - start >= deadlineMs) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
 
 async function run({ failures, hangFirst = false, timeout = "2", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false }) {
   const dir = await mkdtemp(path.join(tmpdir(), "pw-install-"));
@@ -29,16 +58,19 @@ exit 0
   await writeFile(path.join(dir, "sudo"), "#!/usr/bin/env bash\nexit 0\n");
   await chmod(path.join(dir, "pnpm"), 0o755);
   await chmod(path.join(dir, "sudo"), 0o755);
-  const result = spawnSync("bash", [script, ...browsers], {
+  const result = spawnSync(bash, [script, ...browsers], {
     env: {
       ...process.env,
-      PATH: `${dir}:${process.env.PATH}`,
+      PATH: [dir, ...tools, process.env.PATH].join(path.delimiter),
       PLAYWRIGHT_INSTALL_TIMEOUT: timeout,
       PLAYWRIGHT_TRY_WITHOUT_DEPS: withoutDeps ? "1" : "",
     },
     encoding: "utf8",
   });
-  const calls = (await readFile(log, "utf8").catch(() => "")).trim().split("\n").filter(Boolean);
+  const calls = (await readFile(log, "utf8").catch(() => "")).trim().split(/\r?\n/).filter(Boolean);
+  removeDir(dir);
+  // The fake pnpm must have answered: an empty log means the real one could have run.
+  assert.ok(calls.length > 0, `the fake pnpm was never called (status ${result.status}): ${result.stderr?.slice(0, 300)}`);
   return { status: result.status, calls };
 }
 

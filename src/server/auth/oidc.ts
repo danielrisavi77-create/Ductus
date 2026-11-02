@@ -33,6 +33,13 @@ export interface OidcClient {
   authorizationUrl(checks: LoginChecks): Promise<URL>;
   /** `callbackUrl` carries the query of the callback request, nothing else. */
   verify(callbackUrl: URL, checks: LoginChecks): Promise<VerifiedLogin>;
+  /**
+   * The provider's logout address (RP-initiated logout, DAN-212): its
+   * `end_session_endpoint` with `client_id` and the configured
+   * `post_logout_redirect_uri`, no hint and nothing from a request. Null when
+   * discovery names no endpoint, or one without TLS where TLS is required.
+   */
+  endSessionUrl(): Promise<URL | null>;
 }
 
 /** The provider did not answer, answered 5xx, or timed out. */
@@ -196,6 +203,20 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
       if (!idToken) throw new Error("token response has no ID token");
       const userinfo = await client.fetchUserInfo(oidc, tokens.access_token, idToken.sub);
       return { issuer: accountIssuer(config.issuer), idToken, userinfo };
+    },
+
+    async endSessionUrl() {
+      const oidc = await configuration();
+      const endpoint = oidc.serverMetadata().end_session_endpoint;
+      if (typeof endpoint !== "string") return null;
+      let target: URL;
+      try {
+        target = new URL(endpoint);
+      } catch {
+        return null;
+      }
+      if (target.protocol !== "https:" && !(config.allowInsecureRequests && target.protocol === "http:")) return null;
+      return client.buildEndSessionUrl(oidc, { post_logout_redirect_uri: config.postLogoutRedirectUri.href });
     },
   };
 }
