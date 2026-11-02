@@ -10,20 +10,32 @@ const THEMES = ["svijetla", "tamna"] as const;
 const WIDTHS = ["1440", "400"] as const;
 
 function decode(s: string): string {
+  // "&amp;" last, so an escaped entity is decoded exactly once.
   return s
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+/** Repeat a removal until the text stops changing, so a nested fragment cannot survive one pass. */
+function stripAll(s: string, re: RegExp): string {
+  let prev: string;
+  let cur = s;
+  do {
+    prev = cur;
+    cur = cur.replace(re, "");
+  } while (cur !== prev);
+  return cur;
 }
 
 /** Every text node, plus the text of the attributes a person or a screen reader gets. */
 function readings(html: string): { joined: string; spaced: string } {
-  const body = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, "").replace(/<!--[\s\S]*?-->/g, "");
+  const body = stripAll(stripAll(html, /<(script|style)\b[\s\S]*?<\/\1\s*>/gi), /<!--[\s\S]*?-->/g);
   const attrs = [...body.matchAll(/\b(?:aria-label|aria-valuetext|title|alt|placeholder|value)="([^"]*)"/g)].map((m) => m[1]);
-  const joined = decode(body.replace(/<[^>]*>/g, "") + PHRASE_BREAK + attrs.join(PHRASE_BREAK));
+  const joined = decode(stripAll(body, /<[^>]*>/g) + PHRASE_BREAK + attrs.join(PHRASE_BREAK));
   const spaced = decode(body.replace(/<[^>]*>/g, " ") + " " + attrs.join(" "));
   return { joined, spaced };
 }
