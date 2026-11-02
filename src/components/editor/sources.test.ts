@@ -176,6 +176,35 @@ describe("writeSource", () => {
     editor.destroy();
   });
 
+  it("cites in the text after everything was selected (Ctrl+A)", () => {
+    // Review on #866 (c.6567118121): the whole-document selection took in the new bibliography.
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.selectAll();
+    const book = sourceOf(BOOK);
+    const article = sourceOf(ARTICLE);
+    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(true);
+    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
+    const cited = `Prvi odlomak.${citationText(book, "")}${citationText(article, "")}`;
+    expect(texts(editor)).toEqual(["paragraph:" + cited, "heading:Literatura", `paragraph:${entryText(book)}`]);
+    expect(editor.state.selection.empty).toBe(true);
+    expect(editor.state.selection.head).toBe(1 + cited.length);
+    editor.destroy();
+  });
+
+  it("cites in the text after Ctrl+A and an entry added without a citation", () => {
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.selectAll();
+    const book = sourceOf(BOOK);
+    expect(writeSource(editor, null, entryText(book))).toBe(true);
+    expect(writeSource(editor, citationText(book, "15"), null)).toBe(true);
+    expect(texts(editor)).toEqual([
+      `paragraph:Prvi odlomak.${citationText(book, "15")}`,
+      "heading:Literatura",
+      `paragraph:${entryText(book)}`,
+    ]);
+    editor.destroy();
+  });
+
   it("never writes over selected text", () => {
     const editor = editorWith([{ text: "Ostaje." }]);
     editor.commands.setTextSelection({ from: 1, to: 8 });

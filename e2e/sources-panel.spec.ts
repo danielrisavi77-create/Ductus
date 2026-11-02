@@ -124,14 +124,27 @@ test.describe("sources panel (DAN-343)", () => {
     await expect(tab.getByRole("button", { name: t.add })).toBeFocused();
   });
 
-  // F-154 point 2: a field takes no more than its limit, typed or pasted.
-  test("the fields take no more than their limit", async ({ page }) => {
+  // F-154 point 2, QA on #866 (c.6567210898): a field longer than its limit is
+  // refused with a message and nothing is written; it is never cut to fit.
+  test("a field longer than its limit is refused, never cut", async ({ page }) => {
     const tab = await openSources(page, 1440);
+    const before = await blocksOf(page);
     await tab.getByRole("button", { name: t.add }).click();
-    await fill(tab, { [t.title]: "n".repeat(301), [t.family]: "p".repeat(81), [t.citePage]: "1".repeat(21) });
-    await expect(tab.getByLabel(t.title, { exact: true })).toHaveValue("n".repeat(300));
-    await expect(tab.getByLabel(t.family, { exact: true })).toHaveValue("p".repeat(80));
-    await expect(tab.getByLabel(t.citePage, { exact: true })).toHaveValue("1".repeat(20));
+    await fill(tab, {
+      [t.family]: "p".repeat(81), [t.given]: "Ana", [t.year]: "2021", [t.title]: "n".repeat(301),
+      [t.place]: "Zagreb", [t.publisher]: "Primjer", [t.citePage]: "1".repeat(21),
+    });
+    await expect(tab.getByLabel(t.title, { exact: true })).toHaveValue("n".repeat(301));
+    await tab.getByRole("button", { name: t.addOnly }).click();
+    await tab.getByRole("button", { name: t.addAndCite }).click();
+    const alert = tab.getByRole("alert");
+    await expect(alert).toContainText(t.tooLong.replace("{field}", t.title).replace("{n}", "300"));
+    await expect(alert).toContainText(t.tooLong.replace("{field}", t.family).replace("{n}", "80"));
+    await expect(alert).toContainText(t.pageTooLong.replace("{n}", "20"));
+    for (const label of [t.title, t.family, t.citePage]) {
+      await expect(tab.getByLabel(label, { exact: true })).toHaveAttribute("aria-invalid", "true");
+    }
+    expect(await blocksOf(page)).toEqual(before);
   });
 
   // QA on #866 (c.6561280081): a pasted U+0000 the sheet would drop is refused,

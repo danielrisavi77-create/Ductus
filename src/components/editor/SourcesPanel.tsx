@@ -89,7 +89,6 @@ function SourcesForm() {
       <span>{label}</span>
       <input
         value={fields[field]}
-        maxLength={FIELD_MAX[field]}
         inputMode={numeric ? "numeric" : undefined}
         aria-invalid={invalid.has(field) ? "true" : undefined}
         onChange={(event) => set(field)(event.target.value)}
@@ -150,7 +149,7 @@ function SourcesForm() {
           )}
           <label className={styles.field}>
             <span>{t.citePage}</span>
-            <input value={page} maxLength={PAGE_MAX} aria-invalid={tried && !pageValid(page) ? "true" : undefined} onChange={(event) => setPage(event.target.value)} />
+            <input value={page} aria-invalid={tried && !pageValid(page) ? "true" : undefined} onChange={(event) => setPage(event.target.value)} />
           </label>
           {errors.length > 0 ? (
             <ul className={styles.errors} role="alert">{errors.map((text) => <li key={text}>{text}</li>)}</ul>
@@ -177,8 +176,11 @@ function SourcesForm() {
           <>
             <label className={styles.field}>
               <span>{t.citePage}</span>
-              <input value={listPage} maxLength={PAGE_MAX} onChange={(event) => setListPage(event.target.value)} />
+              <input value={listPage} aria-invalid={pageValid(listPage) ? undefined : "true"} onChange={(event) => setListPage(event.target.value)} />
             </label>
+            {pageValid(listPage) ? null : (
+              <p className={styles.errors} role="alert">{pageFits(listPage) ? t.pageUnstorable : pageTooLong}</p>
+            )}
             <ul className={styles.list}>
               {added.map((item) => (
                 <li key={item.entry}>

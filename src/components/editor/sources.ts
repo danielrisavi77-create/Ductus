@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import type { Node as PMNode, NodeType } from "@tiptap/pm/model";
-import { Selection, type Transaction } from "@tiptap/pm/state";
+import { AllSelection, Selection, type Transaction } from "@tiptap/pm/state";
 
 import { CITATION_FORM_META } from "@/editor/source";
 import { storableText } from "@/editor/storable-text";
@@ -50,8 +50,9 @@ export type SourceCheck =
 /**
  * Longest value of each field, in code points (F-154 point 2, owner decision
  * #87 `issuecomment-6423014866`). A guard of the form, not a threshold of
- * assessment. The input's `maxLength` counts UTF-16 units, so it never lets
- * through a value this check refuses; a longer value is refused, never cut.
+ * assessment. The field itself has no `maxLength`: a browser cuts pasted text
+ * to it silently (QA on #866, c.6567210898), so a longer value is refused here
+ * at the click, never cut.
  */
 export const FIELD_MAX: Readonly<Record<SourceField, number>> = {
   family: 80, given: 80, family2: 80, given2: 80, year: 4, title: 300,
@@ -190,6 +191,11 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
   return editor.chain().command(({ tr, state }) => {
     // Evidence: this change is `citation-form`, an event of its own (src/editor/source.ts).
     tr.setMeta(CITATION_FORM_META, true);
+    // Everything selected (Ctrl+A) becomes a cursor at the end of the last text
+    // block first. An `AllSelection` maps to the whole new document, the added
+    // bibliography too, so the next citation would land there (review on #866,
+    // c.6567118121).
+    if (tr.selection instanceof AllSelection) tr.setSelection(Selection.atEnd(tr.doc));
     if (citation !== null) tr.insertText(citation, citationAt(tr));
     if (entry === null) return true;
     const plan = bibliographyPlan(blocksOf(tr.doc), entry);
@@ -218,10 +224,9 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
   }).run();
 }
 
-// The citation goes at the end of the selection, inside a text block. With
-// everything selected (Ctrl+A) that end is the document itself, where an
-// insert would wrap the text in a new paragraph the evidence log refuses
-// (review on #866), so it moves back to the end of the last text block.
+// The citation goes at the end of the selection, inside a text block. Outside
+// one, an insert would wrap the text in a new paragraph the evidence log
+// refuses (review on #866), so it moves back to the end of the text block before.
 function citationAt(tr: Transaction): number {
   const to = tr.doc.resolve(tr.selection.to);
   return to.parent.inlineContent ? to.pos : Selection.near(to, -1).to;
