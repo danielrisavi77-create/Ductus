@@ -368,11 +368,12 @@ function prevailing({ current, carried }) {
 // it still reads as FAIL or BLOCK.
 const NEGATIVE_WORD_RE = /(?<![A-Z0-9])(FAIL|BLOC?K)[A-Z]*(?![A-Z0-9])/;
 // One literal pattern per verdict field, with markdown or spaces around its
-// name, a heading (`#` to `######`, with or without a space) included, and a
-// numbered list marker (`1.`, `1)`, `1\.`) anywhere among them (p06f).
+// name, a heading (`#` to `######`, with or without a space) included, a
+// numbered list marker (`1.`, `1)`, `1\.`) anywhere among them (p06f), and a
+// task list box (`[ ]`, `[x]`, `[X]`) the same way (p06g).
 const VERDICT_LINE_RE = new Map([
-  ["Review-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)])*Review-Verdict[\s*_`>~+#-]*:(.*)$/i],
-  ["QA-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)])*QA-Verdict[\s*_`>~+#-]*:(.*)$/i],
+  ["Review-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)]|\[[ xX]\])*Review-Verdict[\s*_`>~+#-]*:(.*)$/i],
+  ["QA-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)]|\[[ xX]\])*QA-Verdict[\s*_`>~+#-]*:(.*)$/i],
 ]);
 function negativeWord(body, name) {
   const line = VERDICT_LINE_RE.get(name);

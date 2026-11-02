@@ -573,3 +573,49 @@ test("a failed parent check before the named head still keeps nothing, as before
   assert.equal(heads.size, 0);
   assert.equal(heads.heldNegatives?.size ?? 0, 0);
 });
+
+// p06g (owner, #87, 2. 11. 2026.), finding of review c.6588309821: a negative
+// verdict line written as a markdown task list item, with or without an
+// indent, still blocks, read by the same pattern as a numbered list; a PASS so
+// written does not count.
+const TASK_LIST = [
+  ["dash, open box", (V) => `- [ ] ${V}: FAIL`],
+  ["dash, ticked box", (V) => `- [x] ${V}: BLOCK`],
+  ["dash, capital tick", (V) => `- [X] ${V}: BLOK`],
+  ["star, open box", (V) => `* [ ] ${V}: FAIL`],
+  ["plus, open box", (V) => `+ [ ] ${V}: BLOCK`],
+  ["plus, capital tick", (V) => `+ [X] ${V}: FAIL`],
+  ["indent 2, dash, open box", (V) => `  - [ ] ${V}: FAIL`],
+  ["indent 2, star, ticked box", (V) => `  * [x] ${V}: BLOCK`],
+  ["indent 3, plus, capital tick", (V) => `   + [X] ${V}: BLOK`],
+  ["indent 2, plus, open box", (V) => `  + [ ] ${V}: FAIL`],
+  ["indent 3, dash, capital tick", (V) => `   - [X] ${V}: BLOCK`],
+  ["box and bold field name", (V) => `- [ ] **${V}:** FAIL`],
+  ["quote and box", (V) => `> - [x] ${V}: FAIL`],
+  ["box without a bullet", (V) => `[ ] ${V}: BLOCK`],
+];
+for (const kind of ["review", "qa"]) {
+  const slot = kind === "review" ? "r2" : "q2";
+  for (const [name, line] of TASK_LIST) {
+    test(`${kind}: a negative verdict as a task list item "${name}" blocks beside a valid PASS (p06g)`, () => {
+      const { comments, risk } = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, line(V)]));
+      assert.notEqual(gate(comments, { risk }).state, "success", line(KINDS[kind].V));
+    });
+  }
+  test(`${kind}: a task list negative names its earlier head and is walked for (p06g)`, async () => {
+    const comments = [...passesFor(kind), block(kind, slot, ({ H, V }) => [`${H}: ${mergeHead.slice(0, 7)}`, `- [ ] ${V}: FAIL`])];
+    const heads = await walkWith(comments, { broken: new Set([behind]) });
+    assert.deepEqual([...heads], [mergeHead]);
+    assert.notEqual(gate(comments, { risk: riskFor(kind), carriedHeads: heads }).state, "success");
+  });
+  test(`${kind}: a task list PASS is not a PASS and a fenced task list negative is a quote (p06g)`, () => {
+    for (const box of ["- [ ]", "- [x]", "* [X]", "+ [ ]"]) {
+      const onlyPass = kind === "review"
+        ? [block("review", "r1", ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: PASS`])]
+        : [exact("review", "r1"), block("qa", "q1", ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: PASS`])];
+      assert.notEqual(gate(onlyPass, { risk: riskFor(kind) }).state, "success", box);
+    }
+    const fenced = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, "```", `- [ ] ${V}: FAIL`, "```"]));
+    assert.equal(gate(fenced.comments, { risk: fenced.risk }).state, "success");
+  });
+}
