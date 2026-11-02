@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 import { LOCAL_DEMO_DOCUMENT_ID, LOCAL_DEMO_SCOPE_HASH } from "../src/lib/journal/local-scope";
+import { caretAtEnd } from "./support/caret";
 
 /**
  * The local editor on /rad (F-3 step 1b, plan #197). Playwright gives every
@@ -459,6 +460,40 @@ test.describe("local editor (#197)", () => {
     await page.keyboard.press("ArrowRight");
     await page.keyboard.type("!");
     await expect(editorOf(page)).toHaveText(`${text}!`);
+  });
+
+  // DAN-495, #936: on the first focus after a load the editor wrote its older selection back
+  // over the caret a test had just set, and the text was typed mid-document. The page here
+  // does that once, right after the caret is set; the text must still land at the end.
+  test("DAN-495: the caret set at the end of the text holds even when the editor resets it once", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Prvi izmisljeni odlomak.");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Drugi izmisljeni odlomak.");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Treci izmisljeni odlomak.");
+    await journalled(page);
+    await page.reload();
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page).locator("p")).toHaveCount(3);
+    await editorOf(page).evaluate((editor) => {
+      const addRange = Selection.prototype.addRange;
+      let reset = false;
+      Selection.prototype.addRange = function (this: Selection, range: Range) {
+        addRange.call(this, range);
+        const atEnd = range.collapsed && range.startContainer === editor.lastElementChild
+          && range.startOffset === editor.lastElementChild!.childNodes.length;
+        if (reset || !atEnd) return;
+        reset = true;
+        // As the editor's focus handling does: its older selection goes back to the page.
+        setTimeout(() => this.collapse(editor.firstElementChild!.firstChild, 0), 0);
+      };
+    });
+    await caretAtEnd(page, editorOf(page));
+    await page.keyboard.type(" Kraj.");
+    await expect(editorOf(page).locator("p")).toHaveText([
+      "Prvi izmisljeni odlomak.", "Drugi izmisljeni odlomak.", "Treci izmisljeni odlomak. Kraj.",
+    ]);
   });
 
   test("5: a full device is an error that stays while typing on, with an export", async ({ page }) => {

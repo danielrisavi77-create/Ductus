@@ -51,6 +51,13 @@ const roleRows = async (user: string) => (await admin.query(
   `SELECT role, confirmed_at IS NOT NULL AS confirmed, confirmed_by, revoked_at IS NOT NULL AS revoked
      FROM institution.institution_role WHERE user_id = $1 ORDER BY role, revoked_at NULLS FIRST`, [user],
 )).rows as { role: string; confirmed: boolean; confirmed_by: string | null; revoked: boolean }[];
+// DAN-497: the audit rows of one teacher, each checked against the role row it names.
+const roleEvents = async (teacher: string) => (await admin.query(
+  `SELECT e.kind, e.actor_id, e.role, e.actor_id = r.confirmed_by AND e.occurred_at = r.confirmed_at AS as_confirmed
+     FROM audit.teacher_role_event e JOIN institution.institution_role r ON r.id = e.role_id
+    WHERE e.teacher_id = $1 ORDER BY e.occurred_at, e.kind`, [teacher],
+)).rows as { kind: string; actor_id: string; role: string; as_confirmed: boolean }[];
+const confirmedBy = (actor: string) => [{ kind: "confirmed", actor_id: actor, role: "teacher", as_confirmed: true }];
 
 // Scoped snapshots of every table in these schemas detect an accidental write
 // anywhere; only this file's random fixtures enter the comparison. Sessions
@@ -108,6 +115,16 @@ beforeAll(async () => {
 afterAll(async () => {
   vi.unstubAllEnvs();
   await app.end();
+  // The audit rows are append-only (DAN-497); only a replica session removes this file's own.
+  const cleaner = await admin.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    await cleaner.query("DELETE FROM audit.teacher_role_event WHERE institution_id = ANY($1)", [faculties]);
+    await cleaner.query("COMMIT");
+  } finally {
+    cleaner.release();
+  }
   await admin.query("DELETE FROM institution.institution_role WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM institution.institution_settings WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM identity.teacher_eligibility WHERE user_id = ANY($1)", [ids]);
@@ -168,6 +185,8 @@ describe("teacher role confirmation real POST, session and database", () => {
     expect(await first.json()).toEqual({ confirmed: true });
     const confirmed = [{ role: "teacher", confirmed: true, confirmed_by: person.admin.id, revoked: false }];
     expect(await roleRows(person.candidate.id)).toEqual(confirmed);
+    // The confirmation and its audit row are one change, by the administrator of the session.
+    expect(await roleEvents(person.candidate.id)).toEqual(confirmedBy(person.admin.id));
     // Repeating it by another administrator changes nothing, not even who confirmed.
     const before = await snapshot();
     const again = await post(person.secondAdmin.token, person.candidate.id);
@@ -184,10 +203,13 @@ describe("teacher role confirmation real POST, session and database", () => {
     expect(await roleRows(person.pendingCandidate.id)).toEqual([
       { role: "teacher", confirmed: true, confirmed_by: person.admin.id, revoked: false },
     ]);
+    expect(await roleEvents(person.pendingCandidate.id)).toEqual(confirmedBy(person.admin.id));
     expect((await post(person.admin.token, person.formerTeacher.id)).status).toBe(200);
     expect((await roleRows(person.formerTeacher.id)).map(({ confirmed, revoked }) => ({ confirmed, revoked }))).toEqual([
       { confirmed: true, revoked: false }, { confirmed: true, revoked: true },
     ]);
+    // Only the new role row has a row; the revoked one predates the trail in this fixture.
+    expect(await roleEvents(person.formerTeacher.id)).toEqual(confirmedBy(person.admin.id));
   });
 
   it("confirms once when two administrators confirm the same candidate at once", async () => {
@@ -197,5 +219,6 @@ describe("teacher role confirmation real POST, session and database", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ role: "teacher", confirmed: true, revoked: false });
     expect([person.admin.id, person.secondAdmin.id]).toContain(rows[0].confirmed_by);
+    expect(await roleEvents(person.raceCandidate.id)).toEqual(confirmedBy(rows[0].confirmed_by as string));
   });
 });

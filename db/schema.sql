@@ -3465,11 +3465,17 @@ BEGIN
      ) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
-  INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
-  VALUES (actor.institution_id, p_candidate_id, 'teacher', actor.user_id, now())
-  ON CONFLICT (institution_id, user_id, role) WHERE revoked_at IS NULL
-  DO UPDATE SET confirmed_by = EXCLUDED.confirmed_by, confirmed_at = EXCLUDED.confirmed_at
-  WHERE r.confirmed_at IS NULL;
+  WITH confirmed AS (
+    INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
+    VALUES (actor.institution_id, p_candidate_id, 'teacher', actor.user_id, now())
+    ON CONFLICT (institution_id, user_id, role) WHERE revoked_at IS NULL
+    DO UPDATE SET confirmed_by = EXCLUDED.confirmed_by, confirmed_at = EXCLUDED.confirmed_at
+    WHERE r.confirmed_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
+  SELECT confirmed.institution_id, confirmed.id, confirmed.user_id, confirmed.role, 'confirmed', actor.user_id, now()
+  FROM confirmed;
 END
 $$;
 
@@ -4171,15 +4177,23 @@ CREATE FUNCTION institution.revoke_teacher_role(p_teacher_id uuid) RETURNS boole
     AS $$
 DECLARE
   actor record;
+  v_written integer;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
   IF NOT institution.actor_has_role('admin') THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
-  UPDATE institution.institution_role r SET revoked_at = now()
-   WHERE r.institution_id = actor.institution_id AND r.user_id = p_teacher_id
-     AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL;
-  RETURN FOUND;
+  WITH revoked AS (
+    UPDATE institution.institution_role r SET revoked_at = now()
+     WHERE r.institution_id = actor.institution_id AND r.user_id = p_teacher_id
+       AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
+  SELECT revoked.institution_id, revoked.id, revoked.user_id, revoked.role, 'revoked', actor.user_id, now()
+  FROM revoked;
+  GET DIAGNOSTICS v_written = ROW_COUNT;
+  RETURN v_written > 0;
 END
 $$;
 
@@ -4314,6 +4328,26 @@ CREATE TABLE audit.enrollment_code_event (
 );
 
 ALTER TABLE ONLY audit.enrollment_code_event FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: teacher_role_event; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.teacher_role_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    role_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    role text NOT NULL,
+    kind text NOT NULL,
+    actor_id uuid NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT teacher_role_event_kind_check CHECK ((kind = ANY (ARRAY['confirmed'::text, 'revoked'::text]))),
+    CONSTRAINT teacher_role_event_role_check CHECK ((role = 'teacher'::text))
+);
+
+ALTER TABLE ONLY audit.teacher_role_event FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5162,6 +5196,22 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 
 --
+-- Name: teacher_role_event teacher_role_event_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_role_id_kind_key; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_role_id_kind_key UNIQUE (role_id, kind);
+
+
+--
 -- Name: comment comment_pkey; Type: CONSTRAINT; Schema: collaboration; Owner: -
 --
 
@@ -5738,6 +5788,14 @@ ALTER TABLE ONLY institution.faculty_work_rule
 
 
 --
+-- Name: institution_role institution_role_binding_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.institution_role
+    ADD CONSTRAINT institution_role_binding_key UNIQUE (id, institution_id, user_id, role);
+
+
+--
 -- Name: institution_role institution_role_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -5875,6 +5933,13 @@ CREATE INDEX course_member_event_course_idx ON audit.course_member_event USING b
 --
 
 CREATE INDEX enrollment_code_event_course_idx ON audit.enrollment_code_event USING btree (course_id, occurred_at);
+
+
+--
+-- Name: teacher_role_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX teacher_role_event_institution_idx ON audit.teacher_role_event USING btree (institution_id, occurred_at);
 
 
 --
@@ -6141,6 +6206,20 @@ CREATE TRIGGER enrollment_code_event_append_only BEFORE DELETE OR UPDATE ON audi
 --
 
 CREATE TRIGGER enrollment_code_event_no_truncate BEFORE TRUNCATE ON audit.enrollment_code_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: teacher_role_event teacher_role_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER teacher_role_event_append_only BEFORE DELETE OR UPDATE ON audit.teacher_role_event FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: teacher_role_event teacher_role_event_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER teacher_role_event_no_truncate BEFORE TRUNCATE ON audit.teacher_role_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
 
 
 --
@@ -6417,6 +6496,30 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_actor_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_actor_id_institution_id_fkey FOREIGN KEY (actor_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_role_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_role_fkey FOREIGN KEY (role_id, institution_id, teacher_id, role) REFERENCES institution.institution_role(id, institution_id, user_id, role);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_teacher_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_teacher_id_institution_id_fkey FOREIGN KEY (teacher_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -7112,6 +7215,19 @@ ALTER TABLE audit.enrollment_code_event ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY enrollment_code_event_owner ON audit.enrollment_code_event TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: teacher_role_event; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.teacher_role_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: teacher_role_event teacher_role_event_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY teacher_role_event_owner ON audit.teacher_role_event TO ductus_identity USING (true) WITH CHECK (true);
 
 
 --
@@ -7868,4 +7984,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261102190000'),
     ('20261102200000'),
     ('20261102210000'),
+    ('20261102220000'),
     ('20261102230000');

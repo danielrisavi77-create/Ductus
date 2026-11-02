@@ -26,8 +26,8 @@ test.describe("workspace shell", () => {
     test.describe(`without JavaScript at ${width} px`, () => {
       test.use({ viewport: { width, height: 900 }, javaScriptEnabled: false });
 
-      // ☰ cannot open the drawer without JavaScript, so the <noscript> rules
-      // must win over the drawer rules (Codex, 3ff456f7). /rad streams, so
+      // ☰ cannot open the drawer without JavaScript, so the `scripting: none`
+      // rules must win over the drawer rules (Codex, 3ff456f7). /rad streams, so
       // the page may sit in Next's hidden frame: the computed style is read,
       // not the visibility of the whole page.
       test("the side bar is in the page and ☰ is not offered", async ({ page }) => {
@@ -381,7 +381,9 @@ test.describe("workspace shell", () => {
     const sources = list.getByRole("tab", { name: "Literatura" });
     await expect(sources).toBeFocused();
     await expect(sources).toHaveAttribute("aria-selected", "true");
-    await expect(panel.getByRole("tabpanel")).toHaveText("Literatura rada prikazuje se ovdje.");
+    // DAN-343: with a journal the open Literatura panel is the sources panel.
+    await expect(panel.getByRole("tabpanel").getByRole("button", { name: "+ Izvor" })).toBeVisible();
+    await expect(panel.getByRole("tabpanel")).toContainText("Izvori dodani u ovom radu");
     await page.keyboard.press("End");
     await expect(work).toBeFocused();
     await page.keyboard.press("ArrowLeft");

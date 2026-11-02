@@ -44,6 +44,12 @@ const roleRows = async () => (await admin.query(
      FROM institution.institution_role WHERE institution_id = ANY($1) ORDER BY user_id, role, revoked_at NULLS FIRST`, [faculties],
 )).rows as { user_id: string; role: string; confirmed: boolean; revoked: boolean }[];
 const withoutUser = (rows: Awaited<ReturnType<typeof roleRows>>, user: string) => rows.filter((row) => row.user_id !== user);
+// DAN-497: the audit rows of one teacher, each checked against the role row it names.
+const roleEvents = async (teacher: string) => (await admin.query(
+  `SELECT e.kind, e.actor_id, e.role, e.role_id = r.id AS same_row, e.occurred_at = r.revoked_at AS at_revocation
+     FROM audit.teacher_role_event e JOIN institution.institution_role r ON r.id = e.role_id
+    WHERE e.teacher_id = $1 ORDER BY e.occurred_at, e.kind`, [teacher],
+)).rows as { kind: string; actor_id: string; role: string; same_row: boolean; at_revocation: boolean }[];
 
 // Scoped snapshots of every table in these schemas detect an accidental write
 // anywhere; only this file's random fixtures enter the comparison.
@@ -105,6 +111,16 @@ beforeAll(async () => {
 afterAll(async () => {
   vi.unstubAllEnvs();
   await app.end();
+  // The audit rows are append-only (DAN-497); only a replica session removes this file's own.
+  const cleaner = await admin.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    await cleaner.query("DELETE FROM audit.teacher_role_event WHERE institution_id = ANY($1)", [faculties]);
+    await cleaner.query("COMMIT");
+  } finally {
+    cleaner.release();
+  }
   await admin.query("DELETE FROM institution.course_member WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM institution.institution_role WHERE institution_id = ANY($1)", [faculties]);
@@ -147,7 +163,7 @@ describe("teacher role revocation real POST, session and database", () => {
   });
 
   it("revokes exactly one teacher role, once, and the next request of that teacher is refused", async () => {
-    const before = await snapshot(["institution_role"]);
+    const before = await snapshot(["institution_role", "teacher_role_event"]);
     const rows = await roleRows();
     const first = await post(people.admin.token);
     expect(first.status).toBe(200);
@@ -156,12 +172,16 @@ describe("teacher role revocation real POST, session and database", () => {
     expect((await roleRows()).filter((row) => row.user_id === people.teacher.id)).toEqual([
       { user_id: people.teacher.id, role: "teacher", confirmed: true, revoked: true },
     ]);
+    // The revocation and its audit row are one change: the administrator of the session, the same role row and time.
+    const event = [{ kind: "revoked", actor_id: people.admin.id, role: "teacher", same_row: true, at_revocation: true }];
+    expect(await roleEvents(people.teacher.id)).toEqual(event);
     const again = await post(people.secondAdmin.token);
     expect(again.status).toBe(200);
     expect(await again.json()).toEqual({ revoked: false });
     expect(withoutUser(await roleRows(), people.teacher.id)).toEqual(withoutUser(rows, people.teacher.id));
+    expect(await roleEvents(people.teacher.id)).toEqual(event);
     // The course and its memberships stay; only the role is gone.
-    expect(await snapshot(["institution_role"])).toEqual(before);
+    expect(await snapshot(["institution_role", "teacher_role_event"])).toEqual(before);
     const refused = await remove(people.teacher.token);
     expect(refused.status).toBe(403);
     expect(await refused.json()).toEqual({ error: "forbidden" });
@@ -178,6 +198,9 @@ describe("teacher role revocation real POST, session and database", () => {
       { user_id: people.adminTeacher.id, role: "admin", confirmed: true, revoked: false },
       { user_id: people.adminTeacher.id, role: "teacher", confirmed: true, revoked: true },
     ]);
+    expect(await roleEvents(people.adminTeacher.id)).toEqual([
+      { kind: "revoked", actor_id: people.adminTeacher.id, role: "teacher", same_row: true, at_revocation: true },
+    ]);
   });
 
   it("revokes once when two administrators revoke the same teacher at once", async () => {
@@ -187,6 +210,11 @@ describe("teacher role revocation real POST, session and database", () => {
     expect([...revoked].sort()).toEqual([false, true]);
     expect((await roleRows()).filter((row) => row.user_id === people.raceTeacher.id)).toEqual([
       { user_id: people.raceTeacher.id, role: "teacher", confirmed: true, revoked: true },
+    ]);
+    // One revocation, one audit row, by the administrator whose answer was true.
+    const winner = revoked[0] ? people.admin.id : people.secondAdmin.id;
+    expect(await roleEvents(people.raceTeacher.id)).toEqual([
+      { kind: "revoked", actor_id: winner, role: "teacher", same_row: true, at_revocation: true },
     ]);
   });
 });
