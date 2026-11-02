@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { accountPlace } from "@/components/shell/nav";
 
-import { accessShellScope, closedSessionKind, coursesAccess, teacherPageAccess } from "./access-kind";
+import { accessShellScope, closedSessionKind, coursesAccess, mentoredWorksAccess, teacherPageAccess } from "./access-kind";
 
 const SESSION = "A".repeat(43);
 
@@ -63,6 +63,38 @@ describe("coursesAccess", () => {
     expect(coursesAccess("not_found")).toBe("denied");
     expect(coursesAccess("ok")).toBe("allowed");
     expect(coursesAccess("unavailable")).toBe("unavailable");
+  });
+});
+
+// DAN-492 (N-16): the role read decides; the works read can only close or fail it.
+describe("mentoredWorksAccess", () => {
+  it("keeps every access that is not allowed while the works read finds the session open", () => {
+    for (const access of ["signedOut", "denied", "unavailable"] as const) {
+      for (const read of ["ok", "unavailable"] as const) {
+        expect(mentoredWorksAccess(access, read)).toBe(access);
+      }
+    }
+  });
+
+  it("reads a works read that found the session gone as signed out, whatever the role read said", () => {
+    for (const access of ["allowed", "signedOut", "denied", "unavailable"] as const) {
+      expect(mentoredWorksAccess(access, "unauthorized")).toBe("signedOut");
+    }
+  });
+
+  it("a session closed after the role read refused it is Z-03 with a new sign-in, never Z-05 (QA c.6580117645)", () => {
+    expect(teacherPageAccess(mentoredWorksAccess("denied", "unauthorized"), "signed-in", SESSION)).toBe("expired");
+    expect(teacherPageAccess(mentoredWorksAccess("denied", "ok"), "signed-in", SESSION)).toBe("denied");
+  });
+
+  it("turns an allowed access into signed out or unavailable when the works read says so", () => {
+    expect(mentoredWorksAccess("allowed", "ok")).toBe("allowed");
+    expect(mentoredWorksAccess("allowed", "unauthorized")).toBe("signedOut");
+    expect(mentoredWorksAccess("allowed", "unavailable")).toBe("unavailable");
+  });
+
+  it("reads a session closed between the two reads as Z-03, never as the list", () => {
+    expect(teacherPageAccess(mentoredWorksAccess("allowed", "unauthorized"), "signed-in", SESSION)).toBe("expired");
   });
 });
 

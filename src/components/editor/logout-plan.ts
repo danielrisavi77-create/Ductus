@@ -69,6 +69,25 @@ export function logoutText(plan: LogoutPlan): LogoutText {
   return { text: form.replace("{n}", String(n)), note: t.logoutKept, offerExport: false };
 }
 
+/**
+ * How the dialog weighs its actions (#1331). While the sheet holds text the
+ * device did not store, the export is the main action and sign-out is a
+ * plain one named "bez izvoza", so nothing leads to the loss by default.
+ * Sign-out stays available (D-118); only its weight and name change.
+ */
+export type LogoutActions = {
+  /** The export is the main action, sign-out the plain one. */
+  exportFirst: boolean;
+  /** The sign-out label while no sign-out runs. */
+  confirmLabel: string;
+};
+
+export function logoutActions(plan: LogoutPlan): LogoutActions {
+  return plan.unsaved
+    ? { exportFirst: true, confirmLabel: t.logoutConfirmUnsaved }
+    : { exportFirst: false, confirmLabel: t.logoutConfirm };
+}
+
 /** Rows held after the submission: the submitted document's own count, never more than all rows. */
 export function heldAfterSubmission(plan: LogoutPlan): number {
   const own = plan.afterSubmission;

@@ -189,10 +189,12 @@ test("row 9: the dialog says text the device could not store would be lost; sign
   const dialog = logoutDialogOf(page);
   await expect(dialog).toContainText(t.auth.logoutUnsaved);
   await expect(dialog.getByRole("button", { name: t.editor.exportText })).toBeVisible();
+  // #1331: focus starts on "Ostani", and sign-out is named for what it costs.
+  await expect(dialog.getByRole("button", { name: t.auth.logoutStay })).toBeFocused();
   await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
   await expectStillSignedIn(page, token);
 
-  await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await dialog.getByRole("button", { name: t.auth.logoutConfirmUnsaved }).click();
   await page.waitForURL("http://localhost:3000/");
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
 });
@@ -436,7 +438,7 @@ test("in the shell /rad keeps one sign-out, the one that knows the device", asyn
   await expect(page.getByRole("banner").getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
   await page.getByRole("button", { name: t.shell.openNav }).click();
   const nav = side.getByRole("navigation", { name: t.shell.workNav });
-  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.courses, t.shell.nav.workspace, t.shell.nav.enroll]);
+  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.courses, t.shell.nav.works, t.shell.nav.workspace, t.shell.nav.enroll]);
   await expect(nav.getByRole("link", { name: t.shell.nav.workspace })).toHaveAttribute("aria-current", "page");
   await page.keyboard.press("Escape");
   await expect(side).toBeHidden();

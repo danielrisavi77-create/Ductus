@@ -38,10 +38,15 @@ const QUERY = `SELECT institution_name, confirmed_teachers, teacher_candidates, 
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
+/**
+ * The display name as institution.is_plain_label stored it. The database rule
+ * allows edge spaces and counts characters, not UTF-16 units, so the reader
+ * does not refuse what the constraint accepted.
+ */
 function nameOf(value: unknown): string | null | undefined {
   if (value === null) return null;
-  if (typeof value !== "string" || value === "" || value.length > MAX_NAME
-    || value !== value.trim() || CONTROL.test(value)) return undefined;
+  if (typeof value !== "string" || value === "" || [...value].length > MAX_NAME
+    || CONTROL.test(value)) return undefined;
   return value;
 }
 

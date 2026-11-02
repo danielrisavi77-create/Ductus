@@ -22,6 +22,16 @@ function codePoints(value: string): number {
   return [...value].length;
 }
 
+/**
+ * The text cut to `COMMENT_BODY_MAX` code points. A form counts like the
+ * server does: `maxLength` counts UTF-16 units, so it refused text of 1000
+ * emoji that the server accepts.
+ */
+export function limitBody(value: string): string {
+  const points = [...value];
+  return points.length <= COMMENT_BODY_MAX ? value : points.slice(0, COMMENT_BODY_MAX).join("");
+}
+
 function hasForbiddenChars(value: string): boolean {
   // Newline and tab are the only control characters allowed.
   return CONTROL.test(value.replace(/[\n\t]/g, "")) || BIDI.test(value);

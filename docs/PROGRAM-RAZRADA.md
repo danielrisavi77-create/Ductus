@@ -23,12 +23,12 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Cilj:** repo, CI, lokalni stog i pravila gradnje na kojima stoje sve ostale faze.
 
-**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 52 migracije i 50 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. Provjereno na `main` `34b94dab` (1. 11. 2026.): E2E na Chromiumu, Firefoxu i WebKitu dio je obveznog statusa „Local stack (compose.yaml)” na svakom PR-u (#1097, M0.3); skener zabranjenih izraza čita i tekst svojstava izvan JSX-a (#552, `247efb68`, M0.4); testovi pravila hookova prolaze na Linuxu u obveznom poslu „Lint, typecheck, test and build” (DAN-136, M0.7). **Djelomično:** kriterij „isti broj prenesenih testova kao u izvoru” vlasnik je zamijenio dokumentiranom jednakovrijednošću (#87 c.6547174354); karta je u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, a 24 nepokrivena slučaja vraćaju se kao testovi; ljuska još nije u konačnom vizualnom smjeru D-188.
+**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 52 migracije i 50 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. Provjereno na `main` `34b94dab` (1. 11. 2026.): E2E na Chromiumu, Firefoxu i WebKitu dio je obveznog statusa „Local stack (compose.yaml)” na svakom PR-u (#1097, M0.3); skener zabranjenih izraza čita i tekst svojstava izvan JSX-a (#552, `247efb68`, M0.4); testovi pravila hookova prolaze na Linuxu u obveznom poslu „Lint, typecheck, test and build” (DAN-136, M0.7). **Djelomično:** kriterij „isti broj prenesenih testova kao u izvoru” vlasnik je zamijenio dokumentiranom jednakovrijednošću (#87 c.6547174354); karta je u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, a od 273 izvorna slučaja 124 su pokrivena Ductus testom, 149 nema koda u Ductusu (dizajn je drukčiji ili funkcija još nije izgrađena), a 0 ih nedostaje kao test (provjereno na `main` `1df28c3`, 2. 11. 2026., DAN-376); ljuska još nije u konačnom vizualnom smjeru D-188.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M0.1 | Zapis prijenosa jezgre: broj testova u izvoru i na mainu (`docs/engineering/prijenos-jezgre-M0.1.md`) | P | | DAN-376 |
-| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776) | P | | DAN-71 |
+| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776); uvjet (mjere D-91 1, 2, 4 i 6 spojene) ispunjen 2. 11. 2026., dokaz u `docs/engineering/d91-mjere.md` | P | | DAN-71 |
 | M0.3 | E2E na Firefoxu i WebKitu kao obvezna provjera | P | | DAN-114, DAN-232; gotovo: #1097 (`34b94dab`) |
 | M0.4 | Skener zabranjenih izraza i za tekst izvan JSX-a | P | | DAN-133; gotovo: #552 (`247efb68`) |
 | M0.5 | Ljuska u konačnom vizualnom smjeru „papir i grafit”: tokeni, navigacija, dijalozi, mobilni raspored | F | D-188 (#972) | DAN-344 (#973, #974) |
@@ -138,11 +138,19 @@ ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M4.1 | Licenca i pravo redistribucije Lekte | V | | Owner queue |
-| M4.2 | U Lekti: generiran paket pravila (FPZG profili, oblik, citatni stilovi, naslovna stranica) s verzijom i testom zanošenja | P | M4.1 | DAN-392 (repo Lekta) |
+| M4.2 | U Lekti: generiran paket pravila (FPZG profili, oblik, citatni stilovi, naslovna stranica) s verzijom i testom zanošenja; izvodi ga Lekta sesija po Lektinim pravilima, uz Lekta tiket povezan s DAN-392, a Ductus orkestrator ne dodjeljuje Lekta pisce (D-224) | P | M4.1 | DAN-392 (repo Lekta) |
 | M4.3 | Ductus učitava paket s verzijom; kopija iz K-2 prelazi na paket | B | M4.2 | DAN-393 |
-| M4.4 | Provjera oblika nad dokumentom i panel Upute | F | M4.3, M5.3 | DAN-394 |
+| M4.3-P06 | Uvoz prvog paketa; spaja se samo na vlasnikov „Spoji n” (D-217) | B | M4.2, M4.3 | novo |
+| M4.4 | Provjera oblika nad dokumentom i „S-11 — Panel Upute i provjera oblika” | F | M4.3, M5.3 | DAN-394 |
 
-**Ekrani:** S-11 panel Upute (provjera oblika).
+**Ovisnosti i podjela (plan M4 iz paketa „M4 v1.0”, nije u repou; uz D-217 do D-224):**
+- Pin paketa na `assignment_version` ide iza M2.12-P01, M2.13-P01 i M2.4-P02.
+- Citatni stil ima jedan izvor, pin paketa; M2.12-P02 ne uvodi vlastiti.
+- Puna DOCX provjera dijeli se na P05a (ugovor, sada) i P05b (stvarna provjera, nakon M8.4); samo formalne provjere, informativne, nikad ne blokiraju predaju (D-222).
+- M4.3-P06 je uvoz prvog paketa; M4.0a (docs PR s ovim odlukama) i svaki uvoz paketa idu na „Spoji n” (D-217).
+- M4 ulazi u automatski red sa 25 koraka.
+
+**Ekrani:** S-11 — Panel Upute i provjera oblika. Napomena o koliziji naziva: u `docs/FEATURES.md` (r. 19) i u M5.12 oznaka S-11 znači uvodni vodič od dvije minute; puni naziv razlikuje ova dva ekrana.
 
 **Uvjet završetka:** izlazni kriterij M4 iz `docs/PROGRAM.md` (profili učitani s verzijom, test zanošenja u Lekti, provjera oblika javlja odstupanja na izmišljenim testnim radovima).
 
@@ -150,7 +158,7 @@ ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije
 
 **Cilj:** student u Ductusu napiše cijeli akademski rad u obliku fakulteta, sa svakim novim elementom zapisanim u evidenciji.
 
-**Gotovo na mainu:** shema s odlomkom, naslovom, stavkom popisa i blok-citatom (`src/domain/document/schema.ts`); popis naslova; opseg u traci stanja; identitet blokova; format odsječka v3 s izvorom citata (#904). **U tijeku:** citati i literatura (#866), traka alata (#976), ljuska editora (#980). **Nema:** fusnota, tablica, slika, sadržaja, naslovne stranice, citata i bibliografije kao čvorova, provjere DOI-ja, opsega po poglavlju, bilježnice izvora, traži i zamijeni, fokusa.
+**Gotovo na mainu:** shema s odlomkom, naslovom, stavkom popisa i blok-citatom (`src/domain/document/schema.ts`); popis naslova; opseg u traci stanja; identitet blokova; format odsječka v3 s izvorom citata (#904). **U tijeku:** citati i literatura (#866, samo obrazac; ne zatvara M5.1). Traka alata (#976), ljuska editora (#980) i dopuna elemenata iz prototipa (#344) zatvoreni su bez spajanja; M5.2 polazi od maina i odobrene reference. **Nema:** fusnota, tablica, slika, sadržaja, naslovne stranice, citata i bibliografije kao čvorova, provjere DOI-ja, opsega po poglavlju, bilježnice izvora, traži i zamijeni, fokusa.
 
 **V11 (D-201, D-203 t. 6):** prvo shema v2 (DAN-453, `Risk: critical`, ugovor i plan napada prije koda), s rezerviranim mjestom u formatu zapisa za prijedloge i izravne izmjene po D-34. U val 1 ulaze funkcije V11 koje pripadaju osnovnom editoru, komentarima, D-34 i izvozu; ostale idu u val 2 i 3 prema fazama M5 do M9. Koraci za funkcije V11 dodaju se s tiketima koje otvara orkestrator.
 
@@ -159,28 +167,38 @@ ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije
 | M5.1 | Citat u tekstu i bibliografija kao čvorovi dokumenta (D-191 t. 4) | F | | DAN-343 (#866) |
 | M5.2 | Traka alata, popis naslova i napredak naspram opsega; ljuska editora | F | M0.5 | DAN-211 (#976), DAN-214 (#980) |
 | M5.3 | Numerirani naslovi i sadržaj | F | | DAN-395 |
-| M5.4 | Naslovna stranica i izjava | F | M4.3 | DAN-403 |
+| M5.4 | Naslovna stranica: opća naslovnica bez paketa Lekte u valu 1, predložak iz paketa poslije; izjava tek u M7.5 (D-228) | F | M4.3 samo za predložak iz paketa | DAN-403 |
 | M5.5 | Fusnote | F | | DAN-404 |
-| M5.6 | Tablice, slike s opisima, popisi tablica i slika, pozivi na prikaze | F | | DAN-405 (#344) |
+| M5.6 | Tablice, slike s opisima, popisi tablica i slika, pozivi na prikaze; sve vrste slika uz sigurnu obradu i privatan spremnik (D-231) | F, B | | DAN-405 |
 | M5.7 | DOI i ISBN u bibliografskom zapisu (S-08); provjera „pronađeno / nije pronađeno” za DOI i URL (D-48) | B, F | M5.1 | DAN-406 |
 | M5.8 | Opseg po poglavlju (D-60) | F | M5.3 | DAN-407 |
 | M5.9 | Bilježnica izvora (D-59), kasnije uvoz iz Zotera | F, B | M5.1 | DAN-408 |
 | M5.10 | Hrvatski navodnici, traži i zamijeni, način fokusa | F | | DAN-409 |
 | M5.11 | Pravopis prema jeziku rada bez slanja teksta van (S-07) | F | M2.10 | DAN-410 |
-| M5.12 | Uvodni vodič od dvije minute (S-11 iz `docs/FEATURES.md`) | F | | DAN-418 |
+| M5.12 | Uvodni vodič od dvije minute (ekran S-45; S-11 iz `docs/FEATURES.md`) | F | | DAN-418 |
 | M5.13 | Nalaz identiteta blokova u editoru (samo ID): F-044 | F | | DAN-176 |
-| M5.14a | Panel Nacrt (S-14), ljuska kartice i prikaz Obrnuti nacrt, samo izvedeno iz dokumenta (`docs/design/PANEL-NACRT-SPEC.md`) | F | M5.2, M5.3, M0.5, M5.13; odgovori vlasnika na pitanja 3 (naziv kartice) i 9 (podjela M5.14a/b/c) iz specifikacije | novo |
-| M5.14b | Panel Nacrt: pohrana plana (pitanje rada, svrhe poglavlja, pojmovnik) kao zapis uz rad; tablica s RLS-om, RPC, pgTAP | B | M5.14a; odluke 1, 2 i 6 iz specifikacije | novo |
+| M5.14a | Panel Nacrt (S-14), ljuska kartice i prikaz Obrnuti nacrt, samo izvedeno iz dokumenta (`docs/design/PANEL-NACRT-SPEC.md`) | F | M5.2, M5.3, M0.5, M5.13; naziv kartice „Struktura” i prikaza „Prve rečenice” (D-234) | novo |
+| M5.14b | Panel Nacrt: pohrana plana (pitanje rada, svrhe poglavlja, pojmovnik) kao zapis uz rad; tablica s RLS-om, RPC, pgTAP | B | M5.14a, M3.11; pohrana, vidljivost i dorada prema D-234 | novo |
 | M5.14c | Panel Nacrt: prikazi Nit i Pojmovnik nad pohranom | F | M5.14b, M2.10 | novo |
 | M5.15 | Planer rada iz roka i opsega po poglavlju (S-06) | F | M5.8, spajanje #1030 (izuzetak u PRODUCT §5 pravilu 4: napredak po poglavlju i dani do roka) | novo |
 
 Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprodukcije prije spajanja (B-12).
 
-Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u program (#87 c.6543799262, t. 5); smještaj i podjela su PRIJEDLOG iz `docs/design/PANEL-NACRT-SPEC.md`, a pohrana plana, vidljivost mentoru i naziv kartice čekaju odgovore na pitanja 1, 2 i 3 iz te specifikacije, a podjela na odgovor na pitanje 9. **Nijedan od koraka M5.14a do M5.14c ne počinje prije tih odgovora** (M5.14a ne prije pitanja 3 i 9, M5.14b i M5.14c ne prije pitanja 1, 2 i 3); redak M5.14 u ovoj razradi je do tada samo okvir.
+Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u program (#87 c.6543799262, t. 5). Odgovori na pitanja 1, 2, 3, 4, 6 i 9 iz `docs/design/PANEL-NACRT-SPEC.md` §9 su D-234 (2. 11. 2026.): plan na poslužitelju izvan evidencije, mentor ga u valu 1 ne vidi, kartica „Struktura” i prikaz „Prve rečenice”, bez pragova, plan uređiv u doradi, podjela M5.14a/b/c prihvaćena. Pitanja 5, 7 i 8 ostaju PRIJEDLOG specifikacije; nisu bila uvjet za početak koraka.
 
-**Ekrani:** S-10 editor, S-13 Literatura i bilježnica izvora, S-14 panel Nacrt (`docs/design/PANEL-NACRT-SPEC.md`), S-45 prvi ulazak i vodič.
+**Ovisnosti i podjela (plan M5 iz paketa M5, nije u repou; uz D-225 do D-236):**
+- Shema v2 ima vlastiti ugovor i plan napada prije koda (M5.0-S1); prihvaća se s prvim novim čvorom, navodom (M5.1-P04). Novi radovi počinju na v2, v1 ostaje v1 (D-225).
+- Navod, izvori i bibliografija slijede D-226; trajni popis izvora i bilježnica izvora (M5.9) dijele isti model.
+- Val 1 i val 2 prema D-227: dva prihvata, M5 osnovno (20. 1. 2027.) i puni uvjet faze.
+- M5.4 se dijeli (D-228): opća naslovnica u valu 1, predložak iz paketa nakon M4.3; M8.4 ne čeka licencu Lekte.
+- M5.3 daje jedinu projekciju poglavlja po stabilnom id-u bloka; M5.8, M5.14 i M4.4 je koriste, bez druge projekcije. M4.3-P03 ide iza spajanja #866.
+- Numerirani popis (V11, D-201 t. 2) dobiva vlastiti korak M5.V1 kao čvor sheme v2.
+- Slike (D-231): ugovor i plan napada M5.6, zatim pohrana s RLS-om i spremnik; spremnik u lokalnom stogu i stagingu ide na „Spoji n”.
+- UI koraci M5 čekaju odobrene referentne slike (D-235); domena i backend ne čekaju.
 
-**Uvjet završetka:** izlazni kriterij M5 iz `docs/PROGRAM.md` (izmišljeni testni rad od 15.000 riječi sa svim elementima uređuje se bez gubitka; citati i bibliografija usklađeni); rekonstrukcija tog rada podudarna.
+**Ekrani:** S-10 editor, S-13 Literatura i bilježnica izvora, S-14 panel Nacrt, u sučelju kartica „Struktura” (`docs/design/PANEL-NACRT-SPEC.md`, D-234), S-45 prvi ulazak i vodič (S-11 iz `docs/FEATURES.md`).
+
+**Uvjet završetka:** izlazni kriterij M5 iz `docs/PROGRAM.md` (izmišljeni testni rad od 15.000 riječi sa svim elementima uređuje se bez gubitka; citati i bibliografija usklađeni; napredak studenta iz verzija, D-63); rekonstrukcija tog rada podudarna. Prihvat M5 osnovno (val 1) nije završetak faze (D-227).
 
 ## M6 Suradnja
 
@@ -360,7 +378,7 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno), i to u val 1 (D-199 t. 1). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
-5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik). Djelomično riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md` kao okvir. **Smještaj i naziv ostaju otvoreni:** pitanja 1, 2, 3 i 9 iz te specifikacije čekaju vlasnika i nijedan korak M5.14 ne počinje prije odgovora.
+5. ~~Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik).~~ Djelomično riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md` kao okvir. Riješeno 2. 11. 2026. (D-234): smještaj, pohrana, vidljivost, naziv i podjela (pitanja 1, 2, 3, 4, 6 i 9). Pitanja 5, 7 i 8 iz specifikacije ostaju PRIJEDLOG.
 6. D-63 (napredak i „preskočena stanka”) prema D-56 i pravilu 4 (DAN-104).
 7. Kriteriji popisa „tko treba pomoć” (N-12, DAN-102).
 8. ~~RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).~~ Riješeno 2. 11. 2026. (D-204): mentorstvo nastaje kad nastavnik odobri studentov rad; administrator ga ne dodjeljuje.
