@@ -131,7 +131,7 @@ describe("signPendingReceipt", () => {
     ["K2 lone surrogate escape", RECEIPT, TEXT.replace('"doc-1"', '"doc-\\ud800"'), "receipt_malformed"],
     ["K3 not its JCS form", RECEIPT, JSON.stringify(PAYLOAD, null, 1), "not_canonical"],
     ["K3 trailing newline", RECEIPT, `${TEXT}\n`, "not_canonical"],
-    ["K3 duplicate key that parsing drops", RECEIPT, TEXT.replace("{", '{"documentId":"doc-9",'), "not_canonical"],
+    ["K3 duplicate key that parsing drops", RECEIPT, `{"documentId":"doc-9",${TEXT.slice(1)}`, "not_canonical"],
     ["K4 receipt v1", RECEIPT, canonicalizeJcs({ ...PAYLOAD, receiptSchema: "ductus-evidence-receipt-v1" }), "unsupported_schema"],
   ];
   it.each(refused)("%s is refused before the signer is asked", async (_, receiptId, text, reason) => {
