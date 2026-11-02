@@ -747,6 +747,108 @@ describe("the joiner inside a name, class by class", () => {
   });
 });
 
+// DAN-484, review FAIL on #1407 (c.6589873844), contract #1091 c.6590021171:
+// another entry is read from its own text, not from our first family name, and
+// every reading is written as the domain writes an in-text citation. The same
+// written form, "(Babić i Kovač, 2021)" of one author and of two, leaves the
+// in-text citations as written. Organisations are entries written by hand.
+describe("the formatted in-text form, class by class", () => {
+  type Name = readonly [family: string, given: string];
+  const work = (names: readonly Name[], title: string, year = 2021, letter = ""): Source => ({
+    ...sourceOf(BOOK), title, year,
+    authors: names.map(([family, given]) => ({ kind: "person" as const, family, given })),
+    ...(letter === "" ? {} : { yearSuffix: letter }),
+  });
+  const line = (source: Source) => entryText(source);
+  const B: Name = ["Babić", "Ana"];
+  const K: Name = ["Kovač", "Luka"];
+  const H: Name = ["Horvat", "Ivo"];
+  const BIK: Name = ["Babić i Kovač", "Iva"];
+  const base = (names: readonly Name[]) => {
+    const first = work(names, "Prva knjiga");
+    return { first, work: work(names, "Druga knjiga"), cited: `T. ${citationText(first, "")} i ${citationText(first, "9")}.` };
+  };
+  const ONE_BIK = base([BIK]);
+  const PAIR = base([B, K]);
+  const TRIO = base([B, K, H]);
+  const ONE_SUR = base([["Babić i sur.", "Iva"]]);
+  const ONE_ETAL = base([["Babić et al.", "Iva"]]);
+  const ONE_COMMA = base([["Babić, Kovač", "Iva"]]);
+  const ONE_B = base([["Babić", "Iva"]]);
+  const ONE_K = base([["Kovač", "Iva"]]);
+  const ONE_BK = base([["BK", "Iva"]]);
+
+  type Row = { klass: string; base: ReturnType<typeof base>; other: string; promoted: boolean };
+  const rows: Row[] = [
+    { klass: "C1 one author with the joiner in the family name, against a pair (the finding)", base: ONE_BIK, other: line(work([B, K], "Treća")), promoted: false },
+    { klass: "C2 a pair, against one author with the joiner in the family name", base: PAIR, other: line(work([BIK], "Treća")), promoted: false },
+    { klass: "C3 one author whose family name ends in i sur., against three", base: ONE_SUR, other: line(work([B, K, H], "Treća")), promoted: false },
+    { klass: "C4 three authors, against one whose family name ends in i sur.", base: TRIO, other: line(work([["Babić i sur.", "Ema"]], "Treća")), promoted: false },
+    { klass: "C5 one author with et al., against three: the style writes i sur.", base: ONE_ETAL, other: line(work([B, K, H], "Treća")), promoted: true },
+    { klass: "C6 one author with et al., against the same family name", base: ONE_ETAL, other: line(work([["Babić et al.", "Ema"]], "Treća")), promoted: false },
+    { klass: "C7 a comma in our family name, against an organisation of that name", base: ONE_COMMA, other: "Babić, Kovač (2021) Ručni unos.", promoted: false },
+    { klass: "C8 a comma in our family name, against a pair", base: ONE_COMMA, other: line(work([B, K], "Treća")), promoted: true },
+    { klass: "C9 a pair, against a comma in a family name: not read, stays as written", base: PAIR, other: line(work([["Babić, Kovač", "Ema"]], "Treća")), promoted: false },
+    { klass: "C10 one author with the joiner, against another pair", base: ONE_BIK, other: line(work([B, H], "Treća")), promoted: true },
+    { klass: "C11 a pair, against one author with the joiner in another year", base: PAIR, other: line(work([BIK], "Treća", 2020)), promoted: true },
+    { klass: "C12 one author with the joiner, against the pair with a letter", base: ONE_BIK, other: line(work([B, K], "Treća", 2021, "a")), promoted: false },
+    { klass: "C13 a pair, against an organisation named as the pair is cited", base: PAIR, other: "Babić i Kovač (2021) Ručni unos.", promoted: false },
+    { klass: "C14 one author, against a pair whose second is ours", base: ONE_K, other: line(work([B, K], "Treća")), promoted: true },
+    { klass: "C15 one author, against an organisation of that acronym", base: ONE_BK, other: "BK (Babić i Kovač) (2021) Ručni unos.", promoted: false },
+    { klass: "C16 one author, against one whose family name starts with ours and the joiner", base: ONE_B, other: line(work([BIK], "Treća")), promoted: true },
+  ];
+
+  it.each(rows)("class $klass", ({ base: b, other, promoted }) => {
+    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, { text: other }]);
+    atFirstEnd(editor);
+    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe("b");
+    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
+    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
+    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
+    expect(lines).toContain(other);
+    editor.destroy();
+  });
+
+  it("the forms the rows rest on", () => {
+    expect(citationText(ONE_BIK.first, "")).toBe("(Babić i Kovač, 2021)");
+    expect(citationText(PAIR.first, "")).toBe("(Babić i Kovač, 2021)");
+    expect(citationText(ONE_SUR.first, "")).toBe("(Babić i sur., 2021)");
+    expect(citationText(TRIO.first, "")).toBe("(Babić i sur., 2021)");
+    expect(citationText(ONE_COMMA.first, "")).toBe("(Babić, Kovač, 2021)");
+    expect(line(work([BIK], "Treća"))).toBe("Babić i Kovač, Iva (2021) Treća. Zagreb: Primjer.");
+  });
+
+  it("regression c.6589873844: X of Babić and Kovač cited, then two works of Babić i Kovač only in Literatura", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atFirstEnd(editor);
+    const x = sourceOf({ ...BOOK, family: "Babić", given: "Ana", family2: "Kovač", given2: "Luka" });
+    writeSource(editor, x, "", true);
+    const y = { ...BOOK, family: "Babić i Kovač", given: "Iva" };
+    const y1 = sourceOf({ ...y, title: "Prva" });
+    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
+    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Babić i Kovač, 2021)");
+    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
+    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
+    editor.destroy();
+  });
+
+  it("regression c.6589945737: X of Horvat i Kovač cited, then two works of Horvat and Kovač only in Literatura", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atFirstEnd(editor);
+    const x = sourceOf({ ...BOOK, family: "Horvat i Kovač", given: "Marko" });
+    writeSource(editor, x, "", true);
+    const y = { ...BOOK, family: "Horvat", given: "Ana", family2: "Kovač", given2: "Luka" };
+    const y1 = sourceOf({ ...y, title: "Prva" });
+    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
+    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Horvat i Kovač, 2021)");
+    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
+    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
+    editor.destroy();
+  });
+});
+
 // DAN-484 point 2: what the form names live (tried = false) and after a click,
 // over every field of both kinds. A limit counts code points; nothing is cut.
 describe("the form's errors, field by field", () => {

@@ -295,6 +295,61 @@ function sharesCitation(text: string, work: Source): boolean {
   });
 }
 
+/** What an author written as `item` in Literatura could be cited as. */
+function citedReadings(item: string): string[] {
+  const readings = [item];
+  // An organisation with its acronym, "BK (Babić i Kovač)", is cited "BK".
+  const acronym = /^(.+?) \([^()]*\)$/.exec(item);
+  if (acronym !== null) readings.push(acronym[1]!);
+  // A person is cited by the family name, before the comma of the given name:
+  // a comma may stand in a family name ("Babić, Kovač, Iva"), not in a given
+  // name, else every list of authors would read as one person.
+  const comma = item.lastIndexOf(", ");
+  if (comma !== -1) readings.push(item.slice(0, comma));
+  return readings;
+}
+
+/**
+ * Whether an entry, read in any way its names allow, gives the same in-text
+ * citation as the work, written as the domain writes it: "Babić, Ana i Kovač,
+ * Luka (2021)" and "Babić i Kovač, Iva (2021)" are both "(Babić i Kovač,
+ * 2021)" (review on #1407, c.6589873844). Unlike `sharesCitation`, it does
+ * not ask the entry to open with the work's first author: a joiner, comma or
+ * "i sur." inside a family name can move where the first author ends. One or
+ * two authors are read in every split, organisations included; three or more
+ * as a first author, then persons. A reading counts only when it gives the
+ * same text, so this can only keep citations as written, never letter more.
+ */
+function sharesWrittenForm(text: string, work: Source): boolean {
+  const year = /\((\d{4})([^)]*)\)/.exec(text);
+  if (year === null || year[1] !== String(work.year) || !/^[a-z]?$/.test(year[2]!)) return false;
+  const names = text.slice(0, year.index).trimEnd();
+  const { authorJoiner } = fpzgCitationStyle.bibliography;
+  const readings: string[][] = citedReadings(names).map((name) => [name]);
+  for (let at = names.indexOf(authorJoiner); at !== -1; at = names.indexOf(authorJoiner, at + 1)) {
+    const later = citedReadings(names.slice(at + authorJoiner.length));
+    for (const first of citedReadings(names.slice(0, at))) readings.push(...later.map((name) => [first, name]));
+  }
+  // Three or more: the first author ends at a comma (a person, then the given
+  // name) or before the list goes on (an organisation); persons follow.
+  for (let at = names.indexOf(", "); at !== -1; at = names.indexOf(", ", at + 1)) {
+    const head = names.slice(0, at);
+    for (const later of laterFamilies(names.slice(at + 2)) ?? []) readings.push([head, ...later]);
+    for (const first of citedReadings(head)) {
+      for (const later of laterFamilies(`-${names.slice(at)}`) ?? []) readings.push([first, ...later]);
+    }
+  }
+  const ours = citationText(work, "");
+  return readings.some((reading) => {
+    try {
+      const authors = reading.map((family) => ({ kind: "person" as const, family, given: "-" }));
+      return citationText({ ...work, authors }, "") === ours;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /**
  * DAN-484: the letter a work takes in the year of its citation and entry
  * (FPZG rule "same-year": 2021a, 2021b). The entries of the same authors and
@@ -348,7 +403,8 @@ export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
     // student wrote them. Works of the group are told apart by their letters.
     const group = new Set(members.map((m) => m.index));
     const sameForm = blocks.slice(range.start + 1, range.end)
-      .some((b, i) => !group.has(range.start + 1 + i) && sharesCitation(b.text.trim(), base));
+      .some((b, i) => !group.has(range.start + 1 + i)
+        && (sharesCitation(b.text.trim(), base) || sharesWrittenForm(b.text.trim(), base)));
     if (!sameForm) {
       blocks.forEach((block, index) => {
         if (index > range.start && index < range.end) return;
