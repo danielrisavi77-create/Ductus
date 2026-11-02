@@ -35,6 +35,7 @@ export default function TwoSides() {
     content: `<p>${l.sampleText}</p>`,
     editable: false,
     immediatelyRender: false,
+    injectCSS: false, // app/prosemirror.css (DAN-489)
     editorProps: { attributes: () => attributes(l.mentorLabel, true) },
   });
   mentorRef.current = mentor;
@@ -43,6 +44,7 @@ export default function TwoSides() {
     extensions: createEditorExtensions(l.placeholder),
     content: `<p>${l.sampleText}</p>`,
     immediatelyRender: false,
+    injectCSS: false, // app/prosemirror.css (DAN-489)
     editorProps: { attributes: () => attributes(l.editorLabel, false) },
     onUpdate: ({ editor }) => {
       mentorRef.current?.commands.setContent(editor.getJSON(), { emitUpdate: false });
