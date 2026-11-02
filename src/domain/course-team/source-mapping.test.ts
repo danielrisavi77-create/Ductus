@@ -170,6 +170,27 @@ describe("mapTeachingTeamSource (M2.7-P05)", () => {
     expect(okResult(source([other, known]))).toEqual({ ok: true, candidates: [], issues: issues(0) });
   });
 
+  it("R5: a second holder dropped by R7 is still a conflict, in either order", () => {
+    const known = holder("K-ALFA", "sint-osoba-1");
+    const withGroup = { ...holder("K-ALFA", "sint-osoba-2"), groupName: "G" };
+    const issues = (groupRow: number) =>
+      [
+        { row: 1 - groupRow, code: "holder_conflict" },
+        { row: groupRow, code: "holder_conflict" },
+        { row: groupRow, code: "invalid_group_name" },
+      ].sort((a, b) => a.row - b.row || (a.code < b.code ? -1 : 1));
+    expect(okResult(source([known, withGroup]))).toEqual({ ok: true, candidates: [], issues: issues(1) });
+    expect(okResult(source([withGroup, known]))).toEqual({ ok: true, candidates: [], issues: issues(0) });
+  });
+
+  it("R5: the same holder dropped by R7 is no conflict, and R7 still drops that row", () => {
+    const known = holder("K-ALFA", "sint-osoba-1");
+    const withGroup = { ...known, groupName: "G" };
+    const candidates = [{ kind: "course_holder", courseId: C1, accountId: A1, confirmation: "required" }];
+    expect(okResult(source([known, withGroup]))).toEqual({ ok: true, candidates, issues: [{ row: 1, code: "invalid_group_name" }] });
+    expect(okResult(source([withGroup, known]))).toEqual({ ok: true, candidates, issues: [{ row: 0, code: "invalid_group_name" }] });
+  });
+
   it("R6: a repeated row gives one candidate and a duplicate issue", () => {
     const result = okResult(
       source([holder("K-ALFA", "sint-osoba-1"), holder("K-ALFA", "sint-osoba-1"), groupTeacher("K-ALFA", "G", "sint-osoba-2"), groupTeacher("K-ALFA", "G", "sint-osoba-2")]),

@@ -146,23 +146,23 @@ export function mapTeachingTeamSource(input: unknown, context: TeachingTeamMappi
   const issues: TeachingTeamIssue[] = [];
   const resolved: { row: number; candidate: TeachingTeamCandidate }[] = [];
   // R5: holders per course by source identity (issuer, uniqueId), counted
-  // before unknown accounts and foreign issuers are dropped.
+  // before R7, unknown accounts and foreign issuers drop a row.
   const holderRows: { row: number; courseId: string }[] = [];
   const holders = new Map<string, Set<string>>();
   rows.forEach((row, index) => {
-    const needsGroup = row.role === "group_teacher";
-    if (needsGroup !== (row.groupName !== undefined) || (row.groupName !== undefined && !isValidGroupName(row.groupName))) {
-      issues.push({ row: index, code: "invalid_group_name" });
-      return;
-    }
     const courseId = context.courses.get(row.courseKey);
-    if (courseId === undefined) return void issues.push({ row: index, code: "unknown_course" });
-    if (row.role === "holder") {
+    if (row.role === "holder" && courseId !== undefined) {
       const set = holders.get(courseId) ?? new Set<string>();
       set.add(JSON.stringify([row.issuer, row.uniqueId]));
       holders.set(courseId, set);
       holderRows.push({ row: index, courseId });
     }
+    const needsGroup = row.role === "group_teacher";
+    if (needsGroup !== (row.groupName !== undefined) || (row.groupName !== undefined && !isValidGroupName(row.groupName))) {
+      issues.push({ row: index, code: "invalid_group_name" });
+      return;
+    }
+    if (courseId === undefined) return void issues.push({ row: index, code: "unknown_course" });
     if (row.issuer !== context.issuer) return void issues.push({ row: index, code: "foreign_issuer" });
     const accountId = context.accounts.get(row.uniqueId);
     if (accountId === undefined) return void issues.push({ row: index, code: "unknown_account" });
