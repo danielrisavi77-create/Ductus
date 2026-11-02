@@ -24,6 +24,10 @@ const CRITICAL_SAMPLES = [
   ".cc-safety-net/rules/rule.json",
   ".cc-safety-net/rules/ductus-rules/rulebook.json",
   "osv-scanner.toml",
+  // DAN-319: the Squawk pin, its rule exceptions and its fixtures.
+  "scripts/engineering/squawk-migrations.mjs",
+  "scripts/engineering/squawk-fixtures/good.sql",
+  "scripts/engineering/squawk-fixtures/bad.sql",
   "package.json",
   "pnpm-workspace.yaml",
   ".npmrc",
