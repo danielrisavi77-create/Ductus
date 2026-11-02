@@ -78,6 +78,17 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pool?.end();
+  // pool.end() resolves before its sockets are closed; a forced drop that
+  // reaches a connection still closing ends it with 57P01, an error nobody
+  // listens for any more. So the drop waits until no backend is left.
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const { rows } = await admin.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1",
+      [name],
+    );
+    if (rows[0]?.n === 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
   await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
   await admin.end();
 });
