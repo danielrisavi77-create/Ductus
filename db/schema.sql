@@ -2401,6 +2401,20 @@ $$;
 
 
 --
+-- Name: works_started_last(uuid, uuid[], uuid[]); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.works_started_last(p_institution_id uuid, p_assignment_ids uuid[], p_student_ids uuid[]) RETURNS timestamp with time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT max(p.created_at) FROM evidence.project p
+   WHERE p.institution_id = p_institution_id AND p.assignment_id = ANY (p_assignment_ids)
+     AND p.principal_id = ANY (p_student_ids)
+$$;
+
+
+--
 -- Name: acceptance_retry_matches(uuid, text, uuid, bigint, text, text, text); Type: FUNCTION; Schema: evidence; Owner: -
 --
 
@@ -3312,17 +3326,26 @@ CREATE FUNCTION institution.assign_group_student(p_group_id uuid, p_student_id u
 DECLARE
   actor record;
   v_course uuid;
+  v_last timestamptz;
+  v_from timestamptz;
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   SELECT * INTO actor FROM institution.require_course_teacher(v_course);
-  IF NOT EXISTS (
-       SELECT 1 FROM institution.course_member m
-       WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
-     ) THEN
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  PERFORM 1 FROM institution.course_member m
+   WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+   FOR UPDATE;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by)
-  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id)
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT s.id FROM institution.assignment s
+                     WHERE s.course_id = v_course AND s.institution_id = actor.institution_id),
+              ARRAY[p_student_id]);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id, v_from)
   ON CONFLICT (course_id, user_id) WHERE valid_to IS NULL DO NOTHING;
   IF NOT FOUND AND NOT EXISTS (
        SELECT 1 FROM institution.seminar_group_member s
@@ -3345,14 +3368,32 @@ CREATE FUNCTION institution.assign_group_teacher(p_group_id uuid, p_teacher_id u
 DECLARE
   actor record;
   v_course uuid;
+  v_students uuid[];
+  v_last timestamptz;
+  v_from timestamptz;
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   SELECT * INTO actor FROM institution.require_course_teacher(v_course);
   IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by)
-  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id)
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  SELECT array_agg(l.user_id) INTO v_students
+    FROM (SELECT m.user_id
+            FROM institution.course_member m
+            JOIN institution.seminar_group_member s ON s.course_id = m.course_id AND s.user_id = m.user_id
+           WHERE s.group_id = p_group_id AND s.valid_to IS NULL
+             AND m.course_id = v_course AND m.role = 'student' AND m.member_to IS NULL
+           ORDER BY m.id
+             FOR UPDATE OF m) l;
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT a.id FROM institution.assignment a
+                     WHERE a.course_id = v_course AND a.institution_id = actor.institution_id),
+              v_students);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id, v_from)
   ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
 END
 $$;

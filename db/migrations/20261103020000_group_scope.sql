@@ -35,6 +35,20 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION collaboration.work_started_at(uuid, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION collaboration.work_started_at(uuid, uuid, uuid) TO ductus_identity;
+
+-- The latest start of a work of the given students on the given assignments,
+-- or NULL while there is none; read by the two assign functions below after
+-- their locks (#1372, repair round 3). Owned and granted as work_started_at.
+CREATE FUNCTION collaboration.works_started_last(p_institution_id uuid, p_assignment_ids uuid[], p_student_ids uuid[])
+RETURNS timestamptz
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+  SELECT max(p.created_at) FROM evidence.project p
+   WHERE p.institution_id = p_institution_id AND p.assignment_id = ANY (p_assignment_ids)
+     AND p.principal_id = ANY (p_student_ids)
+$$;
+REVOKE ALL ON FUNCTION collaboration.works_started_last(uuid, uuid[], uuid[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION collaboration.works_started_last(uuid, uuid[], uuid[]) TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
 -- True while the actor of the session holds a confirmed and unrevoked
@@ -73,9 +87,12 @@ REVOKE ALL ON FUNCTION institution.actor_group_student(uuid, uuid) FROM PUBLIC;
 -- student's place in the group and the actor's place as its teacher. A work
 -- started before that, in another group, before a handover or before the
 -- actor's earlier place ended, stays closed to her until an explicit transfer
--- (not in this migration). Every time is the server's now() of the
--- transaction that wrote the row, so the answer follows the recorded history
--- and needs no lock. A student with no work yet has nothing earlier.
+-- (not in this migration). A work's start is the now() of the transaction
+-- that wrote it; a place starts at its own now(), or just after a work
+-- committed before it whose transaction began later, which
+-- assign_group_student and assign_group_teacher below serialise with
+-- app.open_student_work (#1372, repair round 3). So the comparison follows
+-- the order of commits, not only the clocks. A student with no work yet has nothing earlier.
 CREATE FUNCTION institution.actor_group_work(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
 LANGUAGE sql STABLE SET search_path = ''
 AS $$
@@ -242,6 +259,91 @@ BEGIN
 END
 $$;
 
+-- As 20261102160000, with the start of the place after every work of the
+-- student committed before it (#1372, repair round 3). The group row is held
+-- first, so a teacher assigned to the same group waits, and then the
+-- student's open course membership FOR UPDATE: app.open_student_work holds
+-- that row FOR SHARE until it commits (app.lock_student_assignment), so a
+-- work in progress commits first and a later one waits for this one. A work
+-- whose transaction began after this one, and so after now(), and committed
+-- before the lock was granted, moves the start one microsecond past it; any
+-- other committed work began at or before now() and is compared with now() as
+-- before, equal not earlier (also a work of this very transaction).
+CREATE OR REPLACE FUNCTION institution.assign_group_student(p_group_id uuid, p_student_id uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+  v_last timestamptz;
+  v_from timestamptz;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  PERFORM 1 FROM institution.course_member m
+   WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT s.id FROM institution.assignment s
+                     WHERE s.course_id = v_course AND s.institution_id = actor.institution_id),
+              ARRAY[p_student_id]);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id, v_from)
+  ON CONFLICT (course_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+  IF NOT FOUND AND NOT EXISTS (
+       SELECT 1 FROM institution.seminar_group_member s
+       WHERE s.group_id = p_group_id AND s.user_id = p_student_id AND s.valid_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+END
+$$;
+
+-- As 20261102160000, with the start of the place after every work of the
+-- group's open members committed before it: the group row first, then their
+-- open course memberships FOR UPDATE in the order of their ids, as above.
+CREATE OR REPLACE FUNCTION institution.assign_group_teacher(p_group_id uuid, p_teacher_id uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+  v_students uuid[];
+  v_last timestamptz;
+  v_from timestamptz;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  SELECT array_agg(l.user_id) INTO v_students
+    FROM (SELECT m.user_id
+            FROM institution.course_member m
+            JOIN institution.seminar_group_member s ON s.course_id = m.course_id AND s.user_id = m.user_id
+           WHERE s.group_id = p_group_id AND s.valid_to IS NULL
+             AND m.course_id = v_course AND m.role = 'student' AND m.member_to IS NULL
+           ORDER BY m.id
+             FOR UPDATE OF m) l;
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT a.id FROM institution.assignment a
+                     WHERE a.course_id = v_course AND a.institution_id = actor.institution_id),
+              v_students);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id, v_from)
+  ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+END
+$$;
+
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA institution, app, collaboration FROM ductus_identity;
@@ -249,8 +351,8 @@ REVOKE USAGE, CREATE ON SCHEMA collaboration FROM ductus_evidence;
 
 -- migrate:down
 -- Local only: staging and production migrate forward (docs/BACKEND.md 6).
--- The definitions of 20261017120000, 20261102200000, 20261101150000 and
--- 20261028140000.
+-- The definitions of 20261017120000, 20261102200000, 20261101150000,
+-- 20261028140000 and 20261102160000.
 SET LOCAL ROLE ductus_migrator;
 GRANT CREATE ON SCHEMA institution, app, collaboration TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
@@ -361,6 +463,51 @@ BEGIN
 END
 $$;
 
+CREATE OR REPLACE FUNCTION institution.assign_group_teacher(p_group_id uuid, p_teacher_id uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by)
+  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id)
+  ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION institution.assign_group_student(p_group_id uuid, p_student_id uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  IF NOT EXISTS (
+       SELECT 1 FROM institution.course_member m
+       WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by)
+  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id)
+  ON CONFLICT (course_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+  IF NOT FOUND AND NOT EXISTS (
+       SELECT 1 FROM institution.seminar_group_member s
+       WHERE s.group_id = p_group_id AND s.user_id = p_student_id AND s.valid_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+END
+$$;
+
 DROP FUNCTION institution.actor_group_work(uuid, uuid);
 DROP FUNCTION institution.actor_group_student(uuid, uuid);
 
@@ -368,3 +515,4 @@ RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA institution, app, collaboration FROM ductus_identity;
 DROP FUNCTION collaboration.work_started_at(uuid, uuid, uuid);
+DROP FUNCTION collaboration.works_started_last(uuid, uuid[], uuid[]);

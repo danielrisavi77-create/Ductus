@@ -71,18 +71,22 @@ SELECT is(
                      || ' ' || array_to_string(p.proconfig, ','), '; ' ORDER BY p.oid::regprocedure::text)
      FROM pg_proc p
     WHERE p.oid IN ('collaboration.work_started_at(uuid, uuid, uuid)'::regprocedure,
+                    'collaboration.works_started_last(uuid, uuid[], uuid[])'::regprocedure,
                     'institution.actor_group_work(uuid, uuid)'::regprocedure)),
   'collaboration.work_started_at(uuid,uuid,uuid) ductus_evidence true search_path=""; '
+  || 'collaboration.works_started_last(uuid,uuid[],uuid[]) ductus_evidence true search_path=""; '
   || 'institution.actor_group_work(uuid,uuid) ductus_identity false search_path=""',
-  'work_started_at is a definer function of the evidence role, actor_group_work an invoker one of the identity role');
+  'work_started_at and works_started_last are definer functions of the evidence role, actor_group_work an invoker one of the identity role');
 SELECT is_empty(
   $$ SELECT f || ' ' || r
-       FROM unnest(ARRAY['collaboration.work_started_at(uuid, uuid, uuid)', 'institution.actor_group_work(uuid, uuid)']) f,
+       FROM unnest(ARRAY['collaboration.work_started_at(uuid, uuid, uuid)', 'collaboration.works_started_last(uuid, uuid[], uuid[])',
+                         'institution.actor_group_work(uuid, uuid)']) f,
             unnest(ARRAY['ductus_app', 'ductus_evidence', 'ductus_worker', 'ductus_auth', 'public']) r
       WHERE has_function_privilege(r, f, 'EXECUTE')
         AND NOT (f LIKE 'collaboration.%' AND r = 'ductus_evidence') $$,
-  'no web, worker or auth role calls either helper');
+  'no web, worker or auth role calls any of the helpers');
 SELECT ok(has_function_privilege('ductus_identity', 'collaboration.work_started_at(uuid, uuid, uuid)', 'EXECUTE')
+          AND has_function_privilege('ductus_identity', 'collaboration.works_started_last(uuid, uuid[], uuid[])', 'EXECUTE')
           AND NOT has_table_privilege('ductus_identity', 'evidence.project', 'SELECT'),
   'the identity role gets the start of a work, and still no right on the evidence tables');
 SELECT matches(pg_temp.ask('vesna', format($$ SELECT collaboration.work_started_at(%L, %L, %L)::text $$,
@@ -209,6 +213,54 @@ INSERT INTO expect VALUES
   ('reassigned', 4, '6 owner', 'boris', 'boris', 'owner'),
   ('reassigned', 5, '6 course teacher', 'vesna', 'boris', 'teacher');
 SELECT check_stage FROM pg_temp.check_stage('reassigned') check_stage;
+
+-- Istodobnost (#1372, repair round 3; Codex PRRT_kwDOU54BVs6y2TNj): the
+-- test runs in one transaction, at the one instant now() = t0, so it stands
+-- for the transaction of a change that began at t0. A work whose own
+-- transaction began after t0 and committed before the change took its lock
+-- has a later start than now(); the change must still come after it.
+-- Without the repair the place starts at t0 and the earlier work opens.
+-- Two real transactions, with the wait on the lock: the integration test
+-- tests/integration/group-move-race.integration.test.ts.
+-- Class 3, after: Dora started her work one second after t0 and committed
+-- it; Vesna then adds her to G2 in the transaction of t0.
+UPDATE evidence.project SET created_at = now() + interval '1 second' WHERE id = 'project-doc-dora-z1';
+SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g2}, {dora}) $$), 'ok',
+  'Dora joins G2 after her work, started later than the change began, was committed');
+SELECT ok((SELECT g.valid_from FROM institution.seminar_group_member g
+            WHERE g.user_id = pg_temp.id('dora') AND g.valid_to IS NULL)
+          = now() + interval '1 second' + interval '1 microsecond',
+  'her place starts one microsecond after that work, not at t0');
+INSERT INTO expect VALUES
+  ('concurrent', 1, '3 after the start of work', 'nina', 'dora', '-'),
+  ('concurrent', 2, '3 after the start of work', 'marko', 'dora', '-'),
+  ('concurrent', 3, '6 course teacher', 'vesna', 'dora', 'teacher'),
+  ('concurrent', 4, '6 owner', 'dora', 'dora', 'owner');
+SELECT check_stage FROM pg_temp.check_stage('concurrent') check_stage;
+-- Class 6, a handover: a minute on, Boris starts a work one second after the
+-- t0 of a handover and commits it; it is Nina's while her place is earlier.
+-- The handover (end and assign again) in the transaction of t0 comes after
+-- that work, so it closes to her as any work before her place.
+SELECT pg_temp.tick();
+UPDATE evidence.project SET created_at = now() + interval '2 seconds' WHERE id = 'project-doc-boris-z1';
+INSERT INTO expect VALUES
+  ('before handover', 1, '1', 'nina', 'boris', 'teacher');
+SELECT check_stage FROM pg_temp.check_stage('before handover') check_stage;
+SELECT is(pg_temp.ask('vesna', v.sql), 'ok', v.what)
+FROM (VALUES
+  (1, $$ SELECT 'ok' FROM institution.end_group_assignment({g2}, {nina}) $$, 'Vesna ends Nina''s place in G2'),
+  (2, $$ SELECT 'ok' FROM institution.assign_group_teacher({g2}, {nina}) $$, 'and assigns her to G2 again')
+) AS v (n, sql, what) ORDER BY v.n;
+SELECT ok((SELECT t.valid_from FROM institution.seminar_group_teacher t
+            WHERE t.user_id = pg_temp.id('nina') AND t.valid_to IS NULL)
+          = now() + interval '2 seconds' + interval '1 microsecond',
+  'her new place starts one microsecond after the latest work of the group''s members');
+INSERT INTO expect VALUES
+  ('handover', 1, '6 handover after the start of work', 'nina', 'boris', '-'),
+  ('handover', 2, '6 handover after the start of work', 'nina', 'dora', '-'),
+  ('handover', 3, '6 owner', 'boris', 'boris', 'owner'),
+  ('handover', 4, '6 course teacher', 'vesna', 'boris', 'teacher');
+SELECT check_stage FROM pg_temp.check_stage('handover') check_stage;
 
 SELECT * FROM finish();
 ROLLBACK;
