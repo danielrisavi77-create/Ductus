@@ -68,7 +68,7 @@ $$;
 -- The helpers: owned as the contract says, not callable by the web role.
 SELECT is(
   (SELECT string_agg(p.oid::regprocedure::text || ' ' || p.proowner::regrole::text || ' ' || p.prosecdef::text
-                     || ' ' || array_to_string(p.proconfig, ','), '; ' ORDER BY p.oid::regprocedure::text)
+                     || ' ' || array_to_string(p.proconfig, ','), '; ' ORDER BY p.oid::regprocedure::text COLLATE "C")
      FROM pg_proc p
     WHERE p.oid IN ('collaboration.work_started_at(uuid, uuid, uuid)'::regprocedure,
                     'collaboration.works_started_last(uuid, uuid[], uuid[])'::regprocedure,
