@@ -365,9 +365,14 @@ function prevailing({ current, carried }) {
 // also with markdown or spaces around its name, that names FAIL or BLOCK (or
 // BLOK) makes the comment negative. Read here only to find a negative.
 const NEGATIVE_WORD_RE = /\b(FAIL|BLOC?K)[A-Z]*\b/;
-const DECORATION = "[\\s*_`>~+-]*";
+// One literal pattern per verdict field, with markdown or spaces around its name.
+const VERDICT_LINE_RE = new Map([
+  ["Review-Verdict", /^[\s*_`>~+-]*Review-Verdict[\s*_`>~+-]*:(.*)$/i],
+  ["QA-Verdict", /^[\s*_`>~+-]*QA-Verdict[\s*_`>~+-]*:(.*)$/i],
+]);
 function negativeWord(body, name) {
-  const line = new RegExp(`^${DECORATION}${name}${DECORATION}:(.*)$`, "i");
+  const line = VERDICT_LINE_RE.get(name);
+  if (!line) throw new Error(`No verdict line pattern for ${name}.`);
   for (const text of metadataLines(body)) {
     const word = NEGATIVE_WORD_RE.exec(line.exec(text)?.[1]?.toUpperCase() ?? "")?.[1];
     if (word) return word === "FAIL" ? "FAIL" : "BLOCK";
