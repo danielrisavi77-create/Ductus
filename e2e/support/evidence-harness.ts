@@ -148,8 +148,14 @@ export type CommitBody = {
  */
 export type Answer = "accept" | "hang" | "abort" | "chain_conflict" | "tamper";
 
-export function receiptKey(keyId: string) {
-  const pair = generateKeyPairSync("ed25519");
+/**
+ * A fresh Ed25519 key for the run. `leadingZero` draws until the public point
+ * starts with 0x00, about one key in 256, which WebKit on Linux refuses to
+ * import as SPKI (#1247).
+ */
+export function receiptKey(keyId: string, { leadingZero = false } = {}) {
+  let pair = generateKeyPairSync("ed25519");
+  while (leadingZero && pair.publicKey.export({ type: "spki", format: "der" })[12] !== 0) pair = generateKeyPairSync("ed25519");
   const key: EvidenceDomainKey = {
     algorithm: "Ed25519", keyId, keyVersion: "1", encoding: "spki-der",
     keyBase64Url: pair.publicKey.export({ type: "spki", format: "der" }).toString("base64url"),
@@ -177,13 +183,17 @@ const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex
 export class EvidenceServer {
   readonly calls: { key: string; text: string; body: CommitBody }[] = [];
   readonly answers: Answer[] = [];
-  readonly signer = receiptKey("kljuc-izmisljeni-e2e");
+  readonly signer: ReturnType<typeof receiptKey>;
   revision = R0;
   head: string | null = null;
   lastSequenceTo = 0;
   maxInFlight = 0;
   private readonly keys = new Map<string, number>();
   private open = 0;
+
+  constructor({ leadingZero = false } = {}) {
+    this.signer = receiptKey("kljuc-izmisljeni-e2e", { leadingZero });
+  }
 
   config(seedText = "Uvod"): HarnessConfig {
     return {
