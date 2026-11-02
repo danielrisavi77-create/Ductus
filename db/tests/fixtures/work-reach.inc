@@ -6,6 +6,19 @@
 CREATE FUNCTION pg_temp.text_hash() RETURNS text
 LANGUAGE sql IMMUTABLE AS $$ SELECT encode(sha256(convert_to('Prvi odlomak.', 'UTF8')), 'hex') $$;
 
+-- now() is one instant for the whole test, so time passes by moving every
+-- recorded start and end of a work, a group place and a teacher place one
+-- minute back; the order of the history is kept, and what comes next is
+-- later than all of it.
+CREATE FUNCTION pg_temp.tick() RETURNS void
+LANGUAGE sql AS $$
+  UPDATE evidence.project SET created_at = created_at - interval '1 minute';
+  UPDATE institution.seminar_group_member
+     SET valid_from = valid_from - interval '1 minute', valid_to = valid_to - interval '1 minute';
+  UPDATE institution.seminar_group_teacher
+     SET valid_from = valid_from - interval '1 minute', valid_to = valid_to - interval '1 minute';
+$$;
+
 -- Every surface of a work the actor reaches, in a fixed order, or "-".
 -- text: read_live_state; comments: list_comments; summary and replay: the
 -- two sources (no package yet, so "unavailable" when allowed and "not_found"

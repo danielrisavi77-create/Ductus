@@ -99,8 +99,9 @@ SELECT is((SELECT array_agg(DISTINCT surface ORDER BY surface) FROM audit.access
 SELECT is_empty($$ SELECT 1 FROM audit.access_log WHERE reader_id = pg_temp.id('marko') AND document_id = 'doc-dora-z1' $$,
   'no refused read of Dora''s work is logged');
 
--- 4. The teacher's place in G1 ends. A group of another course (Marko's own
--- K2) gives nothing in K1.
+-- 4. A minute later the teacher's place in G1 ends. A group of another
+-- course (Marko's own K2) gives nothing in K1.
+SELECT pg_temp.tick();
 SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.end_group_assignment({g1}, {marko}) $$), 'ok',
   'Vesna ends Marko''s place in G1');
 INSERT INTO ref VALUES ('gk2', pg_temp.ask('marko', $$ SELECT institution.create_seminar_group({k2}, 'Grupa K2') $$));
@@ -111,10 +112,15 @@ SELECT is(pg_temp.reach('marko', 'doc-ana-z1'), '-', 'nor any surface of Ana''s 
 SELECT is(pg_temp.can('marko', 'doc-ana-z1'), '-', 'and can() allows him nothing on it');
 SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.assign_group_teacher({g1}, {marko}) $$), 'ok',
   'Vesna makes Marko the teacher of G1 again');
-SELECT is(pg_temp.reach('marko', 'doc-ana-z1'), 'text,comments,summary,replay,checkpoints,fast_path,comment',
-  'and he reaches Ana''s work again');
+SELECT is(pg_temp.reach('marko', 'doc-ana-z1'), '-',
+  'but Ana''s work, started before his new place, stays closed to him without a transfer (#1372, round 2)');
+SELECT is(pg_temp.can('marko', 'doc-ana-z1'), '-', 'and can() allows him nothing on it');
+SELECT is(pg_temp.lists('marko'), 'course=ana; names=-; submissions=-; works=-',
+  'he gets Ana''s name in the course list only, not her earlier work');
 
--- 5. Ana moves from G1 to G2: one work, the same id; who reaches it moves.
+-- 5. Ana moves from G1 to G2 with the work she started in G1: one work, the
+-- same id. Without an explicit transfer it moves to no one (DAN-351,
+-- dopuna 27. 10., points 4 and 5; QA c.6585602557).
 SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g2}, {ana}) $$),
   'ZD409: conflict', 'Ana is never in two groups of K1 at once');
 SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.end_group_assignment({g1}, {ana}) $$), 'ok',
@@ -123,17 +129,22 @@ SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.assign_group_stud
   'Ana joins G2');
 SELECT is((SELECT count(*)::integer FROM evidence.document WHERE principal_id = pg_temp.id('ana')), 1,
   'Ana still has one work on Z1');
-SELECT is(pg_temp.lists('nina'), pg_temp.all_lists('ana,dora', 'doc-ana-z1,doc-dora-z1'),
-  'Nina now gets Ana with the same work id, and Dora');
-SELECT is(pg_temp.reach('nina', 'doc-ana-z1'), 'text,comments,summary,replay,checkpoints,fast_path,comment',
-  'Nina reaches every surface of Ana''s work');
+SELECT is(pg_temp.lists('nina'), 'course=ana,dora; names=dora; submissions=dora; works=doc-dora-z1',
+  'Nina gets Ana''s name in the course list, but not her earlier work in any list of Z1');
+SELECT is(pg_temp.reach('nina', 'doc-ana-z1'), '-',
+  'Nina is refused every surface of Ana''s earlier work: text, comments, summary, replay, checkpoints, fast path');
+SELECT is(pg_temp.can('nina', 'doc-ana-z1'), '-', 'and can() allows her nothing on it');
+SELECT is(pg_temp.reach('nina', 'doc-dora-z1'), 'text,comments,summary,replay,checkpoints,fast_path,comment',
+  'Dora''s work, started in G2, stays Nina''s');
+SELECT is(pg_temp.reach('vesna', 'doc-ana-z1'), 'text,comments,summary,replay,checkpoints,fast_path,comment',
+  'Vesna, teacher of the course, still reaches Ana''s work');
 SELECT is(pg_temp.lists('marko'), pg_temp.all_lists('-', '-'), 'Marko, teacher of the emptied G1, gets nothing');
 SELECT is(pg_temp.reach('marko', 'doc-ana-z1'), '-', 'and loses Ana''s work at once, earlier openings or not');
 
 -- 6. Dora leaves K1 while her place in G2 stays open.
 SELECT is(pg_temp.ask('vesna', $$ SELECT institution.remove_student({k1}, {dora})::text $$), 'true',
   'Vesna removes Dora from K1');
-SELECT is(pg_temp.lists('nina'), pg_temp.all_lists('ana', 'doc-ana-z1'), 'Nina no longer gets Dora');
+SELECT is(pg_temp.lists('nina'), 'course=ana; names=-; submissions=-; works=-', 'Nina no longer gets Dora');
 SELECT is(pg_temp.reach('nina', 'doc-dora-z1'), '-', 'nor any surface of her work');
 SELECT is(pg_temp.can('nina', 'doc-dora-z1'), '-', 'and can() allows her nothing on it');
 

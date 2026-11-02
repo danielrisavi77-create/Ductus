@@ -1766,7 +1766,7 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
    WHERE g.valid_to IS NULL
      AND institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
-     AND institution.actor_group_student(s.course_id, g.user_id)
+     AND institution.actor_group_work(p_assignment_id, g.user_id)
 $$;
 
 
@@ -2015,10 +2015,7 @@ CREATE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id 
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
     WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
     WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
-    WHEN EXISTS (
-           SELECT 1 FROM institution.assignment s
-            WHERE s.id = p_assignment_id AND s.institution_id = a.institution_id
-              AND institution.actor_group_student(s.course_id, p_owner_id)) THEN 'teacher'
+    WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'teacher'
   END
   FROM app.current_actor() a
 $$;
@@ -2387,6 +2384,19 @@ BEGIN
   thread_id := t.id;
   state := t.state;
 END
+$$;
+
+
+--
+-- Name: work_started_at(uuid, uuid, uuid); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.work_started_at(p_institution_id uuid, p_assignment_id uuid, p_student_id uuid) RETURNS timestamp with time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT p.created_at FROM evidence.project p
+   WHERE p.assignment_id = p_assignment_id AND p.institution_id = p_institution_id AND p.principal_id = p_student_id
 $$;
 
 
@@ -3194,6 +3204,29 @@ $$;
 
 
 --
+-- Name: actor_group_work(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_group_work(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = s.course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+     WHERE institution.actor_group_student(s.course_id, p_student_id)
+       AND NOT coalesce(collaboration.work_started_at(s.institution_id, s.id, p_student_id)
+                          < greatest(g.valid_from, t.valid_from), false)
+  )
+$$;
+
+
+--
 -- Name: actor_has_role(text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3373,7 +3406,7 @@ BEGIN
            WHEN a.course_id IS NOT NULL THEN (
              SELECT CASE
                       WHEN m.role = 'teacher' THEN 'teacher'
-                      WHEN institution.actor_group_student(a.course_id, v_scope.principal_id) THEN 'teacher'
+                      WHEN institution.actor_group_work(a.id, v_scope.principal_id) THEN 'teacher'
                       ELSE m.role
                     END
              FROM (SELECT) one

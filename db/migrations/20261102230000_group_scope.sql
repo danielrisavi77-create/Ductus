@@ -9,6 +9,9 @@
 -- every reader of a student or a work goes through: collaboration.actor_role
 -- (text, comments, summary, replay, fast path opening), institution.can, and
 -- the two lists app.teacher_assignment_students and app.teacher_course_students.
+-- The three that open a work use institution.actor_group_work, which also
+-- keeps a work started before the current group place closed (#1372, repair
+-- round 2); the course list shows names only and keeps actor_group_student.
 -- actor_course_role and actor_assignment_role, and with them every policy,
 -- are not changed (T053): the course, its assignments and its groups stay
 -- unreadable to a group teacher. Same signatures, owners and grants; no
@@ -16,6 +19,22 @@
 SET LOCAL ROLE ductus_migrator;
 -- Only while this migration runs; revoked at the end.
 GRANT CREATE ON SCHEMA institution, app, collaboration TO ductus_identity;
+GRANT USAGE, CREATE ON SCHEMA collaboration TO ductus_evidence;
+
+-- When the student's work on the assignment was started (its project row,
+-- written once by the server at now()), or NULL while there is none. Owned by
+-- the evidence role and executable only by the identity role, as
+-- collaboration.document_scope (20261017120000) (#1372, repair round 2).
+SET LOCAL ROLE ductus_evidence;
+CREATE FUNCTION collaboration.work_started_at(p_institution_id uuid, p_assignment_id uuid, p_student_id uuid)
+RETURNS timestamptz
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+  SELECT p.created_at FROM evidence.project p
+   WHERE p.assignment_id = p_assignment_id AND p.institution_id = p_institution_id AND p.principal_id = p_student_id
+$$;
+REVOKE ALL ON FUNCTION collaboration.work_started_at(uuid, uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION collaboration.work_started_at(uuid, uuid, uuid) TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
 -- True while the actor of the session holds a confirmed and unrevoked
@@ -48,9 +67,37 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION institution.actor_group_student(uuid, uuid) FROM PUBLIC;
 
+-- The work of a student of the actor's group on an assignment of the course
+-- (#1372, repair round 2; DAN-351, dopuna 27. 10., points 4 and 5): as
+-- actor_group_student, and the work was started no earlier than both the
+-- student's place in the group and the actor's place as its teacher. A work
+-- started before that, in another group, before a handover or before the
+-- actor's earlier place ended, stays closed to her until an explicit transfer
+-- (not in this migration). Every time is the server's now() of the
+-- transaction that wrote the row, so the answer follows the recorded history
+-- and needs no lock. A student with no work yet has nothing earlier.
+CREATE FUNCTION institution.actor_group_work(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
+LANGUAGE sql STABLE SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = s.course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+     WHERE institution.actor_group_student(s.course_id, p_student_id)
+       AND NOT coalesce(collaboration.work_started_at(s.institution_id, s.id, p_student_id)
+                          < greatest(g.valid_from, t.valid_from), false)
+  )
+$$;
+REVOKE ALL ON FUNCTION institution.actor_group_work(uuid, uuid) FROM PUBLIC;
+
 -- As 20261017120000, with the group teacher: an actor who is not a teacher
--- of the assignment is its teacher for the work of a student of her group,
--- also when she is a student of the course; her own work stays hers.
+-- of the assignment is its teacher for the work of a student of her group
+-- started within their current places (actor_group_work), also when she is
+-- a student of the course; her own work stays hers.
 CREATE OR REPLACE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id uuid, p_owner_id uuid) RETURNS text
 LANGUAGE sql STABLE SET search_path = ''
 AS $$
@@ -58,10 +105,7 @@ AS $$
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
     WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
     WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
-    WHEN EXISTS (
-           SELECT 1 FROM institution.assignment s
-            WHERE s.id = p_assignment_id AND s.institution_id = a.institution_id
-              AND institution.actor_group_student(s.course_id, p_owner_id)) THEN 'teacher'
+    WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'teacher'
   END
   FROM app.current_actor() a
 $$;
@@ -111,7 +155,7 @@ BEGIN
            WHEN a.course_id IS NOT NULL THEN (
              SELECT CASE
                       WHEN m.role = 'teacher' THEN 'teacher'
-                      WHEN institution.actor_group_student(a.course_id, v_scope.principal_id) THEN 'teacher'
+                      WHEN institution.actor_group_work(a.id, v_scope.principal_id) THEN 'teacher'
                       ELSE m.role
                     END
              FROM (SELECT) one
@@ -141,8 +185,9 @@ $$;
 
 -- As 20261101150000, with the students of the actor's group for a course's
 -- assignment the actor is not a teacher of (no part in it, or a student of
--- the course). One open group per student and course, and the actor never
--- among them, so no student comes twice.
+-- the course), unless the student's work was started before the current
+-- places (actor_group_work). One open group per student and course, and the
+-- actor never among them, so no student comes twice.
 CREATE OR REPLACE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TABLE (student_id uuid)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -166,7 +211,7 @@ AS $$
     JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
    WHERE g.valid_to IS NULL
      AND institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
-     AND institution.actor_group_student(s.course_id, g.user_id)
+     AND institution.actor_group_work(p_assignment_id, g.user_id)
 $$;
 
 -- As 20261028140000, with the students of the actor's group for an actor who
@@ -200,6 +245,7 @@ $$;
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA institution, app, collaboration FROM ductus_identity;
+REVOKE USAGE, CREATE ON SCHEMA collaboration FROM ductus_evidence;
 
 -- migrate:down
 -- Local only: staging and production migrate forward (docs/BACKEND.md 6).
@@ -315,8 +361,10 @@ BEGIN
 END
 $$;
 
+DROP FUNCTION institution.actor_group_work(uuid, uuid);
 DROP FUNCTION institution.actor_group_student(uuid, uuid);
 
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA institution, app, collaboration FROM ductus_identity;
+DROP FUNCTION collaboration.work_started_at(uuid, uuid, uuid);
