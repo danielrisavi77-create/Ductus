@@ -13,25 +13,27 @@ Snimke stvarne aplikacije na `main` `061fce2d` (PR #1431), cijela stranica, svij
 
 ## Tablica: ruta × tema × širina → ishod
 
-| Ruta | Tema | Širina | Ishod | Opis |
+**Pažnja:** „odgovara specifikaciji” znači samo da se izmjerene boje i raspored slažu s pisanim DESIGN-SYSTEM-om. Usporedba sa odobrenom slikom nije izvedena (slike ljuske `/rad` nema u repou), pa to nije potvrda vizualne podudarnosti.
+
+| Ruta | Tema | Širina | Ishod (prema pisanoj specifikaciji, ne prema odobrenoj slici) | Opis |
 | --- | --- | --- | --- | --- |
-| `/rad` | svijetla | 1440 | odgovara | Tlo `#f3f2ee`, bijeli list `#fcfbf8`, tamno zlato; tri stupca, traka stanja dolje. |
-| `/rad` | svijetla | 400 | odgovara | Navigacija iza gumba izbornika, upute/literatura i struktura u harmonikama pod listom. |
-| `/rad` | tamna | 1440 | odgovara | Grafit `#242422`, tamni list s tintom `#faf9f5`; zadana kombinacija je u `rad-tamna-bijeli-list-1440.png`. |
+| `/rad` | svijetla | 1440 | odgovara specifikaciji | Tlo `#f3f2ee`, bijeli list `#fcfbf8`, tamno zlato; tri stupca, traka stanja dolje. |
+| `/rad` | svijetla | 400 | odstupa (malo) | Navigacija iza gumba izbornika, upute/literatura i struktura u harmonikama pod listom. Ispod harmonika do trake stanja ostaje prazna ploha (kao u tamnoj temi). Stavka 2. |
+| `/rad` | tamna | 1440 | odgovara specifikaciji | Grafit `#242422`, tamni list s tintom `#faf9f5`; zadana kombinacija je u `rad-tamna-bijeli-list-1440.png`. |
 | `/rad` | tamna | 400 | odstupa (malo) | Isti raspored kao svijetla. Ispod harmonika do trake stanja ostaje prazna ploha druge nijanse od tla. Stavka 2. |
 | `/` | svijetla | 1440 | odstupa | Stranica ostaje tamna iako je `data-theme="light"`. Stavka 1. |
 | `/` | svijetla | 400 | odstupa | Isto. Sadržaj se uredno prelama. |
-| `/` | tamna | 1440 | odgovara | Grafit, zlato samo za glavnu radnju, bijeli list u primjeru. |
-| `/` | tamna | 400 | odgovara | Jedan stupac. |
+| `/` | tamna | 1440 | odgovara specifikaciji | Grafit, zlato samo za glavnu radnju, bijeli list u primjeru. |
+| `/` | tamna | 400 | odgovara specifikaciji | Jedan stupac. |
 | `/prijava` | svijetla | 1440 | odstupa | Tamna iako je tema svijetla (stavka 1). Kompozicija Archivum odgovara. |
 | `/prijava` | svijetla | 400 | odstupa | Isto (stavka 1). |
-| `/prijava` | tamna | 1440 | odgovara | Archivum u paleti papir i grafit; jedina radnja je „Prijava sustavom AAI@EduHr” (D-09). |
-| `/prijava` | tamna | 400 | odgovara | Jedan stupac. |
+| `/prijava` | tamna | 1440 | odgovara specifikaciji | Archivum u paleti papir i grafit; jedina radnja je „Prijava sustavom AAI@EduHr” (D-09). |
+| `/prijava` | tamna | 400 | odgovara specifikaciji | Jedan stupac. |
 
 ## Odstupanja za zasebne stavke (kod se ovdje ne popravlja)
 
 1. **Naslovnica i `/prijava` ne prate svijetlu temu.** DESIGN-SYSTEM to navodi kao privremeno („zasad ostaju tamne, do #1024 i J-01”), pa to nije kršenje specifikacije nego otvoren posao: #1024 je spojen, a stranice su i dalje tamne. Treba odluku: svijetla varijanta ili ažuriranje specifikacije.
-2. **`/rad` 400 px: prazna ploha ispod harmonika** (vidljivo u obje teme): provjeriti treba li popuniti istim tlom do trake stanja ili je namjerno.
+2. **`/rad` 400 px: prazna ploha ispod harmonika** (vidljivo u obje teme): provjeriti treba li popuniti istim tlom do trake stanja ili je namjerno. Isto u svijetloj temi (`rad-svijetla-400.png`).
 3. **Prijavljeno stanje nije snimljeno** (nema Dockera): ponoviti `/` kao prijavljen korisnik i studentske/nastavničke rute uz stog.
 
 Snimke su u `snimke/` (`<ruta>-<tema>-<širina>.png`).
