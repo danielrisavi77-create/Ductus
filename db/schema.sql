@@ -3331,6 +3331,7 @@ DECLARE
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
   PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
   PERFORM 1 FROM institution.course_member m
    WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
@@ -3377,6 +3378,7 @@ BEGIN
   IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
   PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
   SELECT array_agg(l.user_id) INTO v_students
     FROM (SELECT m.user_id
@@ -3806,6 +3808,7 @@ DECLARE
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   PERFORM institution.require_course_teacher(v_course);
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
   UPDATE institution.seminar_group_teacher t SET valid_to = greatest(now(), t.valid_from)
    WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
   UPDATE institution.seminar_group_member s SET valid_to = greatest(now(), s.valid_from)

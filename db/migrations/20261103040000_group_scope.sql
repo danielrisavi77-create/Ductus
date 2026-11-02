@@ -268,7 +268,8 @@ $$;
 -- whose transaction began after this one, and so after now(), and committed
 -- before the lock was granted, moves the start one microsecond past it; any
 -- other committed work began at or before now() and is compared with now() as
--- before, equal not earlier (also a work of this very transaction).
+-- before, equal not earlier (also a work of this very transaction). The
+-- course's group lock comes before both, as in end_group_assignment below.
 CREATE OR REPLACE FUNCTION institution.assign_group_student(p_group_id uuid, p_student_id uuid) RETURNS void
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -280,6 +281,7 @@ DECLARE
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
   PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
   PERFORM 1 FROM institution.course_member m
    WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
@@ -307,7 +309,8 @@ $$;
 
 -- As 20261102160000, with the start of the place after every work of the
 -- group's open members committed before it: the group row first, then their
--- open course memberships FOR UPDATE in the order of their ids, as above.
+-- open course memberships FOR UPDATE in the order of their ids, as above,
+-- after the course's group lock.
 CREATE OR REPLACE FUNCTION institution.assign_group_teacher(p_group_id uuid, p_teacher_id uuid) RETURNS void
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -323,6 +326,7 @@ BEGIN
   IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
   PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
   SELECT array_agg(l.user_id) INTO v_students
     FROM (SELECT m.user_id
@@ -341,6 +345,30 @@ BEGIN
   INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
   VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id, v_from)
   ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+END
+$$;
+
+-- As 20261102160000, with the course's group lock taken first, as in the two
+-- assignments above (#1372, QA c.6590203077). An ended place stays locked
+-- until its transaction commits, and an assignment of the same teacher to the
+-- group, or of the same student to any group of the course, waits on it at
+-- ON CONFLICT. Without the lock that assignment would wait holding its group
+-- row, and the transaction that ended the place would then wait for that row
+-- at its next assignment in the group: a deadlock. With it the second
+-- assignment waits on the course lock before it holds any row.
+CREATE OR REPLACE FUNCTION institution.end_group_assignment(p_group_id uuid, p_user_id uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  PERFORM institution.require_course_teacher(v_course);
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
+  UPDATE institution.seminar_group_teacher t SET valid_to = greatest(now(), t.valid_from)
+   WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
+  UPDATE institution.seminar_group_member s SET valid_to = greatest(now(), s.valid_from)
+   WHERE s.group_id = p_group_id AND s.user_id = p_user_id AND s.valid_to IS NULL;
 END
 $$;
 
@@ -583,6 +611,21 @@ BEGIN
      ) THEN
     RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
   END IF;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION institution.end_group_assignment(p_group_id uuid, p_user_id uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  PERFORM institution.require_course_teacher(v_course);
+  UPDATE institution.seminar_group_teacher t SET valid_to = greatest(now(), t.valid_from)
+   WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
+  UPDATE institution.seminar_group_member s SET valid_to = greatest(now(), s.valid_from)
+   WHERE s.group_id = p_group_id AND s.user_id = p_user_id AND s.valid_to IS NULL;
 END
 $$;
 

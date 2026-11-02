@@ -18,7 +18,9 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // group teacher never reaches a work started in the old group. Review
 // c.6589792083 adds a student who comes back to the course while a teacher of
 // the student's group is being assigned: the return must wait for that
-// assignment, so no work of the student can start and commit before it. Loopback only; one random
+// assignment, so no work of the student can start and commit before it. QA
+// c.6590203077 adds an ending racing a new assignment of the same person:
+// both must commit, not deadlock. Loopback only; one random
 // login and random synthetic rows, removed afterwards. Vesna, Marko, Nina,
 // Ana, Boris, Cvita and Daria are invented.
 const SAFE_ADMIN_URL: string =
@@ -431,5 +433,77 @@ describe("a course return racing the assignment of a group teacher (DAN-351, #13
     const { result, finishedBeforeCommit } = await returnDuringAssignment(groups.g4, people.marko, () => enroll("daria"));
     expect(finishedBeforeCommit).toBe(true);
     expect(result).toBe("enrolled");
+  });
+});
+
+// The schedule of QA c.6590203077: the course teacher ends a place in one
+// transaction and keeps it open; a second transaction assigns the same
+// person again and waits on the ended place; the first then assigns someone
+// else to the group the second wants. Each assignment and each ending takes
+// the course's group lock first, so the second waits before it holds a row
+// and both commit; without that lock PostgreSQL aborts one as a deadlock.
+async function endDuringReassignment(
+  ending: [string, unknown[]],
+  reassignment: [string, unknown[]],
+  following: [string, unknown[]],
+) {
+  let ended!: () => void;
+  let releaseEnding!: () => void;
+  const endingOpen = new Promise<void>((resolve) => { ended = resolve; });
+  const holdEnding = new Promise<void>((resolve) => { releaseEnding = resolve; });
+  const endingRun = withActor(tokens.vesna, async (tx) => {
+    await tx.query(...ending);
+    ended();
+    await holdEnding;
+    await tx.query(...following);
+  });
+  let reassignmentRun: Promise<unknown> | undefined;
+  let waited = false;
+  try {
+    await Promise.race([endingOpen, endingRun]);
+    reassignmentRun = asVesna(...reassignment);
+    waited = await Promise.race([
+      reassignmentRun.then(() => false, () => false),
+      waitForBlocked("%assign_group_%").then(() => true),
+    ]);
+  } finally {
+    ended();
+    releaseEnding();
+  }
+  const settled = await Promise.allSettled([endingRun, reassignmentRun]);
+  return { waited, statuses: settled.map((result) => (result.status === "fulfilled" ? "committed" : String(result.reason))) };
+}
+
+async function openPlaces(table: "seminar_group_teacher" | "seminar_group_member", group: string) {
+  return (await admin.query<{ user_id: string }>(
+    `SELECT user_id FROM institution.${table} WHERE group_id = $1 AND valid_to IS NULL ORDER BY user_id`,
+    [group],
+  )).rows.map((row) => row.user_id);
+}
+
+describe("an ending racing a new assignment of the same person (DAN-351, #1372, c.6590203077)", () => {
+  it("a teacher handover and a repeated assignment of the old teacher both commit", async () => {
+    const { waited, statuses } = await endDuringReassignment(
+      ["SELECT institution.end_group_assignment($1, $2)", [groups.g4, people.marko]],
+      ["SELECT institution.assign_group_teacher($1, $2)", [groups.g4, people.marko]],
+      ["SELECT institution.assign_group_teacher($1, $2)", [groups.g4, people.nina]],
+    );
+    expect(waited).toBe(true);
+    expect(statuses).toEqual(["committed", "committed"]);
+    expect(await openPlaces("seminar_group_teacher", groups.g4)).toEqual([people.marko, people.nina].sort());
+  });
+
+  it("a student move and a new place in the student's next group both commit", async () => {
+    const { waited, statuses } = await endDuringReassignment(
+      ["SELECT institution.end_group_assignment($1, $2)", [groups.g2, people.ana]],
+      ["SELECT institution.assign_group_student($1, $2)", [groups.g3, people.ana]],
+      ["SELECT institution.assign_group_student($1, $2)", [groups.g3, people.daria]],
+    );
+    expect(waited).toBe(true);
+    expect(statuses).toEqual(["committed", "committed"]);
+    expect(await openPlaces("seminar_group_member", groups.g2)).toEqual([]);
+    expect(await openPlaces("seminar_group_member", groups.g3)).toEqual(
+      [people.ana, people.cvita, people.daria].sort(),
+    );
   });
 });
