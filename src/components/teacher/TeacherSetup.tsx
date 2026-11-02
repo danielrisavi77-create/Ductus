@@ -18,6 +18,7 @@ import {
 } from "./assignment-create";
 import { createCourse, type CourseCreation, type CoursePolicy } from "./course-create";
 import { createCourseThenCode, enrollmentCodeExpiry, type EnrollmentCodeCreation } from "./enrollment-code-create";
+import type { ExistingCourse } from "./existing-course";
 import styles from "./TeacherSetup.module.css";
 
 const YEARS = Object.keys(t.teacher.course.years) as (keyof typeof t.teacher.course.years)[];
@@ -44,9 +45,27 @@ function CourseCode({ issued, pending }: { issued: { code: string; validUntil: s
   );
 }
 
+// The course an assignment joins when it is not created here (DAN-310): read
+// only, and no enrollment code is issued, so the course's code stays as it is.
+function CourseSummary({ course }: { course: ExistingCourse }) {
+  const c = t.teacher.course;
+  return (
+    <section className={styles.card} aria-labelledby="kolegij">
+      <h2 id="kolegij">{c.heading}</h2>
+      <p className={styles.listHead}>{course.name}</p>
+      <p className={styles.hint}>
+        {c.years[course.academicYear as keyof typeof c.years] ?? course.academicYear} · {c.policies[course.aiPolicy]}
+      </p>
+      <p className={styles.hint}>{t.teacher.existingCourse.codeKept}</p>
+    </section>
+  );
+}
+
 // Screen 2 of the design handoff. No identity fields: the verified B-7 role on
 // the server decides who may create a course or an assignment.
-export default function TeacherSetup() {
+// DAN-310 (M2.4-P01): with `existingCourse` the assignment joins that course
+// and the course form is replaced by its summary.
+export default function TeacherSetup({ existingCourse = null }: { existingCourse?: ExistingCourse | null }) {
   const c = t.teacher.course;
   const a = t.teacher.assignment;
   const tools = t.teacher.tools;
@@ -54,8 +73,9 @@ export default function TeacherSetup() {
 
   const [name, setName] = useState("");
   const [academicYear, setAcademicYear] = useState<string>(YEARS[0]!);
-  const [aiPolicy, setAiPolicy] = useState<CoursePolicy>("partially_allowed");
-  const [course, setCourse] = useState<{ id: string; policy: CoursePolicy } | null>(null);
+  const [aiPolicy, setAiPolicy] = useState<CoursePolicy>(existingCourse?.aiPolicy ?? "partially_allowed");
+  const [course, setCourse] = useState<{ id: string; policy: CoursePolicy } | null>(
+    existingCourse ? { id: existingCourse.id, policy: existingCourse.aiPolicy } : null);
   const [courseResult, setCourseResult] = useState<CourseCreation | "nameMissing" | null>(null);
   const savedCourse = useRef<string | null>(null);
   const [validUntilLocal, setValidUntilLocal] = useState("");
@@ -170,7 +190,8 @@ export default function TeacherSetup() {
   return (
     <div className={styles.layout}>
       <div className={styles.forms}>
-        {/* noValidate: the Croatian messages below answer a missing or impossible deadline, not the browser. */}
+        {existingCourse ? <CourseSummary course={existingCourse} /> : (
+        /* noValidate: the Croatian messages below answer a missing or impossible deadline, not the browser. */
         <form className={styles.card} onSubmit={submitCourse} aria-labelledby="kolegij" noValidate>
           <h2 id="kolegij">{c.heading}</h2>
           <fieldset className={styles.fields} disabled={pending || course !== null}>
@@ -216,6 +237,7 @@ export default function TeacherSetup() {
             </>
           ) : null}
         </form>
+        )}
 
         <form className={styles.card} onSubmit={submitAssignment} aria-labelledby="zadatak">
           <h2 id="zadatak">{a.heading}</h2>
@@ -298,7 +320,9 @@ export default function TeacherSetup() {
               {published ? a.published : pending && course ? a.pending : a.publish}
             </button>
           </fieldset>
-          <p className={styles.hint}>{course ? a.studentsNotified : a.needCourse}</p>
+          <p className={styles.hint}>
+            {existingCourse ? t.teacher.existingCourse.studentsNotified : course ? a.studentsNotified : a.needCourse}
+          </p>
           <p className={styles.hint}>{a.newVersion}</p>
           {assignmentError ? <p className={styles.notice} role="alert">{assignmentError}</p> : null}
           {published ? <p className={styles.notice} role="status">{a.publishedNotice}</p> : null}
