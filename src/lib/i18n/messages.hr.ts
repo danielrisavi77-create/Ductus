@@ -32,7 +32,7 @@ export const hr = {
     sideNav: "Bočna navigacija",
     workNav: "Radni prostor",
     home: `${APP_NAME}, početna`,
-    space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
+    space: { teacher: "Nastavnički prostor", student: "Studentski prostor", admin: "Administracija ustanove" },
     nav: {
       assignments: "Moji zadaci",
       courses: "Moji kolegiji",
@@ -40,8 +40,9 @@ export const hr = {
       fastPath: "Brz put",
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
+      institution: "Pregled ustanove",
     },
-    role: { teacher: "Nastavnik", student: "Student" },
+    role: { teacher: "Nastavnik", student: "Student", admin: "Administrator" },
     demoNote: "Nijedan stvarni osobni podatak.",
     signOut: "Odjava",
     openNav: "Otvori navigaciju",
@@ -467,6 +468,32 @@ export const hr = {
   // Screen 11, the teacher's fast path (F-11, D-80 point 2). Lines are facts in words (PRODUCT §5 rule 2).
   // Z3 (A), #476 6289158306: the teacher's entry at /nastavnik. The order is
   // the route's (year, name; assignments by due time) and nothing reorders it.
+  // DAN-313 (A-01): counts only, for the administrator's own institution;
+  // never a person, a course name or an activity time.
+  institutionOverview: {
+    title: "Pregled ustanove",
+    lead: "Brojke vrijede samo za vašu ustanovu i računaju se pri otvaranju stranice. Pojedine osobe i kolegiji ovdje se ne prikazuju.",
+    unnamed: "Naziv ustanove nije upisan",
+    countsLabel: "Brojke ustanove",
+    counts: {
+      confirmedTeachers: {
+        label: "Potvrđeni nastavnici",
+        note: "Uloga je potvrđena i nije opozvana.",
+      },
+      teacherCandidates: {
+        label: "Čekaju potvrdu uloge",
+        note: "Zadnja prijava preko AAI@EduHr dala je pravo nastavnika, a ulogu još niste potvrdili.",
+      },
+      teachersWithoutAffiliation: {
+        label: "Nastavnici bez prava pri zadnjoj prijavi",
+        note: "Uloga ostaje potvrđena; samo zadnja prijava nije dala pravo nastavnika.",
+      },
+      courses: { label: "Kolegiji", note: "Svi kolegiji ustanove." },
+      students: { label: "Studenti", note: "Upisani u barem jedan kolegij, svaka osoba jednom." },
+    },
+    unavailable: "Pregled ustanove trenutačno nije dostupan. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+  },
   teacherCourses: {
     title: "Moji kolegiji",
     lead: "Kolegiji u kojima predajete i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
@@ -1110,6 +1137,7 @@ export const hr = {
       newCourse: "obrazac za novi kolegij i zadatak",
       fastPath: "brz put kroz radove",
       home: "svoj prostor",
+      institution: "pregled svoje ustanove",
     },
     deniedTitle: "Nemate pristup ovom prikazu",
     deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
