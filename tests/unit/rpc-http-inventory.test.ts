@@ -36,7 +36,7 @@ type Exception = {
 
 const DOLLAR_RE = /\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$/y;
 
-/** Splits SQL into statements on ";" outside dollar-quoted bodies ($$ or $tag$), quotes and line comments. */
+/** Splits SQL into statements on ";" outside dollar-quoted bodies ($$ or $tag$), quotes and comments, which it drops. */
 export function statements(sql: string): string[] {
   const out: string[] = [];
   let current = "";
@@ -52,6 +52,20 @@ export function statements(sql: string): string[] {
     } else if (tag === null && sql.startsWith("--", i)) {
       const end = sql.indexOf("\n", i);
       i = end < 0 ? sql.length : end;
+    } else if (tag === null && sql.startsWith("/*", i)) {
+      // Block comments nest in PostgreSQL.
+      let depth = 1;
+      i += 2;
+      while (i < sql.length && depth > 0) {
+        if (sql.startsWith("/*", i)) depth += 1;
+        else if (sql.startsWith("*/", i)) depth -= 1;
+        else {
+          i += 1;
+          continue;
+        }
+        i += 2;
+      }
+      current += " ";
     } else if (tag === null && sql[i] === "'") {
       const end = sql.indexOf("'", i + 1);
       const stop = end < 0 ? sql.length : end + 1;
@@ -85,7 +99,8 @@ export function catalogue(
           statement,
         );
       const body = BODY_RE.exec(statement)?.[2];
-      if (/^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i.test(statement)) {
+      const outside = statement.replace(BODY_RE, "").replace(/'[^']*'/g, "");
+      if (/\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i.test(outside)) {
         // A definition this parser cannot read stops the inventory instead
         // of silently leaving a function out of it.
         if (!created?.[1] || body === undefined)
@@ -308,12 +323,33 @@ describe("catalogue parser", () => {
     expect(stateChanging(parsed)).toStrictEqual(["s.w"]);
   });
 
+  it("reads a definition after a block comment", () => {
+    const parsed = catalogue([
+      {
+        name: "1.sql",
+        sql: "/* opis /* ugniježđeno */ ; */ CREATE FUNCTION s.w() RETURNS void LANGUAGE sql VOLATILE AS $$ UPDATE s.t SET a = 1; $$;",
+      },
+    ]);
+    expect(stateChanging(parsed)).toStrictEqual(["s.w"]);
+  });
+
   it("stops on a function definition it cannot read", () => {
     expect(() =>
       catalogue([
         {
           name: "1.sql",
           sql: "CREATE FUNCTION s.w() RETURNS void LANGUAGE sql AS 'UPDATE s.t SET a = 1';",
+        },
+      ]),
+    ).toThrow("1.sql: unreadable function definition");
+  });
+
+  it("stops when a function definition does not start its statement", () => {
+    expect(() =>
+      catalogue([
+        {
+          name: "1.sql",
+          sql: "SELECT 1 CREATE FUNCTION s.w() RETURNS void LANGUAGE sql AS $$ UPDATE s.t SET a = 1; $$;",
         },
       ]),
     ).toThrow("1.sql: unreadable function definition");
