@@ -39,7 +39,8 @@ Verzija i hash paketa upisuju se uz projekciju, a zadatak pamti verziju paketa (
 
 | Stavka | Razlog | Izvor |
 | --- | --- | --- |
-| Dokazni sloj profila: `data/profiles/*/drafts/**` (doslovan citat, stranica, `verifiedHash`, potpis), `verified-profiles.json`, `verified-profiles-heavy.json`, `repair-map.json`, `data/verification/**`, `data/sources/**` | Lektin razred `PROPRIETARY-DATA`, bundle `forbidden`; Lekta ih opisuje kao srž svoje zaštite | `data/classification.json` |
+| Dokazni sloj profila: `data/profiles/*/drafts/**` (doslovan citat, stranica, `verifiedHash`, potpis), `verified-profiles-heavy.json`, `repair-map.json`, `data/verification/**`, `data/sources/**` | Lektin razred `PROPRIETARY-DATA`, bundle `forbidden`; Lekta ih opisuje kao srž svoje zaštite | `data/classification.json` |
+| `data/profiles/verified-profiles.json` | Lektin razred `PROPRIETARY-DATA`, ali `bundle: derived` (izvor istine iz kojeg se generiraju projekcije index i heavy). To je status u Lekti, ne dozvola: odluka za Ductus je da ne ulazi, jer sadrži dokazni sloj; dopuštena je tek filtrirana projekcija iz §3 | `data/classification.json`; `scripts/gen-verified-split.mjs` |
 | `data/generated/**` | `SECURITY-SENSITIVE`; poslužiteljski artefakti | `data/classification.json` |
 | Kanarinci `LEKTA-KANARINAC-*` | Služe za otkrivanje curenja; datoteka u kojoj se pojave ne smije u Ductus. Ako se pojave u projekciji, to je incident i zaustavlja se uvoz | `data/classification.json` (`canaries`) |
 | Lektin kod (`src/**`: popravci, citati, DOCX) | `PUBLIC` je samo razred bundlea, a repo je `UNLICENSED`. Zajednički modul citiranja (§5c, druga faza) traži zasebnu pisanu dozvolu i zaseban zadatak | `package.json`; `data/classification.json` |
@@ -53,6 +54,24 @@ Verzija i hash paketa upisuju se uz projekciju, a zadatak pamti verziju paketa (
 | Sadržajne provjere i bodovi (npr. „tezna rečenica”) | D-221, D-222: samo formalna pravila sa službenim izvorom | D-221, D-222 |
 | Prilagodbe mentora po radu | D-220: mentor ne mijenja pravila; nastavnik samo sužava unutar granica paketa | D-220 |
 | `data/competitors/**`, `public/assets/**` (video, slike), `.claude/katedra-pkg/**` | Nisu pravila oblika; Lekta/Katedra-ov vlastiti sadržaj bez dozvole za drugi proizvod | popis datoteka na SHA-u |
+
+### Ostala pravila Lektine klasifikacije (potpunost)
+
+Lekta za ove staze kaže `PUBLIC`/`allowed`. To je samo razred bundlea (§2), ne licenca. Sve niže je isključeno iz projekcije dok vlasnik ne da pisanu dozvolu i dok se sadržaj ne pregleda; iznimka su stavke već dopuštene u §3.
+
+| Staza (pravilo) | Odluka | Razlog |
+| --- | --- | --- |
+| `data/catalog/**`, `data/coverage/**` | Ne ulazi (NEPROVJERENO) | Sadržaj nije pregledan; nije vrijednost pravila sa službenim izvorom |
+| `data/submission/**`, `data/methodology/**` | Ne ulazi (NEPROVJERENO) | Sadržaj nije pregledan; D-221/D-222 dopuštaju samo formalna pravila sa službenim izvorom |
+| `data/legal/**`, `data/declarations/**` | Ne ulazi (NEPROVJERENO) | Pravni tekstovi i izjave: autorstvo i prava nisu provjereni |
+| `data/title-pages/**` | Samo kako je u §3 i §4 | D-223 |
+| `data/tools/citation-specs/verified/**`, `verified-index.json` | Samo kako je u §3 (citatni stil, D-83) | D-83 |
+| `data/profiles/fpzg-partial.json`, `profile-status.json`, `profile-authority.json`, `base-profiles.json`, `advisory-map.json`, `legal-departments.json`, `verified-profiles-index.json` | Ne ulaze izravno (NEPROVJERENO). FPZG vrijednosti stižu isključivo filtrirane iz paketa (§3, M4.2) | Datoteke nisu pregledane; mogu miješati više fakulteta i savjetodavni sloj izvan D-221 |
+| `data/profiles/profile-claims.json` | Ne ulazi | Razine dokaza A–E su Lektin oblik provenijencije; Lektin dokazni sloj nije u opsegu (D-126) |
+| `data/competitors/**`, `data/work-type-labels.json`, `data/work-type-scope.json`, `data/checks/**` | Ne ulaze (vidi i §5) | Nisu pregledane; `PUBLIC` nije licenca |
+| `data/classification.json` | Ne ulazi | Lektin `PRIVATE-IP`; ovdje se samo čita kao izvor ovog inventara |
+| `public/**`, `*.html`, `rad/*.html`, `moji-radovi/*.html`, `saznaj-vise/*.html`, `src/routes/shared/public-route-directory.json`, `src/assets/fonts/**` | Ne ulaze | Lektino sučelje, marketing i fontovi; nisu pravila oblika (fontovi: §5) |
+| Sve što nijedno pravilo ne pokriva | Ne ulazi | Lekta primjenjuje „deny-by-default”; isto vrijedi ovdje |
 
 ## 5. Prava trećih i nepotvrđene stavke
 
