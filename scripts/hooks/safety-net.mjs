@@ -295,7 +295,9 @@ function hasVerdict(dir, key) {
 // One package run, resolved (never rejected) with the fields of a spawnSync
 // result. Runs that do not depend on each other start together (DAN-480), so
 // the time limit and the output limit are enforced here: past either the child
-// is killed with SIGKILL and the run carries ETIMEDOUT or ENOBUFS.
+// is killed with SIGKILL and the run carries ETIMEDOUT or ENOBUFS. The run then
+// settles at once and closes its pipes, as spawnSync does: a grandchild that
+// keeps them open can no longer delay the answer past the time limit.
 const MAX_OUTPUT = 4 * 1024 * 1024;
 export function runPackage(root, input, timeout, env) {
   const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin", "cc-safety-net.js");
@@ -305,9 +307,24 @@ export function runPackage(root, input, timeout, env) {
     let error;
     let child;
     let timer;
+    let settled = false;
+    const settle = (status, signal) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      for (const name of ["stdin", "stdout", "stderr"]) child[name]?.destroy();
+      child.unref();
+      const text = (name) => Buffer.concat(out[name]).toString("utf8");
+      resolve({ error, status, signal, stdout: text("stdout"), stderr: text("stderr") });
+    };
     const kill = (code, message) => {
       error ??= Object.assign(new Error(message), { code });
-      child?.kill("SIGKILL");
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // Already gone: the error above still blocks.
+      }
+      settle(null, "SIGKILL");
     };
     try {
       child = spawn(process.execPath, [bin, "hook", "--coding-cli"], { cwd: root, env, stdio: ["pipe", "pipe", "pipe"] });
@@ -317,7 +334,9 @@ export function runPackage(root, input, timeout, env) {
     }
     timer = setTimeout(() => kill("ETIMEDOUT", "timed out"), Math.max(1, timeout));
     for (const name of ["stdout", "stderr"]) {
+      child[name].on("error", () => {}); // destroyed on settle; nothing more is read
       child[name].on("data", (chunk) => {
+        if (settled) return;
         size += chunk.length;
         if (size > MAX_OUTPUT) kill("ENOBUFS", "output over the limit");
         else out[name].push(chunk);
@@ -327,11 +346,7 @@ export function runPackage(root, input, timeout, env) {
     child.on("error", (thrown) => {
       error ??= thrown;
     });
-    child.on("close", (status, signal) => {
-      clearTimeout(timer);
-      const text = (name) => Buffer.concat(out[name]).toString("utf8");
-      resolve({ error, status, signal, stdout: text("stdout"), stderr: text("stderr") });
-    });
+    child.on("close", (status, signal) => settle(status, signal));
     child.stdin.end(input);
   });
 }

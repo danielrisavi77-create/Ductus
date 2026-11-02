@@ -34,6 +34,11 @@ const FAKES = {
   garbage: "process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write('not json');process.exit(0)});",
   deny: "process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny'}}));process.exit(0)});",
   hang: "setInterval(()=>{},1000);",
+  // A child that leaves a grandchild holding its stdout and stderr open, then hangs (orphan) or exits at once (orphanexit).
+  orphan:
+    "const g=require('child_process').spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:['ignore','inherit','inherit']});require('fs').appendFileSync(__dirname+'/orphan.pid',g.pid+'\\n');setInterval(()=>{},1000);",
+  orphanexit:
+    "const g=require('child_process').spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:['ignore','inherit','inherit']});require('fs').appendFileSync(__dirname+'/orphan.pid',g.pid+'\\n');process.exit(0);",
   block2: "process.stdin.resume();process.stdin.on('end',()=>{console.error('nope');process.exit(2)});",
   // Run 1 (cwd SN_SUB), run 2 and the probes each behave as told: allow, deny, hang or crash, after SN_DELAY ms.
   split:
@@ -911,6 +916,31 @@ test("DAN-480 a probe that fails while both runs allow blocks", { timeout: 60000
       const result = await decide({ root: tree.root, input: event("Bash", "ls", sub), timeoutMs: 1500, env: { ...process.env, SN_SUB: sub, SN_RUN1: "allow", SN_RUN2: "allow", SN_PROBE: probe } });
       blocked(result, `probe ${probe}`);
       assert.match(result.stderr, /control probe/);
+    });
+  }
+});
+
+test("DAN-480 a run whose grandchild keeps the pipes open still blocks within the time limit", { timeout: 30000 }, async () => {
+  for (const bin of ["orphan", "orphanexit"]) {
+    await withTree({ bin }, async (tree) => {
+      const pidFile = path.join(path.dirname(tree.calls), "orphan.pid");
+      try {
+        const started = Date.now();
+        const result = await decide({ root: tree.root, input: event("Bash", "ls"), timeoutMs: 400 });
+        blocked(result, bin);
+        assert.match(result.stderr, /did not answer/, bin);
+        assert.ok(Date.now() - started < 5000, `${bin}: ${Date.now() - started} ms`);
+      } finally {
+        // Run 1 and each probe leave one grandchild.
+        const pids = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, "utf8").split("\n").filter(Boolean) : [];
+        for (const pid of pids) {
+          try {
+            process.kill(Number(pid), "SIGKILL");
+          } catch {
+            // Already gone.
+          }
+        }
+      }
     });
   }
 });
