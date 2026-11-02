@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-import { API_CONTENT_SECURITY_POLICY } from "./src/server/http/content-security-policy";
+import { API_CONTENT_SECURITY_POLICY, STATIC_CONTENT_SECURITY_POLICY } from "./src/server/http/content-security-policy";
 
 // Pages get their Content-Security-Policy, with a nonce per request, from
 // middleware.ts (DAN-489); the headers here are the same for every response.
@@ -27,6 +27,9 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: [...SECURITY_HEADERS] },
       { source: "/api/:path*", headers: [{ key: "Content-Security-Policy", value: API_CONTENT_SECURITY_POLICY }] },
+      // The paths middleware.ts leaves out: their HTML errors need a policy too.
+      { source: "/_next/static/:path*", headers: [{ key: "Content-Security-Policy", value: STATIC_CONTENT_SECURITY_POLICY }] },
+      { source: "/favicon.ico", headers: [{ key: "Content-Security-Policy", value: STATIC_CONTENT_SECURITY_POLICY }] },
     ];
   },
 };

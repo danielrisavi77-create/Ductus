@@ -170,6 +170,7 @@ frame-ancestors 'none'
 - `form-action` uz `'self'` sadrži ishodište davatelja identiteta, jer 303 odjave vodi na `end_session`. Ako `OIDC_ISSUER` nedostaje ili nije http(s) URL, ostaje samo `'self'`.
 - Samo `next dev` dodaje `'unsafe-eval'` u `script-src` i `'unsafe-inline'` u `style-src`.
 - Middleware ne obuhvaća `/api/*`, `/_next/static/*` ni `/favicon.ico`. `/_next/image` ostaje obuhvaćen: odgovor 400 krajnje točke za slike nosi politiku stranice, optimizator na slike stavlja vlastitu politiku sa `sandbox`, a svaka putanja ispod nje je HTML 404 kojem treba nonce. Prvotno izuzeće `_next/image/` hvatalo je samo takve podputanje, pa je njihov 404 ostajao bez politike (nalaz drugog reviewa na PR-u 2).
+- Izuzete putanje dobivaju iz `next.config.ts` politiku koja ništa ne dopušta. Next.js i ondje na GET odgovara HTML stranicom greške, npr. 416 za `Range` izvan duljine datoteke, a bez te politike ona bi ostala bez CSP-a (nalaz trećeg reviewa na PR-u 2, c.6581226772). Preglednik politiku na skripti ili stilu kao podresursu ne primjenjuje.
 - Izostavljeno u odnosu na 6.1: `upgrade-insecure-requests` (ruši `http://localhost`) i Report-Only razdoblje.
 
 ### 9.2 Promjene koje politika traži u aplikaciji
@@ -186,7 +187,7 @@ frame-ancestors 'none'
 | HTML stranice i 404 | politika iz 9.1, nonce nov za svaki zahtjev | `private, no-cache, no-store, max-age=0, must-revalidate` |
 | `/nastavnik/kolegiji` (307 na `/nastavnik`) | politika iz 9.1 | kao HTML; `s-maxage` je nestao, pa je N-3 zatvoren |
 | `/api/*`, uključujući 405 okvira i JSON 404 nepoznate putanje | `default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` (iz `next.config.ts`) | nepromijenjeno (N-2 ostaje) |
-| `/_next/static/*`, `/favicon.ico` | nema | nepromijenjeno |
+| `/_next/static/*`, `/favicon.ico`, uključujući HTML greške okvira (npr. 416) | ista politika kao za `/api/*` (iz `next.config.ts`) | nepromijenjeno |
 
 Svi odgovori uz tri postojeća zaglavlja nose i `Strict-Transport-Security: max-age=63072000; includeSubDomains` te `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), display-capture=(), clipboard-write=(self)`. `interest-cohort` iz 6.2 je izostavljen, kao u ugovoru, jer je FLoC napušten. Nijedan odgovor nema `Cross-Origin-Opener-Policy`, `Content-Security-Policy-Report-Only` ni `X-Powered-By`.
 

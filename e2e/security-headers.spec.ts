@@ -30,8 +30,14 @@ const PAGE_CSP = new RegExp(
 /** next.config.ts on /api/:path*: nothing loads from an API response. */
 const API_CSP = "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
+/**
+ * next.config.ts on the paths middleware.ts leaves out (/_next/static/*,
+ * /favicon.ico): the same no-load policy, so an HTML error there runs nothing.
+ */
+const STATIC_CSP = API_CSP;
+
 /** Which Content-Security-Policy a response carries: a page, an API answer or a file. */
-type Csp = "page" | "api" | "none";
+type Csp = "page" | "api" | "static";
 
 /** Next.js answer for a dynamically rendered page (document, 4.1). */
 const DYNAMIC_HTML_CACHE = "private, no-cache, no-store, max-age=0, must-revalidate";
@@ -53,7 +59,7 @@ function expectConfigHeaders(response: APIResponse, csp: Csp) {
   const policy = headers["content-security-policy"];
   if (csp === "page") expect(policy, `${response.url()} csp`).toMatch(PAGE_CSP);
   else if (csp === "api") expect(policy, `${response.url()} csp`).toBe(API_CSP);
-  else expect(policy, `${response.url()} csp`).toBeUndefined();
+  else expect(policy, `${response.url()} csp`).toBe(STATIC_CSP);
 }
 
 test.describe("security headers on the build (DAN-296 inventory)", () => {
@@ -104,8 +110,22 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
     expect(chunk, "a chunk referenced by /prijava").toBeDefined();
     const response = await request.get(chunk!);
     expect(response.status()).toBe(200);
-    expectConfigHeaders(response, "none");
+    expectConfigHeaders(response, "static");
     expect(response.headers()["cache-control"]).toBe("public, max-age=31536000, immutable");
+  });
+
+  test("a GET error on a static chunk is never an HTML page without a policy", async ({ request }) => {
+    // DAN-489 review finding (c.6581226772): the middleware skips
+    // /_next/static/*, and Next.js answers a Range past the end of a chunk
+    // with a 416 rendered by its error page, as HTML. It must carry the
+    // no-load policy from next.config.ts.
+    const page = await request.get("/prijava");
+    const chunk = (await page.text()).match(/\/_next\/static\/chunks\/[^"'\s]+\.js/)?.[0];
+    expect(chunk, "a chunk referenced by /prijava").toBeDefined();
+    const response = await request.get(chunk!, { headers: { range: "bytes=999999999999-" }, maxRedirects: 0 });
+    expect(response.status()).toBe(416);
+    expect(await response.text()).toMatch(/^<!DOCTYPE html>/);
+    expectConfigHeaders(response, "static");
   });
 
   test("/api/health is never stored", async ({ request }) => {
@@ -163,7 +183,7 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
   test("/favicon.ico is public but revalidated on every use", async ({ request }) => {
     const response = await request.get("/favicon.ico");
     expect(response.status()).toBe(200);
-    expectConfigHeaders(response, "none");
+    expectConfigHeaders(response, "static");
     expect(response.headers()["cache-control"]).toBe("public, max-age=0, must-revalidate");
   });
 

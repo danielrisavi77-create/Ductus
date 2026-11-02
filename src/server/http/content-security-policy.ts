@@ -21,6 +21,14 @@ export const THEME_SCRIPT_HASH = "sha256-w5EUkO0mfeWuprqAVvvDQYH6baexqP0/rQ+LVq3
 /** API responses carry no markup to run; nothing may load from them. */
 export const API_CONTENT_SECURITY_POLICY = "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
+/**
+ * Static files skip the middleware (middleware.ts), so their responses get no
+ * page policy. Next.js still answers some GETs there with a rendered HTML
+ * error, e.g. 416 for a Range past the end of a chunk; this policy lets such
+ * a page load and run nothing. Browsers ignore it on a script or a stylesheet.
+ */
+export const STATIC_CONTENT_SECURITY_POLICY = API_CONTENT_SECURITY_POLICY;
+
 const NONCE_BYTES = 16; // 128 bits
 const NONCE = /^[A-Za-z0-9+/]{22}==$/;
 const HASH = /^sha256-[A-Za-z0-9+/]{43}=$/;
