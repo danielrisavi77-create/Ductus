@@ -26,8 +26,8 @@ test.describe("workspace shell", () => {
     test.describe(`without JavaScript at ${width} px`, () => {
       test.use({ viewport: { width, height: 900 }, javaScriptEnabled: false });
 
-      // ☰ cannot open the drawer without JavaScript, so the <noscript> rules
-      // must win over the drawer rules (Codex, 3ff456f7). /rad streams, so
+      // ☰ cannot open the drawer without JavaScript, so the `scripting: none`
+      // rules must win over the drawer rules (Codex, 3ff456f7). /rad streams, so
       // the page may sit in Next's hidden frame: the computed style is read,
       // not the visibility of the whole page.
       test("the side bar is in the page and ☰ is not offered", async ({ page }) => {
