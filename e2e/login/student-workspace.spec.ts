@@ -54,10 +54,13 @@ test("rows tell each state, the filter narrows, and a row returns to the same wo
     [await titleOf(fresh), await titleOf(versioned), await titleOf(submitted)];
   const document = await openWorkOf(page, submitted);
   await page.goto(`/rad?zadatak=${submitted}`);
+  // A committed revision first, as in evidence.spec.ts: the server takes it before the submission.
+  const editor = page.getByRole("textbox", { name: t.workspace.documentLabel });
+  await expect(editor).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await editor.click();
+  await editor.press("Control+End");
   await page.keyboard.type("Izmišljena rečenica.");
-  await expect.poll(async () => admin(async (client) => (await client.query<{ r: string }>(
-    "SELECT current_revision::text AS r FROM evidence.document WHERE id = $1", [document])).rows[0]!.r), { timeout: OPEN })
-    .not.toBe("0");
+  await expect(page.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
   await seedSubmission(document);
 
   await page.goto("/zadaci/radovi");
@@ -106,12 +109,12 @@ test("an empty list and an unavailable read are two different screens", async ({
   try {
     await page.reload();
     await expect(page.getByRole("heading", { level: 2, name: w.emptyHeading })).toBeVisible();
-    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
 
     await admin((client) => client.query("REVOKE EXECUTE ON FUNCTION app.student_workspace() FROM ductus_app"));
     try {
       await page.reload();
-      await expect(page.getByRole("alert")).toContainText(t.student.home.unavailableHeading);
+      await expect(page.getByRole("main").getByRole("alert")).toContainText(t.student.home.unavailableHeading);
       await expect(page.getByText(w.emptyHeading)).toHaveCount(0);
     } finally {
       await admin((client) => client.query("GRANT EXECUTE ON FUNCTION app.student_workspace() TO ductus_app"));
