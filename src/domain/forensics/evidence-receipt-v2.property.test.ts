@@ -67,7 +67,8 @@ const expectationOf = (payload: EvidenceReceiptPayloadV2) => ({
 
 const id = (max = 256) => fc.stringMatching(/^[a-z][a-z0-9-]{0,40}$/).filter((value) => value.length <= max);
 const hash = fc.stringMatching(/^[0-9a-f]{64}$/);
-const hex = (length: number) => fc.stringMatching(new RegExp(`^[0-9a-f]{${length}}$`));
+const HEX_DIGIT = fc.constantFrom(..."0123456789abcdef");
+const hex = (length: number) => fc.string({ unit: HEX_DIGIT, minLength: length, maxLength: length });
 const uuidV4 = fc
   .tuple(hex(8), hex(4), hex(3), fc.constantFrom("8", "9", "a", "b"), hex(3), hex(12))
   .map(([a, b, c, variant, d, e]) => `${a}-${b}-4${c}-${variant}${d}-${e}`);
