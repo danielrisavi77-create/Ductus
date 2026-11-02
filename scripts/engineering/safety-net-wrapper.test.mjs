@@ -1307,3 +1307,45 @@ test("F-035 a: a project config too large to compare is refused", { timeout: 600
       foreign(result, "over the entry limit");
       assert.match(result.stderr, /could not be compared/);
     })));
+
+// F-035 (a), review c.6590482994: with foreign rules only the way back to the
+// project root stays open, the install commands included; the other ways
+// without usable rules keep the install exception.
+test("F-035 a: foreign rules leave only cd to the root open, also for the install commands", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const installs = ["pnpm install", "pnpm install --frozen-lockfile"];
+      const stranger = path.join(base, "stranger");
+      fs.mkdirSync(stranger);
+      plantRules(stranger);
+      const otherRepo = path.join(base, "other-repo");
+      fs.mkdirSync(path.join(otherRepo, "sub"), { recursive: true });
+      assert.equal(gitIn(otherRepo, "init", "-q").status, 0);
+      plantRules(otherRepo);
+      const empty = path.join(base, "empty");
+      fs.mkdirSync(empty);
+      const ownBelow = path.join(tree.root, "src");
+      fs.mkdirSync(path.join(ownBelow, ".cc-safety-net"), { recursive: true });
+      fs.writeFileSync(path.join(ownBelow, ".cc-safety-net", "config.json"), "{}");
+      const rows = [
+        // [class, cwd, command, expected code, stderr pattern when blocked]
+        ...installs.flatMap((command) => [
+          ["1/2 foreign, no .git", stranger, command, 2, /not a checkout of this repository/],
+          ["1/2 foreign, another repository", otherRepo, command, 2, /not a checkout of this repository/],
+          ["4 foreign, from below the .git boundary", path.join(otherRepo, "sub"), command, 2, /not a checkout of this repository/],
+          ["5 own rules, the project root", tree.root, command, 0],
+          ["6 no rulebook, no foreign directory", empty, command, 0],
+          ["7 own config below the rulebook", ownBelow, command, 0],
+        ]),
+        ...[stranger, otherRepo, path.join(otherRepo, "sub")].map((cwd) => ["3 foreign, cd to the root", cwd, `cd "${tree.root}"`, 0]),
+        // Controls: the same directories still block an ordinary command.
+        ["6 control", empty, "ls", 2, /no project rulebook/],
+        ["7 control", ownBelow, "ls", 2, /has its own \.cc-safety-net/],
+      ];
+      for (const [label, cwd, command, code, stderr] of rows) {
+        const result = await run(tree, "Bash", command, cwd);
+        assert.equal(result.code, code, `${label}: ${command} in ${cwd}\n${result.stderr}`);
+        if (stderr) assert.match(result.stderr, stderr, `${label}: ${command}`);
+      }
+    })));

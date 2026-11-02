@@ -573,19 +573,18 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
 
   const first = answer(firstResult, timeoutMs);
   if (first.block) return first.block;
-  // Without usable project rules here, only the way back to the project root stays open.
-  const noRules = (problem) => {
+  // Without usable project rules here, only the way back to the project root
+  // stays open; the install exception only where no foreign rules are found.
+  const noRules = (problem, { install = true } = {}) => {
     if (isCdToRoot(command, root)) return { code: 0, stdout: first.stdout, stderr: first.stderr };
-    return unusable(
-      problem,
-      `${isCdToRoot(`cd "${root}"`, root) ? `Run exactly: cd "${root}" (nothing else in the command) to return to the project root, or ` : ""}leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`,
-    );
+    const hint = `${isCdToRoot(`cd "${root}"`, root) ? `Run exactly: cd "${root}" (nothing else in the command) to return to the project root, or ` : ""}leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`;
+    return install ? unusable(problem, hint) : blockedFor(problem, hint);
   };
   if (!rulebookDir) {
     return noRules(`no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`);
   }
   if (ownConfig) return noRules(`${cwd} has its own ${PROJECT_CONFIG} directory below the project's, which the safety check does not accept`);
-  if (foreign) return noRules(foreign);
+  if (foreign) return noRules(foreign, { install: false });
   if (refused) return unusable(refused.problem, refused.hint);
   if (secondResult && !denies(first.stdout)) {
     const second = answer(secondResult, timeoutMs);
