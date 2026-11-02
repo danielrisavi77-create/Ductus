@@ -713,6 +713,8 @@ describe("the joiner inside a name, class by class", () => {
     { klass: "I10b the same, against our three", base: TRIO, other: line(work([HM, BIE, K], "Treća")), promoted: false },
     { klass: "I11a our one author, against a pair with the joiner in a name", base: ONE, other: line(work([HM, BIE], "Treća")), promoted: true },
     { klass: "I11b our three, against a pair with the joiner in a name", base: TRIO, other: line(work([HM, BIE], "Treća")), promoted: true },
+    { klass: "I12 an organisation inside the list, one reading of which is another pair: not read, stays as written", base: PAIR,
+      other: "Horvat, Marko, Zavod za primjer i Babić, Iva (2021) Ručni unos.", promoted: false },
   ];
 
   it.each(rows)("class $klass", ({ base: b, other, promoted }) => {
