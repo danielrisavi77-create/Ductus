@@ -129,17 +129,19 @@ async function main() {
   // without a readable time must still void quota evidence (QA c.6561448849).
   // Filtering them by base change is a separate ticket.
   if (!targetsDefaultBranch(pr)) {
-    // F-014: another open PR on this head owns its statuses; a pending marker
-    // here would overwrite them. An unread list counts as shared.
-    if (sharesHeadWithOpenPr(pr, openPulls)) {
-      knownHead = null;
-      console.log(`${context}: no status; another open PR shares this head. ${NOT_DEFAULT_BASE.description}`);
-      return;
-    }
+    // F-014, F-040: another open PR on this head may own its statuses, and
+    // while the head is shared none of them may stay green (Codex review
+    // c.6564729651), so the run clears them with the shared-head marker. It
+    // never writes success there. An unread list counts as shared.
+    const marker = sharesHeadWithOpenPr(pr, openPulls) ? SHARED_HEAD : NOT_DEFAULT_BASE;
+    // F-040 (QA c.6565224257): once these writes start, a failed one must not
+    // leave older green statuses beside the new pending ones, so the failure
+    // path marks all three pending, as it does for a PR to main.
+    knownHead = { repository, sha: pr.head.sha, url: pr.html_url, carrier: false };
     for (const statusContext of [authorizationContext, autoMergeContext, context]) {
-      await setStatus(repository, pr.head.sha, NOT_DEFAULT_BASE, pr.html_url, statusContext);
+      await setStatus(repository, pr.head.sha, marker, pr.html_url, statusContext);
     }
-    console.log(`${context}: pending — ${NOT_DEFAULT_BASE.description}`);
+    console.log(`${context}: pending — ${marker.description}`);
     return;
   }
 
@@ -154,14 +156,27 @@ async function main() {
     carriedHeads: await carriedHeads(api, owner, repo, pr, comments),
   });
 
+  // F-040: the statuses of a shared head would also stand for the other PR.
+  const shared = sharesHeadWithOpenPr(pr, openPulls);
+  const gate = shared ? SHARED_HEAD : result;
   // Authorization first: a stale green one must never sit beside a new green gate.
-  await setStatus(repository, pr.head.sha, mergeAuthorization ?? WAITING, pr.html_url, authorizationContext);
-  const eligible = sharesHeadWithOpenPr(pr, openPulls)
-    ? SHARED_HEAD
-    : (autoMergeEligible ?? { state: "pending", description: "Not eligible for auto-merge." });
+  await setStatus(repository, pr.head.sha, shared ? SHARED_HEAD : (mergeAuthorization ?? WAITING), pr.html_url, authorizationContext);
+  const eligible = shared ? SHARED_HEAD : (autoMergeEligible ?? { state: "pending", description: "Not eligible for auto-merge." });
   await setStatus(repository, pr.head.sha, eligible, pr.html_url, autoMergeContext);
-  await setStatus(repository, pr.head.sha, result, pr.html_url);
-  console.log(`${context}: ${result.state} — ${result.description}`);
+  await setStatus(repository, pr.head.sha, gate, pr.html_url);
+  // F-040 (QA c.6564767686): runs of two PRs can overlap, so the list read
+  // above may predate a PR opened on this head since. After any green write
+  // the run reads the list again; a PR opened later sees this one in its own
+  // run. A failed re-read fails the run, which marks the head pending.
+  const wroteGreen = !shared && [mergeAuthorization, eligible, gate].some((status) => status?.state === "success");
+  if (wroteGreen && sharesHeadWithOpenPr(pr, await apiAll(`/repos/${owner}/${repo}/pulls?state=open`))) {
+    for (const statusContext of [authorizationContext, autoMergeContext, context]) {
+      await setStatus(repository, pr.head.sha, SHARED_HEAD, pr.html_url, statusContext);
+    }
+    console.log(`${context}: pending — ${SHARED_HEAD.description}`);
+    return;
+  }
+  console.log(`${context}: ${gate.state} — ${gate.description}`);
   if (metadata?.ok) {
     console.log(`Risk: declared=${metadata.risk}, minimum=${metadata.minimumRisk}`);
   }
