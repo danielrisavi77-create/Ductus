@@ -25,7 +25,14 @@ const SECURE = BASE_URL.startsWith("https:");
  * and seeded database, and AUTH_DATABASE_URL, which has no default because
  * its password is made per run (CI) or chosen locally (.env.example).
  */
+// TEMPORARY (DAN-232 diagnosis): GnuTLS and browser logs for the WebKit handshake.
+if (process.env.CI && SECURE) {
+  process.env.GNUTLS_DEBUG_LEVEL = "3";
+  process.env.DEBUG = "pw:browser";
+}
+
 export default defineConfig({
+  globalSetup: process.env.CI && SECURE ? "./scripts/demo/login-tls-probe.mjs" : undefined,
   testDir: "e2e/login",
   retries: 0,
   // The tests share the demo account and the dev server compiles on first
