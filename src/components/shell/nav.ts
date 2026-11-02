@@ -46,12 +46,14 @@ export function accountPlace(scope: string | null, ownAccount: boolean): Account
 }
 
 /**
- * Where "Početna" and the brand lead (#802 part B): each role's own space,
- * the general home without a role. Like the role itself, it only points the
+ * Where "Početna" and the brand lead (#802 part B, D-202 t. 2): each role's
+ * own home, the general home without a role. A student's home is S01 on
+ * /zadaci (D-180), never the workspace; a teacher, also as a mentor (D-204),
+ * goes to /nastavnik. Like the role itself, it only points the
  * way; every page still checks the session on its own.
  */
 export function homeHref(role: ShellRole | null): string {
   if (role === "teacher") return "/nastavnik";
-  if (role === "student") return "/rad";
+  if (role === "student") return "/zadaci";
   return "/";
 }
