@@ -20,7 +20,8 @@ export type Freshness = "live" | "expired" | "future" | "malformed";
 export type SpikeRecord = { documentId: string; synced: boolean; body: Sealed };
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder("utf-8", { fatal: true });
+// ignoreBOM: a leading U+FEFF is part of the text, not a marker to drop.
+const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 /** Binds a record to its scope and document: a moved record does not open. */
 export function contextFor(scopeHash: string, documentId: string): Uint8Array {
@@ -96,11 +97,14 @@ export function freshness(at: unknown, synced: boolean, now: number, policy: Pol
   return now - at >= (synced ? policy.syncedTtlMs : policy.unsyncedTtlMs) ? "expired" : "live";
 }
 
-type KeyRow = { id: string; key: CryptoKey };
+/** `gen` names one key generation: a new key after a shred is a new generation. */
+type KeyRow = { id: string; key: CryptoKey; gen: string };
 
 /** One tab's connection to the spike database (a stand-in for the journal). */
 export class SpikeStore {
   private readonly db: Dexie & { keys: Table<KeyRow, string>; records: Table<SpikeRecord, string> };
+  /** The generation of the key this tab last obtained; a guarded write needs it. */
+  private heldGen: string | null = null;
 
   constructor(readonly name: string, options?: DexieOptions) {
     this.db = new Dexie(name, options) as SpikeStore["db"];
@@ -115,24 +119,31 @@ export class SpikeStore {
   async deviceKey(mode: "naive" | "checked" = "checked", afterRead?: () => Promise<void>): Promise<CryptoKey> {
     if (mode === "naive") {
       const found = await this.db.keys.get(DEVICE_KEY_ID);
-      if (found) return found.key;
+      if (found) return this.hold(found);
       await afterRead?.();
-      const key = await newRecordKey();
-      await this.db.keys.put({ id: DEVICE_KEY_ID, key });
-      return key;
+      const row = { id: DEVICE_KEY_ID, key: await newRecordKey(), gen: crypto.randomUUID() };
+      await this.db.keys.put(row);
+      return this.hold(row);
     }
-    const candidate = await newRecordKey();
+    const candidate = { id: DEVICE_KEY_ID, key: await newRecordKey(), gen: crypto.randomUUID() };
     await afterRead?.();
-    return this.db.transaction("rw", this.db.keys, async () => {
+    const row = await this.db.transaction("rw", this.db.keys, async () => {
       const found = await this.db.keys.get(DEVICE_KEY_ID);
-      if (found) return found.key;
-      await this.db.keys.add({ id: DEVICE_KEY_ID, key: candidate });
+      if (found) return found;
+      await this.db.keys.add(candidate);
       return candidate;
     });
+    return this.hold(row);
+  }
+
+  private hold(row: KeyRow): CryptoKey {
+    this.heldGen = row.gen;
+    return row.key;
   }
 
   async existingKey(): Promise<CryptoKey | null> {
-    return (await this.db.keys.get(DEVICE_KEY_ID))?.key ?? null;
+    const row = await this.db.keys.get(DEVICE_KEY_ID);
+    return row ? this.hold(row) : null;
   }
 
   /** Crypto-shredding: a row delete, which another open tab cannot block. */
@@ -144,10 +155,14 @@ export class SpikeStore {
     await this.db.records.put(record);
   }
 
-  /** Writes only while the key row exists, in the same transaction. */
+  /**
+   * Writes only while the key this tab holds is still the current one, checked
+   * in the same transaction: a shred, or a shred and a new key, refuses it.
+   */
   async putGuarded(record: SpikeRecord): Promise<void> {
     await this.db.transaction("rw", this.db.keys, this.db.records, async () => {
-      if (!(await this.db.keys.get(DEVICE_KEY_ID))) throw new Error("logout");
+      const current = await this.db.keys.get(DEVICE_KEY_ID);
+      if (!current || current.gen !== this.heldGen) throw new Error("logout");
       await this.db.records.put(record);
     });
   }
@@ -193,12 +208,13 @@ export class SpikeStore {
  * student's own sign-in. No network and no KMS here.
  */
 export class FakeKeyService {
-  private readonly keks = new Map<string, CryptoKey>();
+  /** One creation per principal: concurrent first calls share the promise. */
+  private readonly keks = new Map<string, Promise<CryptoKey>>();
 
-  private async kek(principal: string): Promise<CryptoKey> {
+  private kek(principal: string): Promise<CryptoKey> {
     let kek = this.keks.get(principal);
     if (!kek) {
-      kek = await crypto.subtle.generateKey({ name: "AES-KW", length: 256 }, false, ["wrapKey", "unwrapKey"]);
+      kek = crypto.subtle.generateKey({ name: "AES-KW", length: 256 }, false, ["wrapKey", "unwrapKey"]);
       this.keks.set(principal, kek);
     }
     return kek;
@@ -210,9 +226,10 @@ export class FakeKeyService {
   }
 
   async unwrap(principal: string, wrapped: Uint8Array): Promise<CryptoKey | null> {
-    const kek = this.keks.get(principal);
-    if (!kek) return null;
+    const pending = this.keks.get(principal);
+    if (!pending) return null;
     try {
+      const kek = await pending;
       return await crypto.subtle.unwrapKey(
         "raw", wrapped.slice(), kek, "AES-KW", "AES-GCM", false, ["encrypt", "decrypt"],
       );
