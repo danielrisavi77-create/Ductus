@@ -38,6 +38,8 @@ export const hr = {
       courses: "Moji kolegiji",
       newCourse: "Novi kolegij i zadatak",
       fastPath: "Brz put",
+      // DAN-492 (N-16): the works a teacher mentors, outside any course.
+      mentoredWorks: "Radovi uz mentora",
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
     },
@@ -490,6 +492,24 @@ export const hr = {
       onTime: "Predano",
       afterDeadline: "Predano nakon roka",
       none: "Nije predano",
+    },
+  },
+  // DAN-492 (M2.6-P02, N-16), design pregled-radova-v2: only what the read gives (D-202).
+  mentoredWorks: {
+    title: "Radovi uz mentora",
+    lead: "Završni, diplomski i drugi radovi kojima ste mentor. Prikaz samo čita; ništa ne mijenja.",
+    listTitle: "Radovi · abecedno",
+    orderNote: "Popis se ne može poredati po brojevima.",
+    empty: "Nemate otvorenih mentorstava.",
+    unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+    unnamed: "Ime nije dostupno",
+    open: "Otvori rad",
+    // The state as text only, never a colour (D-128).
+    state: {
+      not_started: "Student još nije započeo rad.",
+      in_progress: "U pisanju",
+      submitted: "Predano",
     },
   },
   fastPath: {
@@ -1109,6 +1129,7 @@ export const hr = {
       courses: "svoje kolegije",
       newCourse: "obrazac za novi kolegij i zadatak",
       fastPath: "brz put kroz radove",
+      mentoredWorks: "radove uz mentora",
       home: "svoj prostor",
     },
     deniedTitle: "Nemate pristup ovom prikazu",

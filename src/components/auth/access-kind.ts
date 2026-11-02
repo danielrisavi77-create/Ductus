@@ -1,5 +1,6 @@
 import type { TeacherAccess } from "@/components/teacher/teacher-access";
 import type { SessionPrincipal } from "@/server/auth/principal";
+import type { MentoredWorksRead } from "@/server/institution/mentored-works";
 import type { TeacherCoursesRead } from "@/server/institution/teacher-courses";
 
 /** Which access screen a page shows instead of its content (DAN-378, Z-03 and Z-05). */
@@ -51,6 +52,17 @@ export function teacherPageAccess(
 export function coursesAccess(read: TeacherCoursesRead["kind"] | null): TeacherAccess {
   if (read === null || read === "unauthorized") return "signedOut";
   if (read === "not_found") return "denied";
+  return read === "ok" ? "allowed" : "unavailable";
+}
+
+/**
+ * DAN-492 (N-16): the teacher access of `teacherPageRead` with the mentored
+ * works read beside it. The role read decides; only a read that then found
+ * the session closed (it never reopens) or failed changes an "allowed".
+ */
+export function mentoredWorksAccess(access: TeacherAccess, read: MentoredWorksRead["kind"]): TeacherAccess {
+  if (access !== "allowed") return access;
+  if (read === "unauthorized") return "signedOut";
   return read === "ok" ? "allowed" : "unavailable";
 }
 

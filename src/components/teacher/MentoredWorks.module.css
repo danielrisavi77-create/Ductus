@@ -1,0 +1,102 @@
+/* DAN-492 (N-16), design pregled-radova-v2 list, on the shared tokens (app/globals.css, D-188). */
+.list,
+.empty {
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--chrome);
+}
+
+.empty {
+  padding: 28px;
+}
+
+.empty h2 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.listTitle {
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rule-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.works {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name open" "title open" "meta open";
+  gap: 2px 14px;
+  align-items: center;
+  padding: 12px 18px;
+  border-top: 1px solid var(--hover);
+}
+
+.work:first-child {
+  border-top: 0;
+}
+
+.name {
+  grid-area: name;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  grid-area: title;
+  font-size: 13px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The state is text in the colour of the list, never a colour of its own (D-128). */
+.meta {
+  grid-area: meta;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.open {
+  grid-area: open;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+@media (max-width: 700px) {
+  .work {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "name" "title" "meta" "open";
+  }
+}
+
+/* #732 item 8: 12 px is the floor for interface text, 13 px on a phone; a 44 px target to tap. */
+@media (max-width: 640px) {
+  .listTitle,
+  .meta,
+  .note {
+    font-size: 13px;
+  }
+
+  .open {
+    min-height: 44px;
+  }
+}

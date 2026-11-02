@@ -36,6 +36,10 @@ describe("navFor", () => {
     expect(student.slice(0, 2)).toEqual(["/zadaci", "/zadaci/kolegiji"]);
   });
 
+  it("gives a teacher, from DAN-492 (N-16), the works the teacher mentors", () => {
+    expect(navFor("teacher")).toContainEqual({ href: "/nastavnik/mentorstva", label: "Radovi uz mentora" });
+  });
+
   it("gives no item without a role", () => {
     expect(navFor(null)).toEqual([]);
   });

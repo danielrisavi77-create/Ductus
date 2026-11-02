@@ -18,6 +18,8 @@ const NAV: Record<ShellRole, readonly NavItem[]> = {
     { href: "/nastavnik", label: t.shell.nav.courses },
     { href: "/nastavnik/zadatak/novi", label: t.shell.nav.newCourse },
     { href: "/nastavnik/brz-put", label: t.shell.nav.fastPath },
+    // DAN-492 (N-16): the works the teacher mentors (DAN-477).
+    { href: "/nastavnik/mentorstva", label: t.shell.nav.mentoredWorks },
   ],
   student: [
     { href: "/zadaci", label: t.shell.nav.assignments },
