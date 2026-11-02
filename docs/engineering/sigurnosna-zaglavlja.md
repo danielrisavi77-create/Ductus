@@ -196,3 +196,38 @@ Svi odgovori uz tri postojeća zaglavlja nose i `Strict-Transport-Security: max-
 - COOP; N-1 (`no-referrer` na `/api/auth/*`); N-2 (405 bez `no-store`); Report-Only na stagingu i `report-to`; HSTS `preload` i HSTS na Caddy rubu; `Clear-Site-Data` na odjavi. Predlaže se nastavak pod DAN-296.
 - HSTS preglednik preko HTTP-a zanemaruje (RFC 6797 §8.1); djeluje tek iza TLS-a na stagingu.
 - `'strict-dynamic'` dopušta skripti s nonceom učitati daljnje skripte; sigurnost počiva na tome da nonce dobiva samo Next.js.
+
+## 10. Rani odgovori usmjerivača (DAN-498)
+
+Nalaz reviewa na PR-u 2 (#1323, c.6582425785), issue #1369. Tvrdnja iz 9.3 da sva zaglavlja nose „svi odgovori” nije vrijedila za odgovore koje usmjerivač Next.js šalje prije `headers()` iz `next.config.ts` i prije middlewarea. Ugovor: #1369, c.6584199310.
+
+### 10.1 Što je nedostajalo
+
+Mjereno na buildu `main` abff265 (`pnpm build`, `next start`), za GET, HEAD, POST i OPTIONS:
+
+| Klasa ulaza | Primjer | Odgovor | Zaglavlja prije DAN-498 |
+| --- | --- | --- | --- |
+| dvostruka kosa crta | `/prijava//x`, `//evil.example`, `/api//health` | 308 na normaliziranu putanju | nijedno |
+| obrnuta kosa crta | `/prijava\x`, `/\prijava` | 308 | nijedno |
+| kosa crta na kraju | `/prijava/`, `/api/health/`, `/favicon.ico/` | 308 bez kose crte | nijedno |
+| kodirani znak koji se ne može dekodirati | `/api/%`, `/zadatak/%E0%A4%A` | HTML 400 (stranica greške okvira) | nijedno, pa ni `frame-ancestors` ni `X-Frame-Options` |
+| kodirani znak koji se dekodira | `/prijava%2F%2Fx`, `/%` | 404 normalnim putem | sva |
+| velika i mala slova | `/Prijava//X` (308), `/PRIJAVA` (404) | prema ostalim klasama | 308 nijedno, 404 sva |
+| upit | `/prijava//x?a=b` (308), `/prijava?%` (200) | upit ne mijenja put | 308 nijedno, 200 sva |
+
+### 10.2 Popravak
+
+- `src/server/http/security-headers.ts` drži zaglavlja iz 9.3 (`next.config.ts` ih sada uvozi odande) i „pod”: ta zaglavlja i politiku koja ništa ne dopušta (`default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`).
+- `instrumentation.ts` pri pokretanju Node procesa omata `ServerResponse.prototype.writeHead`. Kroz njega prolaze i `end()` i `flushHeaders()`. Pod postavlja samo zaglavlje koje odgovor još nema, pa vrijednost rute, middlewarea ili `next.config.ts` ostaje; zaglavlja predana samom `writeHead` u Nodeu ionako zamjenjuju ranije, pa i ona imaju prednost. Dvostruka instalacija omata jednom.
+- Edge bundle ga ne sadrži: kod je u bloku `NEXT_RUNTIME === "nodejs"`, koji webpack izbacuje zajedno s uvozom `node:http`.
+- Normalne stranice, `/api/*` i statičke datoteke zadržavaju politike iz 9.3; svako zaglavlje stiže točno jednom.
+
+Dokaz: tablični test u `e2e/security-headers.spec.ts` (svaki redak pinira status, pa dokazuje da je to baš rani put; za `/prijava//x` i `Location`) i unit test poda nad pravim `node:http` poslužiteljem (`src/server/http/security-headers.test.ts`).
+
+### 10.3 Poznate granice
+
+- Odgovor 400 koji Node sam piše na neispravan HTTP zahtjev (`clientError`) ne prolazi kroz `ServerResponse` i ostaje bez zaglavlja. Nema tijela, pa nema što uokviriti.
+- HTML 400 stranica greške okvira sada nosi politiku koja ništa ne dopušta, pa se njezini stilovi ne primjenjuju; tekst ostaje čitljiv.
+- Pod ovisi o tome da Next.js pozove `register()` prije prvog zahtjeva. Next.js 15.5 to čini; nadogradnja okvira mora ponovno proći tablični test.
+- Mjereno na buildu (`next start`). `next dev` učitava isti `instrumentation.ts`, ali nije zaseban dio dokaza.
+- Rub Caddy na stagingu nije dio ove mjere; HSTS ondje ostaje otvoren kao u 9.4.
