@@ -35,6 +35,8 @@ export const hr = {
     space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
     nav: {
       assignments: "Moji zadaci",
+      // DAN-309 (B2): the student's own works across courses, /zadaci/radovi.
+      works: "Moji radovi",
       courses: "Moji kolegiji",
       newCourse: "Novi kolegij i zadatak",
       fastPath: "Brz put",
@@ -839,6 +841,34 @@ export const hr = {
       noAssignments: "U ovom kolegiju zasad nema zadatka.",
       due: "Rok {time}",
       noticeFirst: "Prvo pročitajte obavijest",
+    },
+    // DAN-309 (M2.3-P02, B2): "Moji radovi" on /zadaci/radovi. Each state is
+    // told only from what the server read returned; nothing about the text.
+    works: {
+      title: "Moji radovi",
+      lede: "Vaši radovi na svim kolegijima i njihovo stanje.",
+      search: "Traži po naslovu ili kolegiju",
+      year: "Akademska godina",
+      allYears: "Sve godine",
+      apply: "Prikaži",
+      reset: "Poništi odabir",
+      noMatch: "Nijedan rad ne odgovara odabiru.",
+      emptyHeading: "Još nemate radova.",
+      emptyBody: "Radovi se ovdje prikazuju kad se upišete u kolegij sa zadatkom.",
+      enroll: "Upiši kolegij kodom",
+      list: "Popis radova",
+      due: "Rok {time}",
+      state: {
+        newVersion: "Nova verzija uputa ({version}), još nije potvrđena",
+        notice: "Upute još nisu potvrđene",
+        notStarted: "Rad nije započet",
+        inProgress: "Rad je započet, nije predan",
+        submitted: "Predano {time}",
+        afterDeadline: "Predano {time}, nakon roka",
+      },
+      readNotice: "Pročitaj upute",
+      start: "Otvori zadatak",
+      open: "Otvori rad",
     },
     // DAN-344: the Archivum S01 texts of /zadaci, verbatim from the owner's
     // package (26. 10. 2026.), in "Vi"; the subtitle without its mentoring
