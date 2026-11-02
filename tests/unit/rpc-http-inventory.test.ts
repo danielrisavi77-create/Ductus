@@ -14,14 +14,22 @@ import exceptions from "./rpc-http-exceptions.json";
 // DROP FUNCTION removes the entry. A function changes state when its last
 // definition is neither STABLE nor IMMUTABLE, does not return trigger, and its
 // body writes (INSERT INTO, UPDATE, DELETE FROM) or calls a function that does.
-// A definition the parser cannot read ($$ or $tag$ body) stops the test. It
-// has a route when a call "schema.name(" appears, outside comments, in a file
-// that some app/api/**/route.ts reaches through its imports. A call is matched
+// SQL is read by one scanner that tells code from '...' and E'...'
+// literals, "..." identifiers, $tag$ bodies and comments; volatility is read
+// outside literals and brackets (two volatility words stop the test), and a
+// write is looked for in the body without comments.
+// A definition the parser cannot read, or an unclosed literal, body or
+// comment, stops the test. A function has a route when a call "schema.name("
+// appears, outside comments, in a file that some app/api/**/route.ts reaches
+// through its imports. A call is matched
 // without regard to case and with optional space before "(".
 //
-// Known limits: GRANT is not read (the reason in the list covers who may call
-// a function), and a name built at run time, a quoted identifier, or a call
-// reached through EXECUTE format(...) is not seen.
+// Known limits (separate ticket): GRANT is not read (the reason in the list
+// covers who may call a function); a name built at run time or a call
+// through EXECUTE format(...) is not seen; a quoted function name stops the
+// test and is not counted as a route; a call in a module a route imports
+// counts even if it never runs; MERGE, TRUNCATE and COPY are not counted as
+// writes; U&'...' literals are not read.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MIGRATIONS = join(ROOT, "db/migrations");
@@ -35,57 +43,106 @@ type Exception = {
   ticket?: string;
 };
 
-const DOLLAR_RE = /\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$/y;
+type Part = {
+  kind: "code" | "string" | "ident" | "dollar" | "comment";
+  text: string;
+};
 
-/** Splits SQL into statements on ";" outside dollar-quoted bodies ($$ or $tag$), quotes and comments, which it drops. */
+const DOLLAR_RE = /\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$/y;
+const IDENT_CHAR = /[A-Za-z_0-9$]/;
+
+/**
+ * Splits SQL into code, '...' and E'...' literals, "..." identifiers,
+ * $tag$ bodies and comments (-- and nested block comments). An unclosed
+ * literal, identifier, body or comment stops the inventory.
+ */
+export function scanSql(sql: string): Part[] {
+  const parts: Part[] = [];
+  let code = "";
+  const push = (kind: Part["kind"], text: string) => {
+    if (code) parts.push({ kind: "code", text: code });
+    code = "";
+    parts.push({ kind, text });
+  };
+  let i = 0;
+  while (i < sql.length) {
+    const char = sql[i] ?? "";
+    const before = sql[i - 1] ?? "";
+    DOLLAR_RE.lastIndex = i;
+    const tag =
+      char === "$" && !IDENT_CHAR.test(before)
+        ? DOLLAR_RE.exec(sql)?.[0]
+        : undefined;
+    if (tag) {
+      const end = sql.indexOf(tag, i + tag.length);
+      if (end < 0) throw new Error("unclosed dollar quote");
+      push("dollar", sql.slice(i, end + tag.length));
+      i = end + tag.length;
+    } else if (char === "'" || char === '"') {
+      // E'...' takes backslash escapes; both forms double the quote to escape it.
+      const escapes =
+        char === "'" &&
+        /[Ee]/.test(before) &&
+        !IDENT_CHAR.test(sql[i - 2] ?? "");
+      let end = i + 1;
+      for (;;) {
+        if (end >= sql.length) throw new Error("unclosed quote");
+        if (escapes && sql[end] === "\\") end += 2;
+        else if (sql[end] === char && sql[end + 1] === char) end += 2;
+        else if (sql[end] === char) break;
+        else end += 1;
+      }
+      push(char === "'" ? "string" : "ident", sql.slice(i, end + 1));
+      i = end + 1;
+    } else if (sql.startsWith("--", i)) {
+      const end = sql.indexOf("\n", i);
+      const stop = end < 0 ? sql.length : end;
+      push("comment", sql.slice(i, stop));
+      i = stop;
+    } else if (sql.startsWith("/*", i)) {
+      // Block comments nest in PostgreSQL.
+      let depth = 0;
+      let end = i;
+      do {
+        if (end >= sql.length) throw new Error("unclosed block comment");
+        if (sql.startsWith("/*", end)) depth += 1;
+        else if (sql.startsWith("*/", end)) depth -= 1;
+        else {
+          end += 1;
+          continue;
+        }
+        end += 2;
+      } while (depth > 0);
+      push("comment", sql.slice(i, end));
+      i = end;
+    } else {
+      code += char;
+      i += 1;
+    }
+  }
+  if (code) parts.push({ kind: "code", text: code });
+  return parts;
+}
+
+/** Splits SQL into statements on ";" in code only, and drops comments. */
 export function statements(sql: string): string[] {
   const out: string[] = [];
   let current = "";
-  let tag: string | null = null;
-  let i = 0;
-  while (i < sql.length) {
-    DOLLAR_RE.lastIndex = i;
-    const quote = sql[i] === "$" ? DOLLAR_RE.exec(sql)?.[0] : undefined;
-    if (quote && (tag === null || tag === quote)) {
-      tag = tag === null ? quote : null;
-      current += quote;
-      i += quote.length;
-    } else if (tag === null && sql.startsWith("--", i)) {
-      const end = sql.indexOf("\n", i);
-      i = end < 0 ? sql.length : end;
-    } else if (tag === null && sql.startsWith("/*", i)) {
-      // Block comments nest in PostgreSQL.
-      let depth = 1;
-      i += 2;
-      while (i < sql.length && depth > 0) {
-        if (sql.startsWith("/*", i)) depth += 1;
-        else if (sql.startsWith("*/", i)) depth -= 1;
-        else {
-          i += 1;
-          continue;
-        }
-        i += 2;
+  for (const part of scanSql(sql)) {
+    if (part.kind === "comment") current += " ";
+    else if (part.kind !== "code") current += part.text;
+    else {
+      const pieces = part.text.split(";");
+      current += pieces.shift() ?? "";
+      for (const piece of pieces) {
+        if (current.trim()) out.push(current.trim());
+        current = piece;
       }
-      current += " ";
-    } else if (tag === null && sql[i] === "'") {
-      const end = sql.indexOf("'", i + 1);
-      const stop = end < 0 ? sql.length : end + 1;
-      current += sql.slice(i, stop);
-      i = stop;
-    } else if (tag === null && sql[i] === ";") {
-      if (current.trim()) out.push(current.trim());
-      current = "";
-      i += 1;
-    } else {
-      current += sql[i];
-      i += 1;
     }
   }
   if (current.trim()) out.push(current.trim());
   return out;
 }
-
-const BODY_RE = /(\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$)([\s\S]*?)\1/;
 
 /** The functions that exist after every migration's up part, by schema.name. */
 export function catalogue(
@@ -93,26 +150,64 @@ export function catalogue(
 ): Map<string, Fn> {
   const fns = new Map<string, Fn>();
   for (const file of [...files].sort((a, b) => a.name.localeCompare(b.name))) {
-    const up = file.sql.split(/--\s*migrate:down/)[0] ?? "";
-    for (const statement of statements(up)) {
+    // dbmate reads the marker only at the start of a line.
+    const up = file.sql.split(/^--\s*migrate:down/m)[0] ?? "";
+    let parsed: string[];
+    try {
+      parsed = statements(up);
+    } catch (error) {
+      throw new Error(`${file.name}: ${(error as Error).message}`);
+    }
+    for (const statement of parsed) {
+      const parts = scanSql(statement);
+      // Code with literals, quoted identifiers and bodies as empty tokens.
+      const head = parts
+        .map((part) =>
+          part.kind === "code"
+            ? part.text
+            : part.kind === "ident"
+              ? '""'
+              : "''",
+        )
+        .join("");
       const created =
         /^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_]+\.[a-z_0-9]+)\s*\(/i.exec(
           statement,
         );
-      const body = BODY_RE.exec(statement)?.[2];
-      const outside = statement.replace(BODY_RE, "").replace(/'[^']*'/g, "");
-      if (/\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i.test(outside)) {
+      // The body is the dollar-quoted part right after AS.
+      const at = parts.findIndex(
+        (part, index) =>
+          part.kind === "dollar" &&
+          /\bAS\s*$/i.test(parts[index - 1]?.text ?? ""),
+      );
+      const quoted = parts[at]?.text;
+      const tag = quoted ? /^\$[^$]*\$/.exec(quoted)?.[0] : undefined;
+      const body =
+        quoted && tag ? quoted.slice(tag.length, -tag.length) : undefined;
+      if (/\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i.test(head)) {
         // A definition this parser cannot read stops the inventory instead
         // of silently leaving a function out of it.
         if (!created?.[1] || body === undefined)
           throw new Error(`${file.name}: unreadable function definition`);
-      }
-      if (created?.[1] && body !== undefined) {
-        const head = statement.replace(BODY_RE, "");
+        // Attributes sit outside brackets; a SET value is not one.
+        let attributes = head;
+        while (/\([^()]*\)/.test(attributes))
+          attributes = attributes.replace(/\([^()]*\)/g, " ");
+        attributes = attributes.replace(
+          /\bSET\s+[\w.]+\s*(?:=|\bTO\b)\s*(?:''|""|[\w.]+)(?:\s*,\s*(?:''|""|[\w.]+))*/gi,
+          " ",
+        );
+        const volatility =
+          attributes.match(/\b(?:VOLATILE|STABLE|IMMUTABLE)\b/gi) ?? [];
+        if (volatility.length > 1)
+          throw new Error(`${file.name}: ambiguous volatility`);
         fns.set(created[1].toLowerCase(), {
-          volatile: !/\b(?:STABLE|IMMUTABLE)\b/i.test(head),
-          trigger: /\bRETURNS\s+trigger\b/i.test(head),
-          body: body.replace(/--[^\n]*/g, ""),
+          volatile: !/^(?:STABLE|IMMUTABLE)$/i.test(volatility[0] ?? ""),
+          trigger: /\bRETURNS\s+trigger\b/i.test(attributes),
+          // Literals stay in the body, so EXECUTE 'DELETE FROM ...' still counts.
+          body: scanSql(body)
+            .map((part) => (part.kind === "comment" ? " " : part.text))
+            .join(""),
         });
         continue;
       }
@@ -358,6 +453,57 @@ describe("catalogue parser", () => {
       },
     ]);
     expect(stateChanging(parsed)).toStrictEqual(["s.w"]);
+  });
+
+  it("reads volatility outside literals and keeps writes after -- in a literal", () => {
+    const parsed = catalogue([
+      {
+        name: "1.sql",
+        sql: [
+          "CREATE FUNCTION s.label(p_label text DEFAULT 'stable') RETURNS void LANGUAGE sql VOLATILE AS $$ DELETE FROM s.t WHERE a IS NOT NULL; $$;",
+          'CREATE FUNCTION s.named("stable" int) RETURNS void LANGUAGE sql AS $$ DELETE FROM s.t; $$;',
+          "CREATE FUNCTION s.bare(stable int) RETURNS TABLE (immutable int) LANGUAGE sql SET search_path = stable AS $$ DELETE FROM s.t RETURNING 1; $$;",
+          "CREATE FUNCTION s.dash() RETURNS void LANGUAGE plpgsql VOLATILE AS $$ BEGIN PERFORM '--'; DELETE FROM s.t; END; $$;",
+          "CREATE FUNCTION s.escaped() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE E'\\';--'; DELETE FROM s.t; END $$;",
+          "CREATE FUNCTION s.fixed(p text DEFAULT $$a$$) RETURNS void LANGUAGE sql AS $$ DELETE FROM s.t; $$;",
+          "CREATE FUNCTION s.read() RETURNS int LANGUAGE sql STABLE AS $$ SELECT 1; $$;",
+          "/* not a marker: -- migrate:down */",
+          "CREATE FUNCTION s.after() RETURNS void LANGUAGE sql AS $$ DELETE FROM s.t; $$;",
+        ].join("\n"),
+      },
+    ]);
+    expect(parsed.get("s.read")?.volatile).toBe(false);
+    expect(stateChanging(parsed)).toStrictEqual([
+      "s.after",
+      "s.bare",
+      "s.dash",
+      "s.escaped",
+      "s.fixed",
+      "s.label",
+      "s.named",
+    ]);
+  });
+
+  it("stops on two volatility words", () => {
+    expect(() =>
+      catalogue([
+        {
+          name: "1.sql",
+          sql: "CREATE FUNCTION s.w() RETURNS void LANGUAGE sql STABLE VOLATILE AS $$ DELETE FROM s.t; $$;",
+        },
+      ]),
+    ).toThrow("1.sql: ambiguous volatility");
+  });
+
+  it("stops on an unclosed quote, body or comment", () => {
+    for (const sql of [
+      "CREATE FUNCTION s.w() RETURNS void LANGUAGE sql AS $$ DELETE FROM s.t;",
+      "SELECT 'open;",
+      "/* open",
+    ])
+      expect(() => catalogue([{ name: "1.sql", sql }])).toThrow(
+        /^1\.sql: unclosed/,
+      );
   });
 
   it("stops on a function definition it cannot read", () => {
