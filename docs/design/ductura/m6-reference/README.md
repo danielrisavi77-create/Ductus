@@ -29,6 +29,8 @@ Opseg M6.UX-R po odluci orkestratora (#1091): PR 1 M6.2 (S-34, N-09); PR 2 M6.3/
 | smanjeno kretanje | korak po koraku bez animacije; tipkovnica: razmaknica, strelice |
 | stalni tekst | „Ritam pisanja ne govori ništa o autorstvu ni o trudu.” (`docs/PRODUCT.md` §6) u svakom stanju s reprodukcijom, uključujući prazninu u zapisu i veliki rad |
 
+Primjer je dosljedan kroz sva stanja: početci sesija su promjene 1, 640, 1.201, 2.071 i 3.012 (od 3.906); u svakoj su slici označene samo dionice trenutačne promjene (umetnuto s okvirom, obrisano prekriženo), a ranije promjene su običan tekst. Promjene 1.284 (utipkano) i 1.285 (zalijepljeno) su u sesiji 3, a 2.640 (primijenjeni prijedlog) u sesiji 4; skok na sesiju 3 prikazuje promjenu 1.201.
+
 Student vidi isti prikaz i rečenicu „Isti prikaz vidi i Vaš mentor.” (pravilo 5 i 7). Obrisani tekst prikazan je prekriženo uz objašnjenje.
 
 ## Snimke
