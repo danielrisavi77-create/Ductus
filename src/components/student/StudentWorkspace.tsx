@@ -79,7 +79,10 @@ function body(read: StudentWorkspaceRead, filter: WorkspaceFilter) {
   const years = yearsOf(read.items);
   if (filter.year !== "" && !years.includes(filter.year)) years.push(filter.year);
   return h("div", null,
-    h("form", { className: styles.filter, method: "get", action: HERE, role: "search" },
+    // The fields only take their values when they mount, and a query change
+    // keeps the tree, so the form is keyed by the filter: after "Poništi
+    // odabir" or the back button it shows the filter the list was made with.
+    h("form", { key: filterKey(filter), className: styles.filter, method: "get", action: HERE, role: "search" },
       h("label", { className: styles.field },
         h("span", { className: styles.label }, t.search),
         h("input", { type: "search", name: "q", defaultValue: filter.q, maxLength: 200, className: styles.input })),
@@ -93,6 +96,11 @@ function body(read: StudentWorkspaceRead, filter: WorkspaceFilter) {
     shown.length === 0
       ? h("p", { className: styles.noMatch, role: "status" }, t.noMatch)
       : h("ul", { className: styles.list, "aria-label": t.list }, shown.map(row)));
+}
+
+/** One key per filter, so a different filter mounts a new form. */
+function filterKey(filter: WorkspaceFilter): string {
+  return JSON.stringify([filter.q, filter.year]);
 }
 
 function row(item: StudentWorkspaceItem) {

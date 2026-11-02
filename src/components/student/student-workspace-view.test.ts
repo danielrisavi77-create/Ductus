@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, isValidElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -118,6 +118,34 @@ describe("StudentWorkspace (DAN-309)", () => {
     const signedOut = render({ kind: "unauthorized" });
     expect(signedOut).toContain('href="/api/auth/login?returnTo=%2Fzadaci%2Fradovi"');
     expect(signedOut).not.toContain("<article");
+  });
+
+  it("mounts a new filter form for a new filter, so a reset or the back button shows the filter in use", () => {
+    // The fields take defaultValue only when they mount and a query change keeps
+    // the tree (#1318, review c.6574264038): the form's key must follow the filter.
+    const formKey = (filter: { q: string; year: string }): unknown => {
+      const find = (node: unknown): ReactElement | null => {
+        if (Array.isArray(node)) {
+          for (const child of node) {
+            const hit = find(child);
+            if (hit !== null) return hit;
+          }
+          return null;
+        }
+        if (!isValidElement(node)) return null;
+        if (node.type === "form") return node;
+        return find((node.props as { children?: unknown }).children);
+      };
+      const form = find(StudentWorkspace({ read: { kind: "ok", items: ITEMS }, filter }));
+      expect(form).not.toBeNull();
+      return form!.key;
+    };
+    const none = formKey({ q: "", year: "" });
+    const year = formKey({ q: "", year: "2025/2026" });
+    expect(none).not.toBeNull();
+    expect(year).not.toBe(none);
+    expect(formKey({ q: "esej", year: "" })).not.toBe(none);
+    expect(formKey({ q: "", year: "" })).toBe(none);
   });
 
   it("uses no forbidden term", () => {
