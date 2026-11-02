@@ -22,7 +22,7 @@ Izvori: `docs/PROGRAM-RAZRADA.md` M2.11 i karta zaslona (A-02, A-03), `docs/engi
 | 2 prazno | „Nitko ne čeka potvrdu uloge.” i „Na ustanovi još nema potvrđenih nastavnika.” |
 | 3 potvrda | dijalog s posljedicama i upisom u revizijski trag, zatim ishod u `role="status"` |
 | 4 opoziv | dijalog s posljedicama (kolegiji ostaju, ponovna prijava vraća osobu na čekanje, revizijski trag), zatim ishod |
-| 5 greška | neuspjelo čitanje s „Pokušaj ponovno”, neuspjela radnja u dijalogu („ništa nije promijenjeno”), promijenjeno stanje („više ne čeka potvrdu … Popis je osvježen.”) |
+| 5 greška | neuspjelo čitanje s „Pokušaj ponovno”, prekinuta veza nakon radnje u dijalogu (ishod nije poznat, „Provjeri stanje” prije ponavljanja), promijenjeno stanje („više ne čeka potvrdu … Popis je osvježen.”) |
 | 6 bez ovlasti | isti 404 kao za nepostojeću adresu, bez trake administracije |
 
 ## Stanja A-03
@@ -33,10 +33,10 @@ Izvori: `docs/PROGRAM-RAZRADA.md` M2.11 i karta zaslona (A-02, A-03), `docs/engi
 | 2 prazno | „Za ovu akademsku godinu ustanova nema kolegija.” |
 | 3 potvrda dodjele | dijalog s izborom koji nudi samo potvrđene nastavnike ustanove (D-204), zatim ishod |
 | 4 opoziv dodjele | uklanjanje nastavnika iz grupe; uloga na ustanovi ostaje, opoziv uloge je u A-02 |
-| 5 greška | neuspjelo čitanje, neuspjela radnja, promijenjeno stanje (odabrana osoba više nema potvrđenu ulogu) |
+| 5 greška | neuspjelo čitanje, prekinuta veza nakon dodjele (ishod nije poznat, „Provjeri stanje”), promijenjeno stanje (odabrana osoba više nema potvrđenu ulogu) |
 | 6 bez ovlasti | isti 404 kao u A-02 |
 
-Neuspjelo čitanje na oba zaslona nikad se ne prikazuje kao prazan popis ni kao nule.
+Neuspjelo čitanje na oba zaslona nikad se ne prikazuje kao prazan popis ni kao nule. Kad se veza prekine nakon radnje, ishod se prikazuje kao nepoznat: referenca ne tvrdi ni da je promjena provedena ni da nije.
 
 ## Snimke
 
