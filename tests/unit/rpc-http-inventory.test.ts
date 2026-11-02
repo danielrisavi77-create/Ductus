@@ -10,8 +10,12 @@ import exceptions from "./rpc-http-exceptions.json";
 // state has an HTTP route, or a written reason in rpc-http-exceptions.json.
 //
 // The catalogue is read from db/migrations, not from a database: the up part
-// of each file in version order, where a later CREATE OR REPLACE wins and a
-// DROP FUNCTION removes the entry. A function changes state when its last
+// of each file in version order. A function is kept by its signature, the
+// name and the input argument types, as PostgreSQL keeps overloads apart: a
+// later CREATE OR REPLACE of the same signature wins and DROP FUNCTION removes
+// that signature only (a DROP of a signature not in the catalogue stops the
+// test unless it says IF EXISTS). A name needs a route or a reason when any of
+// its signatures changes state. A function changes state when its last
 // definition is neither STABLE nor IMMUTABLE, does not return trigger, and its
 // body writes (INSERT INTO, UPDATE, DELETE FROM) or calls a function that does.
 // SQL is read by one scanner that tells code from '...' and E'...'
@@ -30,13 +34,14 @@ import exceptions from "./rpc-http-exceptions.json";
 // through EXECUTE format(...) is not seen; a quoted function name stops the
 // test and is not counted as a route; a call in a module a route imports
 // counts even if it never runs; MERGE, TRUNCATE and COPY are not counted as
-// writes; U&'...' literals are not read.
+// writes; U&'...' literals are not read; a DROP FUNCTION of several functions
+// reads only the first.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MIGRATIONS = join(ROOT, "db/migrations");
 const API = join(ROOT, "app/api");
 
-type Fn = { volatile: boolean; trigger: boolean; body: string };
+type Fn = { name: string; volatile: boolean; trigger: boolean; body: string };
 type Exception = {
   function: string;
   status: string;
@@ -145,7 +150,73 @@ export function statements(sql: string): string[] {
   return out;
 }
 
-/** The functions that exist after every migration's up part, by schema.name. */
+const TYPE_ALIASES: Record<string, string> = {
+  int: "integer",
+  int4: "integer",
+  int2: "smallint",
+  int8: "bigint",
+  bool: "boolean",
+  float8: "double precision",
+  varchar: "character varying",
+  timestamptz: "timestamp with time zone",
+};
+// A parameter of these types may start with the type's own first word.
+const TYPE_START =
+  /^(?:double|character|timestamp|time|bit|interval|national)$/i;
+
+/**
+ * The input types of a parameter list that starts right after "(", as
+ * PostgreSQL identifies a function: OUT parameters, names, defaults and type
+ * modifiers left out, common aliases spelled out.
+ */
+export function signatureTypes(rest: string): string {
+  const params: string[] = [];
+  let current = "";
+  let depth = 0;
+  scan: for (const part of scanSql(rest)) {
+    if (part.kind === "comment") {
+      current += " ";
+      continue;
+    }
+    if (part.kind !== "code") {
+      current += part.kind === "ident" ? part.text : "''";
+      continue;
+    }
+    for (const char of part.text) {
+      if (char === "(") depth += 1;
+      if (char === ")" && depth-- === 0) break scan;
+      if (char === "," && depth === 0) {
+        params.push(current);
+        current = "";
+      } else current += char;
+    }
+  }
+  if (depth >= 0) throw new Error("unclosed parameter list");
+  params.push(current);
+  return params
+    .map((param) =>
+      param
+        .replace(/\s+(?:DEFAULT\b|=)[\s\S]*$/i, "")
+        .replace(/\([^()]*\)/g, "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean),
+    )
+    .filter((words) => words.length && !/^OUT$/i.test(words[0] ?? ""))
+    .map((words) => {
+      if (/^(?:IN|INOUT|VARIADIC)$/i.test(words[0] ?? "")) words.shift();
+      if (words.length > 1 && !TYPE_START.test(words[0] ?? "")) words.shift();
+      const type = words
+        .join(" ")
+        .toLowerCase()
+        .replace(/\s*\[\s*\]/g, "[]");
+      const base = type.replace(/(?:\[\])+$/, "");
+      return (TYPE_ALIASES[base] ?? base) + type.slice(base.length);
+    })
+    .join(",");
+}
+
+/** The functions that exist after every migration's up part, by signature "schema.name(types)". */
 export function catalogue(
   files: { name: string; sql: string }[],
 ): Map<string, Fn> {
@@ -207,7 +278,10 @@ export function catalogue(
           options.match(/\b(?:VOLATILE|STABLE|IMMUTABLE)\b/gi) ?? [];
         if (volatility.length > 1)
           throw new Error(`${file.name}: ambiguous volatility`);
-        fns.set(created[1].toLowerCase(), {
+        const name = created[1].toLowerCase();
+        const types = signatureTypes(statement.slice(created[0].length));
+        fns.set(`${name}(${types})`, {
+          name,
           volatile: !/^(?:STABLE|IMMUTABLE)$/i.test(volatility[0] ?? ""),
           trigger: /\bRETURNS\s+trigger\b/i.test(attributes),
           // Literals stay in the body, so EXECUTE 'DELETE FROM ...' still counts.
@@ -218,10 +292,19 @@ export function catalogue(
         continue;
       }
       const dropped =
-        /^DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([a-z_]+\.[a-z_0-9]+)/i.exec(
+        /^DROP\s+FUNCTION\s+(IF\s+EXISTS\s+)?([a-z_]+\.[a-z_0-9]+)\s*(\()?/i.exec(
           statement,
         );
-      if (dropped?.[1]) fns.delete(dropped[1].toLowerCase());
+      if (dropped?.[2]) {
+        // Every DROP in db/migrations names one function with its types.
+        if (!dropped[3])
+          throw new Error(`${file.name}: DROP FUNCTION without argument types`);
+        const signature = `${dropped[2].toLowerCase()}(${signatureTypes(
+          statement.slice(dropped[0].length),
+        )})`;
+        if (!fns.delete(signature) && !dropped[1])
+          throw new Error(`${file.name}: DROP of unknown ${signature}`);
+      }
     }
   }
   return fns;
@@ -240,25 +323,36 @@ export function calls(text: string, name: string): boolean {
   return new RegExp(`(?<![A-Za-z_0-9.])${escaped}\\s*\\(`, "i").test(text);
 }
 
-/** Callable, non-trigger functions that write directly or through a function they call. */
+/**
+ * Names with a callable, non-trigger signature that writes directly or through
+ * a function it calls. A call is matched by name, so it counts for every
+ * overload of that name.
+ */
 export function stateChanging(fns: Map<string, Fn>): string[] {
   const writes = new Set(
-    [...fns].filter(([, fn]) => WRITE_RE.test(fn.body)).map(([name]) => name),
+    [...fns].filter(([, fn]) => WRITE_RE.test(fn.body)).map(([key]) => key),
   );
   for (let grew = true; grew; ) {
     grew = false;
-    for (const [name, fn] of fns) {
-      if (writes.has(name)) continue;
-      if ([...writes].some((callee) => calls(fn.body, callee))) {
-        writes.add(name);
+    for (const [key, fn] of fns) {
+      if (writes.has(key)) continue;
+      if (
+        [...writes].some((callee) =>
+          calls(fn.body, fns.get(callee)?.name ?? ""),
+        )
+      ) {
+        writes.add(key);
         grew = true;
       }
     }
   }
-  return [...fns]
-    .filter(([name, fn]) => fn.volatile && !fn.trigger && writes.has(name))
-    .map(([name]) => name)
-    .sort();
+  return [
+    ...new Set(
+      [...fns]
+        .filter(([key, fn]) => fn.volatile && !fn.trigger && writes.has(key))
+        .map(([, fn]) => fn.name),
+    ),
+  ].sort();
 }
 
 function resolveImport(from: string, specifier: string): string | null {
@@ -346,7 +440,7 @@ describe("RPC to HTTP inventory (DAN-487)", () => {
     expect(fns.size).toBeGreaterThan(50);
     expect(rpcs).toContain("institution.create_course");
     expect(hasRoute("institution.create_course")).toBe(true);
-    expect(fns.has("institution.actor_has_role")).toBe(true);
+    expect(fns.has("institution.actor_has_role(text)")).toBe(true);
     expect(rpcs).not.toContain("institution.actor_has_role");
     expect(rpcs).not.toContain("audit.reject_change");
   });
@@ -409,11 +503,11 @@ describe("catalogue parser", () => {
       },
     ]);
     expect([...parsed.keys()].sort()).toStrictEqual([
-      "s.caller",
-      "s.f",
-      "s.note",
-      "s.trg",
-      "s.w",
+      "s.caller()",
+      "s.f()",
+      "s.note()",
+      "s.trg()",
+      "s.w()",
     ]);
     expect(stateChanging(parsed)).toStrictEqual(["s.caller", "s.w"]);
   });
@@ -451,7 +545,7 @@ describe("catalogue parser", () => {
         sql: "CREATE FUNCTION s.w() RETURNS void LANGUAGE plpgsql AS $rpc$ BEGIN UPDATE s.t SET a = '$$'; END $rpc$;\nCREATE FUNCTION s.f() RETURNS int LANGUAGE sql STABLE AS $$ SELECT 1; $$;",
       },
     ]);
-    expect([...parsed.keys()]).toStrictEqual(["s.w", "s.f"]);
+    expect([...parsed.keys()]).toStrictEqual(["s.w()", "s.f()"]);
     expect(stateChanging(parsed)).toStrictEqual(["s.w"]);
   });
 
@@ -482,7 +576,7 @@ describe("catalogue parser", () => {
         ].join("\n"),
       },
     ]);
-    expect(parsed.get("s.read")?.volatile).toBe(false);
+    expect(parsed.get("s.read()")?.volatile).toBe(false);
     expect(stateChanging(parsed)).toStrictEqual([
       "s.after",
       "s.bare",
@@ -505,9 +599,9 @@ describe("catalogue parser", () => {
         ].join("\n"),
       },
     ]);
-    expect(parsed.get("app.stable")?.volatile).toBe(true);
-    expect(parsed.get("app.immutable")?.volatile).toBe(true);
-    expect(parsed.get("app.read")?.volatile).toBe(false);
+    expect(parsed.get("app.stable()")?.volatile).toBe(true);
+    expect(parsed.get("app.immutable(integer)")?.volatile).toBe(true);
+    expect(parsed.get("app.read()")?.volatile).toBe(false);
     expect(stateChanging(parsed)).toStrictEqual([
       "app.immutable",
       "app.stable",
@@ -539,6 +633,52 @@ describe("catalogue parser", () => {
       "app.u2",
       "app.u3",
     ]);
+  });
+
+  it("keeps overloads apart, so a later STABLE one cannot hide a writer", () => {
+    const writer =
+      "CREATE FUNCTION app.inventory_probe(p_id uuid) RETURNS void LANGUAGE sql VOLATILE AS $$ DELETE FROM institution.course_enrollment_code WHERE course_id = p_id; $$;";
+    const reader =
+      "CREATE FUNCTION app.inventory_probe(p_id text) RETURNS integer LANGUAGE sql STABLE AS $$ SELECT 1; $$;";
+    const parsed = catalogue([{ name: "1.sql", sql: `${writer}\n${reader}` }]);
+    expect([...parsed.keys()].sort()).toStrictEqual([
+      "app.inventory_probe(text)",
+      "app.inventory_probe(uuid)",
+    ]);
+    expect(stateChanging(parsed)).toStrictEqual(["app.inventory_probe"]);
+    // Dropping the reader leaves the writer; dropping the writer by its types,
+    // written with an alias, leaves only the reader.
+    const drop = (sql: string) =>
+      catalogue([
+        { name: "1.sql", sql: `${writer}\n${reader}` },
+        { name: "2.sql", sql },
+      ]);
+    expect(
+      stateChanging(drop("DROP FUNCTION app.inventory_probe(text);")),
+    ).toStrictEqual(["app.inventory_probe"]);
+    expect(
+      stateChanging(drop("DROP FUNCTION app.inventory_probe(uuid);")),
+    ).toStrictEqual([]);
+    expect(() => drop("DROP FUNCTION app.inventory_probe(int);")).toThrow(
+      "2.sql: DROP of unknown app.inventory_probe(integer)",
+    );
+    expect([
+      ...drop("DROP FUNCTION IF EXISTS app.inventory_probe(int);").keys(),
+    ]).toHaveLength(2);
+    expect(() => drop("DROP FUNCTION app.inventory_probe;")).toThrow(
+      "2.sql: DROP FUNCTION without argument types",
+    );
+  });
+
+  it("reads input types without names, OUT parameters, defaults or modifiers", () => {
+    expect(
+      signatureTypes(
+        "p_a int4, OUT o uuid, IN p_b timestamptz DEFAULT now(), p_c varchar(20) = 'x', VARIADIC p_d text [], timestamp with time zone) RETURNS void",
+      ),
+    ).toBe(
+      "integer,timestamp with time zone,character varying,text[],timestamp with time zone",
+    );
+    expect(signatureTypes(") RETURNS void")).toBe("");
   });
 
   it("stops on two volatility words", () => {
