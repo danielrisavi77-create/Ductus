@@ -295,18 +295,34 @@ function sharesCitation(text: string, work: Source): boolean {
   });
 }
 
-/** What an author written as `item` in Literatura could be cited as. */
-function citedReadings(item: string): string[] {
+/**
+ * What an author written as `item` in Literatura could be cited as. An
+ * organisation with its acronym, "BK (Babić i Kovač)", is cited "BK"; its name
+ * may hold brackets, "BK (Zavod (Zagreb))" (QA on #1407, c.6590744530), so the
+ * acronym may end at any " (". A person is cited by the family name, before
+ * the comma of the given name; a comma may stand in a family name ("Babić,
+ * Kovač, Iva"). With `anyComma` (the entry's commas do not make a list of
+ * persons, so one stands in a given name the form takes, "Luka, ml.", review
+ * on #1407, c.6590682130), the family name may end at any ", ".
+ */
+function citedReadings(item: string, anyComma: boolean): string[] {
   const readings = [item];
-  // An organisation with its acronym, "BK (Babić i Kovač)", is cited "BK".
-  const acronym = /^(.+?) \([^()]*\)$/.exec(item);
-  if (acronym !== null) readings.push(acronym[1]!);
-  // A person is cited by the family name, before the comma of the given name:
-  // a comma may stand in a family name ("Babić, Kovač, Iva"), not in a given
-  // name, else every list of authors would read as one person.
-  const comma = item.lastIndexOf(", ");
-  if (comma !== -1) readings.push(item.slice(0, comma));
+  if (item.endsWith(")")) {
+    for (let at = item.indexOf(" ("); at > 0; at = item.indexOf(" (", at + 1)) readings.push(item.slice(0, at));
+  }
+  const last = item.lastIndexOf(", ");
+  for (let at = item.indexOf(", "); at > 0; at = item.indexOf(", ", at + 1)) {
+    if (anyComma || at === last) readings.push(item.slice(0, at));
+  }
   return readings;
+}
+
+// Whether the commas of the names before the year make a list of persons, as
+// `laterFamilies` reads one: "Babić, Ana i Kovač, Luka" does, "Babić, Ana i
+// Kovač, Luka, ml." does not (a comma stands in a name).
+function personList(names: string): boolean {
+  const comma = names.indexOf(", ");
+  return comma === -1 || laterFamilies(names.slice(comma + 2)) !== null;
 }
 
 /**
@@ -325,17 +341,18 @@ function sharesWrittenForm(text: string, work: Source): boolean {
   if (year === null || year[1] !== String(work.year) || !/^[a-z]?$/.test(year[2]!)) return false;
   const names = text.slice(0, year.index).trimEnd();
   const { authorJoiner } = fpzgCitationStyle.bibliography;
-  const readings: string[][] = citedReadings(names).map((name) => [name]);
+  const anyComma = !personList(names);
+  const readings: string[][] = citedReadings(names, anyComma).map((name) => [name]);
   for (let at = names.indexOf(authorJoiner); at !== -1; at = names.indexOf(authorJoiner, at + 1)) {
-    const later = citedReadings(names.slice(at + authorJoiner.length));
-    for (const first of citedReadings(names.slice(0, at))) readings.push(...later.map((name) => [first, name]));
+    const later = citedReadings(names.slice(at + authorJoiner.length), anyComma);
+    for (const first of citedReadings(names.slice(0, at), anyComma)) readings.push(...later.map((name) => [first, name]));
   }
   // Three or more: the first author ends at a comma (a person, then the given
   // name) or before the list goes on (an organisation); persons follow.
   for (let at = names.indexOf(", "); at !== -1; at = names.indexOf(", ", at + 1)) {
     const head = names.slice(0, at);
     for (const later of laterFamilies(names.slice(at + 2)) ?? []) readings.push([head, ...later]);
-    for (const first of citedReadings(head)) {
+    for (const first of citedReadings(head, anyComma)) {
       for (const later of laterFamilies(`-${names.slice(at)}`) ?? []) readings.push([first, ...later]);
     }
   }

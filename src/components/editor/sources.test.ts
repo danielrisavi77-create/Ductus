@@ -847,6 +847,72 @@ describe("the formatted in-text form, class by class", () => {
     expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
     editor.destroy();
   });
+
+  // Review on #1407, c.6590682130: the form takes a comma in a given name
+  // ("Luka, ml."), so a family name may end at any comma, not only the last.
+  // QA on #1407, c.6590744530: an organisation's name may hold brackets, so
+  // its acronym may end at any " (". Every reading is kept.
+  const ONE_ZAVOD = base([["Zavod", "Iva"]]);
+  const AML: Name = ["Babić", "Ana, ml."];
+  const LML: Name = ["Kovač", "Luka, ml."];
+  const reads: Row[] = [
+    { klass: "Z1 no comma in a given name", base: ONE_BIK, other: line(work([B, K], "Treća")), promoted: false },
+    { klass: "Z2 a comma in the first author's given name", base: ONE_BIK, other: line(work([AML, K], "Treća")), promoted: false },
+    { klass: "Z3 a comma in the second author's given name (the finding)", base: ONE_BIK, other: line(work([B, LML], "Treća")), promoted: false },
+    { klass: "Z4 a comma in both given names", base: ONE_BIK, other: line(work([AML, ["Kovač", "Luka, st."]], "Treća")), promoted: false },
+    { klass: "Z5 a pair, against one author with a comma in the given name", base: PAIR, other: line(work([["Babić i Kovač", "Iva, ml."]], "Treća")), promoted: false },
+    { klass: "Z6 ours one author with a comma in the given name, against a pair with one", base: base([["Babić i Kovač", "Iva, ml."]]), other: line(work([B, LML], "Treća")), promoted: false },
+    { klass: "Z7 a comma in the family name and in the given name", base: ONE_COMMA, other: line(work([["Babić, Kovač", "Ema, ml."]], "Treća")), promoted: false },
+    { klass: "Z8 a comma in both given names, another pair", base: ONE_BIK, other: line(work([AML, ["Horvat", "Ivo, st."]], "Treća")), promoted: true },
+    { klass: "Z9 one author, against a pair whose second is ours, a comma in the first's given name", base: ONE_K, other: line(work([AML, K], "Treća")), promoted: true },
+    { klass: "Z10 one author, against a pair that opens with ours: commas that make a list are read as one (A2)", base: ONE_B, other: line(work([B, K], "Treća")), promoted: true },
+    { klass: "Z11 one author, against a pair that opens with ours and a comma in the second's given name", base: ONE_B, other: line(work([B, LML], "Treća")), promoted: false },
+    { klass: "A1 an acronym, no bracket in the name", base: ONE_BK, other: "BK (Babić i Kovač) (2021) Ručni unos.", promoted: false },
+    { klass: "A2 an acronym, a bracket in the name (the finding)", base: ONE_BK, other: "BK (Izmišljeni zavod (Zagreb)) (2021) Ručni unos.", promoted: false },
+    { klass: "A3 an acronym, two brackets in the name", base: ONE_BK, other: "BK (Zavod (Zagreb) (Split)) (2021) Ručni unos.", promoted: false },
+    { klass: "A4 a name with nested brackets and no acronym", base: ONE_ZAVOD, other: "Zavod (Grad (Zagreb)) (2021) Ručni unos.", promoted: false },
+    { klass: "A5 another acronym, a bracket in the name", base: ONE_BK, other: "KB (Izmišljeni zavod (Zagreb)) (2021) Ručni unos.", promoted: true },
+  ];
+
+  it.each(reads)("class $klass", ({ base: b, other, promoted }) => {
+    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, { text: other }]);
+    atFirstEnd(editor);
+    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe("b");
+    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
+    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
+    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
+    expect(lines).toContain(other);
+    editor.destroy();
+  });
+
+  it("regression c.6590682130: X of Babić and Kovač, Luka, ml. cited, then two works of Babić i Kovač only in Literatura", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atFirstEnd(editor);
+    const x = sourceOf({ ...BOOK, family: "Babić", given: "Ana", family2: "Kovač", given2: "Luka, ml." });
+    writeSource(editor, x, "", true);
+    const y = { ...BOOK, family: "Babić i Kovač", given: "Iva" };
+    const y1 = sourceOf({ ...y, title: "Prva" });
+    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
+    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Babić i Kovač, 2021)");
+    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
+    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
+    editor.destroy();
+  });
+
+  it("regression c.6590744530: (BK, 2021) of an organisation with a bracket in its name, then two works of BK, Ana only in Literatura", () => {
+    const org = "BK (Izmišljeni zavod (Zagreb)) (2021) Ručni unos. Zagreb: Primjer.";
+    const editor = editorWith([{ text: "Tekst (BK, 2021)" }, { type: "heading", text: "Literatura" }, { text: org }]);
+    atFirstEnd(editor);
+    const y = { ...BOOK, family: "BK", given: "Ana" };
+    const y1 = sourceOf({ ...y, title: "Prva" });
+    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
+    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe("paragraph:Tekst (BK, 2021)");
+    expect(texts(editor)).toContain(`paragraph:${org}`);
+    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
+    editor.destroy();
+  });
 });
 
 // DAN-484 point 2: what the form names live (tried = false) and after a click,
