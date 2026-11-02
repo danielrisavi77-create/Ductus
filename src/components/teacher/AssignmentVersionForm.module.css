@@ -1,0 +1,31 @@
+/* DAN-310 (M2.4-P02): only what the new version form adds to TeacherSetup.module.css. */
+
+/* A grid item keeps its content's width by default, and a date input keeps its
+   own minimum width; neither may push the field past its card (D-183). */
+.time {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.time input {
+  min-width: 0;
+}
+
+/* Two date fields sit side by side only while each shows its whole value. */
+div.times {
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+}
+
+.changes {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 16px;
+}
+
+.changes dd {
+  margin: 4px 0 0;
+}
+
+.consequence {
+  margin-bottom: 16px;
+}

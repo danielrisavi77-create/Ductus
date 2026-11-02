@@ -23,12 +23,12 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Cilj:** repo, CI, lokalni stog i pravila gradnje na kojima stoje sve ostale faze.
 
-**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 52 migracije i 50 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. Provjereno na `main` `34b94dab` (1. 11. 2026.): E2E na Chromiumu, Firefoxu i WebKitu dio je obveznog statusa „Local stack (compose.yaml)” na svakom PR-u (#1097, M0.3); skener zabranjenih izraza čita i tekst svojstava izvan JSX-a (#552, `247efb68`, M0.4); testovi pravila hookova prolaze na Linuxu u obveznom poslu „Lint, typecheck, test and build” (DAN-136, M0.7). **Djelomično:** kriterij „isti broj prenesenih testova kao u izvoru” vlasnik je zamijenio dokumentiranom jednakovrijednošću (#87 c.6547174354); karta je u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, a 24 nepokrivena slučaja vraćaju se kao testovi; ljuska još nije u konačnom vizualnom smjeru D-188.
+**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 52 migracije i 50 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. Provjereno na `main` `34b94dab` (1. 11. 2026.): E2E na Chromiumu, Firefoxu i WebKitu dio je obveznog statusa „Local stack (compose.yaml)” na svakom PR-u (#1097, M0.3); skener zabranjenih izraza čita i tekst svojstava izvan JSX-a (#552, `247efb68`, M0.4); testovi pravila hookova prolaze na Linuxu u obveznom poslu „Lint, typecheck, test and build” (DAN-136, M0.7). **Djelomično:** kriterij „isti broj prenesenih testova kao u izvoru” vlasnik je zamijenio dokumentiranom jednakovrijednošću (#87 c.6547174354); karta je u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, a od 273 izvorna slučaja 124 su pokrivena Ductus testom, 149 nema koda u Ductusu (dizajn je drukčiji ili funkcija još nije izgrađena), a 0 ih nedostaje kao test (provjereno na `main` `1df28c3`, 2. 11. 2026., DAN-376); ljuska još nije u konačnom vizualnom smjeru D-188.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M0.1 | Zapis prijenosa jezgre: broj testova u izvoru i na mainu (`docs/engineering/prijenos-jezgre-M0.1.md`) | P | | DAN-376 |
-| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776) | P | | DAN-71 |
+| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776); uvjet (mjere D-91 1, 2, 4 i 6 spojene) ispunjen 2. 11. 2026., dokaz u `docs/engineering/d91-mjere.md` | P | | DAN-71 |
 | M0.3 | E2E na Firefoxu i WebKitu kao obvezna provjera | P | | DAN-114, DAN-232; gotovo: #1097 (`34b94dab`) |
 | M0.4 | Skener zabranjenih izraza i za tekst izvan JSX-a | P | | DAN-133; gotovo: #552 (`247efb68`) |
 | M0.5 | Ljuska u konačnom vizualnom smjeru „papir i grafit”: tokeni, navigacija, dijalozi, mobilni raspored | F | D-188 (#972) | DAN-344 (#973, #974) |
@@ -138,11 +138,19 @@ ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M4.1 | Licenca i pravo redistribucije Lekte | V | | Owner queue |
-| M4.2 | U Lekti: generiran paket pravila (FPZG profili, oblik, citatni stilovi, naslovna stranica) s verzijom i testom zanošenja | P | M4.1 | DAN-392 (repo Lekta) |
+| M4.2 | U Lekti: generiran paket pravila (FPZG profili, oblik, citatni stilovi, naslovna stranica) s verzijom i testom zanošenja; izvodi ga Lekta sesija po Lektinim pravilima, uz Lekta tiket povezan s DAN-392, a Ductus orkestrator ne dodjeljuje Lekta pisce (D-224) | P | M4.1 | DAN-392 (repo Lekta) |
 | M4.3 | Ductus učitava paket s verzijom; kopija iz K-2 prelazi na paket | B | M4.2 | DAN-393 |
-| M4.4 | Provjera oblika nad dokumentom i panel Upute | F | M4.3, M5.3 | DAN-394 |
+| M4.3-P06 | Uvoz prvog paketa; spaja se samo na vlasnikov „Spoji n” (D-217) | B | M4.2, M4.3 | novo |
+| M4.4 | Provjera oblika nad dokumentom i „S-11 — Panel Upute i provjera oblika” | F | M4.3, M5.3 | DAN-394 |
 
-**Ekrani:** S-11 panel Upute (provjera oblika).
+**Ovisnosti i podjela (plan M4 iz paketa „M4 v1.0”, nije u repou; uz D-217 do D-224):**
+- Pin paketa na `assignment_version` ide iza M2.12-P01, M2.13-P01 i M2.4-P02.
+- Citatni stil ima jedan izvor, pin paketa; M2.12-P02 ne uvodi vlastiti.
+- Puna DOCX provjera dijeli se na P05a (ugovor, sada) i P05b (stvarna provjera, nakon M8.4); samo formalne provjere, informativne, nikad ne blokiraju predaju (D-222).
+- M4.3-P06 je uvoz prvog paketa; M4.0a (docs PR s ovim odlukama) i svaki uvoz paketa idu na „Spoji n” (D-217).
+- M4 ulazi u automatski red sa 25 koraka.
+
+**Ekrani:** S-11 — Panel Upute i provjera oblika. Napomena o koliziji naziva: u `docs/FEATURES.md` (r. 19) i u M5.12 oznaka S-11 znači uvodni vodič od dvije minute; puni naziv razlikuje ova dva ekrana.
 
 **Uvjet završetka:** izlazni kriterij M4 iz `docs/PROGRAM.md` (profili učitani s verzijom, test zanošenja u Lekti, provjera oblika javlja odstupanja na izmišljenim testnim radovima).
 

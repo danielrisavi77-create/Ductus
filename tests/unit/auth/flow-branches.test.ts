@@ -225,6 +225,20 @@ describe("finishLogin when the session ports fail", () => {
     expect(logged).not.toContain("ana@demo.ductus.test");
   });
 
+  // DAN-491: the two fallbacks of errorCode, a rejection that is not an Error
+  // and an Error whose code is not text.
+  it.each([
+    ["a value that is not an Error", "connect ana@demo.ductus.test", '"open_session","unknown"'],
+    ["an Error with a numeric code", Object.assign(new TypeError("ana@demo.ductus.test"), { code: 111 }), '"open_session","TypeError"'],
+  ])("logs only a fallback code when opening the session rejects with %s", async (_, reason, expected) => {
+    deps.openSession.mockRejectedValueOnce(reason);
+    expect((await approvedCallback()).status).toBe(503);
+    const logged = JSON.stringify(errors.mock.calls);
+    expect(logged).toContain(expected);
+    expect(logged).not.toContain("ana@demo.ductus.test");
+    expect(logged).not.toContain("111");
+  });
+
   it("shows the neutral 400 page on a conflict", async () => {
     deps.openSession.mockResolvedValueOnce({ ok: false, reason: "conflict" });
     const response = await approvedCallback();

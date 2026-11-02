@@ -42,10 +42,16 @@ const SNAPSHOT = `
        SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolinherit
          FROM pg_catalog.pg_roles WHERE rolname LIKE 'ductus\\_%') r) AS roles,
     (SELECT json_agg(m ORDER BY m.role, m.member, m.grantor) FROM (
-       SELECT pg_get_userbyid(roleid) AS role, pg_get_userbyid(member) AS member, pg_get_userbyid(grantor) AS grantor,
-              admin_option, inherit_option, set_option
-         FROM pg_catalog.pg_auth_members
-        WHERE pg_get_userbyid(roleid) LIKE 'ductus\\_%' OR pg_get_userbyid(member) LIKE 'ductus\\_%') m) AS members,
+       -- Names come from pg_roles, read with the transaction snapshot. The
+       -- pg_get_userbyid function reads the live catalog, so a login that
+       -- another test drops meanwhile would show up as "unknown (OID=...)".
+       SELECT r.rolname AS role, mem.rolname AS member, g.rolname AS grantor,
+              am.admin_option, am.inherit_option, am.set_option
+         FROM pg_catalog.pg_auth_members am
+         JOIN pg_catalog.pg_roles r ON r.oid = am.roleid
+         JOIN pg_catalog.pg_roles mem ON mem.oid = am.member
+         LEFT JOIN pg_catalog.pg_roles g ON g.oid = am.grantor
+        WHERE r.rolname LIKE 'ductus\\_%' OR mem.rolname LIKE 'ductus\\_%') m) AS members,
     (SELECT count(*) FROM pg_catalog.pg_class) AS relations,
     (SELECT count(*) FROM pg_catalog.pg_proc) AS functions,
     (SELECT count(*) FROM pg_catalog.pg_namespace) AS schemas`;
@@ -98,6 +104,12 @@ describe("the roles check migration", () => {
     expect(outcome.error).toBeUndefined();
     expect(outcome.after).toEqual(outcome.before);
     expect((outcome.before as { roles: unknown[] }).roles.length).toBeGreaterThanOrEqual(GROUP_ROLES.length + 1);
+  });
+
+  it("sees a change to the membership of a role the migration checks", async () => {
+    const outcome = await attempt([], null, "GRANT ductus_worker TO ductus_migrator WITH INHERIT TRUE");
+    expect(outcome.error).toBeUndefined();
+    expect(outcome.after).not.toEqual(outcome.before);
   });
 
   it("has a down section that changes nothing", async () => {

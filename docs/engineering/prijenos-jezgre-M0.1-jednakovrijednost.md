@@ -9,6 +9,7 @@ Dopuna zapisa `docs/engineering/prijenos-jezgre-M0.1.md`, skupina C. Vlasnik je 
 - Izvor: `pisac-editor@6cd0b75`, samo čitan. Slučaj je svaki poziv `it`/`test` u datoteci, i kad je u istom retku s `describe` (zato 273, a ne 271 kao u prvom brojanju po recima).
 - Za svaki slučaj pročitano je tijelo izvornog testa i otvoren Ductus test na `main` (`0cdffe5f`). Za svaki redak „pokriveno” provjereno je da navedena datoteka postoji i da sadrži navedeno ime testa.
 - Ime Ductus testa je tekst iz `it(...)`/`test(...)`; za pgTAP opis tvrdnje. Kad je ime predložak (`%s`, `${...}`), naveden je predložak.
+- Provjera 2. 11. 2026. na `main` (`1df28c3`): za svih 124 retka „pokriveno” navedena Ductus datoteka postoji i sadrži navedeno ime testa; nijedan slučaj nema ishod „nedostaje test”.
 - Retci `journal.test.ts` i `lock.test.ts` osvježeni su 1. 11. 2026. na `main` (`c5a3f9b3`). Za svaki vraćeni slučaj mutacija je primijenjena lokalno, pokrenut je samo navedeni test (vitest, za bravu Playwright projekti desktop i mobile), test je pao, a datoteka je vraćena. Mutacija je opisana u napomeni retka.
 
 Ishodi:

@@ -35,6 +35,8 @@ export const hr = {
     space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
     nav: {
       assignments: "Moji zadaci",
+      // DAN-309 (B2): the student's own works across courses, /zadaci/radovi.
+      works: "Moji radovi",
       courses: "Moji kolegiji",
       newCourse: "Novi kolegij i zadatak",
       fastPath: "Brz put",
@@ -328,6 +330,45 @@ export const hr = {
       unavailable: "Kolegij trenutačno nije moguće učitati. Pokušajte ponovno.",
       codeKept: "Upisni kod kolegija ostaje isti.",
       studentsNotified: "Studenti upisani u kolegij vide zadatak među svojim zadacima.",
+    },
+    // DAN-310 (M2.4-P02): a new version of a published assignment.
+    newVersion: {
+      title: "Nova verzija zadatka",
+      link: "Nova verzija",
+      current: "Na snazi je verzija {n}.",
+      lead: "Izmjene se objavljuju kao verzija {n}. Verzija koja je sada na snazi ostaje zapisana, a studenti novu verziju potvrđuju prije nastavka pisanja.",
+      fixed: "Vrsta rada, profil zapisa i uvoz ostaju kao u verziji na snazi.",
+      purposesHint: "Možete samo ukloniti uporabu koju verzija na snazi dopušta, ne i dodati novu.",
+      wordsHint: "Raspon se može samo ublažiti: najmanji broj smanjiti ili ukloniti, najveći povećati ili ukloniti.",
+      previewHeading: "Što se mijenja",
+      before: "Sada",
+      after: "Nakon objave",
+      empty: "nije zadano",
+      noPurposes: "nijedna uporaba",
+      consequence: "Objavom nastaje verzija {n}. Studenti upisani u kolegij vide je u obavijesti o zadatku i potvrđuju je prije nastavka pisanja. Već napisan tekst ostaje kakav jest.",
+      publish: "Objavi verziju {n}",
+      pending: "Objavljivanje…",
+      published: "Objavljena je verzija {n}. Studenti je potvrđuju prije nastavka pisanja.",
+      unchanged: "Nema promjena u odnosu na verziju na snazi, pa se ništa ne objavljuje.",
+      widening: "Ovaj raspon riječi stroži je od onoga na snazi, pa se ne može objaviti. Najmanji broj smanjite ili uklonite, a najveći povećajte ili uklonite.",
+      reload: "Učitaj aktualnu verziju",
+      missing: "Zadatak nije dostupan ovom računu.",
+      unavailable: "Zadatak trenutačno nije moguće učitati. Pokušajte ponovno.",
+      fields: {
+        title: "Naslov",
+        instructions: "Upute studentima",
+        opensAt: "Otvaranje",
+        dueAt: "Rok",
+        aiPurposes: "Dopuštene uporabe",
+        wordRange: "Raspon riječi",
+      },
+      errors: {
+        invalid: "Provjerite naslov, otvaranje, rok i raspon riječi. Rok mora biti nakon otvaranja. Ništa nije objavljeno.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno; ništa nije objavljeno.",
+        forbidden: "Za ovaj račun nije dopušteno objavljivanje nove verzije ovog zadatka.",
+        conflict: "Zadatak je u međuvremenu dobio noviju verziju. Vaše izmjene nisu objavljene i ostaju u obrascu. Učitajte aktualnu verziju pa ih ponovite.",
+        unavailable: "Objava verzije nije potvrđena. Pokušajte ponovno.",
+      },
     },
     course: {
       heading: "Kolegij",
@@ -876,6 +917,34 @@ export const hr = {
       due: "Rok {time}",
       noticeFirst: "Prvo pročitajte obavijest",
     },
+    // DAN-309 (M2.3-P02, B2): "Moji radovi" on /zadaci/radovi. Each state is
+    // told only from what the server read returned; nothing about the text.
+    works: {
+      title: "Moji radovi",
+      lede: "Vaši radovi na svim kolegijima i njihovo stanje.",
+      search: "Traži po naslovu ili kolegiju",
+      year: "Akademska godina",
+      allYears: "Sve godine",
+      apply: "Prikaži",
+      reset: "Poništi odabir",
+      noMatch: "Nijedan rad ne odgovara odabiru.",
+      emptyHeading: "Još nemate radova.",
+      emptyBody: "Radovi se ovdje prikazuju kad se upišete u kolegij sa zadatkom.",
+      enroll: "Upiši kolegij kodom",
+      list: "Popis radova",
+      due: "Rok {time}",
+      state: {
+        newVersion: "Nova verzija uputa ({version}), još nije potvrđena",
+        notice: "Upute još nisu potvrđene",
+        notStarted: "Rad nije započet",
+        inProgress: "Rad je započet, nije predan",
+        submitted: "Predano {time}",
+        afterDeadline: "Predano {time}, nakon roka",
+      },
+      readNotice: "Pročitaj upute",
+      start: "Otvori zadatak",
+      open: "Otvori rad",
+    },
     // DAN-344: the Archivum S01 texts of /zadaci, verbatim from the owner's
     // package (26. 10. 2026.), in "Vi"; the subtitle without its mentoring
     // half, which this page does not have. Only what the own-assignments read
@@ -1144,6 +1213,7 @@ export const hr = {
     what: {
       courses: "svoje kolegije",
       newCourse: "obrazac za novi kolegij i zadatak",
+      assignmentVersion: "obrazac za novu verziju zadatka",
       fastPath: "brz put kroz radove",
       home: "svoj prostor",
     },
