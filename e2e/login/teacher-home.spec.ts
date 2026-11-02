@@ -311,3 +311,100 @@ test("a teacher reads a course outside their own list as not available", async (
   await expect(page.getByRole("button", { name: messagesHr.teacher.assignment.publish })).toHaveCount(0);
   await expect(page.getByLabel(messagesHr.teacher.course.name)).toHaveCount(0);
 });
+
+// DAN-310 (M2.4-P02), T025 to T032: a new version from the course list. The
+// preview names each change with its value now and after publishing; a second
+// tab on the old version gets the 409 reply in words and keeps its fields.
+test("a teacher publishes a new version after its preview, and a stale tab is told it is out of date", async ({ page }) => {
+  const n = messagesHr.teacher.newVersion;
+  const a = messagesHr.teacher.assignment;
+  await asTeacher(page);
+  const suffix = Date.now().toString(36);
+  const courseName = `Izmišljeni kolegij verzija ${suffix}`;
+  const title = `Izmišljeni zadatak ${suffix}`;
+  await page.goto("/nastavnik/zadatak/novi");
+  await page.getByLabel(messagesHr.teacher.course.name).fill(courseName);
+  await fillCodeDeadline(page);
+  await page.getByRole("button", { name: messagesHr.teacher.course.submit }).click();
+  await expect(page.getByRole("status").filter({ hasText: messagesHr.teacher.course.created })).toBeVisible();
+  await publishAssignment(page, title);
+
+  await page.goto("/nastavnik");
+  await page.getByRole("region", { name: courseName }).getByRole("link", { name: n.link }).click();
+  await expect(page).toHaveURL(/\/nastavnik\/zadatak\/[0-9a-f-]{36}\/uredi$/);
+  await expect(page.getByRole("heading", { level: 1, name: n.title })).toBeVisible();
+  await expect(page.getByText(n.current.replace("{n}", "1"))).toBeVisible();
+  const publish = page.getByRole("button", { name: n.publish.replace("{n}", "2") });
+  // T032: nothing changed, nothing to publish.
+  await expect(page.getByRole("status").filter({ hasText: n.unchanged })).toBeVisible();
+  await expect(publish).toBeDisabled();
+
+  // T030 is set up here: a second tab reads version 1 before the first publishes.
+  const stale = await page.context().newPage();
+  await stale.goto(page.url());
+  await expect(stale.getByLabel(a.title)).toHaveValue(title);
+
+  await page.getByLabel(a.title).fill(`${title} (dopunjeno)`);
+  const preview = page.getByRole("complementary", { name: n.previewHeading });
+  await expect(preview.getByText(n.fields.title, { exact: true })).toBeVisible();
+  await expect(preview.getByText(title, { exact: true })).toBeVisible();
+  await expect(preview.getByText(`${title} (dopunjeno)`, { exact: true })).toBeVisible();
+  await expect(preview.getByText(n.consequence.replace("{n}", "2"))).toBeVisible();
+  // A minimum where there was none would narrow the range (rule 14).
+  await page.getByLabel(a.wordMin).fill("300");
+  await expect(preview.getByText(n.widening)).toBeVisible();
+  await expect(publish).toBeDisabled();
+  await page.getByLabel(a.wordMin).fill("");
+  await expect(publish).toBeEnabled();
+
+  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(axe.violations).toEqual([]);
+  // D-183: the whole page with the preview, both themes, 1440 and 400 px.
+  for (const pass of [0, 1]) {
+    if (pass === 1) await page.getByRole("button", { name: messagesHr.shell.theme }).click();
+    const theme = await page.locator("[data-theme]").first().getAttribute("data-theme");
+    for (const width of [1440, 400]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await snapshot(page, `nastavnik-nova-verzija-${theme}-${width}`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await publish.click();
+  await expect(page.getByRole("status").filter({ hasText: n.published.replace("{n}", "2") })).toBeVisible();
+  await expect(publish).toBeDisabled();
+
+  // T029 and T030: the stale tab's version is refused in words, its text stays.
+  await stale.getByLabel(a.instructions).fill("Izmišljena dopuna uputa.");
+  await stale.getByRole("button", { name: n.publish.replace("{n}", "2") }).click();
+  await expect(stale.getByRole("alert").filter({ hasText: n.errors.conflict })).toBeVisible();
+  await expect(stale.getByLabel(a.instructions)).toHaveValue("Izmišljena dopuna uputa.");
+  await expect(stale.getByRole("button", { name: n.publish.replace("{n}", "2") })).toBeDisabled();
+  await snapshot(stale, "nastavnik-nova-verzija-sukob");
+  await stale.getByRole("link", { name: n.reload }).click();
+  await expect(stale.getByText(n.current.replace("{n}", "2"))).toBeVisible();
+  await expect(stale.getByLabel(a.title)).toHaveValue(`${title} (dopunjeno)`);
+  await stale.close();
+});
+
+// T031: someone else's, a missing and a malformed assignment read alike.
+test("a teacher reads an assignment outside their own as not available, with no publish button", async ({ page, browser }) => {
+  const n = messagesHr.teacher.newVersion;
+  await asTeacher(page);
+  for (const id of ["00000000-0000-4000-8000-00000000dead", "nije-zadatak"]) {
+    await page.goto(`/nastavnik/zadatak/${id}/uredi`);
+    await expect(page.getByRole("alert").filter({ hasText: n.missing })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Objavi verziju/u })).toHaveCount(0);
+  }
+  // A student signs in in a context of their own: the teacher's session would skip the provider.
+  const context = await browser.newContext();
+  try {
+    const student = await context.newPage();
+    await signIn(student, "/nastavnik/zadatak/00000000-0000-4000-8000-00000000dead/uredi", "Demo studentica");
+    await expect(student.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
+    await expect(student.getByRole("button", { name: /Objavi verziju/u })).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
