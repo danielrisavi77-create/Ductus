@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isCommentBody, isDocumentId, isTextAnchorInput } from "./comment";
+import { COMMENT_BODY_MAX, isCommentBody, isDocumentId, isTextAnchorInput, limitBody } from "./comment";
 
 const ANCHOR = {
   nodeId: "11111111-1111-4111-8111-111111111111",
@@ -70,5 +70,15 @@ describe("B-10 document id", () => {
     for (const value of ["", " doc", "doc ", "a\tb", "d".repeat(257), 7]) {
       expect(isDocumentId(value)).toBe(false);
     }
+  });
+});
+
+describe("limitBody (#535 t. 5)", () => {
+  it("lets 1000 emoji through, as the server does, and cuts at 2000 code points", () => {
+    expect(limitBody("😀".repeat(1000))).toBe("😀".repeat(1000));
+    expect(isCommentBody(limitBody("😀".repeat(1500)))).toBe(true);
+    expect([...limitBody("😀".repeat(2500))].length).toBe(COMMENT_BODY_MAX);
+    expect(limitBody("a".repeat(2500)).length).toBe(COMMENT_BODY_MAX);
+    expect(limitBody("kratko")).toBe("kratko");
   });
 });
