@@ -14,8 +14,9 @@ import exceptions from "./rpc-http-exceptions.json";
 // DROP FUNCTION removes the entry. A function changes state when its last
 // definition is neither STABLE nor IMMUTABLE, does not return trigger, and its
 // body writes (INSERT INTO, UPDATE, DELETE FROM) or calls a function that does.
-// It has a route when a call "schema.name(" appears, outside comment lines, in
-// a file that some app/api/**/route.ts reaches through its imports.
+// A definition the parser cannot read ($$ or $tag$ body) stops the test. It
+// has a route when a call "schema.name(" appears, outside comments, in a file
+// that some app/api/**/route.ts reaches through its imports.
 //
 // Known limits: GRANT is not read (the reason in the list covers who may call
 // a function), and a name built at run time or reached through EXECUTE
@@ -33,26 +34,30 @@ type Exception = {
   ticket?: string;
 };
 
-/** Splits SQL into statements on ";" outside $$ bodies, quotes and line comments. */
+const DOLLAR_RE = /\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$/y;
+
+/** Splits SQL into statements on ";" outside dollar-quoted bodies ($$ or $tag$), quotes and line comments. */
 export function statements(sql: string): string[] {
   const out: string[] = [];
   let current = "";
-  let dollar = false;
+  let tag: string | null = null;
   let i = 0;
   while (i < sql.length) {
-    if (sql.startsWith("$$", i)) {
-      dollar = !dollar;
-      current += "$$";
-      i += 2;
-    } else if (!dollar && sql.startsWith("--", i)) {
+    DOLLAR_RE.lastIndex = i;
+    const quote = sql[i] === "$" ? DOLLAR_RE.exec(sql)?.[0] : undefined;
+    if (quote && (tag === null || tag === quote)) {
+      tag = tag === null ? quote : null;
+      current += quote;
+      i += quote.length;
+    } else if (tag === null && sql.startsWith("--", i)) {
       const end = sql.indexOf("\n", i);
       i = end < 0 ? sql.length : end;
-    } else if (!dollar && sql[i] === "'") {
+    } else if (tag === null && sql[i] === "'") {
       const end = sql.indexOf("'", i + 1);
       const stop = end < 0 ? sql.length : end + 1;
       current += sql.slice(i, stop);
       i = stop;
-    } else if (!dollar && sql[i] === ";") {
+    } else if (tag === null && sql[i] === ";") {
       if (current.trim()) out.push(current.trim());
       current = "";
       i += 1;
@@ -64,6 +69,8 @@ export function statements(sql: string): string[] {
   if (current.trim()) out.push(current.trim());
   return out;
 }
+
+const BODY_RE = /(\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$)([\s\S]*?)\1/;
 
 /** The functions that exist after every migration's up part, by schema.name. */
 export function catalogue(
@@ -77,9 +84,15 @@ export function catalogue(
         /^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_]+\.[a-z_0-9]+)\s*\(/i.exec(
           statement,
         );
-      if (created?.[1]) {
-        const body = /\$\$([\s\S]*?)\$\$/.exec(statement)?.[1] ?? "";
-        const head = statement.replace(/\$\$[\s\S]*?\$\$/, "");
+      const body = BODY_RE.exec(statement)?.[2];
+      if (/^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i.test(statement)) {
+        // A definition this parser cannot read stops the inventory instead
+        // of silently leaving a function out of it.
+        if (!created?.[1] || body === undefined)
+          throw new Error(`${file.name}: unreadable function definition`);
+      }
+      if (created?.[1] && body !== undefined) {
+        const head = statement.replace(BODY_RE, "");
         fns.set(created[1].toLowerCase(), {
           volatile: !/\b(?:STABLE|IMMUTABLE)\b/i.test(head),
           trigger: /\bRETURNS\s+trigger\b/i.test(head),
@@ -137,13 +150,43 @@ function resolveImport(from: string, specifier: string): string | null {
   return null;
 }
 
-/** Source of every file an app/api route reaches, without comment lines. */
+/**
+ * TypeScript source without // and /* *\/ comments. String and template
+ * literal contents stay, because SQL calls are written inside them.
+ */
+export function stripComments(source: string): string {
+  let out = "";
+  let i = 0;
+  while (i < source.length) {
+    const char = source[i] ?? "";
+    if (char === "'" || char === '"' || char === "`") {
+      let end = i + 1;
+      while (end < source.length && source[end] !== char)
+        end += source[end] === "\\" ? 2 : 1;
+      out += source.slice(i, end + 1);
+      i = end + 1;
+    } else if (source.startsWith("//", i)) {
+      const end = source.indexOf("\n", i);
+      i = end < 0 ? source.length : end;
+    } else if (source.startsWith("/*", i)) {
+      const end = source.indexOf("*/", i + 2);
+      out += " ";
+      i = end < 0 ? source.length : end + 2;
+    } else {
+      out += char;
+      i += 1;
+    }
+  }
+  return out;
+}
+
+/** Source of every file an app/api route reaches, without comments. */
 function routeReachableSource(): string {
-  const seen = new Set<string>();
+  const seen = new Map<string, string>();
   const visit = (file: string) => {
     if (seen.has(file)) return;
-    seen.add(file);
-    const text = readFileSync(file, "utf8");
+    const text = stripComments(readFileSync(file, "utf8"));
+    seen.set(file, text);
     for (const match of text.matchAll(
       /(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g,
     )) {
@@ -159,14 +202,7 @@ function routeReachableSource(): string {
     }
   };
   routes(API);
-  return [...seen]
-    .map((file) =>
-      readFileSync(file, "utf8")
-        .split("\n")
-        .filter((line) => !/^\s*(?:\/\/|\/\*|\*)/.test(line))
-        .join("\n"),
-    )
-    .join("\n");
+  return [...seen.values()].join("\n");
 }
 
 const files = readdirSync(MIGRATIONS)
@@ -259,5 +295,42 @@ describe("catalogue parser", () => {
     expect(
       statements("SELECT ';'; CREATE FUNCTION s.f() AS $$ a; b; $$;"),
     ).toStrictEqual(["SELECT ';'", "CREATE FUNCTION s.f() AS $$ a; b; $$"]);
+  });
+
+  it("reads a body quoted with a tagged delimiter", () => {
+    const parsed = catalogue([
+      {
+        name: "1.sql",
+        sql: "CREATE FUNCTION s.w() RETURNS void LANGUAGE plpgsql AS $rpc$ BEGIN UPDATE s.t SET a = '$$'; END $rpc$;\nCREATE FUNCTION s.f() RETURNS int LANGUAGE sql STABLE AS $$ SELECT 1; $$;",
+      },
+    ]);
+    expect([...parsed.keys()]).toStrictEqual(["s.w", "s.f"]);
+    expect(stateChanging(parsed)).toStrictEqual(["s.w"]);
+  });
+
+  it("stops on a function definition it cannot read", () => {
+    expect(() =>
+      catalogue([
+        {
+          name: "1.sql",
+          sql: "CREATE FUNCTION s.w() RETURNS void LANGUAGE sql AS 'UPDATE s.t SET a = 1';",
+        },
+      ]),
+    ).toThrow("1.sql: unreadable function definition");
+  });
+
+  it("drops calls inside line and block comments but keeps string contents", () => {
+    const stripped = stripComments(
+      [
+        "const note = 0; /* institution.create_course( */",
+        "// institution.remove_student(",
+        "const url = 'https://example.test/a';",
+        "await sql`SELECT institution.publish_assignment_version(${id})`;",
+      ].join("\n"),
+    );
+    expect(stripped).not.toContain("institution.create_course(");
+    expect(stripped).not.toContain("institution.remove_student(");
+    expect(stripped).toContain("https://example.test/a");
+    expect(stripped).toContain("institution.publish_assignment_version(");
   });
 });
