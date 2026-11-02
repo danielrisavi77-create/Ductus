@@ -275,7 +275,8 @@ export function foreignRules(rulebookDir, root, limits) {
     // compared below
   }
   const own = commonGitDir(rulebookDir);
-  if (own && own === commonGitDir(root)) return null;
+  const project = own && commonGitDir(root);
+  if (project && samePath(own, project)) return null;
   try {
     const budget = newBudget(limits);
     if (treeDigest(path.join(rulebookDir, PROJECT_CONFIG), [], budget) === treeDigest(path.join(root, PROJECT_CONFIG), [], budget)) return null;
