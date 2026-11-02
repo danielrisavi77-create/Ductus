@@ -1,0 +1,158 @@
+// P6 (#87 c.6582691826), DAN-499: dbmate migration versions must not collide.
+// A pull request fails when a migration it introduces in db/migrations has a
+// version (the leading digits of the name, as dbmate reads it) that main or
+// another open pull request already uses. Every event also fails on two files
+// of one version in the checkout (on a PR that is the merge commit).
+//
+//   node scripts/engineering/migration-versions.mjs
+//
+// On a pull_request event it reads GITHUB_EVENT_PATH, GITHUB_TOKEN and
+// GITHUB_REPOSITORY. Any API error fails the step: the check is fail-closed.
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+import { createApi } from "./review-gate-api.mjs";
+
+const DIR = "db/migrations";
+// dbmate's own pattern for a migration file name; the first group is the version.
+const MIGRATION = /^(\d+).*\.sql$/;
+const INTRODUCING = new Set(["added", "renamed", "copied"]);
+const PER_PAGE = 100;
+const FILE_PAGES = 30; // GitHub lists at most 3000 files of a pull request.
+
+/** Version of a repository path that dbmate would run as a migration, else null. */
+export function migrationVersion(file) {
+  const dir = path.posix.dirname(file);
+  if (dir !== DIR) return null;
+  return MIGRATION.exec(path.posix.basename(file))?.[1] ?? null;
+}
+
+/** Migrations a REST files list introduces: new, renamed or copied into db/migrations. */
+function introduced(files) {
+  return (files ?? [])
+    .filter((f) => INTRODUCING.has(f.status) && migrationVersion(f.filename) !== null)
+    .map((f) => ({ file: f.filename, sha: f.sha, version: migrationVersion(f.filename) }));
+}
+
+/**
+ * Collisions of the migrations `self` introduces with `main` ([{name, sha}] of
+ * db/migrations on main), with each other, and with the open pulls in `pulls`
+ * ([{number, state, files}]). One file name with one blob is one migration
+ * (a stacked PR, or main already holding it), not a collision.
+ */
+export function findCollisions({ self, main, pulls }) {
+  const mine = introduced(self.files);
+  if (mine.length === 0) return [];
+  // A main migration this PR renames or removes is the D-91 ledger's case.
+  const leaving = new Set(
+    (self.files ?? []).flatMap((f) => (f.status === "removed" ? [f.filename] : f.status === "renamed" ? [f.previous_filename] : [])),
+  );
+  const others = [
+    { by: "main", entries: main.map((m) => ({ file: `${DIR}/${m.name}`, sha: m.sha })).filter((m) => !leaving.has(m.file)) },
+    ...pulls.filter((p) => p.state === "open" && p.number !== self.number).map((p) => ({ by: p.number, entries: introduced(p.files) })),
+  ];
+  const collisions = [];
+  for (const m of mine) {
+    for (const other of mine) {
+      if (other !== m && other.version === m.version) collisions.push({ ...m, by: "this PR", other: other.file });
+    }
+    for (const { by, entries } of others) {
+      for (const e of entries) {
+        if (migrationVersion(e.file) !== m.version || (e.file === m.file && e.sha === m.sha)) continue;
+        collisions.push({ ...m, by, other: e.file });
+      }
+    }
+  }
+  return collisions;
+}
+
+export function formatCollision(c) {
+  const owner = typeof c.by === "number" ? `#${c.by}` : c.by;
+  return `${c.file}: version ${c.version} is also used by ${owner} (${c.other}); pick a newer timestamp than main and every open PR (P6).`;
+}
+
+/** Plain migration file names in `dir`; directories are not migrations to dbmate. */
+export function readLocalNames(dir) {
+  return readdirSync(dir).filter((name) => lstatSync(path.join(dir, name)).isFile());
+}
+
+/** Versions held by more than one migration file name. */
+export function localDuplicates(names) {
+  const byVersion = new Map();
+  for (const name of [...names].sort()) {
+    const version = migrationVersion(`${DIR}/${name}`);
+    if (version !== null) byVersion.set(version, [...(byVersion.get(version) ?? []), `${DIR}/${name}`]);
+  }
+  return [...byVersion].filter(([, files]) => files.length > 1).map(([version, files]) => ({ version, files }));
+}
+
+async function pages(api, url, maxPages) {
+  const items = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = await api(`${url}${url.includes("?") ? "&" : "?"}per_page=${PER_PAGE}&page=${page}`);
+    items.push(...batch);
+    if (batch.length < PER_PAGE) return { items, complete: true };
+  }
+  return { items, complete: false };
+}
+
+/** Reads the PR, main and (when the PR introduces a migration) every open PR. */
+export async function checkPullRequest({ api, owner, repo, number, headSha }) {
+  const base = `/repos/${owner}/${repo}`;
+  const current = await api(`${base}/pulls/${number}`);
+  if (current.head?.sha !== headSha) throw new Error("PR changed after this CI run started; a newer run decides.");
+  const own = await pages(api, `${base}/pulls/${number}/files`, FILE_PAGES);
+  if (!own.complete || !(current.changed_files <= own.items.length)) throw new Error(`File list of #${number} is incomplete.`);
+  const self = { number, files: own.items };
+  if (introduced(self.files).length === 0) return [];
+
+  const listing = await api(`${base}/contents/${DIR}?ref=main`);
+  // The contents API lists at most 1000 entries of a directory.
+  if (!Array.isArray(listing) || listing.length >= 1000) throw new Error(`Cannot list ${DIR} on main completely.`);
+  const main = listing.filter((e) => e.type === "file").map((e) => ({ name: e.name, sha: e.sha }));
+
+  const open = await pages(api, `${base}/pulls?state=open`, 10);
+  if (!open.complete) throw new Error("Cannot list every open PR.");
+  const pulls = [];
+  for (const p of open.items) {
+    if (p.number === number) continue;
+    const files = await pages(api, `${base}/pulls/${p.number}/files`, FILE_PAGES);
+    if (!files.complete) throw new Error(`Cannot read all files of #${p.number}.`);
+    pulls.push({ number: p.number, state: p.state, files: files.items });
+  }
+  return findCollisions({ self, main, pulls });
+}
+
+async function main() {
+  const errors = localDuplicates(readLocalNames(DIR)).map(
+    (d) => `version ${d.version} is used by more than one migration: ${d.files.join(", ")} (P6).`,
+  );
+  const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")) : {};
+  if (event.pull_request) {
+    const { GITHUB_TOKEN: token, GITHUB_REPOSITORY: repository } = process.env;
+    if (!token || !repository) throw new Error("Missing GitHub runtime environment.");
+    const [owner, repo] = repository.split("/");
+    const api = createApi({ token, baseUrl: process.env.GITHUB_API_URL ?? "https://api.github.com" });
+    const collisions = await checkPullRequest({
+      api,
+      owner,
+      repo,
+      number: event.pull_request.number,
+      headSha: event.pull_request.head?.sha,
+    });
+    errors.push(...collisions.map(formatCollision));
+  }
+  if (errors.length > 0) {
+    for (const error of errors) console.error(`Migration version collision: ${error}`);
+    process.exit(1);
+  }
+  console.log(
+    event.pull_request
+      ? "Migration versions: no collision in the checkout, with main or with an open PR."
+      : "Migration versions: no collision in the checkout (not a pull_request event).",
+  );
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
