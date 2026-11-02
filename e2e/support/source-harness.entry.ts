@@ -10,7 +10,7 @@
 
 import { Editor } from "@tiptap/core";
 
-import type { EvidenceSourceV2 } from "../../src/domain/forensics/evidence-segment-v2";
+import type { EvidenceSource } from "../../src/domain/forensics/evidence-segment-v2";
 import { ArrowCollapse } from "../../src/editor/arrow-collapse";
 import { createEditorExtensions } from "../../src/editor/schema";
 import { sourceOfChange, SourceObserver } from "../../src/editor/source";
@@ -22,7 +22,7 @@ export type SourceHarness = {
   /** Set once the editor has made its own changes on creation (block ids). */
   ready: boolean;
   /** The source of every change that edited the document, in order. */
-  sources(): EvidenceSourceV2[];
+  sources(): EvidenceSource[];
   /** The `beforeinput` events the editor received, as kind and trust only. */
   signals(): InputSignal[];
   text(): string;
@@ -44,7 +44,7 @@ const editor = new Editor({
   extensions: [...createEditorExtensions(), StorableInput, ArrowCollapse, observer.extension],
 });
 
-let sources: EvidenceSourceV2[] = [];
+let sources: EvidenceSource[] = [];
 let signals: InputSignal[] = [];
 let resetting = false;
 let ready = false;
