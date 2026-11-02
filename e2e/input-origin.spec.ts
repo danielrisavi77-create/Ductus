@@ -7,7 +7,8 @@ import { installSourceHarness, openSourceHarness, prepareSourceHarness } from ".
  * how the production `SourceObserver` labels typed, assistive and scripted
  * input in real engines. Labelling only: every path below reaches the
  * document, none is refused, and no label is shown or judged. A script never
- * earns `editor`, `keyless-input` or a clipboard source; it is `unattributed`.
+ * earns `editor` or a clipboard source; it is `unattributed`, except for
+ * execCommand in WebKit, which is `keyless-input` (see that test).
  * Every text is invented.
  */
 
@@ -57,10 +58,18 @@ test.describe("input origin (D-54)", () => {
     expect(new Set(await sources(page))).toEqual(new Set(["keyless-input"]));
   });
 
-  test("execCommand from a script is unattributed and not refused", async ({ page }) => {
+  test("execCommand from a script is never editor and not refused", async ({ page, browserName }) => {
     await page.evaluate(() => document.execCommand("insertText", false, "oblak nad brdom"));
     expect(await text(page)).toBe("oblak nad brdom");
-    await onlyUnattributed(page);
+    if (browserName !== "webkit") {
+      await onlyUnattributed(page);
+      return;
+    }
+    // A finding of the spike, not a target: WebKit sends a trusted
+    // insertText with no keydown for execCommand, the very signal of keyless
+    // input, so the observer cannot tell it from dictation (known limit in
+    // docs/spikes/M3.5-P01.md). Pinned so a change either way is seen.
+    expect(new Set(await sources(page))).toEqual(new Set(["keyless-input"]));
   });
 
   test("forged key and input events do not lend a source to a DOM change", async ({ page }) => {
