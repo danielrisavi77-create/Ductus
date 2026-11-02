@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 
-// D-91 measure 6: db/migrations/20261101191000_roles_check.sql only checks
+// D-91 measure 6: db/migrations/20261101201000_roles_check.sql only checks
 // the group roles. Every case runs the migration's own up section as
 // ductus_migrator, the way dbmate does, inside a transaction that is always
 // rolled back: roles are cluster-wide, and nothing a case changes may
@@ -16,7 +16,7 @@ const ADMIN_URL = requireLoopbackDatabaseUrl(
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus",
   "The roles check migration test runs only against a loopback database (DATABASE_URL).",
 );
-const FILE = fileURLToPath(new URL("../../db/migrations/20261101191000_roles_check.sql", import.meta.url));
+const FILE = fileURLToPath(new URL("../../db/migrations/20261101201000_roles_check.sql", import.meta.url));
 const GROUP_ROLES = [
   "ductus_app", "ductus_worker", "ductus_retention", "ductus_evidence", "ductus_identity", "ductus_auth",
 ] as const;
