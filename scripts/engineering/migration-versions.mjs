@@ -105,9 +105,10 @@ async function readPull(api, base, number) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const before = await api(`${base}/pulls/${number}`);
     const files = await pages(api, `${base}/pulls/${number}/files`, FILE_PAGES);
-    if (!files.complete || !(before.changed_files <= files.items.length)) throw new Error(`Cannot read all files of #${number}.`);
     const after = await api(`${base}/pulls/${number}`);
-    if (typeof before.head?.sha === "string" && after.head?.sha === before.head.sha) return { number, state: before.state, files: files.items };
+    if (typeof before.head?.sha !== "string" || after.head?.sha !== before.head.sha) continue;
+    if (!files.complete || !(before.changed_files <= files.items.length)) throw new Error(`Cannot read all files of #${number}.`);
+    return { number, state: before.state, files: files.items };
   }
   throw new Error(`#${number} kept changing while its files were read.`);
 }
