@@ -21,6 +21,8 @@ import { createEvidencePayloadReader } from "@/server/evidence/payload-reader";
 import { handleProcessSummaryRequest } from "@/server/projection/process-summary";
 import { handleFastPathRequest, type FastPathRead } from "@/server/teacher/fast-path";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-11c (#757, DAN-308): the teacher's fast path over the real
 // app.fast_path_works under withActor and the payloads stored in the local S3
 // store of compose.yaml. The summary of each work is the one the
@@ -30,9 +32,7 @@ import { handleFastPathRequest, type FastPathRead } from "@/server/teacher/fast-
 // invented, the text is Lorem ipsum.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The fast path test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The fast path test runs only against a loopback database (DATABASE_URL).");
 const ORIGIN = "http://localhost:3000";
 const THRESHOLDS = { sessionBreakAboveMinutes: 30, pasteListedAboveCharacters: 200 };
 const suffix = randomBytes(5).toString("hex");
@@ -412,16 +412,17 @@ afterAll(async () => {
 });
 
 describe("teacher fast path over the API and app.fast_path_works (B-11c, #757)", () => {
-  it("gives Vesna Ana's text and the summary the process-summary route returns, and Dora without a name or work", async () => {
+  it("gives Vesna Ana's text, work id and the summary the process-summary route returns, and Dora without a name or work", async () => {
     const response = await fastPath(tokens.vesna);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const read = (await response.json()) as FastPathRead;
     expect(read.kind).toBe("ok");
     if (read.kind !== "ok") return;
-    expect(read.students.map((s) => [s.id, s.givenName, s.surname, s.work])).toStrictEqual([
-      [people.ana, "Ana", "Testić", "writing"],
-      [people.dora, null, null, "notice_pending"],
+    // #1284: Ana's row names her work document, Dora's row without work names none.
+    expect(read.students.map((s) => [s.id, s.givenName, s.surname, s.documentId, s.work])).toStrictEqual([
+      [people.ana, "Ana", "Testić", documentId, "writing"],
+      [people.dora, null, null, null, "notice_pending"],
     ]);
     const [ana, dora] = read.students;
     expect(dora!.record).toBeNull();
@@ -441,7 +442,7 @@ describe("teacher fast path over the API and app.fast_path_works (B-11c, #757)",
     expect(await openings()).toStrictEqual(["vesna teacher fast_path of ana"]);
   });
 
-  it("gives a student the same empty list as an assignment that does not exist, never 403 or 404", async () => {
+  it("gives a student the same empty list as an assignment that does not exist, never 403 or 404 or a work id", async () => {
     for (const name of ["ana", "dora"] as const) {
       const response = await fastPath(tokens[name]);
       expect(response.status).toBe(200);

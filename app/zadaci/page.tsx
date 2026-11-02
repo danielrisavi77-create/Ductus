@@ -2,10 +2,9 @@ import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
-import { readShellAccount } from "@/components/shell/shell-role";
 import EnrollForm from "@/components/student/EnrollForm";
-import { readMyAssignments } from "@/components/student/my-assignments-read";
 import StudentHome from "@/components/student/StudentHome";
+import { readStudentHome } from "@/components/student/student-home-read";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -23,10 +22,8 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 // (S01_prazna) holds the same EnrollForm as /upis.
 export default async function MyAssignmentsPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [read, { role, scope }] = await Promise.all([
-    readMyAssignments(token, withActor),
-    readShellAccount(token, withActor),
-  ]);
+  // The session is checked before the courses are read (readStudentHome).
+  const { read, account: { role, scope } } = await readStudentHome(token, withActor);
   return (
     <AppShell session={shellSession(token)} role={role} scope={scope} current="/zadaci" crumbs={[t.title]}>
       <StudentHome read={read} enroll={<EnrollForm />} />

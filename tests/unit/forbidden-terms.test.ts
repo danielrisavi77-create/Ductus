@@ -546,6 +546,7 @@ describe("repository scan", () => {
     write("app/icons/icon.tsx", 'export function generateImageMetadata() {\n  return [{ id: "small", alt: "Hidden edits" }];\n}\n');
     write("app/api/status/route.ts", 'export function buildMetadata() {\n  return { title: "Hidden edits" };\n}\n');
     expect(scanned().sort()).toEqual([
+      ["app/api/status/route.ts", 2, ["hidden"]],
       ["app/drafts/page.tsx", 4, ["copied"]],
       ["app/drafts/page.tsx", 5, ["suspicious"]],
       ["app/icons/icon.tsx", 2, ["hidden"]],
@@ -636,6 +637,7 @@ describe("repository scan", () => {
     expect(scanned().sort()).toEqual([
       ["app/api/x/route.ts", 1, ["skriveno"]],
       ["src/application/evidence/evidence-outbox.ts", 1, ["kopirano"]],
+      ["src/components/Table.tsx", 1, ["hidden"]],
       ["src/components/Table.tsx", 1, ["prepisano"]],
       ["src/components/Table.tsx", 2, ["nestali podaci"]],
       ["src/components/Table.tsx", 4, ["rizik"]],

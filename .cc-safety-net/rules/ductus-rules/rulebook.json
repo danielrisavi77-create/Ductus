@@ -1,7 +1,7 @@
 {
   "rulebook_version": 1,
   "name": "ductus-rules",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Ductus git rules from CLAUDE.md. Arguments are matched as whole tokens (short flags also inside a cluster), so the rules list every spelling they block. Not exhaustive: see docs/SESSIONS.md 4a.",
   "author": "Ductus",
   "allowed_commands": [
@@ -238,9 +238,56 @@
       ],
       "reason": "Do not skip the pre-rebase hook; fix the failure instead.",
       "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-push-prune",
+      "command": "git",
+      "subcommand": "push",
+      "block_args": [
+        "--prune",
+        "--prun",
+        "--pru"
+      ],
+      "reason": "git push --prune deletes remote branches that have no local counterpart; deleting branches is not part of the Ductus workflow.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-rebase-exec",
+      "command": "git",
+      "subcommand": "rebase",
+      "block_args": [
+        "-x",
+        "--exec",
+        "--exe",
+        "--ex"
+      ],
+      "reason": "git rebase runs its command outside the commit hooks; a rebase with --exec can run git commit -n or git add -A. Fix the failure instead.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-submodule-foreach",
+      "command": "git",
+      "subcommand": "submodule",
+      "block_args": [
+        "foreach"
+      ],
+      "reason": "git submodule foreach runs an arbitrary command in every submodule; it can bypass the blanket-add and no-verify rules.",
+      "intent": "stop_and_explain"
     }
   ],
   "tests": [
+    {"command": "git push --prune origin", "expect": "blocked", "rule": "block-git-push-prune"},
+    {"command": "git push --pru origin", "expect": "blocked", "rule": "block-git-push-prune"},
+    {"command": "git push origin --prun", "expect": "blocked", "rule": "block-git-push-prune"},
+    {"command": "git push origin --prune", "expect": "blocked", "rule": "block-git-push-prune"},
+    {"command": "git fetch --prune origin", "expect": "allowed"},
+    {"command": "git rebase -x 'git commit -n -m x' HEAD~1", "expect": "blocked", "rule": "block-git-rebase-exec"},
+    {"command": "git rebase --exec 'git add -A' HEAD~1", "expect": "blocked", "rule": "block-git-rebase-exec"},
+    {"command": "git rebase --ex 'git add -A' HEAD~1", "expect": "blocked", "rule": "block-git-rebase-exec"},
+    {"command": "git rebase --exe 'git add -A' HEAD~1", "expect": "blocked", "rule": "block-git-rebase-exec"},
+    {"command": "git rebase origin/main", "expect": "allowed"},
+    {"command": "git submodule foreach 'git add -A'", "expect": "blocked", "rule": "block-git-submodule-foreach"},
+    {"command": "git submodule update --init", "expect": "allowed"},
     {
       "command": "git add -A",
       "expect": "blocked",

@@ -11,6 +11,8 @@ import { InstitutionRoutedPayloadStore } from "@/adapters/evidence/institution-r
 import { STORAGE_IDENTITY_KEY } from "@/adapters/evidence/s3-evidence-payload-store";
 import { sha256Hex, signS3Request, sigV4Authorization } from "@/adapters/evidence/s3-signature";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-8 step 4b / DAN-83 (docs/BACKEND.md 4.1 and 4.13): the db/local script
 // gives an institution its storage domain in the local store of compose.yaml,
 // and the configuration it prints is the one the web process loads. Loopback
@@ -18,10 +20,9 @@ import { sha256Hex, signS3Request, sigV4Authorization } from "@/adapters/evidenc
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const S3_ENDPOINT = process.env.S3_ENDPOINT ?? "http://127.0.0.1:9100";
-for (const url of [SAFE_ADMIN_URL, S3_ENDPOINT]) {
-  if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)) {
-    throw new Error("The storage domain test runs only against loopback services.");
-  }
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The storage domain test runs only against loopback services.");
+if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(S3_ENDPOINT).hostname)) {
+  throw new Error("The storage domain test runs only against loopback services.");
 }
 const credentials = {
   accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "ductus-local",

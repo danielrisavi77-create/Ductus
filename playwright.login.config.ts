@@ -44,11 +44,12 @@ export default defineConfig({
   webServer: {
     command: `pnpm dev --port ${PORT}`,
     url: BASE_URL,
+    // F-152: only fixed local values here. A database URL set in the
+    // environment reaches the server through the environment it inherits.
     env: {
-      APP_DATABASE_URL:
-        process.env.APP_DATABASE_URL ??
-        "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
-      AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL ?? "",
+      ...(process.env.APP_DATABASE_URL === undefined
+        ? { APP_DATABASE_URL: "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus" }
+        : {}),
       DUCTUS_AUTH_PROVIDER: "fake-oidc",
       OIDC_ISSUER: "http://localhost:8090",
       OIDC_REDIRECT_URI: `${BASE_URL}/api/auth/callback`,

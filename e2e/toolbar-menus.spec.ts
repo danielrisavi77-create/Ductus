@@ -45,10 +45,10 @@ test.describe("toolbar menus, wide (1440 px)", () => {
     await viewButton(page).click();
     await expect(viewButton(page)).toHaveAttribute("aria-expanded", "true");
     await expect(viewMenu(page).getByRole("group", { name: "List" })).toBeVisible();
-    await expect(theme(page, "Tamni list")).toHaveAttribute("aria-checked", "true");
-    await expect(theme(page, "Bijeli list")).toHaveAttribute("aria-checked", "false");
-    await theme(page, "Bijeli list").click();
-    await expect(sheetOf(page)).toHaveAttribute("data-sheet-theme", "light");
+    await expect(theme(page, "Bijeli list")).toHaveAttribute("aria-checked", "true");
+    await expect(theme(page, "Tamni list")).toHaveAttribute("aria-checked", "false");
+    await theme(page, "Tamni list").click();
+    await expect(sheetOf(page)).toHaveAttribute("data-sheet-theme", "dark");
     await expect(viewMenu(page)).toHaveCount(0);
     await expect(viewButton(page)).toBeFocused();
 
@@ -81,13 +81,15 @@ test.describe("toolbar menus, wide (1440 px)", () => {
     await page.keyboard.press("Escape");
     await expect(viewMenu(page)).toHaveCount(0);
     await expect(viewButton(page)).toBeFocused();
-    await expect(sheetOf(page)).toHaveAttribute("data-sheet-theme", "dark");
+    await expect(sheetOf(page)).toHaveAttribute("data-sheet-theme", "light");
 
-    // ArrowUp opens on the last item; Space chooses it and focus comes back.
+    // ArrowUp opens on the last item; Home goes to the first; Space chooses it and focus comes back.
     await page.keyboard.press("ArrowUp");
     await expect(theme(page, "Bijeli list")).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(theme(page, "Tamni list")).toBeFocused();
     await page.keyboard.press(" ");
-    await expect(sheetOf(page)).toHaveAttribute("data-sheet-theme", "light");
+    await expect(sheetOf(page)).toHaveAttribute("data-sheet-theme", "dark");
     await expect(viewMenu(page)).toHaveCount(0);
     await expect(viewButton(page)).toBeFocused();
     // The toolbar stays one Tab stop: the menu items are not Tab stops.

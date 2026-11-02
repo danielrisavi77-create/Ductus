@@ -37,7 +37,7 @@ function work(sentence: string): { body: string; hash: string } {
 }
 
 /** Serves the live route from `next()`, which sees the If-None-Match the page sent. */
-async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { status: number; body?: string; etag?: string }) {
+async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { status: number; body?: string; etag?: string; state?: string }) {
   const calls: (string | null)[] = [];
   await page.route(`**/api/live/${DOC}`, async (route: Route) => {
     const ifNoneMatch = route.request().headers()["if-none-match"] ?? null;
@@ -50,6 +50,7 @@ async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { sta
         "cache-control": "no-store",
         ...(reply.body === undefined ? {} : { "content-type": "application/json; charset=utf-8" }),
         ...(reply.etag === undefined ? {} : { etag: `"${reply.etag}"` }),
+        ...(reply.state === undefined ? {} : { "ductus-live-state": reply.state }),
       },
     });
   });
@@ -99,6 +100,49 @@ test("the teacher sees the work as the student writes, with the limits of the re
   await test.info().attach("dan86-uzivo-sirok", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await test.info().attach("dan86-uzivo-mobitel", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+});
+
+// DAN-332 (#826 PR 3): after the submission the route sends the bytes of the
+// submitted revision with `Ductus-Live-State: submitted` (#883).
+test("the submitted work is labelled Predani rad and keeps its text and label", async ({ page }) => {
+  const live = work("Gradske knjižnice su mjesto susreta.");
+  const later = work("Ova rečenica nije predana.");
+  let phase: "live" | "submitted" | "later" | "down" = "live";
+  await serveLive(page, (ifNoneMatch) => {
+    if (phase === "down") return { status: 503, body: '{"error":"unavailable"}' };
+    if (phase === "later") return { status: 200, body: later.body, etag: later.hash };
+    const state = phase === "submitted" ? "submitted" : undefined;
+    return ifNoneMatch === `"${live.hash}"` ? { status: 304, etag: live.hash, state } : { status: 200, body: live.body, etag: live.hash, state };
+  });
+  await signIn(page, PATH, "Demo nastavnik");
+  const text = page.getByRole("document", { name: t.documentLabel });
+  await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toBeVisible();
+  await expect(page.getByText(t.submitted, { exact: true })).toHaveCount(0);
+
+  // A3: the submitted revision is the text already shown; a 304 names it so.
+  phase = "submitted";
+  await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
+  await expect(page.getByText(t.submittedNote)).toBeVisible();
+  await expect(page.getByText(t.note)).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toHaveCount(0);
+
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(results.violations).toEqual([]);
+  await test.info().attach("dan332-predani-rad-sirok", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  // A5: neither another text without the header nor a failure replaces it.
+  for (const next of ["later", "down"] as const) {
+    phase = next;
+    await page.waitForTimeout(2500);
+    await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+    await expect(page.getByText("Ova rečenica nije predana.")).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
+    await expect(page.getByText(t.submittedNote)).toBeVisible();
+    await expect(page.getByText(t.note)).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await test.info().attach("dan332-predani-rad-mobitel", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 });
 
 test("a body that is not the document its ETag names is never shown", async ({ page }) => {
@@ -292,6 +336,81 @@ test.describe("comments from the live view", () => {
     await expect(card).toContainText("„mjesto”");
     await expect(page.getByRole("status").filter({ hasText: t.connection.retrying })).toBeVisible();
     await expect(card.getByText(c.notPlaced)).toHaveCount(0);
+  });
+
+  const PARAGRAPH_ID = "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f";
+  const SENTENCE = "Gradske knjižnice su mjesto susreta i učenja.";
+  const livePage = (sentence: string) => {
+    const doc = JSON.parse(REVISION_ZERO_JCS) as { nodes: Record<string, unknown>[] };
+    doc.nodes = [{ type: "paragraph", id: PARAGRAPH_ID, children: [{ type: "text", text: sentence, marks: [] }] }];
+    const body = canonicalizeJcs(doc);
+    return { body, hash: createHash("sha256").update(body, "utf8").digest("hex") };
+  };
+  const serveText = (page: Page, documentId: string) => {
+    const current = livePage(SENTENCE);
+    return page.route(`**/api/live/${documentId}`, (route) => route.fulfill({
+      status: 200, body: current.body, headers: { etag: `"${current.hash}"`, "content-type": "application/json" },
+    }));
+  };
+
+  // #535 t. 1: the server refuses the student; the page must not offer the panel or ask for the list.
+  test("a student who opens the teacher's address gets no comment panel and no comment request", async ({ browser }) => {
+    const tc = messagesHr.teacherComments;
+    const student = await (await browser.newContext()).newPage();
+    await signIn(student, "/");
+    const { documentId } = await openAssignmentWork(student);
+    const listRequests: string[] = [];
+    student.on("request", (request) => { if (request.url().includes("/api/comments/")) listRequests.push(request.url()); });
+    await serveText(student, documentId);
+    await student.goto(`/nastavnik/rad/${documentId}`);
+    await expect(student.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible();
+    await expect(student.getByRole("heading", { name: messagesHr.comments.title })).toHaveCount(0);
+    await expect(student.getByText(tc.hint)).toHaveCount(0);
+    // Two frames after the text: whatever the page would have asked for has been asked.
+    await student.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+    expect(listRequests).toEqual([]);
+  });
+
+  // #535 t. 3: a comment on its way cannot be cancelled; after a failure the button works again.
+  test("Odustani is disabled while the comment is being published", async ({ browser }) => {
+    const tc = messagesHr.teacherComments;
+    const QUOTE = "mjesto susreta";
+    const teacher = await (await browser.newContext()).newPage();
+    const student = await (await browser.newContext()).newPage();
+    await signIn(student, "/");
+    await signIn(teacher, "/", "Demo nastavnik");
+    const { documentId } = await openAssignmentWork(student);
+    await serveText(teacher, documentId);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    await teacher.route("**/api/comments/create", async (route) => {
+      await held;
+      await route.fulfill({ status: 503, body: "{}", headers: { "content-type": "application/json" } });
+    });
+    await teacher.goto(`/nastavnik/rad/${documentId}`);
+    const text = teacher.getByRole("document", { name: t.documentLabel });
+    await expect(text.getByText(SENTENCE)).toBeVisible();
+    await text.locator("p").evaluate((p, quote) => {
+      const node = document.createTreeWalker(p, NodeFilter.SHOW_TEXT).nextNode()!;
+      const start = node.textContent!.indexOf(quote);
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + quote.length);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+    }, QUOTE);
+    await text.dispatchEvent("mouseup");
+    const form = teacher.getByRole("form", { name: tc.newTitle });
+    await form.getByRole("textbox", { name: tc.bodyLabel }).fill("Dodaj izvor.");
+    const cancel = form.getByRole("button", { name: tc.cancel });
+    await expect(cancel).toBeEnabled();
+    await form.getByRole("button", { name: tc.publish }).click();
+    await expect(cancel).toBeDisabled();
+    release();
+    await expect(form.getByRole("alert")).toBeVisible();
+    await expect(cancel).toBeEnabled();
+    await cancel.click();
+    await expect(form).toHaveCount(0);
   });
 
   test("the teacher marks a passage, comments, and the mark follows the text", async ({ browser }) => {

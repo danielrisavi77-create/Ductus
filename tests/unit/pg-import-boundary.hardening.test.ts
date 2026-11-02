@@ -9,7 +9,11 @@ const DYNAMIC_RULE = "database-boundary/no-restricted-dynamic-imports";
 const BOUNDARY_MESSAGE = "Database access goes through src/server/db only.";
 const RESTRICTED_SPECIFIERS = ["pg", "pg/lib/utils", "pg-cursor", "pg-boss/lib/manager"];
 const APPLICATION_FILES = ["app/api/probe/route.ts", "src/application/probe.ts"];
-const EXCEPTION_FILES = ["src/server/db/probe.ts", "tests/integration/probe.integration.test.ts"];
+const EXCEPTION_FILES = [
+  "src/server/db/probe.ts",
+  "tests/integration/probe.integration.test.ts",
+  "e2e/login/probe.ts",
+];
 const SOURCE_FORMS = ["quoted", "template"] as const;
 
 // The specifiers are the fixed list above. Each is checked to hold only the
@@ -206,4 +210,195 @@ describe("pg dynamic import final-review regressions", () => {
       }),
     ]);
   });
+});
+
+// DAN-50: a static path into an installed copy of the driver is the driver.
+const NODE_MODULES_PG = [
+  "../../node_modules/pg/lib/index.js",
+  "../../node_modules/pg",
+  "../node_modules/PG-boss/src/index.js",
+  "../../node_modules/.pnpm/pg@8.13.1/node_modules/pg/lib/index.js",
+  "..\\..\\node_modules\\pg\\lib\\index.js",
+  "/srv/app/node_modules/pg-cursor",
+];
+const NODE_MODULES_NONFAMILY = ["./node_modules-like/pg", "../pgx", "../../node_modules/pgx", "../../node_modules/@types/pg"];
+
+function nodeModulesCases(files: string[], specifiers: string[]) {
+  return files.flatMap((filePath) => specifiers.map((specifier) => [filePath, specifier] as const));
+}
+
+describe("pg boundary through node_modules paths (DAN-50)", () => {
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG))(
+    "rejects %s importing %s dynamically",
+    async (filePath, specifier) => {
+      await expectDynamicBoundary(filePath, importSource(JSON.stringify(specifier)));
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG))(
+    "rejects %s importing %s statically",
+    async (filePath, specifier) => {
+      expect(await lint(filePath, `import pg from ${JSON.stringify(specifier)};\nexport const probe = pg;\n`)).toEqual([
+        expect.objectContaining({
+          ruleId: "no-restricted-imports",
+          severity: 2,
+          message: expect.stringContaining(BOUNDARY_MESSAGE),
+        }),
+      ]);
+    },
+  );
+
+  it.each(nodeModulesCases(EXCEPTION_FILES, NODE_MODULES_PG))(
+    "allows %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import pg from ${JSON.stringify(specifier)};\nexport const a = pg;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_NONFAMILY))(
+    "allows nonfamily %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import x from ${JSON.stringify(specifier)};\nexport const a = x;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+});
+// Review of #1172 (c.6554355576, c.6557930881): a path with an empty, "." or
+// "x/.." segment reaches the same driver. Statically the custom rule reports
+// it, since no-restricted-imports reads only the raw text.
+const NODE_MODULES_PG_UNNORMALIZED = [
+  "../../node_modules//pg/lib/index.js",
+  "../../node_modules/./pg/lib/index.js",
+  "../../node_modules/x/../pg/lib/index.js",
+  "../../node_modules/.pnpm//pg@8.13.1/node_modules/./pg",
+  "file:///D:/Ductus/node_modules/./pg/lib/index.js",
+  "..\\..\\node_modules\\.\\pg",
+];
+const NODE_MODULES_NONFAMILY_UNNORMALIZED = ["../../node_modules/./pgx", "../../node_modules/x/../@types/pg", "./x/../pg-like"];
+
+describe("pg boundary through unnormalized node_modules paths (review of #1172)", () => {
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG_UNNORMALIZED))(
+    "rejects %s importing %s dynamically",
+    async (filePath, specifier) => {
+      await expectDynamicBoundary(filePath, importSource(JSON.stringify(specifier)));
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_PG_UNNORMALIZED))(
+    "rejects %s importing %s statically, once",
+    async (filePath, specifier) => {
+      for (const code of [
+        `import pg from ${JSON.stringify(specifier)};\nexport const probe = pg;\n`,
+        `export * from ${JSON.stringify(specifier)};\n`,
+        `export { default as probe } from ${JSON.stringify(specifier)};\n`,
+      ]) {
+        await expectDynamicBoundary(filePath, code);
+      }
+    },
+  );
+
+  it.each(nodeModulesCases(EXCEPTION_FILES, NODE_MODULES_PG_UNNORMALIZED))(
+    "allows %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import pg from ${JSON.stringify(specifier)};\nexport const a = pg;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, NODE_MODULES_NONFAMILY_UNNORMALIZED))(
+    "allows nonfamily %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import x from ${JSON.stringify(specifier)};\nexport const a = x;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+});
+// DAN-448 (F-033): a query or fragment suffix does not change the module that
+// is loaded, so the text before the first "?" or "#" decides.
+const SUFFIXED_PG = [
+  "pg?x",
+  "pg#x",
+  "pg?",
+  "pg#",
+  "pg?a#b",
+  "pg#a?b",
+  "PG?raw",
+  "Pg-cursor?x",
+  "../../node_modules/pg?x",
+  "../../node_modules/PG#x",
+  "../../node_modules/./pg?x",
+  "../../node_modules/x/../pg#x",
+  "..\\..\\node_modules\\pg?x",
+  "file:///srv/app/node_modules/pg#x",
+  "../../node_modules/.pnpm//pg?x",
+];
+const SUFFIXED_NONFAMILY = ["pgx?y", "./pg-like?x", "../../node_modules/pgx#y", "../../node_modules/@types/pg?x", "?pg", "#pg"];
+// Cutting at the first "?" or "#" only adds reports: a whole text that already
+// matched stays reported, even when the suffix holds the driver path.
+const SUFFIX_HOLDS_PG = ["../x?/node_modules/pg", "../x#/node_modules/pg-cursor"];
+// no-restricted-imports trims the source before matching; the custom rule must
+// agree on that text so a static import is still reported exactly once.
+const PADDED_PG = [
+  "../../node_modules/./pg?x/node_modules/pg ",
+  " ../../node_modules/./pg?x/node_modules/pg",
+  "pg ",
+  " pg?x",
+  "\tpg#x\n",
+  " ../../node_modules/pg?x ",
+  "../../node_modules/x/../pg ",
+];
+
+function staticForms(specifier: string) {
+  const source = JSON.stringify(specifier);
+  return [
+    `import pg from ${source};\nexport const probe = pg;\n`,
+    `export * from ${source};\n`,
+    `export { default as probe } from ${source};\n`,
+  ];
+}
+
+async function expectSingleBoundary(filePath: string, code: string) {
+  expect(await lint(filePath, code)).toEqual([
+    expect.objectContaining({ severity: 2, message: expect.stringContaining(BOUNDARY_MESSAGE) }),
+  ]);
+}
+
+describe("pg boundary through query and fragment suffixes (DAN-448)", () => {
+  it.each(nodeModulesCases(APPLICATION_FILES, [...SUFFIXED_PG, ...SUFFIX_HOLDS_PG, ...PADDED_PG]))(
+    "rejects %s importing %s dynamically",
+    async (filePath, specifier) => {
+      await expectDynamicBoundary(filePath, importSource(JSON.stringify(specifier)));
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, [...SUFFIXED_PG, ...SUFFIX_HOLDS_PG, ...PADDED_PG]))(
+    "rejects %s importing %s statically, once",
+    async (filePath, specifier) => {
+      for (const code of staticForms(specifier)) await expectSingleBoundary(filePath, code);
+    },
+  );
+
+  it.each(sourceCases(APPLICATION_FILES, ['"pg?x" as const', '<string>`pg#x`', '("../../node_modules/pg?x" satisfies string)!']))(
+    "rejects type-only wrapped suffixed literal in %s: %s",
+    async (filePath, source) => {
+      await expectDynamicBoundary(filePath, importSource(source));
+    },
+  );
+
+  it.each(nodeModulesCases(EXCEPTION_FILES, SUFFIXED_PG))(
+    "allows %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import pg from ${JSON.stringify(specifier)};\nexport const a = pg;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
+
+  it.each(nodeModulesCases(APPLICATION_FILES, SUFFIXED_NONFAMILY))(
+    "allows nonfamily %s importing %s",
+    async (filePath, specifier) => {
+      const code = `import x from ${JSON.stringify(specifier)};\nexport const a = x;\nexport const b = () => import(${JSON.stringify(specifier)});\n`;
+      expect(await lint(filePath, code)).toEqual([]);
+    },
+  );
 });

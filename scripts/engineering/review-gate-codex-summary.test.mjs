@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateGate } from "./review-gate-core.mjs";
+import { evaluateGate, sinceBaseChange } from "./review-gate-core.mjs";
 
 // D-139 with a clean Codex review: Codex leaves no pull request review, only
 // its summary comment with a machine state naming the full reviewed commit
@@ -199,4 +199,21 @@ test("the state must directly follow the marker and an open security finding blo
   });
   pending([summary({ body: summaryBody(withSecurity) })]);
   pending([summary(), summary({ body: summaryBody(withSecurity) })]);
+});
+// F-013 (Codex r4434170872): the runner drops comments created before the
+// last base change, but Codex edits one summary in place. A summary edited
+// after the change still counts as Codex evidence; an older verdict does not.
+test("a Codex summary created before a base change and edited after it still counts (F-013)", () => {
+  const cutoff = BASE + 7 * MIN;
+  const edited = { ...summary(), updated_at: iso(8 * MIN) };
+  const oldPass = { ...byOwner(`Agent-Review: claude:z:reviewer\nReview-Head: ${head}\nReview-Verdict: FAIL\n`, 1 * MIN), updated_at: iso(30 * MIN) };
+  const all = [oldPass, edited, { ...receipt(), created_at: iso(8 * MIN) }, reviewPass, qaPass];
+  const run = (comments) => evaluateGate({ body: AUTHOR, headSha: head, ownerLogin, comments, prReviews: [], reviewComments: [] }).state;
+  const kept = sinceBaseChange(all, cutoff, "created_at", { codexEdits: true });
+  assert.ok(kept.includes(edited), "the edited Codex summary is kept");
+  assert.ok(!kept.includes(oldPass), "an older owner comment edited later is still dropped");
+  assert.equal(run(kept), "success");
+  assert.equal(run(sinceBaseChange(all, cutoff)), "pending", "control: without codexEdits the summary is lost");
+  const stale = { ...summary(), updated_at: iso(6 * MIN) };
+  assert.ok(!sinceBaseChange([stale], cutoff, "created_at", { codexEdits: true }).includes(stale), "a summary last edited before the change is dropped");
 });

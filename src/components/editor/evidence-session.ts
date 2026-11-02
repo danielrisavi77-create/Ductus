@@ -510,9 +510,13 @@ export class EvidenceSession {
     }
   }
 
-  /** Opens again while the work is unknown (§2 t. 4): on `online` and after each saved segment. */
+  /**
+   * Opens again while the work is unknown (§2 t. 4): on `online` and after
+   * each saved segment. Never while paused (the sign-out dialog) or ended
+   * (F-154): `resume()` leaves it to the next `online` or saved segment.
+   */
   private retryOpen(): void {
-    if (this.work || this.opening || this.closed || !this.deps.network.online()) return;
+    if (this.work || this.opening || this.paused || this.ended || !this.deps.network.online()) return;
     this.opening = this.openSafely().then((opened) => {
       if (opened.status !== "opened" || this.closed) return;
       if (opened.work.documentId !== this.id) {

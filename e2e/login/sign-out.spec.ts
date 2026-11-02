@@ -167,6 +167,41 @@ test("sign-out from a second tab ends the session and empties the writing tab", 
   await expect(editorOf(second)).toHaveText("Nacrt A: plava bilježnica");
 });
 
+// DAN-343 (Codex on #866): the Literatura tab drops its list and a half-filled
+// form at the same moment the sheet empties.
+test("sign-out from a second tab empties the Literatura tab of the writing tab", async ({ page, context }) => {
+  const s = t.workspace.sources;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+  await panel.getByRole("tab", { name: t.workspace.tabSources }).click();
+  const tab = panel.getByRole("tabpanel");
+  const fill = async (values: Record<string, string>) => {
+    for (const [label, value] of Object.entries(values)) await tab.getByLabel(label, { exact: true }).fill(value);
+  };
+  await tab.getByRole("button", { name: s.add }).click();
+  await fill({ [s.family]: "Horvat", [s.given]: "Ana", [s.year]: "2021", [s.title]: "Nepostojeca knjiga", [s.place]: "Zagreb", [s.publisher]: "Primjer" });
+  await tab.getByRole("button", { name: s.addOnly }).click();
+  await expect(tab.getByRole("listitem")).toHaveCount(1);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  // A second source, typed but never written.
+  await tab.getByRole("button", { name: s.add }).click();
+  await fill({ [s.family]: "Kovac", [s.title]: "Nacrt koji ne smije ostati" });
+
+  const second = await context.newPage();
+  await second.goto("/rad");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+  await clickSignOut(second);
+  await second.waitForURL("http://localhost:3000/");
+
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expect(tab.getByText(s.readOnly)).toBeVisible();
+  await expect(tab.getByRole("listitem")).toHaveCount(0);
+  await expect(tab.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByText("Nacrt koji ne smije ostati")).toHaveCount(0);
+});
+
 test("row 9: the dialog says text the device could not store would be lost; sign-out goes ahead", async ({ page, context }) => {
   // Journal writes fail as on a full device; only the logout fence could
   // still be written, so the journal alone would look empty.
@@ -189,10 +224,12 @@ test("row 9: the dialog says text the device could not store would be lost; sign
   const dialog = logoutDialogOf(page);
   await expect(dialog).toContainText(t.auth.logoutUnsaved);
   await expect(dialog.getByRole("button", { name: t.editor.exportText })).toBeVisible();
+  // #1331: focus starts on "Ostani", and sign-out is named for what it costs.
+  await expect(dialog.getByRole("button", { name: t.auth.logoutStay })).toBeFocused();
   await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
   await expectStillSignedIn(page, token);
 
-  await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await dialog.getByRole("button", { name: t.auth.logoutConfirmUnsaved }).click();
   await page.waitForURL("http://localhost:3000/");
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
 });
@@ -425,12 +462,20 @@ test("with a session the home page and the sign-in page lead to the student's ow
 // Design v3 shell around the workspace (#476 6314969336, cut (b)): the student
 // items, and in the account place the workspace's own sign-out with its dialog
 // (I5, D-118), never a second, plain one.
+// Since 1. 11. 2026. the side bar on /rad is a drawer behind ☰ at every width
+// (owner), and the sign-out sits in the top bar, still one press away.
 test("in the shell /rad keeps one sign-out, the one that knows the device", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page, "/rad");
   const side = page.getByRole("complementary", { name: t.shell.sideNav });
-  const nav = side.getByRole("navigation", { name: t.shell.workNav });
-  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.workspace, t.shell.nav.enroll]);
-  await expect(nav.getByRole("link", { name: t.shell.nav.workspace })).toHaveAttribute("aria-current", "page");
+  await expect(side).toBeHidden();
   await expect(logoutOf(page)).toHaveCount(1);
-  await expect(side.getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: t.shell.openNav }).click();
+  const nav = side.getByRole("navigation", { name: t.shell.workNav });
+  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.courses, t.shell.nav.works, t.shell.nav.workspace, t.shell.nav.enroll]);
+  await expect(nav.getByRole("link", { name: t.shell.nav.workspace })).toHaveAttribute("aria-current", "page");
+  await page.keyboard.press("Escape");
+  await expect(side).toBeHidden();
+  await expect(page.getByRole("button", { name: t.shell.openNav })).toBeFocused();
 });

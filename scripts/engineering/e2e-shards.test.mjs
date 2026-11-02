@@ -6,11 +6,11 @@ import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test, { after, before } from "node:test";
 import { mergeShardReports, verifyShardReports } from "./e2e-shards.mjs";
-import { compareReport, UI_SPECS } from "./ui-test-pilot.mjs";
+import { compareReport, E2E_PROJECTS, UI_SPECS } from "./ui-test-pilot.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const sha = "a".repeat(40), projects = ["desktop", "mobile"];
-let cwd, shards;
+const sha = "a".repeat(40), projects = [...E2E_PROJECTS];
+let cwd, shards, chromiumOnly;
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 const specs = (r) => r.suites.flatMap(function visit(s) {
   return [...s.specs, ...(s.suites ?? []).flatMap(visit)];
@@ -30,7 +30,7 @@ before(() => {
   }
   writeFileSync(resolve(cwd, "playwright.config.mjs"), `export default {
     testDir: './e2e', workers: 1, retries: 0, metadata: { testedSha: process.env.GITHUB_SHA },
-    projects: [{ name: 'desktop' }, { name: 'mobile' }],
+    projects: [{ name: 'desktop' }, { name: 'mobile' }, { name: 'firefox' }, { name: 'webkit' }],
   };`);
   function run(name, args) {
     const output = resolve(cwd, `${name}.json`);
@@ -42,21 +42,26 @@ before(() => {
     return read(output);
   }
   const inventory = run("inventory", ["--list"]);
-  shards = [1, 2].map((index) => ({ inventory: structuredClone(inventory),
-    report: run(`shard-${index}`, [`--shard=${index}/2`]) }));
+  shards = [1, 2, 3].map((index) => ({ inventory: structuredClone(inventory),
+    report: run(`shard-${index}`, [`--shard=${index}/3`]) }));
+  // The pull request run before M0.3: Chromium projects only.
+  const chromium = ["--project=desktop", "--project=mobile"];
+  const chromiumInventory = run("inventory-chromium", ["--list", ...chromium]);
+  chromiumOnly = [1, 2, 3].map((index) => ({ inventory: structuredClone(chromiumInventory),
+    report: run(`chromium-shard-${index}`, [`--shard=${index}/3`, ...chromium]) }));
 });
 after(() => { if (cwd) rmSync(cwd, { recursive: true, force: true }); });
 
 test("native shards reconcile the full inventory and preserve the advisory pilot", () => {
   const merged = mergeShardReports(shards, sha);
   const result = verifyShardReports(shards, merged, { cwd, projects });
-  assert.equal(result.full.count, 24);
+  assert.equal(result.full.count, 48);
   assert.equal(result.full.failures, 0);
   assert.equal(merged.config.shard, null);
   const pilot = compareReport({ selection: "candidate", specs: UI_SPECS }, merged,
     { cwd, projects, inventory: shards[0].inventory });
   assert.equal(pilot.comparison, "no-miss-observed");
-  assert.equal(pilot.selected.count, 20);
+  assert.equal(pilot.selected.count, 40);
 });
 
 test("required coverage follows discovery, not the advisory pilot's spec mapping", () => {
@@ -64,7 +69,7 @@ test("required coverage follows discovery, not the advisory pilot's spec mapping
   for (const { report, inventory } of input) for (const r of [report, inventory]) {
     for (const spec of specs(r)) spec.file = "renamed.spec.ts";
   }
-  assert.equal(verifyShardReports(input, mergeShardReports(input, sha), { cwd, projects }).full.count, 24);
+  assert.equal(verifyShardReports(input, mergeShardReports(input, sha), { cwd, projects }).full.count, 48);
 });
 
 test("missing, duplicate or wrong-SHA shard evidence cannot merge", () => {
@@ -73,8 +78,8 @@ test("missing, duplicate or wrong-SHA shard evidence cannot merge", () => {
     (s) => { s[1] = structuredClone(s[0]); },
     (s) => { s[1].report.config.metadata.testedSha = "b".repeat(40); },
     (s) => { s[1].inventory.config.metadata.testedSha = "b".repeat(40); },
-    (s) => { s[1].report.config.shard.total = 3; },
-    (s) => { s[1].inventory.config.shard = { current: 2, total: 2 }; },
+    (s) => { s[1].report.config.shard.total = 2; },
+    (s) => { s[1].inventory.config.shard = { current: 2, total: 3 }; },
     (s) => { s[1].inventory.config.rootDir = "/wrong/e2e"; },
   ]) {
     const input = structuredClone(shards); mutate(input);
@@ -88,7 +93,7 @@ test("omissions, duplicates, altered identities and invalid outcomes fail closed
     (s) => { specs(s[0].report)[0].tests = []; s[0].report.stats.expected--; },
     (s) => { const rows = specs(s[0].report); Object.assign(rows[1], rows[0]); },
     (s) => { specs(s[0].report)[0].file = "other.spec.ts"; },
-    (s) => { specs(s[0].report)[0].tests[0].projectName = "webkit"; },
+    (s) => { specs(s[0].report)[0].tests[0].projectName = "safari"; },
     (s) => { specs(s[1].inventory)[0].tests = []; },
     (s) => { s[0].report.errors.push({ message: "synthetic teardown failure" }); },
     (s) => { s[1].inventory.errors.push({ message: "synthetic discovery failure" }); },
@@ -121,9 +126,11 @@ test("CLI preserves failures for the pilot and rejects missing or corrupt artifa
   put(shards);
   assert.equal(cli().status, 0);
   const input = structuredClone(shards);
-  const failing = specs(input[1].report).find((s) => s.file === "other.spec.ts").tests[0];
+  // Native sharding decides where other.spec.ts lands; fail it in that shard.
+  const owner = input.find(({ report }) => specs(report).some((s) => s.file === "other.spec.ts")).report;
+  const failing = specs(owner).find((s) => s.file === "other.spec.ts").tests[0];
   failing.status = "unexpected"; failing.results[0].status = "failed";
-  input[1].report.stats.expected--; input[1].report.stats.unexpected++;
+  owner.stats.expected--; owner.stats.unexpected++;
   put(input);
   assert.equal(cli().status, 1);
   assert.equal(compareReport({ selection: "candidate", specs: UI_SPECS },
@@ -132,12 +139,17 @@ test("CLI preserves failures for the pilot and rejects missing or corrupt artifa
   const file = resolve(cwd, ".ci-reports/shards/e2e-shard-2/results.json");
   writeFileSync(file, "{broken"); assert.equal(cli().status, 1);
   rmSync(file); assert.equal(cli().status, 1);
+  // M0.3: a green Chromium-only run is not a complete pull request run.
+  put(chromiumOnly);
+  const chromium = cli();
+  assert.equal(chromium.status, 1);
+  assert.match(chromium.stderr, /incomplete-projects/);
 });
 
-test("workflow requires both shards and reconciliation without changing Mergify or login", () => {
+test("workflow requires three shards and reconciliation without changing Mergify or login", () => {
   const ci = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
   const job = (name) => ci.split(`\n  ${name}:\n`)[1].split(/^ {2}[\w-]+:\n/m)[0];
-  assert.match(job("stack-e2e"), /strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}shard: \[1, 2\]/);
+  assert.match(job("stack-e2e"), /strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}shard: \[1, 2, 3\]/);
   assert.match(job("stack-e2e"), /E2E_SHARD: \$\{\{ matrix.shard \}\}/);
   assert.doesNotMatch(job("stack-e2e"), /continue-on-error|UI test selection pilot|--grep|--only-changed/);
   assert.match(job("stack-e2e"), /name: e2e-shard-\$\{\{ matrix.shard \}\}/);

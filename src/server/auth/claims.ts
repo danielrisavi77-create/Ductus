@@ -16,6 +16,12 @@ export interface LoginIdentity {
    */
   givenName?: string;
   familyName?: string;
+  /**
+   * Whether hrEduPersonAffiliation allows a teacher role to be confirmed
+   * (D-171, DAN-304). Only this fact leaves here, never the value; a missing
+   * or malformed attribute is false and never refuses the login.
+   */
+  teacherEligible: boolean;
 }
 
 export type ClaimsResult =
@@ -41,6 +47,21 @@ function check(value: unknown): Checked {
   return { value };
 }
 
+/**
+ * AAI@EduHr releases its special hrEdu claims as JSON arrays, also the
+ * single-valued ones (Srce wiki, page 59867172); the local fake provider
+ * sends strings. An array counts only with exactly one member, which must
+ * itself pass `check`: of several values none is picked, and nothing is
+ * coerced. An array that holds no value (`[]`, `[null]`) is invalid, never
+ * missing, so it cannot read as an absent attribute.
+ */
+function checkSingleValued(value: unknown): Checked {
+  if (!Array.isArray(value)) return check(value);
+  if (value.length !== 1 || !Object.hasOwn(value, 0)) return { error: "invalid_claim" };
+  const only = check(value[0]);
+  return "error" in only ? { error: "invalid_claim" } : only;
+}
+
 // Which claim names AAI@EduHr OIDC uses for the two names is not yet
 // confirmed (#757): the OIDC profile names or the LDAP attribute names. Each
 // pair is taken whole, the OIDC one first, so a name never mixes the two.
@@ -61,6 +82,39 @@ function nameFromClaims(claims: Claims): { givenName: string; familyName: string
 }
 
 /**
+ * The hrEduPersonAffiliation values that allow a teacher role (D-171).
+ *
+ * NEPROVJERENO (DAN-304, #1181): not yet read in the source itself, the
+ * code list hrEdu004 of the hrEdu schema register
+ * (www.aaiedu.hr/sheme/sifrarnici, annex 4 of schema v1.2). `djelatnik` is
+ * seen in public extracts, `vanjski suradnik` is not confirmed. When the
+ * code list differs, only this constant and its test change.
+ */
+export const TEACHER_AFFILIATIONS: readonly string[] = Object.freeze(["djelatnik", "vanjski suradnik"]);
+
+// The attribute is multi-valued; more members than any person holds is not
+// an affiliation, and the bound keeps the scan short.
+const MAX_AFFILIATIONS = 32;
+
+/**
+ * True only when one member is exactly one of TEACHER_AFFILIATIONS: no
+ * case folding, trimming or other normalisation. A string counts as one
+ * member. A member that does not pass `check` counts for nothing; an array
+ * with a hole, or longer than the bound, gives no right at all.
+ */
+function teacherEligibleFrom(value: unknown): boolean {
+  const members = typeof value === "string" ? [value] : value;
+  if (!Array.isArray(members) || members.length > MAX_AFFILIATIONS) return false;
+  for (let i = 0; i < members.length; i += 1) {
+    if (!Object.hasOwn(members, i)) return false;
+  }
+  return members.some((member) => {
+    const checked = check(member);
+    return "value" in checked && TEACHER_AFFILIATIONS.includes(checked.value);
+  });
+}
+
+/**
  * `idToken` holds the verified ID token claims. `userinfo`, when the provider
  * released attributes there, must name the same subject (OIDC Core 5.3.2);
  * its attributes take precedence over the ID token's.
@@ -71,13 +125,19 @@ export function identityFromClaims(idToken: Claims, userinfo?: Claims): ClaimsRe
   }
   const merged = { ...idToken, ...userinfo };
   const subject = check(idToken.sub);
-  const uniqueId = check(merged.hrEduPersonUniqueID);
-  const homeOrg = check(merged.hrEduPersonHomeOrg);
+  // `sub` is a standard claim and stays a plain string (OIDC Core 2).
+  const uniqueId = checkSingleValued(merged.hrEduPersonUniqueID);
+  const homeOrg = checkSingleValued(merged.hrEduPersonHomeOrg);
   for (const c of [subject, uniqueId, homeOrg]) if ("error" in c && c.error === "missing_claim") return { ok: false, reason: c.error };
   if (!("value" in subject) || !("value" in uniqueId) || !("value" in homeOrg)) {
     return { ok: false, reason: "invalid_claim" };
   }
-  const identity: LoginIdentity = { subject: subject.value, uniqueId: uniqueId.value, homeOrg: homeOrg.value };
+  const identity: LoginIdentity = {
+    subject: subject.value,
+    uniqueId: uniqueId.value,
+    homeOrg: homeOrg.value,
+    teacherEligible: teacherEligibleFrom(merged.hrEduPersonAffiliation),
+  };
   const names = nameFromClaims(merged);
   if (names) Object.assign(identity, names);
   return { ok: true, identity };

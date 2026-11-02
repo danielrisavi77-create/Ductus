@@ -266,7 +266,7 @@ export function createNativeRun({
     if ((await psql("db/local/migrator.sql")) !== 0) return 1;
     const url = `postgres://ductus:${SUPERUSER_PASSWORD}@127.0.0.1:${PORTS.postgres}/ductus?sslmode=disable&role=ductus_migrator`;
     const dbmate = join(ROOT, "node_modules", "dbmate", "dist", "cli.js");
-    if ((await run(process.execPath, [dbmate, "--url", url, "--no-dump-schema", "--wait", "up"], { env })) !== 0) return 1;
+    if ((await run(process.execPath, [dbmate, "--url", url, "--no-dump-schema", "--wait", "up", "--strict"], { env })) !== 0) return 1;
     if ((await psql("db/local/app-login.sql")) !== 0) return 1;
     // One argv element, never a shell; the statement is not logged (nativeConf).
     return psql("db/local/auth-login.sql", ["-v", `auth_password=${env.DUCTUS_AUTH_LOCAL_PASSWORD}`]);

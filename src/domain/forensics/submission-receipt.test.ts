@@ -64,8 +64,8 @@ describe("submission receipt v1: known-answer vector", () => {
     expect(verify(null, Buffer.from(DIGEST, "hex"), publicKey, Buffer.from(SIGNATURE, "hex"))).toBe(false);
   });
 
-  it("is the vector written in docs/BACKEND.md section 4.1", () => {
-    const backend = readFileSync(new URL("../../../docs/BACKEND.md", import.meta.url), "utf8");
+  it("is the vector written in docs/backend/evidencija.md section 4.1", () => {
+    const backend = readFileSync(new URL("../../../docs/backend/evidencija.md", import.meta.url), "utf8");
     expect(backend).toContain(`payload \`${CANONICAL}\``);
     expect(backend).toContain(`SHA-256/JCS predaje: \`${DIGEST}\``);
     expect(backend).toContain(`RAW ulaz predaje (61B): \`${SIGNING_INPUT}\``);

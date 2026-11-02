@@ -7,7 +7,7 @@ import { createBrowserEditStepsV1Replayer } from "@/adapters/evidence/edit-steps
 import type { CanonicalDocument } from "@/domain/document";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { canonicalizeJcs, jcsUtf8Bytes } from "@/domain/forensics/jcs";
-import { watchClosedBySubmission } from "@/client/evidence-session-deps";
+import { guardedFetch, watchClosedBySubmission } from "@/client/evidence-session-deps";
 import { CaptureError, EvidenceRecorder } from "@/editor/capture";
 import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
@@ -298,6 +298,26 @@ describe("3d-2c2 evidence session: stops never patch the chain", () => {
     await ready(again.session);
     expect(start).not.toHaveBeenCalled();
     expect(again.session.snapshot().state).toBe("LOCAL_DURABLE");
+  });
+
+  // M0.1 process-capture #10: the check at save compares the editor with the
+  // last document the chain covers, so an unseen change is caught even when
+  // nothing recorded follows it.
+  it("3b: a change the recorder never saw, made last before the save, is a gap as well", async () => {
+    const net = server();
+    const { session, journal } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    sheet.wiring.muted = true;
+    sheet.type("skriveno");
+    sheet.wiring.muted = false;
+    const doc = await sheet.save();
+    const stored = await journal.readEvidence(DOC);
+    expect(stored.meta?.evidenceStopped).toBe("gap");
+    expect(canonicalizeJcs(stored.snapshot!.document)).toBe(canonicalizeJcs(doc));
+    expect(JSON.stringify(doc)).toContain("askriveno");
+    expect(session.snapshot().state).toBe("LOCAL_DURABLE");
   });
 });
 
@@ -1308,6 +1328,68 @@ describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", ()
     expect(net.calls).toHaveLength(0);
     expect((await journal.readEvidence(DOC)).pending.map((row) => row.tx.clientTransactionId))
       .toEqual(before.pending.map((row) => row.tx.clientTransactionId));
+  });
+});
+
+describe("F-154: no evidence request without the tab's sign-in", () => {
+  it("no open again while paused; after resume the next online opens", async () => {
+    const journal = openJournal();
+    const first = setup({ journal, online: network(false) });
+    await ready(first.session);
+    first.session.close();
+    let opens = 0;
+    const online = network(false);
+    const second = setup({
+      journal, online,
+      open: async () => { opens += 1; return { status: "unavailable" }; },
+      over: { storedProfile: () => PROFILE },
+    });
+    const loaded = await ready(second.session);
+    expect(opens).toBe(1);
+    const sheet = editorFor(second.session, (loaded as { document: CanonicalDocument }).document);
+    second.session.pause();
+    online.set(true);
+    sheet.type("x");
+    await sheet.save();
+    await second.session.settled();
+    expect(opens).toBe(1);
+    second.session.resume();
+    await second.session.settled();
+    expect(opens).toBe(1);
+    online.set(true);
+    await second.session.settled();
+    expect(opens).toBe(2);
+  });
+
+  it("a drain step refused by the guard is a lost answer: the row stays and is never marked refused", async () => {
+    const journal = openJournal();
+    const net = server();
+    const signedIn = { value: true };
+    const online = network(false);
+    const { session } = setup({
+      journal, net, online,
+      over: {
+        createRunner: (work) => createDrainRunner<QueuedTransaction>({
+          journal, transport: createEvidenceTransport(guardedFetch(net.fetchImpl, () => signedIn.value)),
+          verifyFor: evidenceVerifierFor(work), now: () => 0, jitter: () => 0.5,
+        }),
+      },
+    });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    const before = await journal.readEvidence(DOC);
+    expect(before.pending).toHaveLength(1);
+    signedIn.value = false;
+    online.set(true);
+    await session.settled();
+    expect(net.calls).toHaveLength(0);
+    const after = await journal.readEvidence(DOC);
+    expect(after.pending.map((row) => row.tx.clientTransactionId))
+      .toEqual(before.pending.map((row) => row.tx.clientTransactionId));
+    expect(after.meta?.refusedLocalSeq).toBeUndefined();
+    expect(session.snapshot().refused).toBe(false);
   });
 });
 

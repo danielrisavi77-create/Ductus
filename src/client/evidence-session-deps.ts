@@ -74,16 +74,37 @@ export function watchClosedBySubmission(
   };
 }
 
+/** A request this tab did not make: its sign-in is no longer the browser's. */
+export class SignedOutError extends Error {
+  constructor() {
+    super("signed_out");
+    this.name = "SignedOutError";
+  }
+}
+
+/**
+ * Asks `current()` right before every request (F-154, the F-093 pattern of
+ * `comments.ts` and the live publisher): once it is false nothing is sent and
+ * the call throws. The open route then reads `unavailable` and the drain a
+ * lost answer (`transport_error`), so no row is ever refused without an
+ * answer of the server.
+ */
+export function guardedFetch(fetchImpl: FetchLike, current: () => boolean): FetchLike {
+  return (input, init) => (current() ? fetchImpl(input, init) : Promise.reject(new SignedOutError()));
+}
+
 export type BrowserEvidenceInput = {
   journal: EvidenceSessionDeps["journal"] & DrainJournal;
   documentId: string;
   assignmentId: string;
+  /** Whether this tab's sign-in is still the browser's; asked before each request. */
+  current: () => boolean;
   fetchImpl?: FetchLike;
   source?: OnlineSource;
 };
 
 export function browserEvidenceSessionDeps(input: BrowserEvidenceInput): EvidenceSessionDeps {
-  const fetchImpl = input.fetchImpl ?? ((url, init) => fetch(url, init));
+  const fetchImpl = guardedFetch(input.fetchImpl ?? ((url, init) => fetch(url, init)), input.current);
   const source = input.source ?? window;
   const open = () => openWork(input.assignmentId, fetchImpl);
   // F-155: only the open route's own "submitted" closes the session by submission.

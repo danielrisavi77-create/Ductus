@@ -31,7 +31,7 @@ import type { PlacedThread } from "./TeacherComments";
 
 const t = messagesHr.liveView;
 
-const INITIAL: LiveView = { document: null, hash: null, empty: false, connection: "loading" };
+const INITIAL: LiveView = { document: null, hash: null, empty: false, connection: "loading", submitted: false };
 
 const TONE: Record<LiveView["connection"], string> = {
   loading: "progress", live: "ok", retrying: "warn", paused: "warn", signedOut: "error", notFound: "error",
@@ -101,6 +101,9 @@ export type LiveTextProps = {
 /** The connection line, the sheet with the text, and the note beside a shown text. */
 export default function LiveText({ view, marks, heading, textRef, onSelect }: LiveTextProps) {
   const stopped = liveStopped(view);
+  // DAN-332: the submitted revision is never labelled live, and once shown it
+  // keeps its label through this page's own failed requests (#826 A5).
+  const submitted = !stopped && view.document !== null && view.submitted;
   const placeholder = (line: string) => h("p", { className: "manuscript__placeholder" }, line);
   let text: ReactNode;
   if (stopped) text = placeholder(t.connection[view.connection]);
@@ -122,9 +125,9 @@ export default function LiveText({ view, marks, heading, textRef, onSelect }: Li
       { className: styles.status },
       h(
         "span",
-        { className: "sync-chip", "data-tone": TONE[view.connection], role: "status" },
+        { className: "sync-chip", "data-tone": submitted ? "ok" : TONE[view.connection], role: "status" },
         h("span", { className: "sync-chip__dot", "aria-hidden": "true" }),
-        t.connection[view.connection],
+        submitted ? t.submitted : t.connection[view.connection],
       ),
     ),
     h(
@@ -142,6 +145,6 @@ export default function LiveText({ view, marks, heading, textRef, onSelect }: Li
       }, text),
     ),
     // The note speaks about a shown text, so it stands only beside one.
-    !stopped && view.document ? h("p", { className: styles.note }, t.note) : null,
+    !stopped && view.document ? h("p", { className: styles.note }, submitted ? t.submittedNote : t.note) : null,
   );
 }

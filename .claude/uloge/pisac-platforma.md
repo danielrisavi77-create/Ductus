@@ -23,4 +23,5 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:platfo
 - `node --test` s globom koji ništa ne pogađa prolazi; CI korak zato koristi `failglob` i ne smije se mijenjati bez testa `scripts/engineering/ci-test-step.test.mjs`.
 - Lokalni Node može biti stariji od `engines` u `package.json` (samo upozorenje); ne oslanjaj se na eksperimentalne Node API-je u alatima.
 - Hook koji radi i u oblaku i lokalno provjeri u oba okruženja; razlike zapiši u "Poznate granice".
-- Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (`docs/ENGINEERING_SYSTEM.md` §14 t. 6).
+- Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (`docs/ENGINEERING_SYSTEM.md` §14 t. 6). Ista klasa nalaza je isti korijen, i kad je putanja nova.
+- Izuzeće od gatea ili CI provjere: popis dozvoljenog, jedan izvor putanja, negativni testovi i preskočeni koraci u ugovoru prije prvog commita (`docs/ENGINEERING_SYSTEM.md` §14 t. 8).

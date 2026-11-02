@@ -1,108 +1,45 @@
-/* The "Odjava" dialog of design demo-tok-v2, on the shared tokens (app/globals.css, D-123). */
+/* The "Odjava" dialog of design demo-tok-v2 on the shared dialog base (src/components/shell/Dialog.module.css, Z-08). */
 .dialog {
-  width: 440px;
-  max-width: calc(100vw - 32px);
-  margin: 80px auto auto;
-  padding: 0;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--raised);
-  color: var(--ink);
-  box-shadow: var(--lift);
-}
-
-.dialog::backdrop {
-  background: #0008;
+  composes: dialog from "../shell/Dialog.module.css";
 }
 
 .body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
+  composes: body from "../shell/Dialog.module.css";
 }
 
 .title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.text,
-.note,
-.error {
-  margin: 0;
-  line-height: 1.55;
+  composes: title from "../shell/Dialog.module.css";
 }
 
 .text {
-  font-size: 13px;
+  composes: text from "../shell/Dialog.module.css";
 }
 
 .note {
-  font-size: 12px;
-  color: var(--ink-3);
+  composes: note from "../shell/Dialog.module.css";
 }
 
 .error {
-  font-size: 12.5px;
-  color: var(--ink);
+  composes: error from "../shell/Dialog.module.css";
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.confirm,
-.secondary,
-.stay {
-  min-height: 44px;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
+  composes: actions from "../shell/Dialog.module.css";
 }
 
 .confirm {
-  border: 0;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
+  composes: primary from "../shell/Dialog.module.css";
 }
 
 .secondary {
-  border: 1px solid var(--rule);
-  background: none;
-  color: var(--ink);
+  composes: secondary from "../shell/Dialog.module.css";
 }
 
 .stay {
-  border: 0;
-  background: none;
-  color: var(--ink-2);
-}
-
-.stay:hover,
-.secondary:hover {
-  color: var(--ink);
-}
-
-.confirm:disabled,
-.secondary:disabled,
-.stay:disabled {
-  opacity: 0.6;
-  cursor: default;
+  composes: quiet from "../shell/Dialog.module.css";
 }
 
 /* The copy kept outside the work (3d-2c, P3), set apart from the sign-out text. */
 .copy {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
+  composes: section from "../shell/Dialog.module.css";
 }

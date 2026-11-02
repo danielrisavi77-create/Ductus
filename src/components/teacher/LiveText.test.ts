@@ -31,7 +31,7 @@ const DOC: CanonicalDocument = {
     { type: "paragraph", id: P1, children: [{ type: "text", text: "Gradske knjižnice su mjesto susreta.", marks: ["italic"] }] },
   ],
 } as CanonicalDocument;
-const SHOWN: LiveView = { document: DOC, hash: "a".repeat(64), empty: false, connection: "live" };
+const SHOWN: LiveView = { document: DOC, hash: "a".repeat(64), empty: false, connection: "live", submitted: false };
 const MARK: TextRange = { nodeId: P1, start: 8, end: 17 };
 const t = messagesHr.liveView;
 
@@ -99,8 +99,8 @@ describe("LiveText", () => {
   });
 
   it.each<[string, LiveView, string]>([
-    ["loading", { document: null, hash: null, empty: false, connection: "loading" }, t.loading],
-    ["empty", { document: null, hash: null, empty: true, connection: "live" }, t.empty],
+    ["loading", { document: null, hash: null, empty: false, connection: "loading", submitted: false }, t.loading],
+    ["empty", { document: null, hash: null, empty: true, connection: "live", submitted: false }, t.empty],
     ["signed out", { ...SHOWN, connection: "signedOut" }, t.connection.signedOut],
     ["not found", { ...SHOWN, connection: "notFound" }, t.connection.notFound],
   ])("draws no text and no note when %s", (_name, view, placeholder) => {
@@ -108,6 +108,39 @@ describe("LiveText", () => {
     expect(html).not.toContain("data-node-id");
     expect(html).not.toContain(t.note);
     expect(html).toContain(placeholder);
+  });
+
+  it("labels the submitted revision as such and never as live (DAN-332, #826 A1)", () => {
+    const html = render({ view: { ...SHOWN, submitted: true }, marks: [MARK] });
+    expect(html).toContain(t.submitted);
+    expect(html).toContain(t.submittedNote);
+    expect(html).toContain(`data-node-id="${P1}"`);
+    expect(html).not.toContain(t.connection.live);
+    expect(html).not.toContain(t.note);
+  });
+
+  it.each<LiveView["connection"]>(["live", "retrying", "paused"])("never labels a live text as submitted (%s, #826 A6, A8)", (connection) => {
+    const html = render({ view: { ...SHOWN, connection }, marks: [MARK] });
+    expect(html).not.toContain(t.submitted);
+    expect(html).not.toContain(t.submittedNote);
+    expect(html).toContain(t.connection[connection]);
+    expect(html).toContain(t.note);
+  });
+
+  it.each<LiveView["connection"]>(["retrying", "paused"])("keeps the submitted label while its own requests fail (%s, #826 A5)", (connection) => {
+    const html = render({ view: { ...SHOWN, connection, submitted: true }, marks: [MARK] });
+    expect(html).toContain(t.submitted);
+    expect(html).toContain(t.submittedNote);
+    expect(html).not.toContain(t.connection[connection]);
+    expect(html).not.toContain(t.note);
+  });
+
+  it.each<LiveView["connection"]>(["signedOut", "notFound"])("draws no submitted text, label or note once stopped (%s, #826 A7)", (connection) => {
+    const html = render({ view: { ...SHOWN, connection, submitted: true }, marks: [MARK] });
+    expect(html).not.toContain("data-node-id");
+    expect(html).not.toContain(t.submitted);
+    expect(html).not.toContain(t.submittedNote);
+    expect(html).toContain(t.connection[connection]);
   });
 
   it("stops only once the session ended or the work is not this account's", () => {

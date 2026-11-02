@@ -40,6 +40,8 @@ function record(page: Page, keep: (request: Request) => boolean): Request[] {
 async function writeWork(student: Page): Promise<{ assignment: string; documentId: string; nodeId: NodeId }> {
   const assignment = await seedWork({ teacher: true });
   await student.goto(`/rad?zadatak=${assignment}`);
+  // DAN-330: the work starts on the student's click.
+  await student.getByRole("button", { name: t.workspace.startWork }).click();
   await expect(editorOf(student)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
   await editorOf(student).click();
   await student.keyboard.type(TEXT);

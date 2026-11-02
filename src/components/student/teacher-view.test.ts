@@ -32,7 +32,8 @@ describe("teacherViewMode", () => {
 
   it.each<[string, WorkDocumentPlan]>([
     ["free", { kind: "free", journal: JOURNAL, ...OFF }],
-    ["opening", { kind: "opening", journal: null, assignmentId: ID, ...OFF }],
+    // DAN-330 (#830): the plan before the student's click; it replaced "opening".
+    ["notStarted", { kind: "notStarted", journal: null, assignmentId: ID, dueAt: "2026-11-30T22:59:00.000Z", ...OFF }],
     ["notYetOpen", { kind: "notYetOpen", journal: null, opensAt: "2026-11-02T08:00:00.000Z", ...OFF }],
     ["unavailable", { kind: "unavailable", journal: null, ...OFF }],
     ["localDemo", { kind: "localDemo", journal: JOURNAL, ...OFF }],

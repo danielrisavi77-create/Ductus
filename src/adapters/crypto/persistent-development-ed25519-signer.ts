@@ -97,7 +97,7 @@ function isInside(root: string, path: string): boolean {
  * (BACKEND 4.13 t. 7, owner decision of 19 October 2026). The key comes only
  * from the seed file a local script made; this class never makes one, so a
  * missing file is a closed fault on every call, which ingest answers as
- * 503 `signing`. Construction is refused when NODE_ENV is production.
+ * 503 `signing`. Construction is refused unless NODE_ENV is development or test.
  */
 export class PersistentDevelopmentEd25519SigningKeyProvider implements SigningKeyProvider {
   private loaded: LoadedKey | undefined;
@@ -110,7 +110,9 @@ export class PersistentDevelopmentEd25519SigningKeyProvider implements SigningKe
    * way the web process can be started.
    */
   constructor(env: Readonly<Record<string, string | undefined>>, repositoryRoot: string) {
-    if (env.NODE_ENV === "production") fail("signing_key_production");
+    // An allowlist, as for the fake login provider: an unset, empty or
+    // misspelt NODE_ENV counts as production (F-020).
+    if (env.NODE_ENV !== "development" && env.NODE_ENV !== "test") fail("signing_key_production");
     this.env = env;
     this.repositoryRoot = repositoryRoot;
   }

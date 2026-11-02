@@ -1661,7 +1661,7 @@ Ako feature nema jak odgovor ni na jedno, nije prioritet.
 | Collaboration | M6 |
 | Submission/reconstruction/declaration | M7 |
 | Import/export | M8 |
-| AI Assistant | M9, izvan prvog pilota prema D-77 |
+| AI Assistant | M9, u pilotu prema D-194 (mijenja D-77) |
 | Retention / legal hold | M10 |
 | Ops / GO | M11 |
 | Pilot execution | M12 |

@@ -9,6 +9,8 @@ import { editorMounted, SAVED_HERE, signIn, signOutWithoutDialog, type DemoAccou
 // #711 F1 (contract 6391402093 §8 tests 1-10 and 13, amendment 6391779486):
 // `/rad?zadatak=` writes into the student's own document of the assignment,
 // opened by the real route; without `?zadatak=` the draft stays on the device.
+// DAN-330 (Refs #711): the work starts only on the student's click on
+// "Započni rad"; loading a page never starts it.
 // Every account, course, assignment and text is invented.
 
 const t = messagesHr;
@@ -59,12 +61,176 @@ async function shoot(page: Page, name: string): Promise<void> {
 
 test.afterEach(closeWork);
 
+// DAN-330: the work starts only on the student's click on "Započni rad".
+const startOf = (page: Page) => page.getByRole("button", { name: t.workspace.startWork });
+const opens = (requests: Request[]) => touching(requests, /^\/api\/evidence\/open$/);
+
+/** As shoot, in both themes, switched with the shell's own toggle and back. */
+async function shootThemes(page: Page, name: string): Promise<void> {
+  const toggle = page.getByRole("button", { name: t.shell.theme });
+  for (let i = 0; i < 2; i += 1) {
+    const theme = await page.locator("[data-theme]").first().getAttribute("data-theme");
+    await shoot(page, `${name}-${theme}`);
+    await toggle.click();
+  }
+}
+
+test("DAN-330: loading /rad?zadatak= starts nothing until \"Započni rad\"", async ({ page }) => {
+  await signedIn(page);
+  const assignment = await seedWork();
+  const requests = recordRequests(page);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(startOf(page)).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: t.workspace.notStarted })).toBeVisible();
+  await expect(editorOf(page)).toHaveAttribute("aria-disabled", "true");
+  await expect(writableEditors(page)).toHaveCount(0);
+  await page.waitForTimeout(3000);
+  await page.reload();
+  await expect(startOf(page)).toBeVisible();
+  await page.waitForTimeout(3000);
+  expect(opens(requests)).toEqual([]);
+  expect(await documentsOf(STUDENT, assignment)).toEqual({ projects: 0, documents: [] });
+  await shootThemes(page, "dan330-rad-nije-zapocet");
+
+  const live = page.waitForRequest(isLivePut, { timeout: OPEN });
+  await startOf(page).click();
+  await writable(page);
+  await editorOf(page).click();
+  await page.keyboard.type("Izmišljena prva rečenica nakon klika.");
+  const { projects, documents } = await documentsOf(STUDENT, assignment);
+  expect(projects).toBe(1);
+  expect(documents).toHaveLength(1);
+  expect(pathOf(await live)).toBe(`/api/live/${documents[0]}`);
+  const comments = requests.filter((r) => /^\/api\/comments/.test(pathOf(r)));
+  expect(comments.length).toBeGreaterThan(0);
+  for (const request of comments) expect(request.postData() ?? "").toContain(documents[0]!);
+  // The click made the work; the sheet's evidence session (3d-2c2b, #811)
+  // then opens that same work again, which makes nothing new.
+  expect(opens(requests).length).toBeGreaterThan(0);
+
+  // The work exists: the same address opens the editor directly.
+  await page.reload();
+  await writable(page);
+  await expect(startOf(page)).toHaveCount(0);
+  await expect(page.getByText(t.workspace.notStarted)).toHaveCount(0);
+  expect(await documentsOf(STUDENT, assignment)).toEqual({ projects: 1, documents });
+  expect(carryingFixedId(requests)).toEqual([]);
+  expect(await page.content()).not.toContain(LOCAL_DEMO_DOCUMENT_ID);
+});
+
+test("DAN-330: a double click starts one work", async ({ page }) => {
+  await signedIn(page);
+  const assignment = await seedWork();
+  const requests = recordRequests(page);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/evidence/open", async (route) => { await held; await route.continue(); });
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await startOf(page).dblclick();
+  await page.keyboard.press("Enter");
+  // The waiting button is aria-disabled, which Playwright's actionability
+  // check refuses; a person can still click it, so the click is forced.
+  await startOf(page).click({ force: true });
+  // Waiting: the button stays focusable, aria-disabled, and the sheet is busy.
+  await expect(page.getByRole("status").filter({ hasText: t.workspace.openLoading })).toBeVisible();
+  await expect(startOf(page)).toHaveAttribute("aria-disabled", "true");
+  await expect(startOf(page)).toBeFocused();
+  await expect(editorOf(page)).toHaveAttribute("aria-busy", "true");
+  await shootThemes(page, "dan330-otvaram-rad");
+  // Three clicks while the answer waits sent one open.
+  expect(opens(requests)).toEqual(["/api/evidence/open"]);
+  release();
+  await writable(page);
+  const { projects, documents } = await documentsOf(STUDENT, assignment);
+  expect(projects).toBe(1);
+  expect(documents).toHaveLength(1);
+});
+
+test("DAN-330: the submission page of a work not started sends nothing", async ({ page }) => {
+  await signedIn(page);
+  const assignment = await seedWork();
+  const requests = recordRequests(page);
+  await page.goto(`/rad/${assignment}/predaja`);
+  await expect(page.getByRole("status").filter({ hasText: t.submission.notStarted })).toBeVisible();
+  await expect(page.getByRole("link", { name: t.submission.backToWork })).toHaveAttribute("href", `/rad?zadatak=${assignment}`);
+  await expect(page.getByRole("button", { name: t.submission.submit })).toHaveCount(0);
+  await page.waitForTimeout(3000);
+  await page.reload();
+  await expect(page.getByText(t.submission.notStarted)).toBeVisible();
+  await page.waitForTimeout(3000);
+  expect(touching(requests, /^\/api\/(evidence|submission)(\/|$)/)).toEqual([]);
+  expect(await documentsOf(STUDENT, assignment)).toEqual({ projects: 0, documents: [] });
+  await shootThemes(page, "dan330-predaja-rad-nije-zapocet");
+});
+
+test("DAN-330: past the due date the work can still be started", async ({ page }) => {
+  await signedIn(page);
+  const assignment = await seedWork({ opens: "-10 days", due: "-1 day" });
+  const requests = recordRequests(page);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(page.getByRole("note")).toHaveText(t.workspace.lateNote);
+  await expect(startOf(page)).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(opens(requests)).toEqual([]);
+  await startOf(page).click();
+  await writable(page);
+  await editorOf(page).click();
+  await page.keyboard.type("Rad započet nakon roka.");
+  await expect(editorOf(page)).toContainText("Rad započet nakon roka.");
+  await expect(page.getByRole("note")).toHaveText(t.workspace.lateNote);
+  expect(opens(requests).length).toBeGreaterThan(0);
+  const { projects, documents } = await documentsOf(STUDENT, assignment);
+  expect(projects).toBe(1);
+  expect(documents).toHaveLength(1);
+});
+
+test("DAN-330: offline, nothing is sent before the click and the click continues when the network returns", async ({ page, context }) => {
+  await signedIn(page);
+  const assignment = await seedWork();
+  const requests = recordRequests(page);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(startOf(page)).toBeVisible();
+  // Without a click, the network going and coming back starts nothing.
+  await context.setOffline(true);
+  await page.waitForTimeout(500);
+  await context.setOffline(false);
+  await page.waitForTimeout(2000);
+  expect(opens(requests)).toEqual([]);
+  expect((await documentsOf(STUDENT, assignment)).projects).toBe(0);
+  // With the click, the opening waits for the network and goes on by itself.
+  await context.setOffline(true);
+  await startOf(page).click();
+  await expect(page.getByRole("status").filter({ hasText: t.workspace.openOffline })).toBeVisible({ timeout: OPEN });
+  await expect(writableEditors(page)).toHaveCount(0);
+  expect((await documentsOf(STUDENT, assignment)).projects).toBe(0);
+  await context.setOffline(false);
+  await writable(page);
+  await workDocument(assignment);
+});
+
+test("DAN-330: after another sign-in in this browser the earlier tab starts nothing", async ({ page, context }) => {
+  await signedIn(page);
+  const assignment = await seedWork();
+  const requests = recordRequests(page);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(startOf(page)).toBeVisible();
+  const other = await context.newPage();
+  await context.clearCookies({ name: /^_session/ });
+  await signIn(other, "/rad", "Demo student 2");
+  await expect(startOf(page)).toHaveCount(0);
+  await expect(sheetOf(page).getByRole("link", { name: t.auth.signIn })).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(opens(requests)).toEqual([]);
+  expect((await documentsOf(STUDENT, assignment)).projects).toBe(0);
+});
+
 test("F1: /rad?zadatak= writes into the student's own document of the assignment", async ({ page }) => {
   await signedIn(page);
   const assignment = await seedWork();
   const requests = recordRequests(page);
   const live = page.waitForRequest(isLivePut, { timeout: OPEN });
   await page.goto(`/rad?zadatak=${assignment}`);
+  await startOf(page).click();
   await writable(page);
   await editorOf(page).click();
   await page.keyboard.type("Izmišljena prva rečenica rada F1.");
@@ -87,11 +253,13 @@ test("F1: two assignments keep two documents", async ({ page }) => {
   const x = await seedWork();
   const y = await seedWork();
   await page.goto(`/rad?zadatak=${x}`);
+  await startOf(page).click();
   await writable(page);
   await editorOf(page).click();
   await page.keyboard.type("Tekst samo za zadatak X.");
   await expect(page.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", SAVED_HERE);
   await page.goto(`/rad?zadatak=${y}`);
+  await startOf(page).click();
   await writable(page);
   await expect(editorOf(page)).not.toContainText("Tekst samo za zadatak X.");
   const [docX, docY] = [await workDocument(x), await workDocument(y)];
@@ -110,6 +278,7 @@ test("F1: a foreign, unknown and malformed assignment give the same unavailable 
     await page.goto(`/rad?zadatak=${param}`);
     await expect(sheetOf(page)).toContainText(t.workspace.unavailable);
     await expect(writableEditors(page)).toHaveCount(0);
+    await expect(startOf(page)).toHaveCount(0);
     sheets.push(await sheetOf(page).innerHTML());
   }
   expect(new Set(sheets).size).toBe(1);
@@ -130,6 +299,7 @@ test("F1: a teacher on /rad?zadatak= gets no editor and no work", async ({ brows
   await page.goto(`/rad?zadatak=${assignment}`);
   await expect(sheetOf(page)).toContainText(t.workspace.unavailable);
   await expect(writableEditors(page)).toHaveCount(0);
+  await expect(startOf(page)).toHaveCount(0);
   expect(touching(requests, /^\/api\/(evidence|live)/)).toEqual([]);
   expect((await documentsOf(TEACHER, assignment)).projects).toBe(0);
 });
@@ -141,6 +311,7 @@ test("F1: before opens_at nothing is opened", async ({ page }) => {
   await page.goto(`/rad?zadatak=${assignment}`);
   await expect(sheetOf(page)).toContainText(t.workspace.openNotYet.split("{time}")[0]!.trim());
   await expect(writableEditors(page)).toHaveCount(0);
+  await expect(startOf(page)).toHaveCount(0);
   await page.waitForTimeout(1000);
   expect(touching(requests, /^\/api\/(evidence|live)/)).toEqual([]);
   expect((await documentsOf(STUDENT, assignment)).projects).toBe(0);
@@ -150,6 +321,7 @@ test("F1: past the due date the editor stays writable and says the submission wi
   await signedIn(page);
   const assignment = await seedWork({ opens: "-10 days", due: "-1 day" });
   await page.goto(`/rad?zadatak=${assignment}`);
+  await startOf(page).click();
   await writable(page);
   await expect(page.getByRole("note")).toHaveText(t.workspace.lateNote);
   await editorOf(page).click();
@@ -182,6 +354,7 @@ test("F1: a failing open route leaves the sheet read-only with a retry", async (
   const assignment = await seedWork();
   await page.route("**/api/evidence/open", (route) => route.fulfill({ status: 503, body: "{}" }));
   await page.goto(`/rad?zadatak=${assignment}`);
+  await startOf(page).click();
   const retry = page.getByRole("button", { name: t.workspace.openRetry });
   await expect(retry).toBeVisible({ timeout: OPEN });
   await expect(page.getByRole("status").filter({ hasText: t.workspace.openError })).toBeVisible();
@@ -203,6 +376,7 @@ test("F1: without a network the first open waits and continues when it returns",
     await route.abort("internetdisconnected");
   }, { times: 1 });
   await page.goto(`/rad?zadatak=${assignment}`);
+  await startOf(page).click();
   await expect(page.getByRole("status").filter({ hasText: t.workspace.openOffline })).toBeVisible({ timeout: OPEN });
   await expect(writableEditors(page)).toHaveCount(0);
   await shoot(page, "f1-otvaranje-bez-mreze");
@@ -216,6 +390,7 @@ test("F1: the submission page uses the editor's document", async ({ page }) => {
   const assignment = await seedWork();
   const live = page.waitForRequest(isLivePut, { timeout: OPEN });
   await page.goto(`/rad?zadatak=${assignment}`);
+  await startOf(page).click();
   await writable(page);
   await editorOf(page).click();
   await page.keyboard.type("Izmišljeni tekst za predaju.");
@@ -246,6 +421,7 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
   const y = await seedWork();
   for (const [assignment, text] of [[x, "Tekst X prije odjave."], [y, "Tekst Y prije odjave."]] as const) {
     await page.goto(`/rad?zadatak=${assignment}`);
+    await startOf(page).click();
     await writable(page);
     await editorOf(page).click();
     await page.keyboard.type(text);

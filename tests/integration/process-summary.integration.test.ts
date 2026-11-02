@@ -18,6 +18,8 @@ import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { createEvidencePayloadReader } from "@/server/evidence/payload-reader";
 import { handleProcessSummaryRequest } from "@/server/projection/process-summary";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-13 steps 3 and 4 / DAN-85, PLAN-DEMO B-13 criterion: the owner and the
 // teacher get the same bytes through the API (D-80 point 6), over the real
 // read RPC under withActor and the payloads stored in the local S3 store of
@@ -26,9 +28,7 @@ import { handleProcessSummaryRequest } from "@/server/projection/process-summary
 // removed afterwards). Ana, Vesna and Dora are invented.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The process summary test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The process summary test runs only against a loopback database (DATABASE_URL).");
 const ORIGIN = "http://localhost:3000";
 const suffix = randomBytes(5).toString("hex");
 const login = `it_summary_${suffix}`;

@@ -101,10 +101,8 @@ test.describe("public home page", () => {
   for (const sheet of ["dark", "light"] as const) {
     test(`axe: no WCAG 2.1 AA violations (sheet: ${sheet})`, async ({ page }) => {
       await page.goto("/");
-      if (sheet === "light") {
-        await page.getByRole("button", { name: t.workspace.sheetThemeLight }).click();
-        await expect(page.locator("article.sheet").first()).toHaveAttribute("data-sheet-theme", "light");
-      }
+      await page.getByRole("button", { name: sheet === "light" ? t.workspace.sheetThemeLight : t.workspace.sheetThemeDark }).click();
+      await expect(page.locator("article.sheet").first()).toHaveAttribute("data-sheet-theme", sheet);
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
         .analyze();

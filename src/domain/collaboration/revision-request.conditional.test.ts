@@ -9,7 +9,7 @@ import {
   submitStudentResponse,
   type RevisionRequestState,
 } from "./revision-request";
-import { simpleHash, normalizeForComparison, type ValidityCondition } from "./conditional-validity";
+import { snapshotHash, normalizeForComparison, type ValidityCondition } from "./conditional-validity";
 
 const nodeId = newNodeId(() => "11111111-1111-4111-8111-111111111111");
 const quote = "važna tvrdnja";
@@ -57,7 +57,7 @@ describe("applyConditionalValidity integration (S-UV1)", () => {
       {
         kind: "text_range",
         revision_id: "rev-1",
-        text_snapshot_hash: simpleHash(normalizeForComparison("original")),
+        text_snapshot_hash: snapshotHash(normalizeForComparison("original")),
         status: "valid",
         accepted_at: "2026-10-13T00:00:00Z",
         accepted_by: "t",
@@ -73,7 +73,7 @@ describe("applyConditionalValidity integration (S-UV1)", () => {
       {
         kind: "text_range",
         revision_id: "rev-1",
-        text_snapshot_hash: simpleHash(normalizeForComparison(original)),
+        text_snapshot_hash: snapshotHash(normalizeForComparison(original)),
         text_excerpt: original,
         status: "valid",
         accepted_at: "2026-10-13T00:00:00Z",
@@ -91,7 +91,7 @@ describe("applyConditionalValidity integration (S-UV1)", () => {
       {
         kind: "text_range",
         revision_id: "rev-1",
-        text_snapshot_hash: simpleHash(normalizeForComparison(original)),
+        text_snapshot_hash: snapshotHash(normalizeForComparison(original)),
         status: "valid",
         accepted_at: "2026-10-13T00:00:00Z",
         accepted_by: "t",
@@ -108,7 +108,7 @@ describe("applyConditionalValidity integration (S-UV1)", () => {
       {
         kind: "text_range",
         revision_id: "rev-1",
-        text_snapshot_hash: simpleHash(normalizeForComparison(first)),
+        text_snapshot_hash: snapshotHash(normalizeForComparison(first)),
         text_excerpt: first,
         status: "valid",
         accepted_at: "2026-10-13T00:00:00Z",
@@ -117,7 +117,7 @@ describe("applyConditionalValidity integration (S-UV1)", () => {
       {
         kind: "text_range",
         revision_id: "rev-1",
-        text_snapshot_hash: simpleHash(normalizeForComparison(second)),
+        text_snapshot_hash: snapshotHash(normalizeForComparison(second)),
         text_excerpt: second,
         status: "valid",
         accepted_at: "2026-10-13T00:00:00Z",

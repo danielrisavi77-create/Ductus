@@ -4,8 +4,43 @@ import { expect, test } from "@playwright/test";
 // (#476 6314969336, "Pisanje"): three columns on a wide screen; up to 1250 px
 // the structure rail folds under the sheet, up to 1050 px the panel too
 // (design v3 breakpoints with the shell's 236 px side bar; was README §5.1,
-// FE-D2; DAN-131).
+// FE-D2; DAN-131). Since 1. 11. 2026. the shell's side bar is a drawer behind
+// ☰ on /rad at every width (owner), so the workspace takes the whole width.
 test.describe("workspace shell", () => {
+  test("wide: no side bar beside the workspace, the drawer opens behind ☰", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const side = page.getByRole("complementary", { name: "Bočna navigacija", includeHidden: true });
+    await expect(side).toBeHidden();
+    const rail = await page.getByRole("complementary", { name: "Struktura rada" }).boundingBox();
+    expect(rail!.x).toBeLessThan(236);
+    const menu = page.getByRole("button", { name: "Otvori navigaciju" });
+    await menu.click();
+    await expect(side).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(side).toBeHidden();
+    await expect(menu).toBeFocused();
+  });
+
+  for (const width of [1440, 390]) {
+    test.describe(`without JavaScript at ${width} px`, () => {
+      test.use({ viewport: { width, height: 900 }, javaScriptEnabled: false });
+
+      // ☰ cannot open the drawer without JavaScript, so the `scripting: none`
+      // rules must win over the drawer rules (Codex, 3ff456f7). /rad streams, so
+      // the page may sit in Next's hidden frame: the computed style is read,
+      // not the visibility of the whole page.
+      test("the side bar is in the page and ☰ is not offered", async ({ page }) => {
+        await page.goto("/rad");
+        const side = page.locator("#bocna-navigacija");
+        expect(await side.evaluate((el) => getComputedStyle(el).visibility)).toBe("visible");
+        expect(await side.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+        const menu = page.locator('button[aria-controls="bocna-navigacija"]');
+        expect(await menu.evaluate((el) => getComputedStyle(el).display)).toBe("none");
+      });
+    });
+  }
+
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
@@ -78,10 +113,11 @@ test.describe("workspace shell", () => {
       expect(outline).not.toBe("none");
     }
     // Without an assignment the teacher view has no address: it is a stop, but says so.
-    // The shell's brand, the top bar's Početna (#802) and the theme switch come
-    // first (no session: no navigation).
+    // On /rad the side bar is a closed drawer, so ☰ comes in place of the
+    // brand, then the top bar's Početna (#802) and the theme switch (no
+    // session: no navigation).
     expect(stops).toEqual([
-      "Preskoči na sadržaj", "Ductura, početna", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
+      "Preskoči na sadržaj", "Otvori navigaciju", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
       "Kako vidi nastavnik samo uz zadatak",
     ]);
   });
@@ -345,7 +381,9 @@ test.describe("workspace shell", () => {
     const sources = list.getByRole("tab", { name: "Literatura" });
     await expect(sources).toBeFocused();
     await expect(sources).toHaveAttribute("aria-selected", "true");
-    await expect(panel.getByRole("tabpanel")).toHaveText("Literatura rada prikazuje se ovdje.");
+    // DAN-343: with a journal the open Literatura panel is the sources panel.
+    await expect(panel.getByRole("tabpanel").getByRole("button", { name: "+ Izvor" })).toBeVisible();
+    await expect(panel.getByRole("tabpanel")).toContainText("Izvori dodani u ovom radu");
     await page.keyboard.press("End");
     await expect(work).toBeFocused();
     await page.keyboard.press("ArrowLeft");
@@ -392,15 +430,15 @@ test.describe("workspace shell", () => {
     expect(shadow).toMatch(/0px 0px 0px 1px/);
   });
 
-  test("shell is dark whatever the system says, the sheet is dark by default (design v3)", async ({ page }) => {
+  test("shell is dark whatever the system says, the sheet is the paper by default (D-188)", async ({ page }) => {
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
       await page.goto("/rad");
       const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(body).toBe("rgb(25, 22, 26)");
+      expect(body).toBe("rgb(36, 36, 34)");
       const sheet = page.locator("article.sheet");
-      await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
-      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(41, 35, 41)");
+      await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(252, 251, 248)");
     }
   });
 
@@ -410,31 +448,35 @@ test.describe("workspace shell", () => {
     const view = page.getByRole("toolbar", { name: "Oblikovanje teksta" }).getByRole("button", { name: "Prikaz" });
     const theme = (name: string) => page.getByRole("menu", { name: "Prikaz" }).getByRole("menuitemradio", { name });
     await view.click();
-    await expect(theme("Tamni list")).toHaveAttribute("aria-checked", "true");
-    await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "false");
-    await theme("Bijeli list").click();
-    const sheet = page.locator("article.sheet");
-    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
-    await view.click();
     await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "true");
-    await page.keyboard.press("Escape");
-    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
-    await page.reload();
-    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
-    await view.click();
+    await expect(theme("Tamni list")).toHaveAttribute("aria-checked", "false");
     await theme("Tamni list").click();
+    const sheet = page.locator("article.sheet");
     await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+    await view.click();
+    await expect(theme("Tamni list")).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(46, 46, 43)");
+    await page.reload();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+    await view.click();
+    await theme("Bijeli list").click();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
   });
 
-  test("a stored value that is not a theme leaves the sheet dark", async ({ page }) => {
+  test("a stored value that is not a theme leaves the sheet on the paper", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("ductus.sheetTheme", "sepia"));
     await page.goto("/rad");
-    await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "dark");
+    await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
   });
 
   test("the brand link on the workspace is a comfortable target", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
+    // The brand is in the drawer on /rad; ☰ in the top bar opens it.
+    const menu = await page.getByRole("button", { name: "Otvori navigaciju" }).boundingBox();
+    expect(menu!.height).toBeGreaterThanOrEqual(32);
+    await page.getByRole("button", { name: "Otvori navigaciju" }).click();
     const box = await page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(32);
   });
@@ -454,7 +496,7 @@ test.describe("workspace shell", () => {
     await page.goto("/");
     await expect(
       page.getByText(
-        "Ductura ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidite što nastavnik vidi i od kada.",
+        "Student piše, a nastavnik prati kako rad nastaje i komentira uz odlomke. Ductura ne procjenjuje autorstvo ni korištenje AI-ja, a prije početka vidite što nastavnik vidi i od kada.",
         { exact: true },
       ),
     ).toBeVisible();

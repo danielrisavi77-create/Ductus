@@ -9,11 +9,13 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { signIn, signOutWithoutDialog } from "./support";
 import { localAdminUrl } from "./local-db-url";
+import { openWorkOf } from "./work-seed";
 
 // F-10 (#476 contract 6384297464): the student's submission page. The course,
 // assignment, membership and acknowledgment are invented and written through
 // the admin login of the compose database (as assignment-notice.spec.ts);
-// the work itself is made by the real open route. Until the drain is wired
+// the work itself is made by the real open route, before the page loads
+// (`openWorkOf`, DAN-330: loading the page never starts it). Until the drain is wired
 // (3d-2) the server holds revision 0, so the real path ends in `no_evidence`;
 // the other answers of the submission route are the test's (page.route).
 
@@ -134,6 +136,7 @@ test("with no text on the server it says so and sends nothing to the submission 
   await signIn(page, "/rad");
   const assignment = await seedAssignment(true);
   const bodies = recordSubmissions(page);
+  await openWorkOf(page, assignment);
   await page.goto(pathOf(assignment));
   await expect(page.getByText(t.noEvidence)).toBeVisible();
   await expect(page.getByRole("button", { name: t.submit })).toHaveCount(0);
@@ -153,6 +156,7 @@ test("one click submits exactly the shown revision once and shows the receipt (c
     await route.fulfill({ status: 200, json: { status: "submitted", receipt: receiptFor(open.documentId()) } });
   });
   const bodies = recordSubmissions(page);
+  await openWorkOf(page, assignment);
   await page.goto(pathOf(assignment));
   await expect(page.getByRole("document", { name: t.textLabel })).toContainText("gradskim knjižnicama kao mjestu susreta");
   await shoot(page, "provjera");
@@ -179,6 +183,7 @@ test("without a network the button waits and nothing is sent (#385 H7)", async (
   const assignment = await seedAssignment(true);
   await withText(page);
   const bodies = recordSubmissions(page);
+  await openWorkOf(page, assignment);
   await page.goto(pathOf(assignment));
   await expect(page.getByRole("button", { name: t.submit })).toBeEnabled();
   await context.setOffline(true);
@@ -195,6 +200,7 @@ test("a receipt for another revision is never shown", async ({ page }) => {
   const open = await withText(page);
   await page.route("**/api/submission", (route) =>
     route.fulfill({ status: 200, json: { status: "submitted", receipt: receiptFor(open.documentId(), { revision: 2 }) } }));
+  await openWorkOf(page, assignment);
   await page.goto(pathOf(assignment));
   await page.getByRole("button", { name: t.submit }).click();
   await expect(page.getByText(t.outcome.unavailable)).toBeVisible();
@@ -230,6 +236,7 @@ test("a summary read answering after a newer one is dropped", async ({ page }) =
     }
     await route.fulfill({ status: 200, body: canonicalizeJcs(summary), headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
   });
+  await openWorkOf(page, assignment);
   await page.goto(pathOf(assignment));
   await expect(page.getByRole("button", { name: t.submit })).toBeVisible();
   await expect.poll(() => reads).toBe(1);
@@ -253,6 +260,7 @@ for (const [name, status, body, text] of [
     const assignment = await seedAssignment(true);
     await withText(page);
     await page.route("**/api/submission", (route) => route.fulfill({ status, json: body }));
+    await openWorkOf(page, assignment);
     await page.goto(pathOf(assignment));
     await page.getByRole("button", { name: t.submit }).click();
     await expect(page.getByText(text)).toBeVisible();
@@ -271,6 +279,8 @@ test("an acknowledged assignment on /rad links to its submission and sends nothi
   const assignment = await seedAssignment(true);
   const bodies = recordSubmissions(page);
   await page.goto(`/rad?zadatak=${assignment}`);
+  // DAN-330: the work starts on the student's click.
+  await page.getByRole("button", { name: messagesHr.workspace.startWork }).click();
   const link = submitLinkOf(page);
   // #711 F1: the link comes with the student's own work, opened by the page's one POST.
   await expect(link).toBeVisible({ timeout: 30_000 });
@@ -298,6 +308,7 @@ test("after a sign-out in another tab the work leaves the page and nothing is se
   const assignment = await seedAssignment(true);
   await withText(page);
   const bodies = recordSubmissions(page);
+  await openWorkOf(page, assignment);
   await page.goto(pathOf(assignment));
   await expect(page.getByRole("button", { name: t.submit })).toBeVisible();
   const other = await context.newPage();

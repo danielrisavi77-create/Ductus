@@ -4,7 +4,7 @@ import {
   hasNeedsReReview,
   needsReReview,
   normalizeForComparison,
-  simpleHash,
+  snapshotHash,
   type ValidityCondition,
 } from "./conditional-validity";
 
@@ -14,7 +14,7 @@ function makeCondition(
   return {
     kind: "text_range",
     revision_id: "rev-1",
-    text_snapshot_hash: simpleHash(normalizeForComparison("broj sudionika je 42")),
+    text_snapshot_hash: snapshotHash(normalizeForComparison("broj sudionika je 42")),
     text_excerpt: "broj sudionika je 42",
     status: "valid",
     accepted_at: "2026-10-13T00:00:00Z",
@@ -56,10 +56,33 @@ describe("conditional-validity spike (S-UV1)", () => {
       expect(needsReReview(c, "  broj sudionika je 42.  ")).toBe(false);
     });
 
+    // Owner decision of 31 October 2026 (#87, comment 6544623431): a change
+    // of the final mark alone is no change of the sentence.
+    it("keeps a sentence unchanged when only its final mark changes", () => {
+      const original = "Rezultat je točan.";
+      const c = makeCondition({ text_snapshot_hash: snapshotHash(normalizeForComparison(original)), text_excerpt: original });
+      for (const changed of ["Rezultat je točan?", "Rezultat je točan!", "Rezultat je točan"]) {
+        expect(needsReReview(c, changed), changed).toBe(false);
+      }
+    });
+
+    // F-168: two texts that differ in one word, a pair the former hash of the
+    // spike did not tell apart.
+    it("tells apart two texts that differ in one word", () => {
+      const original = "Rezultat je Aa točan";
+      const c = makeCondition({ text_snapshot_hash: snapshotHash(normalizeForComparison(original)), text_excerpt: original });
+      expect(needsReReview(c, "Rezultat je BB točan")).toBe(true);
+    });
+
+    it("asks for re-review of a condition stored with a hash of another form", () => {
+      const c = makeCondition({ text_snapshot_hash: "99a0c2ed" });
+      expect(needsReReview(c, "Rezultat je Aa točan")).toBe(true);
+    });
+
     it("detects semantic change: povezano je -> uzrokuje", () => {
       const original = "rezultati su povezani s prethodnim radovima";
       const c = makeCondition({
-        text_snapshot_hash: simpleHash(normalizeForComparison(original)),
+        text_snapshot_hash: snapshotHash(normalizeForComparison(original)),
         text_excerpt: original,
       });
       expect(needsReReview(c, "rezultati uzrokuju promjene")).toBe(true);
@@ -126,7 +149,7 @@ describe("conditional-validity spike (S-UV1)", () => {
         makeCondition({ text_excerpt: "prva tvrdnja" }),
         makeCondition({
           text_excerpt: "druga tvrdnja",
-          text_snapshot_hash: simpleHash(normalizeForComparison("druga tvrdnja")),
+          text_snapshot_hash: snapshotHash(normalizeForComparison("druga tvrdnja")),
         }),
       ];
       const updated = applyRevisionToConditions(conditions, (condition) =>
@@ -185,7 +208,7 @@ describe("conditional-validity spike (S-UV1)", () => {
         {
           kind: "text_range",
           revision_id: "rev-1",
-          text_snapshot_hash: simpleHash(normalizeForComparison(original)),
+          text_snapshot_hash: snapshotHash(normalizeForComparison(original)),
           text_excerpt: original.slice(0, 80),
           status: "valid",
           accepted_at: "2026-10-13T00:00:00Z",

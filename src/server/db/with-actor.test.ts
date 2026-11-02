@@ -173,6 +173,37 @@ describe("withActor", () => {
     await expect(Promise.all([db.withActor(TOKEN, async () => 1), db.withActor(null, async () => 2)])).resolves.toEqual([1, 2]);
   });
 
+  it("refuses a nested call on another pool too, which would commit apart from the outer one", async () => {
+    const outer = fakePool();
+    const other = fakePool();
+    const inner = vi.fn(async () => "inner");
+    await expect(outer.withActor(TOKEN, async () => other.withActor(TOKEN, inner))).rejects.toThrow("nested call");
+    expect(inner).not.toHaveBeenCalled();
+    expect(other.sent).toEqual([]);
+  });
+
+  it.each([
+    ["committed", async () => "outer"],
+    ["failed", async () => Promise.reject(new Error("outer failed"))],
+  ])("lets a call that fn left behind run once the outer call has %s", async (_ending, outcome) => {
+    // F-022: the store follows every continuation made inside fn, so a later
+    // write scheduled there (a fire-and-forget audit row) would otherwise be
+    // refused as nested long after the outer transaction ended.
+    const db = fakePool();
+    let start!: () => void;
+    const started = new Promise<void>((resolve) => (start = resolve));
+    let later: Promise<number> | undefined;
+    await db.withActor(TOKEN, async () => {
+      later = started.then(() => db.withActor(TOKEN, async () => 2));
+      return outcome();
+    }).catch(() => undefined);
+    start();
+    await expect(later).resolves.toBe(2);
+    // The later call is a transaction of its own, after the outer one ended.
+    expect(db.statements().slice(-5)).toEqual(["BEGIN", "SELECT", "SELECT", "COMMIT", "DISCARD"]);
+    expect(db.released).toHaveLength(2);
+  });
+
   it("fails without committing when fn swallowed an error that aborted the transaction", async () => {
     const aborted = Object.assign(new Error("current transaction is aborted"), { code: "25P02" });
     const db = fakePool({ "SELECT pg_catalog.current_setting": aborted });

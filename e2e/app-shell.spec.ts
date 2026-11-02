@@ -14,7 +14,7 @@ test("a signed-out visitor gets the shell without navigation or account", async 
   await expect(page.getByRole("navigation", { name: t.shell.workNav })).toHaveCount(0);
   await expect(page.getByRole("button", { name: t.shell.signOut })).toHaveCount(0);
   await expect(page.locator("main#sadrzaj")).toHaveCount(1);
-  await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: t.access.signedOutTitle })).toBeVisible();
 });
 
 // Cut (b): the student screens outside /rad get the same shell; signed out,
@@ -43,9 +43,17 @@ test("the theme switch turns the shell light and the browser remembers it", asyn
     const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     expect(axe.violations, path).toEqual([]);
   }
-  // Pages outside the shell keep their own look.
-  await page.goto("/prijava");
-  await expect(page.locator("[data-theme]")).toHaveCount(0);
+  // Z-13a: the choice is on <html>, so a page outside the shell is light too.
+  const ground = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ground").trim());
+  await page.goto("/ne-postoji-z13a");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await ground()).toBe("#f3f2ee");
+  // The sign-in screen (until #1024) and the public home page (J-01) keep their dark look.
+  for (const path of ["/prijava", "/"]) {
+    await page.goto(path);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    expect(await ground(), path).toBe("#242422");
+  }
 });
 
 test("the focused skip link is drawn above the side bar", async ({ page }) => {
@@ -111,7 +119,7 @@ test.describe("at 390 px without JavaScript", () => {
     await expect(aside).toBeVisible();
     await expect(aside.getByRole("link", { name: t.shell.home })).toBeInViewport();
     await expect(page.getByRole("button", { name: t.shell.openNav })).toBeHidden();
-    await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: t.access.signedOutTitle })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
@@ -137,5 +145,29 @@ for (const [width, min] of [[1440, 12], [390, 13]] as const) {
       return found;
     }, min);
     expect(small).toEqual([]);
+  });
+}
+
+// #1325: widening from a phone to a wide screen puts the side bar in place at
+// once, in both themes; no drawer slide over an empty column. Read without
+// waiting, because a retrying assertion would wait the slide out.
+for (const theme of ["dark", "light"] as const) {
+  test(`${theme}: widening from 400 to 1440 px shows the side bar at once`, async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 900 });
+    await page.goto(PATH);
+    if (theme === "light") {
+      await page.getByRole("button", { name: t.shell.theme }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const place = await page.locator("#bocna-navigacija").evaluate((aside) => {
+      const brand = aside.querySelector("a")!.getBoundingClientRect();
+      return { left: aside.getBoundingClientRect().left, brand: brand.left, visibility: getComputedStyle(aside).visibility };
+    });
+    expect(place.left).toBe(0);
+    expect(place.visibility).toBe("visible");
+    expect(place.brand).toBeGreaterThanOrEqual(0);
+    const aside = page.getByRole("complementary", { name: t.shell.sideNav });
+    await expect(aside.getByRole("link", { name: t.shell.home })).toBeInViewport({ ratio: 1 });
   });
 }

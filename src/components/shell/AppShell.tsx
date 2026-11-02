@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
@@ -10,7 +10,7 @@ import { accountPlace, homeHref, navFor, type ShellRole } from "./nav";
 import SessionObserver from "./SessionObserver";
 import ShellLogout from "./ShellLogout";
 import type { ShellSession } from "./shell-session";
-import { readTheme, saveTheme, THEME_SCRIPT } from "./theme";
+import { toggleTheme } from "./theme";
 
 const ICONS = {
   menu: "M3 6h18M3 12h18M3 18h18",
@@ -36,14 +36,16 @@ function Logo() {
   );
 }
 
-/** Flips the theme on the shell element itself, so React never holds a copy that could disagree. */
+/** Flips the theme on `<html>` itself, so React never holds a copy that could disagree. */
 function ThemeToggle() {
-  const toggle = (event: { currentTarget: HTMLElement }) => {
-    const shell = event.currentTarget.closest<HTMLElement>(`.${styles.shell}`);
-    if (!shell) return;
-    const next = shell.getAttribute("data-theme") === "light" ? "dark" : "light";
-    shell.setAttribute("data-theme", next);
-    saveTheme(window.localStorage, next);
+  const toggle = () => {
+    let storage: Storage | undefined;
+    try {
+      storage = window.localStorage;
+    } catch {
+      // Storage blocked: the theme changes on this page only.
+    }
+    toggleTheme(document.documentElement, storage);
   };
   return (
     <button type="button" className={styles.iconButton} aria-label={t.shell.theme} onClick={toggle}>
@@ -80,6 +82,12 @@ export type AppShellProps = {
   account?: ReactNode;
   /** The page brings its own `<main id="sadrzaj">` (the workspace, FE-D1). */
   ownMain?: boolean;
+  /**
+   * The side bar is a drawer behind ☰ at every width, so the page takes the
+   * whole width (the workspace, owner 1. 11. 2026.). Navigation and signing
+   * out stay one press away.
+   */
+  drawer?: boolean;
   children: ReactNode;
 };
 
@@ -89,27 +97,13 @@ export type AppShellProps = {
  * (I2); signing out is the same POST as everywhere and works without
  * JavaScript (I5). Below 800 px the side bar is a drawer behind ☰.
  */
-export default function AppShell({ role, session, scope, current, crumbs, account, ownMain = false, children }: AppShellProps) {
+export default function AppShell({ role, session, scope, current, crumbs, account, ownMain = false, drawer = false, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
-  const shell = useRef<HTMLDivElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const items = navFor(role);
   const home = homeHref(role);
   const place = accountPlace(scope, account !== undefined);
-
-  // The inline script runs only when the server's HTML is parsed; after a
-  // client-side navigation the new shell reads the saved theme here, before
-  // it is painted.
-  useLayoutEffect(() => {
-    let storage: Storage | undefined;
-    try {
-      storage = window.localStorage;
-    } catch {
-      // Storage blocked: the shell stays dark.
-    }
-    shell.current?.setAttribute("data-theme", readTheme(storage));
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -127,7 +121,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
   // From 800 px the side bar is no drawer, so an open one must not leave the
   // shade and an inert page behind.
   useEffect(() => {
-    if (!open) return;
+    if (!open || drawer) return;
     const wide = window.matchMedia("(min-width: 800px)");
     const onChange = () => {
       if (wide.matches) setOpen(false);
@@ -135,22 +129,37 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
     onChange();
     wide.addEventListener("change", onChange);
     return () => wide.removeEventListener("change", onChange);
-  }, [open]);
+  }, [open, drawer]);
 
   const close = () => {
     setOpen(false);
     menuButton.current?.focus();
   };
 
+  // Rendered once: in the side bar, or in the top bar where the side bar is a
+  // closed drawer, so signing out stays one press away (D-118).
+  const accountBlock = place === "own" ? (
+    <div className={styles.account}>
+      {role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
+      {account}
+    </div>
+  ) : place === "signOut" ? (
+    // A signed-in person always has a way out, also without a role
+    // read for this page (#802 part B); the role label only with one.
+    <ShellLogout
+      scope={scope}
+      session={session.tag === null ? null : { tag: session.tag, at: session.at }}
+      className={styles.account}
+      buttonClassName={styles.signOut}
+      lead={role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
+    >
+      <Icon name="logout" />
+    </ShellLogout>
+  ) : null;
+
   return (
-    <div ref={shell} className={styles.shell} data-theme="dark" suppressHydrationWarning>
-      <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+    <div className={drawer ? `${styles.shell} ${styles.drawerShell}` : styles.shell}>
       <SessionObserver tag={session.tag} at={session.at} />
-      {/* Without JavaScript ☰ cannot open the drawer, so on a phone the side
-          bar, and with it signing out, stays in the page above the content (I5). */}
-      <noscript>
-        <style>{`@media (max-width: 799.98px) { .${styles.sidebar} { position: static; width: auto; transform: none; visibility: visible; } .${styles.menuButton} { display: none; } }`}</style>
-      </noscript>
       {open ? <div className={styles.shade} onClick={close} aria-hidden="true" /> : null}
       <aside ref={sidebar} className={styles.sidebar} data-open={open} aria-label={t.shell.sideNav} id="bocna-navigacija">
         <Link className={styles.brand} href={home} aria-label={t.shell.home}>
@@ -183,24 +192,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
             <strong>{t.shell.demoBadge}</strong>
             {t.shell.demoNote}
           </p>
-          {place === "own" ? (
-            <div className={styles.account}>
-              {role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
-              {account}
-            </div>
-          ) : place === "signOut" ? (
-            // A signed-in person always has a way out, also without a role
-            // read for this page (#802 part B); the role label only with one.
-            <ShellLogout
-              scope={scope}
-              session={session.tag === null ? null : { tag: session.tag, at: session.at }}
-              className={styles.account}
-              buttonClassName={styles.signOut}
-              lead={role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
-            >
-              <Icon name="logout" />
-            </ShellLogout>
-          ) : null}
+          {drawer ? null : accountBlock}
         </div>
       </aside>
       <div className={styles.area}>
@@ -236,6 +228,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
           <div className={styles.actions}>
             <span className={styles.demo}>{t.shell.demoBadge}</span>
             <ThemeToggle />
+            {drawer ? accountBlock : null}
           </div>
         </header>
         {ownMain ? (

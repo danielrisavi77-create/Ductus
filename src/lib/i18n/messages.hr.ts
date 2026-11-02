@@ -35,9 +35,13 @@ export const hr = {
     space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
     nav: {
       assignments: "Moji zadaci",
+      // DAN-309 (B2): the student's own works across courses, /zadaci/radovi.
+      works: "Moji radovi",
       courses: "Moji kolegiji",
       newCourse: "Novi kolegij i zadatak",
       fastPath: "Brz put",
+      // DAN-492 (N-16): the works a teacher mentors, outside any course.
+      mentoredWorks: "Radovi uz mentora",
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
     },
@@ -51,7 +55,6 @@ export const hr = {
     homeCrumb: "Početna",
   },
   home: {
-    lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidite što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
     openTeacher: "Otvori kolegije",
     // #802 part B: the signed-in home (pocetna.dc.html: greeting, cards).
@@ -73,14 +76,14 @@ export const hr = {
     sectionsNav: "Odjeljci početne stranice",
     howItWorksLink: "Kako radi",
     forWhomLink: "Za koga",
-    eyebrow: "Prostor za akademsko pisanje",
-    title: "Od prve rečenice do predaje,",
-    titleAccent: "uz svog nastavnika.",
-    intro: `${APP_NAME} je mjesto na kojem student piše seminarski ili završni rad, a nastavnik prati kako rad nastaje i komentira ga uz odlomke.`,
+    eyebrow: "Dnevnik pisanja · seminarski i završni radovi",
+    title: "Rad se vidi",
+    titleAccent: "dok nastaje.",
+    intro: `Student piše, a nastavnik prati kako rad nastaje i komentira uz odlomke. ${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja, a prije početka vidite što nastavnik vidi i od kada.`,
     enter: "Prijavi se i počni",
     aaiOnly: "Prijava isključivo preko AAI@EduHr.",
     previewLabel: "Primjer radnog prostora: list rada i komentar nastavnika, izmišljeni podaci",
-    previewCourse: "Javne politike · seminarski rad",
+    previewSignature: "DUC · 371.3 · rad 07",
     previewTitle: "Gradski promet i održiva mobilnost",
     previewSection: "1. Uvod",
     previewParagraph1:
@@ -317,11 +320,58 @@ export const hr = {
   teacher: {
     title: "Novi kolegij i zadatak",
     signedOut: "Prijavite se nastavničkim računom.",
-    denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
     unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušajte ponovno.",
     signIn: "Prijavi se",
     backHome: "Na početnu",
     backCourses: "Moji kolegiji",
+    // DAN-310 (M2.4-P01): a further assignment in a course the teacher already has.
+    existingCourse: {
+      title: "Novi zadatak u kolegiju",
+      link: "Novi zadatak u kolegiju",
+      missing: "Kolegij nije dostupan ovom računu.",
+      unavailable: "Kolegij trenutačno nije moguće učitati. Pokušajte ponovno.",
+      codeKept: "Upisni kod kolegija ostaje isti.",
+      studentsNotified: "Studenti upisani u kolegij vide zadatak među svojim zadacima.",
+    },
+    // DAN-310 (M2.4-P02): a new version of a published assignment.
+    newVersion: {
+      title: "Nova verzija zadatka",
+      link: "Nova verzija",
+      current: "Na snazi je verzija {n}.",
+      lead: "Izmjene se objavljuju kao verzija {n}. Verzija koja je sada na snazi ostaje zapisana, a studenti novu verziju potvrđuju prije nastavka pisanja.",
+      fixed: "Vrsta rada, profil zapisa i uvoz ostaju kao u verziji na snazi.",
+      purposesHint: "Možete samo ukloniti uporabu koju verzija na snazi dopušta, ne i dodati novu.",
+      wordsHint: "Raspon se može samo ublažiti: najmanji broj smanjiti ili ukloniti, najveći povećati ili ukloniti.",
+      previewHeading: "Što se mijenja",
+      before: "Sada",
+      after: "Nakon objave",
+      empty: "nije zadano",
+      noPurposes: "nijedna uporaba",
+      consequence: "Objavom nastaje verzija {n}. Studenti upisani u kolegij vide je u obavijesti o zadatku i potvrđuju je prije nastavka pisanja. Već napisan tekst ostaje kakav jest.",
+      publish: "Objavi verziju {n}",
+      pending: "Objavljivanje…",
+      published: "Objavljena je verzija {n}. Studenti je potvrđuju prije nastavka pisanja.",
+      unchanged: "Nema promjena u odnosu na verziju na snazi, pa se ništa ne objavljuje.",
+      widening: "Ovaj raspon riječi stroži je od onoga na snazi, pa se ne može objaviti. Najmanji broj smanjite ili uklonite, a najveći povećajte ili uklonite.",
+      reload: "Učitaj aktualnu verziju",
+      missing: "Zadatak nije dostupan ovom računu.",
+      unavailable: "Zadatak trenutačno nije moguće učitati. Pokušajte ponovno.",
+      fields: {
+        title: "Naslov",
+        instructions: "Upute studentima",
+        opensAt: "Otvaranje",
+        dueAt: "Rok",
+        aiPurposes: "Dopuštene uporabe",
+        wordRange: "Raspon riječi",
+      },
+      errors: {
+        invalid: "Provjerite naslov, otvaranje, rok i raspon riječi. Rok mora biti nakon otvaranja. Ništa nije objavljeno.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno; ništa nije objavljeno.",
+        forbidden: "Za ovaj račun nije dopušteno objavljivanje nove verzije ovog zadatka.",
+        conflict: "Zadatak je u međuvremenu dobio noviju verziju. Vaše izmjene nisu objavljene i ostaju u obrascu. Učitajte aktualnu verziju pa ih ponovite.",
+        unavailable: "Objava verzije nije potvrđena. Pokušajte ponovno.",
+      },
+    },
     course: {
       heading: "Kolegij",
       name: "Naziv",
@@ -485,10 +535,27 @@ export const hr = {
       none: "Nije predano",
     },
   },
+  // DAN-492 (M2.6-P02, N-16), design pregled-radova-v2: only what the read gives (D-202).
+  mentoredWorks: {
+    title: "Radovi uz mentora",
+    lead: "Završni, diplomski i drugi radovi kojima ste mentor. Prikaz samo čita; ništa ne mijenja.",
+    listTitle: "Radovi · abecedno",
+    orderNote: "Popis se ne može poredati po brojevima.",
+    empty: "Nemate otvorenih mentorstava.",
+    unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+    unnamed: "Ime nije dostupno",
+    open: "Otvori rad",
+    // The state as text only, never a colour (D-128).
+    state: {
+      not_started: "Student još nije započeo rad.",
+      in_progress: "U pisanju",
+      submitted: "Predano",
+    },
+  },
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
-    denied: "Ovaj prikaz vidi samo nastavnik.",
     loading: "Učitavanje radova…",
     unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
     // F-11 (#757, contract c.6397637802 §3; owner c.6397679688).
@@ -551,6 +618,42 @@ export const hr = {
     tabInstructions: "Upute",
     tabComments: "Komentari",
     sourcesEmpty: "Literatura rada prikazuje se ovdje.",
+    // DAN-343 (contract on #866): the "Literatura" tab, design editor-v11 "Brzi izvor".
+    sources: {
+      add: "+ Izvor",
+      formTitle: "Novi izvor",
+      type: "Vrsta izvora",
+      book: "Knjiga",
+      article: "Članak u časopisu",
+      family: "Prezime autora",
+      given: "Ime autora",
+      secondAuthor: "Drugi autor (neobavezno)",
+      family2: "Prezime drugog autora",
+      given2: "Ime drugog autora",
+      year: "Godina",
+      title: "Naslov",
+      place: "Mjesto izdanja",
+      publisher: "Izdavač",
+      journal: "Časopis",
+      volume: "Godište",
+      issue: "Broj",
+      pages: "Stranice",
+      citePage: "Stranica navoda (neobavezno)",
+      preview: "Ovako će biti upisano",
+      addAndCite: "Dodaj i citiraj",
+      addOnly: "Samo u Literaturu",
+      cancel: "Odustani",
+      cite: "Citiraj",
+      listTitle: "Izvori dodani u ovom radu",
+      empty: "Dodaj izvor; navod i unos u popisu literature upisuju se u stilu FPZG-a.",
+      required: "Upiši: {field}.",
+      yearInvalid: "Godina ima četiri znamenke.",
+      tooLong: "{field} ima najviše {n} znakova.",
+      pageTooLong: "Stranica navoda ima najviše {n} znakova.",
+      unstorable: "{field} sadrži znak koji list ne prima; upiši polje ponovno.",
+      pageUnstorable: "Stranica navoda sadrži znak koji list ne prima; upiši je ponovno.",
+      readOnly: "List je samo za čitanje; izvori se ne mogu dodati.",
+    },
     instructionsEmpty: "Upute zadatka prikazuju se ovdje.",
     commentsEmpty: "Komentari nastavnika prikazuju se ovdje.",
     // FE-D9 (06c): "Upute" and "Rad" of the right panel, design editor-v11 §5.1.
@@ -587,6 +690,9 @@ export const hr = {
     // #711 F1 (contract 6391402093 §3, §5, §6): /rad with and without an assignment.
     freeNote: "Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvarate s njegove obavijesti.",
     unavailable: "Ovaj zadatak nije dostupan ovom računu.",
+    // DAN-330: the work starts only on the student's click.
+    startWork: "Započni rad",
+    notStarted: "Rad još nije započet.",
     openLoading: "Otvaram rad…",
     openNotYet: "Zadatak se otvara {time}.",
     openOffline: "Za prvo otvaranje rada potrebna je veza.",
@@ -708,6 +814,10 @@ export const hr = {
     loading: "Učitavanje rada…",
     empty: "Student još nije poslao tekst.",
     note: "Prikazan je zadnji tekst koji je studentov preglednik poslao. To nije zapis rada i može kasniti ili zastati.",
+    // DAN-332 (#826 PR 3): the route sent the bytes of the submitted revision.
+    // These two replace the connection line and the note beside that text.
+    submitted: "Predani rad",
+    submittedNote: "Prikazana je verzija rada koju je student predao. Ova se verzija više ne mijenja.",
     signIn: "Prijavi se",
     signInFirst: "Prijavite se da vidite rad.",
     invalid: "Ova poveznica ne vodi do rada.",
@@ -738,6 +848,7 @@ export const hr = {
     signedOut: "Prijavite se da predate rad.",
     signIn: "Prijavi se",
     backToWork: "Natrag na rad",
+    notStarted: "Rad još nije započet. Započni ga u radnom prostoru.",
     steps: { check: "1 Provjera zapisa", submit: "2 Predaja", receipt: "3 Potvrda" },
     loading: "Učitavanje teksta s poslužitelja…",
     textTitle: "Ovo je tekst koji predajete.",
@@ -805,7 +916,11 @@ export const hr = {
   // and PRODUCT §5 rules 4 and 7; D-24 and D-81 for the 30-second steps.
   // AssignmentNotice renders recorded, notRecorded and teacher in key order.
   // Live view and replay are not built yet, so the notice says what will happen
-  // in this assignment; D-63 for the skipped long pauses of the replay.
+  // in this assignment. D-63 as corrected on 31. 10. 2026. (#87 c.6544361788,
+  // PRODUCT §5 rule 4 exception): the replay neither skips nor marks pauses.
+  // The notice names the P-01 sessions as the one measure taken from time.
+  // recorded.live also names the input mark the mentor sees (D-54, D-127,
+  // src/editor/source.ts).
   student: {
     title: "Zadatak",
     // DAN-344 (Archivum S03): the way back from the notice to /zadaci, verbatim from the package.
@@ -822,6 +937,34 @@ export const hr = {
       due: "Rok {time}",
       noticeFirst: "Prvo pročitajte obavijest",
     },
+    // DAN-309 (M2.3-P02, B2): "Moji radovi" on /zadaci/radovi. Each state is
+    // told only from what the server read returned; nothing about the text.
+    works: {
+      title: "Moji radovi",
+      lede: "Vaši radovi na svim kolegijima i njihovo stanje.",
+      search: "Traži po naslovu ili kolegiju",
+      year: "Akademska godina",
+      allYears: "Sve godine",
+      apply: "Prikaži",
+      reset: "Poništi odabir",
+      noMatch: "Nijedan rad ne odgovara odabiru.",
+      emptyHeading: "Još nemate radova.",
+      emptyBody: "Radovi se ovdje prikazuju kad se upišete u kolegij sa zadatkom.",
+      enroll: "Upiši kolegij kodom",
+      list: "Popis radova",
+      due: "Rok {time}",
+      state: {
+        newVersion: "Nova verzija uputa ({version}), još nije potvrđena",
+        notice: "Upute još nisu potvrđene",
+        notStarted: "Rad nije započet",
+        inProgress: "Rad je započet, nije predan",
+        submitted: "Predano {time}",
+        afterDeadline: "Predano {time}, nakon roka",
+      },
+      readNotice: "Pročitaj upute",
+      start: "Otvori zadatak",
+      open: "Otvori rad",
+    },
     // DAN-344: the Archivum S01 texts of /zadaci, verbatim from the owner's
     // package (26. 10. 2026.), in "Vi"; the subtitle without its mentoring
     // half, which this page does not have. Only what the own-assignments read
@@ -830,6 +973,9 @@ export const hr = {
       heading: "Vaš studentski prostor",
       lede: "Zadaci na kolegijima.",
       courses: "Moji kolegiji",
+      // S02 subtitle: chosen by the orchestrator (Daniel left it to them, 26. 10. 2026.),
+      // not the PNG's, because the student has no course page to open.
+      coursesLede: "Kolegiji na koje ste upisani i njihovi zadaci.",
       courseLabel: "Kolegij",
       due: "Rok: {time}",
       open: "Otvori zadatak",
@@ -884,21 +1030,23 @@ export const hr = {
     loading: "Učitavanje zadatka…",
     notOpen: "Zadatak se otvara {time}. Obavijest potvrđujete kad se zadatak otvori.",
     pastDue: "Rok zadatka je prošao {time}.",
-    step: `Obavijest prije prve rečenice · korak ${NOTICE_STEP_COUNT}`,
-    opensFrom: "otvoreno od",
-    due: "rok",
+    // DAN-344 (Archivum S03-a, #923 c.6545848868): the header verbatim from
+    // S03_upute.png; "otvoreno od" is gone (owner, c.6435071376 point 2).
+    step: "Prije pisanja",
+    courseEyebrow: "Kolegij",
+    dueAt: "Rok: {time}",
     toolsHeading: "Uporaba alata u ovom zadatku (FPZG čl. 8)",
     noTools: "U ovom zadatku uporaba alata generativne umjetne inteligencije nije dopuštena.",
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
-      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To će služiti samo prikazu uživo i reprodukciji.",
+      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. Uz svaku promjenu bilježit će se i način unosa, pa će nastavnik (mentor) vidjeti oznaku kad uređivač uz unos nije vidio pritisak tipke ni lijepljenje, na primjer kod diktiranja, nekih tipkovnica na mobitelu ili pomoćnih alata. Oznaka govori samo kako je tekst ušao u uređivač, ne tko ga je napisao. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodate.",
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
-      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, ritam ni bilo kakva mjera. Reprodukcija preskače duge stanke i ne navodi koliko su trajale.",
+      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena ne računaju se brzina, ritam ni bilo kakva mjera, osim sesija: sesije se određuju prekidom dužim od praga P-01. Reprodukcija neće preskakati ni isticati stanke.",
       outside: "Druge aplikacije i kartice preglednika, kamera, mikrofon i zaslon.",
       device: "IP adresa i podaci o uređaju.",
     },
@@ -909,6 +1057,9 @@ export const hr = {
       replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćete i Vi.",
       purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidite Vi.",
+      // DAN-235 (D-130, PRODUCT §5 rules 5 and 17): the mentor's working records by kind.
+      // Rubric, report draft and grade publication are conditional (D-135, D-136): stated as unavailable, never promised.
+      workingNotes: `Mentor (nastavnik zadatka) moći će voditi i radne zapise o Vašem radu: oznaku zadnjeg pregleda s vremenom, privatne bilješke i predloške komentara. Oni nisu prikaz rada: nećete ih vidjeti u aplikaciji, ali ćete ih moći zatražiti pravom pristupa. U njima nema mjera ni zaključaka koje je izračunala ${APP_NAME}. Ne ulaze u sažetak, izvoz ni predaju, brišu se kad i rad i ne smiju utjecati na kašnjenje ni ocjenu. Rubrika i nacrt izvješća također bi bili radni zapisi, ali se u Ducturi zasad ne vode. Ni objava ocjene u Ducturi zasad nije dostupna.`,
       noVerdict: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja.`,
     },
     // D-05, PRODUCT §6 "Profili evidencije": only for the extended profile.
@@ -989,6 +1140,8 @@ export const hr = {
     // app sends nothing to the server yet, so it promises no sending (#476).
     logoutTitle: "Odjava",
     logoutConfirm: "Odjavi se",
+    // Unsaved text (#1331): sign-out is still allowed (D-118) but named for what it costs.
+    logoutConfirmUnsaved: "Odjavi se bez izvoza",
     logoutStay: "Ostani",
     logoutPlain: "Odjava zatvara sesiju na ovom uređaju.",
     logoutPending: {
@@ -1037,16 +1190,61 @@ export const hr = {
   // the one way in; nothing here describes what is recorded (the notice of
   // each assignment does, PRODUCT §5 rule 6).
   prijava: {
+    // Archivum sign-in (owner's design package of 26 Oct 2026, DAN-344).
     title: "Prijava",
-    titleAccent: "u radni prostor",
-    lead: `${APP_NAME} je prostor u kojem pišeš seminarske, završne i diplomske radove, a mentor ih prati od prve rečenice do predaje.`,
-    motto: `${APP_NAME} ne piše umjesto tebe. Pomaže ti da napišeš svoj rad i pokažeš kako je nastao.`,
-    cardTitle: "Za studente i nastavnike",
-    cardBody: "Prijavi se korisničkim računom AAI@EduHr, istim kojim se prijavljuješ u Studomat i Merlin.",
+    back: "Na naslovnicu",
+    // D-181: the reader is addressed with "Vi" (Codex P2 on #879, 6ea3ced8).
+    eyebrow: "Vaš akademski prostor",
+    heading: "Dobro došli",
+    headingMore: "u svoj",
+    headingAccent: "prostor.",
+    lead: "Jedan ulaz za studente i nastavnike.",
+    leadMore: "Pisanje, povratna informacija i razgovor o radu.",
+    paperMeta: `${APP_NAME} / akademski rad`,
+    paperTitle: "Prije prve",
+    paperTitleAccent: "rečenice.",
+    paperNote: "Jasne upute. Povezan razgovor.",
+    paperStudent: "Student piše.",
+    paperTeacher: "Nastavnik usmjerava.",
+    cardEyebrow: "Prijava",
+    cardTitle: "Vaš akademski",
+    cardTitleAccent: "identitet.",
+    cardBody: "Prijavite se korisničkim računom AAI@EduHr, istim kojim se prijavljujete u Studomat i Merlin. Studenti i nastavnici koriste isti ulaz.",
     button: "Prijava sustavom AAI@EduHr",
-    passwordNote: "Lozinku upisuješ samo kod AAI@EduHr.",
-    codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
-    help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
+    passwordNote: "Lozinku upisujete samo kod AAI@EduHr.",
+    roleTitle: "Jedan ulaz. Vaš prostor.",
+    roleBody: "Nakon prijave otvara se vaš prostor prema dodijeljenoj ulozi. Ulogu nastavnika potvrđuje administrator fakulteta.",
+    codeSummary: "Prvi dolazak ili imate kod zadatka?",
+    codeNote: "Prvo se prijavite sustavom AAI@EduHr. Kod zadatka od nastavnika upisujete nakon prijave.",
+    footer: "Identitet AAI@EduHr · pristup prema dodijeljenoj ulozi",
+    helpSummary: "Trebate pomoć?",
+    helpAaiTitle: "Ne možete se prijaviti računom AAI@EduHr?",
+    helpAaiBody: "Za zaboravljenu korisničku oznaku ili lozinku obratite se službi svoje matične ustanove.",
+    helpAaiLink: "Službena pomoć AAI@EduHr",
+    helpAccessTitle: "Prijava je uspjela, ali nemate pristup?",
+    helpAccessBody: "Javite se koordinatoru na svojoj ustanovi.",
+  },
+  // DAN-378 (M1.8): Z-03, a closed session behind the cookie; signed out,
+  // with no session ever shown; Z-05, signed in without the role (UX pass
+  // DAN-450, #1091 c.6561627758). Z-05 speaks of the own account only.
+  access: {
+    expiredTitle: "Sesija je istekla",
+    expiredBody: "Zbog neaktivnosti odjavljeni ste. Prijavite se ponovno i nastavite gdje ste stali.",
+    signedOutTitle: "Niste prijavljeni.",
+    signedOutBody: "Prijavite se da vidite {what}.",
+    what: {
+      courses: "svoje kolegije",
+      newCourse: "obrazac za novi kolegij i zadatak",
+      assignmentVersion: "obrazac za novu verziju zadatka",
+      fastPath: "brz put kroz radove",
+      mentoredWorks: "radove uz mentora",
+      home: "svoj prostor",
+    },
+    deniedTitle: "Nemate pristup ovom prikazu",
+    deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
+    deniedPending: "Ulogu nastavnika potvrđuje administrator fakulteta. Dok se ne potvrdi, ovaj prikaz nije dostupan.",
+    deniedNext: "Javite se koordinatoru na svojoj ustanovi.",
+    backToOwn: "Natrag na moj prostor",
   },
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
   errorPage: {

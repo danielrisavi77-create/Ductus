@@ -4,7 +4,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 
 ## Pročitaj na početku
 - Skill `ductus-review` i odjeljak "Neovisni pregled" u `AGENTS.md`: redoslijed provjera i oblik nalaza.
-- Samo diff PR-a i odjeljke koji ga se tiču: `CLAUDE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3, §4 i §6 kad je primjenjivo, zapis odluke u `docs/DECISIONS.md` (`docs/SESSIONS.md` §4).
+- Samo diff PR-a i odjeljke koji ga se tiču: `CLAUDE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3, §4 i §6 (indeks; tekst je u `docs/backend/`) kad je primjenjivo, zapis odluke u `docs/DECISIONS.md` (`docs/SESSIONS.md` §4).
 - Opis PR-a: `Risk`, ugovor i "Poznate granice". Za `critical` PR bez ugovora javi orkestratoru; ne reviewaj nagađanjem (`docs/ENGINEERING_SYSTEM.md` §14 t. 1).
 - Kontrolni skill koji odgovara diffu (popis u `.claude/skills/ductus-worker/SKILL.md`) kao popis što provjeriti.
 
@@ -24,4 +24,5 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 - Nalaz izvan ugovora i "Poznatih granica" je manji samo ako granica ima trag vlasnikova odobrenja; nalaz koji dira tvrdo pravilo iz `CLAUDE.md`, `docs/PRODUCT.md` §5 ili granicu povjerenja nikad (`docs/ENGINEERING_SYSTEM.md` §14 t. 2).
 - Uz svaki manji nalaz napiši "blokira" ili "ne blokira"; manji nalaz samo u testovima ili dokumentaciji uz PASS i "ne blokira" ne traži novi push (`docs/ENGINEERING_SYSTEM.md` §14 t. 5).
 - Za `critical` PASS vrijede različiti Appovi ili uvjeti iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par (D-158) na aktualnom headu ili prenesen kroz dokazani D-101 (D-161). D-158 je prihvaćen i spojen kroz #538; stvarna neovisnost ostaje obvezna.
-- Ne prijavljuj stil ni ono što hvata linter (`AGENTS.md`).
+- Kod izuzeća od gatea ili CI provjere napadaj klasu, ne samo primjer: traži putanju izvan popisa dozvoljenog koju izuzeće ipak pokriva i mjesto koje ne čita isti izvor putanja (`docs/ENGINEERING_SYSTEM.md` §14 t. 8).
+- Ne prijavljuj stil koda ni ono što hvata linter (`AGENTS.md`). Izgled sučelja nije stil koda: za PR sučelja usporedi snimke s referentnom slikom iz paketa; neobrazloženo odstupanje je blokirajući nalaz, a PR bez snimki vrati piscu (D-183).

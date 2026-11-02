@@ -54,8 +54,9 @@ const PAGE = `<!doctype html>
 </html>`;
 
 let bundle: Promise<string> | undefined;
+const bundles = new Map<string, Promise<string>>();
 
-async function buildBundle(): Promise<string> {
+async function buildBundle(entry: string, name: string): Promise<string> {
   const fromHere = createRequire(import.meta.url);
   const fromVitest = createRequire(fromHere.resolve("vitest/package.json"));
   const vite = (await import(pathToFileURL(fromVitest.resolve("vite")).href)) as Bundler;
@@ -68,11 +69,11 @@ async function buildBundle(): Promise<string> {
     build: {
       write: false,
       minify: false,
-      lib: { entry: path.join(here, "evidence-harness.entry.ts"), formats: ["iife"], name: "EvidenceHarness" },
+      lib: { entry: path.join(here, entry), formats: ["iife"], name },
     },
   });
   const code = (Array.isArray(result) ? result[0] : result).output[0]?.code;
-  if (!code) throw new Error("evidence harness: the bundle is empty");
+  if (!code) throw new Error(`${entry}: the bundle is empty`);
   return code;
 }
 
@@ -82,20 +83,30 @@ async function buildBundle(): Promise<string> {
  * directory, the others read it.
  */
 export function prepareEvidenceHarness(outputDir: string): Promise<string> {
-  bundle ??= (async () => {
-    const directory = path.join(outputDir, ".evidence-harness");
-    const file = path.join(directory, `bundle-${process.ppid}.js`);
-    await mkdir(directory, { recursive: true });
-    return withLock(path.join(directory, "build.lock"), 120_000, async () => {
-      const ready = await readFile(file, "utf8").catch(() => null);
-      if (ready) return ready;
-      const code = await buildBundle();
-      await writeFile(`${file}.${process.pid}`, code);
-      await rename(`${file}.${process.pid}`, file);
-      return code;
-    });
-  })();
+  bundle ??= prepareBundle(outputDir, "evidence-harness.entry.ts", "EvidenceHarness");
   return bundle;
+}
+
+/** The same for any harness entry in this directory, built once per run. */
+export function prepareBundle(outputDir: string, entry: string, name: string): Promise<string> {
+  let ready = bundles.get(entry);
+  if (!ready) {
+    ready = (async () => {
+      const directory = path.join(outputDir, ".evidence-harness");
+      const file = path.join(directory, `${path.basename(entry, ".entry.ts")}-${process.ppid}.js`);
+      await mkdir(directory, { recursive: true });
+      return withLock(path.join(directory, "build.lock"), 120_000, async () => {
+        const built = await readFile(file, "utf8").catch(() => null);
+        if (built) return built;
+        const code = await buildBundle(entry, name);
+        await writeFile(`${file}.${process.pid}`, code);
+        await rename(`${file}.${process.pid}`, file);
+        return code;
+      });
+    })();
+    bundles.set(entry, ready);
+  }
+  return ready;
 }
 
 /** A lock shared by the worker processes: a directory only one of them can create. */
@@ -137,8 +148,14 @@ export type CommitBody = {
  */
 export type Answer = "accept" | "hang" | "abort" | "chain_conflict" | "tamper";
 
-export function receiptKey(keyId: string) {
-  const pair = generateKeyPairSync("ed25519");
+/**
+ * A fresh Ed25519 key for the run. `leadingZero` draws until the public point
+ * starts with 0x00, about one key in 256, which WebKit on Linux refuses to
+ * import as SPKI (#1247).
+ */
+export function receiptKey(keyId: string, { leadingZero = false } = {}) {
+  let pair = generateKeyPairSync("ed25519");
+  while (leadingZero && pair.publicKey.export({ type: "spki", format: "der" })[12] !== 0) pair = generateKeyPairSync("ed25519");
   const key: EvidenceDomainKey = {
     algorithm: "Ed25519", keyId, keyVersion: "1", encoding: "spki-der",
     keyBase64Url: pair.publicKey.export({ type: "spki", format: "der" }).toString("base64url"),
@@ -166,13 +183,17 @@ const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex
 export class EvidenceServer {
   readonly calls: { key: string; text: string; body: CommitBody }[] = [];
   readonly answers: Answer[] = [];
-  readonly signer = receiptKey("kljuc-izmisljeni-e2e");
+  readonly signer: ReturnType<typeof receiptKey>;
   revision = R0;
   head: string | null = null;
   lastSequenceTo = 0;
   maxInFlight = 0;
   private readonly keys = new Map<string, number>();
   private open = 0;
+
+  constructor({ leadingZero = false } = {}) {
+    this.signer = receiptKey("kljuc-izmisljeni-e2e", { leadingZero });
+  }
 
   config(seedText = "Uvod"): HarnessConfig {
     return {

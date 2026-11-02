@@ -6,7 +6,7 @@ BEGIN;
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(771);
+SELECT plan(1091);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
@@ -14,8 +14,9 @@ SELECT bag_eq(
   $$ SELECT c.relname::text FROM pg_class c
      WHERE c.relnamespace = 'institution'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f') $$,
   ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
-        'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship'],
-  'the institution schema holds exactly the eleven tables of this matrix'
+        'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
+        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member'],
+  'the institution schema holds exactly the sixteen tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -48,7 +49,11 @@ SELECT bag_eq(
     'ductus_app SELECT assignment',
     'ductus_app SELECT assignment_version',
     'ductus_app SELECT notice_acknowledgment',
-    'ductus_app SELECT mentorship'
+    'ductus_app SELECT mentorship',
+    'ductus_app SELECT course_holder',
+    'ductus_app SELECT seminar_group',
+    'ductus_app SELECT seminar_group_teacher',
+    'ductus_app SELECT seminar_group_member'
   ],
   'besides the owner only ductus_app holds a privilege on an institution table, and only SELECT'
 );
@@ -82,9 +87,18 @@ SELECT bag_eq(
     'notice_acknowledgment: notice_acknowledgment_read SELECT to ductus_app',
     'faculty_work_rule: faculty_work_rule_owner ALL to ductus_identity',
     'mentorship: mentorship_owner ALL to ductus_identity',
-    'mentorship: mentorship_read SELECT to ductus_app'
+    'mentorship: mentorship_read SELECT to ductus_app',
+    'notification: notification_owner ALL to ductus_identity',
+    'course_holder: course_holder_owner ALL to ductus_identity',
+    'course_holder: course_holder_read SELECT to ductus_app',
+    'seminar_group: seminar_group_owner ALL to ductus_identity',
+    'seminar_group: seminar_group_read SELECT to ductus_app',
+    'seminar_group_teacher: seminar_group_teacher_owner ALL to ductus_identity',
+    'seminar_group_teacher: seminar_group_teacher_read SELECT to ductus_app',
+    'seminar_group_member: seminar_group_member_owner ALL to ductus_identity',
+    'seminar_group_member: seminar_group_member_read SELECT to ductus_app'
   ],
-  'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt and faculty_work_rule'
+  'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
 -- A version is immutable by its triggers, and one of a mentorship's assignment
 -- stays within the faculty's rule; losing one must change this list.
@@ -93,8 +107,8 @@ SELECT bag_eq(
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
      WHERE c.relnamespace = 'institution'::regnamespace AND NOT t.tgisinternal $$,
   ARRAY['assignment_version: assignment_version_immutable 27 O', 'assignment_version: assignment_version_no_truncate 34 O',
-        'assignment_version: assignment_version_mentorship_rule 7 O'],
-  'triggers: before every UPDATE and DELETE of a row, before TRUNCATE and before every INSERT of a row of assignment_version, all enabled'
+        'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O'],
+  'triggers: immutable versions, mentorship validation and transactional notification, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -114,6 +128,7 @@ SELECT bag_eq(
     'actor_has_role(p_role text) definer app',
     'actor_course_role(p_course_id uuid) definer app',
     'confirm_teacher_role(p_candidate_id uuid) definer app',
+    'list_teacher_candidates() definer app',
     'create_course(p_name text, p_academic_year text, p_ai_policy text) definer app',
     'create_enrollment_code(p_course_id uuid, p_valid_until timestamp with time zone) definer app',
     'revoke_enrollment_code(p_course_id uuid) definer app',
@@ -121,6 +136,8 @@ SELECT bag_eq(
     'remove_student(p_course_id uuid, p_student_id uuid) definer app',
     'allow_student_return(p_course_id uuid, p_student_id uuid) definer app',
     'revoke_teacher_role(p_teacher_id uuid) definer app',
+    'teachers_without_affiliation() definer app',
+    'institution_overview() definer app',
     'ai_policy_rank(p_ai_policy text)',
     'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean)',
     'refuse_change()',
@@ -133,7 +150,16 @@ SELECT bag_eq(
     'has_acknowledged_current(p_assignment_id uuid) definer app',
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',
-    'check_mentorship_version() definer'
+    'check_mentorship_version() definer',
+    'notify_assignment_version() definer',
+    'require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid)',
+    'is_confirmed_teacher(p_user_id uuid, p_course_id uuid)',
+    'set_course_holder(p_course_id uuid, p_holder_id uuid) definer app',
+    'create_seminar_group(p_course_id uuid, p_name text) definer app',
+    'assign_group_teacher(p_group_id uuid, p_teacher_id uuid) definer app',
+    'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
+    'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app',
+    'can(p_action text, p_document_id text) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
@@ -187,12 +213,13 @@ FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_aut
                   'ductus_migrator', 'ductus_test_stranger']) WITH ORDINALITY AS r (role, n)
 CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code',
                         'course_member', 'enrollment_attempt', 'assignment', 'assignment_version',
-                        'notice_acknowledgment', 'faculty_work_rule', 'mentorship']) WITH ORDINALITY AS t (tbl, n)
+                        'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
+                        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(
   pg_temp.probe(role, 'anon', tbl, op),
-  CASE WHEN role = 'ductus_app' AND op = 'SELECT' AND tbl NOT IN ('enrollment_attempt', 'faculty_work_rule') THEN 'rows=0'
+  CASE WHEN role = 'ductus_app' AND op = 'SELECT' AND tbl NOT IN ('enrollment_attempt', 'faculty_work_rule', 'notification') THEN 'rows=0'
        WHEN role IN ('ductus_app', 'ductus_migrator') THEN 'no table privilege'
        ELSE 'no schema privilege' END,
   format('%s: %s on %s', role, op, tbl)

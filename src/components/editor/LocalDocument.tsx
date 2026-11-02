@@ -251,6 +251,7 @@ export function LocalDocumentProvider({
     extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput, ArrowCollapse, observer.extension],
     editable: false,
     immediatelyRender: false,
+    injectCSS: false, // app/prosemirror.css (DAN-489)
     editorProps: {
       attributes: () => ({
         role: "textbox",
@@ -399,7 +400,8 @@ export function LocalDocumentProvider({
         return;
       }
       // Only the tab holding the lock opens the work (3d-2c2 §4, one writer).
-      const { saver, evidence } = createDocumentSaver({ journal, documentId, assignmentId });
+      // No evidence request leaves a tab whose sign-in has ended (F-154).
+      const { saver, evidence } = createDocumentSaver({ journal, documentId, assignmentId, current: () => !ended() });
       // The cleanup's flush may still emit after `setSnapshot(null)`; what the
       // old saver reports then must not come back as the next lock's notice.
       const unsubscribe = saver.subscribe((next) => {
@@ -625,6 +627,21 @@ async function postLogout(): Promise<boolean> {
 }
 
 /**
+ * After a successful `postLogout`: the same POST once more, natively, so the
+ * browser follows the route's redirect on to the provider's logout (DAN-212);
+ * the fetch cannot follow it. It arrives without the cookie, so it closes
+ * nothing twice. A form of its own, so it holds while the page re-renders.
+ */
+function followLogoutNatively(): void {
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = "/api/auth/logout";
+  form.hidden = true;
+  document.body.append(form);
+  form.submit();
+}
+
+/**
  * After sign-out, from a tab that does not write the document: deletes the
  * journal if no other tab holds the document and nothing is unconfirmed.
  * Anything else leaves it to this person's next sign-in.
@@ -829,7 +846,7 @@ export function LocalLogout() {
       setWorking(false);
     };
     void signOut().then((done) => {
-      if (done) window.location.assign("/");
+      if (done) followLogoutNatively();
       else failure();
     }, failure);
   };

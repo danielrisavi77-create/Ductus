@@ -44,14 +44,15 @@ export function loadProcessSummaryThresholds(
   return { sessionBreakAboveMinutes, pasteListedAboveCharacters };
 }
 
-type SourceRow = {
+export type SourceRow = {
   outcome?: unknown;
   institution_id?: unknown;
   evidence_package_id?: unknown;
   segment_hashes?: unknown;
 };
 
-function sourceResult(rows: SourceRow[]): ProcessSummarySourceResult {
+/** The row of a record source read (summary or replay) as the port's result. */
+export function sourceResult(rows: SourceRow[]): ProcessSummarySourceResult {
   const malformed = { status: "unavailable", reason: "source_malformed" } as const;
   if (rows.length !== 1) return malformed;
   const { outcome, institution_id: institutionId, evidence_package_id: packageId, segment_hashes: hashes } = rows[0];

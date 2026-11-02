@@ -48,6 +48,25 @@ describe("pr-metadata-precheck hook", { timeout: 30_000 }, () => {
     expect(run("gh pr view 12").status).toBe(0);
   });
 
+  // DAN-481: relevant shapes still get the full check (a bad Agent line blocks).
+  const bad = "Agent: claude:desktop:platform\nRisk: low\nTask: DAN-1";
+  it.each([
+    ["extra spaces", `gh   pr  create --title x --body "${bad}"`],
+    ["gh.exe path", `"C:\\Program Files\\GitHub CLI\\gh.exe" pr create --title x --body "${bad}"`],
+    ["chained command", `cd docs && git status && gh pr create --title x --body "${bad}"`],
+    ["PowerShell form", `& 'C:\\gh\\gh.exe' pr create --title x --body "${bad}"; echo done`],
+  ])("still runs the full check for %s", (_name, command) => {
+    expect(run(command).status).toBe(2);
+  });
+
+  it("exits 0 at once for commands that are neither gh pr nor git push", () => {
+    for (const command of ["ls -la", "pnpm test", "echo gh", "git status", ""]) {
+      expect(run(command).status).toBe(0);
+    }
+    // Outside a repository a PR command would block (DAN-137); these never reach that.
+    expect(runIn("pnpm lint", cwd).status).toBe(0);
+  });
+
   it("passes a heredoc body with valid metadata", () => {
     expect(run(heredoc("claude:desktop:platforma")).status).toBe(0);
   });
@@ -154,6 +173,15 @@ describe("pr-auto-merge hook", { timeout: 30_000 }, () => {
   it("leaves standard and critical PRs alone", () => {
     expect(decide(create("standard"), url)).toBe("");
     expect(decide(create("critical"), url)).toBe("");
+  });
+
+  it("does nothing for commands that cannot create a PR (DAN-481)", () => {
+    expect(decide("pnpm test", url)).toBe("");
+    expect(decide("git status", url)).toBe("");
+  });
+
+  it("still selects a low-risk create in a chained or spaced command", () => {
+    expect(decide(`cd . && gh   pr create --title "x" --body "Agent: claude:a:platforma\nRisk: low\nTask: DAN-1"`, url)).toBe(url);
   });
 
   it("does nothing when no PR was created", () => {

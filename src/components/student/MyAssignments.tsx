@@ -26,14 +26,16 @@ function dueHr(iso: string): string {
  * and sends an unacknowledged notice to /zadatak/<id> (PRODUCT §5 rule 6).
  * The list arrives ordered from the read and is drawn as it comes. Written
  * with `createElement`, like TeacherCourses, so unit tests need no JSX compiler.
+ * `level` is the course name's heading level: h3 under the "Moji kolegiji" h2
+ * of S01, h2 right under the page h1 of S02, so no heading level is skipped.
  */
-export default function MyAssignments({ courses }: { courses: readonly MyCourse[] }) {
+export default function MyAssignments({ courses, level = 3 }: { courses: readonly MyCourse[]; level?: 2 | 3 }) {
   return h("div", { className: styles.grid },
     courses.map((course) =>
       h("section", { key: course.id, className: styles.course, "aria-labelledby": `kolegij-${course.id}` },
         h("header", { className: styles.head, "data-motif": courseMotif(course.id) },
           h("p", { className: styles.eyebrow }, home.courseLabel),
-          h("h3", { id: `kolegij-${course.id}`, className: styles.courseName }, course.name)),
+          h(`h${level}`, { id: `kolegij-${course.id}`, className: styles.courseName }, course.name)),
         course.assignments.length === 0
           ? h("p", { className: styles.none }, t.noAssignments)
           : h("ul", { className: styles.assignments },

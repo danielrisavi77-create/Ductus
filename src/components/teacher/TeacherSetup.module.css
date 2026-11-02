@@ -90,8 +90,8 @@
 
 .control:focus-visible,
 .check input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
 }
 
 .check {

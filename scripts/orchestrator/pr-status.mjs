@@ -1,7 +1,7 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
-import { checkRollup, openPrsWithPaths, prComments, readGate } from "./gh.mjs";
+import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
 import {
-  evaluateChecks, formatOverlaps, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
+  evaluateChecks, externalReason, formatStatusRow, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
 } from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
@@ -12,7 +12,7 @@ function formatChecks({ total, bad }) {
   return `${bad.length}/${total} ${bad.slice(0, 3).map((b) => `${b.name}=${b.state}`).join(", ")}`;
 }
 
-async function row(pr) {
+async function row(pr, origin) {
   const [gate, comments, rollup] = await Promise.all([
     readGate(pr.headRefOid).then((g) => (g?.error ? undefined : g)),
     prComments(pr.number).catch(() => undefined),
@@ -26,6 +26,8 @@ async function row(pr) {
     head: pr.headRefOid.slice(0, 8),
     base: pr.baseRefName,
     draft: pr.isDraft,
+    // F-010: reason the PR waits for the owner to adopt it, or null.
+    external: externalReason(pr, origin.repository, origin.owner),
     agent,
     risk,
     ci: rollup ? formatChecks(evaluateChecks(rollup)) : "?",
@@ -37,15 +39,15 @@ async function row(pr) {
 
 try {
   const prs = await openPrsWithPaths();
+  const { owner, repo } = await repoId();
+  const origin = { repository: `${owner}/${repo}`, owner };
   const pairs = overlapPairs(prs);
-  const rows = (await Promise.all(prs.map(row))).map((r) => ({ ...r, overlaps: overlapsOf(r.number, prs, pairs) }));
+  const rows = (await Promise.all(prs.map((pr) => row(pr, origin)))).map((r) => ({ ...r, overlaps: overlapsOf(r.number, prs, pairs) }));
   if (json) {
     console.log(JSON.stringify(rows, null, 2));
   } else {
     for (const r of rows) {
-      console.log(
-        `#${r.number} ${r.head} ${r.base}${r.draft ? " DRAFT" : ""} | ${r.agent ?? "-"} | ${r.risk ?? "-"} | ci ${r.ci} | gate ${r.gate} | review ${r.review} | qa ${r.qa} | preklapa: ${formatOverlaps(r.overlaps)}`,
-      );
+      console.log(formatStatusRow(r));
     }
     if (!rows.length) console.log("no open PRs");
   }

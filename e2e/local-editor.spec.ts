@@ -1,6 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+import { LOCAL_DEMO_DOCUMENT_ID, LOCAL_DEMO_SCOPE_HASH } from "../src/lib/journal/local-scope";
+import { caretAtEnd } from "./support/caret";
+
 /**
  * The local editor on /rad (F-3 step 1b, plan #197). Playwright gives every
  * test a fresh browser context, so every test starts with an empty IndexedDB.
@@ -305,6 +308,39 @@ test.describe("local editor (#197)", () => {
     await expect(editorOf(second)).toHaveText("Tekst iz prve kartice, dopisan i nastavljen");
   });
 
+  test("the journal lock is named for this scope and this document, and the editor holds exactly that one", async ({ page }) => {
+    await openEditor(page);
+    const held = await page.evaluate(async () => (await navigator.locks.query()).held?.map((lock) => lock.name) ?? []);
+    expect(held).toEqual([`ductus-journal:${LOCAL_DEMO_SCOPE_HASH}:${LOCAL_DEMO_DOCUMENT_ID}`]);
+  });
+
+  test("a lock held for another document neither blocks this one nor is taken by it", async ({ page, context }) => {
+    const other = `ductus-journal:${LOCAL_DEMO_SCOPE_HASH}:another-document`;
+    const own = `ductus-journal:${LOCAL_DEMO_SCOPE_HASH}:${LOCAL_DEMO_DOCUMENT_ID}`;
+    // Another tab of the same origin holds the lock of a different document for as long as it is open.
+    const holder = await context.newPage();
+    await holder.goto("/");
+    await holder.evaluate((name) => new Promise<void>((granted) => {
+      void navigator.locks.request(name, () => {
+        granted();
+        return new Promise(() => {});
+      });
+    }), other);
+
+    await openEditor(page);
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
+    await expect(page.getByText(BLOCKED, { exact: false })).toHaveCount(0);
+    await typeInto(page, "Tekst drugog dokumenta");
+    await journalled(page);
+    await expect(chipOf(page)).toHaveText(DURABLE);
+
+    // Each document keeps its own lock: the other one is still held by its tab,
+    // and this document's lock is held by the editor, so a third caller gets neither.
+    const free = await holder.evaluate(async (names) => Promise.all(names.map((name) =>
+      navigator.locks.request(name, { ifAvailable: true }, (lock) => lock !== null))), [other, own]);
+    expect(free).toEqual([false, false]);
+  });
+
   test("6: without IndexedDB the author is told and the editor stays read-only", async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(window, "indexedDB", { value: undefined, configurable: true });
@@ -426,6 +462,40 @@ test.describe("local editor (#197)", () => {
     await expect(editorOf(page)).toHaveText(`${text}!`);
   });
 
+  // DAN-495, #936: on the first focus after a load the editor wrote its older selection back
+  // over the caret a test had just set, and the text was typed mid-document. The page here
+  // does that once, right after the caret is set; the text must still land at the end.
+  test("DAN-495: the caret set at the end of the text holds even when the editor resets it once", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Prvi izmisljeni odlomak.");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Drugi izmisljeni odlomak.");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Treci izmisljeni odlomak.");
+    await journalled(page);
+    await page.reload();
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page).locator("p")).toHaveCount(3);
+    await editorOf(page).evaluate((editor) => {
+      const addRange = Selection.prototype.addRange;
+      let reset = false;
+      Selection.prototype.addRange = function (this: Selection, range: Range) {
+        addRange.call(this, range);
+        const atEnd = range.collapsed && range.startContainer === editor.lastElementChild
+          && range.startOffset === editor.lastElementChild!.childNodes.length;
+        if (reset || !atEnd) return;
+        reset = true;
+        // As the editor's focus handling does: its older selection goes back to the page.
+        setTimeout(() => this.collapse(editor.firstElementChild!.firstChild, 0), 0);
+      };
+    });
+    await caretAtEnd(page, editorOf(page));
+    await page.keyboard.type(" Kraj.");
+    await expect(editorOf(page).locator("p")).toHaveText([
+      "Prvi izmisljeni odlomak.", "Drugi izmisljeni odlomak.", "Treci izmisljeni odlomak. Kraj.",
+    ]);
+  });
+
   test("5: a full device is an error that stays while typing on, with an export", async ({ page }) => {
     const device = await deviceSpace(page);
     const history = await chipHistory(page);
@@ -544,7 +614,7 @@ test.describe("local editor (#197)", () => {
       const s = getComputedStyle(el);
       return { visible: el.matches(":focus-visible"), outline: s.outlineStyle, width: s.outlineWidth };
     });
-    expect(style).toEqual({ visible: true, outline: "solid", width: "2px" });
+    expect(style).toEqual({ visible: true, outline: "solid", width: "3px" });
   });
 
   // Browsers match :focus-visible on a text field after a click as well; the

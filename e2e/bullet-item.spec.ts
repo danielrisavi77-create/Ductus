@@ -154,10 +154,10 @@ test.describe("bullet item (E1)", () => {
     await page.keyboard.type("Odlomak poslije popisa.");
     const results = await new AxeBuilder({ page }).include(".editor-toolbar").include('[role="textbox"]').analyze();
     expect(results.violations).toEqual([]);
-    await test.info().attach("e1-popis-tamni-1440", { body: await page.screenshot(), contentType: "image/png" });
-    await toolbarOf(page).getByRole("button", { name: "Prikaz" }).click();
-    await page.getByRole("menu", { name: "Prikaz" }).getByRole("menuitemradio", { name: "Bijeli list" }).click();
     await test.info().attach("e1-popis-bijeli-1440", { body: await page.screenshot(), contentType: "image/png" });
+    await toolbarOf(page).getByRole("button", { name: "Prikaz" }).click();
+    await page.getByRole("menu", { name: "Prikaz" }).getByRole("menuitemradio", { name: "Tamni list" }).click();
+    await test.info().attach("e1-popis-tamni-1440", { body: await page.screenshot(), contentType: "image/png" });
   });
 });
 
@@ -177,6 +177,6 @@ test.describe("bullet item on a phone (390 px)", () => {
     await moreButton(page).click();
     await expect(item).toHaveAttribute("aria-checked", "true");
     await page.keyboard.press("Escape");
-    await test.info().attach("e1-popis-tamni-390", { body: await page.screenshot(), contentType: "image/png" });
+    await test.info().attach("e1-popis-bijeli-390", { body: await page.screenshot(), contentType: "image/png" });
   });
 });

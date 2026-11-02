@@ -116,8 +116,8 @@ describe("receipt v2: known-answer vectors (D-92)", () => {
     expect(contract.canonicalUtf8Hex).toContain(toHex(utf8.encode('"tx-')) + "c5a1" + toHex(utf8.encode('-1"')));
   });
 
-  it("is the vector written in docs/BACKEND.md section 4.1", () => {
-    const backend = readFileSync(new URL("../../../docs/BACKEND.md", import.meta.url), "utf8");
+  it("is the vector written in docs/backend/evidencija.md section 4.1", () => {
+    const backend = readFileSync(new URL("../../../docs/backend/evidencija.md", import.meta.url), "utf8");
     expect(backend).toContain(`\`${contract.canonical}\``);
     expect(backend).toContain(`SHA-256/JCS: \`${contract.payloadDigestSha256}\``);
     expect(backend).toContain(`RAW ulaz (59B): \`${contract.signingInputHex}\``);

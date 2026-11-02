@@ -15,6 +15,10 @@ import { type DemoAccount, signIn } from "./support";
 // same refusal on the live view.
 
 const t = messagesHr.liveView;
+// The first visit to /nastavnik/rad/[id] in a shard makes `next dev` compile
+// the route, which can take longer than the default 5 s (#1008, Login 4/5).
+// The same wait as the other open routes of the login suite.
+const OPEN = 30_000;
 const SENTENCE = "Gradske knjižnice su mjesto susreta i učenja.";
 
 /** Revision zero with one invented paragraph, as exact JCS and its SHA-256. */
@@ -64,8 +68,8 @@ test.describe("teacher reaches a work by navigation", () => {
     await expect(teacher.getByRole("list", { name: courses.worksLabel }).getByRole("listitem").filter({ has: teacher.locator(`a[href="${href}"]`) }))
       .toHaveText(new RegExp(`^${courses.work} \\d+ · ${courses.submission.none}$`));
     await link.click();
-    await expect(teacher).toHaveURL(href);
-    await expect(teacher.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible();
+    await expect(teacher).toHaveURL(href, { timeout: OPEN });
+    await expect(teacher.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible({ timeout: OPEN });
 
     // Another course's teacher has no such link and, like another student, is refused
     // exactly as for an id that does not exist.

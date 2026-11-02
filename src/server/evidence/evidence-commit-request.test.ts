@@ -267,3 +267,30 @@ describe("commitEvidenceRequest with format v3", () => {
     },
   );
 });
+// DAN-453 PR 0 (#1258 G2): the real caller refuses every reserved value of
+// D-34 and D-132 before anything is stored or committed.
+describe("commitEvidenceRequest with a reserved value", () => {
+  const SUGGESTION = "33333333-3333-4333-8333-333333333333";
+  const VARIANT = "44444444-4444-4444-8444-444444444444";
+  const withFirstEvent = (evidenceSchema: string, change: Record<string, unknown>) =>
+    segmentWith({
+      evidenceSchema,
+      events: golden.segment.events.map((event, index) => (index === 0 ? { ...event, ...change } : event)),
+    });
+
+  it.each([
+    ["ductus-evidence-segment-v2", { source: "applied-suggestion", suggestionId: SUGGESTION }],
+    ["ductus-evidence-segment-v3", { source: "applied-suggestion", suggestionId: SUGGESTION }],
+    ["ductus-evidence-segment-v2", { source: "own-variant", variantId: VARIANT }],
+    ["ductus-evidence-segment-v3", { source: "own-variant", variantId: VARIANT }],
+    ["ductus-evidence-segment-v3", { source: "citation-form", suggestionId: SUGGESTION }],
+    ["ductus-evidence-segment-v2", { variantId: VARIANT }],
+    ["ductus-evidence-variant-v1", {}],
+  ])("refuses %s with %j without storing or committing", async (evidenceSchema, change) => {
+    const { run, queries, payloads } = setup();
+    expect(await run({ segment: withFirstEvent(evidenceSchema, change) })).toEqual({ status: "invalid" });
+    expect(payloads.putImmutable).not.toHaveBeenCalled();
+    expect(payloads.storageRefFor).not.toHaveBeenCalled();
+    expect(queries.map((q) => q.kind)).not.toContain("commit");
+  });
+});
