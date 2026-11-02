@@ -12,7 +12,6 @@ const LISTED_ASSOCIATIONS = new Set(["MEMBER", "COLLABORATOR"]);
 // always is, a member or collaborator only when its login is listed here.
 // Adding a login is a D-97 change; never list a bot or triage account.
 export const TRUSTED_VERDICT_LOGINS = Object.freeze([]);
-const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 export const APP_RUNTIMES = new Map([
   ["claude", new Set(["claude"])],
@@ -361,6 +360,34 @@ function prevailing({ current, carried }) {
   return carriedLater && NEGATIVE.has(carried.verdict) ? carried : current;
 }
 
+// F-027 (M0.6c, #1091): a FAIL or BLOCK the parser cannot read exactly still
+// blocks; a PASS counts only in its exact form. Any verdict line of the block,
+// also with markdown or spaces around its name, that names FAIL or BLOCK (or
+// BLOK) makes the comment negative. Read here only to find a negative.
+const NEGATIVE_WORD_RE = /\b(FAIL|BLOC?K)[A-Z]*\b/;
+const DECORATION = "[\\s*_`>~+-]*";
+function negativeWord(body, name) {
+  const line = new RegExp(`^${DECORATION}${name}${DECORATION}:(.*)$`, "i");
+  for (const text of metadataLines(body)) {
+    const word = NEGATIVE_WORD_RE.exec(line.exec(text)?.[1]?.toUpperCase() ?? "")?.[1];
+    if (word) return word === "FAIL" ? "FAIL" : "BLOCK";
+  }
+  return null;
+}
+
+// Where a negative belongs. A full SHA, or a prefix of at least seven hex
+// digits, of the current or a carried head is that head; of any other head it
+// is elsewhere (null). Anything else, missing, words, fewer than seven or more
+// than forty hex digits (r4434690343), is the current head, since nothing
+// readable names another one.
+function negativeHead(value, headSha, carriedHeads) {
+  const sha = headSha.toLowerCase();
+  const named = (value ?? "").replace(/^[\s*_`]+|[\s*_`.,;]+$/g, "").toLowerCase();
+  if (!/^[0-9a-f]{7,40}$/.test(named) || sha.startsWith(named)) return { head: sha, current: true };
+  const onCarried = [...carriedHeads].find((carriedSha) => carriedSha.toLowerCase().startsWith(named));
+  return onCarried ? { head: onCarried.toLowerCase(), current: false } : null;
+}
+
 function latestVerdicts(entries, {
   agentField,
   headField,
@@ -393,17 +420,24 @@ function latestVerdicts(entries, {
     // neither a PASS nor a FAIL, so an edit never brings back the principal's
     // earlier PASS on that head. An edited FAIL or BLOCK keeps its verdict. An
     // edit that moves the comment to another head, removes the block or names
-    // another principal is not covered here (rest of F-012, owner).
-    const counted = sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase());
-    if (!counted) continue;
-    const readable = Boolean(verdict) && VERDICTS.has(verdict) && !(extraField && !extra);
-    const held = entry.edited && !(readable && NEGATIVE.has(verdict));
-    if (!readable && !held) continue;
+    // another principal is not covered here (rest of F-012, owner). A negative
+    // in any form (F-027) keeps its verdict, edited or not, and needs no
+    // QA-Scope; its head is read by `negativeHead`.
+    const negative = negativeWord(entry.body, verdictField);
+    let place;
+    if (negative) {
+      place = negativeHead(head, headSha, carriedHeads);
+    } else if (sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) {
+      place = { head: head.toLowerCase(), current: sameHead(head, headSha) };
+    }
+    if (!place) continue;
+    const pass = !negative && verdict === "PASS" && !(extraField && !extra);
+    if (!negative && !pass && !entry.edited) continue;
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict: held ? "EDITED" : verdict, extra, fallback,
-      fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
-      current: sameHead(head, headSha) };
+    const candidate = { agent, head: place.head, verdict: negative ?? (entry.edited ? "EDITED" : "PASS"), extra,
+      fallback, fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
+      current: place.current };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
