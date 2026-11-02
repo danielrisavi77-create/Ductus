@@ -88,25 +88,23 @@ Lekta za ove staze kaže `PUBLIC`/`allowed`. To je samo razred bundlea (§2), ne
 
 ## 6. Otvoreno za vlasnika (Owner queue, bez čekanja)
 
-1. Pisana dozvola za §3: prenesena kroz zadatak DAN-513, ali izvorni tekst nije pronađen u #87 (§6a). **NEPOTVRĐENO** dok vlasnik ne potvrdi izjavu na provjerljivom mjestu. Neobavezan LICENSE/NOTICE u Lekti, ako ga vlasnik poželi.
+1. ~~Pisana dozvola za §3~~ dana i zapisana 2. 11. 2026. (zapis vlasničke odluke na #87 [c.6588746985](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6588746985), §6a). Ostaje neobavezan LICENSE/NOTICE u Lekti, ako ga vlasnik poželi.
 2. Hoće li Lekta dobiti licencu i ostati javna (D-217: vidljivost Lekte je zasebna odluka).
 3. Potvrda FPZG-a za primjenjivost na eseje i podneske i za objavu pravila (D-219).
 
 ## 6a. Zapis dozvole i opseg distribucije (M4.1-P02, DAN-513)
 
-Provjerljivi izvor: #87 [c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6578722946) (zapisao orkestrator `claude:b:orchestrator`) bilježi samo vlasnikovo prihvaćanje preporuka M4 i uvjet O1: „vlasnikova pisana dozvola za vlastiti kod i podatke”. Taj komentar **ne sadrži** izjavu niže.
+Izvor: zapis vlasničke odluke na #87 [c.6588746985](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6588746985) (2. 11. 2026., zapisao orkestrator `claude:b:orchestrator`); uvjet iz D-217 i M4-Q1 (O1).
 
-**Izjava prenesena kroz zadatak DAN-513** (Daniel, 2. 11. 2026., kako ju je orkestrator naveo u zadatku; nije provjerljiva u repou ni na #87): „Odobravam sve, pogotovo ovo za letku, pa to je moj projekt tako da mož.”
-
-**Status: NEPOTVRĐENO.** Dok vlasnik ne ponovi izjavu na provjerljivom mjestu (komentar na #87 ili LICENSE/NOTICE u Lekti), M4.2 ne smije uvoziti paket na temelju ovog zapisa.
+**Pisana dozvola vlasnika Lekte** (Daniel, 2. 11. 2026., doslovno, s izvornim tipfelerima): „Oodobravam sve, pogotovo ovo za letku, pa to je moj projekt tako da mož. Zadaj posao dodatni, pogotovo za m0”. Zapis bilježi da je pisana dozvola vlasnika Lekte dana za M4.1-P02 (DAN-513), uz opseg distribucije prema O1.
 
 | Pitanje | Zapis |
 | --- | --- |
 | Što dozvola pokriva | Vlasnikov kod i podaci Lekte, u opsegu §3 (minimalna projekcija u `config/faculties/`, samo FPZG profili, samo vrste rada sa službenim izvorom, D-219) |
 | Što dozvola ne mijenja | Isključenja iz §4 ostaju (to su odluke Ductusa, ne pravna ograničenja). Prava trećih iz §5 ostaju NEPROVJERENO; vlasnik ne može dati dozvolu za tuđe dokumente, fontove ni ovisnosti |
 | Lektin kod (zajednički modul citiranja) | Nije potvrđeno da ga ovaj citat izričito obuhvaća: ostaje zasebna pisana potvrda i zasebni zadatak (§4). Pitanje je postavljeno na #1091 |
-| Rok | Rok je 15. 12. 2026. (D-218); dozvola se računa tek nakon potvrde izvora |
-| Oblik zapisa | Provjerljiv komentar vlasnika na #87 ili LICENSE/NOTICE u Lekti; ovaj zapis sam nije dokaz |
+| Rok | Dozvola je stigla prije roka 15. 12. 2026. (D-218) |
+| Oblik zapisa | Zapis vlasničke odluke na #87 (c.6588746985) i ovaj zapis; LICENSE/NOTICE u Lekti nije uvjet |
 
 **Opseg distribucije paketa (O1):** dozvola vrijedi za isporuku paketa Ductusu, i to samo za minimalnu projekciju iz §3 koja ulazi u javni repo Ductusa (`config/faculties/`), uz verziju i hash paketa. Svaki uvoz paketa spaja se isključivo na „Spoji n” (D-217). Izvodi ga Lekta sesija (D-224). Cijeli paket (135 jedinica i 423 profila) dozvola ne daje za javnu objavu.
 
