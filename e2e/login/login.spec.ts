@@ -70,7 +70,7 @@ test("a replayed callback ends on the neutral page and opens no session", async 
   expect(await sessionRow(token)).toMatchObject({ closed_at: null });
 });
 
-test("a callback with another state ends on the neutral page without a session", async ({ page, context }) => {
+test("a callback with another state ends on the neutral page without a session", async ({ page, context, browserName }) => {
   // A redirect target cannot be routed, so the provider's redirects after the
   // account choice are followed here, and the browser gets the callback with
   // its state swapped for one the login cookie does not hold.
@@ -80,6 +80,12 @@ test("a callback with another state ends on the neutral page without a session",
       const location = new URL(response.headers()["location"] ?? "", "http://localhost:8090");
       if (location.href.startsWith(`${APP_ORIGIN}/api/auth/callback?`)) {
         location.searchParams.set("state", "x".repeat(43));
+        // Playwright's WebKit refuses to fulfill with a redirect status, so there the
+        // page navigates to the swapped callback itself (a GET, as the redirect would).
+        if (browserName === "webkit") {
+          const target = JSON.stringify(location.href).replaceAll("<", "\\u003c");
+          return route.fulfill({ status: 200, contentType: "text/html", body: `<!doctype html><script>location.replace(${target})</script>` });
+        }
         return route.fulfill({ status: 303, headers: { location: location.href } });
       }
       response = await context.request.get(location.href, { maxRedirects: 0 });
