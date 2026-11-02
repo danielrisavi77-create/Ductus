@@ -117,13 +117,15 @@ export function sourceFromFields(fields: SourceFields): SourceCheck {
   return { ok: true, source };
 }
 
+export type Source = BookSource | ArticleSource;
+
 /** The in-text citation, with the page only when one is given. */
-export function citationText(source: BookSource | ArticleSource, page: string): string {
+export function citationText(source: Source, page: string): string {
   const trimmed = page.trim();
   return formatInText(source, fpzgCitationStyle, trimmed === "" ? undefined : trimmed);
 }
 
-export function entryText(source: BookSource | ArticleSource): string {
+export function entryText(source: Source): string {
   return formatBibliographyEntry(source, fpzgCitationStyle);
 }
 
@@ -148,10 +150,9 @@ export function compareEntries(a: string, b: string): number {
  * heading and the entry go to the end. The same text twice is not added.
  */
 export function bibliographyPlan(blocks: readonly Block[], entry: string): BibliographyPlan {
-  const start = blocks.findIndex((b) => b.type === "heading" && b.text.trim() === BIBLIOGRAPHY_HEADING);
-  if (start === -1) return { kind: "insert", index: blocks.length, heading: true };
-  let end = start + 1;
-  while (end < blocks.length && blocks[end]!.type !== "heading") end++;
+  const range = section(blocks);
+  if (range === null) return { kind: "insert", index: blocks.length, heading: true };
+  const { start, end } = range;
   // The whole section first: a student may have reordered the entries by hand.
   for (let i = start + 1; i < end; i++) {
     if (blocks[i]!.text.trim() === entry) return { kind: "duplicate" };
@@ -166,7 +167,107 @@ export function bibliographyPlan(blocks: readonly Block[], entry: string): Bibli
   return { kind: "insert", index, heading: false };
 }
 
-function blocksOf(doc: PMNode): Block[] {
+const LETTERS = "abcdefghijklmnopqrstuvwxyz";
+
+/** Where a letter goes into a block: before `offset` of the block's text. */
+export type LetterAt = { index: number; offset: number; letter: string };
+
+export type SuffixPlan =
+  /** The work, with the letter it takes; `promote` letters earlier text. */
+  | { kind: "write"; source: Source; duplicate: boolean; promote: readonly LetterAt[] }
+  /** Every letter a to z is taken for this author and year: nothing is written. */
+  | { kind: "full" };
+
+// The bibliography section: the blocks after the first heading "Literatura" up to the next heading.
+function section(blocks: readonly Block[]): { start: number; end: number } | null {
+  const start = blocks.findIndex((b) => b.type === "heading" && b.text.trim() === BIBLIOGRAPHY_HEADING);
+  if (start === -1) return null;
+  let end = start + 1;
+  while (end < blocks.length && blocks[end]!.type !== "heading") end++;
+  return { start, end };
+}
+
+// The common start of a text without and with the letter "a", where the letter goes.
+function lead(plain: string, lettered: string): string {
+  let at = 0;
+  while (at < plain.length && plain[at] === lettered[at]) at++;
+  return plain.slice(0, at);
+}
+
+/**
+ * DAN-484: the letter a work takes in the year of its citation and entry
+ * (FPZG rule "same-year": 2021a, 2021b). The entries of the same authors and
+ * year in the bibliography section are its group. The same work again keeps
+ * its letter (and is a duplicate); the first other work of the group gives
+ * the one already written the letter "a", in its entry and, when no other
+ * entry shares its in-text form, in its in-text citations outside the
+ * section; then the new work takes the next free letter.
+ */
+export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
+  const base: Source = { ...work };
+  delete base.yearSuffix;
+  const plain = entryText(base);
+  const head = lead(plain, entryText({ ...base, yearSuffix: "a" }));
+  const tail = plain.slice(head.length);
+  const range = section(blocks);
+  if (range === null) return { kind: "write", source: base, duplicate: false, promote: [] };
+
+  type Member = { index: number; offset: number; letter: string | null; same: boolean };
+  const members: Member[] = [];
+  for (let i = range.start + 1; i < range.end; i++) {
+    const text = blocks[i]!.text;
+    const offset = text.length - text.trimStart().length + head.length;
+    const trimmed = text.trim();
+    if (!trimmed.startsWith(head)) continue;
+    const rest = trimmed.slice(head.length);
+    const letter = /^[a-z]\)/.test(rest) ? rest[0]! : null;
+    if (letter === null && !rest.startsWith(")")) continue;
+    members.push({ index: i, offset, letter, same: (letter === null ? rest : rest.slice(1)) === tail });
+  }
+  const same = members.find((m) => m.same);
+  if (same !== undefined) {
+    const source = same.letter === null ? base : { ...base, yearSuffix: same.letter };
+    return { kind: "write", source, duplicate: true, promote: [] };
+  }
+  if (members.length === 0) return { kind: "write", source: base, duplicate: false, promote: [] };
+
+  const free = [...LETTERS].filter((l) => !members.some((m) => m.letter === l));
+  const unlettered = members.filter((m) => m.letter === null);
+  if (free.length < unlettered.length + 1) return { kind: "full" };
+  const promote: LetterAt[] = unlettered.map((m, i) => ({ index: m.index, offset: m.offset, letter: free[i]! }));
+  // In-text citations name only the family names, so they are lettered only
+  // when exactly one entry of the section could be the one they point to.
+  if (unlettered.length === 1) {
+    const citeHead = lead(citationText(base, ""), citationText({ ...base, yearSuffix: "a" }, ""));
+    const { pageSeparator, close } = fpzgCitationStyle.inText;
+    // Another entry of the first author and year (another given name, another
+    // second author) could be what "(Horvat, 2021)" points to: then the
+    // in-text citations stay as the student wrote them.
+    const first = base.authors[0]!;
+    const family = first.kind === "person" ? `${first.family}, ` : first.name;
+    const sameForm = blocks.slice(range.start + 1, range.end).some((b, i) => {
+      const text = b.text.trim();
+      return range.start + 1 + i !== unlettered[0]!.index && text.startsWith(family) && text.includes(`(${base.year}`);
+    });
+    if (!sameForm) {
+      blocks.forEach((block, index) => {
+        if (index > range.start && index < range.end) return;
+        let from = block.text.indexOf(citeHead);
+        while (from !== -1) {
+          const next = block.text.slice(from + citeHead.length);
+          if (next.startsWith(close) || next.startsWith(pageSeparator)) {
+            promote.push({ index, offset: from + citeHead.length, letter: promote[0]!.letter });
+          }
+          from = block.text.indexOf(citeHead, from + citeHead.length);
+        }
+      });
+    }
+  }
+  return { kind: "write", source: { ...base, yearSuffix: free[unlettered.length]! }, duplicate: false, promote };
+}
+
+/** The top-level blocks of a document, as the plans read them. */
+export function blocksOf(doc: PMNode): Block[] {
   const blocks: Block[] = [];
   doc.forEach((node) => blocks.push({ type: node.type.name, text: node.textContent }));
   return blocks;
@@ -178,20 +279,56 @@ function writable(editor: Editor | null): editor is Editor {
   return editor !== null && editor.isEditable;
 }
 
+// The document position before `offset` of the text of top-level block `index`.
+function textPos(doc: PMNode, index: number, offset: number): number {
+  let pos = 0;
+  for (let i = 0; i < index; i++) pos += doc.child(i).nodeSize;
+  const block = doc.child(index);
+  let seen = 0;
+  let at = pos + 1;
+  for (let i = 0; i < block.childCount; i++) {
+    const child = block.child(i);
+    const length = child.isText ? child.text!.length : child.textContent.length;
+    if (child.isText && offset <= seen + length) return at + offset - seen;
+    seen += length;
+    at += child.nodeSize;
+  }
+  return at;
+}
+
 /**
- * Writes the citation after the selection (never over selected text) and, when
- * `entry` is given, the entry into the bibliography, in one transaction. Returns
- * false and changes nothing while the editor may not be written in or when
- * either text is not `storable`.
+ * Writes the citation of `work` after the selection (never over selected
+ * text) when `page` is given, and the entry into the bibliography when
+ * `withEntry`, in one transaction, with the letter of its year from
+ * `suffixPlan` (DAN-484). The plan is made from the sheet at the moment of the
+ * write, not from what the form showed before. Returns the work as written,
+ * or null and changes nothing while the editor may not be written in, when a
+ * text is not `storable`, or when every letter of the year is taken.
  */
-export function writeSource(editor: Editor | null, citation: string | null, entry: string | null): boolean {
-  if (!writable(editor)) return false;
-  // Text the sheet would change on the way in is never written (QA on #866).
-  if ((citation !== null && !storable(citation)) || (entry !== null && !storable(entry))) return false;
+export function writeSource(editor: Editor | null, work: Source, page: string | null, withEntry: boolean): Source | null {
+  if (!writable(editor)) return null;
+  let written: Source | null = null;
   // No focus(): a keyboard user stays in the panel they clicked in.
-  return editor.chain().command(({ tr, state }) => {
+  editor.chain().command(({ tr, state }) => {
+    const plan = suffixPlan(blocksOf(tr.doc), work);
+    // Tiptap dispatches even a command that returns false; nothing is written then.
+    const refuse = () => { tr.setMeta("preventDispatch", true); return false; };
+    if (plan.kind === "full") return refuse();
+    // "Citiraj" from the list letters nothing else: the work keeps the letter
+    // its entry has in the sheet, or the one it was written with.
+    const source = withEntry || plan.duplicate ? plan.source : work;
+    const promote = withEntry && !plan.duplicate ? plan.promote : [];
+    const citation = page === null ? null : citationText(source, page);
+    const entry = withEntry && !plan.duplicate ? entryText(source) : null;
+    // Text the sheet would change on the way in is never written (QA on #866).
+    if ((citation !== null && !storable(citation)) || (entry !== null && !storable(entry))) return refuse();
+    written = source;
     // Evidence: this change is `citation-form`, an event of its own (src/editor/source.ts).
     tr.setMeta(CITATION_FORM_META, true);
+    // From the end of the document back, so each position still holds.
+    const letters = promote.map((p) => ({ pos: textPos(tr.doc, p.index, p.offset), letter: p.letter }))
+      .sort((x, y) => y.pos - x.pos);
+    for (const { pos, letter } of letters) tr.insertText(letter, pos);
     // Everything selected (Ctrl+A) becomes a cursor at the end of the last text
     // block before the bibliography first. An `AllSelection` maps to the whole
     // new document, the added bibliography too, so the next citation would land
@@ -199,17 +336,17 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     if (tr.selection instanceof AllSelection) tr.setSelection(endOfText(tr.doc));
     if (citation !== null) tr.insertText(citation, citationAt(tr));
     if (entry === null) return true;
-    const plan = bibliographyPlan(blocksOf(tr.doc), entry);
-    if (plan.kind === "duplicate") return true;
+    const placed = bibliographyPlan(blocksOf(tr.doc), entry);
+    if (placed.kind === "duplicate") return true;
     // The cursor stays in the student's text (Codex on #866): a split at the end
     // of the block the cursor ends would otherwise carry it into the new heading.
     const kept = tr.selection;
     const from = tr.mapping.maps.length;
     const { schema } = state;
     const blocks: [NodeType, Record<string, unknown> | null, string][] = [[schema.nodes.paragraph!, null, entry]];
-    if (plan.heading) blocks.unshift([schema.nodes.heading!, { level: 1 }, BIBLIOGRAPHY_HEADING]);
+    if (placed.heading) blocks.unshift([schema.nodes.heading!, { level: 1 }, BIBLIOGRAPHY_HEADING]);
     let pos = 0;
-    for (let i = 0; i < plan.index; i++) pos += tr.doc.child(i).nodeSize;
+    for (let i = 0; i < placed.index; i++) pos += tr.doc.child(i).nodeSize;
     // Every top-level block of the schema is a text block (src/editor/schema.ts),
     // so the block before always takes a split. The evidence format writes a new block only as a split at the end of the
     // block before, as Enter does (src/editor/capture-rewrite.ts), never as a
@@ -223,6 +360,7 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     tr.setSelection(keepBefore(kept, tr, from));
     return true;
   }).run();
+  return written;
 }
 
 // The end of the last text block before the bibliography heading, or of the

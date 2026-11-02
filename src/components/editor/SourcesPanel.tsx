@@ -18,7 +18,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
 import {
-  citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
+  blocksOf, citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
   type SourceField, type SourceFields, type SourceKind,
 } from "./sources";
 import styles from "./SourcesPanel.module.css";
@@ -56,7 +56,18 @@ function SourcesForm() {
   const [listPage, setListPage] = useState("");
 
   const check = sourceFromFields(fields);
-  const invalid = new Set<SourceField>(tried && !check.ok ? [...check.missing, ...(check.yearInvalid ? ["year" as const] : []), ...check.tooLong, ...check.unstorable] : []);
+  // DAN-484: a value over its limit or one the sheet would change is shown as
+  // it is typed or pasted, never cut; an empty field only after a click.
+  const invalid = new Set<SourceField>(check.ok ? [] : [
+    ...check.tooLong, ...check.unstorable,
+    ...(tried ? [...check.missing, ...(check.yearInvalid ? ["year" as const] : [])] : []),
+  ]);
+  // The work as it would be written now, with the letter of its year (DAN-484);
+  // the write plans again from the sheet at the click.
+  const plan = useEditorState({
+    editor, selector: ({ editor: e }) => (e === null || !check.ok ? null : suffixPlan(blocksOf(e.state.doc), check.source)),
+  }) ?? null;
+  const shown = check.ok ? (plan?.kind === "write" ? plan.source : check.source) : null;
 
   // Checked again at the click: a sign-out stops writing without a render.
   const canWrite = () => editable && editor !== null && !editor.isDestroyed && editor.isEditable;
@@ -72,15 +83,29 @@ function SourcesForm() {
   const commit = (cite: boolean) => {
     setTried(true);
     if (!check.ok || !pageValid(page) || !canWrite()) return;
-    const entry = entryText(check.source);
-    if (!writeSource(editor, cite ? citationText(check.source, page) : null, entry)) return;
-    const source = check.source;
-    setAdded((list) => (list.some((item) => item.entry === entry) ? list : [...list, { entry, source }].sort((a, b) => compareEntries(a.entry, b.entry))));
+    if (writeSource(editor, check.source, cite ? page : null, true) === null) return;
+    relist(check.source);
     close();
   };
 
+  // The list follows the letters the sheet now holds: an earlier work may have become "a".
+  const relist = (extra?: Added["source"]) => {
+    if (editor === null) return;
+    const blocks = blocksOf(editor.state.doc);
+    setAdded((list) => {
+      const next: Added[] = [];
+      for (const work of [...list.map((item) => item.source), ...(extra ? [extra] : [])]) {
+        const found = suffixPlan(blocks, work);
+        const source = found.kind === "write" && found.duplicate ? found.source : work;
+        const entry = entryText(source);
+        if (!next.some((item) => item.entry === entry)) next.push({ entry, source });
+      }
+      return next.sort((a, b) => compareEntries(a.entry, b.entry));
+    });
+  };
+
   const cite = (item: Added) => {
-    if (pageValid(listPage) && canWrite()) writeSource(editor, citationText(item.source, listPage), null);
+    if (pageValid(listPage) && canWrite() && writeSource(editor, item.source, listPage, false) !== null) relist();
   };
 
   const set = (field: keyof SourceFields) => (value: string) => setFields((f) => ({ ...f, [field]: value }));
@@ -106,14 +131,15 @@ function SourcesForm() {
     </button>
   );
 
-  const errors = tried && !check.ok ? [
-    ...check.missing.map((field) => t.required.replace("{field}", t[field])),
-    ...(check.yearInvalid ? [t.yearInvalid] : []),
+  const errors = !check.ok ? [
+    ...(tried ? check.missing.map((field) => t.required.replace("{field}", t[field])) : []),
+    ...(tried && check.yearInvalid ? [t.yearInvalid] : []),
     ...check.tooLong.map((field) => t.tooLong.replace("{field}", t[field]).replace("{n}", String(FIELD_MAX[field]))),
     ...check.unstorable.map((field) => t.unstorable.replace("{field}", t[field])),
   ] : [];
-  if (tried && !pageFits(page)) errors.push(pageTooLong);
-  if (tried && !storable(page)) errors.push(t.pageUnstorable);
+  if (!pageFits(page)) errors.push(pageTooLong);
+  if (!storable(page)) errors.push(t.pageUnstorable);
+  if (plan?.kind === "full") errors.push(t.yearFull);
 
   return (
     <div className={styles.panel}>
@@ -149,16 +175,17 @@ function SourcesForm() {
           )}
           <label className={styles.field}>
             <span>{t.citePage}</span>
-            <input value={page} aria-invalid={tried && !pageValid(page) ? "true" : undefined} onChange={(event) => setPage(event.target.value)} />
+            <input value={page} aria-invalid={pageValid(page) ? undefined : "true"} onChange={(event) => setPage(event.target.value)} />
           </label>
           {errors.length > 0 ? (
-            <ul className={styles.errors} role="alert">{errors.map((text) => <li key={text}>{text}</li>)}</ul>
+            // The role sits around the list: on the list itself it takes away its items (axe, DAN-484).
+            <div role="alert"><ul className={styles.errors}>{errors.map((text) => <li key={text}>{text}</li>)}</ul></div>
           ) : null}
-          {check.ok ? (
+          {shown !== null ? (
             <section className={styles.preview} aria-labelledby={`${id}-preview`}>
               <h3 id={`${id}-preview`} className={styles.label}>{t.preview}</h3>
-              <p data-preview="citation">{citationText(check.source, page)}</p>
-              <p data-preview="entry">{entryText(check.source)}</p>
+              <p data-preview="citation">{citationText(shown, page)}</p>
+              <p data-preview="entry">{entryText(shown)}</p>
             </section>
           ) : null}
           <div className={styles.actions}>

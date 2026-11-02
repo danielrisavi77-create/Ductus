@@ -293,6 +293,48 @@ test("3d-2c2: a real paste is recorded as paste", async ({ page, context }) => {
   for (const event of carrying) expect(event.source).toBe("paste");
 });
 
+// DAN-484 (#866 "Izdvojeno u zaseban tiket" point 3): a source from the
+// Literatura tab reaches the server as a citation-form event, the second work
+// of the same author and year letters the first in that same event, and the
+// server holds the same text.
+test("DAN-484: the Literatura tab's text reaches the server as citation-form", async ({ page }) => {
+  const s = t.workspace.sources;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { documentId } = await openSheet(page);
+  const segments: { events: { source: string; steps: unknown[] }[] }[] = [];
+  await page.route(COMMIT, async (route) => {
+    const sent = route.request().postDataJSON() as { segments: string[] };
+    for (const segment of sent.segments) segments.push(JSON.parse(Buffer.from(segment, "base64").toString("utf8")));
+    await route.continue();
+  });
+  await type(page, "Izmišljeni odlomak ");
+  const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+  await panel.getByRole("tab", { name: t.workspace.tabSources }).click();
+  const form = panel.getByRole("tabpanel").locator("form");
+  const add = async (title: string, button: string) => {
+    await panel.getByRole("tabpanel").getByRole("button", { name: s.add }).click();
+    for (const [label, value] of Object.entries({
+      [s.family]: "Horvat", [s.given]: "Ana", [s.year]: "2021", [s.title]: title, [s.place]: "Zagreb", [s.publisher]: "Primjer",
+    })) await form.getByLabel(label, { exact: true }).fill(value);
+    await form.getByRole("button", { name: button }).click();
+  };
+  await add("Izmišljena knjiga", s.addAndCite);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+  await add("Druga izmišljena knjiga", s.addAndCite);
+  await expect(editorOf(page)).toContainText("Izmišljeni odlomak (Horvat, 2021a)(Horvat, 2021b)");
+  await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+
+  const events = segments.flatMap((segment) => segment.events);
+  const carrying = (text: string) => events.filter((event) => JSON.stringify(event.steps).includes(text));
+  for (const text of ["(Horvat, 2021)", "Horvat, Ana (2021) Izmišljena knjiga", "(Horvat, 2021b)", "Horvat, Ana (2021b) Druga"]) {
+    expect(carrying(text).map((event) => event.source), text).toEqual(["citation-form"]);
+  }
+  // The letter "a" of the first work came in the second work's event.
+  const second = carrying("(Horvat, 2021b)")[0]!;
+  expect(JSON.stringify(second.steps)).toContain(`"text":"a"`);
+  await sameOnServer(page, documentId);
+});
+
 test("3d-2c2: sign-out within 400 ms keeps every typed character", async ({ page }) => {
   const { assignment, documentId } = await openSheet(page);
   const TEXT = "Svaki znak prije odjave.";

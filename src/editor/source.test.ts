@@ -8,6 +8,7 @@ import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-rep
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
 import { writeSource } from "@/components/editor/sources";
+import type { BookSource } from "@/domain/citation";
 import type { EvidenceSegment, EvidenceSource } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 import { projectProcessSummary } from "@/domain/projection/process-summary";
@@ -392,6 +393,10 @@ describe("3d-1c QA t. 6: pastes are events of their own", () => {
 
 // DAN-343, contract on #866 (`issuecomment-6423076996`): the Literatura form's text is `citation-form`.
 describe("citation-form", () => {
+  const BOOK: BookSource = {
+    type: "book", authors: [{ kind: "person", family: "Horvat", given: "Ana" }], year: 2021,
+    title: "Izmisljena knjiga", place: "Zagreb", publisher: "Primjer",
+  };
   const BOOK_ENTRY = "Horvat, Ana (2021) Izmisljena knjiga. Zagreb: Primjer.";
 
   it("writeSource is one citation-form event, apart from typing before and after", async () => {
@@ -400,7 +405,7 @@ describe("citation-form", () => {
     t.typeChar("x");
     await endTask();
     t.wait(50);
-    expect(writeSource(t.editor, "(Horvat, 2021: 15)", BOOK_ENTRY)).toBe(true);
+    expect(writeSource(t.editor, BOOK, "15", true)).not.toBeNull();
     await endTask();
     t.wait(50);
     t.typeChar("y");
@@ -415,7 +420,7 @@ describe("citation-form", () => {
   it("a long entry from the form is no paste in the summary", async () => {
     const t = setup();
     t.select(9);
-    expect(writeSource(t.editor, null, `Horvat, Ana (2021) ${"Izmisljena knjiga ".repeat(28)}`)).toBe(true);
+    expect(writeSource(t.editor, { ...BOOK, title: "Izmisljena knjiga ".repeat(16).trim() }, null, true)).not.toBeNull();
     const { sources, pastes } = await check(t);
     expect(sources).toEqual(["citation-form"]);
     expect(pastes.listed).toEqual([]);
@@ -426,7 +431,7 @@ describe("citation-form", () => {
   it("with everything selected the citation goes at the end of the last paragraph and evidence stays intact", async () => {
     const t = setup();
     t.editor.commands.selectAll();
-    expect(writeSource(t.editor, "(Horvat, 2021: 15)", BOOK_ENTRY)).toBe(true);
+    expect(writeSource(t.editor, BOOK, "15", true)).not.toBeNull();
     const { sources } = await check(t);
     expect(sources).toEqual(["citation-form"]);
     const doc = t.editor.state.doc;
@@ -436,10 +441,27 @@ describe("citation-form", () => {
     expect(doc.childCount).toBe(4);
   });
 
+  // DAN-484: the letters of an earlier work and the new citation are one event.
+  it("a second work of the year letters the first in the same citation-form event", async () => {
+    const t = setup();
+    t.select(9);
+    writeSource(t.editor, BOOK, "", true);
+    await endTask();
+    t.wait(50);
+    expect(writeSource(t.editor, { ...BOOK, title: "Druga knjiga" }, "3", true)?.yearSuffix).toBe("b");
+    const { sources } = await check(t);
+    expect(sources).toEqual(["citation-form", "citation-form"]);
+    const texts: string[] = [];
+    t.editor.state.doc.forEach((node) => texts.push(node.textContent));
+    expect(texts.filter((text) => text.includes("(Horvat, 2021a)"))).toHaveLength(1);
+    expect(texts).toContain("Horvat, Ana (2021a) Izmisljena knjiga. Zagreb: Primjer.");
+    expect(texts).toContain("Horvat, Ana (2021b) Druga knjiga. Zagreb: Primjer.");
+  });
+
   it("Undo of the form's text is unattributed", async () => {
     const t = setup();
     t.select(9);
-    writeSource(t.editor, "(Horvat, 2021)", null);
+    writeSource(t.editor, BOOK, "", false);
     await endTask();
     t.wait(50);
     t.editor.commands.undo();

@@ -10,7 +10,7 @@ import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import {
-  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
+  bibliographyPlan, blocksOf, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
   type SourceField, type SourceFields,
 } from "./sources";
 
@@ -156,9 +156,9 @@ describe("writeSource", () => {
     editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, citationText(book, "15"), entryText(book))).toBe(true);
-    expect(writeSource(editor, null, entryText(article))).toBe(true);
-    expect(writeSource(editor, null, entryText(book))).toBe(true);
+    expect(writeSource(editor, book, "15", true)).not.toBeNull();
+    expect(writeSource(editor, article, null, true)).not.toBeNull();
+    expect(writeSource(editor, book, null, true)).not.toBeNull();
     expect(texts(editor)).toEqual([
       `paragraph:Prvi odlomak.${formatInText(book, fpzgCitationStyle, "15")}`,
       "heading:Literatura",
@@ -174,8 +174,8 @@ describe("writeSource", () => {
     editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(true);
-    expect(writeSource(editor, citationText(article, ""), entryText(article))).toBe(true);
+    expect(writeSource(editor, book, "", true)).not.toBeNull();
+    expect(writeSource(editor, article, "", true)).not.toBeNull();
     const cited = `Prvi odlomak.${citationText(book, "")}${citationText(article, "")}`;
     expect(texts(editor)[0]).toBe(`paragraph:${cited}`);
     expect(editor.state.selection.empty).toBe(true);
@@ -189,8 +189,8 @@ describe("writeSource", () => {
     editor.commands.selectAll();
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(true);
-    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
+    expect(writeSource(editor, book, "", true)).not.toBeNull();
+    expect(writeSource(editor, article, "", false)).not.toBeNull();
     const cited = `Prvi odlomak.${citationText(book, "")}${citationText(article, "")}`;
     expect(texts(editor)).toEqual(["paragraph:" + cited, "heading:Literatura", `paragraph:${entryText(book)}`]);
     expect(editor.state.selection.empty).toBe(true);
@@ -202,8 +202,8 @@ describe("writeSource", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }]);
     editor.commands.selectAll();
     const book = sourceOf(BOOK);
-    expect(writeSource(editor, null, entryText(book))).toBe(true);
-    expect(writeSource(editor, citationText(book, "15"), null)).toBe(true);
+    expect(writeSource(editor, book, null, true)).not.toBeNull();
+    expect(writeSource(editor, book, "15", false)).not.toBeNull();
     expect(texts(editor)).toEqual([
       `paragraph:Prvi odlomak.${citationText(book, "15")}`,
       "heading:Literatura",
@@ -217,9 +217,9 @@ describe("writeSource", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }, { text: "Drugi odlomak." }]);
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, null, entryText(book))).toBe(true);
+    expect(writeSource(editor, book, null, true)).not.toBeNull();
     editor.commands.selectAll();
-    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
+    expect(writeSource(editor, article, "", false)).not.toBeNull();
     const cited = `Drugi odlomak.${citationText(article, "")}`;
     expect(texts(editor)).toEqual([
       "paragraph:Prvi odlomak.",
@@ -236,7 +236,7 @@ describe("writeSource", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }, { text: "Drugi odlomak." }]);
     editor.commands.selectAll();
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
+    expect(writeSource(editor, article, "", false)).not.toBeNull();
     expect(texts(editor)).toEqual(["paragraph:Prvi odlomak.", `paragraph:Drugi odlomak.${citationText(article, "")}`]);
     editor.destroy();
   });
@@ -244,8 +244,9 @@ describe("writeSource", () => {
   it("never writes over selected text", () => {
     const editor = editorWith([{ text: "Ostaje." }]);
     editor.commands.setTextSelection({ from: 1, to: 8 });
-    writeSource(editor, "(X, 2020)", null);
-    expect(texts(editor)).toEqual(["paragraph:Ostaje.(X, 2020)"]);
+    const book = sourceOf(BOOK);
+    writeSource(editor, book, "", false);
+    expect(texts(editor)).toEqual([`paragraph:Ostaje.${citationText(book, "")}`]);
     editor.destroy();
   });
 
@@ -254,9 +255,116 @@ describe("writeSource", () => {
     editor.setEditable(false, false);
     const before = editor.state.doc.toJSON();
     const book = sourceOf(BOOK);
-    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(false);
+    expect(writeSource(editor, book, "", true)).toBeNull();
     expect(editor.state.doc.toJSON()).toEqual(before);
-    expect(writeSource(null, "(X, 2020)", null)).toBe(false);
+    expect(writeSource(null, book, "", false)).toBeNull();
+    editor.destroy();
+  });
+});
+
+// DAN-484: two works of the same authors in one year are 2021a and 2021b (FPZG "same-year").
+describe("the letter of the year", () => {
+  const SECOND: SourceFields = { ...BOOK, title: "Druga izmišljena knjiga" };
+  const THIRD: SourceFields = { ...BOOK, title: "Treća izmišljena knjiga" };
+  const lettered = (fields: SourceFields, letter: string) => ({ ...sourceOf(fields), yearSuffix: letter });
+  const atEnd = (editor: Editor) => editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+
+  it("gives no letter to a work alone in its author and year", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atEnd(editor);
+    const book = sourceOf(BOOK);
+    expect(writeSource(editor, book, "", true)).toEqual(book);
+    expect(writeSource(editor, { ...book, year: 2020, title: "Ranija" }, "", true)?.yearSuffix).toBeUndefined();
+    expect(writeSource(editor, sourceOf({ ...BOOK, family2: "Kovač", given2: "Luka" }), "", true)?.yearSuffix).toBeUndefined();
+    expect(writeSource(editor, sourceOf({ ...BOOK, given: "Marko", title: "Treća" }), "", true)?.yearSuffix).toBeUndefined();
+    editor.destroy();
+  });
+
+  it("letters the first work a, in its entry and in-text citations, and the second b", () => {
+    const editor = editorWith([{ text: "Tekst." }, { text: "Drugi (Horvat, 2021: 9) i (Horvat, 20215)." }]);
+    atEnd(editor);
+    const first = sourceOf(BOOK);
+    writeSource(editor, first, "", true);
+    expect(writeSource(editor, sourceOf(SECOND), "4", true)).toEqual(lettered(SECOND, "b"));
+    expect(texts(editor)).toEqual([
+      `paragraph:Tekst.${citationText(lettered(BOOK, "a"), "")}${citationText(lettered(SECOND, "b"), "4")}`,
+      "paragraph:Drugi (Horvat, 2021a: 9) i (Horvat, 20215).",
+      "heading:Literatura",
+      `paragraph:${entryText(lettered(BOOK, "a"))}`,
+      `paragraph:${entryText(lettered(SECOND, "b"))}`,
+    ]);
+    // The third takes c; nothing written before changes again.
+    expect(writeSource(editor, sourceOf(THIRD), null, true)?.yearSuffix).toBe("c");
+    expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(lettered(BOOK, "a"), "")}${citationText(lettered(SECOND, "b"), "4")}`);
+    expect(texts(editor).slice(3)).toEqual([BOOK, SECOND, THIRD].map((f, i) => `paragraph:${entryText(lettered(f, "abc"[i]!))}`));
+    editor.destroy();
+  });
+
+  it("keeps the letter of a work already there, as a duplicate and in Citiraj", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atEnd(editor);
+    writeSource(editor, sourceOf(BOOK), null, true);
+    writeSource(editor, sourceOf(SECOND), null, true);
+    const before = texts(editor);
+    expect(writeSource(editor, sourceOf(SECOND), null, true)).toEqual(lettered(SECOND, "b"));
+    expect(writeSource(editor, sourceOf(BOOK), null, true)).toEqual(lettered(BOOK, "a"));
+    expect(texts(editor)).toEqual(before);
+    expect(writeSource(editor, sourceOf(SECOND), "3", false)).toEqual(lettered(SECOND, "b"));
+    expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(lettered(SECOND, "b"), "3")}`);
+    editor.destroy();
+  });
+
+  it("letters works of two authors and leaves in-text citations alone when another given name shares them", () => {
+    const editor = editorWith([{ text: "Vidi (Horvat, 2021)." }]);
+    atEnd(editor);
+    writeSource(editor, sourceOf(ARTICLE), null, true);
+    expect(writeSource(editor, sourceOf({ ...ARTICLE, title: "Drugi članak" }), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)).toContain(`paragraph:${entryText({ ...sourceOf(ARTICLE), yearSuffix: "a" })}`);
+    writeSource(editor, sourceOf(BOOK), null, true);
+    writeSource(editor, sourceOf({ ...BOOK, given: "Marko", title: "Treća" }), null, true);
+    expect(writeSource(editor, sourceOf(SECOND), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe("paragraph:Vidi (Horvat, 2021).");
+    expect(texts(editor)).toContain(`paragraph:${entryText(lettered(BOOK, "a"))}`);
+    editor.destroy();
+  });
+
+  it("letters a citation split by marks and an entry with leading spaces", () => {
+    const editor = new Editor({
+      element: null, extensions: createEditorExtensions(),
+      content: { type: "doc", content: [
+        { type: "paragraph", content: [{ type: "text", text: "Vidi (Hor" }, { type: "text", text: "vat, 2021)", marks: [{ type: "bold" }] }] },
+        { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Literatura" }] },
+        { type: "paragraph", content: [{ type: "text", text: `  ${entryText(sourceOf(BOOK))}` }] },
+      ] },
+    });
+    atEnd(editor);
+    expect(writeSource(editor, sourceOf(SECOND), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe("paragraph:Vidi (Horvat, 2021a)");
+    expect(texts(editor)[2]).toBe(`paragraph:  ${entryText(lettered(BOOK, "a"))}`);
+    editor.destroy();
+  });
+
+  it("writes nothing when every letter a to z is taken", () => {
+    const taken = [..."abcdefghijklmnopqrstuvwxyz"].map((l) => ({ text: entryText(lettered({ ...BOOK, title: `Knjiga ${l}` }, l)) }));
+    const editor = editorWith([{ text: "Tekst." }, { type: "heading", text: "Literatura" }, ...taken]);
+    atEnd(editor);
+    const before = editor.state.doc.toJSON();
+    expect(suffixPlan(blocksOf(editor.state.doc), sourceOf(SECOND))).toEqual({ kind: "full" });
+    expect(writeSource(editor, sourceOf(SECOND), "", true)).toBeNull();
+    expect(editor.state.doc.toJSON()).toEqual(before);
+    editor.destroy();
+  });
+
+  it("takes the letter from the sheet at the write, not from an earlier preview", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atEnd(editor);
+    writeSource(editor, sourceOf(BOOK), null, true);
+    const preview = suffixPlan(blocksOf(editor.state.doc), sourceOf(THIRD));
+    expect(preview.kind === "write" && preview.source.yearSuffix).toBe("b");
+    // Another write lands between the preview and the click.
+    writeSource(editor, sourceOf(SECOND), null, true);
+    expect(writeSource(editor, sourceOf(THIRD), null, true)?.yearSuffix).toBe("c");
+    expect(texts(editor).filter((t) => t.includes("(2021b)"))).toHaveLength(1);
     editor.destroy();
   });
 });
@@ -267,12 +375,12 @@ describe("writeSource and unstorable text", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }]);
     editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
     const book = sourceOf(BOOK);
-    expect(writeSource(editor, null, entryText(book))).toBe(true);
+    expect(writeSource(editor, book, null, true)).not.toBeNull();
     const before = editor.state.doc.toJSON();
     const withNul = { ...book, title: `Izmišljena${NUL} knjiga` };
-    expect(writeSource(editor, null, entryText(withNul))).toBe(false);
-    expect(writeSource(editor, citationText(book, `1${NUL}5`), null)).toBe(false);
-    expect(writeSource(editor, citationText(book, `1${LONE}`), entryText(book))).toBe(false);
+    expect(writeSource(editor, withNul, null, true)).toBeNull();
+    expect(writeSource(editor, book, `1${NUL}5`, false)).toBeNull();
+    expect(writeSource(editor, book, `1${LONE}`, true)).toBeNull();
     expect(editor.state.doc.toJSON()).toEqual(before);
     editor.destroy();
   });
