@@ -322,12 +322,14 @@ export async function verifySignedEvidenceReceiptV2(
       return refuse("key_unknown");
     }
     // The key is sound, so from here on a call that fails is the runtime,
-    // also where it has no Web Crypto or no Ed25519 in it.
+    // also where it has no Web Crypto or no Ed25519 in it. The 32 bytes go in
+    // as `raw`: WebKit on Linux refuses an SPKI whose point starts with 0x00
+    // (about one key in 256) and imports the same point as `raw` (#1247).
     const valid: unknown = await Promise.resolve()
       .then(() =>
         globalThis.crypto.subtle.importKey(
-          "spki",
-          keyBytes,
+          "raw",
+          point.slice(),
           { name: "Ed25519" },
           false,
           ["verify"],

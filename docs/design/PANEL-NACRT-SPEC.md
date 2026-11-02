@@ -123,6 +123,8 @@ Nema opažanja korisnika o ovom panelu; sljedeće su hipoteze iz prototipa i tre
 
 ## 9. Otvorena pitanja za vlasnika (PRIJEDLOG)
 
+> **Odgovoreno D-234 (2. 11. 2026.; [`docs/DECISIONS.md`](../DECISIONS.md), [#87 c.6580438138](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6580438138)).** Pitanja 1, 2, 3, 4, 6 i 9: plan se sprema na poslužitelju uz rad, izvan evidencije; u valu 1 mentor plan ne vidi; kartica se zove „Struktura”, a prikaz „Prve rečenice”; pragova nema; plan je uređiv tijekom dorade, bez snimki; podjela M5.14a/b/c je prihvaćena. Pitanja 5, 7 i 8 ostaju PRIJEDLOG; prijedlog uz pitanje 5 treba uskladiti s D-221 (Upute su samo formalna pravila sa službenim izvorom). Tekst ispod ostaje kao trag.
+
 1. **Pohrana plana.** Sprema li se plan (pitanje, svrhe, pojmovnik) na poslužitelju uz rad kao zaseban zapis izvan evidencije (prijedlog), ili ostaje samo lokalno do predaje? Lokalno je jeftinije, ali ne preživi drugi uređaj i ne omogućuje odluku 2.
 2. **Vidljivost mentoru.** Vide li mentor/nastavnik pitanje rada i svrhe poglavlja kao kontekst u pregledu rada (prijedlog: da, samo čitanje, kao dio rada „kao rad”, bez izračuna), ili ništa? Utječe na obavijest S3 (pravilo 6).
 3. **Naziv kartice.** Zadržava li se „Nacrt” ili ide jasniji naziv (npr. „Struktura”, „Argument”)? Isto za „Obrnuti nacrt” (npr. „Prve rečenice”).
