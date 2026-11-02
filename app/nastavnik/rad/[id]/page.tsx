@@ -43,7 +43,7 @@ export default async function LiveWorkPage({ params }: { params: Promise<{ id: s
       </>
     );
   } else {
-    body = <LiveWorkView documentId={id} session={session} />;
+    body = <LiveWorkView documentId={id} session={session} canComment={role === "teacher"} />;
   }
 
   return (

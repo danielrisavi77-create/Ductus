@@ -18,7 +18,7 @@ import {
   changeThreadState, createComment, listComments, replyComment,
   type CommentThread, type CreateOutcome, type ListOutcome, type ReplyOutcome,
 } from "@/client/comments";
-import type { TextAnchor } from "@/domain/collaboration";
+import { limitBody, type TextAnchor } from "@/domain/collaboration";
 import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
@@ -83,8 +83,8 @@ function ThreadCard({ placed, current, onChanged, onShow }: {
       </div>
       {thread.state === "resolved" ? null : (
         <form className={styles.form} onSubmit={send}>
-          <textarea rows={2} aria-label={t.replyLabel} placeholder={t.replyPlaceholder} maxLength={2000}
-            value={draft} onChange={(event) => setDraft(event.target.value)} />
+          <textarea rows={2} aria-label={t.replyLabel} placeholder={t.replyPlaceholder} 
+            value={draft} onChange={(event) => setDraft(limitBody(event.target.value))} />
           <button type="submit" className="btn" disabled={busy || draft.trim() === ""}>{busy ? t.replying : t.reply}</button>
         </form>
       )}
@@ -113,11 +113,11 @@ function NewComment({ documentId, anchor, current, onDone }: {
     <form className={styles.newComment} onSubmit={(event) => void publish(event)} aria-labelledby="new-comment-title">
       <h3 id="new-comment-title">{tt.newTitle}</h3>
       <p className={styles.quote}>„{anchor.quote}”</p>
-      <textarea rows={3} aria-label={tt.bodyLabel} maxLength={2000} value={body}
-        onChange={(event) => setBody(event.target.value)} />
+      <textarea rows={3} aria-label={tt.bodyLabel} value={body}
+        onChange={(event) => setBody(limitBody(event.target.value))} />
       <div className={styles.actions}>
         <button type="submit" className="btn" disabled={busy || body.trim() === ""}>{busy ? tt.publishing : tt.publish}</button>
-        <button type="button" className={styles.link} onClick={() => onDone(false)}>{tt.cancel}</button>
+        <button type="button" className={styles.link} disabled={busy} onClick={() => onDone(false)}>{tt.cancel}</button>
       </div>
       {error ? <p role="alert" className={styles.error}>{tt.errors[error]}</p> : null}
     </form>

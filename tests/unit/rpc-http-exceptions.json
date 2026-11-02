@@ -1,0 +1,79 @@
+[
+  {
+    "function": "app.record_fast_path_opening",
+    "status": "bez rute",
+    "reason": "Interni korak: zove ga app.fast_path_works, koja ima rutu; EXECUTE ima samo ductus_evidence."
+  },
+  {
+    "function": "app.worker_attach_receipt_signature",
+    "status": "bez rute",
+    "reason": "Potpis potvrde u radniku (ductus_worker), ne na zahtjevu korisnika; web put je app.attach_receipt_signature."
+  },
+  {
+    "function": "audit.record_work_opening",
+    "status": "bez rute",
+    "reason": "Interni zapis revizijskog traga bez EXECUTE za aplikacijske uloge; zovu ga RPC-ovi koji imaju rutu."
+  },
+  {
+    "function": "collaboration.delete_live_state",
+    "status": "bez rute",
+    "reason": "Brisanje po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
+  },
+  {
+    "function": "collaboration.set_thread_state",
+    "status": "bez rute",
+    "reason": "Interni korak bez EXECUTE za aplikacijske uloge; zovu ga collaboration.resolve_thread i reopen_thread, koje imaju rutu."
+  },
+  {
+    "function": "identity.close_all_sessions_for_identity",
+    "status": "ruta dolazi",
+    "reason": "Odjava sa svih uređaja (close_reason logout_all); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-296"
+  },
+  {
+    "function": "identity.close_user_sessions",
+    "status": "bez rute",
+    "reason": "Operaterska radnja zatvaranja svih sesija jednog korisnika; nijedna aplikacijska uloga ni PUBLIC je ne smije pozvati (F-036)."
+  },
+  {
+    "function": "identity.purge_ended_sessions",
+    "status": "bez rute",
+    "reason": "Čišćenje završenih sesija po pravilu zadržavanja; poziva ga samo ductus_retention."
+  },
+  {
+    "function": "identity.touch_current_session",
+    "status": "ruta dolazi",
+    "reason": "Bilježi aktivnost sesije (D-200 P2); poziva ga poslužitelj na zahtjevima koji se broje kao aktivnost, a taj poziv još nije spojen.",
+    "ticket": "DAN-296"
+  },
+  {
+    "function": "institution.assign_group_student",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija dodaje studenta kolegija u seminarsku grupu (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
+    "function": "institution.assign_group_teacher",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija dodaje potvrđenog nastavnika ustanove u seminarsku grupu (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
+    "function": "institution.create_seminar_group",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija stvara seminarsku grupu kolegija (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
+    "function": "institution.end_group_assignment",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija završava mjesto nastavnika ili studenta u grupi bez brisanja povijesti (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
+    "function": "institution.set_course_holder",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija imenuje nositelja kolegija i završava prethodnog (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  }
+]

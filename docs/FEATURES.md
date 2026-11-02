@@ -42,6 +42,8 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | A-10 | "Moj rad u brojkama" za studenta, bez ritma i usporedbe | 1 | 3 |
 | S-14 | Panel Nacrt u editoru (obrnuti nacrt, nit argumenta, pojmovnik). **Ulazi u program (vlasnik, 31. 10. 2026., #87 c.6543799262).** Oznaka je iz mape ekrana, ne iz ove serije S-01 do S-12. Specifikacija: `docs/design/PANEL-NACRT-SPEC.md`; smještaj M5.14 i pohrana plana su PRIJEDLOG | 3 do 5 (hipoteza) | M5 |
 
+Napomena o koliziji naziva (#87 [c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6578722946)): u ovoj tablici S-11 je uvodni vodič od dvije minute i to značenje ostaje. Plan M4 istu oznaku koristi za ekran mape ekrana, pa se taj ekran uvijek piše punim nazivom „S-11 — Panel Upute i provjera oblika” (`docs/PROGRAM-RAZRADA.md`, M4).
+
 Zbroj prihvaćenog: oko **55 do 70 večeri** uz grupne radove s izmjenom pisača. Uz 99 do 134 večeri iz `PROGRAM.md` to je više nego što stane u pilot; raspored po valovima i rezovi su sljedeći korak.
 
 ## Iz vanjske revizije (3. 10. 2026., ODLUČENO D-80)
