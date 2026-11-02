@@ -202,6 +202,25 @@ SELECT is((SELECT string_agg(p.name || CASE WHEN s.ended_at IS NULL THEN '' ELSE
 SELECT is(pg_temp.to('ana'), 'vesna', 'class 3: the newer substitution applies');
 SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({s3}) $$), 'ok', 'Vesna ends it');
 
+-- Class 3: a substitution goes one step, without a chain. Luka is Ana's only
+-- recipient; Luka -> Marko and Marko -> Vesna give Marko, not Vesna.
+INSERT INTO ref VALUES ('c1', pg_temp.ask('vesna',
+  $$ SELECT institution.set_team_substitution({k1}, {luka}, {marko}, now() + interval '7 days') $$));
+INSERT INTO ref VALUES ('c2', pg_temp.ask('vesna',
+  $$ SELECT institution.set_team_substitution({k1}, {marko}, {vesna}, now() + interval '7 days') $$));
+SELECT is(pg_temp.to('ana'), 'marko', 'class 3: a substitution goes one step, not along a chain');
+-- Two recipients with the same substitute give that substitute once.
+SELECT is(pg_temp.run('vesna', $$ institution.assign_group_teacher({ga}, {marko}) $$), 'ok', 'Marko teaches group A');
+SELECT is(pg_temp.to('ana'), 'marko,vesna', 'class 3: each recipient is replaced by its own substitute');
+SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({c1}) $$), 'ok', 'Vesna ends Luka -> Marko');
+INSERT INTO ref VALUES ('c3', pg_temp.ask('vesna',
+  $$ SELECT institution.set_team_substitution({k1}, {luka}, {vesna}, now() + interval '7 days') $$));
+SELECT is(pg_temp.to('ana'), 'vesna', 'class 3: Luka -> Vesna and Marko -> Vesna give Vesna once');
+SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({c2}) $$), 'ok', 'Vesna ends Marko -> Vesna');
+SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({c3}) $$), 'ok', 'Vesna ends Luka -> Vesna');
+SELECT is(pg_temp.run('vesna', $$ institution.end_group_assignment({ga}, {marko}) $$), 'ok', 'Marko leaves group A');
+SELECT is(pg_temp.to('ana'), 'luka', 'with no substitution, Luka again');
+
 -- Class 3: a substitution that ended on its valid_to, or has not begun, does
 -- not apply. Written by the owner, as no call can write either.
 INSERT INTO institution.team_substitution (course_id, institution_id, absent_id, substitute_id, assigned_by, valid_from, valid_to)
