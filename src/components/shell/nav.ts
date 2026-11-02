@@ -6,7 +6,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
  * browser never chooses it. Only routes that exist are listed, so no item
  * leads to a 404 (a unit test checks every href against `app/`).
  */
-export type ShellRole = "teacher" | "student";
+export type ShellRole = "teacher" | "student" | "admin";
 
 export type NavItem = {
   href: string;
@@ -29,6 +29,10 @@ const NAV: Record<ShellRole, readonly NavItem[]> = {
     { href: "/zadaci/radovi", label: t.shell.nav.works },
     { href: "/rad", label: t.shell.nav.workspace },
     { href: "/upis", label: t.shell.nav.enroll },
+  ],
+  // DAN-313 (A-01): the administrator's overview of their own institution.
+  admin: [
+    { href: "/ustanova", label: t.shell.nav.institution },
   ],
 };
 
@@ -59,5 +63,6 @@ export function accountPlace(scope: string | null, ownAccount: boolean): Account
 export function homeHref(role: ShellRole | null): string {
   if (role === "teacher") return "/nastavnik";
   if (role === "student") return "/zadaci";
+  if (role === "admin") return "/ustanova";
   return "/";
 }
