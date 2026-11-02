@@ -48,7 +48,7 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .row.stale .obs { color: var(--ink-2); }
 .stale-mark { font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
 .facts { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 2px; }
-.btn { font: 600 13.5px/1 var(--ff-ui); min-height: 32px; padding: 0 14px; border-radius: 5px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); justify-self: start; cursor: pointer; }
+.btn { font: 600 13.5px/1 var(--ff-ui); min-height: 44px; padding: 0 14px; border-radius: 5px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); justify-self: start; cursor: pointer; }
 .btn.secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
 .skel { height: 12px; border-radius: 4px; background: var(--well); }
 .skel.w60 { width: 60%; } .skel.w80 { width: 80%; } .skel.w40 { width: 40%; }
@@ -59,7 +59,9 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .page { max-width: 1200px; margin: 0 auto; padding: 0 24px 48px; display: grid; gap: 28px; }
 .variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
 .variant { display: grid; gap: 8px; min-width: 0; }
-.btn.small { min-height: 32px; padding: 0 10px; }
+.btn.small { padding: 0 10px; }
+/* DESIGN-SYSTEM §5: 32 px samo u gustim trakama; drugdje i na mobitelu 44 px. */
+.panel-top .btn.small, .item .acts .btn.small, .statusbar .btn.small { min-height: 32px; }
 .btn.ghost { background: transparent; color: var(--ink); border-color: transparent; text-decoration: underline; text-decoration-color: var(--link-rule); text-underline-offset: 3px; }
 .btn[aria-disabled="true"] { opacity: 1; background: var(--well); color: var(--ink-3); border-color: var(--rule-2); cursor: not-allowed; }
 .tag { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
@@ -77,6 +79,9 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .sheet { --sheet: #fcfbf8; --ink: #242422; --ink-2: #55534d; --ink-3: #5c5a54; --rule: #cfccc4; --well: #efede7; --accent: #806529;
   background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 20px 24px; font: 16px/1.7 var(--ff-display); display: grid; gap: 10px; }
 .sheet p { margin: 0; }
+/* Oznaka fusnote: cilj dodira 44 × 44 px (#1386 t. 6); negativne margine čuvaju redak, broj ostaje mala gornja oznaka. */
+.sheet .fn { position: relative; z-index: 1; display: inline-flex; justify-content: center; align-items: center; width: 44px; height: 44px; margin: -12px -18px; color: inherit; text-decoration: none; }
+.sheet .fn sup { position: relative; top: -0.45em; font-size: 0.75em; line-height: 1; }
 .mark { background: var(--well); border-bottom: 2px solid var(--accent); padding: 0 2px; }
 .toast { background: var(--raised); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .workspace { display: grid; grid-template-columns: 220px 1fr; border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; background: var(--ground); }
@@ -97,7 +102,7 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
   .variants { grid-template-columns: 1fr; }
   .workspace { grid-template-columns: 1fr; }
   .workspace .rail { border-right: 0; border-bottom: 1px solid var(--rule-2); }
-  .btn, .btn.small { min-height: 44px; }
+  .btn, .btn.small, .panel-top .btn.small, .item .acts .btn.small, .statusbar .btn.small { min-height: 44px; }
   .panel a, .rail a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   .tag, .field label, .statusbar, .src { font-size: 13px; }
 }
