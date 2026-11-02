@@ -200,6 +200,19 @@ const ACKS_OFF_KEY = `
   SELECT n.* FROM institution.notice_acknowledgment n
   JOIN institution.assignment_version v USING (assignment_id, version_no)
   WHERE n.institution_id IS DISTINCT FROM v.institution_id`;
+// Acknowledgments that still reach their version under the full key the chain adds.
+const ACKS_ON_KEY = `
+  SELECT n.* FROM institution.notice_acknowledgment n
+  JOIN institution.assignment_version v USING (assignment_id, version_no, institution_id)
+  ORDER BY assignment_id, version_no, student_id`;
+
+/** Every old acknowledgment is kept as it was and reaches its version under the full key. */
+async function expectAcksKept(client: pg.Client, acksBefore: unknown[]) {
+  expect((await client.query(ACKS)).rows).toEqual(acksBefore);
+  expect((await client.query(ACKS_OFF_KEY)).rows).toEqual([]);
+  expect((await client.query(ACKS_ON_KEY)).rows).toEqual(acksBefore);
+}
+
 const KEY_COLUMNS = `
   SELECT table_name FROM information_schema.columns
   WHERE table_schema = 'institution' AND table_name IN ('assignment_version', 'course_enrollment_code')
@@ -231,8 +244,7 @@ describe("the institution key chain migration over old rows", () => {
       })),
     );
     expect((await client.query(EVENTS)).rows).toEqual(eventsBefore);
-    expect((await client.query(ACKS)).rows).toEqual(acksBefore);
-    expect((await client.query(ACKS_OFF_KEY)).rows).toEqual([]);
+    await expectAcksKept(client, acksBefore);
     expect(versions).toHaveLength(3);
     expect(codes).toHaveLength(3);
     expect(eventsBefore).toHaveLength(1);
@@ -243,6 +255,33 @@ describe("the institution key chain migration over old rows", () => {
       ]),
     );
     expect(acksBefore).toHaveLength(3);
+  });
+
+  it.each([
+    {
+      what: "an old acknowledgment is lost",
+      change: (client: pg.Client, ids: Ids) =>
+        client.query("DELETE FROM institution.notice_acknowledgment WHERE student_id = $1", [ids.studentB]),
+    },
+    {
+      what: "an old acknowledgment changes its time",
+      change: (client: pg.Client, ids: Ids) =>
+        client.query(
+          `UPDATE institution.notice_acknowledgment SET acknowledged_at = acknowledged_at + interval '1 second'
+           WHERE assignment_id = $1 AND version_no = 1`,
+          [ids.assignmentA],
+        ),
+    },
+  ])("the acknowledgment check fails when $what after the migration", async ({ change }) => {
+    const client = await beforeTheChain();
+    const ids = await oldRows(client);
+    const acksBefore = (await client.query(ACKS)).rows;
+    await migrate(client);
+    await expectAcksKept(client, acksBefore);
+
+    expect((await change(client, ids)).rowCount).toBe(1);
+
+    await expect(expectAcksKept(client, acksBefore)).rejects.toThrow();
   });
 
   it.each([
