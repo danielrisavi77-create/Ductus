@@ -104,25 +104,30 @@ ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije
 
 **Gotovo na mainu:** JCS i hash lanac, odsječak v2 i v3, potvrda (`src/domain/forensics/`); izvori unosa uključujući lijepljenje (D-43) i vrste dokaza (D-44); rute `app/api/evidence/{commit,open,replay}`; jedan RPC za commit i `reserve`, odbijanje nepoznatih polja i granice veličine (B-8); provjera hasha uklonjenog raspona (B-12, `src/adapters/evidence/edit-steps-v1-rules.ts`); osam stanja sinkronizacije sa „spremljeno na poslužitelju” tek uz potpisanu potvrdu; journal vezan uz korisnika i odjava po D-118; format vremena po promjeni v1 i njegov verifikator (#942); pgTAP 040 do 049 i 088. **Djelomično:** potpis i rekonstrukcija u workeru izašli su iz demoa (D-98) i vraćeni su u opseg (D-191 t. 4); nema mjerenja rekonstrukcije velikog rada (B0.2) ni spikea D-54.
 
+**Odluke za plan (D-207 do D-216, #87 c.6567392018):** worker se gradi u `src/runtime/worker/` (`docs/ARCHITECTURE.md`), a spike B0.2 u postojećem `spikes/b0.2-reconstruction`; putanja `src/worker/` iz paketa ne usvaja se (D-214). Ostatak DAN-84 i DAN-453 ide u nove uske tikete (D-210).
+
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M3.1 | Zatvoriti preostali opseg B-8 | B | | DAN-83 (#970) |
-| M3.2 | Worker potpisuje potvrdu i oporavlja `pending_signature` (B-9) | B | | DAN-84 |
+| M3.2 | Worker potpisuje potvrdu i oporavlja `pending_signature` (B-9); ostatak u novom uskom tiketu (D-210) | B | | DAN-84 |
 | M3.3 | Kontrolne točke rekonstrukcije u B-12 i čitanje snimki dokumenta | B | M3.2 | DAN-293 |
-| M3.4 | Spike B0.2: rekonstrukcija 15.000 i 80.000 riječi na stvarnom stroju | P | stroj | DAN-388 |
-| M3.5 | Spike programskog unosa (D-54) | B | | DAN-390 |
-| M3.6 | Ostaci evidencije i značenje odgovora na ponovljeni `ingest` | B | | DAN-301, DAN-46 |
+| M3.4 | Spike B0.2: rekonstrukcija 15.000 i 80.000 riječi na stvarnom stroju; puni M3, ne osnovica (D-208) | P | stroj, B0.1 (D-08) | DAN-388 |
+| M3.5 | Spike programskog unosa (D-54); M3.5-P01 je `Risk: critical`, a ugovor zabranjuje bilježenje tipki i trajanja (pravilo 4, D-216) | B | | DAN-390 |
+| M3.6 | Ostaci evidencije i značenje odgovora na ponovljeni `ingest`; ponovno izdavanje nakon opoziva po varijanti A zapisuje se prije M3.6-P02 (D-212) | B | | DAN-301, DAN-46 |
 | M3.7 | Nalazi evidencije, lokalnog zapisa i rekonstrukcije (samo ID): F-001, F-003 do F-008, F-028, F-029, F-030, F-034, F-037, F-038, F-043, F-048, F-049, F-154 | B, F | | DAN-140, DAN-145, DAN-146, DAN-147 do DAN-152, DAN-164, DAN-165, DAN-167, DAN-170, DAN-175, DAN-180, DAN-181, #913 |
-| M3.8 | Produkcijski potpisnik preko KMS-a | B | B0.1 (M11.1) | DAN-295 |
-| M3.9 | Specifikacija i izvedba dnevnog korijena i žiga s CLI verifikatorom (B5, D-72, D-93) | B | M3.2 | DAN-55; izvedba DAN-391 |
-| M3.10 | Fuzz parsera B-8 i B-12 te proba izgubljenog odgovora nakon prihvata | P, B | | DAN-320, DAN-321 |
-| M3.11 | Oznake stanja spremanja po rječniku i izlaz iz blokirane odjave | F | | DAN-99, DAN-103 |
+| M3.8 | Produkcijski potpisnik preko KMS-a; puni M3, ne osnovica (D-208) | B | B0.1 (M11.1) | DAN-295 |
+| M3.9 | Specifikacija i izvedba dnevnog korijena i žiga s CLI verifikatorom (B5, D-72, D-93); D-72 je ODLUČEN (D-209), a M3.9-P05 i P07 grade se tek nakon tog zapisa | B | M3.2 | DAN-55; izvedba DAN-391 |
+| M3.10 | Fuzz parsera B-8 i B-12 (zasad fast-check, Jazzer tek nakon provjere licence i ovisnosti, D-213) te proba izgubljenog odgovora nakon prihvata bez Toxiproxyja (D-211) | P, B | | DAN-320 |
+| M3.11 | Oznake stanja spremanja po rječniku i izlaz iz blokirane odjave; Z-02 slijedi D-118, bez blokirane odjave (D-216) | F | | DAN-99, DAN-103 |
+| M3.12 | Kratki sintetički spike šifriranja i roka (D-122); datum unutar faze do 20. 12. 2026. (D-207) | B | | novo |
 
 **Ekrani:** S-10 editor (stanja spremanja), Z-02 odjava i dijalog, Z-11 rad bez mreže, druga kartica i oporavak.
 
-**Uvjet završetka:** izlazni kriterij M3 iz `docs/PROGRAM.md` (property testovi, idempotentno ponovno slanje, oporavak prekida između Storagea, RPC-a i potpisa, izmjereno CPU vrijeme rekonstrukcije doktorskog rada u zapisu B0.2); potvrdu potpisuje worker; B5 prolazi known-answer vektor i negativne slučajeve iz `docs/BACKEND.md` §8; nalazi iz M3.7 zatvoreni.
+**Uvjet završetka:** izlazni kriterij M3 iz `docs/PROGRAM.md` (property testovi, idempotentno ponovno slanje, oporavak prekida između Storagea, RPC-a i potpisa, izmjereno CPU vrijeme rekonstrukcije doktorskog rada u zapisu B0.2); potvrdu potpisuje worker; B5 prolazi known-answer vektor i negativne slučajeve iz `docs/BACKEND.md` §8; nalazi iz M3.7 zatvoreni; pravilo 10 (zapis nastao bez mreže ostaje tako označen i nakon sinkronizacije) ima test (D-216).
 
-**Osnovica 20. 12. 2026. (D-203 C2):** spremanje, worker koji potpisuje (M3.2), potpisane potvrde, rekonstrukcija (M3.3) i oporavak. Osnovica se mjeri na kontrolnoj točki 20. 12. i ne zatvara M3. Puni B5 (M3.9) i ostali dijelovi uvjeta završetka prihvaćaju se prije nastavnog pilota; B5 se ne prebacuje iza pilota bez posebne odluke.
+**Osnovica 20. 12. 2026. (D-203 C2, D-208):** spremanje, worker koji potpisuje (M3.2) s testnim potpisnikom, potpisane potvrde, rekonstrukcija (M3.3) i oporavak. Osnovica se mjeri na kontrolnoj točki 20. 12. i ne zatvara M3. Puni B5 (M3.9) i ostali dijelovi uvjeta završetka prihvaćaju se prije nastavnog pilota; B5 se ne prebacuje iza pilota bez posebne odluke. Stvarni KMS (M3.8) i B0.2 na stroju (M3.4) dio su punog M3 i ovise o B0.1 (D-08).
+
+**Poznata granica (D-215):** inventar v1 pretpostavlja da izvan razvojnih i demo računala nema trajnih izvora potvrda; Daniel tu pretpostavku može ispraviti.
 
 ## M4 Paket pravila Lekte
 
