@@ -1759,6 +1759,14 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.mentorship t ON t.id = s.mentorship_id AND t.institution_id = s.institution_id
    WHERE t.ended_at IS NULL
      AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+  UNION ALL
+  SELECT g.user_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
+   WHERE g.valid_to IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) IS NULL
+     AND institution.actor_group_student(s.course_id, g.user_id)
 $$;
 
 
@@ -1772,13 +1780,15 @@ CREATE FUNCTION app.teacher_course_students(p_course_id uuid) RETURNS TABLE(stud
     AS $$
 DECLARE
   v_actor record;
+  v_role text;
 BEGIN
   SELECT * INTO v_actor FROM app.current_actor();
   IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
     RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
   END IF;
   -- Decided once per call, in the session's institution (actor_course_role).
-  IF institution.actor_course_role(p_course_id) IS DISTINCT FROM 'teacher' THEN
+  v_role := institution.actor_course_role(p_course_id);
+  IF v_role IS NOT NULL AND v_role <> 'teacher' THEN
     RETURN;
   END IF;
   -- One open membership per student and course, so one row per student.
@@ -1788,6 +1798,7 @@ BEGIN
     LEFT JOIN identity.person_name n ON n.user_id = m.user_id AND n.institution_id = m.institution_id
    WHERE m.course_id = p_course_id AND m.institution_id = v_actor.institution_id
      AND m.role = 'student' AND m.member_to IS NULL
+     AND (v_role = 'teacher' OR institution.actor_group_student(p_course_id, m.user_id))
    ORDER BY m.user_id;
 END
 $$;
@@ -2007,6 +2018,10 @@ CREATE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id 
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
     WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
     WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
+    WHEN institution.actor_assignment_role(p_assignment_id) IS NULL AND EXISTS (
+           SELECT 1 FROM institution.assignment s
+            WHERE s.id = p_assignment_id AND s.institution_id = a.institution_id
+              AND institution.actor_group_student(s.course_id, p_owner_id)) THEN 'teacher'
   END
   FROM app.current_actor() a
 $$;
@@ -3158,6 +3173,29 @@ $$;
 
 
 --
+-- Name: actor_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_group_student(p_course_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.institution_role r ON r.user_id = a.user_id AND r.institution_id = a.institution_id
+       AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = p_course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+      JOIN institution.course_member m ON m.course_id = p_course_id AND m.institution_id = a.institution_id
+       AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+  )
+$$;
+
+
+--
 -- Name: actor_has_role(text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3329,11 +3367,14 @@ BEGIN
 
   -- The actor's relation to the assignment of the work: through the course,
   -- or through the mentorship. An assignment has exactly one of the two.
+  -- Without a membership of the course, through a seminar group of it whose
+  -- teacher the actor is and whose member the owner is.
   SELECT CASE
-           WHEN a.course_id IS NOT NULL THEN (
-             SELECT m.role FROM institution.course_member m
-             WHERE m.course_id = a.course_id AND m.institution_id = v_institution
-               AND m.user_id = v_user AND m.member_to IS NULL)
+           WHEN a.course_id IS NOT NULL THEN coalesce(
+             (SELECT m.role FROM institution.course_member m
+              WHERE m.course_id = a.course_id AND m.institution_id = v_institution
+                AND m.user_id = v_user AND m.member_to IS NULL),
+             CASE WHEN institution.actor_group_student(a.course_id, v_scope.principal_id) THEN 'teacher' END)
            ELSE (
              SELECT CASE WHEN ms.mentor_id = v_user THEN 'teacher'
                          WHEN ms.student_id = v_user THEN 'student' END
@@ -7779,4 +7820,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261102150000'),
     ('20261102160000'),
     ('20261102190000'),
-    ('20261102200000');
+    ('20261102200000'),
+    ('20261102210000');

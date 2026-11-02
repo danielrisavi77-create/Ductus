@@ -1,0 +1,312 @@
+-- migrate:up
+-- DAN-351, M2.5-P01 (contract on #1091, c.6582474569): the students and works
+-- of a seminar group for its teacher (variant A). A teacher of the course,
+-- the holder among them, keeps the whole course as before; a teacher of a
+-- seminar group who is not a member of the course gets the students of the
+-- group, and their works, and nothing else of the course.
+--
+-- One condition, institution.actor_group_student, joins the four places
+-- every reader of a student or a work goes through: collaboration.actor_role
+-- (text, comments, summary, replay, fast path opening), institution.can, and
+-- the two lists app.teacher_assignment_students and app.teacher_course_students.
+-- actor_course_role and actor_assignment_role, and with them every policy,
+-- are not changed (T053): the course, its assignments and its groups stay
+-- unreadable to a group teacher. Same signatures, owners and grants; no
+-- table, grant to ductus_app or policy is added.
+SET LOCAL ROLE ductus_migrator;
+-- Only while this migration runs; revoked at the end.
+GRANT CREATE ON SCHEMA institution, app, collaboration TO ductus_identity;
+SET LOCAL ROLE ductus_identity;
+
+-- True while the actor of the session holds a confirmed and unrevoked
+-- teacher role, is an open teacher of a seminar group of the course, and the
+-- student is an open member of that group and still an open student of the
+-- course (a removal from the course does not end the group membership,
+-- 20261102160000). Nothing else falls back to the whole course: no group, an
+-- ended assignment or an unconfirmed role is false. A student is in at most
+-- one open group of a course, so moving her to another group moves who sees
+-- her one work. Called only from definer functions of ductus_identity.
+CREATE FUNCTION institution.actor_group_student(p_course_id uuid, p_student_id uuid) RETURNS boolean
+LANGUAGE sql STABLE SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.institution_role r ON r.user_id = a.user_id AND r.institution_id = a.institution_id
+       AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = p_course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+      JOIN institution.course_member m ON m.course_id = p_course_id AND m.institution_id = a.institution_id
+       AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+  )
+$$;
+REVOKE ALL ON FUNCTION institution.actor_group_student(uuid, uuid) FROM PUBLIC;
+
+-- As 20261017120000, with the group teacher: an actor without a part in the
+-- assignment is its teacher for the work of a student of her group.
+CREATE OR REPLACE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id uuid, p_owner_id uuid) RETURNS text
+LANGUAGE sql STABLE SET search_path = ''
+AS $$
+  SELECT CASE
+    WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
+    WHEN institution.actor_assignment_role(p_assignment_id) IS NULL AND EXISTS (
+           SELECT 1 FROM institution.assignment s
+            WHERE s.id = p_assignment_id AND s.institution_id = a.institution_id
+              AND institution.actor_group_student(s.course_id, p_owner_id)) THEN 'teacher'
+  END
+  FROM app.current_actor() a
+$$;
+
+-- As 20261102200000, with the same group branch, so that db/tests/098 still
+-- finds no cell where can() and actor_role differ.
+CREATE OR REPLACE FUNCTION institution.can(p_action text, p_document_id text) RETURNS boolean
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_scope record;
+  v_confirmed boolean;
+  v_relation text;
+  v_teacher boolean;
+  v_owner boolean;
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('read', 'comment', 'open_fast_path', 'write', 'propose') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  IF v_user IS NULL OR p_document_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT s.institution_id, s.assignment_id, s.principal_id INTO v_scope
+  FROM collaboration.document_scope(p_document_id) s;
+  IF v_scope.institution_id IS DISTINCT FROM v_institution THEN
+    RETURN false;
+  END IF;
+
+  v_confirmed := EXISTS (
+    SELECT 1 FROM institution.institution_role r
+    WHERE r.user_id = v_user AND r.institution_id = v_institution AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  );
+
+  -- The actor's relation to the assignment of the work: through the course,
+  -- or through the mentorship. An assignment has exactly one of the two.
+  -- Without a membership of the course, through a seminar group of it whose
+  -- teacher the actor is and whose member the owner is.
+  SELECT CASE
+           WHEN a.course_id IS NOT NULL THEN coalesce(
+             (SELECT m.role FROM institution.course_member m
+              WHERE m.course_id = a.course_id AND m.institution_id = v_institution
+                AND m.user_id = v_user AND m.member_to IS NULL),
+             CASE WHEN institution.actor_group_student(a.course_id, v_scope.principal_id) THEN 'teacher' END)
+           ELSE (
+             SELECT CASE WHEN ms.mentor_id = v_user THEN 'teacher'
+                         WHEN ms.student_id = v_user THEN 'student' END
+             FROM institution.mentorship ms
+             WHERE ms.id = a.mentorship_id AND ms.institution_id = v_institution AND ms.ended_at IS NULL)
+         END
+  INTO v_relation
+  FROM institution.assignment a
+  WHERE a.id = v_scope.assignment_id AND a.institution_id = v_institution;
+
+  v_teacher := v_relation IS NOT DISTINCT FROM 'teacher' AND v_confirmed;
+  v_owner := v_relation IS NOT DISTINCT FROM 'student' AND v_scope.principal_id = v_user;
+
+  RETURN CASE p_action
+           WHEN 'read' THEN v_teacher OR v_owner
+           WHEN 'write' THEN v_owner
+           ELSE v_teacher
+         END;
+END
+$$;
+
+-- As 20261101150000, with the students of the actor's group for a course's
+-- assignment the actor has no part in. One open group per student and
+-- course, so no student comes twice.
+CREATE OR REPLACE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TABLE (student_id uuid)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+  SELECT m.user_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.course_member m ON m.course_id = s.course_id AND m.institution_id = s.institution_id
+   WHERE m.role = 'student' AND m.member_to IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+  UNION ALL
+  SELECT t.student_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.mentorship t ON t.id = s.mentorship_id AND t.institution_id = s.institution_id
+   WHERE t.ended_at IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+  UNION ALL
+  SELECT g.user_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
+   WHERE g.valid_to IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) IS NULL
+     AND institution.actor_group_student(s.course_id, g.user_id)
+$$;
+
+-- As 20261028140000, with the students of the actor's group for an actor who
+-- is not a member of the course.
+CREATE OR REPLACE FUNCTION app.teacher_course_students(p_course_id uuid)
+RETURNS TABLE (student_id uuid, given_name text, family_name text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_actor record;
+  v_role text;
+BEGIN
+  SELECT * INTO v_actor FROM app.current_actor();
+  IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
+    RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+  -- Decided once per call, in the session's institution (actor_course_role).
+  v_role := institution.actor_course_role(p_course_id);
+  IF v_role IS NOT NULL AND v_role <> 'teacher' THEN
+    RETURN;
+  END IF;
+  -- One open membership per student and course, so one row per student.
+  RETURN QUERY
+  SELECT m.user_id, n.given_name, n.family_name
+    FROM institution.course_member m
+    LEFT JOIN identity.person_name n ON n.user_id = m.user_id AND n.institution_id = m.institution_id
+   WHERE m.course_id = p_course_id AND m.institution_id = v_actor.institution_id
+     AND m.role = 'student' AND m.member_to IS NULL
+     AND (v_role = 'teacher' OR institution.actor_group_student(p_course_id, m.user_id))
+   ORDER BY m.user_id;
+END
+$$;
+
+RESET ROLE;
+SET LOCAL ROLE ductus_migrator;
+REVOKE CREATE ON SCHEMA institution, app, collaboration FROM ductus_identity;
+
+-- migrate:down
+-- Local only: staging and production migrate forward (docs/BACKEND.md 6).
+-- The definitions of 20261017120000, 20261102200000, 20261101150000 and
+-- 20261028140000.
+SET LOCAL ROLE ductus_migrator;
+GRANT CREATE ON SCHEMA institution, app, collaboration TO ductus_identity;
+SET LOCAL ROLE ductus_identity;
+
+CREATE OR REPLACE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id uuid, p_owner_id uuid) RETURNS text
+LANGUAGE sql STABLE SET search_path = ''
+AS $$
+  SELECT CASE
+    WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
+  END
+  FROM app.current_actor() a
+$$;
+
+CREATE OR REPLACE FUNCTION institution.can(p_action text, p_document_id text) RETURNS boolean
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_scope record;
+  v_confirmed boolean;
+  v_relation text;
+  v_teacher boolean;
+  v_owner boolean;
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('read', 'comment', 'open_fast_path', 'write', 'propose') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  IF v_user IS NULL OR p_document_id IS NULL THEN
+    RETURN false;
+  END IF;
+  SELECT s.institution_id, s.assignment_id, s.principal_id INTO v_scope
+  FROM collaboration.document_scope(p_document_id) s;
+  IF v_scope.institution_id IS DISTINCT FROM v_institution THEN
+    RETURN false;
+  END IF;
+  v_confirmed := EXISTS (
+    SELECT 1 FROM institution.institution_role r
+    WHERE r.user_id = v_user AND r.institution_id = v_institution AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  );
+  SELECT CASE
+           WHEN a.course_id IS NOT NULL THEN (
+             SELECT m.role FROM institution.course_member m
+             WHERE m.course_id = a.course_id AND m.institution_id = v_institution
+               AND m.user_id = v_user AND m.member_to IS NULL)
+           ELSE (
+             SELECT CASE WHEN ms.mentor_id = v_user THEN 'teacher'
+                         WHEN ms.student_id = v_user THEN 'student' END
+             FROM institution.mentorship ms
+             WHERE ms.id = a.mentorship_id AND ms.institution_id = v_institution AND ms.ended_at IS NULL)
+         END
+  INTO v_relation
+  FROM institution.assignment a
+  WHERE a.id = v_scope.assignment_id AND a.institution_id = v_institution;
+  v_teacher := v_relation IS NOT DISTINCT FROM 'teacher' AND v_confirmed;
+  v_owner := v_relation IS NOT DISTINCT FROM 'student' AND v_scope.principal_id = v_user;
+  RETURN CASE p_action
+           WHEN 'read' THEN v_teacher OR v_owner
+           WHEN 'write' THEN v_owner
+           ELSE v_teacher
+         END;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TABLE (student_id uuid)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+  SELECT m.user_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.course_member m ON m.course_id = s.course_id AND m.institution_id = s.institution_id
+   WHERE m.role = 'student' AND m.member_to IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+  UNION ALL
+  SELECT t.student_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.mentorship t ON t.id = s.mentorship_id AND t.institution_id = s.institution_id
+   WHERE t.ended_at IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+$$;
+
+CREATE OR REPLACE FUNCTION app.teacher_course_students(p_course_id uuid)
+RETURNS TABLE (student_id uuid, given_name text, family_name text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_actor record;
+BEGIN
+  SELECT * INTO v_actor FROM app.current_actor();
+  IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
+    RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+  IF institution.actor_course_role(p_course_id) IS DISTINCT FROM 'teacher' THEN
+    RETURN;
+  END IF;
+  RETURN QUERY
+  SELECT m.user_id, n.given_name, n.family_name
+    FROM institution.course_member m
+    LEFT JOIN identity.person_name n ON n.user_id = m.user_id AND n.institution_id = m.institution_id
+   WHERE m.course_id = p_course_id AND m.institution_id = v_actor.institution_id
+     AND m.role = 'student' AND m.member_to IS NULL
+   ORDER BY m.user_id;
+END
+$$;
+
+DROP FUNCTION institution.actor_group_student(uuid, uuid);
+
+RESET ROLE;
+SET LOCAL ROLE ductus_migrator;
+REVOKE CREATE ON SCHEMA institution, app, collaboration FROM ductus_identity;
