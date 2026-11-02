@@ -192,10 +192,10 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     // Evidence: this change is `citation-form`, an event of its own (src/editor/source.ts).
     tr.setMeta(CITATION_FORM_META, true);
     // Everything selected (Ctrl+A) becomes a cursor at the end of the last text
-    // block first. An `AllSelection` maps to the whole new document, the added
-    // bibliography too, so the next citation would land there (review on #866,
-    // c.6567118121).
-    if (tr.selection instanceof AllSelection) tr.setSelection(Selection.atEnd(tr.doc));
+    // block before the bibliography first. An `AllSelection` maps to the whole
+    // new document, the added bibliography too, so the next citation would land
+    // there (review on #866, c.6567118121, c.6574593813).
+    if (tr.selection instanceof AllSelection) tr.setSelection(endOfText(tr.doc));
     if (citation !== null) tr.insertText(citation, citationAt(tr));
     if (entry === null) return true;
     const plan = bibliographyPlan(blocksOf(tr.doc), entry);
@@ -222,6 +222,16 @@ export function writeSource(editor: Editor | null, citation: string | null, entr
     tr.setSelection(keepBefore(kept, tr, from));
     return true;
   }).run();
+}
+
+// The end of the last text block before the bibliography heading, or of the
+// document when it has none (or nothing stands before the heading).
+function endOfText(doc: PMNode): Selection {
+  const start = blocksOf(doc).findIndex((b) => b.type === "heading" && b.text.trim() === BIBLIOGRAPHY_HEADING);
+  if (start <= 0) return Selection.atEnd(doc);
+  let pos = 0;
+  for (let i = 0; i < start; i++) pos += doc.child(i).nodeSize;
+  return Selection.near(doc.resolve(pos), -1);
 }
 
 // The citation goes at the end of the selection, inside a text block. Outside

@@ -205,6 +205,35 @@ describe("writeSource", () => {
     editor.destroy();
   });
 
+  it("cites in the text, not in the bibliography, after Ctrl+A with a bibliography already there", () => {
+    // Review c.6574593813 and QA c.6574665912 on #866: the cursor went to the last entry.
+    const editor = editorWith([{ text: "Prvi odlomak." }, { text: "Drugi odlomak." }]);
+    const book = sourceOf(BOOK);
+    const article = sourceOf(ARTICLE);
+    expect(writeSource(editor, null, entryText(book))).toBe(true);
+    editor.commands.selectAll();
+    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
+    const cited = `Drugi odlomak.${citationText(article, "")}`;
+    expect(texts(editor)).toEqual([
+      "paragraph:Prvi odlomak.",
+      `paragraph:${cited}`,
+      "heading:Literatura",
+      `paragraph:${entryText(book)}`,
+    ]);
+    expect(editor.state.selection.empty).toBe(true);
+    expect(editor.state.selection.head).toBe(15 + 1 + cited.length);
+    editor.destroy();
+  });
+
+  it("cites at the end of the last paragraph after Ctrl+A without a bibliography", () => {
+    const editor = editorWith([{ text: "Prvi odlomak." }, { text: "Drugi odlomak." }]);
+    editor.commands.selectAll();
+    const article = sourceOf(ARTICLE);
+    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
+    expect(texts(editor)).toEqual(["paragraph:Prvi odlomak.", `paragraph:Drugi odlomak.${citationText(article, "")}`]);
+    editor.destroy();
+  });
+
   it("never writes over selected text", () => {
     const editor = editorWith([{ text: "Ostaje." }]);
     editor.commands.setTextSelection({ from: 1, to: 8 });
