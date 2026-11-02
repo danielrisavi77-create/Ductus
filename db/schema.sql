@@ -2735,6 +2735,9 @@ CREATE FUNCTION identity.close_sessions_on_home_org_change() RETURNS trigger
     SET search_path TO ''
     AS $$
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
   UPDATE identity.session
      SET closed_at = pg_catalog.now(), close_reason = 'institution_changed'
    WHERE institution_id = OLD.id
@@ -2754,6 +2757,9 @@ CREATE FUNCTION identity.close_sessions_on_issuer_removal() RETURNS trigger
     SET search_path TO ''
     AS $$
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
   IF TG_OP = 'UPDATE'
      AND NEW.institution_id = OLD.institution_id
      AND NEW.oidc_issuer = OLD.oidc_issuer COLLATE "C" THEN
@@ -2781,6 +2787,9 @@ CREATE FUNCTION identity.close_sessions_on_issuer_truncate() RETURNS trigger
     SET search_path TO ''
     AS $$
 BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
   UPDATE identity.session
      SET closed_at = pg_catalog.now(), close_reason = 'issuer_removed'
    WHERE closed_at IS NULL
@@ -2803,6 +2812,9 @@ DECLARE
 BEGIN
   IF p_user_id IS NULL THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
   END IF;
   UPDATE identity.session
      SET closed_at = pg_catalog.now(), close_reason = 'operator'
@@ -2873,8 +2885,9 @@ BEGIN
   -- (F-036, DAN-169). A change to aai_home_org or to the issuer row then
   -- waits for this login, and its trigger closes the session it opened; a
   -- change committed first is seen here, under READ COMMITTED the row is
-  -- read again, and the login gets the same ZD503. Shared locks do not
-  -- block each other, so logins do not wait for one another.
+  -- read again, and the login gets the same ZD503. The change itself must
+  -- run under READ COMMITTED; its triggers refuse any other level. Shared
+  -- locks do not block each other, so logins do not wait for one another.
   SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org FOR SHARE;
   SELECT true INTO v_issuer_ok FROM identity.institution_issuer ii
   WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)

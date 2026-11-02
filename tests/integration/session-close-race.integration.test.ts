@@ -138,6 +138,83 @@ describe("institution change and a login in flight", () => {
     }
   });
 
+  // A snapshot taken before the login committed would hide its session from
+  // the trigger (Codex c.6566277449, QA c.6566413277), so the change is
+  // refused unless it runs under READ COMMITTED.
+  const changes = [
+    {
+      what: "an issuer removal",
+      sql: "DELETE FROM identity.institution_issuer WHERE institution_id = $1 AND oidc_issuer = $2",
+      args: () => [institution, issuer],
+    },
+    {
+      what: "a new aai_home_org",
+      sql: "UPDATE identity.institution SET aai_home_org = $2 WHERE id = $1",
+      args: () => [institution, `moved-${homeOrg}`],
+    },
+  ];
+  it.each(["REPEATABLE READ", "SERIALIZABLE"].flatMap((level) => changes.map((change) => ({ level, ...change }))))(
+    "$what under $level that waits for a login is refused and leaves no session open",
+    async ({ level, sql, args }) => {
+      const login = await client(authUrl());
+      const operator = await client(ADMIN_URL);
+      const tokenHash = hash();
+
+      try {
+        await login.c.query("BEGIN");
+        await login.c.query(OPEN, openArgs(tokenHash));
+        await operator.c.query(`BEGIN ISOLATION LEVEL ${level}`);
+        // The snapshot is taken here, before the login commits.
+        await operator.c.query("SELECT count(*) FROM identity.session WHERE institution_id = $1", [institution]);
+        const change = operator.c.query(sql, args()).then(
+          () => "ok",
+          (error: { code?: string }) => error.code ?? "error",
+        );
+        const waited = await settlesOrWaits(change, operator.pid);
+        await login.c.query("COMMIT");
+        const outcome = await change;
+        await operator.c.query(outcome === "ok" ? "COMMIT" : "ROLLBACK");
+
+        expect(waited).toBe(true);
+        expect(outcome).toBe("25000");
+        const kept = await admin.query(
+          "SELECT 1 FROM identity.institution i JOIN identity.institution_issuer ii ON ii.institution_id = i.id WHERE i.id = $1 AND i.aai_home_org = $2 AND ii.oidc_issuer = $3",
+          [institution, homeOrg, issuer],
+        );
+        expect(kept.rowCount).toBe(1);
+        expect(await sessionState(tokenHash)).toBe("open");
+      } finally {
+        await operator.c.query("ROLLBACK").catch(() => {});
+        await admin.query("UPDATE identity.institution SET aai_home_org = $2 WHERE id = $1", [institution, homeOrg]);
+        await admin.query(
+          "INSERT INTO identity.institution_issuer (institution_id, oidc_issuer) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+          [institution, issuer],
+        );
+      }
+    },
+  );
+
+  it("TRUNCATE and close_user_sessions are refused under REPEATABLE READ", async () => {
+    const operator = await client(ADMIN_URL);
+    const outcome = async (sql: string, args: unknown[] = []) => {
+      await operator.c.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      try {
+        await operator.c.query(sql, args);
+        return "ok";
+      } catch (error) {
+        return (error as { code?: string }).code ?? "error";
+      } finally {
+        await operator.c.query("ROLLBACK");
+      }
+    };
+
+    expect(await outcome("TRUNCATE identity.institution_issuer")).toBe("25000");
+    expect(await outcome("SELECT identity.close_user_sessions($1)", [randomUUID()])).toBe("25000");
+    // Under READ COMMITTED the same call runs.
+    const closed = await operator.c.query<{ n: number }>("SELECT identity.close_user_sessions($1) AS n", [randomUUID()]);
+    expect(closed.rows[0].n).toBe(0);
+  });
+
   it("logins do not wait for one another", async () => {
     const first = await client(authUrl());
     const second = await client(authUrl());
