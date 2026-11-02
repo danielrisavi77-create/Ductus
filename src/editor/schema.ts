@@ -33,6 +33,7 @@ import { PluginKey } from "@tiptap/pm/state";
 
 import { blockMarkerRule, markerRemoval } from "./block-marker";
 import { BulletItem } from "./bullet-item";
+import { FindReplaceHistory } from "./find-replace";
 import { Quote } from "./quote";
 import { createNodeIdentityPlugin, mintMissingIds, repeatedNodeIds, type NodeIdMinter } from "./identity";
 import { NODE_ID_ATTRIBUTE } from "./interop";
@@ -187,6 +188,7 @@ export const F1_EXTENSION_NAMES = [
   "undoRedo",
   "placeholder",
   "nodeIdentity",
+  "findReplaceHistory",
 ] as const;
 
 /**
@@ -212,5 +214,7 @@ export function createEditorExtensions(
     History,
     Placeholder.configure({ placeholder }),
     NodeIdentity,
+    // Last, so its closing transaction follows every other appended one.
+    FindReplaceHistory,
   ];
 }

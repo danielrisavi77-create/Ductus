@@ -14,13 +14,17 @@
  *   before it, last to first, so a replacement that makes a new match is never
  *   searched again. It carries `FIND_REPLACE_META`: `recordWithSource` records
  *   it as an event of its own, one undo step takes it back, and it goes
- *   through the same capture as every other change.
+ *   through the same capture as every other change. History is closed before
+ *   it (`closeHistory` on the transaction) and after it (`FindReplaceHistory`
+ *   appends an empty closing transaction), so neither the typing before nor
+ *   the typing right after it joins its undo step.
  * - Nothing is logged, sent or stored: the query and the text stay here.
  */
 
+import { Extension } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import type { EditorState, Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
 
 import { findLiteral, isSearchableText, type LiteralQuery } from "@/domain/text/find-literal";
 
@@ -131,3 +135,25 @@ export function replaceMatchTransaction(
   if (match === undefined) return { ok: false, reason: "no_match" };
   return replaceMatches(state, [match], replacement);
 }
+
+/**
+ * Closes the history group right after a find and replace. `closeHistory` on
+ * the transaction only ends the group before it; without this, typing next to
+ * a match within the history's group delay would join the replacement's undo
+ * step (Codex c.4447413741). The appended transaction has no steps, so it
+ * changes neither the document nor the evidence.
+ */
+export const FindReplaceHistory = Extension.create({
+  name: "findReplaceHistory",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("findReplaceHistory"),
+        appendTransaction(transactions, _oldState, newState) {
+          const replaced = transactions.some((tr) => tr.docChanged && tr.getMeta(FIND_REPLACE_META) === true);
+          return replaced ? closeHistory(newState.tr) : null;
+        },
+      }),
+    ];
+  },
+});

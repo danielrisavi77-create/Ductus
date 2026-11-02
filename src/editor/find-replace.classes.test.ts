@@ -258,6 +258,18 @@ describe("find and replace: evidence", () => {
     expect(texts(t.editor)).toEqual(["abb"]);
   });
 
+  it("replace all is its own undo step, even with typing right after it next to a match (Codex c.4447413741)", () => {
+    const t = recorded([p("ab")]);
+    const outcome = replaceAllTransaction(t.editor.state, searchDocument(t.editor.state.doc, { text: "b", matchCase: true })!, "c");
+    if (outcome.ok) t.editor.view.dispatch(outcome.tr);
+    t.editor.view.dispatch(t.editor.state.tr.insertText("d", 3));
+    expect(texts(t.editor)).toEqual(["acd"]);
+    t.undo();
+    expect(texts(t.editor)).toEqual(["ac"]);
+    t.undo();
+    expect(texts(t.editor)).toEqual(["ab"]);
+  });
+
   afterEach(() => vi.restoreAllMocks());
 
   it("no telemetry: search and replace log, fetch and store nothing", () => {
