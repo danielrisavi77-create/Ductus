@@ -16,8 +16,9 @@ import exceptions from "./rpc-http-exceptions.json";
 // body writes (INSERT INTO, UPDATE, DELETE FROM) or calls a function that does.
 // SQL is read by one scanner that tells code from '...' and E'...'
 // literals, "..." identifiers, $tag$ bodies and comments; volatility is read
-// outside literals and brackets (two volatility words stop the test), and a
-// write is looked for in the body without comments.
+// outside literals and brackets, after the function name and return type
+// (two volatility words stop the test), and a write is looked for in the body
+// without comments; a schema or table name in UPDATE may be "quoted".
 // A definition the parser cannot read, or an unclosed literal, body or
 // comment, stops the test. A function has a route when a call "schema.name("
 // appears, outside comments, in a file that some app/api/**/route.ts reaches
@@ -197,8 +198,13 @@ export function catalogue(
           /\bSET\s+[\w.]+\s*(?:=|\bTO\b)\s*(?:''|""|[\w.]+)(?:\s*,\s*(?:''|""|[\w.]+))*/gi,
           " ",
         );
+        // Volatility is an attribute after the signature: the function name
+        // and the first word of the return type are not attributes.
+        const options = attributes
+          .replace(/^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+[\w.$]+/i, " ")
+          .replace(/\bRETURNS\s+(?:SETOF\s+)?[\w.$]+/i, " ");
         const volatility =
-          attributes.match(/\b(?:VOLATILE|STABLE|IMMUTABLE)\b/gi) ?? [];
+          options.match(/\b(?:VOLATILE|STABLE|IMMUTABLE)\b/gi) ?? [];
         if (volatility.length > 1)
           throw new Error(`${file.name}: ambiguous volatility`);
         fns.set(created[1].toLowerCase(), {
@@ -221,8 +227,12 @@ export function catalogue(
   return fns;
 }
 
-const WRITE_RE =
-  /\b(?:INSERT\s+INTO|UPDATE\s+[a-z_]+\.[a-z_0-9]+|DELETE\s+FROM)\b/i;
+// A plain or "quoted" identifier; UPDATE needs schema.table so FOR UPDATE is not a write.
+const SQL_IDENT = String.raw`(?:[a-z_][a-z_0-9$]*|"(?:[^"]|"")+")`;
+const WRITE_RE = new RegExp(
+  String.raw`\b(?:INSERT\s+INTO|UPDATE\s+${SQL_IDENT}\.${SQL_IDENT}|DELETE\s+FROM)(?![a-z_0-9$])`,
+  "i",
+);
 
 /** Whether text calls schema.name, in any case and with optional space before "(". */
 export function calls(text: string, name: string): boolean {
@@ -481,6 +491,53 @@ describe("catalogue parser", () => {
       "s.fixed",
       "s.label",
       "s.named",
+    ]);
+  });
+
+  it("reads volatility only after the signature, not from the name or return type", () => {
+    const parsed = catalogue([
+      {
+        name: "1.sql",
+        sql: [
+          "CREATE FUNCTION app.stable() RETURNS void LANGUAGE sql AS $$ DELETE FROM identity.session; $$;",
+          "CREATE FUNCTION app.immutable(p int) RETURNS app.stable LANGUAGE sql AS $$ UPDATE app.t SET a = 1 RETURNING 1; $$;",
+          "CREATE FUNCTION app.read() RETURNS app.volatile LANGUAGE sql STABLE AS $$ SELECT 1; $$;",
+        ].join("\n"),
+      },
+    ]);
+    expect(parsed.get("app.stable")?.volatile).toBe(true);
+    expect(parsed.get("app.immutable")?.volatile).toBe(true);
+    expect(parsed.get("app.read")?.volatile).toBe(false);
+    expect(stateChanging(parsed)).toStrictEqual([
+      "app.immutable",
+      "app.stable",
+    ]);
+  });
+
+  it("counts writes to a table whose schema or name is quoted", () => {
+    const parsed = catalogue([
+      {
+        name: "1.sql",
+        sql: [
+          'CREATE FUNCTION app.u1() RETURNS void LANGUAGE sql AS $$ UPDATE identity."session" SET last_seen_at = now(); $$;',
+          'CREATE FUNCTION app.u2() RETURNS void LANGUAGE sql AS $$ UPDATE "identity".session SET last_seen_at = now(); $$;',
+          'CREATE FUNCTION app.u3() RETURNS void LANGUAGE sql AS $$ UPDATE "identity"."se""ssion" SET a = 1; $$;',
+          'CREATE FUNCTION app.i1() RETURNS void LANGUAGE sql AS $$ INSERT INTO identity."session" VALUES (1); $$;',
+          'CREATE FUNCTION app.i2() RETURNS void LANGUAGE sql AS $$ INSERT INTO "identity".session VALUES (1); $$;',
+          'CREATE FUNCTION app.d1() RETURNS void LANGUAGE sql AS $$ DELETE FROM identity."session"; $$;',
+          'CREATE FUNCTION app.d2() RETURNS void LANGUAGE sql AS $$ DELETE FROM "identity".session; $$;',
+          'CREATE FUNCTION app.lock() RETURNS void LANGUAGE sql AS $$ SELECT 1 FROM "identity".session FOR UPDATE; $$;',
+        ].join("\n"),
+      },
+    ]);
+    expect(stateChanging(parsed)).toStrictEqual([
+      "app.d1",
+      "app.d2",
+      "app.i1",
+      "app.i2",
+      "app.u1",
+      "app.u2",
+      "app.u3",
     ]);
   });
 
