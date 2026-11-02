@@ -7,6 +7,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 import type { AssignmentSubmission } from "@/server/evidence/assignment-submissions";
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 
+import { newAssignmentHref } from "./existing-course";
 import styles from "./TeacherCourses.module.css";
 
 const t = messagesHr.teacherCourses;
@@ -80,7 +81,10 @@ export default function TeacherCourses({ courses, works = {} }: {
       h("section", { key: course.id, className: styles.course, "aria-labelledby": `kolegij-${course.id}` },
         h("header", { className: styles.courseHead },
           h("h2", { id: `kolegij-${course.id}` }, course.name),
-          h("span", { className: styles.year }, yearHr(course.academicYear))),
+          h("span", { className: styles.year }, yearHr(course.academicYear)),
+          // DAN-310 (M2.4-P01): a further assignment in this course.
+          h(Link, { className: styles.add, href: newAssignmentHref(course.id), prefetch: false },
+            messagesHr.teacher.existingCourse.link)),
         course.assignments.length === 0
           ? h("p", { className: styles.none }, t.noAssignments)
           : h("ul", { className: styles.assignments },

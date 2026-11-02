@@ -141,3 +141,13 @@
     font-size: 13px;
   }
 }
+
+/* DAN-310: a further assignment in the course, at the end of its header. */
+.add {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 13px;
+  white-space: nowrap;
+}

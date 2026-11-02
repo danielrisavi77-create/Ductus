@@ -320,6 +320,15 @@ export const hr = {
     signIn: "Prijavi se",
     backHome: "Na početnu",
     backCourses: "Moji kolegiji",
+    // DAN-310 (M2.4-P01): a further assignment in a course the teacher already has.
+    existingCourse: {
+      title: "Novi zadatak u kolegiju",
+      link: "Novi zadatak u kolegiju",
+      missing: "Kolegij nije dostupan ovom računu.",
+      unavailable: "Kolegij trenutačno nije moguće učitati. Pokušajte ponovno.",
+      codeKept: "Upisni kod kolegija ostaje isti.",
+      studentsNotified: "Studenti upisani u kolegij vide zadatak među svojim zadacima.",
+    },
     course: {
       heading: "Kolegij",
       name: "Naziv",
