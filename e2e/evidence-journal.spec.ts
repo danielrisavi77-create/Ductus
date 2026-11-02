@@ -307,3 +307,29 @@ test.describe("evidence journal without Ed25519 in Web Crypto", () => {
     expect(server.calls.length).toBeGreaterThan(0);
   });
 });
+
+test.describe("evidence journal with a receipt key whose point starts with 0x00", () => {
+  test.beforeAll(async ({}, testInfo) => {
+    testInfo.setTimeout(180_000);
+    await prepareEvidenceHarness(testInfo.project.outputDir);
+  });
+
+  // #1247: WebKit on Linux refuses such a key as SPKI, about one key in 256;
+  // a random key per test made t. 12-21 fail now and then with ERROR.
+  test("22: a receipt under a key whose point starts with 0x00 reaches SYNCED", async ({ context, page }) => {
+    const server = new EvidenceServer({ leadingZero: true });
+    expect(Buffer.from(server.signer.key.keyBase64Url, "base64url")[12]).toBe(0);
+    await server.install(context, server.config());
+    await openEvidenceHarness(page);
+    await expectEd25519(page);
+
+    await type(page, " nula");
+    const saved = await save(page);
+    expect((await drain(page)).map((result) => ok(result).kind)).toEqual(["sent", "idle"]);
+
+    const after = await state(page);
+    expect(after.meta?.state).toBe("SYNCED");
+    expect(after.rows).toEqual([]);
+    expect(after.meta?.evidenceHead).toEqual({ segmentHash: saved.sha256, lastSequenceTo: saved.sequenceTo });
+  });
+});

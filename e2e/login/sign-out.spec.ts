@@ -189,10 +189,12 @@ test("row 9: the dialog says text the device could not store would be lost; sign
   const dialog = logoutDialogOf(page);
   await expect(dialog).toContainText(t.auth.logoutUnsaved);
   await expect(dialog.getByRole("button", { name: t.editor.exportText })).toBeVisible();
+  // #1331: focus starts on "Ostani", and sign-out is named for what it costs.
+  await expect(dialog.getByRole("button", { name: t.auth.logoutStay })).toBeFocused();
   await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
   await expectStillSignedIn(page, token);
 
-  await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await dialog.getByRole("button", { name: t.auth.logoutConfirmUnsaved }).click();
   await page.waitForURL("http://localhost:3000/");
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
 });

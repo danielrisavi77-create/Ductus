@@ -14,7 +14,7 @@ const t = messagesHr.fastPath;
 
 // Invented names only.
 function student(givenName: string | null, surname: string | null, id = `${givenName}-${surname}`): FastPathStudent {
-  return { id, givenName, surname, work: "writing", lastChangeAt: null, record: null };
+  return { id, givenName, surname, documentId: null, work: "writing", lastChangeAt: null, record: null };
 }
 
 const SAMPLE = DEMO_FAST_PATH;
