@@ -16,3 +16,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ men
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   }, mentorshipId);
 }
+
+// Exported so Next.js does not answer OPTIONS itself with 204: the handler
+// refuses every method but GET and HEAD with the same 405 (QA on #1278).
+export const OPTIONS = GET;
