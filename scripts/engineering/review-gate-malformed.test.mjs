@@ -618,4 +618,18 @@ for (const kind of ["review", "qa"]) {
     const fenced = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, "```", `- [ ] ${V}: FAIL`, "```"]));
     assert.equal(gate(fenced.comments, { risk: fenced.risk }).state, "success");
   });
+  // The two forms the p06g contract names as a risk (orchestrator c.6588599079).
+  // Expectation: a box without a bullet and an escaped box (`\[ \]`, which
+  // renders as a visible `[ ]`) are read like any other box, so a negative
+  // blocks and a PASS in that form still does not count.
+  test(`${kind}: a box without a bullet and an escaped box block, and their PASS does not count (p06g)`, () => {
+    for (const box of ["[ ]", "[x]", "- \\[ \\]", "* \\[x\\]", "\\[X\\]", "  + \\[ \\]"]) {
+      const negative = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: FAIL`]));
+      assert.notEqual(gate(negative.comments, { risk: negative.risk }).state, "success", `${box} FAIL`);
+      const onlyPass = kind === "review"
+        ? [block("review", "r1", ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: PASS`])]
+        : [exact("review", "r1"), block("qa", "q1", ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: PASS`])];
+      assert.notEqual(gate(onlyPass, { risk: riskFor(kind) }).state, "success", `${box} PASS`);
+    }
+  });
 }
