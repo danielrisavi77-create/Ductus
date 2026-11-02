@@ -251,6 +251,7 @@ export function LocalDocumentProvider({
     extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput, ArrowCollapse, observer.extension],
     editable: false,
     immediatelyRender: false,
+    injectCSS: false, // app/prosemirror.css (DAN-489)
     editorProps: {
       attributes: () => ({
         role: "textbox",

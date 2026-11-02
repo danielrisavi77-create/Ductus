@@ -1,8 +1,8 @@
 # Sigurnosna zaglavlja: inventar builda i ciljani ugovor (M1.6, prvi dio)
 
-Korak M1.6 iz `docs/PROGRAM-RAZRADA.md` (r. 55), Linear DAN-296. Ovaj zapis nije izvor pravila. Prvi dio bilježi što produkcijski build danas šalje i što stranice učitavaju te predlaže ciljani CSP i ugovor predmemorije. Produkcijska zaglavlja mijenja tek PR 2, nakon ugovora na #1091. Sesije i istek neaktivne sesije (P2) nisu dio ovog koraka.
+Korak M1.6 iz `docs/PROGRAM-RAZRADA.md` (r. 55), Linear DAN-296. Ovaj zapis nije izvor pravila. Prvi dio bilježi što produkcijski build danas šalje i što stranice učitavaju te predlaže ciljani CSP i ugovor predmemorije. Produkcijska zaglavlja mijenja PR 2 (M1.6b, Linear DAN-489) prema ugovoru na #1091 (c.6574486389); njegovo stanje je u odjeljku 9. Sesije i istek neaktivne sesije (P2) nisu dio ovog koraka.
 
-Stanje "danas" čuva `e2e/security-headers.spec.ts`: test čita zaglavlja s builda i pada čim se ona razlikuju od ovog inventara. PR 2 zato mijenja konfiguraciju, ovaj dokument i test u istom PR-u.
+Stanje builda čuva `e2e/security-headers.spec.ts`: test čita zaglavlja s builda i pada čim se ona razlikuju od inventara. Od PR 2 pinira stanje iz odjeljka 9; odjeljci 2 do 5 ostaju zapis stanja prije njega.
 
 ## 1. Metoda
 
@@ -56,7 +56,7 @@ Osnova svih proba: `default-src 'self'; img-src 'self'; font-src 'self'; connect
 
 Zaključak: osim inline skripti i Tiptap stila, ništa ne traži izvor izvan `'self'`.
 
-## 4. Zaglavlja na buildu danas
+## 4. Zaglavlja na buildu prije PR 2 (6f58458b)
 
 `next.config.ts` postavlja na `/:path*`: `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`; `poweredByHeader: false`.
 
@@ -82,7 +82,7 @@ Nijedan odgovor nema `Content-Security-Policy`, `Permissions-Policy`, `Strict-Tr
 - **N-4.** Nema CSP-a, Permissions-Policy, HSTS-a ni COOP-a (komentar u `next.config.ts` ih najavljuje s prijenosom uređivača).
 - **N-5.** Ugradnju u okvir brani samo `X-Frame-Options`; nema `frame-ancestors`.
 
-## 6. Prijedlog ciljanog stanja (PRIJEDLOG, gradi PR 2)
+## 6. Prijedlog ciljanog stanja (PRIJEDLOG; što je PR 2 izveo, a što ne, piše u odjeljku 9)
 
 ### 6.1 CSP
 
@@ -135,7 +135,7 @@ upgrade-insecure-requests
 - `next dev` nije mjeren.
 - Nadogradnja Next.js-a može promijeniti zadana zaglavlja (npr. Cache-Control za HTML ili 405); test to uhvati.
 
-## 8. Popis za PR 2
+## 8. Popis za PR 2 (izvorni; ishod u odjeljku 9)
 
 1. `middleware.ts`: nonce po zahtjevu i CSP (najprije Report-Only).
 2. Tiptap: `injectCSS: false` i stylesheet, ili `injectNonce`.
@@ -143,3 +143,56 @@ upgrade-insecure-requests
 4. Odluka o statičnim stranicama i `s-maxage` preusmjerenju.
 5. HSTS u Caddy konfiguraciji ruba (B0.x) i mjerenje na stagingu.
 6. Ažurirati ovaj dokument i `e2e/security-headers.spec.ts` u istom PR-u.
+
+## 9. Stanje nakon PR 2 (DAN-489)
+
+Ugovor: #1091, c.6574486389, koji je orkestrator potvrdio. Mjereno na buildu (`pnpm build`, `next start`); sve rute su dinamičke (`ƒ`), statičnih više nema.
+
+### 9.1 CSP stranica
+
+`middleware.ts` za svaki zahtjev stranice stvara nonce od 128 slučajnih bitova i politiku (`src/server/http/content-security-policy.ts`). Postavlja je na zaglavlje zahtjeva, iz kojeg Next.js nonce stavlja na svoje skripte, i na odgovor, koji provodi preglednik. Na buildu:
+
+```
+default-src 'self';
+script-src 'self' 'nonce-<po zahtjevu>' 'sha256-w5EUkO0mfeWuprqAVvvDQYH6baexqP0/rQ+LVq3kZ6I=' 'strict-dynamic';
+style-src 'self';
+img-src 'self';
+font-src 'self';
+connect-src 'self';
+worker-src 'none';
+object-src 'none';
+base-uri 'none';
+form-action 'self' <ishodište OIDC_ISSUER>;
+frame-ancestors 'none'
+```
+
+- `THEME_SCRIPT` je dopušten svojim hashom, a ne nonceom. Unit test hash ponovno računa iz skripte, pa promjena skripte bez nove konstante pada.
+- `form-action` uz `'self'` sadrži ishodište davatelja identiteta, jer 303 odjave vodi na `end_session`. Ako `OIDC_ISSUER` nedostaje ili nije http(s) URL, ostaje samo `'self'`.
+- Samo `next dev` dodaje `'unsafe-eval'` u `script-src` i `'unsafe-inline'` u `style-src`.
+- Middleware ne obuhvaća `/api/*`, `/_next/static/*` ni `/favicon.ico`. `/_next/image` ostaje obuhvaćen: odgovor 400 krajnje točke za slike nosi politiku stranice, optimizator na slike stavlja vlastitu politiku sa `sandbox`, a svaka putanja ispod nje je HTML 404 kojem treba nonce. Prvotno izuzeće `_next/image/` hvatalo je samo takve podputanje, pa je njihov 404 ostajao bez politike (nalaz drugog reviewa na PR-u 2).
+- Izuzete putanje dobivaju iz `next.config.ts` politiku koja ništa ne dopušta. Next.js i ondje na GET odgovara HTML stranicom greške, npr. 416 za `Range` izvan duljine datoteke, a bez te politike ona bi ostala bez CSP-a (nalaz trećeg reviewa na PR-u 2, c.6581226772). Preglednik politiku na skripti ili stilu kao podresursu ne primjenjuje.
+- Izostavljeno u odnosu na 6.1: `upgrade-insecure-requests` (ruši `http://localhost`) i Report-Only razdoblje.
+
+### 9.2 Promjene koje politika traži u aplikaciji
+
+- Tiptap: `injectCSS: false` u `LocalDocument.tsx` i `TwoSides.tsx`; njegov osnovni CSS, doslovno iz `@tiptap/core` 3.31.4, je u `app/prosemirror.css`, uvezen u root layout.
+- `app/not-found.tsx` zove `await connection()`: prerenderirana 404 nema nonce, pa bi joj se skripte odbile.
+- `app/api/[...path]/route.ts` nepoznatu `/api/*` putanju odbija JSON odgovorom 404 s `no-store`. Bez nje bi Next.js ondje renderirao `app/not-found.tsx` kao HTML pod politikom za API, bez noncea, pa bi stilovi i skripte bili odbijeni (nalaz reviewa na PR-u 2). Postojeće rute pod `app/api` imaju prednost.
+- `AppShell.tsx`: pravila za rad bez JavaScripta (bočna traka i odjava ostaju u stranici, I5) prešla su iz `<noscript><style>` u `@media (scripting: none)` u `AppShell.module.css`, jer `style-src 'self'` odbija inline stil. Ovo nije bilo u ugovoru; dopuna je na #1091.
+
+### 9.3 Zaglavlja po klasi odgovora
+
+| Klasa odgovora | CSP | Cache-Control |
+| --- | --- | --- |
+| HTML stranice i 404 | politika iz 9.1, nonce nov za svaki zahtjev | `private, no-cache, no-store, max-age=0, must-revalidate` |
+| `/nastavnik/kolegiji` (307 na `/nastavnik`) | politika iz 9.1 | kao HTML; `s-maxage` je nestao, pa je N-3 zatvoren |
+| `/api/*`, uključujući 405 okvira i JSON 404 nepoznate putanje | `default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` (iz `next.config.ts`) | nepromijenjeno (N-2 ostaje) |
+| `/_next/static/*`, `/favicon.ico`, uključujući HTML greške okvira (npr. 416) | ista politika kao za `/api/*` (iz `next.config.ts`) | nepromijenjeno |
+
+Svi odgovori uz tri postojeća zaglavlja nose i `Strict-Transport-Security: max-age=63072000; includeSubDomains` te `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), display-capture=(), clipboard-write=(self)`. `interest-cohort` iz 6.2 je izostavljen, kao u ugovoru, jer je FLoC napušten. Nijedan odgovor nema `Cross-Origin-Opener-Policy`, `Content-Security-Policy-Report-Only` ni `X-Powered-By`.
+
+### 9.4 Otvoreno nakon PR 2
+
+- COOP; N-1 (`no-referrer` na `/api/auth/*`); N-2 (405 bez `no-store`); Report-Only na stagingu i `report-to`; HSTS `preload` i HSTS na Caddy rubu; `Clear-Site-Data` na odjavi. Predlaže se nastavak pod DAN-296.
+- HSTS preglednik preko HTTP-a zanemaruje (RFC 6797 §8.1); djeluje tek iza TLS-a na stagingu.
+- `'strict-dynamic'` dopušta skripti s nonceom učitati daljnje skripte; sigurnost počiva na tome da nonce dobiva samo Next.js.
