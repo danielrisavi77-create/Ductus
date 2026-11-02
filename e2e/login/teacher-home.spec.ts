@@ -112,6 +112,7 @@ test("a teacher sees their course with its assignment, in the route's order, and
   const nav = page.getByRole("navigation", { name: messagesHr.shell.workNav });
   await expect(nav.getByRole("link")).toHaveText([
     messagesHr.shell.nav.courses, messagesHr.shell.nav.newCourse, messagesHr.shell.nav.fastPath,
+    messagesHr.shell.nav.mentoredWorks,
   ]);
   await expect(nav.getByRole("link", { name: messagesHr.shell.nav.courses })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: messagesHr.shell.signOut })).toBeVisible();
