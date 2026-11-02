@@ -197,8 +197,12 @@ const LETTERS = "abcdefghijklmnopqrstuvwxyz";
 export type LetterAt = { index: number; offset: number; letter: string };
 
 export type SuffixPlan =
-  /** The work, with the letter it takes; `promote` letters earlier text. */
-  | { kind: "write"; source: Source; duplicate: boolean; promote: readonly LetterAt[] }
+  /**
+   * The work, with the letter it takes; `promote` letters earlier text.
+   * `taken`: the year form `work` came with (its letter, or none) is held by
+   * another entry of the group, so a citation of `work` as it is would point there.
+   */
+  | { kind: "write"; source: Source; duplicate: boolean; promote: readonly LetterAt[]; taken: boolean }
   /** Every letter a to z is taken for this author and year: nothing is written. */
   | { kind: "full" };
 
@@ -235,23 +239,30 @@ function citedForm(names: readonly string[]): readonly string[] {
 }
 
 /**
- * The family names of an entry's authors after its first, read from what
- * follows the first author's family name and comma: "Marko, Babić, Iva i
- * Kovač, Luka" gives ["Babić", "Kovač"]. A joiner with no comma after it is
- * part of a name ("Ana i Marija"). `null` when the list is not one of
- * persons (an organisation among them): it cannot be read safely.
+ * Every reading of the family names of an entry's authors after its first,
+ * from what follows the first author's family name and comma: "Marko, Babić,
+ * Iva i Kovač, Luka" gives [["Babić", "Kovač"]]. The joiner between authors
+ * stands only in the part before the last author's given name, between the
+ * given name before it and the last family name; a joiner anywhere else is
+ * part of a name ("Babić, Iva i Ema", QA on #1407, c.6588415588). When that
+ * part holds more than one joiner ("Iva i Ema i Kovač"), each is a reading.
+ * `null` when the list is not one of persons (an organisation among them):
+ * it cannot be read safely.
  */
-function laterFamilies(rest: string): string[] | null {
+function laterFamilies(rest: string): string[][] | null {
   const { authorJoiner } = fpzgCitationStyle.bibliography;
-  const joined = rest.lastIndexOf(authorJoiner);
-  const last = joined === -1 ? -1 : rest.indexOf(", ", joined + authorJoiner.length);
-  const before = last === -1 ? rest : rest.slice(0, joined);
-  // The first author's given name, then (family, given) pairs.
-  const parts = before.split(", ");
-  if (parts.length % 2 === 0) return null;
-  const families = parts.filter((_, i) => i % 2 === 1);
-  if (last !== -1) families.push(rest.slice(joined + authorJoiner.length, last));
-  return families;
+  // The first author's given name, then (family, given) pairs; the last family
+  // name shares its part with the given name before it.
+  const parts = rest.split(", ");
+  if (parts.length === 1) return [[]];
+  if (parts.length % 2 === 1) return null;
+  const middle = parts.slice(1, -2).filter((_, i) => i % 2 === 0);
+  const joined = parts[parts.length - 2]!;
+  const readings: string[][] = [];
+  for (let at = joined.indexOf(authorJoiner); at !== -1; at = joined.indexOf(authorJoiner, at + 1)) {
+    readings.push([...middle, joined.slice(at + authorJoiner.length)]);
+  }
+  return readings.length === 0 ? null : readings;
 }
 
 /**
@@ -263,7 +274,8 @@ function laterFamilies(rest: string): string[] | null {
  * "Analiza (2021)" (QA on #1407, c.6586313749). "Horvat, Marko, Babić, Iva i
  * Kovač, Luka (2021)" is "(Horvat i sur., 2021)", not "(Horvat i Kovač, 2021)"
  * (QA on #1407, c.6587528637). An entry that cannot be read counts as shared,
- * so the student's citations stay as written.
+ * so the student's citations stay as written, and so does one any reading of
+ * whose names gives the same form (c.6588415588).
  */
 function sharesCitation(text: string, work: Source): boolean {
   const first = work.authors[0]!;
@@ -274,11 +286,13 @@ function sharesCitation(text: string, work: Source): boolean {
   // What stands between the first author's head and the year: a given name, or
   // more authors. An organisation has no given name: a stand-in keeps the shape.
   const rest = text.slice(head.length, head.length + year.index).trimEnd();
-  const later = laterFamilies(first.kind === "person" ? rest : `-${rest}`);
-  if (later === null) return true;
-  const theirs = citedForm([citedName(first), ...later]);
+  const readings = laterFamilies(first.kind === "person" ? rest : `-${rest}`);
+  if (readings === null) return true;
   const ours = citedForm(work.authors.map(citedName));
-  return theirs.length === ours.length && theirs.every((name, i) => name === ours[i]);
+  return readings.some((later) => {
+    const theirs = citedForm([citedName(first), ...later]);
+    return theirs.length === ours.length && theirs.every((name, i) => name === ours[i]);
+  });
 }
 
 /**
@@ -297,7 +311,7 @@ export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
   const head = lead(plain, entryText({ ...base, yearSuffix: "a" }));
   const tail = plain.slice(head.length);
   const range = section(blocks);
-  if (range === null) return { kind: "write", source: base, duplicate: false, promote: [] };
+  if (range === null) return { kind: "write", source: base, duplicate: false, promote: [], taken: false };
 
   type Member = { index: number; offset: number; letter: string | null; same: boolean };
   const members: Member[] = [];
@@ -314,9 +328,10 @@ export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
   const same = members.find((m) => m.same);
   if (same !== undefined) {
     const source = same.letter === null ? base : { ...base, yearSuffix: same.letter };
-    return { kind: "write", source, duplicate: true, promote: [] };
+    return { kind: "write", source, duplicate: true, promote: [], taken: false };
   }
-  if (members.length === 0) return { kind: "write", source: base, duplicate: false, promote: [] };
+  if (members.length === 0) return { kind: "write", source: base, duplicate: false, promote: [], taken: false };
+  const taken = members.some((m) => m.letter === (work.yearSuffix ?? null));
 
   const free = [...LETTERS].filter((l) => !members.some((m) => m.letter === l));
   const unlettered = members.filter((m) => m.letter === null);
@@ -348,7 +363,7 @@ export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
       });
     }
   }
-  return { kind: "write", source: { ...base, yearSuffix: free[unlettered.length]! }, duplicate: false, promote };
+  return { kind: "write", source: { ...base, yearSuffix: free[unlettered.length]! }, duplicate: false, promote, taken };
 }
 
 /** The top-level blocks of a document, as the plans read them. */
@@ -399,6 +414,10 @@ export function writeSource(editor: Editor | null, work: Source, page: string | 
     // Tiptap dispatches even a command that returns false; nothing is written then.
     const refuse = () => { tr.setMeta("preventDispatch", true); return false; };
     if (plan.kind === "full") return refuse();
+    // "Citiraj" for a work no longer in Literatura (Poništi) never writes the
+    // letter, or the year without one, that another work of its group now holds
+    // there: "(Horvat, 2021b)" would point to that work (review on #1407, c.6588340462).
+    if (!withEntry && !plan.duplicate && plan.taken) return refuse();
     // "Citiraj" from the list letters nothing else: the work keeps the letter
     // its entry has in the sheet, or the one it was written with.
     const source = withEntry || plan.duplicate ? plan.source : work;

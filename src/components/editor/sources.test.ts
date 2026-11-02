@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { Editor } from "@tiptap/core";
+import { closeHistory } from "@tiptap/pm/history";
 import { describe, expect, it } from "vitest";
 
 import { formatBibliographyEntry, formatInText, fpzgCitationStyle } from "@/domain/citation";
@@ -592,6 +593,155 @@ describe("sameForm by the number of authors, class by class", () => {
     expect(citationText(PAIR.first, "")).toBe("(Horvat i Kovač, 2021)");
     expect(citationText(TRIO.first, "")).toBe("(Horvat i sur., 2021)");
     expect(line(work([HM, B, K], "Treća knjiga"))).toBe("Horvat, Marko, Babić, Iva i Kovač, Luka (2021) Treća knjiga. Zagreb: Primjer.");
+  });
+});
+
+// DAN-484, review FAIL on #1407 (c.6588340462): "Citiraj" for a work no longer
+// in Literatura after Poništi never writes the year form (a letter, or none)
+// another work of its group now holds there. Sequences through the editor's undo.
+describe("Citiraj after Poništi, class by class", () => {
+  const W = ["Prva", "Druga", "Treća", "Četvrta"].map((title) => sourceOf({ ...BOOK, title: `${title} knjiga` }));
+  const as = (n: number, letter?: string): Source => (letter === undefined ? W[n]! : { ...W[n]!, yearSuffix: letter });
+  // A step adds work n to Literatura (the letter it is expected to take) or takes the last step back.
+  type Step = readonly [n: number, letter?: string] | "undo";
+  // A headless editor keeps its history only with the plugins installed in its view (as history.test.ts).
+  const sheet = () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
+    return editor;
+  };
+  const undo = (editor: Editor) => expect(editor.commands.undo()).toBe(true);
+  type Row = { klass: string; steps: readonly Step[]; cite: Source; written: string | null | undefined };
+  // written: the letter the citation carries (undefined: none), or null when nothing is written.
+  const rows: Row[] = [
+    { klass: "U1 one work: add, undo, cite", steps: [[0], "undo"], cite: as(0), written: undefined },
+    { klass: "U2 one work: add W1, undo, add W2, cite W1 without a letter (W2's form)", steps: [[0], "undo", [1]], cite: as(0), written: null },
+    { klass: "U3 two works: add both, undo the second, cite it with its free b", steps: [[0], [1, "b"], "undo"], cite: as(1, "b"), written: "b" },
+    { klass: "U4 two works, the finding: add both, undo B, add C (b), cite B with b", steps: [[0], [1, "b"], "undo", [2, "b"]], cite: as(1, "b"), written: null },
+    { klass: "U5 the state of U4, cite A (a in Literatura)", steps: [[0], [1, "b"], "undo", [2, "b"]], cite: as(0), written: "a" },
+    { klass: "U6 three works: undo the third, add a fourth (c), cite the third with c",
+      steps: [[0], [1, "b"], [2, "c"], "undo", [3, "c"]], cite: as(2, "c"), written: null },
+    { klass: "U7a three works: undo twice, add a fourth (b), cite the second with b",
+      steps: [[0], [1, "b"], [2, "c"], "undo", "undo", [3, "b"]], cite: as(1, "b"), written: null },
+    { klass: "U7b the state of U7a, cite the third with its free c",
+      steps: [[0], [1, "b"], [2, "c"], "undo", "undo", [3, "b"]], cite: as(2, "c"), written: "c" },
+    { klass: "U8 the state of U4, add B again (c), cite it with c", steps: [[0], [1, "b"], "undo", [2, "b"], [1, "c"]], cite: as(1, "c"), written: "c" },
+  ];
+
+  it.each(rows)("class $klass", ({ steps, cite, written }) => {
+    const editor = sheet();
+    for (const step of steps) {
+      if (step === "undo") undo(editor);
+      else expect(writeSource(editor, W[step[0]]!, null, true)?.yearSuffix).toBe(step[1]);
+      // Each click is its own step of Poništi, as in the sheet.
+      editor.view.dispatch(closeHistory(editor.state.tr));
+    }
+    const before = texts(editor);
+    atFirstEnd(editor);
+    const got = writeSource(editor, cite, "", false);
+    if (written === null) {
+      expect(got).toBeNull();
+      expect(texts(editor)).toEqual(before);
+    } else {
+      expect(got?.yearSuffix).toBe(written);
+      expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(got!, "")}`);
+      expect(texts(editor).slice(1)).toEqual(before.slice(1));
+    }
+    editor.destroy();
+  });
+
+  it("regression c.6588340462: A and B, Poništi B, C takes b, Citiraj B writes no (Horvat, 2021b)", () => {
+    const editor = sheet();
+    const [a, b, c] = W as [Source, Source, Source];
+    writeSource(editor, a, null, true);
+    editor.view.dispatch(closeHistory(editor.state.tr));
+    expect(writeSource(editor, b, null, true)?.yearSuffix).toBe("b");
+    editor.view.dispatch(closeHistory(editor.state.tr));
+    undo(editor);
+    expect(writeSource(editor, c, null, true)?.yearSuffix).toBe("b");
+    const before = texts(editor);
+    atFirstEnd(editor);
+    expect(writeSource(editor, { ...b, yearSuffix: "b" }, "", false)).toBeNull();
+    expect(texts(editor)).toEqual(before);
+    expect(texts(editor).join("\n")).not.toContain("(Horvat, 2021b)");
+    editor.destroy();
+  });
+});
+
+// DAN-484, QA FAIL on #1407 (c.6588415588): the joiner between authors is the
+// " i " before the last author's family name; " i " anywhere else is part of a name.
+describe("the joiner inside a name, class by class", () => {
+  type Name = readonly [family: string, given: string];
+  const work = (names: readonly Name[], title: string): Source => ({
+    ...sourceOf(BOOK), title,
+    authors: names.map(([family, given]) => ({ kind: "person" as const, family, given })),
+  });
+  const line = (source: Source) => entryText(source);
+  const H: Name = ["Horvat", "Ana"];
+  const HM: Name = ["Horvat", "Marko"];
+  const HMI: Name = ["Horvat", "Marko i Ivo"];
+  const K: Name = ["Kovač", "Luka"];
+  const B: Name = ["Babić", "Iva"];
+  const BIE: Name = ["Babić", "Iva i Ema"];
+  const BK: Name = ["Babić i Kovač", "Luka"];
+  const base = (names: readonly Name[]) => {
+    const first = work(names, "Prva knjiga");
+    return { first, work: work(names, "Druga knjiga"), cited: `T. ${citationText(first, "")} i ${citationText(first, "9")}.` };
+  };
+  const ONE = base([H]);
+  const PAIR = base([H, K]);
+  const TRIO = base([H, B, K]);
+  const PAIR_BK = base([H, BK]);
+
+  type Row = { klass: string; base: ReturnType<typeof base>; other: string; promoted: boolean };
+  const rows: Row[] = [
+    { klass: "I1 no joiner in a name, another second author", base: PAIR, other: line(work([HM, B], "Treća")), promoted: true },
+    { klass: "I2 the joiner in the second author's given name (the finding)", base: PAIR, other: line(work([HM, BIE], "Treća")), promoted: true },
+    { klass: "I3 the joiner in the first author's given name, another second author", base: PAIR, other: line(work([HMI, B], "Treća")), promoted: true },
+    { klass: "I4 the joiner in the first author's given name, the same second author", base: PAIR, other: line(work([HMI, ["Kovač", "Ema"]], "Treća")), promoted: false },
+    { klass: "I5 a second family name one reading of which is ours: left as written", base: PAIR,
+      other: line(work([HM, ["Babić i Kovač", "Iva"]], "Treća")), promoted: false },
+    { klass: "I6a our second family name holds the joiner, the same in the other entry", base: PAIR_BK,
+      other: line(work([HM, ["Babić i Kovač", "Iva"]], "Treća")), promoted: false },
+    { klass: "I6b our second family name holds the joiner, another in the other entry", base: PAIR_BK, other: line(work([HM, K], "Treća")), promoted: true },
+    { klass: "I7 both at once: the joiner between authors and in both given names", base: PAIR, other: line(work([HMI, BIE], "Treća")), promoted: true },
+    { klass: "I8 one author with the joiner in the given name, against our pair", base: PAIR, other: line(work([["Horvat", "Marko i Ema"]], "Treća")), promoted: true },
+    { klass: "I9a three authors, the joiner in the last given name, against our pair", base: PAIR,
+      other: line(work([HM, B, ["Kovač", "Luka i Ivo"]], "Treća")), promoted: true },
+    { klass: "I9b the same, against our three", base: TRIO, other: line(work([HM, B, ["Kovač", "Luka i Ivo"]], "Treća")), promoted: false },
+    { klass: "I10a three authors, the joiner in a middle given name, against our pair", base: PAIR, other: line(work([HM, BIE, K], "Treća")), promoted: true },
+    { klass: "I10b the same, against our three", base: TRIO, other: line(work([HM, BIE, K], "Treća")), promoted: false },
+    { klass: "I11a our one author, against a pair with the joiner in a name", base: ONE, other: line(work([HM, BIE], "Treća")), promoted: true },
+    { klass: "I11b our three, against a pair with the joiner in a name", base: TRIO, other: line(work([HM, BIE], "Treća")), promoted: true },
+  ];
+
+  it.each(rows)("class $klass", ({ base: b, other, promoted }) => {
+    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, { text: other }]);
+    atFirstEnd(editor);
+    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe("b");
+    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
+    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
+    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
+    expect(lines).toContain(other);
+    editor.destroy();
+  });
+
+  it("the entries the rows rest on", () => {
+    expect(line(work([HM, BIE], "Treća"))).toBe("Horvat, Marko i Babić, Iva i Ema (2021) Treća. Zagreb: Primjer.");
+    expect(line(work([HM, BIE, K], "Treća"))).toBe("Horvat, Marko, Babić, Iva i Ema i Kovač, Luka (2021) Treća. Zagreb: Primjer.");
+    expect(citationText(PAIR_BK.first, "")).toBe("(Horvat i Babić i Kovač, 2021)");
+  });
+
+  it("regression c.6588415588: A of Horvat and Kovač, X of Horvat and Babić (Iva i Ema), a second work of A", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atFirstEnd(editor);
+    const a = sourceOf({ ...BOOK, family2: "Kovač", given2: "Luka" });
+    writeSource(editor, a, "", true);
+    writeSource(editor, sourceOf({ ...BOOK, given: "Marko", family2: "Babić", given2: "Iva i Ema", title: "Treća" }), null, true);
+    expect(writeSource(editor, sourceOf({ ...BOOK, family2: "Kovač", given2: "Luka", title: "Druga" }), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Horvat i Kovač, 2021a)");
+    expect(texts(editor)).toContain(`paragraph:${entryText({ ...a, yearSuffix: "a" })}`);
+    editor.destroy();
   });
 });
 
