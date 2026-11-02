@@ -216,6 +216,19 @@ describe("Istodobnost", () => {
     expect(await tabA.read(DOC, CTX, keyNew)).toEqual({ ok: true, text: "novije" });
   });
 
+  it("a key already held in memory still opens the record after a shred; only a new fetch fails", async () => {
+    const a = store(freshName());
+    const holder = store(a.name);
+    const key = await a.deviceKey();
+    await a.put({ documentId: DOC, synced: false, body: await seal(key, "tekst", CTX, NOW) });
+    const retained = await holder.existingKey();
+    expect(retained).not.toBeNull();
+    await a.shredKey();
+    expect(await holder.existingKey()).toBeNull();
+    expect(await holder.read(DOC, CTX, retained)).toEqual({ ok: true, text: "tekst" });
+    expect(await holder.read(DOC, CTX, null)).toEqual({ ok: false, reason: "no_key" });
+  });
+
   it("a shred while another tab keeps the database open still makes the record unreadable", async () => {
     const a = store(freshName());
     const holder = store(a.name);
