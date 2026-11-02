@@ -206,5 +206,27 @@ SELECT is(
    WHERE h.course_id = pg_temp.id('k1') AND h.valid_to IS NULL),
   'vesna', 'T050: the row names who made the change');
 
+-- T058: a row opened by a transaction that started after this one (so its
+-- valid_from is later than this now()) is still ended, and never before it
+-- began: the CHECK valid_to >= valid_from holds (Codex on #1302). Moving
+-- valid_from forward stands in for that later transaction.
+UPDATE institution.course_holder SET valid_from = now() + interval '1 minute'
+ WHERE course_id = pg_temp.id('k1') AND valid_to IS NULL;
+SELECT is(pg_temp.run('vesna', $$ institution.set_course_holder({k1}, {vesna}) $$), 'ok',
+  'T058: a holder opened later is still replaced');
+SELECT is(
+  (SELECT string_agg(p.name || ':' || (h.valid_from >= now() + interval '1 minute')::text
+                     || CASE WHEN h.valid_to IS NULL THEN '' ELSE '(ended)' END, ' '
+                     ORDER BY h.valid_to IS NULL, h.valid_from, p.name)
+   FROM institution.course_holder h JOIN person p ON p.id = h.user_id WHERE h.course_id = pg_temp.id('k1')),
+  'vesna:false(ended) marko:true(ended) vesna:true', 'T058: the new holder begins where the replaced one ended, not earlier');
+UPDATE institution.seminar_group_teacher SET valid_from = now() + interval '1 minute'
+ WHERE group_id = pg_temp.id('ga') AND user_id = pg_temp.id('marko') AND valid_to IS NULL;
+SELECT is(pg_temp.run('vesna', $$ institution.end_group_assignment({ga}, {marko}) $$), 'ok',
+  'T058: a group place opened later is still ended');
+SELECT is((SELECT count(*)::integer FROM institution.seminar_group_teacher
+            WHERE group_id = pg_temp.id('ga') AND user_id = pg_temp.id('marko') AND valid_to IS NULL), 0,
+  'T058: and none of Marko''s places stays open');
+
 SELECT * FROM finish();
 ROLLBACK;

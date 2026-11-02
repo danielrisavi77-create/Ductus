@@ -141,11 +141,15 @@ $$;
 
 -- Names the holder, who must be an open teacher of the course with the
 -- teacher role, and ends the previous holder. Repeating it changes nothing.
+-- now() is when this transaction began, which can be before a holder that a
+-- later transaction committed: an end is never before its start, and the new
+-- holder begins where the previous one ended.
 CREATE FUNCTION institution.set_course_holder(p_course_id uuid, p_holder_id uuid) RETURNS void
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE
   actor record;
+  v_ended timestamptz;
 BEGIN
   SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
   IF NOT institution.is_confirmed_teacher(p_holder_id, p_course_id) OR NOT EXISTS (
@@ -160,9 +164,11 @@ BEGIN
              WHERE h.course_id = p_course_id AND h.user_id = p_holder_id AND h.valid_to IS NULL) THEN
     RETURN;
   END IF;
-  UPDATE institution.course_holder h SET valid_to = now() WHERE h.course_id = p_course_id AND h.valid_to IS NULL;
-  INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by)
-  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id);
+  UPDATE institution.course_holder h SET valid_to = greatest(now(), h.valid_from)
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL
+  RETURNING h.valid_to INTO v_ended;
+  INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), v_ended));
 END
 $$;
 
@@ -238,8 +244,8 @@ BEGIN
 END
 $$;
 
--- Ends the open place of a teacher or a student in a group. Repeating it
--- changes nothing.
+-- Ends the open place of a teacher or a student in a group, never before it
+-- began (see set_course_holder). Repeating it changes nothing.
 CREATE FUNCTION institution.end_group_assignment(p_group_id uuid, p_user_id uuid) RETURNS void
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -248,9 +254,9 @@ DECLARE
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   PERFORM institution.require_course_teacher(v_course);
-  UPDATE institution.seminar_group_teacher t SET valid_to = now()
+  UPDATE institution.seminar_group_teacher t SET valid_to = greatest(now(), t.valid_from)
    WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
-  UPDATE institution.seminar_group_member s SET valid_to = now()
+  UPDATE institution.seminar_group_member s SET valid_to = greatest(now(), s.valid_from)
    WHERE s.group_id = p_group_id AND s.user_id = p_user_id AND s.valid_to IS NULL;
 END
 $$;
