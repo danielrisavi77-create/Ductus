@@ -14,7 +14,7 @@
  * Nothing here is a secret: a tag is a digest of the cookie, not the cookie.
  */
 
-import { browserMarkStore, currentSession, type MarkStore } from "./session-marks";
+import { browserMarkStore, currentSession, endAfterLogout, endSessions, type MarkStore } from "./session-marks";
 
 export const PENDING_LOGOUT_KEY = "ductus-logout-pending";
 /** The Web Lock under which one tab of the browser makes the later call. */
@@ -44,6 +44,25 @@ export function holdServerLogout(store: MarkStore | null, tags: readonly string[
   } catch {
     return false;
   }
+}
+
+/**
+ * Ends a sign-out on this device and returns the sessions that ended, for the
+ * other tabs. `before` is the session the browser recorded when the request
+ * was sent. An answered route cleared the cookie the browser held, so the
+ * session recorded last ended too. Without an answer only the page's own
+ * session and `before` end and wait for the route: a session that became
+ * current while the request was on its way (another tab signed in) stays
+ * current, so the later call is dropped instead of ending it.
+ */
+export function endSignOut(
+  store: MarkStore | null, tag: string | null, before: string | null, reached: boolean,
+): string[] {
+  if (reached) return endAfterLogout(store, tag);
+  const tags = [...new Set([tag, before].filter((one): one is string => one !== null))];
+  endSessions(store, tags);
+  holdServerLogout(store, tags);
+  return tags;
 }
 
 export function dropPendingLogout(store: MarkStore | null): void {

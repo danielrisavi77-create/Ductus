@@ -1,10 +1,10 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
 
 import {
-  completePendingLogout, completePendingLogoutOnce, holdServerLogout, pendingLogout, pendingLogoutStep,
+  completePendingLogout, completePendingLogoutOnce, endSignOut, holdServerLogout, pendingLogout, pendingLogoutStep,
   PENDING_LOGOUT_KEY, PENDING_LOGOUT_LOCK, postLogout, type PendingLogoutEnv,
 } from "./pending-logout";
-import { endAfterLogout, observeSession, type MarkStore } from "./session-marks";
+import { currentSession, endAfterLogout, hasEnded, observeSession, type MarkStore } from "./session-marks";
 
 // #1330 (D-118): a sign-out the logout route did not answer still ends the
 // session on this device; the route is called again later, and never once a
@@ -190,3 +190,40 @@ describe("Istodobnost", () => {
     expect(run.post).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("a sign-in in another tab while the sign-out waits for the route", () => {
+  it("unanswered: the newer session stays current, and the later call is dropped, not made", async () => {
+    const store = memoryStore();
+    observeSession(store, A, 1_000);
+    const before = currentSession(store)?.tag ?? null;
+    // The request for A is on its way; another tab signs in as B.
+    observeSession(store, B, 2_000);
+    const ended = endSignOut(store, A, before, false);
+    expect(ended).toEqual([A]);
+    expect(currentSession(store)?.tag).toBe(B);
+    expect(hasEnded(store, { tag: B, at: 2_000 })).toBe(false);
+    expect(pendingLogoutStep(store)).toBe("drop");
+    const run = env(store, true);
+    await expect(completePendingLogout(run)).resolves.toBe(false);
+    expect(run.post).not.toHaveBeenCalled();
+  });
+
+  it("unanswered, nobody signed in meanwhile: the page's session and the one recorded before end and wait", () => {
+    const store = memoryStore();
+    observeSession(store, A, 1_000);
+    expect(endSignOut(store, A, currentSession(store)?.tag ?? null, false)).toEqual([A]);
+    expect(currentSession(store)).toBeNull();
+    expect(pendingLogout(store)).toEqual([A]);
+    expect(pendingLogoutStep(store)).toBe("retry");
+  });
+
+  it("answered: the route cleared the cookie the browser held, so the session recorded last ends too", () => {
+    const store = memoryStore();
+    observeSession(store, A, 1_000);
+    observeSession(store, B, 2_000);
+    expect(endSignOut(store, A, A, true).sort()).toEqual([A, B]);
+    expect(currentSession(store)).toBeNull();
+    expect(pendingLogout(store)).toEqual([]);
+  });
+});
+

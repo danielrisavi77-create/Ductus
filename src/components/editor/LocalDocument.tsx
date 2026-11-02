@@ -45,7 +45,7 @@ import {
 
 import type { CanonicalDocument } from "@/domain/document";
 import {
-  browserMarkStore, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
+  browserMarkStore, currentSession, hasEnded, SESSION_END_CHANNEL, type SessionMark,
 } from "@/client/session-marks";
 import { localChip, type LocalChip } from "@/domain/sync/labels";
 import type { SyncState } from "@/domain/sync/states";
@@ -58,7 +58,7 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
-import { followLogoutNatively, holdServerLogout, postLogout, resumePendingLogout } from "@/client/pending-logout";
+import { endSignOut, followLogoutNatively, postLogout, resumePendingLogout } from "@/client/pending-logout";
 import {
   editorSignOutPlan, planAfterDiscard, readLogoutHold, untilLoaded, withinHoldLimit, type HoldRead,
 } from "@/client/logout-hold";
@@ -600,14 +600,15 @@ export function LocalDocumentProvider({
 
   const signOut = async (): Promise<"server" | "device"> => {
     const locked = logoutRef.current;
+    const store = browserMarkStore();
+    const before = currentSession(store)?.tag ?? null;
     const reached = await postLogout();
     // The session has ended here either way: every tab of it stops, and so
     // does the session the browser held last if it was another one. Without
     // an answer the cookie may still be valid on the server, so the route is
-    // called again later (SessionObserver); nothing unconfirmed is deleted.
-    const store = browserMarkStore();
-    const ended = endAfterLogout(store, markTag);
-    if (!reached) holdServerLogout(store, ended);
+    // called again later (SessionObserver); nothing unconfirmed is deleted,
+    // and a sign-in made meanwhile in another tab is kept (endSignOut).
+    const ended = endSignOut(store, markTag, before, reached);
     for (const tag of ended) channelRef.current?.postMessage(tag);
     if (editor && !editor.isDestroyed) {
       editor.setEditable(false, false);
