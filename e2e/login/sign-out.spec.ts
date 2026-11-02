@@ -210,14 +210,19 @@ test("Istodobnost: a sign-in in another tab while the sign-out waits keeps the n
 
   // The route is reachable again, and a page of the first tab loads: a record
   // of A's sign-out would be completed here, under B's cookie.
+  // The second tab still holds the document, so this one opens it under B as
+  // "blocked", never "signed-out".
   await page.unroute("**/api/auth/logout");
   await page.goto("/rad");
   await editorMounted(page);
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "blocked");
+  // With the first tab gone, B's own page loads again and writes.
+  await page.close();
   await second.reload();
   await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
   expect(logouts).toEqual([]);
   await expectStillSignedIn(second, tokenB);
-  expect(await page.evaluate(() => localStorage.getItem("ductus-logout-pending"))).toBeNull();
+  expect(await second.evaluate(() => localStorage.getItem("ductus-logout-pending"))).toBeNull();
 });
 
 // #1444 (review c.6588776166): the sign-out ended on this device, the server
