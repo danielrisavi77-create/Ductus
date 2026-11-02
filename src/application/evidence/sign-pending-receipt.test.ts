@@ -221,6 +221,10 @@ describe("signPendingReceipt", () => {
     [{ outcome: "signed", signature: undefined }, { status: "unavailable", stage: "store", reason: "stored_signature_mismatch" }],
     [{ outcome: "unavailable", reason: "x" }, { status: "unavailable", stage: "store", reason: "store_unavailable" }],
     [{ outcome: "something_new" } as never, { status: "unavailable", stage: "store", reason: "unknown_outcome" }],
+    [null as never, { status: "unavailable", stage: "store", reason: "unknown_outcome" }],
+    [undefined as never, { status: "unavailable", stage: "store", reason: "unknown_outcome" }],
+    ["signed" as never, { status: "unavailable", stage: "store", reason: "unknown_outcome" }],
+    [{ outcome: { toString: () => "signed" } } as never, { status: "unavailable", stage: "store", reason: "unknown_outcome" }],
     ["throws", { status: "unavailable", stage: "store", reason: "store_unavailable" }],
   ];
   it.each(storeOutcomes)("K10 store outcome %j is never answered as signed", async (outcome, expected) => {

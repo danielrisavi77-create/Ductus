@@ -172,6 +172,11 @@ export function createSignPendingReceipt(deps: SignPendingReceiptDeps) {
     own: SignedEvidenceReceiptV2,
     keys: readonly EvidenceDomainKey[],
   ): Promise<SignPendingReceiptOutcome> {
+    // The store is an outside port: a reply that is not an object with a
+    // string outcome is answered as unknown, never read further.
+    if (!isPlainObject(attached) || typeof attached.outcome !== "string") {
+      return { status: "unavailable", stage: "store", reason: "unknown_outcome" };
+    }
     switch (attached.outcome) {
       case "signed":
         // `signed` must carry the signature this call sent; anything else is
