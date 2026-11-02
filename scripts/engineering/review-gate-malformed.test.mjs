@@ -633,3 +633,61 @@ for (const kind of ["review", "qa"]) {
     }
   });
 }
+
+// p06h (owner, #87, 2. 11. 2026.), finding of QA c.6589891662: any whitespace,
+// several of it or none inside the task list box still reads the negative, for
+// review and QA alike, with a bullet, without one and escaped; a PASS so
+// written does not count. Escapes keep each character visible here.
+const BOX_CONTENT = [
+  ["one space (control)", " "],
+  ["x (control)", "x"],
+  ["X (control)", "X"],
+  ["tab", "\t"],
+  ["two spaces", "  "],
+  ["three spaces", "   "],
+  ["space and tab", " \t"],
+  ["no-break space U+00A0", " "],
+  ["en quad U+2000", " "],
+  ["em space U+2003", " "],
+  ["hair space U+200A", " "],
+  ["narrow no-break space U+202F", " "],
+  ["medium mathematical space U+205F", " "],
+  ["ideographic space U+3000", "　"],
+  ["ogham space mark U+1680", " "],
+  ["byte order mark U+FEFF", "﻿"],
+  ["vertical tab", "\v"],
+  ["form feed", "\f"],
+  ["empty", ""],
+];
+const boxes = (inside) => [`- [${inside}]`, `* [${inside}]`, `[${inside}]`, `- \\[${inside}\\]`, `  + [${inside}]`];
+for (const kind of ["review", "qa"]) {
+  const slot = kind === "review" ? "r2" : "q2";
+  for (const [name, inside] of BOX_CONTENT) {
+    test(`${kind}: a box holding "${name}" reads the negative and its PASS does not count (p06h)`, () => {
+      for (const box of boxes(inside)) {
+        for (const verdict of ["FAIL", "BLOCK", "BLOK"]) {
+          const negative = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: ${verdict}`]));
+          assert.notEqual(gate(negative.comments, { risk: negative.risk }).state, "success", JSON.stringify(`${box} ${verdict}`));
+        }
+        const onlyPass = kind === "review"
+          ? [block("review", "r1", ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: PASS`])]
+          : [exact("review", "r1"), block("qa", "q1", ({ H, V }) => [`${H}: ${head}`, `${box} ${V}: PASS`])];
+        assert.notEqual(gate(onlyPass, { risk: riskFor(kind) }).state, "success", JSON.stringify(`${box} PASS`));
+      }
+    });
+  }
+  test(`${kind}: the exact case of QA c.6589891662 blocks beside valid PASSes, and fenced it is a quote (p06h)`, () => {
+    const exactCase = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, `- [\t] ${V}: FAIL`]));
+    assert.notEqual(gate(exactCase.comments, { risk: exactCase.risk }).state, "success");
+    const fenced = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, "```", `- [\t] ${V}: FAIL`, "```"]));
+    assert.equal(gate(fenced.comments, { risk: fenced.risk }).state, "success");
+    const passesOnly = withPasses(kind, exact(kind, slot));
+    assert.equal(gate(passesOnly.comments, { risk: passesOnly.risk }).state, "success");
+  });
+  test(`${kind}: a tab box negative names its earlier head and is walked for (p06h)`, async () => {
+    const comments = [...passesFor(kind), block(kind, slot, ({ H, V }) => [`${H}: ${mergeHead.slice(0, 7)}`, `- [\t] ${V}: FAIL`])];
+    const heads = await walkWith(comments, { broken: new Set([behind]) });
+    assert.deepEqual([...heads], [mergeHead]);
+    assert.notEqual(gate(comments, { risk: riskFor(kind), carriedHeads: heads }).state, "success");
+  });
+}
