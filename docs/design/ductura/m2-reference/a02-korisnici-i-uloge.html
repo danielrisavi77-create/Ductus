@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-02 — Korisnici i uloge (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">Ductura</div>
+    <button class="btn secondary menu" type="button" aria-expanded="false">Izbornik</button>
+    <nav aria-label="Administracija">
+      <a href="#">Pregled ustanove</a>
+      <a href="#" aria-current="page">Korisnici i uloge</a>
+      <a href="#">Kolegiji i akademske godine</a>
+      <a href="#">Pravila fakulteta</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header>
+      <div class="ref-tag">Referenca M2.11-P02 · DAN-313 · prijedlog slike · podaci su izmišljeni</div>
+      <h1>Korisnici i uloge</h1>
+      <p>Nastavnici vaše ustanove i osobe koje čekaju potvrdu uloge. Ulogu nastavnika potvrđujete i opozivate vi; prijava preko AAI@EduHr daje samo pravo da vas osoba čeka na popisu.</p>
+    </header>
+
+    <section class="state" aria-labelledby="h-ceka">
+      <div class="ref-tag">Stanje 1 · popunjeno</div>
+      <h2 id="h-ceka">Čekaju potvrdu uloge</h2>
+      <p class="lead">Zadnja prijava preko AAI@EduHr dala im je pravo nastavnika. Uloga počinje tek kad je potvrdite.</p>
+      <div class="list">
+        <div class="item">
+          <span class="who">Lana Probić</span>
+          <span class="facts">Zadnja prijava 30. 10. 2026. · pravo nastavnika: da</span>
+          <div class="actions"><button class="btn" type="button">Potvrdi ulogu</button></div>
+        </div>
+        <div class="item">
+          <span class="who">Tin Primjerić</span>
+          <span class="facts">Zadnja prijava 29. 10. 2026. · pravo nastavnika: da · uloga opozvana 2. 9. 2026.</span>
+          <div class="actions"><button class="btn" type="button">Potvrdi ulogu</button></div>
+        </div>
+      </div>
+
+      <h2 id="h-nastavnici" style="margin-top:12px">Potvrđeni nastavnici</h2>
+      <div class="list" aria-labelledby="h-nastavnici">
+        <div class="item">
+          <span class="who">Iva Ogledić</span>
+          <span class="facts">Potvrđeno 14. 9. 2026. · zadnja prijava 31. 10. 2026. · pravo nastavnika: da</span>
+          <div class="actions"><button class="btn secondary" type="button">Opozovi ulogu</button></div>
+        </div>
+        <div class="item">
+          <span class="who">Petar Uzorak</span>
+          <span class="facts">Potvrđeno 14. 9. 2026. · zadnja prijava 28. 10. 2026.</span>
+          <div class="flag">
+            <strong>Za pregled</strong>
+            <span>Zadnja prijava nije dala pravo nastavnika. Uloga nije opozvana i ostaje dok ne odlučite.</span>
+          </div>
+          <div class="actions"><button class="btn secondary" type="button">Opozovi ulogu</button></div>
+        </div>
+        <div class="item">
+          <span class="who">Mara Nacrtić</span>
+          <span class="facts">Potvrđeno 2. 10. 2026. · zadnja prijava 1. 11. 2026. · pravo nastavnika: da</span>
+          <div class="actions"><button class="btn secondary" type="button">Opozovi ulogu</button></div>
+        </div>
+      </div>
+      <p class="ref-tag">Oznaka „Za pregled” je D-200 P7: nestanak prava ne opoziva ulogu sam.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-prazno">
+      <div class="ref-tag">Stanje 2 · prazno</div>
+      <h2 id="h-prazno">Čekaju potvrdu uloge</h2>
+      <div class="card">
+        <p>Nitko ne čeka potvrdu uloge.</p>
+        <p class="meta">Osoba se pojavi ovdje nakon prijave preko AAI@EduHr koja joj da pravo nastavnika na ovoj ustanovi.</p>
+      </div>
+      <h2>Potvrđeni nastavnici</h2>
+      <div class="card"><p>Na ustanovi još nema potvrđenih nastavnika.</p></div>
+    </section>
+
+    <section class="state" aria-labelledby="h-potvrda">
+      <div class="ref-tag">Stanje 3 · potvrda · dijalog i ishod</div>
+      <h2 id="h-potvrda">Potvrda uloge</h2>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d-potvrda">
+        <h3 id="d-potvrda">Potvrditi ulogu nastavnika za Lanu Probić?</h3>
+        <ul>
+          <li>Moći će stvarati kolegije i zadatke na ovoj ustanovi.</li>
+          <li>Ulogu možete kasnije opozvati.</li>
+          <li>Potvrda se upisuje u revizijski trag, s vama kao izvršiteljem.</li>
+        </ul>
+        <div class="buttons">
+          <button class="btn" type="button">Potvrdi ulogu</button>
+          <button class="btn secondary" type="button">Odustani</button>
+        </div>
+      </div>
+      <p class="status" role="status">Uloga nastavnika potvrđena je za Lanu Probić. Sada je među potvrđenim nastavnicima.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-opoziv">
+      <div class="ref-tag">Stanje 4 · opoziv · dijalog i ishod</div>
+      <h2 id="h-opoziv">Opoziv uloge</h2>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d-opoziv">
+        <h3 id="d-opoziv">Opozvati ulogu nastavnika za Petra Uzorka?</h3>
+        <ul>
+          <li>Od sljedećeg zahtjeva više ne može raditi kao nastavnik na ovoj ustanovi.</li>
+          <li>Kolegiji i zadaci ostaju; nositelja i nastavnike grupa mijenjate u „Kolegiji i akademske godine”.</li>
+          <li>Ako mu kasnija prijava da pravo nastavnika, ponovno će čekati vašu potvrdu.</li>
+          <li>Opoziv se upisuje u revizijski trag, s vama kao izvršiteljem.</li>
+        </ul>
+        <div class="buttons">
+          <button class="btn" type="button">Opozovi ulogu</button>
+          <button class="btn secondary" type="button">Odustani</button>
+        </div>
+      </div>
+      <p class="status" role="status">Uloga nastavnika opozvana je za Petra Uzorka.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-greska">
+      <div class="ref-tag">Stanje 5 · greška · čitanje, radnja i promijenjeno stanje</div>
+      <h2 id="h-greska">Kad nešto ne uspije</h2>
+      <p class="alert" role="alert"><strong>Popis korisnika trenutačno nije dostupan.</strong> Pokušajte ponovno. <a href="#">Pokušaj ponovno</a></p>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d-greska">
+        <h3 id="d-greska">Potvrditi ulogu nastavnika za Lanu Probić?</h3>
+        <p class="alert" role="alert"><strong>Uloga nije potvrđena.</strong> Veza s poslužiteljem nije uspjela i ništa nije promijenjeno.</p>
+        <div class="buttons">
+          <button class="btn" type="button">Pokušaj ponovno</button>
+          <button class="btn secondary" type="button">Odustani</button>
+        </div>
+      </div>
+      <p class="alert" role="alert"><strong>Potvrda nije moguća.</strong> Ova osoba više ne čeka potvrdu na vašoj ustanovi. Popis je osvježen.</p>
+      <p class="ref-tag">Neuspjelo čitanje nikad se ne prikazuje kao prazan popis.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-ovlast">
+      <div class="ref-tag">Stanje 6 · bez ovlasti · student, nastavnik, opozvani administrator, druga ustanova</div>
+      <h2 id="h-ovlast">Bez ovlasti</h2>
+      <div class="card notfound">
+        <h3>Stranica ne postoji</h3>
+        <p>Na ovoj adresi nema stranice. Provjerite adresu ili se vratite na početnu.</p>
+      </div>
+      <p class="ref-tag">Isti 404 kao za nepostojeću adresu, bez trake administracije.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>
