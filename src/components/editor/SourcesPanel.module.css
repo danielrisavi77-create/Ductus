@@ -1,0 +1,180 @@
+/* "Literatura" of design editor-v11 §5.1 ("Brzi izvor"), on the shared tokens only (app/globals.css, D-123). */
+.panel,
+.form,
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.panel {
+  gap: 14px;
+}
+
+.part {
+  padding-top: 12px;
+  border-top: 1px solid var(--rule-2);
+}
+
+.label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.field input {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--warn);
+}
+
+.kinds,
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.group {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kinds legend,
+.group legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.kinds label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.errors {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+}
+
+.preview p,
+.list p {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.primary,
+.secondary {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 3px 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.secondary {
+  border: 1px solid var(--rule);
+  background: none;
+  color: var(--ink-2);
+}
+
+.secondary:hover {
+  color: var(--ink);
+}
+
+.primary[aria-disabled="true"],
+.secondary[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* #732 item 8: 12 px is the floor for interface text, 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .panel,
+  .form,
+  .part,
+  .label,
+  .note,
+  .field,
+  .field input,
+  .kinds legend,
+  .group legend,
+  .errors,
+  .primary,
+  .secondary {
+    font-size: 13px;
+  }
+}

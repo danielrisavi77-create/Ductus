@@ -167,6 +167,41 @@ test("sign-out from a second tab ends the session and empties the writing tab", 
   await expect(editorOf(second)).toHaveText("Nacrt A: plava bilježnica");
 });
 
+// DAN-343 (Codex on #866): the Literatura tab drops its list and a half-filled
+// form at the same moment the sheet empties.
+test("sign-out from a second tab empties the Literatura tab of the writing tab", async ({ page, context }) => {
+  const s = t.workspace.sources;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+  await panel.getByRole("tab", { name: t.workspace.tabSources }).click();
+  const tab = panel.getByRole("tabpanel");
+  const fill = async (values: Record<string, string>) => {
+    for (const [label, value] of Object.entries(values)) await tab.getByLabel(label, { exact: true }).fill(value);
+  };
+  await tab.getByRole("button", { name: s.add }).click();
+  await fill({ [s.family]: "Horvat", [s.given]: "Ana", [s.year]: "2021", [s.title]: "Nepostojeca knjiga", [s.place]: "Zagreb", [s.publisher]: "Primjer" });
+  await tab.getByRole("button", { name: s.addOnly }).click();
+  await expect(tab.getByRole("listitem")).toHaveCount(1);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  // A second source, typed but never written.
+  await tab.getByRole("button", { name: s.add }).click();
+  await fill({ [s.family]: "Kovac", [s.title]: "Nacrt koji ne smije ostati" });
+
+  const second = await context.newPage();
+  await second.goto("/rad");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+  await clickSignOut(second);
+  await second.waitForURL("http://localhost:3000/");
+
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expect(tab.getByText(s.readOnly)).toBeVisible();
+  await expect(tab.getByRole("listitem")).toHaveCount(0);
+  await expect(tab.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByText("Nacrt koji ne smije ostati")).toHaveCount(0);
+});
+
 test("row 9: the dialog says text the device could not store would be lost; sign-out goes ahead", async ({ page, context }) => {
   // Journal writes fail as on a full device; only the logout fence could
   // still be written, so the journal alone would look empty.
