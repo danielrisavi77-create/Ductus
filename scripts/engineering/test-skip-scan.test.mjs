@@ -40,15 +40,28 @@ const ALLOWED = [
   ],
 ];
 
+// `of` is not here: it is a keyword only in a for-of head (see `ofKeyword`).
 const KEYWORDS_BEFORE_EXPRESSION = new Set(
-  "return typeof case do else in of new delete void throw instanceof yield await".split(
+  "return typeof case do else in new delete void throw instanceof yield await".split(
     " ",
   ),
 );
+// A statement follows the `)` of these heads, so `/` there starts a regex.
+const HEADS = new Set("if while for with".split(" "));
 // JavaScript line terminators; a line comment or a regular expression ends on any.
 const LINE_END = "\n\r\u2028\u2029";
-const ID_START = /[A-Za-z_$\u0080-￿]/;
-const ID_PART = /[A-Za-z0-9_$\u0080-￿]/;
+// The JavaScript identifier classes; a Unicode space or line end is in neither.
+const ID_START = /^[\p{ID_Start}$_]$/u;
+const ID_PART = /^[\p{ID_Continue}$\u200C\u200D]$/u;
+// Code units taken by the identifier character at src[i] (2 when astral), or 0.
+function idChar(src, i, re) {
+  const cp = src.codePointAt(i);
+  if (cp === undefined) return 0;
+  const ch = String.fromCodePoint(cp);
+  return re.test(ch) ? ch.length : 0;
+}
+const member = (t) =>
+  t?.type === "punct" && (t.value === "." || t.value === "?.");
 
 // The cooked text of a string or template, or null when an escape is invalid
 // (allowed in a tagged template such as String.raw`\u{110000}`).
@@ -95,22 +108,44 @@ export function tokenize(src) {
   let broken = false;
   let i = 0;
   let line = 1;
-  const push = (type, value, at) => tokens.push({ type, value, line: at });
+  const push = (type, value, at, extra) =>
+    tokens.push({ type, value, line: at, ...extra });
   const last = () => tokens[tokens.length - 1];
+  const back = (n) => tokens[tokens.length - n];
   const regexAllowed = () => {
     const t = last();
     if (!t) return true;
-    // A keyword is one only outside member position: `o.of / 2` divides.
-    const before = tokens[tokens.length - 2];
+    // An expression starts after `${`; a finished template is a value.
+    if (t.type === "tmpl") return t.opens === true;
+    // A keyword is one only outside member position: `o.in / 2` divides.
     if (t.type === "id")
-      return (
-        KEYWORDS_BEFORE_EXPRESSION.has(t.value) &&
-        !(before?.type === "punct" && [".", "?."].includes(before.value))
-      );
-    // A regular expression cannot follow `++` or `--`, so `/` there divides.
+      return t.value === "of"
+        ? t.keyword === true
+        : KEYWORDS_BEFORE_EXPRESSION.has(t.value) && !member(back(2));
+    // After the `)` of an if, while, for or with head a statement starts;
+    // after any other `)`, `]`, `}`, `++` or `--` the `/` divides.
     if (t.type === "punct")
-      return ![")", "]", "}", "++", "--"].includes(t.value);
+      return t.value === ")"
+        ? t.head === true
+        : !["]", "}", "++", "--"].includes(t.value);
     return false;
+  };
+  // `of` is the for-of keyword when it follows the binding (a name, `]` or `}`;
+  // not `const`, `let`, `var` or an operator keyword such as `in`, unless a
+  // member) in a for head, before any `;`, once per head.
+  const ofKeyword = () => {
+    const top = stack[stack.length - 1];
+    const p = last();
+    if (!top?.forHead || top.semi || top.of) return false;
+    const binding =
+      (p?.type === "id" &&
+        (member(back(2)) ||
+          !(
+            ["const", "let", "var"].includes(p.value) ||
+            KEYWORDS_BEFORE_EXPRESSION.has(p.value)
+          ))) ||
+      (p?.type === "punct" && (p.value === "]" || p.value === "}"));
+    return binding && (top.of = true);
   };
   const template = (fresh) => {
     // i is just past a backtick (fresh) or the closing `}` of a substitution.
@@ -135,7 +170,7 @@ export function tokenize(src) {
       if (c === "$" && src[i + 1] === "{") {
         i += 2;
         stack.push("${");
-        return push("tmpl", null, at);
+        return push("tmpl", null, at, { opens: true });
       }
       if (c === "\n") line++;
       raw += c;
@@ -188,26 +223,31 @@ export function tokenize(src) {
       }
       if (ok) {
         j++;
-        while (j < src.length && ID_PART.test(src[j])) j++;
+        for (let n; (n = idChar(src, j, ID_PART)); ) j += n;
         push("regex", src.slice(i, j), line);
         i = j;
       } else {
         push("punct", "/", line);
         i++;
       }
-    } else if (ID_START.test(c) || (c === "\\" && src[i + 1] === "u")) {
+    } else if (idChar(src, i, ID_START) || (c === "\\" && src[i + 1] === "u")) {
       // An identifier may spell a letter as \uXXXX or \u{X}; its name is the decoded text.
       let j = i;
-      while (
-        j < src.length &&
-        (ID_PART.test(src[j]) || (src[j] === "\\" && src[j + 1] === "u"))
-      ) {
-        if (src[j] !== "\\") j++;
+      for (;;) {
+        const n = idChar(src, j, ID_PART);
+        if (n) j += n;
+        else if (src[j] !== "\\" || src[j + 1] !== "u") break;
         else if (src[j + 2] === "{")
           j = src.indexOf("}", j) === -1 ? src.length : src.indexOf("}", j) + 1;
         else j += 6;
       }
-      push("id", decode(src.slice(i, j)), line);
+      const name = decode(src.slice(i, j));
+      push(
+        "id",
+        name,
+        line,
+        name === "of" && ofKeyword() ? { keyword: true } : undefined,
+      );
       i = j;
     } else if (
       /[0-9]/.test(c) ||
@@ -231,16 +271,33 @@ export function tokenize(src) {
       push("punct", c + c, line);
       i += 2;
     } else {
-      if (c === "{" || c === "(" || c === "[") stack.push(c);
+      let extra;
+      if (c === "(") {
+        // A paren after `if`, `while`, `for`, `for await` or `with` (not a member) is a head.
+        const kw = (t, before) => t?.type === "id" && !member(before);
+        const forHead =
+          (kw(back(1), back(2)) && back(1).value === "for") ||
+          (back(1)?.value === "await" &&
+            kw(back(2), back(3)) &&
+            back(2).value === "for");
+        const head =
+          forHead || (kw(back(1), back(2)) && HEADS.has(back(1).value));
+        stack.push({ head, forHead, semi: false, of: false });
+      } else if (c === "{" || c === "[") stack.push(c);
+      else if (c === ";" && stack[stack.length - 1]?.forHead)
+        stack[stack.length - 1].semi = true;
       else if (c === "}" && stack[stack.length - 1] === "${") {
         stack.pop();
         i++;
         template(false);
         continue;
       } else if (c === "}" || c === ")" || c === "]") {
-        if (stack.pop() !== { "}": "{", ")": "(", "]": "[" }[c]) broken = true;
+        const top = stack.pop();
+        const open = typeof top === "object" ? "(" : top;
+        if (open !== { "}": "{", ")": "(", "]": "[" }[c]) broken = true;
+        else if (c === ")") extra = { head: top.head };
       }
-      push("punct", c, line);
+      push("punct", c, line, extra);
       i++;
     }
   }
@@ -408,6 +465,31 @@ const POSITIVE = [
   ['// c\rt.skip("r");', [1]],
   ["// c\u2028t.todo();", [1]],
   ["// c\u2029t.only();", [1]],
+  // A space or line end right after the name ends it (Unicode ones too).
+  ['test.skip\u00A0("x", () => {});', [1]],
+  ["test('x', t => t.skip\u2028('reason'));", [1]],
+  ["t.skip\u2029();", [1]],
+  ["t.skip\uFEFF();", [1]],
+  ["t.todo\u3000();", [1]],
+  ["t.only\u2003();", [1]],
+  ["const a\u{1D465} = 1; t.skip();", [1]],
+  // A template that ends, or has no substitution, is a value: `/` divides.
+  ["const s = `${x}` / 2; t.skip(); /x/;", [1]],
+  ["const s = `a` / 2; t.todo(); /x/;", [1]],
+  // `of` is a keyword only in a for-of head, after the binding.
+  ['const of = 2; of / 2; t.skip("r"); /x/.test("x");', [1]],
+  ["for (a; of / 2; t.skip()) /x/;", [1]],
+  ["for (x = of / 2;;) t.skip(); /x/;", [1]],
+  ["for (x of of / 2) t.skip(); /x/;", [1]],
+  ["for (x in of / 2) t.skip(); /x/;", [1]],
+  ["for (typeof of / 2;;) t.todo(); /x/;", [1]],
+  ["for (o.of / 2; t.skip(); ) /x/;", [1]],
+  // Only the `)` of an if, while, for or with head starts a statement.
+  ["f(x) / 2; t.skip(); /x/;", [1]],
+  ["if ((a) / 2) t.skip(); /x/;", [1]],
+  ["if (a) (b) / 2; t.skip(); /x/;", [1]],
+  ["o.if(x) / 2; t.skip(); /x/;", [1]],
+  ["o.for(x) / 2; t.todo(); /x/;", [1]],
 ];
 const NEGATIVE = [
   "// t.skip() in a comment",
@@ -428,12 +510,51 @@ const NEGATIVE = [
   "a = b + +/skip/.source;",
   "const m = String.raw`\\u{110000}`;",
   "const m = String.raw`\\xZZ \\u12`;",
+  "t.skip\u200C();",
+  "t.skip\u00E9();",
+  "t.skip\u{1D465}();",
+  "const \u{1D465}skip = 1;",
+  "const s = `${/\\.skip/.source}`;",
+  "const s = `a${x}b${/\\.only/.source}`;",
+  "for (const x of /\\.skip/g.exec(s));",
+  "for (const [a] of /\\.only/.exec(s));",
+  "for (const { a } of /\\.todo/.exec(s));",
+  "for await (const x of /\\.skip/.exec(s));",
+  "for (let of of /\\.skip/.exec(s));",
+  "for (x.of of /\\.todo/.exec(s));",
+  "for (x.in of /\\.only/.exec(s));",
+  'if (true) /\\.skip\\b/.test("x");',
+  "while (x) /\\.only/.test(s);",
+  "for (;;) /\\.todo/.exec(s);",
+  "for await (const x of xs) /\\.skip/.exec(x);",
+  "with (o) /\\.skip/.exec(s);",
 ];
 
 test("F-035 c: the scanner finds every marker form and nothing else", () => {
   for (const [src, lines] of POSITIVE)
     assert.deepEqual(markers(src), lines, src);
   for (const src of NEGATIVE) assert.deepEqual(markers(src), [], src);
+});
+
+// JavaScript itself decides whether `a<c>b` is one identifier.
+function joinsName(c) {
+  try {
+    return new Function(`a${c}b`, "").length === 1;
+  } catch {
+    return false;
+  }
+}
+
+test("F-035 c: a character right after the name ends it exactly when JavaScript says so", () => {
+  const wrong = [];
+  for (let cp = 0; cp <= 0xffff; cp++) {
+    if (cp >= 0xd800 && cp <= 0xdfff) continue;
+    const c = String.fromCharCode(cp);
+    const want = joinsName(c) ? [] : [1];
+    const got = markers(`t.skip${c}();`);
+    if (got.join() !== want.join()) wrong.push(cp.toString(16));
+  }
+  assert.deepEqual(wrong, []);
 });
 
 test("F-035 c: a listed place passes once; the same line elsewhere, twice or a stale entry fails", () => {
