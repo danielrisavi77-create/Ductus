@@ -107,7 +107,8 @@ test("the critical list contains every owner-command path, so the two cannot dri
 });
 
 test("a decision record is never low and is an owner-command path", () => {
-  for (const file of D97_MANUAL_PATHS) {
+  for (const entry of D97_MANUAL_PATHS) {
+    const file = entry.endsWith("/") ? `${entry}D-05.md` : entry;
     assert.equal(minimumRisk([file]).risk, "standard", file);
     assert.equal(declared("low", [file]).ok, false, file);
     assert.deepEqual(ownerCommandPaths([file]), [file]);
@@ -280,6 +281,7 @@ test("a fully approved PR on owner-command paths is not success while auto-merge
     ["scripts/orchestrator/pr-ready.mjs"],
     [".claude/skills/x/SKILL.md"],
     ["docs/DECISIONS.md"],
+    ["docs/odluke/D-05.md"],
   ]) {
     const held = decide({ risk: "critical", names, autoMerge: true });
     assert.equal(held.state, "pending", names.join());
