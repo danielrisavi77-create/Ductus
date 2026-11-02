@@ -145,7 +145,7 @@ export default async function WorkspacePage({
   ) : undefined;
   const heading = <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>;
   const workspace = (
-    <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
+    <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain drawer>
       <WorkspaceShell
         mode={view.mode}
         writingHref={radPath(assignmentId)}

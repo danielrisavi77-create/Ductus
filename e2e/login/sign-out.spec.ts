@@ -425,12 +425,20 @@ test("with a session the home page and the sign-in page lead to the student's ow
 // Design v3 shell around the workspace (#476 6314969336, cut (b)): the student
 // items, and in the account place the workspace's own sign-out with its dialog
 // (I5, D-118), never a second, plain one.
+// Since 1. 11. 2026. the side bar on /rad is a drawer behind ☰ at every width
+// (owner), and the sign-out sits in the top bar, still one press away.
 test("in the shell /rad keeps one sign-out, the one that knows the device", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page, "/rad");
   const side = page.getByRole("complementary", { name: t.shell.sideNav });
+  await expect(side).toBeHidden();
+  await expect(logoutOf(page)).toHaveCount(1);
+  await expect(page.getByRole("banner").getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: t.shell.openNav }).click();
   const nav = side.getByRole("navigation", { name: t.shell.workNav });
   await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.courses, t.shell.nav.workspace, t.shell.nav.enroll]);
   await expect(nav.getByRole("link", { name: t.shell.nav.workspace })).toHaveAttribute("aria-current", "page");
-  await expect(logoutOf(page)).toHaveCount(1);
-  await expect(side.getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(side).toBeHidden();
+  await expect(page.getByRole("button", { name: t.shell.openNav })).toBeFocused();
 });
