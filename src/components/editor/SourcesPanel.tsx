@@ -18,7 +18,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
 import {
-  blocksOf, citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
+  blocksOf, citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
   type SourceField, type SourceFields, type SourceKind,
 } from "./sources";
 import styles from "./SourcesPanel.module.css";
@@ -58,16 +58,15 @@ function SourcesForm() {
   const check = sourceFromFields(fields);
   // DAN-484: a value over its limit or one the sheet would change is shown as
   // it is typed or pasted, never cut; an empty field only after a click.
-  const invalid = new Set<SourceField>(check.ok ? [] : [
-    ...check.tooLong, ...check.unstorable,
-    ...(tried ? [...check.missing, ...(check.yearInvalid ? ["year" as const] : [])] : []),
-  ]);
+  const problems = formErrors(check, page, tried);
+  const invalid = new Set<SourceField>(problems.flatMap((p) => ("field" in p ? [p.field] : p.kind === "yearInvalid" ? ["year" as const] : [])));
   // The work as it would be written now, with the letter of its year (DAN-484);
   // the write plans again from the sheet at the click.
   const plan = useEditorState({
     editor, selector: ({ editor: e }) => (e === null || !check.ok ? null : suffixPlan(blocksOf(e.state.doc), check.source)),
   }) ?? null;
-  const shown = check.ok ? (plan?.kind === "write" ? plan.source : check.source) : null;
+  // With every letter of the year taken nothing would be written, so no preview is shown.
+  const shown = check.ok && plan?.kind !== "full" ? (plan?.kind === "write" ? plan.source : check.source) : null;
 
   // Checked again at the click: a sign-out stops writing without a render.
   const canWrite = () => editable && editor !== null && !editor.isDestroyed && editor.isEditable;
@@ -131,15 +130,16 @@ function SourcesForm() {
     </button>
   );
 
-  const errors = !check.ok ? [
-    ...(tried ? check.missing.map((field) => t.required.replace("{field}", t[field])) : []),
-    ...(tried && check.yearInvalid ? [t.yearInvalid] : []),
-    ...check.tooLong.map((field) => t.tooLong.replace("{field}", t[field]).replace("{n}", String(FIELD_MAX[field]))),
-    ...check.unstorable.map((field) => t.unstorable.replace("{field}", t[field])),
-  ] : [];
-  if (!pageFits(page)) errors.push(pageTooLong);
-  if (!storable(page)) errors.push(t.pageUnstorable);
-  if (plan?.kind === "full") errors.push(t.yearFull);
+  const errors = problems.map((p) => {
+    switch (p.kind) {
+      case "missing": return t.required.replace("{field}", t[p.field]);
+      case "yearInvalid": return t.yearInvalid;
+      case "tooLong": return t.tooLong.replace("{field}", t[p.field]).replace("{n}", String(FIELD_MAX[p.field]));
+      case "unstorable": return t.unstorable.replace("{field}", t[p.field]);
+      case "pageTooLong": return pageTooLong;
+      case "pageUnstorable": return t.pageUnstorable;
+    }
+  });
 
   return (
     <div className={styles.panel}>

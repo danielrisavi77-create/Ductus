@@ -10,7 +10,7 @@ import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import {
-  bibliographyPlan, blocksOf, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
+  bibliographyPlan, blocksOf, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
   type SourceField, type SourceFields,
 } from "./sources";
 
@@ -48,6 +48,9 @@ function editorWith(paragraphs: { type?: string; text: string }[]) {
   });
   return editor;
 }
+
+// The cursor at the end of the first block, where "Dodaj i citiraj" writes.
+const atFirstEnd = (editor: Editor) => editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
 
 const texts = (editor: Editor) => {
   const out: string[] = [];
@@ -366,6 +369,150 @@ describe("the letter of the year", () => {
     expect(writeSource(editor, sourceOf(THIRD), null, true)?.yearSuffix).toBe("c");
     expect(texts(editor).filter((t) => t.includes("(2021b)"))).toHaveLength(1);
     editor.destroy();
+  });
+});
+
+// DAN-484, contract #1091 c.6584858242 (confirmed c.6584911859): the classes
+// of input of point 1, one row each. A block "# X" is a heading X; `entry(f, l)`
+// and `cite(f, l, page)` are the domain's text with letter l (none when "").
+describe("the letter of the year, class by class", () => {
+  const SECOND: SourceFields = { ...BOOK, title: "Druga izmišljena knjiga" };
+  const TWO: SourceFields = { ...BOOK, family2: "Kovač", given2: "Luka", title: "Zajednička knjiga" };
+  const entry = (f: SourceFields, l = "") => entryText(l === "" ? sourceOf(f) : { ...sourceOf(f), yearSuffix: l });
+  const cite = (f: SourceFields, l = "", page = "") => citationText(l === "" ? sourceOf(f) : { ...sourceOf(f), yearSuffix: l }, page);
+  const letters = (n: number) => [..."abcdefghijklmnopqrstuvwxyz"].slice(0, n);
+
+  type Row = { klass: string; before: string[]; work: SourceFields; letter: string | null; after: string[] };
+  const rows: Row[] = [
+    { klass: "1 no other work", before: ["T.", "# Literatura"], work: BOOK, letter: "", after: ["T.", "# Literatura", entry(BOOK)] },
+    { klass: "2 same authors, another year", before: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK)],
+      work: { ...SECOND, year: "2020" }, letter: "",
+      after: ["T. (Horvat, 2021)", "# Literatura", entry({ ...SECOND, year: "2020" }), entry(BOOK)] },
+    { klass: "3 same year, another author", before: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK)],
+      work: { ...SECOND, family: "Kovač" }, letter: "",
+      after: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK), entry({ ...SECOND, family: "Kovač" })] },
+    { klass: "4a same first author with a second, against the first alone", before: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK)],
+      work: TWO, letter: "", after: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK), entry(TWO)] },
+    { klass: "4b the first alone, against the first with a second", before: ["T.", "# Literatura", entry(TWO)],
+      work: SECOND, letter: "", after: ["T.", "# Literatura", entry(SECOND), entry(TWO)] },
+    { klass: "5 the same authors in reverse order", before: ["T.", "# Literatura", entry(TWO)],
+      work: { ...TWO, family: "Kovač", given: "Luka", family2: "Horvat", given2: "Ana", title: "Obrnuta" }, letter: "",
+      after: ["T.", "# Literatura", entry(TWO), entry({ ...TWO, family: "Kovač", given: "Luka", family2: "Horvat", given2: "Ana", title: "Obrnuta" })] },
+    { klass: "6 a family name that starts another (Horvat / Horvatić)", before: ["T. (Horvatić, 2021)", "# Literatura", entry({ ...BOOK, family: "Horvatić" })],
+      work: SECOND, letter: "", after: ["T. (Horvatić, 2021)", "# Literatura", entry(SECOND), entry({ ...BOOK, family: "Horvatić" })] },
+    { klass: "7 the second work: the first becomes a in entry and citations, with and without a page",
+      before: ["T. (Horvat, 2021) i (Horvat, 2021: 9).", "# Literatura", entry(BOOK)], work: SECOND, letter: "b",
+      after: ["T. (Horvat, 2021a) i (Horvat, 2021a: 9).", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")] },
+    { klass: "8 the same work again after its letter: a duplicate that keeps it",
+      before: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")], work: SECOND, letter: "b",
+      after: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")] },
+    { klass: "9 a and b taken: c", before: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")],
+      work: { ...BOOK, title: "Treća" }, letter: "c",
+      after: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b"), entry({ ...BOOK, title: "Treća" }, "c")] },
+    { klass: "10 a gap (a, c): b", before: ["T.", "# Literatura", entry(BOOK, "a"), entry({ ...BOOK, title: "Treća" }, "c")],
+      work: SECOND, letter: "b",
+      after: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b"), entry({ ...BOOK, title: "Treća" }, "c")] },
+    { klass: "11 all 26 letters taken: nothing is written",
+      before: ["T.", "# Literatura", ...letters(26).map((l) => entry({ ...BOOK, title: `Knjiga ${l}` }, l))], work: SECOND, letter: null,
+      after: ["T.", "# Literatura", ...letters(26).map((l) => entry({ ...BOOK, title: `Knjiga ${l}` }, l))] },
+    { klass: "12 the same text outside the Literatura section neither counts nor changes",
+      before: [entry(BOOK), "# Literatura", "# Prilozi", entry(BOOK)], work: SECOND, letter: "",
+      after: [entry(BOOK), "# Literatura", entry(SECOND), "# Prilozi", entry(BOOK)] },
+    { klass: "12b an entry written by hand with more after the year is not of the group",
+      before: ["T. (Horvat, 2021)", "# Literatura", "Horvat, Ana (2021-2022) Ručno upisan rad."], work: SECOND, letter: "",
+      after: ["T. (Horvat, 2021)", "# Literatura", "Horvat, Ana (2021-2022) Ručno upisan rad.", entry(SECOND)] },
+    { klass: "13 a lettered citation and another author's citation stay as they are",
+      before: ["T. (Horvat, 2021b) i (Kovač i Horvat, 2021) i (Horvat, 20215).", "# Literatura", entry(BOOK)], work: SECOND, letter: "b",
+      after: ["T. (Horvat, 2021b) i (Kovač i Horvat, 2021) i (Horvat, 20215).", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")] },
+    { klass: "14 two authors", before: ["T. (Babić i Kovač, 2019: 45).", "# Literatura", entry(ARTICLE)],
+      work: { ...ARTICLE, title: "Drugi članak" }, letter: "b",
+      after: ["T. (Babić i Kovač, 2019a: 45).", "# Literatura", entry(ARTICLE, "a"), entry({ ...ARTICLE, title: "Drugi članak" }, "b")] },
+  ];
+  const blocks = (lines: string[]) => lines.map((line) => (line.startsWith("# ") ? { type: "heading", text: line.slice(2) } : { text: line }));
+  const shown = (editor: Editor) => texts(editor).map((line) => line.replace(/^heading:/, "# ").replace(/^paragraph:/, ""));
+
+  it.each(rows)("class $klass", ({ before, work, letter, after }) => {
+    const editor = editorWith(blocks(before));
+    atFirstEnd(editor);
+    const doc = editor.state.doc.toJSON();
+    const plan = suffixPlan(blocksOf(editor.state.doc), sourceOf(work));
+    const written = writeSource(editor, sourceOf(work), null, true);
+    if (letter === null) {
+      expect(plan).toEqual({ kind: "full" });
+      expect(written).toBeNull();
+      expect(editor.state.doc.toJSON()).toEqual(doc);
+    } else {
+      expect(written?.yearSuffix ?? "").toBe(letter);
+      expect(plan.kind === "write" && (plan.source.yearSuffix ?? "")).toBe(letter);
+    }
+    expect(shown(editor)).toEqual(after);
+    editor.destroy();
+  });
+
+  it("class 7 also letters the citation it writes, with and without a page", () => {
+    for (const page of ["", "4"]) {
+      const editor = editorWith(blocks(["T.", "# Literatura", entry(BOOK)]));
+      atFirstEnd(editor);
+      expect(writeSource(editor, sourceOf(SECOND), page, true)?.yearSuffix).toBe("b");
+      expect(shown(editor)[0]).toBe(`T.${cite(SECOND, "b", page)}`);
+      editor.destroy();
+    }
+  });
+});
+
+// DAN-484 point 2: what the form names live (tried = false) and after a click,
+// over every field of both kinds. A limit counts code points; nothing is cut.
+describe("the form's errors, field by field", () => {
+  const BOOK_FIELDS: SourceField[] = ["family", "given", "family2", "given2", "title", "place", "publisher"];
+  const ARTICLE_FIELDS: SourceField[] = ["family", "given", "family2", "given2", "title", "journal", "volume", "issue", "pages"];
+  const ASTRAL = "\u{1D49C}"; // one code point, two UTF-16 units
+  const full = { ...BOOK, family2: "Kovač", given2: "Luka" };
+  const fullArticle = { ...ARTICLE };
+  const cases = [
+    ...BOOK_FIELDS.map((field) => ({ kind: "book", base: full, field })),
+    ...ARTICLE_FIELDS.map((field) => ({ kind: "article", base: fullArticle, field })),
+  ] as const;
+
+  it.each(cases)("$kind $field", ({ base, field }) => {
+    const max = FIELD_MAX[field];
+    const at = (fill: string) => ({ ...base, [field]: fill });
+    const errs = (fields: SourceFields, tried: boolean) => formErrors(sourceFromFields(fields), "", tried);
+    // Empty: named only after a click, and only when the field is needed.
+    const empty = at("");
+    const needed = sourceFromFields(empty).ok === false;
+    expect(errs(empty, false)).toEqual([]);
+    expect(errs(empty, true).some((e) => e.kind === "missing")).toBe(needed);
+    // At the limit, in code points, with spaces around and with an astral character.
+    expect(errs(at("č".repeat(max)), false)).toEqual([]);
+    expect(errs(at(`  ${"č".repeat(max)}  `), false)).toEqual([]);
+    expect(errs(at(`${ASTRAL}${"č".repeat(max - 1)}`), false)).toEqual([]);
+    // One more: named at once, without a click, and the value is not cut.
+    const over = at(`${ASTRAL}${"č".repeat(max)}`);
+    expect(errs(over, false)).toEqual([{ kind: "tooLong", field }]);
+    expect(over[field]).toHaveLength(max + 2);
+    // A character the sheet would change: named at once too.
+    expect(errs(at(`a${NUL}`), false)).toEqual([{ kind: "unstorable", field }]);
+  });
+
+  it("never names a hidden field of the other kind", () => {
+    const over = (field: SourceField) => "1".repeat(FIELD_MAX[field] + 1);
+    expect(formErrors(sourceFromFields({ ...BOOK, journal: over("journal"), pages: over("pages") }), "", true)).toEqual([]);
+    expect(formErrors(sourceFromFields({ ...ARTICLE, place: over("place"), publisher: `x${NUL}` }), "", true)).toEqual([]);
+  });
+
+  it("names a malformed year with its own message, and only after a click", () => {
+    expect(formErrors(sourceFromFields({ ...BOOK, year: "20215" }), "", false)).toEqual([]);
+    expect(formErrors(sourceFromFields({ ...BOOK, year: "20215" }), "", true)).toEqual([{ kind: "yearInvalid" }]);
+  });
+
+  it("names the page of a citation at once, at the limit and one over", () => {
+    const ok = sourceFromFields(BOOK);
+    expect(formErrors(ok, "1".repeat(PAGE_MAX), false)).toEqual([]);
+    expect(formErrors(ok, ` ${ASTRAL}${"1".repeat(PAGE_MAX - 1)} `, false)).toEqual([]);
+    expect(formErrors(ok, "1".repeat(PAGE_MAX + 1), false)).toEqual([{ kind: "pageTooLong" }]);
+    expect(formErrors(ok, `1${NUL}`, false)).toEqual([{ kind: "pageUnstorable" }]);
+    // An empty form says nothing until a click; the page still speaks at once.
+    expect(formErrors(sourceFromFields(EMPTY_FIELDS), "1".repeat(PAGE_MAX + 1), false)).toEqual([{ kind: "pageTooLong" }]);
   });
 });
 

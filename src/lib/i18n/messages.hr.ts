@@ -652,7 +652,6 @@ export const hr = {
       pageTooLong: "Stranica navoda ima najviše {n} znakova.",
       unstorable: "{field} sadrži znak koji list ne prima; upiši polje ponovno.",
       pageUnstorable: "Stranica navoda sadrži znak koji list ne prima; upiši je ponovno.",
-      yearFull: "U Literaturi su već radovi ovih autora iz te godine sa svim slovima od a do z.",
       readOnly: "List je samo za čitanje; izvori se ne mogu dodati.",
     },
     instructionsEmpty: "Upute zadatka prikazuju se ovdje.",
