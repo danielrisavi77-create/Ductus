@@ -97,6 +97,13 @@ describe("sourceFromFields", () => {
     expect(sourceFromFields({ ...BOOK, year: "20215" })).toMatchObject({ ok: false, yearInvalid: true, tooLong: [] });
   });
 
+  it("does not let a hidden field of the previous kind block the form (review on #866, c.6578428081)", () => {
+    // An article with 21 characters in "Stranice", then switched to a book and filled in correctly.
+    const switched: SourceFields = { ...BOOK, journal: ARTICLE.journal, pages: "1".repeat(FIELD_MAX.pages + 1) };
+    expect(switched.pages).toHaveLength(21);
+    expect(sourceFromFields(switched)).toMatchObject({ ok: true, source: { type: "book" } });
+  });
+
   it("bounds the page of a citation", () => {
     expect(PAGE_MAX).toBe(20);
     expect(pageFits("1".repeat(20))).toBe(true);

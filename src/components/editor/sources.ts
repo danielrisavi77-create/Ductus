@@ -99,7 +99,8 @@ export function sourceFromFields(fields: SourceFields): SourceCheck {
   const missing = needed.filter((field) => value(field) === "");
   const yearInvalid = value("year") !== "" && !/^[1-9]\d{3}$/.test(value("year"));
   // The year has its own message: its form already bounds it to four digits.
-  const tooLong = (Object.keys(FIELD_MAX) as SourceField[])
+  // Only the fields of the chosen kind count: a hidden field of the other kind is never read.
+  const tooLong = USED[fields.kind]
     .filter((field) => field !== "year" && codePoints(value(field)) > FIELD_MAX[field]);
   const unstorable = USED[fields.kind].filter((field) => !storable(fields[field]));
   if (missing.length > 0 || yearInvalid || tooLong.length > 0 || unstorable.length > 0) {
