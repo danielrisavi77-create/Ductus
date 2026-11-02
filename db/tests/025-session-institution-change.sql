@@ -242,7 +242,7 @@ SELECT lives_ok(
   $$ INSERT INTO identity.session (token_hash, user_id, institution_id, expires_at, closed_at, close_reason)
      SELECT pg_temp.h('ok-' || r), '00000000-0000-4000-8000-0000000025b1', '00000000-0000-4000-8000-0000000025b0',
             now() + interval '1 hour', now(), r
-     FROM unnest(ARRAY['logout', 'backchannel_logout', 'institution_changed', 'issuer_removed', 'operator']) AS r $$,
+     FROM unnest(ARRAY['logout', 'backchannel_logout', 'logout_all', 'institution_changed', 'issuer_removed', 'operator']) AS r $$,
   'every listed close_reason is accepted'
 );
 

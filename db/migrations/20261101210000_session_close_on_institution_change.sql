@@ -22,9 +22,11 @@
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
+-- logout_all comes from 20261101200000_session_idle.sql (DAN-296), which
+-- landed first; this CHECK keeps it.
 ALTER TABLE identity.session DROP CONSTRAINT session_close_reason_check;
 ALTER TABLE identity.session ADD CONSTRAINT session_close_reason_check CHECK (
-  close_reason IN ('logout', 'backchannel_logout', 'institution_changed', 'issuer_removed', 'operator')
+  close_reason IN ('logout', 'backchannel_logout', 'logout_all', 'institution_changed', 'issuer_removed', 'operator')
 );
 
 CREATE FUNCTION identity.close_sessions_on_home_org_change() RETURNS trigger
@@ -331,7 +333,7 @@ DROP FUNCTION identity.close_sessions_on_issuer_removal();
 DROP FUNCTION identity.close_sessions_on_home_org_change();
 ALTER TABLE identity.session DROP CONSTRAINT session_close_reason_check;
 ALTER TABLE identity.session ADD CONSTRAINT session_close_reason_check CHECK (
-  close_reason IN ('logout', 'backchannel_logout')
+  close_reason IN ('logout', 'backchannel_logout', 'logout_all')
 );
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA identity FROM ductus_identity;

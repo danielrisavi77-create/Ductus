@@ -8,7 +8,7 @@ CREATE ROLE ductus_test_stranger NOLOGIN;
 GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 
-SELECT plan(42);
+SELECT plan(43);
 
 INSERT INTO identity.institution (id, slug) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a'),
@@ -174,6 +174,24 @@ SELECT is_empty(
   $$ SELECT tablename || '.' || policyname FROM pg_policies
      WHERE schemaname = 'identity' AND roles <> ARRAY['ductus_identity']::name[] $$,
   'every policy on an identity table is for ductus_identity alone'
+);
+-- The session functions (DAN-296): only the web role may close, touch or
+-- sign out everywhere, and only the retention role may purge. open_session
+-- has its own matrix in 021; a login role holds only what its group holds
+-- (010).
+SELECT is_empty(
+  $$ SELECT r.rolname || ': EXECUTE on ' || f.fn
+     FROM (SELECT rolname::text FROM pg_roles
+           WHERE rolname LIKE 'ductus\_%' AND rolname <> 'ductus_identity' AND NOT rolcanlogin
+           UNION ALL SELECT 'public') AS r
+     CROSS JOIN (VALUES
+       ('identity.close_current_session()', 'ductus_app'),
+       ('identity.touch_current_session()', 'ductus_app'),
+       ('identity.close_all_sessions_for_identity()', 'ductus_app'),
+       ('identity.purge_ended_sessions()', 'ductus_retention')
+     ) AS f (fn, allowed)
+     WHERE has_function_privilege(r.rolname, f.fn::regprocedure, 'EXECUTE') <> (r.rolname = f.allowed) $$,
+  'each session function is executable by its one role, by no other role and not by PUBLIC'
 );
 
 SELECT * FROM finish();
