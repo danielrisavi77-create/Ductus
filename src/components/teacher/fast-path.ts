@@ -53,6 +53,8 @@ export type FastPathStudent = {
   /** Both null when the account has no name (#757 D1); never a stand-in. */
   readonly givenName: string | null;
   readonly surname: string | null;
+  /** The work to open (#1284); null exactly when there is no record (`notice_pending`). */
+  readonly documentId: string | null;
   readonly work: WorkState;
   /** ISO instant on a whole minute, or null when there is no record yet. */
   readonly lastChangeAt: string | null;
