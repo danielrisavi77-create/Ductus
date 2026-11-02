@@ -73,10 +73,10 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .field { display: grid; gap: 4px; }
 .field label { font-size: 12.5px; color: var(--ink-3); }
 .input { min-height: 32px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 5px; background: var(--ground); color: var(--ink); font: inherit; }
-.sheet { background: #fcfbf8; color: #242422; border: 1px solid #cfccc4; border-radius: 6px; padding: 20px 24px; font: 16px/1.7 var(--ff-display); display: grid; gap: 10px; }
+/* List je papir u obje ljuske (D-188): tokeni bijelog lista iz DESIGN-SYSTEM §3, ne nasljeđuje ljusku. */
+.sheet { --sheet: #fcfbf8; --ink: #242422; --ink-2: #55534d; --ink-3: #5c5a54; --rule: #cfccc4; --well: #efede7; --accent: #806529;
+  background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 20px 24px; font: 16px/1.7 var(--ff-display); display: grid; gap: 10px; }
 .sheet p { margin: 0; }
-.sheet .tag { color: #55534d; border-color: #cfccc4; }
-.sheet .mark { background: #ecebe5; }
 .mark { background: var(--well); border-bottom: 2px solid var(--accent); padding: 0 2px; }
 .toast { background: var(--raised); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .workspace { display: grid; grid-template-columns: 220px 1fr; border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; background: var(--ground); }
@@ -98,5 +98,6 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
   .workspace { grid-template-columns: 1fr; }
   .workspace .rail { border-right: 0; border-bottom: 1px solid var(--rule-2); }
   .btn, .btn.small { min-height: 44px; }
+  .panel a, .rail a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   .tag, .field label, .statusbar, .src { font-size: 13px; }
 }
