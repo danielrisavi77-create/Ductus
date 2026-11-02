@@ -3638,6 +3638,39 @@ $$;
 
 
 --
+-- Name: list_teacher_candidates(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.list_teacher_candidates() RETURNS TABLE(user_id uuid)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- The same three conditions as confirm_teacher_role: the account belongs to
+  -- this institution, its right is recorded under it, and it is not the actor.
+  RETURN QUERY
+  SELECT e.user_id
+  FROM identity.teacher_eligibility e
+  JOIN identity.user_account u ON u.id = e.user_id AND u.institution_id = actor.institution_id
+  WHERE e.institution_id = actor.institution_id
+    AND e.user_id <> actor.user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM institution.institution_role r
+      WHERE r.institution_id = actor.institution_id AND r.user_id = e.user_id
+        AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    )
+  ORDER BY e.user_id;
+END
+$$;
+
+
+--
 -- Name: list_teacher_courses(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -7185,4 +7218,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261101201000'),
     ('20261101210000'),
     ('20261102120000'),
-    ('20261102150000');
+    ('20261102150000'),
+    ('20261102190000');
