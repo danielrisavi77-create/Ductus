@@ -21,6 +21,7 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | N-01 | Obavijesti e-poštom i u aplikaciji (odmah ili dnevni sažetak) | 2 do 3 | 1 |
 | N-02 | Podsjetnici o roku | 1 | 1 |
 | N-03 | Banka komentara | 1 | 2 |
+| N-04 | Glasovni komentar. **Ulazi u program (D-201 t. 3d); gradi se sa sintetičkim podacima u valu 2 (D-240), za stvarne studente isključen do DPIA i pravnog mišljenja** | nije procijenjeno | 2 |
 | N-05 | Promjene od mog zadnjeg pregleda | 2 | 2 |
 | N-07 | Ključni rokovi mentorskog rada | 2 do 3 | 3 |
 | N-08 | Komentor (model u M2) | 1 | 3 |
@@ -69,4 +70,4 @@ Zbroj prihvaćenog: oko **55 do 70 večeri** uz grupne radove s izmjenom pisača
 
 ## Kasnije
 
-S-05 transkripcija intervjua, N-04 glasovni komentar, N-06 rubrika povratne informacije, N-10 predlošci zadataka, F-05 izvoz u Dabar, F-07 članstvo iz ISVU-a, F-08 Merlin (LTI 1.3), A-02 provjera koherentnosti, A-06 ključ fakulteta za AI, A-09 otvorena specifikacija formata evidencije.
+S-05 transkripcija intervjua, N-06 rubrika povratne informacije (M6.13 do M6.15 se u M6 ne grade, D-249), N-10 predlošci zadataka, F-05 izvoz u Dabar, F-07 članstvo iz ISVU-a, F-08 Merlin (LTI 1.3), A-02 provjera koherentnosti, A-06 ključ fakulteta za AI, A-09 otvorena specifikacija formata evidencije.
