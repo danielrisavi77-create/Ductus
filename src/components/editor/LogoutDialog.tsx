@@ -209,18 +209,6 @@ export default function LogoutDialog({
     if (event.target === event.currentTarget && !busy && !asking) onStay();
   };
 
-  // With unsaved text the export is the main action (#1331); otherwise it stays plain.
-  const exportButton = (
-    <button
-      type="button"
-      className={exportFirst ? styles.confirm : styles.secondary}
-      onClick={onExport}
-      disabled={busy || asking}
-    >
-      {messagesHr.editor.exportText}
-    </button>
-  );
-
   return (
     <dialog
       ref={dialogRef}
@@ -282,21 +270,17 @@ export default function LogoutDialog({
           {failed ? <p className={styles.error}>{t.logoutFailed}</p> : null}
           {discard === "failed" ? <p className={styles.error}>{t.copyDiscardFailed}</p> : null}
         </div>
-        <div className={styles.actions}>
-          {offerExport && exportFirst ? exportButton : null}
-          <button
-            type="button"
-            className={exportFirst ? styles.secondary : styles.confirm}
-            onClick={onConfirm}
-            disabled={busy || asking}
-          >
-            {working ? t.loggingOut : confirmLabel}
-          </button>
-          {offerExport && !exportFirst ? exportButton : null}
-          <button ref={stayRef} type="button" className={styles.stay} onClick={onStay} disabled={busy || asking}>
-            {t.logoutStay}
-          </button>
-        </div>
+        <MainActions
+          exportFirst={exportFirst}
+          offerExport={offerExport}
+          working={working}
+          confirmLabel={confirmLabel}
+          disabled={busy || asking}
+          stayRef={stayRef}
+          onConfirm={onConfirm}
+          onExport={onExport}
+          onStay={onStay}
+        />
       </div>
     </dialog>
   );
@@ -345,5 +329,41 @@ function AfterSubmissionPart({
       {/* The live region exists before its text, so the failure is announced. */}
       <div role="alert">{failed ? <p className={styles.error}>{t.afterSubmissionDiscardFailed}</p> : null}</div>
     </section>
+  );
+}
+/**
+ * The three main choices (#1331). With unsaved text the export is the main
+ * action and sign-out a plain one named "bez izvoza"; otherwise as before.
+ * Its own element, so the dialog's text keeps few readings for the term scan.
+ */
+function MainActions({
+  exportFirst, offerExport, working, confirmLabel, disabled, stayRef, onConfirm, onExport, onStay,
+}: {
+  exportFirst: boolean;
+  offerExport: boolean;
+  working: boolean;
+  confirmLabel: string;
+  disabled: boolean;
+  stayRef: RefObject<HTMLButtonElement | null>;
+  onConfirm: () => void;
+  onExport: () => void;
+  onStay: () => void;
+}) {
+  const exportButton = offerExport ? (
+    <button type="button" className={exportFirst ? styles.confirm : styles.secondary} onClick={onExport} disabled={disabled}>
+      {messagesHr.editor.exportText}
+    </button>
+  ) : null;
+  return (
+    <div className={styles.actions}>
+      {exportFirst ? exportButton : null}
+      <button type="button" className={exportFirst ? styles.secondary : styles.confirm} onClick={onConfirm} disabled={disabled}>
+        {working ? t.loggingOut : confirmLabel}
+      </button>
+      {exportFirst ? null : exportButton}
+      <button ref={stayRef} type="button" className={styles.stay} onClick={onStay} disabled={disabled}>
+        {t.logoutStay}
+      </button>
+    </div>
   );
 }

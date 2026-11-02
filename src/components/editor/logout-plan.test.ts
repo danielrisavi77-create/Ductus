@@ -353,5 +353,6 @@ describe("logoutActions (#1331)", () => {
     expect(source).toContain("className={exportFirst ? styles.secondary : styles.confirm}");
     expect(source).toContain("onClick={onConfirm}");
     expect(source).toContain("className={exportFirst ? styles.confirm : styles.secondary}");
+    expect(source).toContain("{working ? t.loggingOut : confirmLabel}");
   });
 });
