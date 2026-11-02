@@ -138,11 +138,19 @@ ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M4.1 | Licenca i pravo redistribucije Lekte | V | | Owner queue |
-| M4.2 | U Lekti: generiran paket pravila (FPZG profili, oblik, citatni stilovi, naslovna stranica) s verzijom i testom zanošenja | P | M4.1 | DAN-392 (repo Lekta) |
+| M4.2 | U Lekti: generiran paket pravila (FPZG profili, oblik, citatni stilovi, naslovna stranica) s verzijom i testom zanošenja; izvodi ga Lekta sesija po Lektinim pravilima, uz Lekta tiket povezan s DAN-392, a Ductus orkestrator ne dodjeljuje Lekta pisce (D-224) | P | M4.1 | DAN-392 (repo Lekta) |
 | M4.3 | Ductus učitava paket s verzijom; kopija iz K-2 prelazi na paket | B | M4.2 | DAN-393 |
-| M4.4 | Provjera oblika nad dokumentom i panel Upute | F | M4.3, M5.3 | DAN-394 |
+| M4.3-P06 | Uvoz prvog paketa; spaja se samo na vlasnikov „Spoji n” (D-217) | B | M4.2, M4.3 | novo |
+| M4.4 | Provjera oblika nad dokumentom i „S-11 — Panel Upute i provjera oblika” | F | M4.3, M5.3 | DAN-394 |
 
-**Ekrani:** S-11 panel Upute (provjera oblika).
+**Ovisnosti i podjela (plan M4 iz paketa „M4 v1.0”, nije u repou; uz D-217 do D-224):**
+- Pin paketa na `assignment_version` ide iza M2.12-P01, M2.13-P01 i M2.4-P02.
+- Citatni stil ima jedan izvor, pin paketa; M2.12-P02 ne uvodi vlastiti.
+- Puna DOCX provjera dijeli se na P05a (ugovor, sada) i P05b (stvarna provjera, nakon M8.4); samo formalne provjere, informativne, nikad ne blokiraju predaju (D-222).
+- M4.3-P06 je uvoz prvog paketa; M4.0a (docs PR s ovim odlukama) i svaki uvoz paketa idu na „Spoji n” (D-217).
+- M4 ulazi u automatski red sa 25 koraka.
+
+**Ekrani:** S-11 — Panel Upute i provjera oblika. Napomena o koliziji naziva: u `docs/FEATURES.md` (r. 19) i u M5.12 oznaka S-11 znači uvodni vodič od dvije minute; puni naziv razlikuje ova dva ekrana.
 
 **Uvjet završetka:** izlazni kriterij M4 iz `docs/PROGRAM.md` (profili učitani s verzijom, test zanošenja u Lekti, provjera oblika javlja odstupanja na izmišljenim testnim radovima).
 
