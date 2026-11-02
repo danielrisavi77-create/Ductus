@@ -247,7 +247,11 @@ const lineOf = (buffer) => buffer?.toString("utf8").split(/\r?\n/)[0].trim() || 
 function commonGitDir(dir) {
   try {
     const dotGit = path.join(dir, ".git");
-    if (fs.lstatSync(dotGit).isDirectory()) return fs.realpathSync(dotGit);
+    if (fs.lstatSync(dotGit).isDirectory()) {
+      // Resolved again, so a `.git` replaced by a link after the lstat is not taken.
+      const real = fs.realpathSync(dotGit);
+      return samePath(real, path.join(fs.realpathSync(dir), ".git")) ? real : null;
+    }
     const named = /^gitdir: (.+)$/m.exec(readRegular(dotGit)?.toString("utf8") ?? "")?.[1]?.trim();
     if (!named) return null;
     const adminDir = fs.realpathSync(path.resolve(dir, named));
@@ -266,8 +270,7 @@ function commonGitDir(dir) {
 // F-035: the project rules may come from a directory other than the project
 // root only when it is a checkout of the same repository (the root itself, or a
 // worktree sharing its git directory) or holds a byte-identical configuration.
-// Otherwise a reduced rulebook there would pass the probe, which only checks
-// two denials. Returns null when the rules are acceptable, else the problem.
+// Returns null when the rules are acceptable, else the reason to block.
 export function foreignRules(rulebookDir, root, limits) {
   try {
     if (samePath(fs.realpathSync(rulebookDir), fs.realpathSync(root))) return null;
