@@ -16,11 +16,12 @@ import exceptions from "./rpc-http-exceptions.json";
 // body writes (INSERT INTO, UPDATE, DELETE FROM) or calls a function that does.
 // A definition the parser cannot read ($$ or $tag$ body) stops the test. It
 // has a route when a call "schema.name(" appears, outside comments, in a file
-// that some app/api/**/route.ts reaches through its imports.
+// that some app/api/**/route.ts reaches through its imports. A call is matched
+// without regard to case and with optional space before "(".
 //
 // Known limits: GRANT is not read (the reason in the list covers who may call
-// a function), and a name built at run time or reached through EXECUTE
-// format(...) is not seen.
+// a function), and a name built at run time, a quoted identifier, or a call
+// reached through EXECUTE format(...) is not seen.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MIGRATIONS = join(ROOT, "db/migrations");
@@ -128,6 +129,12 @@ export function catalogue(
 const WRITE_RE =
   /\b(?:INSERT\s+INTO|UPDATE\s+[a-z_]+\.[a-z_0-9]+|DELETE\s+FROM)\b/i;
 
+/** Whether text calls schema.name, in any case and with optional space before "(". */
+export function calls(text: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![A-Za-z_0-9.])${escaped}\\s*\\(`, "i").test(text);
+}
+
 /** Callable, non-trigger functions that write directly or through a function they call. */
 export function stateChanging(fns: Map<string, Fn>): string[] {
   const writes = new Set(
@@ -137,7 +144,7 @@ export function stateChanging(fns: Map<string, Fn>): string[] {
     grew = false;
     for (const [name, fn] of fns) {
       if (writes.has(name)) continue;
-      if ([...writes].some((callee) => fn.body.includes(`${callee}(`))) {
+      if ([...writes].some((callee) => calls(fn.body, callee))) {
         writes.add(name);
         grew = true;
       }
@@ -226,7 +233,7 @@ const files = readdirSync(MIGRATIONS)
 const fns = catalogue(files);
 const rpcs = stateChanging(fns);
 const routed = routeReachableSource();
-const hasRoute = (name: string) => routed.includes(`${name}(`);
+const hasRoute = (name: string) => calls(routed, name);
 const listed = exceptions as Exception[];
 
 describe("RPC to HTTP inventory (DAN-487)", () => {
@@ -304,6 +311,26 @@ describe("catalogue parser", () => {
       "s.w",
     ]);
     expect(stateChanging(parsed)).toStrictEqual(["s.caller", "s.w"]);
+  });
+
+  it("counts a call written in another case or with space before the bracket", () => {
+    const parsed = catalogue([
+      {
+        name: "1.sql",
+        sql: [
+          "CREATE FUNCTION s.w() RETURNS void LANGUAGE sql AS $$ UPDATE s.t SET a = 1; $$;",
+          "CREATE FUNCTION s.spaced() RETURNS void LANGUAGE sql AS $$ SELECT s.w (); $$;",
+          "CREATE FUNCTION s.upper() RETURNS void LANGUAGE sql AS $$ SELECT S.W(); $$;",
+          "CREATE FUNCTION s.other() RETURNS void LANGUAGE sql AS $$ SELECT s.wx(); $$;",
+        ].join("\n"),
+      },
+    ]);
+    expect(stateChanging(parsed).sort()).toStrictEqual([
+      "s.spaced",
+      "s.upper",
+      "s.w",
+    ]);
+    expect(calls("x.s.w()", "s.w")).toBe(false);
   });
 
   it("does not split a statement on a semicolon inside a body or a quote", () => {
