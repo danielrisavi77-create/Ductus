@@ -33,6 +33,7 @@ import {
 import { FakeKmsClient } from "./fake-kms-client";
 
 const ARN = "arn:aws:kms:eu-central-1:000000000000:key/sinteticki-1";
+const OTHER_ARN = "arn:aws:kms:eu-central-1:000000000000:key/sinteticki-2";
 const MESSAGE = new TextEncoder().encode("sinteticka-potvrda");
 const SIG64 = new Uint8Array(64).fill(7);
 const SPKI = new Uint8Array([48, 42, 48, 5, 6, 3, 43, 101, 112, 3, 33, 0, ...new Uint8Array(32)]);
@@ -50,16 +51,16 @@ function stub(respond: (command: unknown, signal?: AbortSignal) => Promise<unkno
   return new AwsSdkKmsEd25519Transport(sender, { timeoutMs: 50 });
 }
 
-function call(transport: AwsSdkKmsEd25519Transport, op: Op): Promise<unknown> {
+function call(transport: AwsSdkKmsEd25519Transport, op: Op, keyId = ARN): Promise<unknown> {
   const base = {
-    keyId: ARN,
+    keyId,
     message: MESSAGE,
     messageType: AWS_KMS_RAW_MESSAGE_TYPE,
     signingAlgorithm: AWS_KMS_ED25519_ALGORITHM,
   };
   if (op === "sign") return transport.sign(base);
   if (op === "verify") return transport.verify({ ...base, signature: SIG64 });
-  return transport.getPublicKey({ keyId: ARN });
+  return transport.getPublicKey({ keyId });
 }
 
 const okOutput: Record<Op, Record<string, unknown>> = {
@@ -106,9 +107,18 @@ const INVALID: Array<[Op, string, Record<string, unknown> | null]> = [
   ["sign", "signature as string", { ...okOutput.sign, Signature: "AAAA" }],
   ["sign", "63-byte signature", { ...okOutput.sign, Signature: new Uint8Array(63) }],
   ["sign", "65-byte signature", { ...okOutput.sign, Signature: new Uint8Array(65) }],
+  ["sign", "answer for another key", { ...okOutput.sign, KeyId: OTHER_ARN }],
   ["verify", "null output", null],
   ["verify", "SignatureValid missing", { KeyId: ARN }],
-  ["verify", "SignatureValid as string", { KeyId: ARN, SignatureValid: "true" }],
+  ["verify", "SignatureValid as string", { ...okOutput.verify, SignatureValid: "true" }],
+  // QA c.6585451053: a boolean alone is not a complete answer to the same request.
+  ["verify", "only SignatureValid", { SignatureValid: true }],
+  ["verify", "missing KeyId", { ...okOutput.verify, KeyId: undefined }],
+  ["verify", "blank KeyId", { ...okOutput.verify, KeyId: " " }],
+  ["verify", "answer for another key", { ...okOutput.verify, KeyId: OTHER_ARN }],
+  ["verify", "missing algorithm", { ...okOutput.verify, SigningAlgorithm: undefined }],
+  ["verify", "other algorithm", { ...okOutput.verify, SigningAlgorithm: "ECDSA_SHA_256" }],
+  ["verify", "other key, SignatureValid false", { ...okOutput.verify, KeyId: OTHER_ARN, SignatureValid: false }],
   ["getPublicKey", "null output", null],
   ["getPublicKey", "missing PublicKey", { ...okOutput.getPublicKey, PublicKey: undefined }],
   ["getPublicKey", "empty PublicKey", { ...okOutput.getPublicKey, PublicKey: new Uint8Array() }],
@@ -117,6 +127,7 @@ const INVALID: Array<[Op, string, Record<string, unknown> | null]> = [
   ["getPublicKey", "no Ed25519 algorithm", { ...okOutput.getPublicKey, SigningAlgorithms: ["ECDSA_SHA_256"] }],
   ["getPublicKey", "algorithms not an array", { ...okOutput.getPublicKey, SigningAlgorithms: "ED25519_SHA_512" }],
   ["getPublicKey", "missing KeyId", { ...okOutput.getPublicKey, KeyId: undefined }],
+  ["getPublicKey", "answer for another key", { ...okOutput.getPublicKey, KeyId: OTHER_ARN }],
 ];
 
 async function expectKind(promise: Promise<unknown>, kind: KmsTransportErrorKind, op: Op) {
@@ -234,8 +245,32 @@ describe("AwsSdkKmsEd25519Transport input classes", () => {
       Promise.reject(new KMSInvalidSignatureException({ message: "x", ...meta })),
     );
     expect(await call(rejected, "verify")).toBe(false);
-    expect(await call(stub(async () => ({ KeyId: ARN, SignatureValid: false })), "verify")).toBe(false);
+    const answer = { ...okOutput.verify, SignatureValid: false };
+    expect(await call(stub(async () => answer), "verify")).toBe(false);
   });
+
+  // QA c.6585451053: the answer must name the key the request asked for.
+  const ALIAS = "alias/ductus-sinteticki";
+  const BINDING: Array<[string, string, string, boolean]> = [
+    ["alias, any key ARN", ALIAS, OTHER_ARN, true],
+    ["alias ARN, any key ARN", "arn:aws:kms:eu-central-1:000000000000:alias/ductus-sinteticki", ARN, true],
+    ["alias, answer names the alias", ALIAS, ALIAS, false],
+    ["bare key id, its ARN", "sinteticki-1", ARN, true],
+    ["bare key id, another key", "sinteticki-1", OTHER_ARN, false],
+    ["bare key id, longer id", "sinteticki-1", "arn:aws:kms:eu-central-1:000000000000:key/xsinteticki-1", false],
+    ["key ARN, bare id back", ARN, "sinteticki-1", false],
+  ];
+  it.each(OPS.flatMap((op) => BINDING.map((row) => [op, ...row] as const)))(
+    "%s: %s is %s",
+    async (op, _name, requested, returned, ok) => {
+      const t = stub(async () => ({ ...okOutput[op], KeyId: returned }));
+      if (ok) {
+        await expect(call(t, op, requested)).resolves.toBeDefined();
+      } else {
+        await expectKind(call(t, op, requested), "invalid_response", op);
+      }
+    },
+  );
 
   it("KMSInvalidSignatureException on sign is a service error, not false", async () => {
     const t = stub(() => Promise.reject(new KMSInvalidSignatureException({ message: "x", ...meta })));

@@ -89,6 +89,23 @@ const isBytes = (value: unknown): value is Uint8Array =>
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 
+const KEY_ARN = /^arn:aws[a-z-]*:kms:[^:]+:\d{12}:key\/[^/]+$/;
+const ALIAS_ARN = /^arn:aws[a-z-]*:kms:[^:]+:\d{12}:alias\//;
+
+/**
+ * True when `returned` is the KMS key that answers a request for `requested`
+ * (#1091: a result only for a complete answer to the same request). KMS names
+ * the key in every answer by its key ARN: a key ARN request must get the same
+ * ARN back, a bare key id an ARN ending in that id, and an alias any key ARN,
+ * since the alias may point at any key (the provider then checks trust).
+ */
+function answersRequest(requested: string, returned: unknown): returned is string {
+  if (!isText(returned) || !KEY_ARN.test(returned)) return false;
+  if (requested.startsWith("alias/") || ALIAS_ARN.test(requested)) return true;
+  if (requested.startsWith("arn:")) return returned === requested;
+  return returned.endsWith(`:key/${requested}`);
+}
+
 /**
  * AwsKmsEd25519Transport over the official AWS SDK (D-71). Every call has its
  * own deadline: on expiry the request is aborted and a late answer or late
@@ -132,12 +149,6 @@ export class AwsSdkKmsEd25519Transport implements AwsKmsEd25519Transport {
       output = await Promise.race([sent, deadline]);
     } catch (error) {
       if (error instanceof KmsTransportError) throw error;
-      if (
-        operation === "verify" &&
-        record(error)?.name === "KMSInvalidSignatureException"
-      ) {
-        return { SignatureValid: false };
-      }
       throw classify(error, operation);
     } finally {
       clearTimeout(timer);
@@ -158,7 +169,7 @@ export class AwsSdkKmsEd25519Transport implements AwsKmsEd25519Transport {
       "sign",
     );
     if (
-      !isText(out.KeyId) ||
+      !answersRequest(input.keyId, out.KeyId) ||
       out.SigningAlgorithm !== AWS_KMS_ED25519_ALGORITHM ||
       !isBytes(out.Signature) ||
       out.Signature.byteLength !== ED25519_SIGNATURE_BYTES
@@ -169,17 +180,35 @@ export class AwsSdkKmsEd25519Transport implements AwsKmsEd25519Transport {
   }
 
   async verify(input: Parameters<AwsKmsEd25519Transport["verify"]>[0]): Promise<boolean> {
-    const out = await this.send(
-      new VerifyCommand({
-        KeyId: input.keyId,
-        Message: input.message,
-        Signature: input.signature,
-        MessageType: input.messageType,
-        SigningAlgorithm: input.signingAlgorithm,
-      }),
-      "verify",
-    );
-    if (typeof out.SignatureValid !== "boolean") {
+    let out: Record<string, unknown>;
+    try {
+      out = await this.send(
+        new VerifyCommand({
+          KeyId: input.keyId,
+          Message: input.message,
+          Signature: input.signature,
+          MessageType: input.messageType,
+          SigningAlgorithm: input.signingAlgorithm,
+        }),
+        "verify",
+      );
+    } catch (error) {
+      // KMS answers a signature that does not verify with this exception, not
+      // with SignatureValid: false; it is the one failure that is an answer.
+      if (
+        error instanceof KmsTransportError &&
+        error.kind === "service_error" &&
+        error.awsErrorName === "KMSInvalidSignatureException"
+      ) {
+        return false;
+      }
+      throw error;
+    }
+    if (
+      !answersRequest(input.keyId, out.KeyId) ||
+      out.SigningAlgorithm !== AWS_KMS_ED25519_ALGORITHM ||
+      typeof out.SignatureValid !== "boolean"
+    ) {
       throw new KmsTransportError("invalid_response", "verify");
     }
     return out.SignatureValid;
@@ -191,7 +220,7 @@ export class AwsSdkKmsEd25519Transport implements AwsKmsEd25519Transport {
     const out = await this.send(new GetPublicKeyCommand({ KeyId: input.keyId }), "getPublicKey");
     const algorithms = out.SigningAlgorithms;
     if (
-      !isText(out.KeyId) ||
+      !answersRequest(input.keyId, out.KeyId) ||
       out.KeySpec !== AWS_KMS_ED25519_KEY_SPEC ||
       out.KeyUsage !== AWS_KMS_SIGN_VERIFY_USAGE ||
       !Array.isArray(algorithms) ||
