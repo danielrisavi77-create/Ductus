@@ -14,13 +14,11 @@ Pravilo tumačenja: svako pravilo iz D-93 i `BACKEND.md` §4.2 vrijedi nepromije
 
 ## 2. Stanje odluka na koje se oslanja
 
-| Odluka | Status | Što ovdje znači |
-| --- | --- | --- |
-| D-93 | ODLUČENO, uz dopunu 11. 10. | Merkle log, list po `receiptSchema`, cutover, gapless indeks, dnevna kontrolna točka, vanjska povijest prije potpisa |
-| D-102 | ODLUČENO | Domena evidencije, vlastiti ključ kontrolne točke i vlastiti dnevnik po domeni; bez globalnog brojača |
-| D-72 / D-209 | ODLUČENO 2. 11. 2026. | DigiCert i Sectigo kao TSA; Internet Archive kao prvi neovisni primatelj; zaseban javni repo; javni broj potvrda u DPIA-i |
-| D-92 / D-215 | ODLUČENO | Digest i potpis potvrde v1 i v2; pretpostavka da izvan razvojnih i demo računala nema trajnih v1 potvrda |
-| D-08, dio o dobavljačima | PRIJEDLOG (B0.1) | O njemu ovisi izbor vanjske pohrane povijesti (§11, O5). Na tome se ne gradi dok nije odlučeno |
+- **D-93**, ODLUČENO, uz dopunu 11. 10.: Merkle log, list po `receiptSchema`, cutover, gapless indeks, dnevna kontrolna točka, vanjska povijest prije potpisa.
+- **D-102**, ODLUČENO: domena evidencije, vlastiti ključ kontrolne točke i vlastiti dnevnik po domeni; bez globalnog brojača.
+- **D-72 i D-209**, ODLUČENO 2. 11. 2026.: DigiCert i Sectigo kao TSA; Internet Archive kao prvi neovisni primatelj; zaseban javni repo; javni broj potvrda u DPIA-i.
+- **D-92 i D-215**, ODLUČENO: digest i potpis potvrde v1 i v2; pretpostavka da izvan razvojnih i demo računala nema trajnih v1 potvrda.
+- **D-08, dio o dobavljačima**, PRIJEDLOG (B0.1): o njemu ovisi izbor vanjske pohrane povijesti (§11, O5). Na tome se ne gradi dok nije odlučeno.
 
 Nijedan dio ove specifikacije ne gradi na odluci sa statusom PRIJEDLOG. Gdje bi izvedba to morala, stoji pitanje u §11.
 
