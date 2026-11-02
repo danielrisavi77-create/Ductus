@@ -331,6 +331,16 @@ describe("the letter of the year", () => {
     editor.destroy();
   });
 
+  it("letters in-text citations when another year of the author only names that year in its title", () => {
+    const editor = editorWith([{ text: "Tekst." }]);
+    atEnd(editor);
+    writeSource(editor, sourceOf(BOOK), "", true);
+    writeSource(editor, sourceOf({ ...BOOK, year: "2020", title: "Analiza (2021)" }), null, true);
+    expect(writeSource(editor, sourceOf(SECOND), null, true)?.yearSuffix).toBe("b");
+    expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(lettered(BOOK, "a"), "")}`);
+    editor.destroy();
+  });
+
   it("letters a citation split by marks and an entry with leading spaces", () => {
     const editor = new Editor({
       element: null, extensions: createEditorExtensions(),

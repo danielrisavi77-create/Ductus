@@ -269,9 +269,14 @@ export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
     // in-text citations stay as the student wrote them.
     const first = base.authors[0]!;
     const family = first.kind === "person" ? `${first.family}, ` : first.name;
+    // The year is read at its place, in the first bracket after the authors,
+    // never in a title such as "Analiza (2021)" (QA on #1407).
+    const year = String(base.year);
     const sameForm = blocks.slice(range.start + 1, range.end).some((b, i) => {
       const text = b.text.trim();
-      return range.start + 1 + i !== unlettered[0]!.index && text.startsWith(family) && text.includes(`(${base.year}`);
+      if (range.start + 1 + i === unlettered[0]!.index || !text.startsWith(family)) return false;
+      const open = text.indexOf("(", family.length);
+      return open !== -1 && text.startsWith(year, open + 1) && !/[0-9]/.test(text.charAt(open + 1 + year.length));
     });
     if (!sameForm) {
       blocks.forEach((block, index) => {
