@@ -3706,6 +3706,38 @@ END
 $$;
 
 
+--
+-- Name: teachers_without_affiliation(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.teachers_without_affiliation() RETURNS TABLE(user_id uuid, confirmed_at timestamp with time zone)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- A right recorded under another institution does not count; the account
+  -- is the one of this issuer and unique id, so another account of the same
+  -- person never lifts the mark.
+  RETURN QUERY
+  SELECT r.user_id, r.confirmed_at
+  FROM institution.institution_role r
+  WHERE r.institution_id = actor.institution_id
+    AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM identity.teacher_eligibility e
+      WHERE e.user_id = r.user_id AND e.institution_id = actor.institution_id
+    )
+  ORDER BY r.confirmed_at, r.user_id;
+END
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -6976,4 +7008,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261101160000'),
     ('20261101180000'),
     ('20261101190000'),
-    ('20261101200000');
+    ('20261101200000'),
+    ('20261102120000');

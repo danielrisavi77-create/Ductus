@@ -122,6 +122,7 @@ SELECT bag_eq(
     'remove_student(p_course_id uuid, p_student_id uuid) definer app',
     'allow_student_return(p_course_id uuid, p_student_id uuid) definer app',
     'revoke_teacher_role(p_teacher_id uuid) definer app',
+    'teachers_without_affiliation() definer app',
     'ai_policy_rank(p_ai_policy text)',
     'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean)',
     'refuse_change()',
