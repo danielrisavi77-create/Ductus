@@ -82,8 +82,10 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .sheet { --sheet: #fcfbf8; --ink: #242422; --ink-2: #55534d; --ink-3: #5c5a54; --rule: #cfccc4; --well: #efede7; --accent: #806529;
   background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 20px 24px; font: 16px/1.7 var(--ff-display); display: grid; gap: 10px; }
 .sheet p { margin: 0; }
-/* Oznaka fusnote: cilj dodira 44 × 44 px (#1386 t. 6); negativne margine čuvaju redak, broj ostaje mala gornja oznaka. */
-.sheet .fn { position: relative; z-index: 1; display: inline-flex; justify-content: center; align-items: center; width: 44px; height: 44px; margin: -12px -18px; color: inherit; text-decoration: none; }
+/* Oznaka fusnote: cilj dodira 44 × 44 px (#1386 t. 6). Odlomak s oznakom ima prored 46 px, a cilj je visok 44 px bez vertikalnih margina: ciljevi susjednih
+   redaka imaju razmak 2 px (zaokruživanje na piksele ne smije ih spojiti), pa se ne preklapaju ni uz kakav prijelom teksta. Vodoravne negativne margine čuvaju razmak teksta. */
+.sheet p:has(> .fn) { line-height: 46px; }
+.sheet .fn { position: relative; z-index: 1; display: inline-flex; justify-content: center; align-items: center; vertical-align: top; width: 44px; height: 44px; margin: 0 -18px; color: inherit; text-decoration: none; }
 .sheet .fn sup { position: relative; top: -0.45em; font-size: 0.75em; line-height: 1; }
 .mark { background: var(--well); border-bottom: 2px solid var(--accent); padding: 0 2px; }
 .toast { background: var(--raised); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
