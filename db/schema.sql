@@ -3233,6 +3233,52 @@ $$;
 
 
 --
+-- Name: approve_mentorship_request(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.approve_mentorship_request(p_request_id uuid) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  req institution.mentorship_request;
+  v_mentorship uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- Two approvals of one request wait for each other here.
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.teacher_id = actor.user_id
+  FOR UPDATE;
+  IF NOT FOUND OR institution.lock_teacher_role(actor.user_id) IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  ELSIF req.approved_at IS NOT NULL THEN
+    RETURN req.mentorship_id;
+  ELSIF req.withdrawn_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  BEGIN
+    INSERT INTO institution.mentorship (institution_id, mentor_id, student_id, work_type, confirmed_by)
+    VALUES (req.institution_id, actor.user_id, req.student_id, req.work_type, actor.user_id)
+    RETURNING id INTO v_mentorship;
+  EXCEPTION WHEN unique_violation THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END;
+  WITH approved AS (
+    UPDATE institution.mentorship_request r SET approved_at = now(), mentorship_id = v_mentorship
+    WHERE r.id = req.id
+    RETURNING r.id, r.institution_id, r.student_id, r.teacher_id, r.mentorship_id
+  )
+  INSERT INTO audit.mentorship_event (
+    institution_id, request_id, student_id, teacher_id, kind, actor_id, mentorship_id, occurred_at
+  )
+  SELECT institution_id, id, student_id, teacher_id, 'approved', actor.user_id, mentorship_id, now() FROM approved;
+  RETURN v_mentorship;
+END
+$$;
+
+
+--
 -- Name: assign_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4129,6 +4175,22 @@ $$;
 
 
 --
+-- Name: lock_teacher_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.lock_teacher_role(p_user_id uuid) RETURNS uuid
+    LANGUAGE sql
+    SET search_path TO ''
+    AS $$
+  SELECT r.id FROM app.current_actor() a
+  JOIN institution.institution_role r ON r.institution_id = a.institution_id
+  WHERE r.user_id = p_user_id AND r.role = 'teacher'
+    AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  FOR SHARE OF r
+$$;
+
+
+--
 -- Name: notify_assignment_version(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4242,6 +4304,52 @@ BEGIN
   SELECT actor.institution_id, ended.course_id, ended.id, ended.user_id, 'removed', actor.user_id, now() FROM ended;
   GET DIAGNOSTICS v_written = ROW_COUNT;
   RETURN v_written > 0;
+END
+$$;
+
+
+--
+-- Name: request_mentorship(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.request_mentorship(p_teacher_id uuid, p_work_type text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_id uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF p_work_type IS NULL
+     OR p_work_type NOT IN ('bachelor_thesis', 'master_thesis', 'specialist_thesis', 'doctoral_thesis') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_teacher_id IS NOT DISTINCT FROM actor.user_id
+     OR institution.lock_teacher_role(p_teacher_id) IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM institution.mentorship m
+    WHERE m.institution_id = actor.institution_id AND m.student_id = actor.user_id
+      AND m.work_type = p_work_type AND m.ended_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  BEGIN
+    WITH requested AS (
+      INSERT INTO institution.mentorship_request (institution_id, student_id, teacher_id, work_type)
+      VALUES (actor.institution_id, actor.user_id, p_teacher_id, p_work_type)
+      RETURNING id, institution_id, student_id, teacher_id
+    ), logged AS (
+      INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
+      SELECT institution_id, id, student_id, teacher_id, 'requested', actor.user_id, now() FROM requested
+    )
+    SELECT id INTO v_id FROM requested;
+  EXCEPTION WHEN unique_violation THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END;
+  RETURN v_id;
 END
 $$;
 
@@ -4557,6 +4665,40 @@ $$;
 
 
 --
+-- Name: withdraw_mentorship_request(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.withdraw_mentorship_request(p_request_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  req institution.mentorship_request;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.student_id = actor.user_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  ELSIF req.approved_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  ELSIF req.withdrawn_at IS NOT NULL THEN
+    RETURN false;
+  END IF;
+  WITH withdrawn AS (
+    UPDATE institution.mentorship_request r SET withdrawn_at = now() WHERE r.id = req.id
+    RETURNING r.id, r.institution_id, r.student_id, r.teacher_id
+  )
+  INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
+  SELECT institution_id, id, student_id, teacher_id, 'withdrawn', actor.user_id, now() FROM withdrawn;
+  RETURN true;
+END
+$$;
+
+
+--
 -- Name: work_relation(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4656,6 +4798,27 @@ CREATE TABLE audit.enrollment_code_event (
 );
 
 ALTER TABLE ONLY audit.enrollment_code_event FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: mentorship_event; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.mentorship_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    kind text NOT NULL,
+    actor_id uuid NOT NULL,
+    mentorship_id uuid,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT mentorship_event_check CHECK (((kind = 'approved'::text) = (mentorship_id IS NOT NULL))),
+    CONSTRAINT mentorship_event_kind_check CHECK ((kind = ANY (ARRAY['requested'::text, 'withdrawn'::text, 'approved'::text])))
+);
+
+ALTER TABLE ONLY audit.mentorship_event FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5403,6 +5566,29 @@ ALTER TABLE ONLY institution.mentorship FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: mentorship_request; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.mentorship_request (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    work_type text NOT NULL,
+    requested_at timestamp with time zone DEFAULT now() NOT NULL,
+    withdrawn_at timestamp with time zone,
+    approved_at timestamp with time zone,
+    mentorship_id uuid,
+    CONSTRAINT mentorship_request_check CHECK ((student_id <> teacher_id)),
+    CONSTRAINT mentorship_request_check1 CHECK ((num_nonnulls(withdrawn_at, approved_at) <= 1)),
+    CONSTRAINT mentorship_request_check2 CHECK (((approved_at IS NULL) = (mentorship_id IS NULL))),
+    CONSTRAINT mentorship_request_work_type_check CHECK ((work_type = ANY (ARRAY['bachelor_thesis'::text, 'master_thesis'::text, 'specialist_thesis'::text, 'doctoral_thesis'::text])))
+);
+
+ALTER TABLE ONLY institution.mentorship_request FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: notice_acknowledgment; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -5590,6 +5776,22 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mentorship_event mentorship_event_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mentorship_event mentorship_event_request_id_kind_key; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_request_id_kind_key UNIQUE (request_id, kind);
 
 
 --
@@ -6233,6 +6435,30 @@ ALTER TABLE ONLY institution.mentorship
 
 
 --
+-- Name: mentorship_request mentorship_request_id_institution_id_student_id_teacher_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_id_institution_id_student_id_teacher_id_key UNIQUE (id, institution_id, student_id, teacher_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_mentorship_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_mentorship_id_key UNIQUE (mentorship_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: notice_acknowledgment notice_acknowledgment_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -6354,6 +6580,13 @@ CREATE INDEX course_member_event_course_idx ON audit.course_member_event USING b
 --
 
 CREATE INDEX enrollment_code_event_course_idx ON audit.enrollment_code_event USING btree (course_id, occurred_at);
+
+
+--
+-- Name: mentorship_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX mentorship_event_institution_idx ON audit.mentorship_event USING btree (institution_id, occurred_at);
 
 
 --
@@ -6560,6 +6793,27 @@ CREATE UNIQUE INDEX mentorship_open_idx ON institution.mentorship USING btree (i
 
 
 --
+-- Name: mentorship_request_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX mentorship_request_open_idx ON institution.mentorship_request USING btree (institution_id, student_id, work_type) WHERE ((withdrawn_at IS NULL) AND (approved_at IS NULL));
+
+
+--
+-- Name: mentorship_request_student_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX mentorship_request_student_idx ON institution.mentorship_request USING btree (student_id);
+
+
+--
+-- Name: mentorship_request_teacher_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX mentorship_request_teacher_open_idx ON institution.mentorship_request USING btree (teacher_id) WHERE ((withdrawn_at IS NULL) AND (approved_at IS NULL));
+
+
+--
 -- Name: mentorship_student_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
@@ -6655,6 +6909,20 @@ CREATE TRIGGER enrollment_code_event_append_only BEFORE DELETE OR UPDATE ON audi
 --
 
 CREATE TRIGGER enrollment_code_event_no_truncate BEFORE TRUNCATE ON audit.enrollment_code_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: mentorship_event mentorship_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER mentorship_event_append_only BEFORE DELETE OR UPDATE ON audit.mentorship_event FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: mentorship_event mentorship_event_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER mentorship_event_no_truncate BEFORE TRUNCATE ON audit.mentorship_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
 
 
 --
@@ -6945,6 +7213,30 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_actor_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_actor_id_institution_id_fkey FOREIGN KEY (actor_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_mentorship_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_mentorship_id_institution_id_fkey FOREIGN KEY (mentorship_id, institution_id) REFERENCES institution.mentorship(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_request_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_request_fkey FOREIGN KEY (request_id, institution_id, student_id, teacher_id) REFERENCES institution.mentorship_request(id, institution_id, student_id, teacher_id);
 
 
 --
@@ -7548,6 +7840,30 @@ ALTER TABLE ONLY institution.mentorship
 
 
 --
+-- Name: mentorship_request mentorship_request_mentorship_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_mentorship_id_institution_id_fkey FOREIGN KEY (mentorship_id, institution_id) REFERENCES institution.mentorship(id, institution_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_teacher_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_teacher_id_institution_id_fkey FOREIGN KEY (teacher_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: mentorship mentorship_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -7760,6 +8076,19 @@ ALTER TABLE audit.enrollment_code_event ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY enrollment_code_event_owner ON audit.enrollment_code_event TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: mentorship_event; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.mentorship_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mentorship_event mentorship_event_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY mentorship_event_owner ON audit.mentorship_event TO ductus_identity USING (true) WITH CHECK (true);
 
 
 --
@@ -8378,6 +8707,26 @@ CREATE POLICY mentorship_read ON institution.mentorship FOR SELECT TO ductus_app
 
 
 --
+-- Name: mentorship_request; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.mentorship_request ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mentorship_request mentorship_request_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY mentorship_request_owner ON institution.mentorship_request TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: mentorship_request mentorship_request_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY mentorship_request_read ON institution.mentorship_request FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR ((teacher_id = ( SELECT app.current_user_id() AS current_user_id)) AND (withdrawn_at IS NULL) AND (approved_at IS NULL) AND ( SELECT institution.actor_has_role('teacher'::text) AS actor_has_role)))));
+
+
+--
 -- Name: notice_acknowledgment; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -8591,4 +8940,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261102210000'),
     ('20261102220000'),
     ('20261103010000'),
-    ('20261103030000');
+    ('20261103030000'),
+    ('20261103060000');
