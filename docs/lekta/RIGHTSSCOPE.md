@@ -106,6 +106,8 @@ Izvor: #87 [c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues
 | Rok | Dozvola je stigla prije roka 15. 12. 2026. (D-218) |
 | Oblik zapisa | Komentar na #87 i ovaj zapis (§6 t. 1 ranije); LICENSE/NOTICE u Lekti nije uvjet |
 
-**Opseg distribucije paketa (O1, opcija 2):** oba repoa su javna, pa „privatni izvor” iz M4-Q1 znači privatni kanal. Paket izvodi Lekta sesija (D-224) i do Ductusa stiže privatnim kanalom (vlasnikov privatni prijenos), a ne kao javni artefakt Lekte. U javni repo Ductusa ulazi samo minimalna projekcija iz §3, uz verziju i hash paketa. Svaki uvoz paketa spaja se isključivo na „Spoji n” (D-217). Dozvola ne daje pravo na drugu distribuciju (npr. javno objavljen cijeli paket od 135 jedinica i 423 profila). Zapis ne rješava vidljivost ni licencu Lekte (§6 t. 2); ako Lekta postane privatna, privatni kanal ostaje bez promjene.
+**Opseg distribucije paketa (O1):** dozvola vrijedi za isporuku paketa Ductusu, i to samo za minimalnu projekciju iz §3 koja ulazi u javni repo Ductusa (`config/faculties/`), uz verziju i hash paketa. Svaki uvoz paketa spaja se isključivo na „Spoji n” (D-217). Izvodi ga Lekta sesija (D-224). Cijeli paket (135 jedinica i 423 profila) dozvola ne daje za javnu objavu.
+
+**Kanal isporuke i otvoreni nesklad.** Zadatak DAN-513 (orkestrator, D-111) traži da se, jer su oba repoa javna, za „privatni izvor” iz M4-Q1 primijeni O1 opcija 2 (privatni kanal, preporuka paketa M4.1-P02). D-217 pak kaže da privatni kanal ima smisao samo ako Lekta postane privatna. Ovaj zapis ne mijenja D-217 i ne uvodi novu odluku: nesklad je otvoren, a do vlasnikova razrješenja M4.2 smije isporučiti samo ono što D-217 već dopušta (minimalna projekcija iz §3 na „Spoji n”), bez objave ostatka paketa. Pitanje je na #1091 i ide u Owner queue (STATE.md).
 
 Sljedeći koraci (Lekta strana): M4.2, paket i test zanošenja, izvodi Lekta sesija uz tiket povezan s DAN-392 (D-224). Ovaj dokument ga ne zamjenjuje.
