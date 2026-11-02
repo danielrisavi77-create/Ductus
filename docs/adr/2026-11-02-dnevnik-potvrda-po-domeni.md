@@ -69,7 +69,7 @@ Redak je nepromjenjiv: okidač zabranjuje `UPDATE`, `DELETE` i `TRUNCATE`, kao k
    <tree_size, dekadski, bez vodećih nula>
    <korijen, standardni base64 s paddingom>
    ```
-   Potpis je čisti Ed25519 (`ED25519_SHA_512`, `RAW`) nad točnim UTF-8 bajtovima tog teksta, uključujući završni LF. Nema prefiksa ni hashiranja iz D-92. Potpisni redak je `— <ime> base64(keyID ‖ potpis64)`. Tekst dulji od 4096 B odbija se prije poziva KMS-u.
+   Potpis je čisti Ed25519 (`ED25519_SHA_512`, `RAW`) nad točnim UTF-8 bajtovima tog teksta, uključujući završni LF. Nema prefiksa ni hashiranja iz D-92. Iza teksta slijedi jedan prazan redak, a zatim potpisni redak `— <ime> base64(keyID ‖ potpis64)` (C2SP signed-note; crtica je U+2014, iza nje i iza imena po jedan razmak). Tekst dulji od 4096 B odbija se prije poziva KMS-u.
 5. **Žig:** dva RFC 3161 zahtjeva (DigiCert, Sectigo; D-209) nad SHA-256 cijele potpisane bilješke, dakle teksta i potpisnog retka. Uspjeh dana je barem jedan valjan žig, a dan bez žiga je alarm (`BACKEND.md` §4.2 t. 2).
 
 ## 6. Dodavanje u dnevnik i redoslijed
