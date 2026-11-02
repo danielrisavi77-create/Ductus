@@ -59,12 +59,14 @@ for (const width of WIDTHS) {
   });
 }
 
-test("QA (2) and (4): a student's Početna leads to /rad; on a teacher page (no role) to / with a sign-out", async ({ page }) => {
+// D-202 t. 2: the brand and Početna lead to the student's home, S01 on
+// /zadaci (D-180), not to the workspace.
+test("QA (2) and (4): a student's Početna and brand lead to S01 on /zadaci; on a teacher page (no role) to / with a sign-out", async ({ page }) => {
   await signIn(page, "/upis");
-  await expect(homeCrumbOf(page)).toHaveAttribute("href", "/rad");
-  await expect(page.getByRole("link", { name: t.shell.home })).toHaveAttribute("href", "/rad");
+  await expect(homeCrumbOf(page)).toHaveAttribute("href", "/zadaci");
+  await expect(page.getByRole("link", { name: t.shell.home })).toHaveAttribute("href", "/zadaci");
   await homeCrumbOf(page).click();
-  await page.waitForURL("http://localhost:3000/rad");
+  await page.waitForURL("http://localhost:3000/zadaci");
 
   await page.goto("/nastavnik/brz-put");
   await expect(homeCrumbOf(page)).toHaveAttribute("href", "/");

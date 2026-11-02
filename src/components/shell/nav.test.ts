@@ -5,12 +5,19 @@ import { describe, expect, it } from "vitest";
 
 import { homeHref, navFor } from "./nav";
 
-// #802 part B, QA (4): "Početna" leads to each role's own space.
+// #802 part B, QA (4), and D-202 t. 2: the brand and "Početna" lead to the
+// home of the signed-in person's role.
 describe("homeHref", () => {
-  it("leads a teacher to /nastavnik, a student to /rad and no role to /", () => {
+  it("leads a teacher to /nastavnik, a student to S01 on /zadaci (D-180) and no role to /", () => {
     expect(homeHref("teacher")).toBe("/nastavnik");
-    expect(homeHref("student")).toBe("/rad");
+    expect(homeHref("student")).toBe("/zadaci");
     expect(homeHref(null)).toBe("/");
+  });
+
+  it("never leads to the workspace, the package's homeHref (D-202 t. 2)", () => {
+    for (const role of ["teacher", "student", null] as const) {
+      expect(homeHref(role).startsWith("/rad"), String(role)).toBe(false);
+    }
   });
 
   it("leads only to routes that exist", () => {
