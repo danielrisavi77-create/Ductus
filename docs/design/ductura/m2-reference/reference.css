@@ -59,7 +59,7 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .flag strong { color: var(--warn); font-size: 12.5px; }
 .chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--well); color: var(--ink-2); }
 
-.btn { font: 600 13.5px/1 var(--ff-ui); min-height: 36px; padding: 0 14px; border-radius: 5px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; white-space: nowrap; }
+.btn { font: 600 13.5px/1 var(--ff-ui); min-height: 44px; padding: 0 14px; border-radius: 5px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; white-space: nowrap; }
 .btn.secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
 .btn.quiet { background: transparent; color: var(--accent); border-color: transparent; padding: 0 6px; }
 
@@ -88,7 +88,7 @@ dl.kv dd { margin: 0; }
   .shell { grid-template-columns: minmax(0, 1fr); }
   .side { border-right: 0; border-bottom: 1px solid var(--rule-2); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
   .side nav { display: none; }
-  .side .brand { padding: 0; min-height: 0; }
+  .side .brand { padding: 0; min-height: 44px; }
   .side .brand .mark { display: none; }
   .side .brand .word { display: inline; font-size: 19px; }
   .menu { display: inline-block; }
@@ -100,7 +100,6 @@ dl.kv dd { margin: 0; }
   .main h2 { font-size: 21px; }
   .item { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
   .item .actions { grid-column: 1; grid-row: auto; margin-top: 6px; }
-  .btn { min-height: 44px; }
   .dialog { padding: 16px; }
   .dialog .buttons .btn { flex: 1 1 auto; }
   dl.kv { grid-template-columns: minmax(0, 1fr); gap: 0; }
