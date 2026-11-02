@@ -206,9 +206,14 @@ SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({s3}) $$), '
 -- recipient; Luka -> Marko and Marko -> Vesna give Marko, not Vesna.
 INSERT INTO ref VALUES ('c1', pg_temp.ask('vesna',
   $$ SELECT institution.set_team_substitution({k1}, {luka}, {marko}, now() + interval '7 days') $$));
+-- Istodobnost: Marko -> Vesna is set between two reads. Dora's recipient,
+-- the editor Marko, shows that it applies to Marko himself.
+SELECT is(pg_temp.to('ana'), 'marko', 'Istodobnost: first read, Marko substitutes for Luka');
+SELECT is(pg_temp.to('dora'), 'marko', 'Istodobnost: first read, the editor Marko has no substitute');
 INSERT INTO ref VALUES ('c2', pg_temp.ask('vesna',
   $$ SELECT institution.set_team_substitution({k1}, {marko}, {vesna}, now() + interval '7 days') $$));
 SELECT is(pg_temp.to('ana'), 'marko', 'class 3: a substitution goes one step, not along a chain');
+SELECT is(pg_temp.to('dora'), 'vesna', 'Istodobnost: second read, Vesna substitutes for the editor Marko');
 -- Two recipients with the same substitute give that substitute once.
 SELECT is(pg_temp.run('vesna', $$ institution.assign_group_teacher({ga}, {marko}) $$), 'ok', 'Marko teaches group A');
 SELECT is(pg_temp.to('ana'), 'marko,vesna', 'class 3: each recipient is replaced by its own substitute');
@@ -216,6 +221,8 @@ SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({c1}) $$), '
 INSERT INTO ref VALUES ('c3', pg_temp.ask('vesna',
   $$ SELECT institution.set_team_substitution({k1}, {luka}, {vesna}, now() + interval '7 days') $$));
 SELECT is(pg_temp.to('ana'), 'vesna', 'class 3: Luka -> Vesna and Marko -> Vesna give Vesna once');
+SELECT is((SELECT count(*)::integer FROM institution.team_notification_recipients(pg_temp.id('k1'), pg_temp.id('ana'))),
+  1, 'class 3: Vesna is one row, not two');
 SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({c2}) $$), 'ok', 'Vesna ends Marko -> Vesna');
 SELECT is(pg_temp.run('vesna', $$ institution.end_team_substitution({c3}) $$), 'ok', 'Vesna ends Luka -> Vesna');
 SELECT is(pg_temp.run('vesna', $$ institution.end_group_assignment({ga}, {marko}) $$), 'ok', 'Marko leaves group A');
