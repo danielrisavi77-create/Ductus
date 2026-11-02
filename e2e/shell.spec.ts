@@ -4,8 +4,43 @@ import { expect, test } from "@playwright/test";
 // (#476 6314969336, "Pisanje"): three columns on a wide screen; up to 1250 px
 // the structure rail folds under the sheet, up to 1050 px the panel too
 // (design v3 breakpoints with the shell's 236 px side bar; was README §5.1,
-// FE-D2; DAN-131).
+// FE-D2; DAN-131). Since 1. 11. 2026. the shell's side bar is a drawer behind
+// ☰ on /rad at every width (owner), so the workspace takes the whole width.
 test.describe("workspace shell", () => {
+  test("wide: no side bar beside the workspace, the drawer opens behind ☰", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const side = page.getByRole("complementary", { name: "Bočna navigacija", includeHidden: true });
+    await expect(side).toBeHidden();
+    const rail = await page.getByRole("complementary", { name: "Struktura rada" }).boundingBox();
+    expect(rail!.x).toBeLessThan(236);
+    const menu = page.getByRole("button", { name: "Otvori navigaciju" });
+    await menu.click();
+    await expect(side).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(side).toBeHidden();
+    await expect(menu).toBeFocused();
+  });
+
+  for (const width of [1440, 390]) {
+    test.describe(`without JavaScript at ${width} px`, () => {
+      test.use({ viewport: { width, height: 900 }, javaScriptEnabled: false });
+
+      // ☰ cannot open the drawer without JavaScript, so the <noscript> rules
+      // must win over the drawer rules (Codex, 3ff456f7). /rad streams, so
+      // the page may sit in Next's hidden frame: the computed style is read,
+      // not the visibility of the whole page.
+      test("the side bar is in the page and ☰ is not offered", async ({ page }) => {
+        await page.goto("/rad");
+        const side = page.locator("#bocna-navigacija");
+        expect(await side.evaluate((el) => getComputedStyle(el).visibility)).toBe("visible");
+        expect(await side.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+        const menu = page.locator('button[aria-controls="bocna-navigacija"]');
+        expect(await menu.evaluate((el) => getComputedStyle(el).display)).toBe("none");
+      });
+    });
+  }
+
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
@@ -78,10 +113,11 @@ test.describe("workspace shell", () => {
       expect(outline).not.toBe("none");
     }
     // Without an assignment the teacher view has no address: it is a stop, but says so.
-    // The shell's brand, the top bar's Početna (#802) and the theme switch come
-    // first (no session: no navigation).
+    // On /rad the side bar is a closed drawer, so ☰ comes in place of the
+    // brand, then the top bar's Početna (#802) and the theme switch (no
+    // session: no navigation).
     expect(stops).toEqual([
-      "Preskoči na sadržaj", "Ductura, početna", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
+      "Preskoči na sadržaj", "Otvori navigaciju", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
       "Kako vidi nastavnik samo uz zadatak",
     ]);
   });
@@ -435,6 +471,10 @@ test.describe("workspace shell", () => {
   test("the brand link on the workspace is a comfortable target", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
+    // The brand is in the drawer on /rad; ☰ in the top bar opens it.
+    const menu = await page.getByRole("button", { name: "Otvori navigaciju" }).boundingBox();
+    expect(menu!.height).toBeGreaterThanOrEqual(32);
+    await page.getByRole("button", { name: "Otvori navigaciju" }).click();
     const box = await page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(32);
   });
