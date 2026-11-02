@@ -21,9 +21,11 @@ const PG_PATH_RE = /(?:^|\/)node_modules\/(?:\.pnpm\/)?pg(?:$|[/@+-])/iu;
 const normalized = (specifier) => posix.normalize(specifier.replace(/\\/g, "/"));
 // A query or fragment suffix ("?", "#") does not change the module that is
 // loaded (DAN-448, F-033). Test what comes before the first of them as well as
-// the whole text, so the cut only ever adds reports.
+// the whole text, so the cut only ever adds reports. The trimmed text is tested
+// too, because no-restricted-imports trims the source before matching.
 const matchesPg = (path) => PG_SPECIFIER_RE.test(path) || PG_PATH_RE.test(normalized(path));
-const isPg = (specifier) => matchesPg(specifier) || matchesPg(specifier.replace(/[?#].*$/su, ""));
+const isPg = (specifier) =>
+  [specifier, specifier.trim()].some((text) => matchesPg(text) || matchesPg(text.replace(/[?#].*$/su, "")));
 
 const databaseBoundaryPlugin = {
   rules: {
@@ -63,12 +65,12 @@ const databaseBoundaryPlugin = {
               context.report({ node: source, messageId: "restrictedPg" });
             }
           },
-          // Static imports and re-exports: no-restricted-imports reads the raw
-          // text, so this rule reports only the forms it cannot see, those
-          // that are the driver only after normalization.
+          // Static imports and re-exports: no-restricted-imports matches the
+          // trimmed text, so this rule reports only the forms it cannot see,
+          // those that are the driver only after normalization.
           "ImportDeclaration, ExportNamedDeclaration, ExportAllDeclaration"(node) {
             const specifier = node.source?.value;
-            if (typeof specifier === "string" && !PG_SPECIFIER_RE.test(specifier) && isPg(specifier)) {
+            if (typeof specifier === "string" && !PG_SPECIFIER_RE.test(specifier.trim()) && isPg(specifier)) {
               context.report({ node: node.source, messageId: "restrictedPg" });
             }
           },

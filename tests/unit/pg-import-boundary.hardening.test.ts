@@ -9,7 +9,11 @@ const DYNAMIC_RULE = "database-boundary/no-restricted-dynamic-imports";
 const BOUNDARY_MESSAGE = "Database access goes through src/server/db only.";
 const RESTRICTED_SPECIFIERS = ["pg", "pg/lib/utils", "pg-cursor", "pg-boss/lib/manager"];
 const APPLICATION_FILES = ["app/api/probe/route.ts", "src/application/probe.ts"];
-const EXCEPTION_FILES = ["src/server/db/probe.ts", "tests/integration/probe.integration.test.ts"];
+const EXCEPTION_FILES = [
+  "src/server/db/probe.ts",
+  "tests/integration/probe.integration.test.ts",
+  "e2e/login/probe.ts",
+];
 const SOURCE_FORMS = ["quoted", "template"] as const;
 
 // The specifiers are the fixed list above. Each is checked to hold only the
@@ -333,6 +337,17 @@ const SUFFIXED_NONFAMILY = ["pgx?y", "./pg-like?x", "../../node_modules/pgx#y", 
 // Cutting at the first "?" or "#" only adds reports: a whole text that already
 // matched stays reported, even when the suffix holds the driver path.
 const SUFFIX_HOLDS_PG = ["../x?/node_modules/pg", "../x#/node_modules/pg-cursor"];
+// no-restricted-imports trims the source before matching; the custom rule must
+// agree on that text so a static import is still reported exactly once.
+const PADDED_PG = [
+  "../../node_modules/./pg?x/node_modules/pg ",
+  " ../../node_modules/./pg?x/node_modules/pg",
+  "pg ",
+  " pg?x",
+  "\tpg#x\n",
+  " ../../node_modules/pg?x ",
+  "../../node_modules/x/../pg ",
+];
 
 function staticForms(specifier: string) {
   const source = JSON.stringify(specifier);
@@ -350,14 +365,14 @@ async function expectSingleBoundary(filePath: string, code: string) {
 }
 
 describe("pg boundary through query and fragment suffixes (DAN-448)", () => {
-  it.each(nodeModulesCases(APPLICATION_FILES, [...SUFFIXED_PG, ...SUFFIX_HOLDS_PG]))(
+  it.each(nodeModulesCases(APPLICATION_FILES, [...SUFFIXED_PG, ...SUFFIX_HOLDS_PG, ...PADDED_PG]))(
     "rejects %s importing %s dynamically",
     async (filePath, specifier) => {
       await expectDynamicBoundary(filePath, importSource(JSON.stringify(specifier)));
     },
   );
 
-  it.each(nodeModulesCases(APPLICATION_FILES, [...SUFFIXED_PG, ...SUFFIX_HOLDS_PG]))(
+  it.each(nodeModulesCases(APPLICATION_FILES, [...SUFFIXED_PG, ...SUFFIX_HOLDS_PG, ...PADDED_PG]))(
     "rejects %s importing %s statically, once",
     async (filePath, specifier) => {
       for (const code of staticForms(specifier)) await expectSingleBoundary(filePath, code);
