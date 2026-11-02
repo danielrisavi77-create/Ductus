@@ -51,7 +51,7 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | --- | --- | --- | --- | --- |
 | M1.1 | Ovlast za AAI@EduHr Lab i registracija usluge | V | FPZG, Srce | DAN-196, DAN-198 |
 | M1.2 | Prijava na Labu: konfiguracija klijenta, mapiranje hrEdu atributa, zapis prolaza s testnim računom | B | M1.1 | DAN-377 |
-| M1.3 | Afilijacija djelatnika pri potvrdi nastavničke uloge | B | M1.2 | DAN-304 |
+| M1.3 | Afilijacija djelatnika pri potvrdi nastavničke uloge | B | M1.2 | DAN-304; ostatak u novi uski tiket (D-205 t. 4) |
 | M1.4 | Odjava kod pružatelja (RP-initiated logout) | B | M1.2 | DAN-212 |
 | M1.5 | Izravni unit testovi `flow.ts` i `oidc.ts` | B | | DAN-307 |
 | M1.6 | CSP, HSTS, Permissions-Policy i istek neaktivne sesije | B | | DAN-296 |
@@ -75,13 +75,13 @@ Napomena (D-203 t. 4): M1.3 i M1.4 ovise o M1.2 samo za provjeru na Labu. Za teh
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M2.1 | Rad nastaje tek na „Započni rad”, uz korak na poslužitelju | F, B | | DAN-330 (#830), DAN-331 (#831) |
-| M2.2 | HTTP rute za preostale institucijske RPC-ove | B | | DAN-292 |
+| M2.2 | HTTP rute za preostale institucijske RPC-ove | B | | DAN-292; ostatak u novi uski tiket (D-205 t. 4) |
 | M2.3 | Studentska projekcija kolegija, zadataka i radova; ekran Moji radovi (B1, B2) | B, F | | DAN-309, #941 |
 | M2.4 | Zadatak u postojećem kolegiju, uređivanje s pregledom posljedica i čarobnjak zadatka (B3, B8) | F | M2.2 | DAN-310 |
 | M2.5 | Popis studenata kolegija i zadatka s imenima | B, F | | #948 (DAN-344) |
-| M2.6 | Mentorstva: put evidencije, čitači i RPC za dodjelu | B | vlasnik za RPC (D-182 t. 1) | DAN-349 (#947) |
+| M2.6 | Mentorstva: put evidencije, čitači i RPC: studentov zahtjev i nastavnikovo odobrenje, uz revizijski trag i provjeru ustanove; mentor samo uz potvrđenu nastavničku ulogu; administrator ne dodjeljuje (D-204) | B | | DAN-349 (#947); ostatak u novi uski tiket (D-205 t. 4) |
 | M2.7 | Nastavni tim kolegija i seminarske grupe | B | | DAN-351 |
-| M2.8 | Komentor i povjerenstvo s vremenski ograničenim pristupom (model, N-08, N-09) | B | M2.6 | DAN-379 |
+| M2.8 | Komentor i povjerenstvo s vremenski ograničenim pristupom (model, N-08, N-09); komentor po radnjama, bez zadanog skupa ovlasti, a skup se određuje uz U-1 prije M6.12 (D-205 t. 3) | B | M2.6 | DAN-379 |
 | M2.9 | Oznaka odobrene prilagodbe (D-50): nastavnik vidi oznaku, ne razlog | B, F | | DAN-380 |
 | M2.10 | Jezik rada odvojen od jezika sučelja (F-06) | B | | DAN-386 |
 | M2.11 | Administracija ustanove: pregled, korisnici i uloge, kolegiji i akademske godine (C1 do C3) | B, F | M1.3 | DAN-313 |
@@ -89,10 +89,14 @@ Napomena (D-203 t. 4): M1.3 i M1.4 ovise o M1.2 samo za provjeru na Labu. Za teh
 | M2.13 | Potvrda obavijesti veže otisak teksta obavijesti | B | | DAN-306 |
 | M2.14 | Mentorovi radni zapisi navedeni u obavijesti studentu (D-130) | F | | DAN-235 (#553) |
 | M2.15 | Nalazi granice baze (samo ID): F-018, F-019; RLS uz `current_actor()` kao initplan | B | | DAN-156, DAN-157, DAN-51 |
+| M2.16 | Ključ ustanove kroz `assignment_version` (preuzima FK dio DAN-301 N-1; D-199) | B | | DAN-442 |
+| M2.17 | Konfiguracija po ustanovi (D-199) | B | | DAN-443 |
+
+ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije stvarne uporabe” (D-205 t. 2).
 
 **Ekrani:** S-02 studentska početna, S-03 moji kolegiji, S-04 upis kodom, S-05 obavijest (dio o zadatku), N-01 moji kolegiji, N-02 novi kolegij i zadatak, N-03 čarobnjak zadatka, N-04 popis studenata, N-16 radovi uz mentora (podaci), A-01 pregled ustanove, A-02 korisnici i uloge, A-03 kolegiji i akademske godine, A-04 pravila fakulteta.
 
-**Uvjet završetka:** pgTAP matrica zelena za studenta, nastavnika, mentora, komentora, člana povjerenstva, administratora i osobu druge ustanove; E2E: administrator potvrdi nastavnika, nastavnik napravi kolegij i zadatak, student se upiše i potvrdi obavijest; svaki RPC koji mijenja stanje ima HTTP rutu ili zapisan razlog zašto je nema.
+**Uvjet završetka:** pgTAP matrica zelena za studenta, nastavnika, mentora, komentora, člana povjerenstva, administratora i osobu druge ustanove; E2E: administrator potvrdi nastavnika, nastavnik napravi kolegij i zadatak, student se upiše i potvrdi obavijest; svaki RPC koji mijenja stanje ima HTTP rutu ili zapisan razlog zašto je nema; administracija ustanove radi u sučelju. **Rokovi (D-205 t. 1):** ova jezgra do 30. 11. 2026., ostatak koraka M2 do 20. 12. 2026.
 
 ## M3 Evidencija
 
@@ -248,13 +252,13 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M8.11 | Čitanje spremljenih verzija iz OneDrivea, SharePointa i Google Drivea za odabranu datoteku (D-198 t. 1; granica podataka i opseg dozvola po D-198 t. 5) | B, F | M8.2, M8.9 | DAN-438 |
 | M8.12 | Word i Google Docs dodaci, sljedeći val, ne pilot (D-198 t. 2; uvjet U-7) | B, F | M8.11 | DAN-439 |
 | M8.13 | Ekran „Povijest dokumenta”: popis „uvezeno, tvrdnja iz datoteke”, isti za obje uloge (D-198 t. 6) | F | M8.2, M8.9 | DAN-440 |
-| M8.14 | Izvoz PDF/A; profil i način dokaza valjanosti još nisu određeni, a obični PDF se ne označava kao PDF/A (D-203 A3) | B | M8.5; profil PDF/A (istraživanje dodjeljuje orkestrator, odluka vlasnika, D-203 t. 3) | novo |
+| M8.14 | Izvoz PDF/A-2u; valjanost provjerava veraPDF u CI-ju s fiksnim profilom `-f 2u`, pinanom verzijom i digestom; PDF se označava kao PDF/A samo uz `isCompliant="true"` (D-206, D-203 A3) | B | M8.5 | novo |
 
 Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 **Ekrani:** S-19 uvoz teksta, S-20 izvoz, N-18 izvoz predanog rada i paket za Merlin.
 
-**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvoz DOCX-a, PDF-a i PDF/A prihvaćen prije nastavnog pilota, PDF/A prema profilu koji odredi vlasnik; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil kad stigne licenca, D-203 t. 2).
+**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvoz DOCX-a, PDF-a i PDF/A prihvaćen prije nastavnog pilota, PDF/A-2u uz veraPDF `isCompliant="true"` (D-206); izvezeni DOCX prolazi Lektinu provjeru za FPZG profil kad stigne licenca, D-203 t. 2).
 
 ## M9 AI pomoćnik
 
@@ -354,7 +358,9 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik). Djelomično riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md` kao okvir. **Smještaj i naziv ostaju otvoreni:** pitanja 1, 2, 3 i 9 iz te specifikacije čekaju vlasnika i nijedan korak M5.14 ne počinje prije odgovora.
 6. D-63 (napredak i „preskočena stanka”) prema D-56 i pravilu 4 (DAN-104).
 7. Kriteriji popisa „tko treba pomoć” (N-12, DAN-102).
-8. RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).
+8. ~~RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).~~ Riješeno 2. 11. 2026. (D-204): mentorstvo nastaje kad nastavnik odobri studentov rad; administrator ga ne dodjeljuje.
 9. ~~Izlazni kriterij M0 „isti broj testova kao u izvoru”.~~ Riješeno 31. 10. 2026. odlukom vlasnika (#87 c.6547174354): umjesto broja vrijedi zapis jednakovrijednosti za svaki neprenesen izvorni slučaj (`docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`); nepokriveno se vraća kao test.
 10. Sastav backend dodatka (otvoreno pitanje uz D-99) gubi rok 16. 11. 2026. s rasporedom po valovima; rješava li se uz novi raspored.
 11. M8 Document Provenance (D-198): rok čuvanja uvezenih verzija uz FPZG DPO i pravno mišljenje (t. 3). Dodaci za Word i Google Docs odlučeni su za sljedeći val (t. 2, U-7).
+12. Uloge nastavnika i mentora (D-204). D-154 kaže da su mentor i nastavnik zadatka „jedna uloga općenito”, a D-204 da je ista osoba nastavnik na kolegiju i mentor na pisanom radu. Je li to jedna potvrđena uloga `teacher` s dva odnosa (kolegij, mentorstvo) ili dvije uloge, i treba li izmijeniti D-154? `docs/PRODUCT.md` §3 još navodi da administrator „potvrđuje ulogu nastavnika i mentora” i ulaz „dodjelom mentoru”, a popis vrsta mentorskog rada (završni, diplomski, specijalistički, doktorski) razlikuje se od D-204 (esej, završni, diplomski i drugi). Otvoreno je i što se događa s mentorstvima kad se nastavniku opozove uloga (D-200 P7). Točka 2 odluke o ulogama od 31. 10. 2026. (povjerenstvo u istrazi) čeka izmjenu Ustava.
+13. Trajanje produljene probe D-196 (D-205 t. 5): zapis ne navodi novi završni datum. Traje li do jezgre M2 (30. 11. 2026.) ili do kraja M2 (20. 12. 2026.)? `docs/ORKESTRATOR.md` §4a još navodi „do 14. 11. 2026.”.

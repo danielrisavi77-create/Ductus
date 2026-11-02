@@ -17,8 +17,17 @@ const homeCrumbOf = (page: Page) =>
   page.getByRole("navigation", { name: t.shell.breadcrumb }).getByRole("link", { name: t.shell.homeCrumb, exact: true });
 const signOutOf = (page: Page) => page.getByRole("button", { name: t.shell.signOut, exact: true });
 
-/** The sign-out: in the side bar from 800 px, behind ☰ on a phone. */
+/**
+ * The sign-out: in the side bar from 800 px, behind ☰ on a phone. On /rad
+ * the side bar is a drawer at every width, so the sign-out is in the top bar.
+ */
 async function expectSignOut(page: Page, width: number): Promise<void> {
+  // The page the browser is on, not the one asked for: a page may send a
+  // signed-in student on to /rad.
+  if (new URL(page.url()).pathname === "/rad") {
+    await expect(page.getByRole("banner").getByRole("button", { name: t.shell.signOut, exact: true })).toBeVisible();
+    return;
+  }
   if (width < 800) {
     await expect(signOutOf(page)).toBeHidden();
     await page.getByRole("button", { name: t.shell.openNav }).click();

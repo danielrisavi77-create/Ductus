@@ -22,6 +22,7 @@ const reply = (status, body) => ({
   text: async () => JSON.stringify(body),
 });
 let statusCount = 0;
+let pullListReads = 0;
 globalThis.fetch = async (url, options = {}) => {
   const path = new URL(url).pathname;
   if ((options.method ?? "GET") === "POST" && path.includes("/statuses/")) {
@@ -39,14 +40,18 @@ globalThis.fetch = async (url, options = {}) => {
   if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
   if (path.endsWith("/issues/7/events")) return reply(200, plan.timeline ?? []);
   if (path.endsWith("/pulls/7/reviews")) return reply(200, plan.reviews ?? []);
-  if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
+  if (path.endsWith("/pulls")) {
+    pullListReads++;
+    if (pullListReads > 1 && plan.failListReread) throw new TypeError("fetch failed");
+    return reply(200, (pullListReads > 1 ? plan.openPullsReread : undefined) ?? plan.openPulls ?? []);
+  }
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
   return reply(200, []);
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -61,7 +66,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread }),
       FAKE_LOG: log,
     },
   });
@@ -180,19 +185,81 @@ test("a PR whose base is not the default branch gets no green status for its hea
   }
 });
 
-test("another open PR on the same head leaves Auto-merge eligible pending (F-165)", () => {
-  for (const other of [{ number: 8, head: { sha: HEAD } }, { number: 9, head: { sha: HEAD }, base: { ref: "feature" } }]) {
+test("another open PR on the same head leaves every status pending (F-165, F-040)", () => {
+  for (const other of [{ number: 8, head: { sha: HEAD } }, { number: 9, head: { sha: HEAD.toUpperCase() }, base: { ref: "feature" } }]) {
     const { code, posts } = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible, other] });
     assert.equal(code, 0);
-    assert.deepEqual(states(posts), [
-      ["Merge authorization", "success"], ["Auto-merge eligible", "pending"], ["Engineering review gate", "success"],
-    ]);
-    assert.match(posts[1].body.description, /another open PR shares this head/);
+    assert.deepEqual(states(posts), ALL.map((c) => [c, "pending"]));
+    for (const post of posts) {
+      assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
+      assert.match(post.body.description, /another open PR shares this head/);
+    }
   }
   // A failed read of the open PRs fails the run closed.
   const failed = run(comment, { pr: eligible, files: addedTest, fail: ["/pulls"] });
   assert.equal(failed.code, 1);
   assert.ok(failed.posts.every((p) => p.body.state !== "success"));
+});
+
+// F-040: two open PRs on one head, one to main and one to a side branch whose
+// diff is a single docs file. A status belongs to the head, so the test folds
+// the runs in order into the statuses the head is left with: no order of
+// events may leave a green one, also when the PR to main was green first
+// (Codex review c.6564729651).
+const finalStates = (runs) => {
+  const last = {};
+  for (const { posts } of runs) for (const p of posts) last[p.body.context] = [p.path, p.body.state];
+  return last;
+};
+test("F-040 regression: no green gate status in the registered case", () => {
+  const side = {
+    ...eligible, number: 8, body: "Agent: claude:a:platforma\nRisk: low\nTask: B-1\n",
+    head: { ...eligible.head, ref: "feat/y" }, base: { ...eligible.base, ref: "side" },
+  };
+  const docs = [{ filename: "docs/x.md", status: "modified" }];
+  // The side PR as seen by its own run (the fake serves PR number 7).
+  const asSide = { pr: { ...side, number: 7 }, files: docs, openPulls: [{ ...eligible, number: 8 }, { ...side, number: 7 }] };
+  const mainAlone = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible] });
+  assert.deepEqual(states(mainAlone.posts), ALL.map((c) => [c, "success"]));
+  const sequences = [
+    // Green first, then the side PR is opened, then later events on either PR.
+    [mainAlone, run(pullRequest, asSide)],
+    [mainAlone, run(pullRequest, asSide), run(comment, { pr: eligible, files: addedTest, openPulls: [eligible, side] })],
+    [mainAlone, run(pullRequest, asSide), run(comment, asSide)],
+    [run(comment, asSide), run(pullRequest, { pr: eligible, files: addedTest, openPulls: [eligible, side] })],
+  ];
+  for (const [index, runs] of sequences.entries()) {
+    for (const { code } of runs) assert.equal(code, 0, `sequence ${index}`);
+    const last = finalStates(runs);
+    assert.deepEqual(Object.keys(last).sort(), [...ALL].sort(), `sequence ${index}`);
+    for (const [statusContext, [where, state]] of Object.entries(last)) {
+      assert.equal(where, `/repos/o/r/statuses/${HEAD}`, `sequence ${index} ${statusContext}`);
+      assert.equal(state, "pending", `sequence ${index} ${statusContext}`);
+    }
+  }
+  // Every write the side PR makes on the shared head is the shared-head marker.
+  for (const post of run(comment, asSide).posts) {
+    assert.equal(post.body.state, "pending");
+    assert.match(post.body.description, /another open PR shares this head/);
+  }
+});
+
+// F-040 (QA c.6564767686): the run of the PR to main read the open PRs before
+// another PR on its head was opened, and that PR's run wrote pending first.
+test("a green run re-reads the open PRs and clears its statuses when the head is now shared (F-040)", () => {
+  const other = { ...eligible, number: 8 };
+  const raced = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], openPullsReread: [eligible, other] });
+  assert.equal(raced.code, 0);
+  const last = finalStates([raced]);
+  for (const c of ALL) assert.equal(last[c][1], "pending", c);
+  for (const post of raced.posts.slice(-3)) assert.match(post.body.description, /another open PR shares this head/);
+  // A failed re-read fails the run closed.
+  const unread = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], failListReread: true });
+  assert.equal(unread.code, 1);
+  for (const c of ALL) assert.equal(finalStates([unread])[c][1], "pending", c);
+  // Control: a head still alone keeps its three green statuses.
+  const alone = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible], openPullsReread: [eligible] });
+  assert.deepEqual(states(alone.posts), ALL.map((c) => [c, "success"]));
 });
 
 test("a queue carrier keeps its statuses without a default_branch field (F-165)", () => {
@@ -419,12 +486,18 @@ test("a failed PR read marks the event head only for an open PR of this reposito
   }
 });
 
-test("a PR off the default branch writes nothing on a head another open PR shares (F-014)", () => {
+test("a PR off the default branch writes only the shared-head marker on a head another open PR shares (F-014, F-040)", () => {
   const side = { ...eligible, number: 9, base: { ...eligible.base, ref: "feature" } };
   const main = { ...eligible, number: 8 };
+  // F-040: the head's statuses must not stay green while it is shared, so the
+  // side PR clears them; it never writes success or its own base marker there.
   const shared = run(comment, { pr: side, files: addedTest, openPulls: [side, main] });
   assert.equal(shared.code, 0);
-  assert.deepEqual(shared.posts, []);
+  assert.deepEqual(states(shared.posts), ALL.map((c) => [c, "pending"]));
+  for (const post of shared.posts) {
+    assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
+    assert.match(post.body.description, /another open PR shares this head/);
+  }
   // An unread list counts as shared: nothing is written, and the run fails.
   const unread = run(comment, { pr: side, files: addedTest, fail: ["/pulls"] });
   assert.equal(unread.code, 1);
@@ -444,4 +517,23 @@ test("a PR off the default branch writes nothing on a head another open PR share
   // Control: alone on its head it still gets the pending marker.
   const alone = run(comment, { pr: side, files: addedTest, openPulls: [side] });
   assert.deepEqual(states(alone.posts), ALL.map((c) => [c, "pending"]));
+});
+
+// F-040 (QA c.6565224257): the PR to main left three green statuses on the
+// head; the side PR's run cleared one and then a write returned HTTP 500.
+test("a failed status write of a side-base PR leaves no green status on the shared head (F-040)", () => {
+  const side = { ...eligible, number: 9, base: { ...eligible.base, ref: "feature" } };
+  const main = { ...eligible, number: 8 };
+  const green = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible] });
+  assert.deepEqual(states(green.posts), ALL.map((c) => [c, "success"]));
+  for (const failPostNumber of [1, 2, 3]) {
+    const failed = run(comment, { pr: side, files: addedTest, openPulls: [side, main], failPostNumber });
+    assert.equal(failed.code, 1, `POST ${failPostNumber}`);
+    const last = finalStates([green, failed]);
+    for (const c of ALL) {
+      assert.equal(last[c][0], `/repos/o/r/statuses/${HEAD}`, `POST ${failPostNumber} ${c}`);
+      assert.equal(last[c][1], "pending", `POST ${failPostNumber} ${c}`);
+    }
+    assert.ok(failed.posts.every((p) => p.body.state === "pending"), `POST ${failPostNumber}`);
+  }
 });
