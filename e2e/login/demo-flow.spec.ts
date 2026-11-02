@@ -28,6 +28,7 @@ import {
   signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
 import { localAdminUrl } from "./local-db-url";
+import { caretAtEnd as caretAtEndOf } from "../support/caret";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -104,23 +105,8 @@ const blocksOf = (contents: JournalContents) => contents.snapshot!.document.node
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 
-/**
- * Puts the caret at the end of the last block, where a writer continues the text. A click
- * and Control+End right after a load left it at the end of the citation paragraph, in CI and
- * on the native runner (DAN-348 N5); the DOM selection set here is followed by the editor
- * as a mouse selection is, as in the F-9 step.
- */
-async function caretAtEnd(page: Page): Promise<void> {
-  await editorOf(page).click();
-  await editorOf(page).evaluate((editor) => {
-    const range = document.createRange();
-    range.selectNodeContents(editor.lastElementChild!);
-    range.collapse(false);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(range);
-  });
-  await page.keyboard.press("End");
-}
+/** The caret at the end of the last block, where a writer continues the text (`../support/caret`). */
+const caretAtEnd = (page: Page) => caretAtEndOf(page, editorOf(page));
 
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 
@@ -1065,15 +1051,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
       // The caret goes to the end of the last block before typing: in CI a
       // click and Control+End once left it at the end of the citation paragraph.
-      await editorOf(page).locator("p").last().click();
-      await editorOf(page).evaluate((editor) => {
-        const range = document.createRange();
-        range.selectNodeContents(editor.lastElementChild!);
-        range.collapse(false);
-        window.getSelection()!.removeAllRanges();
-        window.getSelection()!.addRange(range);
-      });
-      await page.keyboard.press("End");
+      await caretAtEnd(page);
       await page.keyboard.press("Enter");
       await page.keyboard.type(LIVE_TEXT);
       // A new paragraph: the editor's text joins the blocks without a separator.
