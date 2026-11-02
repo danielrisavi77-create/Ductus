@@ -86,7 +86,8 @@ type Ids = Awaited<ReturnType<typeof oldRows>>;
  * Old rows, written as the compose superuser past every function, as the
  * schema before the chain allowed them: fak-a has K1 with Z1 (two versions)
  * and a revoked and an active code, fak-b has K3 with Z3 and one code; the
- * revocation left an audit event of fak-a.
+ * revocation left an audit event of fak-a. A student of fak-a acknowledged
+ * the notice of both versions of Z1, a student of fak-b that of Z3.
  */
 async function oldRows(client: pg.Client) {
   const ids = {
@@ -94,6 +95,8 @@ async function oldRows(client: pg.Client) {
     facultyB: randomUUID(),
     teacherA: randomUUID(),
     teacherB: randomUUID(),
+    studentA: randomUUID(),
+    studentB: randomUUID(),
     courseA: randomUUID(),
     courseB: randomUUID(),
     assignmentA: randomUUID(),
@@ -109,6 +112,8 @@ async function oldRows(client: pg.Client) {
   for (const [id, institution, name] of [
     [ids.teacherA, ids.facultyA, "nastavnik-a"],
     [ids.teacherB, ids.facultyB, "nastavnik-b"],
+    [ids.studentA, ids.facultyA, "student-a"],
+    [ids.studentB, ids.facultyB, "student-b"],
   ]) {
     await client.query(
       `INSERT INTO identity.user_account (id, institution_id, oidc_issuer, oidc_subject, hr_edu_person_unique_id)
@@ -128,6 +133,9 @@ async function oldRows(client: pg.Client) {
   await code(client, ids.codeA, ids.courseA, ids.teacherA, true);
   await code(client, ids.codeB, ids.courseB, ids.teacherB, true);
   await codeEvent(client, ids.facultyA, ids.courseA, ids.oldCodeA, ids.teacherA);
+  await acknowledgment(client, ids.assignmentA, 1, ids.studentA, ids.facultyA);
+  await acknowledgment(client, ids.assignmentA, 2, ids.studentA, ids.facultyA);
+  await acknowledgment(client, ids.assignmentB, 1, ids.studentB, ids.facultyB);
   return ids;
 }
 
@@ -169,9 +177,29 @@ async function codeEvent(client: pg.Client, institution: string, course: string,
   );
 }
 
+async function acknowledgment(
+  client: pg.Client,
+  assignmentId: string,
+  versionNo: number,
+  student: string,
+  institution: string,
+) {
+  await client.query(
+    `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id, acknowledged_at)
+     VALUES ($1, $2, $3, $4, now() - interval '1 day')`,
+    [assignmentId, versionNo, student, institution],
+  );
+}
+
 const VERSIONS = "SELECT * FROM institution.assignment_version ORDER BY assignment_id, version_no";
 const CODES = "SELECT * FROM institution.course_enrollment_code ORDER BY id";
 const EVENTS = "SELECT * FROM audit.enrollment_code_event ORDER BY id";
+const ACKS = "SELECT * FROM institution.notice_acknowledgment ORDER BY assignment_id, version_no, student_id";
+// Acknowledgments whose key differs from that of the version they acknowledge.
+const ACKS_OFF_KEY = `
+  SELECT n.* FROM institution.notice_acknowledgment n
+  JOIN institution.assignment_version v USING (assignment_id, version_no)
+  WHERE n.institution_id IS DISTINCT FROM v.institution_id`;
 const KEY_COLUMNS = `
   SELECT table_name FROM information_schema.columns
   WHERE table_schema = 'institution' AND table_name IN ('assignment_version', 'course_enrollment_code')
@@ -184,6 +212,7 @@ describe("the institution key chain migration over old rows", () => {
     const versionsBefore = (await client.query(VERSIONS)).rows;
     const codesBefore = (await client.query(CODES)).rows;
     const eventsBefore = (await client.query(EVENTS)).rows;
+    const acksBefore = (await client.query(ACKS)).rows;
 
     await migrate(client);
 
@@ -202,9 +231,18 @@ describe("the institution key chain migration over old rows", () => {
       })),
     );
     expect((await client.query(EVENTS)).rows).toEqual(eventsBefore);
+    expect((await client.query(ACKS)).rows).toEqual(acksBefore);
+    expect((await client.query(ACKS_OFF_KEY)).rows).toEqual([]);
     expect(versions).toHaveLength(3);
     expect(codes).toHaveLength(3);
     expect(eventsBefore).toHaveLength(1);
+    expect(acksBefore.map((row) => [row.student_id, row.institution_id])).toEqual(
+      expect.arrayContaining([
+        [ids.studentA, ids.facultyA],
+        [ids.studentB, ids.facultyB],
+      ]),
+    );
+    expect(acksBefore).toHaveLength(3);
   });
 
   it.each([
@@ -230,6 +268,7 @@ describe("the institution key chain migration over old rows", () => {
     const versionsBefore = (await client.query(VERSIONS)).rows;
     const codesBefore = (await client.query(CODES)).rows;
     const eventsBefore = (await client.query(EVENTS)).rows;
+    const acksBefore = (await client.query(ACKS)).rows;
 
     await expect(migrate(client)).rejects.toMatchObject({ code: "23503", constraint });
 
@@ -237,5 +276,6 @@ describe("the institution key chain migration over old rows", () => {
     expect((await client.query(VERSIONS)).rows).toEqual(versionsBefore);
     expect((await client.query(CODES)).rows).toEqual(codesBefore);
     expect((await client.query(EVENTS)).rows).toEqual(eventsBefore);
+    expect((await client.query(ACKS)).rows).toEqual(acksBefore);
   });
 });
