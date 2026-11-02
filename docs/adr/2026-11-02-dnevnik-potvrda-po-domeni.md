@@ -95,21 +95,21 @@ Redak je nepromjenjiv: okidač zabranjuje `UPDATE`, `DELETE` i `TRUNCATE`, kao k
 **Dnevni posao po domeni** (worker, `src/runtime/worker/`, D-214). Svaka domena ide zasebno; pad jedne ne zaustavlja druge.
 
 1. Uzme zakup domene (single-flight; §8, t. 6).
-2. Pročita vanjsku povijest kontrolnih točaka tog ishodišta iz pohrane izvan domene povrata baze (§11, O5). Nedostupna povijest zatvara put: nema potpisa, žiga ni objave.
+2. Pročita vanjsku povijest kontrolnih točaka tog ishodišta iz pohrane izvan domene povrata baze (§11, O5). Povijest sadrži pohranjene točke i rezervacije kandidata (t. 6). Nedostupna povijest zatvara put: nema potpisa, žiga ni objave.
 3. Provjeri da je vanjska povijest sama lanac. Svaki par uzastopnih točaka ima `n2 ≥ n1`, a pri `n2 = n1` isti korijen. Pri `n2 > n1` objavljeni consistency dokaz mora se provjeriti. Otvorena rezervacija (t. 6) ulazi u lanac kao njegova najveća točka, jer se ne zna je li njezin potpis već izdan.
 4. Iz `log_entry` domene izračuna korijen za `tree_size = next_index` zaključan u trenutku čitanja. Za listove dodane od zadnje točke ponovno izračuna `D_schema` iz pohranjenog `receipt_payload` i usporedi s `payload_digest` i `leaf_hash`. Razlika je alarm i put se zatvara.
 5. Usporedi novu točku s najvećom vanjskom točkom ili otvorenom rezervacijom `(n1, r1)`:
    - `n < n1`: odbija se;
    - `n = n1` uz drugi korijen: odbija se kao fork;
-   - `n = n1` uz isti korijen: vraća se postojeća pohranjena točka bez KMS-a, a otvorena rezervacija dovršava se kroz t. 7 i 8 nad istim bajtovima;
+   - `n = n1` uz isti korijen: vraća se postojeća pohranjena točka bez KMS-a, a otvorena rezervacija dovršava se kroz t. 7 i 8 nad istim bajtovima i s istim potpisom;
    - `n > n1`: consistency dokaz `(n1 → n)` iz baze mora se provjeriti prema `r1`.
 
    Jer je vanjska povijest u t. 3 provjerena kao lanac, provjera prema najvećoj točki ekvivalentna je provjeri prema svakoj ranijoj, kako traži D-93. Izvedba smije provjeriti i svaku izravno.
-6. **Prije KMS-a** trajno upiše rezervaciju kandidata `(n, korijen)` u vanjsku povijest, uvjetnim dodavanjem uz očekivanu zadnju točku (§8, t. 6 i 10). Neuspio upis zatvara put bez potpisa. Rezervacija je izvan domene povrata baze, pa je povrat baze ne briše.
+6. **Prije KMS-a** trajno upiše rezervaciju kandidata u vanjsku povijest, uvjetnim dodavanjem (§8, t. 6). Rezervacija sadrži ishodište, `tree_size = n`, korijen, prethodnu točku `(n1, r1)`, consistency dokaz `(n1 → n)` i `D_schema` listova od `n1` do `n − 1`. Digesti omogućuju da se baza nakon povrata uskladi s rezervacijom. Dodavanje uspijeva samo ako je zadnji vanjski zapis pohranjena točka `(n1, r1)`, pa otvorena rezervacija može biti najviše jedna. Kod prve točke cutovera (§6 t. 3 i 4) povijest je prazna, a prethodne točke ni consistency dokaza nema. KMS se poziva tek kad ponovno čitanje potvrdi rezervaciju. Neuspio upis zatvara put bez potpisa, a nejasan ishod (npr. istek veze) vraća posao na t. 2. Rezervacija je izvan domene povrata baze, pa je povrat baze ne briše.
 7. Potpiše tekst bilješke ključem kontrolne točke domene (KMS) i traži dva žiga.
-8. Neovisno pohrani potpisanu bilješku, žigove i consistency dokaz, uvjetnim dodavanjem; time je rezervacija razriješena. Tek zatim objavi (§9).
+8. Neovisno pohrani potpisanu bilješku, žigove i consistency dokaz uz rezervaciju, uvjetnim dodavanjem. Time rezervacija postaje pohranjena točka. Tek zatim objavi (§9).
 
-   Otvorena rezervacija koju baza više ne može doseći (isti `n` uz drugi korijen, manji `n`, ili neprovjerljiv consistency dokaz) zatvara potpisivanje domene i diže alarm. Worker je sam ne razrješava (§10, t. 5; §11, O7).
+   **Oporavak.** Otvorena rezervacija `(n1, r1)` je ona bez pohranjene točke iste veličine. Dok postoji, worker smije samo nju dovršiti; novi kandidat se ne rezervira. Ako baza za `tree_size = n1` daje korijen `r1`, worker dovršava rezervaciju (t. 7 i 8) istim tekstom bilješke, a veći kandidat rezervira tek u idućem prolazu. Ako baza ne daje korijen `r1` za `tree_size = n1` (manje listova ili drugi korijen, npr. nakon povrata baze), put se zatvara: nema poziva KMS-u, žiga ni objave, a zapisuje se alarm. Rezervacija se nikad ne povlači ni zamjenjuje. Put ostaje zatvoren dok se baza ne uskladi s dokazanom vanjskom poviješću, uključujući rezervaciju (`BACKEND.md` §4.2 t. 2); indeksi se ne vraćaju na nulu. Zato se ni nakon pada ni nakon povrata ne potpisuje drugi korijen iste veličine, a ishodište i ključ ostaju isti.
 9. Dan bez novih listova objavljuje istu točku s novim žigom. Potpis je isti, jer je Ed25519 determinističan nad istim bajtovima.
 
 **Provjera dodavanja u bazi** (svakodnevno i u B4 testu):
@@ -130,11 +130,12 @@ Ovaj PR je dokument i nema koda, pa tablični test istodobnosti ovdje **ne primj
 | 3 | Rollback nakon dodjele indeksa; idempotentni retry | Rollback ne troši indeks; retry ne dodaje list | B4 (D-93) |
 | 4 | `reserve` istodobno sa zatvaranjem gatea | Prihvat koji dobije bravu prije gatea završi prije snimke inventara; nakon zatvaranja `reserve` vraća ponovljivu privremenu grešku | B4, cutover |
 | 5 | Prekid između upisa lista i objave korijena | List je u istoj transakciji kao potvrda, pa nema lista bez potvrde. Potvrda ostaje „još nije sidrena” dok točka s `tree_size > indeks` nije objavljena; sljedeći dnevni posao je uključuje | B4 + jedinični test statusa sidrenja |
-| 6 | Dva workera nad istom domenom | Zakup po domeni u bazi. Uz to vanjska pohrana prima dodavanje samo uz očekivanu zadnju točku, pa drugi worker dobiva ili idempotentan isti rezultat ili odbijanje | B5, dva workera |
-| 7 | Prekid nakon rezervacije ili potpisa, a prije žiga ili vanjske pohrane | Ponovno pokretanje nalazi otvorenu rezervaciju, računa isti tekst i potpis i dovršava je; ništa nije objavljeno dok vanjska pohrana ne uspije | B5, prekid u svakom koraku |
-| 8 | Prekid nakon vanjske pohrane, a prije zapisa u bazi | Vanjska povijest je mjerodavna; sljedeći posao prepoznaje točku i ne potpisuje drugu točku iste veličine | B5 |
+| 6 | Dva workera nad istom domenom | Zakup po domeni u bazi. Uz to vanjska pohrana prima dodavanje rezervacije i točke samo uz očekivani zadnji zapis, pa drugi worker dobiva ili idempotentan isti rezultat ili odbijanje | B5, dva workera |
+| 7 | Prekid nakon rezervacije, prije ili poslije potpisa, a prije žiga ili vanjske pohrane | Ponovno pokretanje nalazi otvorenu rezervaciju i dovršava je istim tekstom i potpisom (§7 t. 5); ništa nije objavljeno dok vanjska pohrana ne uspije | B5, prekid u svakom koraku |
+| 8 | Prekid nakon vanjske pohrane, a prije zapisa u bazi | Vanjska povijest je mjerodavna; sljedeći posao prepoznaje točku ili rezervaciju i ne potpisuje drugu točku iste veličine | B5 |
 | 9 | Povrat stare baze | Regresivna ili razgranata točka nije potpisana, žigosana ni objavljena; indeksi se ne vraćaju na nulu | B5 (D-93) |
-| 10 | Prekid nakon potpisa točke `n/A`, zatim povrat baze ispod `n` i novi prihvati do `n/B` | Rezervacija `n/A` preživi povrat; `n/B` se ne šalje KMS-u ni uz vanjsku točku manju od `n`; domena ostaje zatvorena uz alarm | B5, kombinacija 7 i 9 |
+| 10 | Kombinacija 7 i 9: vanjska povijest završava na točki 100; rezerviran je 101/A, worker padne prije ili poslije KMS-a i prije t. 8; baza se vrati na 100, a novi prihvat stvori 101/B | Rezervacija 101/A preživi povrat. Nema poziva KMS-u ni za 101/B ni za veću točku grane B; nema žiga ni objave; nema druge rezervacije veličine 101; alarm i zatvoren put dok se baza ne uskladi s rezervacijom | B5, lažni KMS broji pozive, prekid prije i poslije KMS-a |
+| 11 | Nejasan ishod upisa rezervacije | KMS se ne poziva dok ponovno čitanje ne potvrdi rezervaciju; dva workera nikad ne drže dvije rezervacije iste veličine | B5, lažna pohrana s istekom nakon upisa |
 
 ## 9. Objava i tko čita
 
@@ -161,7 +162,7 @@ Popis listova domene (C2SP tiles ili slično) se u pilotu **ne objavljuje**. Van
 2. **Indeks nije vrijeme.** Redoslijed listova dokazuje redoslijed indeksiranja u domeni, ne vremenski redoslijed `acceptedAt` ni redoslijed među domenama. Dvije domene nemaju zajednički poredak.
 3. **List sidri payload, ne potpis.** Potvrda u `pending_signature` već je list. Potpis koji kasnije stigne dokazuje se zasebno ključem potvrda.
 4. **v1 i domena.** List v1 nije vezan za domenu u potpisanom sadržaju. Pripadnost dolazi iz paketa. Prema D-215 izvan razvojnih i demo računala nema trajnih v1 potvrda; ako se to pokaže netočnim, ova granica se ponovno otvara.
-5. **Potvrde izgubljene povratom baze.** Potvrda prihvaćena nakon zadnje neovisno pohranjene točke, a izgubljena povratom baze, ostaje valjano potpisana, ali nikad sidrena. Dnevnik je ne vraća. Postupak povrata (backup i restore, zaseban zadatak) mora takve potvrde navesti; ovaj dokument ga ne propisuje. Ako je povrat izgubio listove otvorene rezervacije, domena ne potpisuje dalje pod istim ključem dok vlasnik ne odluči (O7).
+5. **Potvrde izgubljene povratom baze.** Potvrda prihvaćena nakon zadnje neovisno pohranjene točke, a izgubljena povratom baze, ostaje valjano potpisana, ali nikad sidrena. Dnevnik je ne vraća. Postupak povrata (backup i restore, zaseban zadatak) mora takve potvrde navesti; ovaj dokument ga ne propisuje. Ako je takva potvrda već u rezervaciji kandidata, domena ostaje zatvorena za potpis dok se baza ne uskladi s rezervacijom (§7, Oporavak).
 6. **Javni broj po ustanovi.** Uz dnevnik po domeni, `tree_size` otkriva točan broj potvrda svake domene, dakle po ustanovi i regiji, a ne samo ukupan broj kao u D-93. To treba potvrditi i zapisati u DPIA (§11, O3).
 7. **Javni consistency dokazi** sadrže hasheve podstabala, a na rubu i hash pojedinog lista. Hash lista je SHA-256 nad digestom payloada s UUID-ovima i vremenom, pa se praktično ne može obrnuti. Ipak je to pseudonimni izvedeni podatak i ide u DPIA uz `docs/privacy/05`.
 8. **Jamstva vrijede za pozivatelje** `reserve` (gateway evidencije, `BACKEND.md` §4.1), cutover i dnevni posao workera. Svaki novi pisac u `log_entry` ponovno otvara ovu specifikaciju.
@@ -176,7 +177,6 @@ Ništa od ovoga ne rješava pisac. Uz svako pitanje je preporuka i što bez odgo
 - **O4. Rotacija ključa kontrolne točke.** Preporuka: isto ishodište i isto ime; novi ključ ima novi key ID. Tijekom preklapanja bilješka nosi dva potpisna retka. Verifikator prihvaća ključ iz javnog popisa domene u rasponu valjanosti (`signing_key.valid_from`, `valid_to`). Blokira prvu rotaciju, ne izvedbu.
 - **O5. Vanjska pohrana povijesti za signer.** D-93 traži append-only povijest izvan domene povrata baze, koju signer čita prije svakog potpisa. Internet Archive ima kašnjenje i nema uvjetno dodavanje, a javni repo kontrolira operater. Preporuka: WORM spremnik (object lock) kod drugog pružatelja ili računa nego sigurnosne kopije baze, uz Internet Archive kao svjedoka. Izbor dobavljača ovisi o D-08 (B0.1, PRIJEDLOG). Do odluke izvedba gradi port s lažnom pohranom za testove, ali ne stvarni adapter.
 - **O6. Javni popis domena.** Ishodište otkriva `evidenceDomainId` prije javnog popisa iz D-102 t. 2. Preporuka: prihvatiti, jer je identifikator neproziran; popis domena objaviti najkasnije s prvom stvarnom točkom.
-- **O7. Rezervacija nedostižna nakon povrata baze.** Potpis rezervirane točke možda postoji, pa svaki drugi korijen te veličine pod istim ključem može biti fork (D-93; C2SP tlog-checkpoint). Preporuka: povući ključ kontrolne točke te domene, objaviti incident i rezervaciju u vanjskoj povijesti, a nastaviti pod novim ishodištem i ključem od zadnje pohranjene točke. To sužava kontinuitet jednog ishodišta iz D-93, pa traži odluku. Blokira samo oporavak nakon takvog povrata, ne izvedbu.
 
 ## 12. Klase ulaza: zahtjevi za izvedbu
 
@@ -193,11 +193,11 @@ Za ovaj dokument tablični test klasa ulaza **ne primjenjuje se**, jer PR ne mij
 | Bilješka bez završnog LF-a, drugi prefiks, krivi key ID, potpis nad SHA-256 bilješke | Verifikator odbija (`BACKEND.md` §4.1) |
 | `tree_size` 1, 2, 3, 7, 8, 9 | Korijen, inclusion i consistency jednaki referentnoj izvedbi RFC 9162 |
 | Regresija, fork, nedostupna vanjska povijest | Nema potpisa, žiga ni objave |
-| Otvorena rezervacija koja se ne slaže s bazom | Nema KMS poziva; domena zatvorena uz alarm |
+| Otvorena rezervacija koju baza ne reproducira (manje listova ili drugi korijen) | Nema poziva KMS-u, žiga ni objave; nema nove rezervacije; alarm |
 
 ## 13. Što slijedi
 
 1. Neovisni review ovog dokumenta (D-93).
-2. Vlasnikovi odgovori na O1 do O7, upisani zasebnim docs PR-om u `docs/DECISIONS.md`.
+2. Vlasnikovi odgovori na O1 do O6, upisani zasebnim docs PR-om u `docs/DECISIONS.md`.
 3. Zaseban mali PR usklađuje `BACKEND.md` §4.2 t. 1 s ovim dokumentom.
 4. Izvedba (DAN-391, M3.9-P02 i dalje) po §4 do §8, s testovima iz §8 i §12.
