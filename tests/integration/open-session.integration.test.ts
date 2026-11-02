@@ -38,6 +38,7 @@ const input = (overrides: Partial<Parameters<ReturnType<typeof createOpenSession
   subject: "sub-it-1",
   uniqueId: `ana@${homeOrg}`,
   homeOrg,
+  teacherEligible: false,
   tokenHash: tokenHash(),
   ...overrides,
 });
@@ -54,16 +55,21 @@ beforeAll(async () => {
   await admin.query("INSERT INTO identity.institution (id, slug, aai_home_org) VALUES ($1, $2, $3)", [
     institution, `it-open-${suffix}`, homeOrg,
   ]);
+  await admin.query("INSERT INTO identity.institution_issuer (institution_id, oidc_issuer) VALUES ($1, $2)", [
+    institution, issuer,
+  ]);
 });
 
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.end()));
   await admin.query("DELETE FROM identity.person_name WHERE institution_id = $1", [institution]);
+  await admin.query("DELETE FROM identity.teacher_eligibility WHERE institution_id = $1", [institution]);
   await admin.query(
     "DELETE FROM identity.session WHERE user_id IN (SELECT id FROM identity.user_account WHERE institution_id = $1)",
     [institution],
   );
   await admin.query("DELETE FROM identity.user_account WHERE institution_id = $1", [institution]);
+  await admin.query("DELETE FROM identity.institution_issuer WHERE institution_id = $1", [institution]);
   await admin.query("DELETE FROM identity.institution WHERE id = $1", [institution]);
   await admin.query(`DROP ROLE IF EXISTS ${AUTH_LOGIN}`);
   await admin.query(`DROP ROLE IF EXISTS ${APP_LOGIN}`);
@@ -127,6 +133,33 @@ describe("openSession over a ductus_auth login", () => {
     expect(await nameOf()).toEqual([{ given_name: "Mia", family_name: "Novak-Test" }]);
     expect((await openSession(input(who))).ok).toBe(true);
     expect(await nameOf()).toEqual([]);
+  });
+
+  // DAN-304 (#1181, item 14): logins of one account at the same time, some
+  // with the right and some without, all open their sessions, none fails on
+  // a duplicate key, and one row at most is left.
+  it("keeps one teacher right at most when logins of one account run at the same time", async () => {
+    const who = { subject: "sub-it-4", uniqueId: `ema@${homeOrg}` };
+    expect((await createOpenSession(loginPool(AUTH_LOGIN))(input(who))).ok).toBe(true);
+    const logins = Array.from({ length: 6 }, (_, i) =>
+      createOpenSession(loginPool(AUTH_LOGIN))(input({ ...who, teacherEligible: i % 2 === 0 })),
+    );
+    expect((await Promise.all(logins)).map((result) => result.ok)).toEqual(Array(6).fill(true));
+    const { rows } = await admin.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM identity.teacher_eligibility e
+         JOIN identity.user_account u ON u.id = e.user_id AND u.institution_id = e.institution_id
+        WHERE u.hr_edu_person_unique_id = $1`,
+      [who.uniqueId],
+    );
+    expect(rows[0].n).toBeLessThanOrEqual(1);
+    // The next login decides alone.
+    expect((await createOpenSession(loginPool(AUTH_LOGIN))(input({ ...who, teacherEligible: true }))).ok).toBe(true);
+    const after = await admin.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM identity.teacher_eligibility e
+         JOIN identity.user_account u ON u.id = e.user_id WHERE u.hr_edu_person_unique_id = $1`,
+      [who.uniqueId],
+    );
+    expect(after.rows[0].n).toBe(1);
   });
 
   it("does not run over a ductus_app login or the admin login", async () => {

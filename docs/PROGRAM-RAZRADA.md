@@ -1,8 +1,8 @@
 # Ductus: razrada faza M0 do M11
 
-Verzija 0.1 · 31. 10. 2026. · Dopuna `docs/PROGRAM.md` prema D-191 (trag: #87 [c.6524612217](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6524612217); vlasnikovo odobrenje 31. 10. 2026.: „Može, kreni bez datuma”).
+Verzija 0.2 · 1. 11. 2026. · Dopuna `docs/PROGRAM.md` prema D-191 (trag: #87 [c.6524612217](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6524612217); vlasnikovo odobrenje 31. 10. 2026.: „Može, kreni bez datuma”).
 
-Dokument daje redoslijed faza i koraka, **bez datuma**. Novi raspored i datum pilota zasebna su vlasnička odluka (D-191 t. 2, Owner queue u `STATE.md`). Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
+Dokument daje redoslijed faza i koraka, **bez datuma**. Ciljni datumi po fazi i kontrolne točke su u D-199 t. 6 (ODLUČENO 1. 11. 2026.; novi raspored iz D-191 t. 2), kako ga mijenja D-203 (datum pilota E3, kontrolna točka 20. 12. 2026., osnovica M3 C2), i u Linear milestoneovima. Sadržaj faza i izlazni kriteriji ostaju u tablici faza u `docs/PROGRAM.md`; ovdje su razloženi na korake. U sukobu vrijede `docs/PROGRAM.md`, `docs/PRODUCT.md`, `docs/BACKEND.md` i `docs/DECISIONS.md`.
 
 ## Kako čitati
 
@@ -17,27 +17,27 @@ Dokument daje redoslijed faza i koraka, **bez datuma**. Novi raspored i datum pi
 
 ## Redoslijed
 
-M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka licencu Lekte) i M8 → M10 → M9 → M11. M4 i M8 dijele izvoz u obliku fakulteta, pa izvoz DOCX-a ide nakon M4. M9 ne blokira nijednu drugu fazu. Koraci vezani uz vanjske račune (B0.1) i AAI Lab ne zaustavljaju ostale korake.
+M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka licencu Lekte) i M8 → M10 → M9 → M11. Izvoz DOCX-a, PDF-a i PDF/A (M8.4, M8.5, M8.14) ulazi u val 1 i ne čeka M4: radi bez paketa pravila Lekte, a provjera oblika FPZG-a uključuje se kad stigne licenca (D-203 A3, t. 2). Tehnički M1 ne čeka Lab; prijava na Labu uvjet je prije stvarne uporabe (D-203 t. 4). Shema v2 (DAN-453) ide prije funkcija V11 (D-201 t. 2), a funkcije V11 raspoređene su po fazama M5 do M9 (D-203 t. 6). M9 ne blokira nijednu drugu fazu. Koraci vezani uz vanjske račune (B0.1) i AAI Lab ne zaustavljaju ostale korake.
 
 ## M0 Temelj
 
 **Cilj:** repo, CI, lokalni stog i pravila gradnje na kojima stoje sve ostale faze.
 
-**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 52 migracije i 50 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. **Djelomično:** kriterij „isti broj prenesenih testova kao u izvoru” vlasnik je zamijenio dokumentiranom jednakovrijednošću (#87 c.6547174354); karta je u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, a 24 nepokrivena slučaja vraćaju se kao testovi; E2E izvan Chromiuma nije obvezan (D-191 t. 4 ga vraća u opseg); ljuska još nije u konačnom vizualnom smjeru D-188.
+**Gotovo na mainu:** CI u `.github/workflows/ci.yml` (lint, typecheck, unit, property, integration, pgTAP preko `pg_prove`, E2E i E2E prijave); sigurnosni posao (Gitleaks nad cijelom poviješću, zizmor, Semgrep, OSV); axe (`e2e/accessibility.spec.ts`); `lefthook.yml`; `compose.yaml` (Postgres 17, RustFS, Mailpit, lažni OIDC); dbmate s 52 migracije i 50 pgTAP datoteka; provjera zabranjenih izraza u CI-ju. Provjereno na `main` `34b94dab` (1. 11. 2026.): E2E na Chromiumu, Firefoxu i WebKitu dio je obveznog statusa „Local stack (compose.yaml)” na svakom PR-u (#1097, M0.3); skener zabranjenih izraza čita i tekst svojstava izvan JSX-a (#552, `247efb68`, M0.4); testovi pravila hookova prolaze na Linuxu u obveznom poslu „Lint, typecheck, test and build” (DAN-136, M0.7). **Djelomično:** kriterij „isti broj prenesenih testova kao u izvoru” vlasnik je zamijenio dokumentiranom jednakovrijednošću (#87 c.6547174354); karta je u `docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`, a 24 nepokrivena slučaja vraćaju se kao testovi; ljuska još nije u konačnom vizualnom smjeru D-188.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M0.1 | Zapis prijenosa jezgre: broj testova u izvoru i na mainu (`docs/engineering/prijenos-jezgre-M0.1.md`) | P | | DAN-376 |
-| M0.2 | Sedam zaštitnih mjera za dbmate (D-91) | P | | DAN-71 |
-| M0.3 | E2E na Firefoxu i WebKitu kao obvezna provjera | P | | DAN-114, DAN-232 |
-| M0.4 | Skener zabranjenih izraza i za tekst izvan JSX-a | P | | DAN-133 (#552) |
+| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776) | P | | DAN-71 |
+| M0.3 | E2E na Firefoxu i WebKitu kao obvezna provjera | P | | DAN-114, DAN-232; gotovo: #1097 (`34b94dab`) |
+| M0.4 | Skener zabranjenih izraza i za tekst izvan JSX-a | P | | DAN-133; gotovo: #552 (`247efb68`) |
 | M0.5 | Ljuska u konačnom vizualnom smjeru „papir i grafit”: tokeni, navigacija, dijalozi, mobilni raspored | F | D-188 (#972) | DAN-344 (#973, #974) |
-| M0.6 | Nalazi kontrolne ravnine i review gatea s rokom prije prvog stvarnog studenta (samo ID): F-010, F-011, F-012, F-013, F-014, F-015, F-017, F-023, F-027, F-033, F-035, F-039, F-040, F-041, F-045, F-046 | P | | DAN-141 do DAN-144, DAN-153 do DAN-155, DAN-161, DAN-163, DAN-166, DAN-168, DAN-171 do DAN-173, DAN-177, DAN-178 |
-| M0.7 | Testovi pravila hookova prolaze na Linuxu | P | | DAN-136 |
+| M0.6 | Nalazi kontrolne ravnine i review gatea s rokom prije prvog stvarnog studenta (samo ID): F-010, F-011, F-012, F-013, F-014, F-015, F-017, F-023, F-027, F-033, F-035, F-039, F-040, F-041, F-045, F-046; F-040 i F-045 zatvaraju se za M0, ne tek prije M1, a dio F-010 koji je radnja vlasnika ide privatno (#87 c.6557413776) | P | | DAN-141 do DAN-144, DAN-153 do DAN-155, DAN-161, DAN-163, DAN-166, DAN-168, DAN-171 do DAN-173, DAN-177, DAN-178 |
+| M0.7 | Testovi pravila hookova prolaze na Linuxu | P | | DAN-136; gotovo na `main` `34b94dab` |
 
 **Ekrani:** Z-01 ljuska i navigacija, Z-04 greška i 404, Z-06 učitavanje, Z-08 dijalozi, Z-13 tema.
 
-**Uvjet završetka:** CI zelen na `main` uz obvezan E2E na Chromiumu, Firefoxu i WebKitu; zapis M0.1 postoji; mjere D-91 spojene; nalazi iz M0.6 zatvoreni u privatnom registru; ljuska prošla vizualnu provjeru prema D-183.
+**Uvjet završetka:** CI zelen na `main` uz obvezan E2E na Chromiumu, Firefoxu i WebKitu; zapis M0.1 postoji; mjere D-91 1, 2, 4 i 6 spojene (3, 5 i 7 su u B0.x, #87 c.6557413776); nalazi iz M0.6 zatvoreni u privatnom registru; ljuska prošla vizualnu provjeru prema D-183.
 
 ## M1 Prijava preko AAI@EduHr
 
@@ -45,11 +45,13 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Gotovo na mainu:** vlastiti OIDC klijent (`src/server/auth/`, `app/api/auth/{login,callback,logout}`) s PKCE, `state` i `nonce`; sesije u bazi; jedinstvenost (`oidc_issuer`, `hr_edu_person_unique_id`) bez spajanja po e-pošti (`db/migrations/20261003210100_identity_session.sql`, D-73), čime je D-104 pokriven na razini sheme; test da produkcijski build nema lažnog pružatelja (`tests/unit/auth/build-mode.test.ts`); pgTAP 020 do 022; ekran `/prijava`. **Nema:** prijave na stvarnom AAI@EduHr Labu.
 
+**Odluke plana M1:** atributi, istek sesije, adapter, odjava, proba na Labu, nositelj Test resursa i svježina podobnosti (P1 do P7) su D-200 u `docs/DECISIONS.md` (ODLUČENO 1. 11. 2026.).
+
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M1.1 | Ovlast za AAI@EduHr Lab i registracija usluge | V | FPZG, Srce | DAN-196, DAN-198 |
 | M1.2 | Prijava na Labu: konfiguracija klijenta, mapiranje hrEdu atributa, zapis prolaza s testnim računom | B | M1.1 | DAN-377 |
-| M1.3 | Afilijacija djelatnika pri potvrdi nastavničke uloge | B | M1.2 | DAN-304 |
+| M1.3 | Afilijacija djelatnika pri potvrdi nastavničke uloge | B | M1.2 | DAN-304; ostatak u novi uski tiket (D-205 t. 4) |
 | M1.4 | Odjava kod pružatelja (RP-initiated logout) | B | M1.2 | DAN-212 |
 | M1.5 | Izravni unit testovi `flow.ts` i `oidc.ts` | B | | DAN-307 |
 | M1.6 | CSP, HSTS, Permissions-Policy i istek neaktivne sesije | B | | DAN-296 |
@@ -58,7 +60,11 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Ekrani:** S-01 prijava, Z-03 sesija istekla, Z-05 nema ovlasti.
 
-**Uvjet završetka:** zapisan uspješan prolaz prijave na Labu; `app_user` vezan uz `hrEduPersonUniqueID`; test da drugi izdavatelj s istim identifikatorom ne dobiva isti račun (D-104); CI test bez lažnog pružatelja u produkciji zelen; nalazi iz M1.7 zatvoreni.
+Napomena (D-203 t. 4): M1.3 i M1.4 ovise o M1.2 samo za provjeru na Labu. Za tehnički M1 grade se i testiraju uz lažni pružatelj, a prolaz na Labu dodaje se kad Lab bude dostupan.
+
+**Uvjet završetka (tehnički M1, D-203 t. 4):** spojeni koraci M1.3 do M1.8; `app_user` vezan uz `hrEduPersonUniqueID`; test da drugi izdavatelj s istim identifikatorom ne dobiva isti račun (D-104); CI test bez lažnog pružatelja u produkciji zelen; nalazi iz M1.7 zatvoreni.
+
+**Prije stvarne uporabe:** zapisan uspješan prolaz prijave na Labu (M1.1, M1.2), uz staging M11.4 i GO uvjete. Lažni OIDC i CI nisu dokaz stvarnog AAI toka (D-203 D1).
 
 ## M2 Model fakulteta
 
@@ -69,13 +75,13 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M2.1 | Rad nastaje tek na „Započni rad”, uz korak na poslužitelju | F, B | | DAN-330 (#830), DAN-331 (#831) |
-| M2.2 | HTTP rute za preostale institucijske RPC-ove | B | | DAN-292 |
+| M2.2 | HTTP rute za preostale institucijske RPC-ove | B | | DAN-292; ostatak u novi uski tiket (D-205 t. 4) |
 | M2.3 | Studentska projekcija kolegija, zadataka i radova; ekran Moji radovi (B1, B2) | B, F | | DAN-309, #941 |
 | M2.4 | Zadatak u postojećem kolegiju, uređivanje s pregledom posljedica i čarobnjak zadatka (B3, B8) | F | M2.2 | DAN-310 |
 | M2.5 | Popis studenata kolegija i zadatka s imenima | B, F | | #948 (DAN-344) |
-| M2.6 | Mentorstva: put evidencije, čitači i RPC za dodjelu | B | vlasnik za RPC (D-182 t. 1) | DAN-349 (#947) |
+| M2.6 | Mentorstva: put evidencije, čitači i RPC: studentov zahtjev i nastavnikovo odobrenje, uz revizijski trag i provjeru ustanove; mentor samo uz potvrđenu nastavničku ulogu; administrator ne dodjeljuje (D-204) | B | | DAN-349 (#947); ostatak u novi uski tiket (D-205 t. 4) |
 | M2.7 | Nastavni tim kolegija i seminarske grupe | B | | DAN-351 |
-| M2.8 | Komentor i povjerenstvo s vremenski ograničenim pristupom (model, N-08, N-09) | B | M2.6 | DAN-379 |
+| M2.8 | Komentor i povjerenstvo s vremenski ograničenim pristupom (model, N-08, N-09); komentor po radnjama, bez zadanog skupa ovlasti, a skup se određuje uz U-1 prije M6.12 (D-205 t. 3) | B | M2.6 | DAN-379 |
 | M2.9 | Oznaka odobrene prilagodbe (D-50): nastavnik vidi oznaku, ne razlog | B, F | | DAN-380 |
 | M2.10 | Jezik rada odvojen od jezika sučelja (F-06) | B | | DAN-386 |
 | M2.11 | Administracija ustanove: pregled, korisnici i uloge, kolegiji i akademske godine (C1 do C3) | B, F | M1.3 | DAN-313 |
@@ -83,10 +89,14 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | M2.13 | Potvrda obavijesti veže otisak teksta obavijesti | B | | DAN-306 |
 | M2.14 | Mentorovi radni zapisi navedeni u obavijesti studentu (D-130) | F | | DAN-235 (#553) |
 | M2.15 | Nalazi granice baze (samo ID): F-018, F-019; RLS uz `current_actor()` kao initplan | B | | DAN-156, DAN-157, DAN-51 |
+| M2.16 | Ključ ustanove kroz `assignment_version` (preuzima FK dio DAN-301 N-1; D-199) | B | | DAN-442 |
+| M2.17 | Konfiguracija po ustanovi (D-199) | B | | DAN-443 |
+
+ISVU adapter (F-07) nije korak ove tablice: ide u zaseban tiket s rokom „prije stvarne uporabe” (D-205 t. 2).
 
 **Ekrani:** S-02 studentska početna, S-03 moji kolegiji, S-04 upis kodom, S-05 obavijest (dio o zadatku), N-01 moji kolegiji, N-02 novi kolegij i zadatak, N-03 čarobnjak zadatka, N-04 popis studenata, N-16 radovi uz mentora (podaci), A-01 pregled ustanove, A-02 korisnici i uloge, A-03 kolegiji i akademske godine, A-04 pravila fakulteta.
 
-**Uvjet završetka:** pgTAP matrica zelena za studenta, nastavnika, mentora, komentora, člana povjerenstva, administratora i osobu druge ustanove; E2E: administrator potvrdi nastavnika, nastavnik napravi kolegij i zadatak, student se upiše i potvrdi obavijest; svaki RPC koji mijenja stanje ima HTTP rutu ili zapisan razlog zašto je nema.
+**Uvjet završetka:** pgTAP matrica zelena za studenta, nastavnika, mentora, komentora, člana povjerenstva, administratora i osobu druge ustanove; E2E: administrator potvrdi nastavnika, nastavnik napravi kolegij i zadatak, student se upiše i potvrdi obavijest; svaki RPC koji mijenja stanje ima HTTP rutu ili zapisan razlog zašto je nema; administracija ustanove radi u sučelju. **Rokovi (D-205 t. 1):** ova jezgra do 30. 11. 2026., ostatak koraka M2 do 20. 12. 2026.
 
 ## M3 Evidencija
 
@@ -112,6 +122,8 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Uvjet završetka:** izlazni kriterij M3 iz `docs/PROGRAM.md` (property testovi, idempotentno ponovno slanje, oporavak prekida između Storagea, RPC-a i potpisa, izmjereno CPU vrijeme rekonstrukcije doktorskog rada u zapisu B0.2); potvrdu potpisuje worker; B5 prolazi known-answer vektor i negativne slučajeve iz `docs/BACKEND.md` §8; nalazi iz M3.7 zatvoreni.
 
+**Osnovica 20. 12. 2026. (D-203 C2):** spremanje, worker koji potpisuje (M3.2), potpisane potvrde, rekonstrukcija (M3.3) i oporavak. Osnovica se mjeri na kontrolnoj točki 20. 12. i ne zatvara M3. Puni B5 (M3.9) i ostali dijelovi uvjeta završetka prihvaćaju se prije nastavnog pilota; B5 se ne prebacuje iza pilota bez posebne odluke.
+
 ## M4 Paket pravila Lekte
 
 **Cilj:** pravila akademskog pisanja FPZG-a dolaze iz verzioniranog paketa Lekte, a Ductus ih samo čita i provjerava (D-117, pravilo 12).
@@ -134,6 +146,8 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 **Cilj:** student u Ductusu napiše cijeli akademski rad u obliku fakulteta, sa svakim novim elementom zapisanim u evidenciji.
 
 **Gotovo na mainu:** shema s odlomkom, naslovom, stavkom popisa i blok-citatom (`src/domain/document/schema.ts`); popis naslova; opseg u traci stanja; identitet blokova; format odsječka v3 s izvorom citata (#904). **U tijeku:** citati i literatura (#866), traka alata (#976), ljuska editora (#980). **Nema:** fusnota, tablica, slika, sadržaja, naslovne stranice, citata i bibliografije kao čvorova, provjere DOI-ja, opsega po poglavlju, bilježnice izvora, traži i zamijeni, fokusa.
+
+**V11 (D-201, D-203 t. 6):** prvo shema v2 (DAN-453, `Risk: critical`, ugovor i plan napada prije koda), s rezerviranim mjestom u formatu zapisa za prijedloge i izravne izmjene po D-34. U val 1 ulaze funkcije V11 koje pripadaju osnovnom editoru, komentarima, D-34 i izvozu; ostale idu u val 2 i 3 prema fazama M5 do M9. Koraci za funkcije V11 dodaju se s tiketima koje otvara orkestrator.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
@@ -174,7 +188,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M6.1 | Prikaz uživo: predani rad prikazan kao predan; mentorski prikaz s komentarom | F, B | | DAN-332 (#911), DAN-215 |
 | M6.2 | Reprodukcija znak po znak za mentora, odnosno nastavnika zadatka, i za studenta (D-143, D-154) | F | M3.1 | DAN-344 (#932) |
 | M6.3 | Prijedlozi izmjena s prihvaćanjem kao zasebnom promjenom s izvorom | B, F | M5.1 | DAN-419 |
-| M6.4 | Izravne izmjene nastavnika s pripisivanjem i postavkom vidljivom na radu (D-21, D-34) | B, F | M6.3 | DAN-420 |
+| M6.4 | Izravne izmjene nastavnika s pripisivanjem i postavkom vidljivom na radu (D-21, D-34); val 1, cijeli tok po D-34 (D-203 B1) | B, F | M6.3 | DAN-420 |
 | M6.5 | Zahtjev za doradu i odgovor studenta (D-45), uključujući „promijenjeno nakon prihvaćanja” | B, F | | DAN-314, DAN-266 |
 | M6.6 | Obavijesti u aplikaciji i e-poštom, podsjetnici o roku (N-01, N-02) | B, F | | DAN-305 (#950) |
 | M6.7 | Odgođeno objavljivanje komentara (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | F, B | | DAN-421 |
@@ -225,21 +239,30 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M8.1 | Lokalni sintetički spike čitanja DOCX-a | B | | DAN-242 |
+| M8.1 | Lokalni sintetički spike čitanja DOCX-a (D-198 t. 5) | B | M8.8 | DAN-242 |
 | M8.2 | Uvoz DOCX-a kao događaj s izvorom „uvoz” | B, F | M8.1, M3.1 | DAN-396 |
 | M8.3 | Uvoz PDF-a kao događaj s izvorom | B, F | M8.2 | DAN-397 |
-| M8.4 | Izvoz DOCX-a u obliku fakulteta | B | M4.3, M5.4 | DAN-398 |
+| M8.4 | Izvoz DOCX-a u obliku fakulteta | B | M5.4 (provjera oblika: M4.3, D-203 t. 2) | DAN-398 |
 | M8.5 | Izvoz PDF-a u obliku fakulteta | B | M8.4 | DAN-399 |
 | M8.6 | Izvoz predanog rada, potvrde za referadu (R-06) i paket za Merlin (R-05); provjerljiv izvozni paket (D-173) | B, F | M7.1 | DAN-316, DAN-341 |
-| M8.7 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom (S-09) te provjera doslovnog citata u učitanom PDF-u (A-03) | F, B | M5.1, M5.9, M8.3 | novo |
+| M8.7 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom (S-09) te provjera doslovnog citata u učitanom PDF-u (A-03) | F, B | M5.1, M5.9, M8.3 | DAN-441 |
+| M8.8 | Paket, lockfile, OSV skeniranje i testovi za `spikes/docx-provenance` | P | | DAN-435 |
+| M8.9 | Ugovor provenance i manifest uz `import_event`; `evidence-receipt-v2` se ne mijenja (D-198 t. 7) | B | M8.1, M8.2 | DAN-436 |
+| M8.10 | Tragovi u PDF-u i ODT-u, bez povijesti pisanja | B | M8.3, M8.9 | DAN-437 |
+| M8.11 | Čitanje spremljenih verzija iz OneDrivea, SharePointa i Google Drivea za odabranu datoteku (D-198 t. 1; granica podataka i opseg dozvola po D-198 t. 5) | B, F | M8.2, M8.9 | DAN-438 |
+| M8.12 | Word i Google Docs dodaci, sljedeći val, ne pilot (D-198 t. 2; uvjet U-7) | B, F | M8.11 | DAN-439 |
+| M8.13 | Ekran „Povijest dokumenta”: popis „uvezeno, tvrdnja iz datoteke”, isti za obje uloge (D-198 t. 6) | F | M8.2, M8.9 | DAN-440 |
+| M8.14 | Izvoz PDF/A-2u; valjanost provjerava veraPDF u CI-ju s fiksnim profilom `-f 2u`, pinanom verzijom i digestom; PDF se označava kao PDF/A samo uz `isCompliant="true"` (D-206, D-203 A3) | B | M8.5 | novo |
+
+Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 **Ekrani:** S-19 uvoz teksta, S-20 izvoz, N-18 izvoz predanog rada i paket za Merlin.
 
-**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil).
+**Uvjet završetka:** izlazni kriterij M8 iz `docs/PROGRAM.md` (uvoz označen u evidenciji; izvoz DOCX-a, PDF-a i PDF/A prihvaćen prije nastavnog pilota, PDF/A-2u uz veraPDF `isCompliant="true"` (D-206); izvezeni DOCX prolazi Lektinu provjeru za FPZG profil kad stigne licenca, D-203 t. 2).
 
 ## M9 AI pomoćnik
 
-**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela.
+**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela; ulazi u val 1 (D-199 t. 1).
 
 **Gotovo na mainu:** pravilo AI-ja i dopuštene svrhe na kolegiju i zadatku (#943). **Nema:** posrednika prema pružatelju ni sučelja pomoćnika.
 
@@ -318,6 +341,7 @@ Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.654
 | U-4 | dio M9.6 | Oznaka „podudara se s odgovorom AI pomoćnika” ostaje oznaka mjesta, ne tvrdnja o autoru. | pravilo 1 (C-9, C-10); D-194 |
 | U-5 | M10.9 | Tekst paketa i QR provjere ne smije tvrditi autorstvo; dokument izlazi izvan sustava. | pravilo 9, C-13 |
 | U-6 | M10.10 | Agregati bez rizika, ranga i ocjena; isti prag od najmanje 5 studenata kao N-11. | pravilo 2 |
+| U-7 | M8.12 | Dodaci idu u sljedeći val, ne u pilot (D-198 t. 2, ODLUČENO 1. 11. 2026.). Prije gradnje pisana potvrda FPZG-a, pravno mišljenje, DPIA i provjera ograničenja Microsofta i Googlea. Do tada vrijede D-79 i D-80. | D-79, D-80 |
 
 Planer (M5.15) i „Moj rad u brojkama” (M7.13) više nisu uvjetni prema odluci vlasnika o D-63 („1. da 2. da”, #87), ali izričiti izuzetak u PRODUCT §5 pravilu 4 (napredak po poglavlju, dani do roka, napredak iz verzija) upisuje tek docs PR #1030: **M5.15 i M7.13 ne počinju prije spajanja #1030.** A-08 (dnevni vremenski žig kod vanjskog pružatelja) ostaje izvan rasporeda.
 
@@ -327,13 +351,16 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 
 ## Otvorena pitanja za vlasnika
 
-1. Novi raspored i datum pilota (D-191 t. 2; već u Owner queueu).
-2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
+1. ~~Novi raspored i datum pilota.~~ Riješeno 1. 11. 2026.: pilot 1. 3. 2027. (D-194 t. 1), raspored D-199 t. 6 (#87 c.6551869348). Izmijenjeno D-203 E3: kod vala 1 spreman 22. 2. 2027., zatim proba od oko četiri tjedna; nastavna aktivacija oko 22. 3. 2027. ili poslije, uz prihvat i suglasnost FPZG-a. Datum 1. 3. 2027. ostaje kao trag.
+2. M9: AI pomoćnik ulazi u pilot (D-194 t. 1, odlučeno), i to u val 1 (D-199 t. 1). Otvoreno ostaje: model računa, ugovorni model i izbor pružatelja (D-194 t. 6 i 7, PRIJEDLOG, uz pravno mišljenje i DPIA; `docs/privacy/05` t. 23 do 28).
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
 5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik). Djelomično riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md` kao okvir. **Smještaj i naziv ostaju otvoreni:** pitanja 1, 2, 3 i 9 iz te specifikacije čekaju vlasnika i nijedan korak M5.14 ne počinje prije odgovora.
 6. D-63 (napredak i „preskočena stanka”) prema D-56 i pravilu 4 (DAN-104).
 7. Kriteriji popisa „tko treba pomoć” (N-12, DAN-102).
-8. RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).
+8. ~~RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).~~ Riješeno 2. 11. 2026. (D-204): mentorstvo nastaje kad nastavnik odobri studentov rad; administrator ga ne dodjeljuje.
 9. ~~Izlazni kriterij M0 „isti broj testova kao u izvoru”.~~ Riješeno 31. 10. 2026. odlukom vlasnika (#87 c.6547174354): umjesto broja vrijedi zapis jednakovrijednosti za svaki neprenesen izvorni slučaj (`docs/engineering/prijenos-jezgre-M0.1-jednakovrijednost.md`); nepokriveno se vraća kao test.
 10. Sastav backend dodatka (otvoreno pitanje uz D-99) gubi rok 16. 11. 2026. s rasporedom po valovima; rješava li se uz novi raspored.
+11. M8 Document Provenance (D-198): rok čuvanja uvezenih verzija uz FPZG DPO i pravno mišljenje (t. 3). Dodaci za Word i Google Docs odlučeni su za sljedeći val (t. 2, U-7).
+12. Uloge nastavnika i mentora (D-204). D-154 kaže da su mentor i nastavnik zadatka „jedna uloga općenito”, a D-204 da je ista osoba nastavnik na kolegiju i mentor na pisanom radu. Je li to jedna potvrđena uloga `teacher` s dva odnosa (kolegij, mentorstvo) ili dvije uloge, i treba li izmijeniti D-154? `docs/PRODUCT.md` §3 još navodi da administrator „potvrđuje ulogu nastavnika i mentora” i ulaz „dodjelom mentoru”, a popis vrsta mentorskog rada (završni, diplomski, specijalistički, doktorski) razlikuje se od D-204 (esej, završni, diplomski i drugi). Otvoreno je i što se događa s mentorstvima kad se nastavniku opozove uloga (D-200 P7). Točka 2 odluke o ulogama od 31. 10. 2026. (povjerenstvo u istrazi) čeka izmjenu Ustava.
+13. Trajanje produljene probe D-196 (D-205 t. 5): zapis ne navodi novi završni datum. Traje li do jezgre M2 (30. 11. 2026.) ili do kraja M2 (20. 12. 2026.)? `docs/ORKESTRATOR.md` §4a još navodi „do 14. 11. 2026.”.

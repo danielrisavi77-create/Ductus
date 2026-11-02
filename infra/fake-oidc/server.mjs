@@ -10,6 +10,9 @@ import { ACCOUNTS, demoAccountClaims, isDemoAccountId } from "./accounts.mjs";
 const PORT = Number(process.env.PORT ?? 8080);
 const ISSUER = process.env.ISSUER ?? `http://localhost:${PORT}`;
 const REDIRECT_URI = process.env.REDIRECT_URI ?? "http://localhost:3000/api/auth/callback";
+// The one address the provider sends the browser back to after its logout
+// (DAN-212), as AAI@EduHr accepts only the registered one.
+const POST_LOGOUT_REDIRECT_URI = process.env.POST_LOGOUT_REDIRECT_URI ?? "http://localhost:3000/";
 
 const provider = new Provider(ISSUER, {
   clients: [
@@ -17,12 +20,22 @@ const provider = new Provider(ISSUER, {
       client_id: "ductus-local",
       client_secret: "ductus-local-only",
       redirect_uris: [REDIRECT_URI],
+      post_logout_redirect_uris: [POST_LOGOUT_REDIRECT_URI],
       token_endpoint_auth_method: "client_secret_basic",
     },
   ],
   pkce: { required: () => true },
   cookies: { keys: ["ductus-fake-oidc-local-only"] },
-  features: { devInteractions: { enabled: false } },
+  features: {
+    devInteractions: { enabled: false },
+    // RP-initiated logout (DAN-212): "Demo odjava" ends this provider's session.
+    rpInitiatedLogout: {
+      enabled: true,
+      async logoutSource(ctx, form) {
+        ctx.body = logoutPage(form);
+      },
+    },
+  },
   interactions: { url: (_ctx, interaction) => `/interaction/${interaction.uid}` },
   claims: {
     openid: ["sub"],
@@ -101,6 +114,28 @@ function loginPage(uid) {
 ${buttons}
 </form>
 </main>
+</body>
+</html>`;
+}
+
+// `form` is the provider's own hidden form (id "op.logoutForm", with its
+// xsrf value). The one button ends the session here; the script presses it,
+// so a sign-out in Ductus returns to Ductus without a stop, and without JS
+// the button stays.
+function logoutPage(form) {
+  return `<!doctype html>
+<html lang="hr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo odjava</title><link rel="icon" href="/favicon.ico" type="image/svg+xml"><style>${PAGE_STYLE}</style></head>
+<body>
+<main>
+<span class="tag">Samo lokalno i CI</span>
+<h1>Demo odjava</h1>
+<p>Ovo nije AAI@EduHr. Odjava kod lažnog pružatelja prijave za lokalni rad i CI.</p>
+${form}
+<button autofocus type="submit" form="op.logoutForm" name="logout" value="yes">Odjavi se</button>
+</main>
+<script>document.querySelector('button[name="logout"]').click();</script>
 </body>
 </html>`;
 }

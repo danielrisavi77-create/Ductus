@@ -316,7 +316,6 @@ export const hr = {
   teacher: {
     title: "Novi kolegij i zadatak",
     signedOut: "Prijavite se nastavničkim računom.",
-    denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
     unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušajte ponovno.",
     signIn: "Prijavi se",
     backHome: "Na početnu",
@@ -487,7 +486,6 @@ export const hr = {
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
-    denied: "Ovaj prikaz vidi samo nastavnik.",
     loading: "Učitavanje radova…",
     unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
     // F-11 (#757, contract c.6397637802 §3; owner c.6397679688).
@@ -908,7 +906,7 @@ export const hr = {
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
-      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. Uz svaku promjenu bilježit će se i način unosa, pa će nastavnik (mentor) vidjeti oznaku kad tekst nije unesen tipkovnicom ni lijepljenjem, na primjer diktiranjem. To će služiti samo prikazu uživo i reprodukciji.",
+      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. Uz svaku promjenu bilježit će se i način unosa, pa će nastavnik (mentor) vidjeti oznaku kad uređivač uz unos nije vidio pritisak tipke ni lijepljenje, na primjer kod diktiranja, nekih tipkovnica na mobitelu ili pomoćnih alata. Oznaka govori samo kako je tekst ušao u uređivač, ne tko ga je napisao. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodate.",
     },
@@ -1053,16 +1051,59 @@ export const hr = {
   // the one way in; nothing here describes what is recorded (the notice of
   // each assignment does, PRODUCT §5 rule 6).
   prijava: {
+    // Archivum sign-in (owner's design package of 26 Oct 2026, DAN-344).
     title: "Prijava",
-    titleAccent: "u radni prostor",
-    lead: `${APP_NAME} je prostor u kojem pišeš seminarske, završne i diplomske radove, a mentor ih prati od prve rečenice do predaje.`,
-    motto: `${APP_NAME} ne piše umjesto tebe. Pomaže ti da napišeš svoj rad i pokažeš kako je nastao.`,
-    cardTitle: "Za studente i nastavnike",
-    cardBody: "Prijavi se korisničkim računom AAI@EduHr, istim kojim se prijavljuješ u Studomat i Merlin.",
+    back: "Na naslovnicu",
+    // D-181: the reader is addressed with "Vi" (Codex P2 on #879, 6ea3ced8).
+    eyebrow: "Vaš akademski prostor",
+    heading: "Dobro došli",
+    headingMore: "u svoj",
+    headingAccent: "prostor.",
+    lead: "Jedan ulaz za studente i nastavnike.",
+    leadMore: "Pisanje, povratna informacija i razgovor o radu.",
+    paperMeta: `${APP_NAME} / akademski rad`,
+    paperTitle: "Prije prve",
+    paperTitleAccent: "rečenice.",
+    paperNote: "Jasne upute. Povezan razgovor.",
+    paperStudent: "Student piše.",
+    paperTeacher: "Nastavnik usmjerava.",
+    cardEyebrow: "Prijava",
+    cardTitle: "Vaš akademski",
+    cardTitleAccent: "identitet.",
+    cardBody: "Prijavite se korisničkim računom AAI@EduHr, istim kojim se prijavljujete u Studomat i Merlin. Studenti i nastavnici koriste isti ulaz.",
     button: "Prijava sustavom AAI@EduHr",
-    passwordNote: "Lozinku upisuješ samo kod AAI@EduHr.",
-    codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
-    help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
+    passwordNote: "Lozinku upisujete samo kod AAI@EduHr.",
+    roleTitle: "Jedan ulaz. Vaš prostor.",
+    roleBody: "Nakon prijave otvara se vaš prostor prema dodijeljenoj ulozi. Ulogu nastavnika potvrđuje administrator fakulteta.",
+    codeSummary: "Prvi dolazak ili imate kod zadatka?",
+    codeNote: "Prvo se prijavite sustavom AAI@EduHr. Kod zadatka od nastavnika upisujete nakon prijave.",
+    footer: "Identitet AAI@EduHr · pristup prema dodijeljenoj ulozi",
+    helpSummary: "Trebate pomoć?",
+    helpAaiTitle: "Ne možete se prijaviti računom AAI@EduHr?",
+    helpAaiBody: "Za zaboravljenu korisničku oznaku ili lozinku obratite se službi svoje matične ustanove.",
+    helpAaiLink: "Službena pomoć AAI@EduHr",
+    helpAccessTitle: "Prijava je uspjela, ali nemate pristup?",
+    helpAccessBody: "Javite se koordinatoru na svojoj ustanovi.",
+  },
+  // DAN-378 (M1.8): Z-03, a closed session behind the cookie; signed out,
+  // with no session ever shown; Z-05, signed in without the role (UX pass
+  // DAN-450, #1091 c.6561627758). Z-05 speaks of the own account only.
+  access: {
+    expiredTitle: "Sesija je istekla",
+    expiredBody: "Zbog neaktivnosti odjavljeni ste. Prijavite se ponovno i nastavite gdje ste stali.",
+    signedOutTitle: "Niste prijavljeni.",
+    signedOutBody: "Prijavite se da vidite {what}.",
+    what: {
+      courses: "svoje kolegije",
+      newCourse: "obrazac za novi kolegij i zadatak",
+      fastPath: "brz put kroz radove",
+      home: "svoj prostor",
+    },
+    deniedTitle: "Nemate pristup ovom prikazu",
+    deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
+    deniedPending: "Ulogu nastavnika potvrđuje administrator fakulteta. Dok se ne potvrdi, ovaj prikaz nije dostupan.",
+    deniedNext: "Javite se koordinatoru na svojoj ustanovi.",
+    backToOwn: "Natrag na moj prostor",
   },
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
   errorPage: {

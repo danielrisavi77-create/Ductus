@@ -25,7 +25,8 @@ export const D97_PATHS = [
   "plugins/ductura-engineering/",
 ];
 // D-97 also covers DECISIONS entries about who may merge/review; not decidable by path alone.
-export const D97_MANUAL_PATHS = ["docs/DECISIONS.md"];
+// DAN-372: docs/odluke/ holds one file per decision, the index stays in DECISIONS.md.
+export const D97_MANUAL_PATHS = ["docs/DECISIONS.md", "docs/odluke/"];
 
 export const normalizePath = (p) =>
   String(p).replaceAll("\\", "/").replace(/\/{2,}/g, "/").replace(/^(?:\.?\/)+/, "");
@@ -63,8 +64,13 @@ export function isAgentControlPath(file) {
   );
 }
 
-/** A D-97 path by path: one of D97_PATHS or an agent control path. */
-export const isD97Path = (file) => matchesPath(file, D97_PATHS) || isAgentControlPath(file);
+// F-174: pnpm runs the root pnpmfile as code on every install (CI and every
+// agent worktree), so adding or changing one decides what runs everywhere.
+export const INSTALL_HOOK_PATHS = [".pnpmfile.cjs", ".pnpmfile.mjs"];
+
+/** A D-97 path by path: one of D97_PATHS, an agent control path or a pnpm install hook. */
+export const isD97Path = (file) =>
+  matchesPath(file, D97_PATHS) || isAgentControlPath(file) || matchesPath(file, INSTALL_HOOK_PATHS);
 
 /** Paths of a REST pull-request files list; a rename counts under both names. */
 export function changedPaths(files) {

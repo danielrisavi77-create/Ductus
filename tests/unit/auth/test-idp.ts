@@ -24,14 +24,50 @@ export interface Misbehaviour {
   tokenStatus?: number;
   /** Network failure on every request. */
   down?: boolean;
+  /** Edits the token endpoint's success body, e.g. drops the ID token. */
+  tokenBody?: (body: Record<string, unknown>) => Record<string, unknown>;
+  /** One endpoint path answers with this status and an error body. */
+  endpointStatus?: { path: string; status: number };
+  /** Requests to one path reject with this error, as fetch does on a failure or timeout. */
+  reject?: { path: string; error: unknown };
+  /** The authorization code outlived its lifetime: the token endpoint answers invalid_grant. */
+  codeExpired?: boolean;
+  /** Discovery names this `end_session_endpoint` (DAN-212); without it, none. */
+  endSessionEndpoint?: string;
 }
 
 interface Grant {
   nonce: string;
   challenge: string;
   redirectUri: string;
+  scopes: string[];
   used: boolean;
 }
+
+/**
+ * "fake": the local fake provider, which answers every login with string
+ * attributes. "aai": the documented shape of AAI@EduHr (Srce wiki, page
+ * 59867172), released in UserInfo only to the access token of that login and
+ * only for the scopes it asked for: each hrEdu scope gives the claim of the
+ * same name as a JSON array, and `profile` gives given_name (from givenName)
+ * and family_name (from sn) as strings, never a hrEdu attribute. What a
+ * registered client really receives is not yet verified (plan #1104).
+ */
+export type IdpShape = "fake" | "aai";
+
+/** An invented account; the names and the affiliation are used by the AAI shape. */
+export interface TestAccount {
+  sub: string;
+  uniqueId: string;
+  homeOrg: string;
+  givenName?: string;
+  familyName?: string;
+  /** hrEduPersonAffiliation; may hold several values, which nothing parses. */
+  affiliation?: string[];
+}
+
+/** What the AAI shape releases per scope; the values are filled in per account. */
+export const AAI_ATTRIBUTE_SCOPES = ["hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"] as const;
 
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
@@ -45,13 +81,17 @@ function rsaKey(): { privateKey: KeyObject; jwk: Record<string, unknown> } {
  * token and the callback; its endpoints stay under ISSUER.
  */
 export function createTestIdp(
-  account = { sub: "sub-demo-1", uniqueId: "ana@demo.ductus.test", homeOrg: "demo.ductus.test" },
+  account: TestAccount = { sub: "sub-demo-1", uniqueId: "ana@demo.ductus.test", homeOrg: "demo.ductus.test" },
   spelledIssuer: string = ISSUER,
+  shape: IdpShape = "fake",
 ) {
   const key = rsaKey();
   const foreign = rsaKey();
   const grants = new Map<string, Grant>();
+  const accessTokens = new Map<string, Grant>();
   const tokenRequests: URLSearchParams[] = [];
+  /** Path of every request the provider received, in order. */
+  const requests: string[] = [];
   const state = { next: {} as Misbehaviour, account };
 
   function idToken(grant: Grant): string {
@@ -79,6 +119,10 @@ export function createTestIdp(
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
   async function handle(url: URL, init: RequestInit): Promise<Response> {
+    requests.push(url.pathname);
+    const { endpointStatus, reject } = state.next;
+    if (reject?.path === url.pathname) throw reject.error;
+    if (endpointStatus?.path === url.pathname) return json({ error: "server_error" }, endpointStatus.status);
     switch (url.pathname) {
       case "/.well-known/openid-configuration":
         return json({
@@ -91,6 +135,7 @@ export function createTestIdp(
           subject_types_supported: ["public"],
           id_token_signing_alg_values_supported: ["RS256"],
           code_challenge_methods_supported: ["S256"],
+          ...(state.next.endSessionEndpoint === undefined ? {} : { end_session_endpoint: state.next.endSessionEndpoint }),
         });
       case "/jwks":
         return json({ keys: [{ ...key.jwk, kid: "test-kid", alg: "RS256", use: "sig" }] });
@@ -107,13 +152,17 @@ export function createTestIdp(
         if (
           !grant ||
           grant.used ||
+          state.next.codeExpired ||
           grant.redirectUri !== params.get("redirect_uri") ||
           createHash("sha256").update(verifier).digest("base64url") !== grant.challenge
         ) {
           return json({ error: "invalid_grant" }, 400);
         }
         grant.used = true;
-        return json({ access_token: "at-" + randomBytes(8).toString("hex"), token_type: "Bearer", expires_in: 300, id_token: idToken(grant) });
+        const accessToken = "at-" + randomBytes(8).toString("hex");
+        accessTokens.set(accessToken, grant);
+        const body = { access_token: accessToken, token_type: "Bearer", expires_in: 300, id_token: idToken(grant) };
+        return json(state.next.tokenBody ? state.next.tokenBody(body) : body);
       }
       case "/me": {
         if (state.next.userinfoBody) {
@@ -124,6 +173,22 @@ export function createTestIdp(
           hrEduPersonUniqueID: state.account.uniqueId,
           hrEduPersonHomeOrg: state.account.homeOrg,
         };
+        if (shape === "aai") {
+          const bearer = (new Headers(init.headers).get("authorization") ?? "").match(/^Bearer (.+)$/)?.[1];
+          const grant = bearer === undefined ? undefined : accessTokens.get(bearer);
+          if (!grant) return json({ error: "invalid_token" }, 401);
+          const values: Record<(typeof AAI_ATTRIBUTE_SCOPES)[number], string[]> = {
+            hrEduPersonUniqueID: [state.account.uniqueId],
+            hrEduPersonHomeOrg: [state.account.homeOrg],
+            hrEduPersonAffiliation: state.account.affiliation ?? ["student"],
+          };
+          body = { sub: state.account.sub };
+          for (const scope of AAI_ATTRIBUTE_SCOPES) if (grant.scopes.includes(scope)) body[scope] = values[scope];
+          if (grant.scopes.includes("profile")) {
+            if (state.account.givenName !== undefined) body.given_name = state.account.givenName;
+            if (state.account.familyName !== undefined) body.family_name = state.account.familyName;
+          }
+        }
         if (state.next.userinfo) body = state.next.userinfo(body);
         return json(body);
       }
@@ -135,6 +200,7 @@ export function createTestIdp(
   return {
     state,
     tokenRequests,
+    requests,
     fetch: (async (input: string | URL | Request, init: RequestInit = {}) => {
       if (state.next.down) throw new TypeError("fetch failed");
       return handle(new URL(String(input instanceof Request ? input.url : input)), init);
@@ -147,6 +213,7 @@ export function createTestIdp(
         nonce: p.get("nonce") ?? "",
         challenge: p.get("code_challenge") ?? "",
         redirectUri: p.get("redirect_uri") ?? "",
+        scopes: (p.get("scope") ?? "").split(" ").filter(Boolean),
         used: false,
       });
       const callback = new URL(callbackBase);

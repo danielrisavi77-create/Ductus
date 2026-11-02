@@ -56,7 +56,14 @@ describe("S3 notice text (D-142, D-143)", () => {
 
   it("names the input mark the mentor sees (D-54, D-127, F-171)", () => {
     expect(s.recorded.live).toContain("bilježit će se i način unosa");
-    expect(s.recorded.live).toContain("nastavnik (mentor) vidjeti oznaku kad tekst nije unesen tipkovnicom ni lijepljenjem");
+    expect(s.recorded.live).toContain("nastavnik (mentor) vidjeti oznaku kad uređivač uz unos nije vidio pritisak tipke ni lijepljenje");
+  });
+
+  it("describes the mark as what the editor saw, never as who typed or how (F-177)", () => {
+    // A phone keyboard or an IME also leaves the mark, and a program can press keys without one.
+    expect(s.recorded.live).toContain("nekih tipkovnica na mobitelu");
+    expect(s.recorded.live).toContain("ne tko ga je napisao");
+    for (const text of notice()) expect(text).not.toMatch(/nije unesen tipkovnicom|nije utipkan/);
   });
 
   it("tells the student the mentor sees the work live, deleted text included", () => {

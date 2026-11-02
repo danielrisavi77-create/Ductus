@@ -15,6 +15,11 @@ INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-00000000000b', 'test-b', 'b.example'),
   ('00000000-0000-4000-8000-00000000000c', 'test-c', NULL),
   ('00000000-0000-4000-8000-00000000000d', 'test-k', 'k.example');
+-- Every fixture institution takes the common issuer (023 tests the issuer
+-- rule itself); test-a also takes a second one, for section 4.
+INSERT INTO identity.institution_issuer (institution_id, oidc_issuer)
+SELECT i.id, 'https://issuer.test' FROM identity.institution i WHERE i.slug IN ('test-a', 'test-b', 'test-c', 'test-k')
+UNION ALL SELECT '00000000-0000-4000-8000-00000000000a', 'https://other-issuer.test';
 
 -- Token hashes stand in for sha256(token); the function never sees a token.
 CREATE FUNCTION pg_temp.h(p_name text) RETURNS bytea
@@ -22,7 +27,8 @@ LANGUAGE sql IMMUTABLE AS $$ SELECT sha256(convert_to(p_name, 'UTF8')) $$;
 CREATE FUNCTION pg_temp.open(p_issuer text, p_subject text, p_unique_id text, p_home_org text, p_hash bytea)
 RETURNS text LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM identity.open_session(p_issuer, p_subject, p_unique_id, p_home_org, p_hash);
+  -- DAN-304: ductus_auth reaches only the eight-argument form (024).
+  PERFORM identity.open_session(p_issuer, p_subject, p_unique_id, p_home_org, p_hash, NULL, NULL, false);
   RETURN 'ok';
 EXCEPTION WHEN OTHERS THEN
   RETURN SQLSTATE || ': ' || SQLERRM;
@@ -58,16 +64,17 @@ SELECT is(pg_get_userbyid(p.proowner), 'ductus_identity', 'open_session belongs 
 FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea)'::regprocedure;
 SELECT is(p.proconfig, ARRAY['search_path=""'], 'open_session runs with an empty search_path')
 FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea)'::regprocedure;
-SELECT ok(has_function_privilege('ductus_auth', 'identity.open_session(text, text, text, text, bytea)', 'EXECUTE'),
-  'ductus_auth may execute open_session');
+-- DAN-304 (#1181, item 13): the login role opens a session only through the
+-- eight-argument form, which also writes the teacher right (024).
+SELECT ok(NOT has_function_privilege('ductus_auth', 'identity.open_session(text, text, text, text, bytea)', 'EXECUTE'),
+  'ductus_auth may no longer execute the five-argument open_session');
 SELECT is_empty(
   $$ SELECT r.rolname FROM (SELECT rolname::text FROM pg_roles
                             WHERE rolname LIKE 'ductus\_%'
-                              -- ductus_auth_local inherits ductus_auth and nothing else (010).
-                              AND rolname NOT IN ('ductus_auth', 'ductus_identity', 'ductus_auth_local')
+                              AND rolname <> 'ductus_identity'
                             UNION ALL SELECT 'public') AS r (rolname)
      WHERE has_function_privilege(r.rolname, 'identity.open_session(text, text, text, text, bytea)', 'EXECUTE') $$,
-  'no role but ductus_auth, its local login and the owner, nor PUBLIC, may execute open_session'
+  'no role but the owner, nor PUBLIC, may execute the five-argument open_session'
 );
 SET LOCAL ROLE ductus_app;
 SELECT throws_ok(
@@ -84,7 +91,7 @@ SELECT throws_ok('SELECT * FROM app.current_actor()', '42501', NULL, 'ductus_aut
 SELECT throws_ok('SELECT identity.close_current_session()', '42501', NULL, 'ductus_auth: close_current_session() is denied');
 
 SELECT is(
-  identity.open_session('https://issuer.test', 'sub-ana', 'ana@a.example', 'a.example', pg_temp.h(repeat('A', 43))),
+  identity.open_session('https://issuer.test', 'sub-ana', 'ana@a.example', 'a.example', pg_temp.h(repeat('A', 43)), NULL, NULL, false),
   now() + interval '12 hours', 'first login opens a session that ends in 12 hours'
 );
 RESET ROLE;

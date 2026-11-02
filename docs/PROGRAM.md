@@ -1,8 +1,8 @@
 # Ductus: program rada
 
-Verzija 0.3 · 30. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.4 · 1. 11. 2026. · Odgovorna osoba: Daniel Rišavi
 
-**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
+**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Novi raspored je D-199 t. 6 (ODLUČENO 1. 11. 2026.): kod vala 1 spreman 22. 2. 2027., pilot 1. 3. 2027.; datumi u odjeljcima ispod koji su stariji od te odluke ostaju povijesni zapis. D-203 (ODLUČENO 1. 11. 2026., E3) mijenja datum pilota: nakon koda spremnog 22. 2. 2027. slijedi puna tehnička proba od oko četiri tjedna, a nastavna aktivacija dolazi tek nakon uspješnog prihvata i suglasnosti FPZG-a, oko 22. 3. 2027. ili poslije. Datum 1. 3. 2027. ostaje kao trag prethodnog cilja. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
 
 Faze idu redom po ovisnostima. Faza je gotova tek kad je njezin izlazni kriterij dokazan testom ili zapisom, ne kad je kod napisan. Procjene su u večerima rada (oko 3 sata) jedne osobe uz AI agente i služe samo za planiranje.
 
@@ -13,6 +13,7 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 - Ljetni semestar 2026./2027.: prema okvirnom kalendaru Sveučilišta u Zagrebu nastava počinje 22. 3. 2027. FPZG ima vlastiti kalendar; točan datum potvrditi s fakultetom.
 - Tehnička proba (faza A) traje oko 4 tjedna prije početka nastave, pa kod za prvi val mora biti spreman **oko 22. 2. 2027.**
 - Od 3. 10. 2026. do 22. 2. 2027. ima oko 20 tjedana.
+- **D-203 E3:** 22. 2. 2027. ostaje cilj spremnosti koda vala 1. Puna tehnička proba se ne skraćuje radi datuma, a nastavna aktivacija čeka uspješan prihvat i suglasnost FPZG-a.
 
 ## Faze
 
@@ -21,14 +22,14 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 | Faza | Sadržaj | Izlazni kriterij | Procjena |
 | --- | --- | --- | --- |
 | **M0 Temelj** | Prijenos jezgre iz `pisac-editor` s testovima; CI (lint, typecheck, unit, property, E2E, axe, Gitleaks, zizmor, Semgrep, OSV); lefthook; `docker compose` okruženje (Postgres, S3-kompatibilna pohrana, Mailpit, lažni OIDC; MinIO više nema sliku, lokalno RustFS) u CI-ju; kod iza sučelja dok dio D-08 o dobavljačima i trošku nije potvrđen | Svi preneseni testovi zeleni; za svaki neprenesen izvorni test zapisan Ductus test koji ga pokriva, a nepokriveno vraćeno kao test (odluka vlasnika 31. 10. 2026., #87 c.6547174354); CI zelen na `main` | 2 do 3 |
-| **M1 AAI spike** | Prijava preko AAI@EduHr Laba kroz vlastiti OIDC klijent (D-73); provjera da nema spajanja računa po e-pošti i mapiranja hrEdu atributa; lažni pružatelj za CI; prije prvih stvarnih računa model računa za drugog izdavatelja identiteta (D-104, `critical`, uz plan napada; D-09 nepromijenjen) | Prijava na Labu radi; `app_user` vezan uz `hrEduPersonUniqueID`; test dokazuje da lažni pružatelj ne postoji u produkciji; model računa nije tvrdo vezan uz jedan izdavatelj (D-104) | 1 do 2 |
+| **M1 AAI spike** | Prijava preko AAI@EduHr Laba kroz vlastiti OIDC klijent (D-73); provjera da nema spajanja računa po e-pošti i mapiranja hrEdu atributa; lažni pružatelj za CI; prije prvih stvarnih računa model računa za drugog izdavatelja identiteta (D-104, `critical`, uz plan napada; D-09 nepromijenjen) | **Tehnički M1** (D-203 t. 4): spojeni koraci M1.3 do M1.8; `app_user` vezan uz `hrEduPersonUniqueID`; test dokazuje da lažni pružatelj ne postoji u produkciji; model računa nije tvrdo vezan uz jedan izdavatelj (D-104). **Prije stvarne uporabe:** prijava na Labu radi (M1.1, M1.2), uz staging M11.4 i GO uvjete. Lažni OIDC i CI nisu dokaz stvarnog AAI toka (D-203 D1) | 1 do 2 |
 | **M2 Model fakulteta** | Fakultet, kolegij, članstvo, zadatak i verzije zadatka, potvrda obavijesti, mentorstvo, uloge, pravilo AI-ja kolegija (D-52), oznaka prilagodbe (D-50); upis kodom; pgTAP matrica pristupa | Matrica pristupa zelena za sve kombinacije uloga, uključujući mentora | 4 do 5 |
 | **M3 Evidencija** | Sažimanje transakcija u odsječke s autorom, ruta `ingest`, hash lanac, kontrolne točke, praznine, offline oznaka, oznaka lijepljenja (D-43), vrsta dokaza (D-44), spike programskog unosa (D-54); journal vezan uz korisnika i brisanje sinkroniziranog zapisa pri odjavi (D-118) | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; idempotentno ponovno slanje; oporavak prekida između Storagea, RPC-a i potpisa; izmjereno CPU vrijeme rekonstrukcije doktorskog rada | 7 do 9 |
 | **M4 Lekta paket** | U Lekti: generirani paket pravila po uzoru na `katedra-pack` (FPZG profili, pravila oblika, citatni stilovi, predlošci naslovne stranice). U Ductusu: učitavanje profila i provjera oblika nad dokumentom editora | FPZG profili učitani iz paketa s verzijom; test zanošenja (drift) u Lekti; provjera oblika javlja odstupanja na testnim radovima | 8 do 12 |
 | **M5 Akademski editor** | Numerirani naslovi, sadržaj, naslovna stranica i izjava, fusnote, tablice, slike s opisima, popisi tablica i slika, citiranje u tekstu, bibliografija u stilu fakulteta; provjera postojanja DOI-ja i URL-a (D-48, val 2); opseg po poglavlju (D-60), bilježnica izvora (D-59, uvoz iz Zotera u valu 2), poziv na prikaze, hrvatski navodnici, traži i zamijeni, fokus | Testni rad od 15.000 riječi sa svim elementima uređuje se bez gubitka; citati i bibliografija usklađeni; napredak studenta iz verzija (D-63) | 19 do 26 |
 | **M6 Suradnja** | Nastavnički pogled na spremljeno stanje (polling, D-74), komentari vezani uz odlomak, prijedlozi izmjena, izravne izmjene s pripisivanjem, pravilo D-34; val 2: zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), konzultacije (D-47) | Komentar i prijedlog stižu studentu bez osvježavanja; svaka izmjena nastavnika pripisana u evidenciji; nema izgubljenih promjena kad oboje rade; izmjena prihvaćenog odlomka ponovno otvara pregled | 17 do 24 |
 | **M7 Predaja i sažetak** | Obavijest (S3), ciklusi verzija, pregled prije predaje, zamrzavanje, rekonstrukcija, potvrda, sažetak procesa, usporedba verzija, produljenje roka, izjava po FPZG čl. 9 i 15 (D-40); val 2: prenosiv zapis s QR provjerom (D-49) | Rekonstrukcija podudarna na svim scenarijima, uključujući prazninu; nepodudarnost blokira predaju; student i nastavnik vide isti sažetak; nema zabranjenih riječi; rok testiran preko promjene sata; izjava sadrži sve zabilježene stavke; karta podrijetla bez zbroja (D-57); otvorena mjesta (D-61) i pravila zadatka s kontrolnim popisom (D-62) bez oznaka prolaza | 15 do 20 |
-| **M8 Uvoz i izvoz** | Uvoz DOCX-a i PDF-a kao označen događaj; izvoz DOCX-a i PDF-a u obliku fakulteta | Uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil | 6 do 8 |
+| **M8 Uvoz i izvoz** | Uvoz DOCX-a i PDF-a kao označen događaj; izvoz DOCX-a, PDF-a i PDF/A u obliku fakulteta (izvoz u valu 1, D-203 A3) | Uvoz označen u evidenciji; izvoz DOCX, PDF i PDF/A prihvaćen prije nastavnog pilota; PDF/A-2u prolazi provjeru veraPDF-om (`isCompliant="true"`), a obični PDF nije označen kao PDF/A (D-206, D-203 A3); izvezeni DOCX prolazi Lektinu provjeru za FPZG profil kad stigne licenca Lekte, a do tada izvoz radi bez provjere oblika (D-203 t. 2) | 6 do 8; PDF/A nije procijenjen |
 | **M9 AI pomoćnik** (u pilotu, D-194; mijenja D-77) | Pristup pomoćniku preko računa kod pružatelja (model računa i pružatelj su otvoreni, D-194 t. 6 i 7), popis dopuštenih pružatelja po fakultetu i zadatku bez kineskih pružatelja i modela (D-194 t. 2), sve namjene iz D-64 uključujući transkripciju i alate pružatelja (D-194 t. 4), prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42), razgovori uz izjavu (D-41), zaštita sadržaja pri lekturi (D-46), poznato podrijetlo i podudaranje s AI odgovorom (D-58) | Nedopušten pružatelj nije dostupan; svako prenošenje u evidenciji; nepriloženi razgovori nisu vidljivi nastavniku; promijenjena brojka ili citat prikazani prije primjene; prepisan AI odgovor označen; svrhe razine 2 nedostupne dok ih nastavnik ne uključi, pomoćnik koji pita (D-64) | 14 do 19 |
 | **M10 Podaci** | Klase podataka, brisanje po roku, izvoz za studenta i za bivšeg studenta preko administratora | Brisanje po roku testirano; lanac ostaje provjerljiv nakon brisanja sadržaja | 3 |
 | **M11 GO uvjeti** | Produkcijski okoliš u EU-u (D-08), staging s AAI@EduHr Labom, proba povrata iz kopije, DPIA i ugovor o obradi, obavijest o privatnosti, pristupačnost, `docs/OPERATIONS.md` | Sve stavke iz tablice GO uvjeta zelene i zapisane | 3 + vanjski rokovi |
@@ -90,13 +91,16 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 - Val 1 prema tablici niže: 56 do 74 bez backend dodatka; s dodatkom od 18 do 25 večeri (`docs/BACKEND.md` §8) **74 do 99**.
 - Val 2 prema tablici niže: **28 do 38**.
 - Val 1 i val 2 zajedno: **102 do 137**, naspram oko 130 nominalnih večeri do 22. 2. 2027. Raniji tekst navodio je 94 do 124, a tablice bez backend dodatka davale su 84 do 112.
-- Do kontrolne točke 15. 12. 2026. ima oko 75 nominalnih večeri; val 1 bez M11 (5 do 6) traži **69 do 93**.
+- **Nakon D-203 (1. 11. 2026., NEPROVJERENO):** val 1 **84 do 113**, val 2 **19 do 28**, zajedno **103 do 141**, sve bez M9 i uz neprocijenjeni V11. Zbrojevi iznad ostaju kao zapis D-99.
+- Do kontrolne točke 15. 12. 2026. (povijesno; zamijenjena točkom 20. 12. 2026., D-203 t. 5) ima oko 75 nominalnih večeri; val 1 bez M11 (5 do 6) traži **69 do 93**.
 - Faktor prekoračenja: M0 je procijenjen na 2 do 3 večeri, a 10. 10. 2026. `STATE.md` ga i dalje vodi kao trenutnu fazu. Na svakoj kontrolnoj točki zapisuju se stvarno utrošene jedinice po fazi i iz njih se izvodi faktor prekoračenja, umjesto pretpostavljenih 40 % s kojima računa tablica kapaciteta gore.
 - **Otvoreno pitanje: sastav backend dodatka (riješiti prije provjere 16. 11. 2026.).** Dodatak od 18 do 25 večeri nije razložen po koracima ni po fazama. Retci s procjenom u `docs/BACKEND.md` §8 zajedno daju 26 do 39 večeri. Među njima je B5 (4 do 5), koji ima i vlastiti redak u valu 2, i B9 (3 do 4), koji pripada M11. Ako dodatak sadrži B5, zbroj 102 do 137 broji ga dvaput; ako sadrži B9, "val 1 bez M11" (69 do 93) sadrži dio M11. Brojke 74 do 99, 102 do 137 i 69 do 93 prihvaćene su u D-99 i ovdje se ne mijenjaju, ali ovise o ovom pitanju.
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
-Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tražiti, D-38); u koji val pilota ulazi M9 (D-194) odlučuje novi raspored prema datumu pilota 1. 3. 2027. Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+Radovi: podnesci i eseji. AI pomoćnik M9 ulazi u ovaj val (D-199 t. 1, zamjenjuje raniju rečenicu „Bez AI pomoćnika u ovom valu”), ali ga zadatak i dalje ne smije tražiti (D-38). M9 nije u tablici ni u zbroju ispod; raspored koji ga uklapa do 1. 3. 2027. je D-199 t. 6 (ODLUČENO, D-191 t. 2). Dio M8 iz D-198 t. 1 (čitanje verzija iz clouda) prema tom rasporedu seli iz vala 2 u val 1; dodaci za Word i Google Docs idu u sljedeći val (D-198 t. 2). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+
+Prema D-203 (ODLUČENO 1. 11. 2026.) val 1 dobiva i: izvoz DOCX, PDF i PDF/A (A3); cijeli tok nastavničkih izmjena po D-34, bez novog modela istodobnog uređivanja (B1); puni B5 prije nastavnog pilota (C2); shemu v2 (DAN-453) i funkcije V11 koje pripadaju fazama vala 1: osnovni editor, komentari, D-34 i izvoz (D-201, D-203 t. 6). Ostale funkcije V11 idu u val 2 i 3 prema fazama M5 do M9. M2 napreduje uz sintetičke identitete, a stvarni AAI ostaje kriterij prije stvarne uporabe (D1). Retci D-203 su ispod zbroja D-99.
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
@@ -106,26 +110,31 @@ Radovi: podnesci i eseji. Bez AI pomoćnika u ovom valu (zadatak ga ne smije tra
 | M4 osnovno | Lekta paket: FPZG citatni stil, opseg, naslovna stranica | 4 do 6 |
 | M5 osnovno | Naslovi, citiranje, bibliografija, DOI i ISBN (S-08), opseg po poglavlju (D-60), pravopis po jeziku rada (S-07), navodnici, traži i zamijeni, osnovna bilježnica izvora (D-59) | 9 do 12 |
 | M6 osnovno | Pogled na rad u nastajanju, komentari, prijedlozi | 6 do 8 |
-| M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 bez AI dijela, produljenje roka | 8 do 10 |
+| M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 s AI dijelom (D-199 t. 1), produljenje roka | 8 do 10 |
 | M10 osnovno | Klase podataka, brisanje po roku, pravno zadržavanje (F-02) | 2 do 3 |
 | M11 | GO uvjeti, sučelje na engleskom (D-70), pristupačnost (F-03), statusna stranica (F-10) | 5 do 6 |
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
 | Backend dodatak | Okomiti rez kroz faze vala 1 prema `docs/BACKEND.md` §8 (D-99) | 18 do 25 |
 | **Ukupno** | | **74 do 99** |
+| M6 nastavničke izmjene (D-203 B1) | Prijedlog koji primjenjuje studentov klijent, jedan pisac (D-34): ovlasti, pripisivanje, povijest, prikaz, scenariji sukoba i neuspjeha; dijelom se preklapa s „prijedlozima” u retku M6 osnovno | 3 do 4, NEPROVJERENO |
+| M8 izvoz (D-203 A3) | Izvoz DOCX, PDF i PDF/A; provjera oblika FPZG-a kad stigne licenca Lekte (t. 2) | 3 do 5, NEPROVJERENO |
+| B5 (D-203 C2) | Dnevni korijen i žig, CLI verifikator (D-72), seli iz vala 2 | 4 do 5 |
+| Shema v2 i V11 vala 1 (D-201, D-203 t. 6) | Proširenje kanonske sheme (DAN-453) i funkcije V11 za osnovni editor, komentare, D-34 i izvoz | nije procijenjeno |
+| **Ukupno s D-203** | Bez M9, dijela M8 iz D-198 i AI dijela izjave (D-199 t. 6) | **84 do 113** uz neprocijenjeni V11 |
 
 ### Val 2: proširenje seminarskih radova (cilj: početak semestra; najkasnije sredina svibnja 2027.)
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
 | M5 ostatak | Fusnote, tablice, slike, pozivi na prikaze | 5 do 7 |
-| M6 ostatak | Izravne izmjene (D-21), zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | 8 do 11 |
+| M6 ostatak | Zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05); izravne izmjene (D-21) po toku D-34 sele u val 1 (D-203 B1) | 5 do 8, NEPROVJERENO (prije D-203: 8 do 11) |
 | M7 ostatak | Karta podrijetla (D-57), otvorena mjesta (D-61), pravila zadatka i kontrolni popis (D-62) | 5 do 7 |
-| M8 | Uvoz i izvoz DOCX-a | 4 do 5 |
+| M8 | Uvoz DOCX-a; izvoz seli u val 1 (D-203 A3) | 2 do 3, NEPROVJERENO |
 | Izjava o vanjskom AI-ju | Ispis razgovora iz vanjskog alata uz izjavu po čl. 15, kao izjavljeno (D-77) | 2 do 3 |
-| B5 | Dnevni korijen i žig, CLI verifikator (D-72) | 4 do 5 |
-| **Ukupno** | | **28 do 38** |
+| B5 | Seli u val 1 (D-203 C2) | 0 |
+| **Ukupno** | | **19 do 28** (prije D-203: 28 do 38) |
 
-Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad.
+Izvan pilota (3. 10. 2026.): grupni radovi S-12 (D-78). Ugrađeni AI pomoćnik M9 ušao je u pilot 31. 10. 2026. (D-194, mijenja D-77); procjena tjedana za M9 u tablici faza gore nije uključena u zbroj iznad. M9 ide u val 1 (D-199 t. 1), pa zbroj vala 1 i oba vala zajedno bez M9 podcjenjuje potreban rad.
 
 Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se pomiče prema kraju semestra; ne skraćuje se val 1.
 
@@ -136,9 +145,22 @@ Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju 
 ### Ovisnosti koje se ne smiju propustiti
 
 - **Ritam za reprodukciju (D-56)** postoji samo ako se bilježi od prvog dana pisanja. Ako izmjena Ustava C-14 i C-19 i pravno mišljenje nisu gotovi prije početka pisanja završnih radova, ti radovi imat će reprodukciju samo po odsječcima, bez ritma.
-- **M1** ovisi o pristupu AAI@EduHr Labu (Srce).
+- **M1** ovisi o pristupu AAI@EduHr Labu (Srce) samo u dijelu prijave na Labu (M1.1, M1.2), koji je uvjet prije stvarne uporabe. Tehnički M1 zatvara se koracima M1.3 do M1.8 (D-203 t. 4).
+
+### Kontrolna točka 20. 12. 2026. [ODLUČENO D-203]
+
+Zamjenjuje kontrolnu točku 15. 12. 2026. (D-203 t. 5). Kontrolne točke 30. 11. 2026. i 15. 1. 2027. iz D-199 t. 6 ostaju.
+
+- **Mjeri se osnovica M3 (C2):** spremanje, worker, potpisane potvrde, rekonstrukcija i oporavak, svaki dokazan uvjetom iz `docs/PROGRAM-RAZRADA.md`, ne spojenim PR-om. Osnovica ne zatvara M3. Puni B5 i ostali kriteriji M3 prihvaćaju se prije nastavnog pilota.
+- **Uspoređuje se** preostali opseg vala 1 s preostalim tjednima do 22. 2. 2027., kao u D-199 t. 6.
+- **Ako ne stane, ništa se ne reže samo.** Orkestrator vlasniku predaje 2 do 3 varijante, a vlasnik bira (D-203 t. 1). Isto vrijedi na kontrolnim točkama 30. 11. 2026. i 15. 1. 2027. Rezovi iz popisa niže mogući su sadržaj varijante, ne okidač. Rez 1 (prijedlozi u val 2) proturječi B1, pa varijanta koja ga sadrži mora izričito navesti da mijenja B1.
+- Puna tehnička proba nakon 22. 2. 2027. ne skraćuje se radi datuma (E3).
+
+**Kapacitet nakon D-203, NEPROVJERENO.** D-199 t. 6 računa val 1 s M9, dijelom M8 iz D-198 i AI dijelom izjave na oko 93 do 126 nominalnih jedinica. D-203 dodaje B5 (4 do 5), izvoz M8 (3 do 5) i nastavničke izmjene po D-34 (3 do 4), dakle oko **103 do 140**, uz neprocijenjenu shemu v2 i funkcije V11 vala 1. Stari model (10 jedinica tjedno, 14 radnih tjedana od 2. 11. 2026. do 22. 2. 2027., prekoračenje 40 %) daje oko 100. Opseg ne stane ni na donjoj granici. Ako backend dodatak već sadrži B5 (otvoreno pitanje iz „Provjera zbroja”), raspon je oko 99 do 135, što uz neprocijenjeni V11 također ne stane. Isto vrijedi ako je redak D-34 potpuno sadržan u „prijedlozima” iz M6 osnovno: tada je raspon oko 100 do 136. Stvarna brzina rada agenata još nije izmjerena (D-199 t. 6). Opseg se ne reže; vlasnik bira varijantu (D-203 t. 1), a prve varijante su u opisu PR-a koji je upisao D-203.
 
 ### Kontrolna točka 15. 12. 2026.
+
+**Povijesni zapis.** Zamijenjena kontrolnom točkom 20. 12. 2026. (D-203 t. 5). Okidač rezova iz D-100 izmijenjen je D-203 t. 1, a izravne izmjene po D-34 ulaze u val 1 (D-203 B1).
 
 Uz puno radno vrijeme do tada mora biti gotov cijeli val 1 osim M11 (69 do 93 nominalne večeri s backend dodatkom, naspram oko 75 raspoloživih do tog datuma; D-99). Ako nije, val 2 se vraća na cilj sredine svibnja.
 
