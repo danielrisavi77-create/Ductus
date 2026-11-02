@@ -257,6 +257,36 @@ test("a teacher adds a second assignment to an existing course from the course l
   await expect(page.getByText(courseName)).toHaveCount(0);
 });
 
+// DAN-310 (QA on #1275): the assignment takes the policy of the course it joins,
+// handed over through `existingCourse`, not the course form's default.
+test("an assignment in an existing course that prohibits AI help is sent as prohibited", async ({ page }) => {
+  const e = messagesHr.teacher.existingCourse;
+  const c = messagesHr.teacher.course;
+  await asTeacher(page);
+  const courseName = `Izmišljeni zabranjeni kolegij ${Date.now().toString(36)}`;
+  await page.goto("/nastavnik/zadatak/novi");
+  await page.getByLabel(c.name).fill(courseName);
+  await page.getByLabel(c.policy).selectOption("prohibited");
+  await fillCodeDeadline(page);
+  await page.getByRole("button", { name: c.submit }).click();
+  await expect(page.getByRole("status").filter({ hasText: c.created })).toBeVisible();
+
+  await page.goto("/nastavnik");
+  await page.getByRole("region", { name: courseName }).getByRole("link", { name: e.link }).click();
+  await expect(page.getByRole("heading", { level: 1, name: e.title })).toBeVisible();
+  await expect(page.getByText(messagesHr.teacher.tools.courseProhibits)).toBeVisible();
+  for (const purpose of Object.values(messagesHr.teacher.tools.purposes)) {
+    const box = page.getByRole("checkbox", { name: purpose });
+    await expect(box).toBeDisabled();
+    await expect(box).not.toBeChecked();
+  }
+
+  const request = page.waitForRequest((r) => r.method() === "POST" && /\/api\/institution\/courses\/[0-9a-f-]{36}\/assignments$/.test(r.url()));
+  await publishAssignment(page, "Izmišljeni zadatak bez AI pomoći");
+  const body: unknown = (await request).postDataJSON();
+  expect(body).toMatchObject({ aiPolicy: "prohibited", aiPurposes: [] });
+});
+
 // DAN-310, T001 to T004 for the new entry: no session, no teacher role and a
 // course outside the teacher's own read never show a course or a publish button.
 test("a course id the account cannot read shows neither a course nor a publish button", async ({ page }) => {
