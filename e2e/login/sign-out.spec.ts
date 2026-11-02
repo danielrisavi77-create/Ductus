@@ -1,9 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
-  appCookie, clickSignOut, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+  appCookie, clickSignOut, editorMounted, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
 
 // F-5 (DAN-34, plan #376): the writing page of a signed-in person and the
@@ -178,6 +178,86 @@ test("row 3: with nothing held, the sign-out without the server opens the dialog
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
 });
 
+// #1444 (review c.6588776166, QA c.6588844375): another person signs in in a
+// second tab while the sign-out still waits for the route, before anything
+// is recorded. Only the session the request carried ends; the newer one stays.
+test("Istodobnost: a sign-in in another tab while the sign-out waits keeps the newer session signed in", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  const tokenA = (await appCookie(context, SESSION_COOKIE))!.value;
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  let held: Route | undefined;
+  await page.route("**/api/auth/logout", (route) => { held = route; });
+
+  // Nothing is held, so "Odjava" posts at once (O1); the request now waits.
+  await logoutOf(page).click();
+  await expect.poll(() => held !== undefined).toBe(true);
+
+  await forgetProviderLogin(context);
+  const second = await context.newPage();
+  await signIn(second, "/rad", "Demo student 2");
+  const tokenB = (await appCookie(context, SESSION_COOKIE))!.value;
+  expect(tokenB).not.toBe(tokenA);
+  await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
+
+  const logouts: string[] = [];
+  context.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/logout") logouts.push(request.url());
+  });
+  // A's request never gets its answer.
+  await held!.abort("timedout");
+  await expect(logoutDialogOf(page).getByRole("alert")).toHaveText(t.auth.logoutDevice);
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+
+  // The route is reachable again, and a page of the first tab loads: a record
+  // of A's sign-out would be completed here, under B's cookie.
+  await page.unroute("**/api/auth/logout");
+  await page.goto("/rad");
+  await editorMounted(page);
+  await second.reload();
+  await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
+  expect(logouts).toEqual([]);
+  await expectStillSignedIn(second, tokenB);
+  expect(await page.evaluate(() => localStorage.getItem("ductus-logout-pending"))).toBeNull();
+});
+
+// #1444 (review c.6588776166): the sign-out ended on this device, the server
+// refused it and the cookie stays. "Prijavi se" is a new sign-in through the
+// login route, back to the same page, never a loop through /prijava.
+test("after a sign-out the server refused, Prijavi se signs in anew and comes back to the page", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await writeAndWait(page, " Nacrt B: zelena olovka");
+  await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503, body: "" }));
+
+  const dialog = logoutDialogOf(page);
+  await clickSignOut(page);
+  await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice);
+  await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expectStillSignedIn(page, token);
+
+  // Still 503, still the old cookie: the click leads to the provider.
+  await forgetProviderLogin(context);
+  const logins: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/login") logins.push(request.url());
+  });
+  await noticeOf(page).getByRole("link", { name: t.auth.signInAgain }).click();
+  await expect(page).toHaveURL(/^http:\/\/localhost:8090\/interaction\//);
+  expect(logins).toEqual(["http://localhost:3000/api/auth/login?returnTo=%2Frad"]);
+  await page.getByRole("button", { name: "Demo studentica" }).click();
+  await page.waitForURL("http://localhost:3000/rad");
+
+  // A new session; the one whose sign-out the server refused is closed by it.
+  const renewed = (await appCookie(context, SESSION_COOKIE))!.value;
+  expect(renewed).not.toBe(token);
+  expect(await sessionRow(renewed)).toMatchObject({ closed_at: null });
+  expect((await sessionRow(token))?.closed_at).not.toBeNull();
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await expect(editorOf(page)).toContainText("Nacrt B: zelena olovka");
+  await expect(noticeOf(page).getByRole("link", { name: t.auth.signInAgain })).toHaveCount(0);
+});
+
 // D-183 (#1330, #1336): the dialog of a sign-out that ended on this device and
 // the sheet after it, full page, in both themes at 1440 and 400 px. No new
 // visual element: the existing dialog and notice (prijava-v5 Z-03).
@@ -229,7 +309,7 @@ test("sign-out from a second tab ends the session and empties the writing tab", 
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
   await expect(noticeOf(page)).toContainText(t.auth.signedOutElsewhere);
   // #1336: the way back is a new sign-in, never this tab's text.
-  await expect(noticeOf(page).getByRole("link", { name: t.auth.signInAgain })).toHaveAttribute("href", "/prijava");
+  await expect(noticeOf(page).getByRole("link", { name: t.auth.signInAgain })).toHaveAttribute("href", "/api/auth/login?returnTo=%2F");
   await expect(editorOf(page)).toHaveText("");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
   await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);

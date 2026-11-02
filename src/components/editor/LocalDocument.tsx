@@ -59,6 +59,7 @@ import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { endSignOut, followLogoutNatively, postLogout, resumePendingLogout } from "@/client/pending-logout";
+import { signInHref, signInTarget, SIGN_IN_DEFAULT_TARGET } from "@/components/auth/sign-in-link";
 import {
   editorSignOutPlan, planAfterDiscard, readLogoutHold, untilLoaded, withinHoldLimit, type HoldRead,
 } from "@/client/logout-hold";
@@ -728,18 +729,20 @@ export function LocalEditor() {
 }
 
 /**
- * The way back for a tab whose session has ended (#1336). Through the sign-in
- * screen, which marks the session first: a sign-out still waiting for the
- * server is completed there before anyone signs in (#1330). Back to this page
- * afterwards; the address is read on click, so the server renders the same.
+ * The way back for a tab whose session has ended (#1336): a new sign-in
+ * through the login route (AAI@EduHr, D-09), back to this page. Not through
+ * /prijava: after a sign-out the server never got, the cookie is still there
+ * and /prijava would forward straight back here (#1444). The new sign-in
+ * closes the session of that cookie on the server. The address is read on
+ * click, so the server renders the same.
  */
 function SignInAgain() {
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.currentTarget.href = `/prijava?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    event.currentTarget.href = signInHref(signInTarget(window.location.pathname + window.location.search));
   };
   return (
     <p>
-      <a className="btn" href="/prijava" onClick={onClick}>{t.auth.signInAgain}</a>
+      <a className="btn" href={signInHref(SIGN_IN_DEFAULT_TARGET)} onClick={onClick}>{t.auth.signInAgain}</a>
     </p>
   );
 }
