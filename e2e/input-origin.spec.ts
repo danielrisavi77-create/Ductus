@@ -36,7 +36,7 @@ test.describe("input origin (D-54)", () => {
     await openSourceHarness(page);
   });
 
-  // The record of the spike (docs/spikes/D-54.md): per engine, which input
+  // The record of the spike (docs/spikes/M3.5-P01.md): per engine, which input
   // kinds arrived, with their trust, and which sources were recorded.
   test.afterEach(async ({ page }, testInfo) => {
     const record = await page.evaluate(() => ({ signals: window.__source!.signals(), sources: window.__source!.sources() }));
