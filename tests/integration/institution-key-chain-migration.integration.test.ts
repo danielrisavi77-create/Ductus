@@ -86,8 +86,9 @@ type Ids = Awaited<ReturnType<typeof oldRows>>;
  * Old rows, written as the compose superuser past every function, as the
  * schema before the chain allowed them: fak-a has K1 with Z1 (two versions)
  * and a revoked and an active code, fak-b has K3 with Z3 and one code; the
- * revocation left an audit event of fak-a. A student of fak-a acknowledged
- * the notice of both versions of Z1, a student of fak-b that of Z3.
+ * revocation left an audit event of fak-a. Of the students of fak-a, A1
+ * acknowledged the notice of version 1 of Z1 and A2 that of version 2 (the
+ * current one); student B of fak-b acknowledged that of Z3.
  */
 async function oldRows(client: pg.Client) {
   const ids = {
@@ -96,6 +97,7 @@ async function oldRows(client: pg.Client) {
     teacherA: randomUUID(),
     teacherB: randomUUID(),
     studentA: randomUUID(),
+    studentA2: randomUUID(),
     studentB: randomUUID(),
     courseA: randomUUID(),
     courseB: randomUUID(),
@@ -113,6 +115,7 @@ async function oldRows(client: pg.Client) {
     [ids.teacherA, ids.facultyA, "nastavnik-a"],
     [ids.teacherB, ids.facultyB, "nastavnik-b"],
     [ids.studentA, ids.facultyA, "student-a"],
+    [ids.studentA2, ids.facultyA, "student-a2"],
     [ids.studentB, ids.facultyB, "student-b"],
   ]) {
     await client.query(
@@ -134,7 +137,7 @@ async function oldRows(client: pg.Client) {
   await code(client, ids.codeB, ids.courseB, ids.teacherB, true);
   await codeEvent(client, ids.facultyA, ids.courseA, ids.oldCodeA, ids.teacherA);
   await acknowledgment(client, ids.assignmentA, 1, ids.studentA, ids.facultyA);
-  await acknowledgment(client, ids.assignmentA, 2, ids.studentA, ids.facultyA);
+  await acknowledgment(client, ids.assignmentA, 2, ids.studentA2, ids.facultyA);
   await acknowledgment(client, ids.assignmentB, 1, ids.studentB, ids.facultyB);
   return ids;
 }
@@ -200,10 +203,12 @@ const ACKS_OFF_KEY = `
   SELECT n.* FROM institution.notice_acknowledgment n
   JOIN institution.assignment_version v USING (assignment_id, version_no)
   WHERE n.institution_id IS DISTINCT FROM v.institution_id`;
-// Acknowledgments that still reach their version under the full key the chain adds.
+// Acknowledgments that still reach their version under the full key the chain
+// adds, and whose key is also that of their assignment.
 const ACKS_ON_KEY = `
   SELECT n.* FROM institution.notice_acknowledgment n
   JOIN institution.assignment_version v USING (assignment_id, version_no, institution_id)
+  JOIN institution.assignment a ON a.id = n.assignment_id AND a.institution_id = n.institution_id
   ORDER BY assignment_id, version_no, student_id`;
 
 /** Every old acknowledgment is kept as it was and reaches its version under the full key. */
@@ -251,7 +256,14 @@ describe("the institution key chain migration over old rows", () => {
     expect(acksBefore.map((row) => [row.student_id, row.institution_id])).toEqual(
       expect.arrayContaining([
         [ids.studentA, ids.facultyA],
+        [ids.studentA2, ids.facultyA],
         [ids.studentB, ids.facultyB],
+      ]),
+    );
+    expect(acksBefore.map((row) => [row.student_id, row.version_no])).toEqual(
+      expect.arrayContaining([
+        [ids.studentA, 1],
+        [ids.studentA2, 2],
       ]),
     );
     expect(acksBefore).toHaveLength(3);
@@ -270,6 +282,15 @@ describe("the institution key chain migration over old rows", () => {
           `UPDATE institution.notice_acknowledgment SET acknowledged_at = acknowledged_at + interval '1 second'
            WHERE assignment_id = $1 AND version_no = 1`,
           [ids.assignmentA],
+        ),
+    },
+    {
+      what: "an old acknowledgment moves to another version of the same institution",
+      change: (client: pg.Client, ids: Ids) =>
+        client.query(
+          `UPDATE institution.notice_acknowledgment SET version_no = 1
+           WHERE assignment_id = $1 AND student_id = $2 AND version_no = 2`,
+          [ids.assignmentA, ids.studentA2],
         ),
     },
   ])("the acknowledgment check fails when $what after the migration", async ({ change }) => {
