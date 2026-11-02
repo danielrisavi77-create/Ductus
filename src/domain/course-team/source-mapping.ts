@@ -81,6 +81,23 @@ function hasExactKeys(value: Record<string, unknown>, allowed: readonly string[]
   return required.every((key) => Object.hasOwn(value, key));
 }
 
+/**
+ * Values of a plain array read from its own data descriptors, so no accessor
+ * runs: `Array.prototype`, no own symbols (so no own iterator), no holes and
+ * no names other than `length` and the indices. Otherwise null.
+ */
+function plainArrayValues(value: readonly unknown[], count: number): unknown[] | null {
+  if (Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertySymbols(value).length > 0) return null;
+  if (Object.getOwnPropertyNames(value).length !== count + 1) return null;
+  const values: unknown[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const d = Object.getOwnPropertyDescriptor(value, String(i));
+    if (!d || !d.enumerable || !("value" in d)) return null;
+    values.push(d.value);
+  }
+  return values;
+}
+
 const isNonEmptyString = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 512;
 
 function parseRow(value: unknown): TeachingTeamSourceRowV0 | null {
@@ -113,10 +130,14 @@ export function mapTeachingTeamSource(input: unknown, context: TeachingTeamMappi
   }
   if (input.institutionKey !== context.institutionKey) return { ok: false, reason: "wrong_institution" };
   const rawRows: readonly unknown[] = input.rows;
-  if (rawRows.length > TEACHING_TEAM_SOURCE_MAX_ROWS) return { ok: false, reason: "too_many_rows" };
+  // The bound comes from `length`; rows are read by index, never by an iterator.
+  const count = rawRows.length;
+  if (count > TEACHING_TEAM_SOURCE_MAX_ROWS) return { ok: false, reason: "too_many_rows" };
+  const rawValues = plainArrayValues(rawRows, count);
+  if (!rawValues) return { ok: false, reason: "invalid_input" };
 
   const rows: TeachingTeamSourceRowV0[] = [];
-  for (const raw of rawRows) {
+  for (const raw of rawValues) {
     const row = parseRow(raw);
     if (!row) return { ok: false, reason: "invalid_input" };
     rows.push(row);
@@ -124,6 +145,10 @@ export function mapTeachingTeamSource(input: unknown, context: TeachingTeamMappi
 
   const issues: TeachingTeamIssue[] = [];
   const resolved: { row: number; candidate: TeachingTeamCandidate }[] = [];
+  // R5: holders per course by source identity (issuer, uniqueId), counted
+  // before unknown accounts and foreign issuers are dropped.
+  const holderRows: { row: number; courseId: string }[] = [];
+  const holders = new Map<string, Set<string>>();
   rows.forEach((row, index) => {
     const needsGroup = row.role === "group_teacher";
     if (needsGroup !== (row.groupName !== undefined) || (row.groupName !== undefined && !isValidGroupName(row.groupName))) {
@@ -132,6 +157,12 @@ export function mapTeachingTeamSource(input: unknown, context: TeachingTeamMappi
     }
     const courseId = context.courses.get(row.courseKey);
     if (courseId === undefined) return void issues.push({ row: index, code: "unknown_course" });
+    if (row.role === "holder") {
+      const set = holders.get(courseId) ?? new Set<string>();
+      set.add(JSON.stringify([row.issuer, row.uniqueId]));
+      holders.set(courseId, set);
+      holderRows.push({ row: index, courseId });
+    }
     if (row.issuer !== context.issuer) return void issues.push({ row: index, code: "foreign_issuer" });
     const accountId = context.accounts.get(row.uniqueId);
     if (accountId === undefined) return void issues.push({ row: index, code: "unknown_account" });
@@ -142,20 +173,14 @@ export function mapTeachingTeamSource(input: unknown, context: TeachingTeamMappi
     resolved.push({ row: index, candidate });
   });
 
-  const holders = new Map<string, Set<string>>();
-  for (const { candidate } of resolved) {
-    if (candidate.kind !== "course_holder") continue;
-    const set = holders.get(candidate.courseId) ?? new Set<string>();
-    set.add(candidate.accountId);
-    holders.set(candidate.courseId, set);
+  const inConflict = (courseId: string) => (holders.get(courseId)?.size ?? 0) > 1;
+  for (const { row, courseId } of holderRows) {
+    if (inConflict(courseId)) issues.push({ row, code: "holder_conflict" });
   }
 
   const seen = new Map<string, TeachingTeamCandidate>();
   for (const { row, candidate } of resolved) {
-    if (candidate.kind === "course_holder" && (holders.get(candidate.courseId)?.size ?? 0) > 1) {
-      issues.push({ row, code: "holder_conflict" });
-      continue;
-    }
+    if (candidate.kind === "course_holder" && inConflict(candidate.courseId)) continue;
     const key = candidateKey(candidate);
     if (seen.has(key)) issues.push({ row, code: "duplicate" });
     else seen.set(key, candidate);

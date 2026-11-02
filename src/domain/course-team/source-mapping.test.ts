@@ -79,6 +79,33 @@ describe("mapTeachingTeamSource (M2.7-P05)", () => {
     expect(mapTeachingTeamSource(source([row]), context)).toEqual({ ok: false, reason: "invalid_input" });
   });
 
+  it("R1: rejects a getter as an element of rows without running it", () => {
+    let calls = 0;
+    const rows: unknown[] = [];
+    Object.defineProperty(rows, 0, {
+      get: () => {
+        calls += 1;
+        return holder("K-ALFA", "sint-osoba-1");
+      },
+      enumerable: true,
+    });
+    expect(mapTeachingTeamSource(source(rows), context)).toEqual({ ok: false, reason: "invalid_input" });
+    expect(calls).toBe(0);
+  });
+
+  it("R1: the row bound does not depend on an own iterator, which is never called", () => {
+    let calls = 0;
+    const rows: unknown[] = [holder("K-ALFA", "sint-osoba-1")];
+    Object.defineProperty(rows, Symbol.iterator, {
+      value: function* () {
+        calls += 1;
+        for (let i = 0; i <= TEACHING_TEAM_SOURCE_MAX_ROWS; i += 1) yield holder("K-ALFA", "sint-osoba-1");
+      },
+    });
+    expect(mapTeachingTeamSource(source(rows), context)).toEqual({ ok: false, reason: "invalid_input" });
+    expect(calls).toBe(0);
+  });
+
   it("R1: one bad row rejects everything, no partial result", () => {
     const input = source([holder("K-ALFA", "sint-osoba-1"), { courseKey: "K-BETA" }]);
     expect(mapTeachingTeamSource(input, context)).toEqual({ ok: false, reason: "invalid_input" });
@@ -96,7 +123,7 @@ describe("mapTeachingTeamSource (M2.7-P05)", () => {
 
   it("R2: matches only the exact identifier, no case folding or trimming", () => {
     const result = okResult(
-      source([holder("K-ALFA", "SINT-OSOBA-1"), holder("K-BETA", " sint-osoba-1"), holder("K-BETA", "sint-osoba-1 ")]),
+      source([holder("K-ALFA", "SINT-OSOBA-1"), holder("K-BETA", " sint-osoba-1"), groupTeacher("K-BETA", "G", "sint-osoba-1 ")]),
     );
     expect(result.candidates).toEqual([]);
     expect(result.issues.map((i) => i.code)).toEqual(["unknown_account", "unknown_account", "unknown_account"]);
@@ -126,6 +153,21 @@ describe("mapTeachingTeamSource (M2.7-P05)", () => {
       { row: 0, code: "holder_conflict" },
       { row: 1, code: "holder_conflict" },
     ]);
+  });
+
+  it.each([
+    ["an unknown account", holder("K-ALFA", "sint-osoba-9"), "unknown_account"],
+    ["a foreign issuer", holder("K-ALFA", "sint-osoba-1", "https://drugi.primjer.invalid"), "foreign_issuer"],
+  ] as const)("R5: a second holder with %s is still a conflict, in either order", (_label, other, code) => {
+    const known = holder("K-ALFA", "sint-osoba-1");
+    const issues = (otherRow: number) =>
+      [
+        { row: 1 - otherRow, code: "holder_conflict" },
+        { row: otherRow, code },
+        { row: otherRow, code: "holder_conflict" },
+      ].sort((a, b) => a.row - b.row || (a.code < b.code ? -1 : 1));
+    expect(okResult(source([known, other]))).toEqual({ ok: true, candidates: [], issues: issues(1) });
+    expect(okResult(source([other, known]))).toEqual({ ok: true, candidates: [], issues: issues(0) });
   });
 
   it("R6: a repeated row gives one candidate and a duplicate issue", () => {

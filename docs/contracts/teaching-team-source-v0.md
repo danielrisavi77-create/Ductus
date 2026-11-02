@@ -15,11 +15,11 @@ Kontekst daje poslužitelj: ključ ustanove, jedini prihvaćeni izdavatelj, pres
 
 | Pravilo | Ishod |
 | --- | --- |
-| R1 | Nepoznato ili nedostajuće polje, getter, krivi tip, drugi `format` ili više od 2000 redaka: cijeli ulaz se odbija (`ok: false`), bez djelomičnog rezultata. Druga ustanova: `wrong_institution`. |
+| R1 | Nepoznato ili nedostajuće polje, getter, krivi tip, drugi `format` ili više od 2000 redaka: cijeli ulaz se odbija (`ok: false`), bez djelomičnog rezultata. Druga ustanova: `wrong_institution`. `rows` mora biti obično polje bez rupa, pristupnika i vlastitog iteratora; elementi se čitaju po indeksu iz podatkovnih svojstava, a granica broja redaka računa se iz `length`. |
 | R2 | Osoba se uparuje s računom samo točnim parom (izdavatelj, `uniqueId`). Nema usporedbe imena, promjene velikih i malih slova ni rezanja razmaka. |
 | R3 | Isti `uniqueId` pod drugim izdavateljem ne daje kandidata, nego nalaz `foreign_issuer` (D-104). |
 | R4 | Nepoznat kolegij ili račun daje nalaz `unknown_course` ili `unknown_account`; nikad novi račun ni kolegij. |
-| R5 | Dva različita nositelja istog kolegija: nijedan kandidat za nositelja, nalaz `holder_conflict` na svakom takvom retku. Administrator bira sam. |
+| R5 | Dva različita nositelja istog kolegija: nijedan kandidat za nositelja, nalaz `holder_conflict` na svakom takvom retku. Administrator bira sam. Nositelji se razlikuju po izvornom identitetu (izdavatelj, `uniqueId`), prije odbacivanja nepoznatih računa i stranih izdavatelja. |
 | R6 | Ponovljeni redak daje jednog kandidata i nalaz `duplicate`. |
 | R7 | `group_teacher` traži naziv grupe, a `holder` ga ne smije imati. Naziv je u NFC obliku, bez vanjskih razmaka i kontrolnih znakova, od 1 do 120 znakova; inače `invalid_group_name`. |
 | R8 | Kandidati i vrste nalaza ne ovise o redoslijedu redaka; ulaz se ne mijenja. |
