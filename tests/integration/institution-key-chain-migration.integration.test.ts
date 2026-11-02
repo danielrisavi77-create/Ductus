@@ -86,8 +86,9 @@ type Ids = Awaited<ReturnType<typeof oldRows>>;
  * Old rows, written as the compose superuser past every function, as the
  * schema before the chain allowed them: fak-a has K1 with Z1 (two versions)
  * and a revoked and an active code, fak-b has K3 with Z3 and one code; the
- * revocation left an audit event of fak-a. Of the students of fak-a, A1
- * acknowledged the notice of version 1 of Z1 and A2 that of version 2 (the
+ * revocation left an audit event of fak-a. Z1 points at version 2, as the
+ * RPC that adds a version leaves it. Of the students of fak-a, A1 acknowledged
+ * the notice of version 1 of Z1 (an earlier one) and A2 that of version 2 (the
  * current one); student B of fak-b acknowledged that of Z3.
  */
 async function oldRows(client: pg.Client) {
@@ -131,6 +132,7 @@ async function oldRows(client: pg.Client) {
   );
   await assignment(client, ids.assignmentA, ids.courseA, ids.facultyA, ids.teacherA);
   await version(client, ids.assignmentA, 2, ids.teacherA);
+  await client.query("UPDATE institution.assignment SET current_version = 2 WHERE id = $1", [ids.assignmentA]);
   await assignment(client, ids.assignmentB, ids.courseB, ids.facultyB, ids.teacherB);
   await code(client, ids.oldCodeA, ids.courseA, ids.teacherA, false);
   await code(client, ids.codeA, ids.courseA, ids.teacherA, true);
@@ -218,6 +220,12 @@ async function expectAcksKept(client: pg.Client, acksBefore: unknown[]) {
   expect((await client.query(ACKS_ON_KEY)).rows).toEqual(acksBefore);
 }
 
+// Each acknowledgment with the version its assignment points at.
+const ACKS_BY_CURRENT = `
+  SELECT n.student_id, n.version_no, a.current_version FROM institution.notice_acknowledgment n
+  JOIN institution.assignment a ON a.id = n.assignment_id
+  ORDER BY n.assignment_id, n.version_no, n.student_id`;
+
 const KEY_COLUMNS = `
   SELECT table_name FROM information_schema.columns
   WHERE table_schema = 'institution' AND table_name IN ('assignment_version', 'course_enrollment_code')
@@ -231,6 +239,7 @@ describe("the institution key chain migration over old rows", () => {
     const codesBefore = (await client.query(CODES)).rows;
     const eventsBefore = (await client.query(EVENTS)).rows;
     const acksBefore = (await client.query(ACKS)).rows;
+    const acksByCurrentBefore = (await client.query(ACKS_BY_CURRENT)).rows;
 
     await migrate(client);
 
@@ -267,6 +276,15 @@ describe("the institution key chain migration over old rows", () => {
       ]),
     );
     expect(acksBefore).toHaveLength(3);
+    // A1 acknowledged an earlier version than the one Z1 points at and A2 the
+    // current one, before the migration and after it.
+    expect(acksByCurrentBefore).toEqual(
+      expect.arrayContaining([
+        { student_id: ids.studentA, version_no: 1, current_version: 2 },
+        { student_id: ids.studentA2, version_no: 2, current_version: 2 },
+      ]),
+    );
+    expect((await client.query(ACKS_BY_CURRENT)).rows).toEqual(acksByCurrentBefore);
   });
 
   it.each([
@@ -274,6 +292,14 @@ describe("the institution key chain migration over old rows", () => {
       what: "an old acknowledgment is lost",
       change: (client: pg.Client, ids: Ids) =>
         client.query("DELETE FROM institution.notice_acknowledgment WHERE student_id = $1", [ids.studentB]),
+    },
+    {
+      what: "the acknowledgment of a version earlier than the current one is lost",
+      change: (client: pg.Client) =>
+        client.query(
+          `DELETE FROM institution.notice_acknowledgment n USING institution.assignment a
+           WHERE a.id = n.assignment_id AND n.version_no < a.current_version`,
+        ),
     },
     {
       what: "an old acknowledgment changes its time",
