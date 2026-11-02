@@ -99,10 +99,14 @@ function unreadLinkErrors(name, text) {
   return errors;
 }
 
-/** IDs of the index entries, once per entry row (labels as written). */
+/**
+ * IDs of the index entries, once per entry row (labels as written). The first
+ * cell is read as written, inline code included, so text beside the link keeps
+ * the row from being an entry (review, #1179).
+ */
 function entryIds(text) {
   const ids = [];
-  for (const line of stripCode(text).split("\n")) {
+  for (const line of text.split("\n")) {
     const m = CELL_LINK.exec(FIRST_CELL.exec(line)?.[1].trim() ?? "");
     if (m && ID_ONLY.test(shownLabel(m[1]))) ids.push(shownLabel(m[1]));
   }

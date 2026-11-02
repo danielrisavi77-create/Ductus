@@ -72,6 +72,11 @@ test("C1: only the first cell of an index row is an entry; a reference in a deci
   const noEntry = ref.replace("| [D-05](odluke/D-05.md) | Naslov | 1. 1. 2026. | ODLUČENO |\n", "");
   fails(tree({ index: noEntry }), /D-05\.md is linked 0 times/);
   fails(tree({ index: `${ref}  | [D-05](odluke/D-05.md) | opet |\n` }), /D-05\.md is linked 2 times/);
+  // Inline code is visible text: a first cell with code beside the link, or a
+  // link inside code, is not an entry (review, #1179).
+  for (const cell of ["`Vidi` [D-05](odluke/D-05.md)", "[D-05](odluke/D-05.md) `x`", "`[D-05](odluke/D-05.md)`"]) {
+    fails(tree({ index: `${noEntry}| ${cell} | Referenca | R. |\n` }), /D-05\.md is linked 0 times/);
+  }
 });
 
 test("C5: a reference link definition is refused, in the index and in a decision file (QA, #1179)", () => {
