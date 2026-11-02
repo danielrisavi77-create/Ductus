@@ -99,6 +99,19 @@ async function pages(api, url, maxPages) {
 }
 
 /** Reads the PR, main and (when the PR introduces a migration) every open PR. */
+// Another PR's file list counts only when it holds at least `changed_files`
+// entries and its head did not move while the list was read (#1399 c.6585772874).
+async function readPull(api, base, number) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const before = await api(`${base}/pulls/${number}`);
+    const files = await pages(api, `${base}/pulls/${number}/files`, FILE_PAGES);
+    if (!files.complete || !(before.changed_files <= files.items.length)) throw new Error(`Cannot read all files of #${number}.`);
+    const after = await api(`${base}/pulls/${number}`);
+    if (typeof before.head?.sha === "string" && after.head?.sha === before.head.sha) return { number, state: before.state, files: files.items };
+  }
+  throw new Error(`#${number} kept changing while its files were read.`);
+}
+
 export async function checkPullRequest({ api, owner, repo, number, headSha }) {
   const base = `/repos/${owner}/${repo}`;
   const current = await api(`${base}/pulls/${number}`);
@@ -117,10 +130,7 @@ export async function checkPullRequest({ api, owner, repo, number, headSha }) {
   if (!open.complete) throw new Error("Cannot list every open PR.");
   const pulls = [];
   for (const p of open.items) {
-    if (p.number === number) continue;
-    const files = await pages(api, `${base}/pulls/${p.number}/files`, FILE_PAGES);
-    if (!files.complete) throw new Error(`Cannot read all files of #${p.number}.`);
-    pulls.push({ number: p.number, state: p.state, files: files.items });
+    if (p.number !== number) pulls.push(await readPull(api, base, p.number));
   }
   return findCollisions({ self, main, pulls });
 }

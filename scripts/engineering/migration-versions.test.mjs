@@ -143,6 +143,7 @@ test("checkPullRequest reads every page of open PRs and files and finds the coll
   bigFiles.push(add(B));
   const { api } = fakeApi([
     [/^\/repos\/o\/r\/pulls\/1$/, pr(1)],
+    [/^\/repos\/o\/r\/pulls\/(\d+)$/, (m) => pr(Number(m[1]), { changed_files: m[1] === "249" ? 121 : 0 })],
     [/^\/repos\/o\/r\/pulls\/1\/files\?/, (m) => page([add(A)], m)],
     [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=main$/, MAIN.map((f) => ({ ...f, type: "file" }))],
     [/^\/repos\/o\/r\/pulls\?state=open/, (m) => page([pr(1), ...others], m)],
@@ -175,13 +176,62 @@ test("checkPullRequest fails closed", async () => {
     ["more open PRs than the listing reads", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, base[0],
       [/^\/repos\/o\/r\/pulls\?state=open/, () => Array.from({ length: 100 }, (_, i) => pr(2 + i))]], /every open PR/],
     ["API error on another PR", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base], /404/],
-    ["other PR at the 3000 file limit", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base,
+    ["other PR at the 3000 file limit", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base, [/^\/repos\/o\/r\/pulls\/7$/, pr(7)],
       [/^\/repos\/o\/r\/pulls\/7\/files\?/, () => Array.from({ length: 100 }, () => ({ filename: "x", status: "added", sha: "s" }))]], /all files of #7/],
+    // A lagging /files of another PR omits its migration: the short page must not count as complete.
+    ["other PR's file list shorter than changed_files", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base,
+      [/^\/repos\/o\/r\/pulls\/7$/, pr(7, { changed_files: 2 })],
+      [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => page([{ filename: "src/a.ts", status: "added", sha: "s" }], m)]], /all files of #7/],
+    ["other PR without changed_files", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base,
+      [/^\/repos\/o\/r\/pulls\/7$/, pr(7, { changed_files: undefined })],
+      [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => page([add(B)], m)]], /all files of #7/],
+    ["other PR's head keeps moving", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base,
+      [/^\/repos\/o\/r\/pulls\/7$/, movingHead()],
+      [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => page([add(B)], m)]], /#7 kept changing/],
+    ["other PR without a head", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base,
+      [/^\/repos\/o\/r\/pulls\/7$/, pr(7, { head: undefined })],
+      [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => page([add(B)], m)]], /#7 kept changing/],
   ];
   for (const [name, routes, error] of cases) {
     const { api } = fakeApi(routes);
     await assert.rejects(checkPullRequest({ api, owner: "o", repo: "r", number: 1, headSha: head }), error, name);
   }
+});
+
+function movingHead(stableAfter = Infinity) {
+  let calls = 0;
+  return () => {
+    calls += 1;
+    return pr(7, { head: { sha: String(Math.min(calls, stableAfter)).repeat(40).slice(0, 40) } });
+  };
+}
+
+test("checkPullRequest rereads another PR whose head moved once", async () => {
+  const { api, calls } = fakeApi([
+    [/^\/repos\/o\/r\/pulls\/1$/, pr(1)],
+    [/^\/repos\/o\/r\/pulls\/1\/files\?/, (m) => page([add(A)], m)],
+    [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=main$/, MAIN.map((f) => ({ ...f, type: "file" }))],
+    [/^\/repos\/o\/r\/pulls\?state=open/, (m) => page([pr(1), pr(7)], m)],
+    [/^\/repos\/o\/r\/pulls\/7$/, movingHead(2)],
+    [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => page([add(B)], m)],
+  ]);
+  const collisions = await checkPullRequest({ api, owner: "o", repo: "r", number: 1, headSha: "h".repeat(40) });
+  assert.deepEqual(by(collisions), [`${M(A)}|7`]);
+  assert.equal(calls.filter((url) => url === "/repos/o/r/pulls/7").length, 4);
+  assert.equal(calls.filter((url) => url.startsWith("/repos/o/r/pulls/1")).length, 2, "the PR itself is read once");
+});
+
+test("checkPullRequest gives up on a moving head after two reads", async () => {
+  const { api, calls } = fakeApi([
+    [/^\/repos\/o\/r\/pulls\/1$/, pr(1)],
+    [/^\/repos\/o\/r\/pulls\/1\/files\?/, (m) => page([add(A)], m)],
+    [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=main$/, MAIN.map((f) => ({ ...f, type: "file" }))],
+    [/^\/repos\/o\/r\/pulls\?state=open/, (m) => page([pr(1), pr(7)], m)],
+    [/^\/repos\/o\/r\/pulls\/7$/, movingHead()],
+    [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => page([add(B)], m)],
+  ]);
+  await assert.rejects(checkPullRequest({ api, owner: "o", repo: "r", number: 1, headSha: "h".repeat(40) }), /#7 kept changing/);
+  assert.equal(calls.filter((url) => url === "/repos/o/r/pulls/7").length, 4);
 });
 
 test("CI runs the check in the build job with the workflow token", () => {
