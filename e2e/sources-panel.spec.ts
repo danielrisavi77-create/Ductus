@@ -134,6 +134,31 @@ test.describe("sources panel (DAN-343)", () => {
     await expect(tab.getByLabel(t.citePage, { exact: true })).toHaveValue("1".repeat(20));
   });
 
+  // QA on #866 (c.6561280081): a pasted U+0000 the sheet would drop is refused,
+  // so it never gives a second, identical entry.
+  test("a field with a character the sheet does not keep is refused", async ({ page }) => {
+    const tab = await openSources(page, 1440);
+    const book = {
+      [t.family]: "Horvat", [t.given]: "Ana", [t.year]: "2021", [t.title]: "Izmišljena knjiga",
+      [t.place]: "Zagreb", [t.publisher]: "Primjer",
+    };
+    await tab.getByRole("button", { name: t.add }).click();
+    await fill(tab, book);
+    await tab.getByRole("button", { name: t.addOnly }).click();
+    const after = await blocksOf(page);
+
+    await tab.getByRole("button", { name: t.add }).click();
+    await fill(tab, { ...book, [t.title]: `Izmišljena${String.fromCodePoint(0)} knjiga` });
+    await expect(tab.getByLabel(t.title, { exact: true })).toHaveValue(`Izmišljena${String.fromCodePoint(0)} knjiga`);
+    await expect(tab.locator('[data-preview="citation"]')).toHaveCount(0);
+    await tab.getByRole("button", { name: t.addOnly }).click();
+    await expect(tab.getByRole("alert")).toContainText(t.unstorable.replace("{field}", t.title));
+    await expect(tab.getByLabel(t.title, { exact: true })).toHaveAttribute("aria-invalid", "true");
+    expect(await blocksOf(page)).toEqual(after);
+    // The list of added sources holds the first book only (the alert is a list too).
+    await expect(tab.getByRole("button", { name: `${t.cite}: `, exact: false })).toHaveCount(1);
+  });
+
   test("a tab that may not write says so and writes nothing", async ({ page, context }) => {
     await openSources(page, 1440);
     const second = await context.newPage();

@@ -3,6 +3,7 @@ import type { Node as PMNode, NodeType } from "@tiptap/pm/model";
 import { Selection, type Transaction } from "@tiptap/pm/state";
 
 import { CITATION_FORM_META } from "@/editor/source";
+import { storableText } from "@/editor/storable-text";
 
 import {
   formatBibliographyEntry, formatInText, fpzgCitationStyle,
@@ -44,7 +45,7 @@ export const EMPTY_FIELDS: SourceFields = {
 
 export type SourceCheck =
   | { ok: true; source: BookSource | ArticleSource }
-  | { ok: false; missing: SourceField[]; yearInvalid: boolean; tooLong: SourceField[] };
+  | { ok: false; missing: SourceField[]; yearInvalid: boolean; tooLong: SourceField[]; unstorable: SourceField[] };
 
 /**
  * Longest value of each field, in code points (F-154 point 2, owner decision
@@ -67,6 +68,23 @@ export function pageFits(page: string): boolean {
   return codePoints(page.trim()) <= PAGE_MAX;
 }
 
+/**
+ * Whether the sheet keeps this text exactly as it is. `StorableInput` drops
+ * U+0000 and replaces a lone surrogate in the editor (src/editor/storable-text.ts),
+ * so text holding either would be written as other text than the form shows:
+ * the duplicate check misses it and the evidence log refuses the change (QA on
+ * #866, c.6561280081). The form refuses it instead; nothing is cut silently.
+ */
+export function storable(text: string): boolean {
+  return storableText(text) === text;
+}
+
+// The fields a source of each kind is built from; a field of the other kind is never read.
+const USED: Readonly<Record<SourceKind, readonly SourceField[]>> = {
+  book: ["family", "given", "family2", "given2", "year", "title", "place", "publisher"],
+  article: ["family", "given", "family2", "given2", "year", "title", "journal", "volume", "issue", "pages"],
+};
+
 /** The heading the bibliography stands under; only this exact text is recognised. */
 export const BIBLIOGRAPHY_HEADING = "Literatura";
 
@@ -82,7 +100,10 @@ export function sourceFromFields(fields: SourceFields): SourceCheck {
   // The year has its own message: its form already bounds it to four digits.
   const tooLong = (Object.keys(FIELD_MAX) as SourceField[])
     .filter((field) => field !== "year" && codePoints(value(field)) > FIELD_MAX[field]);
-  if (missing.length > 0 || yearInvalid || tooLong.length > 0) return { ok: false, missing, yearInvalid, tooLong };
+  const unstorable = USED[fields.kind].filter((field) => !storable(fields[field]));
+  if (missing.length > 0 || yearInvalid || tooLong.length > 0 || unstorable.length > 0) {
+    return { ok: false, missing, yearInvalid, tooLong, unstorable };
+  }
 
   const authors: Person[] = [{ kind: "person", family: value("family"), given: value("given") }];
   if (value("family2") !== "") authors.push({ kind: "person", family: value("family2"), given: value("given2") });
@@ -158,10 +179,13 @@ function writable(editor: Editor | null): editor is Editor {
 /**
  * Writes the citation after the selection (never over selected text) and, when
  * `entry` is given, the entry into the bibliography, in one transaction. Returns
- * false and changes nothing while the editor may not be written in.
+ * false and changes nothing while the editor may not be written in or when
+ * either text is not `storable`.
  */
 export function writeSource(editor: Editor | null, citation: string | null, entry: string | null): boolean {
   if (!writable(editor)) return false;
+  // Text the sheet would change on the way in is never written (QA on #866).
+  if ((citation !== null && !storable(citation)) || (entry !== null && !storable(entry))) return false;
   // No focus(): a keyboard user stays in the panel they clicked in.
   return editor.chain().command(({ tr, state }) => {
     // Evidence: this change is `citation-form`, an event of its own (src/editor/source.ts).

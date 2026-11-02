@@ -10,7 +10,7 @@ import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import {
-  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, writeSource,
+  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
   type SourceField, type SourceFields,
 } from "./sources";
 
@@ -23,6 +23,10 @@ const ARTICLE: SourceFields = {
   ...EMPTY_FIELDS, kind: "article", family: "Babić", given: "Iva", family2: "Kovač", given2: "Luka",
   year: "2019", title: "Izmišljeni članak", journal: "Primjer časopis", volume: "12", issue: "3", pages: "45-60",
 };
+
+// Built, not written as literals, like src/editor/storable-text.ts.
+const NUL = String.fromCodePoint(0);
+const LONE = String.fromCharCode(0xd800);
 
 function sourceOf(fields: SourceFields) {
   const check = sourceFromFields(fields);
@@ -65,7 +69,7 @@ describe("sourceFromFields", () => {
 
   it("names the fields still missing and refuses a year that is not four digits", () => {
     expect(sourceFromFields(EMPTY_FIELDS)).toEqual({
-      ok: false, missing: ["family", "given", "year", "title", "place", "publisher"], yearInvalid: false, tooLong: [],
+      ok: false, missing: ["family", "given", "year", "title", "place", "publisher"], yearInvalid: false, tooLong: [], unstorable: [],
     });
     expect(sourceFromFields({ ...EMPTY_FIELDS, kind: "article" })).toMatchObject({ missing: ["family", "given", "year", "title", "journal"] });
     expect(sourceFromFields({ ...BOOK, family2: "Kovač" })).toMatchObject({ ok: false, missing: ["given2"] });
@@ -98,6 +102,20 @@ describe("sourceFromFields", () => {
     expect(pageFits("1".repeat(20))).toBe(true);
     expect(pageFits(` ${"1".repeat(20)} `)).toBe(true);
     expect(pageFits("1".repeat(21))).toBe(false);
+  });
+
+  // QA on #866 (c.6561280081): U+0000 or a lone surrogate would be changed by
+  // StorableInput, so the form refuses it and never builds a source from it.
+  it("refuses a field the sheet would not keep as typed", () => {
+    for (const bad of [NUL, LONE]) {
+      expect(sourceFromFields({ ...BOOK, title: `Knjiga${bad}test` })).toMatchObject({ ok: false, missing: [], unstorable: ["title"] });
+      expect(sourceFromFields({ ...ARTICLE, pages: `45${bad}60` })).toMatchObject({ ok: false, unstorable: ["pages"] });
+    }
+    // A field of the other kind is never read, so it never blocks.
+    expect(sourceFromFields({ ...BOOK, journal: `X${NUL}` }).ok).toBe(true);
+    expect(sourceFromFields({ ...BOOK, title: "Knjiga\uD83D\uDCD6" }).ok).toBe(true);
+    expect(storable(`15${NUL}`)).toBe(false);
+    expect(storable("15")).toBe(true);
   });
 });
 
@@ -174,6 +192,23 @@ describe("writeSource", () => {
     expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(false);
     expect(editor.state.doc.toJSON()).toEqual(before);
     expect(writeSource(null, "(X, 2020)", null)).toBe(false);
+    editor.destroy();
+  });
+});
+
+describe("writeSource and unstorable text", () => {
+  // QA on #866: the second entry with U+0000 became a duplicate and stopped the evidence log.
+  it("writes nothing that the sheet would change on the way in", () => {
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+    const book = sourceOf(BOOK);
+    expect(writeSource(editor, null, entryText(book))).toBe(true);
+    const before = editor.state.doc.toJSON();
+    const withNul = { ...book, title: `Izmišljena${NUL} knjiga` };
+    expect(writeSource(editor, null, entryText(withNul))).toBe(false);
+    expect(writeSource(editor, citationText(book, `1${NUL}5`), null)).toBe(false);
+    expect(writeSource(editor, citationText(book, `1${LONE}`), entryText(book))).toBe(false);
+    expect(editor.state.doc.toJSON()).toEqual(before);
     editor.destroy();
   });
 });
