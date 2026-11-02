@@ -112,8 +112,10 @@ describe("S3 notice text (D-142, D-143)", () => {
     expect(w).toContain("brišu se kad i rad");
     expect(w).toContain("ne smiju utjecati na kašnjenje ni ocjenu");
     expect(w).toContain("u Ducturi zasad ne vode");
-    // No access log (rule 17) and no grade publication are built yet.
-    expect(w).not.toMatch(/dnevnik pristupa|objav/);
+    // DAN-235 acceptance: grade publication is named as not available yet (D-135, D-136).
+    expect(w).toContain("Ni objava ocjene u Ducturi zasad nije dostupna");
+    // No access log (rule 17) is built, and nothing promises a future grade publication.
+    expect(w).not.toMatch(/dnevnik pristupa|objavit će|bit će objavljen/);
   });
 
   it("claims nothing the contract leaves open", () => {
