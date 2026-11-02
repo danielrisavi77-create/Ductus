@@ -24,7 +24,7 @@ Izvori:
 | S-10 1a slanje | — | „Sinkroniziram”, postojeća oznaka i ton; služi za usporedbu |
 | S-10 1b potvrda čeka potpis | #1332 | „Primljeno na poslužitelju, čeka potvrdu”. Točka je prsten u boji poslužitelja, ne pulsira i ne postaje puna. Ne piše „spremljeno na poslužitelju” |
 | S-10 1c nakon praga | #1332 | ton prelazi u upozorenje: „Primljeno na poslužitelju, potvrda kasni”. Obavijest kaže da je tekst na uređaju i da se može nastaviti pisati. Prag se predlaže na 10 minuta i čeka vlasnikovu potvrdu |
-| S-10 2a–2c neuspjeh spremanja | #1333 | oznaka „Ne sprema se na uređaj” sama kaže posljedicu, a uz nju je radnja „Izvezi tekst”. Svaki razlog ima svoju obavijest: nema prostora (s jednim korakom za oslobađanje prostora), pohrana nedostupna, granica zapisa |
+| S-10 2a–2c neuspjeh spremanja | #1333 | oznaka „Ne sprema se na uređaj” sama kaže posljedicu, a uz nju je radnja „Izvezi tekst”. Svaki razlog ima svoju obavijest: nema prostora (s jednim korakom za oslobađanje prostora i napomenom da se podaci ove stranice ne brišu), pohrana nedostupna, granica zapisa |
 | S-10 usporedba | #1333 | „Potreban oporavak” ostaje kakav je i razlikuje se od neuspjeha riječju i bojom točke |
 | Z-11 1 druga kartica | #1334 | kratka oznaka „Pisanje je u drugoj kartici” i jedna obavijest umjesto dvije. List je samo za čitanje. Radnja „Preuzmi pisanje ovdje” je prijedlog koji vlasnik prihvaća ili odbacuje |
 | Z-11 2a bez mreže, sprema se | #1335 | dvije rečenice: što je sigurno (tekst je na uređaju) i što se događa po povratku mreže. Zapis koji vide i student i nastavnik ostaje označen kao napisan bez mreže (pravilo 10) |
