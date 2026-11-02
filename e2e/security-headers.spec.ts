@@ -99,6 +99,23 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
     expect(response.headers()["cache-control"]).toBe("no-store");
   });
 
+  test("an unknown API path is a JSON 404 under the API policy, never an HTML page", async ({ request }) => {
+    // DAN-489 review finding: app/not-found.tsx rendered here as HTML without
+    // a nonce, so `default-src 'none'` refused its styles and scripts.
+    for (const response of [
+      await request.get("/api/nepostoji-dan489", { maxRedirects: 0 }),
+      await request.post("/api/nepostoji-dan489", { maxRedirects: 0 }),
+      await request.get("/api/health/nepostoji-dan489", { maxRedirects: 0 }),
+      await request.get("/api/comments/nepostoji/dan489", { maxRedirects: 0 }),
+    ]) {
+      expect(response.status(), response.url()).toBe(404);
+      expect(response.headers()["content-type"], response.url()).toMatch(/^application\/json/);
+      expect(await response.json()).toEqual({ error: "not_found" });
+      expectConfigHeaders(response, "api");
+      expect(response.headers()["cache-control"], response.url()).toBe("no-store");
+    }
+  });
+
   test("/api/auth/login is never stored and its referrer policy is overwritten by the config", async ({ request }) => {
     // The production build refuses "Demo prijava" (D-09, e2e/auth.spec.ts).
     const response = await request.get("/api/auth/login", { maxRedirects: 0 });

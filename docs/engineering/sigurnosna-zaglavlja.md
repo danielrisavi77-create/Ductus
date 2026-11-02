@@ -176,6 +176,7 @@ frame-ancestors 'none'
 
 - Tiptap: `injectCSS: false` u `LocalDocument.tsx` i `TwoSides.tsx`; njegov osnovni CSS, doslovno iz `@tiptap/core` 3.31.4, je u `app/prosemirror.css`, uvezen u root layout.
 - `app/not-found.tsx` zove `await connection()`: prerenderirana 404 nema nonce, pa bi joj se skripte odbile.
+- `app/api/[...path]/route.ts` nepoznatu `/api/*` putanju odbija JSON odgovorom 404 s `no-store`. Bez nje bi Next.js ondje renderirao `app/not-found.tsx` kao HTML pod politikom za API, bez noncea, pa bi stilovi i skripte bili odbijeni (nalaz reviewa na PR-u 2). Postojeće rute pod `app/api` imaju prednost.
 - `AppShell.tsx`: pravila za rad bez JavaScripta (bočna traka i odjava ostaju u stranici, I5) prešla su iz `<noscript><style>` u `@media (scripting: none)` u `AppShell.module.css`, jer `style-src 'self'` odbija inline stil. Ovo nije bilo u ugovoru; dopuna je na #1091.
 
 ### 9.3 Zaglavlja po klasi odgovora
@@ -184,7 +185,7 @@ frame-ancestors 'none'
 | --- | --- | --- |
 | HTML stranice i 404 | politika iz 9.1, nonce nov za svaki zahtjev | `private, no-cache, no-store, max-age=0, must-revalidate` |
 | `/nastavnik/kolegiji` (307 na `/nastavnik`) | politika iz 9.1 | kao HTML; `s-maxage` je nestao, pa je N-3 zatvoren |
-| `/api/*`, uključujući 405 okvira | `default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` (iz `next.config.ts`) | nepromijenjeno (N-2 ostaje) |
+| `/api/*`, uključujući 405 okvira i JSON 404 nepoznate putanje | `default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` (iz `next.config.ts`) | nepromijenjeno (N-2 ostaje) |
 | `/_next/static/*`, `/favicon.ico` | nema | nepromijenjeno |
 
 Svi odgovori uz tri postojeća zaglavlja nose i `Strict-Transport-Security: max-age=63072000; includeSubDomains` te `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), display-capture=(), clipboard-write=(self)`. `interest-cohort` iz 6.2 je izostavljen, kao u ugovoru, jer je FLoC napušten. Nijedan odgovor nema `Cross-Origin-Opener-Policy`, `Content-Security-Policy-Report-Only` ni `X-Powered-By`.
