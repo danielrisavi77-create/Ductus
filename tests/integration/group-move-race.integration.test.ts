@@ -20,7 +20,10 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // the student's group is being assigned: the return must wait for that
 // assignment, so no work of the student can start and commit before it. QA
 // c.6590203077 adds an ending racing a new assignment of the same person:
-// both must commit, not deadlock. Loopback only; one random
+// both must commit, not deadlock. A Codex thread adds a student removed from
+// the course after an assignment of a group teacher began: the place of the
+// new teacher still starts after the work the student started before the
+// removal. Loopback only; one random
 // login and random synthetic rows, removed afterwards. Vesna, Marko, Nina,
 // Ana, Boris, Cvita and Daria are invented.
 const SAFE_ADMIN_URL: string =
@@ -505,5 +508,63 @@ describe("an ending racing a new assignment of the same person (DAN-351, #1372, 
     expect(await openPlaces("seminar_group_member", groups.g3)).toEqual(
       [people.ana, people.cvita, people.daria].sort(),
     );
+  });
+});
+
+// The schedule of the Codex thread on group_scope.sql:336: the course
+// teacher's transaction begins; a student with an open place in the group
+// then starts a work and commits it, is removed from the course and allowed
+// back, each in its own transaction; only then does the first transaction
+// assign a new teacher to the group, and the student comes back. The removed
+// student keeps the place, so the new teacher's place must still start after
+// that work.
+describe("a student removed after an assignment of a group teacher began (DAN-351, #1372, Codex)", () => {
+  it("the new teacher does not reach the work the student started before the removal", async () => {
+    let begun!: () => void;
+    let releaseAssignment!: () => void;
+    const teacherBegun = new Promise<void>((resolve) => { begun = resolve; });
+    const holdAssignment = new Promise<void>((resolve) => { releaseAssignment = resolve; });
+    const teacherRun = withActor(tokens.vesna, async (tx) => {
+      await tx.query("SELECT now()");
+      begun();
+      await holdAssignment;
+      await tx.query("SELECT institution.assign_group_teacher($1, $2)", [groups.g1, people.marko]);
+    });
+    let documentId = "";
+    try {
+      await Promise.race([teacherBegun, teacherRun]);
+      const work = await withActor(tokens.boris, async (tx) => (
+        await tx.query<{ outcome: string; document_id: string }>(
+          "SELECT outcome, document_id FROM app.open_student_work($1)",
+          [returnAssignmentId],
+        )
+      ).rows[0]);
+      expect(work.outcome).toBe("opened");
+      documentId = work.document_id;
+      expect((await asVesna("SELECT institution.remove_student($1, $2) AS done", [courseId, people.boris])).done).toBe(true);
+      expect((await asVesna("SELECT institution.allow_student_return($1, $2) AS done", [courseId, people.boris])).done).toBe(true);
+    } finally {
+      begun();
+      releaseAssignment();
+      await Promise.allSettled([teacherRun]);
+    }
+    await teacherRun;
+    expect(await enroll("boris")).toBe("enrolled");
+    expect(await openPlaces("seminar_group_member", groups.g1)).toEqual([people.boris]);
+    const order = await admin.query<{ after: boolean }>(
+      `SELECT t.valid_from > p.created_at AS after
+         FROM institution.seminar_group_teacher t, evidence.project p
+        WHERE t.group_id = $1 AND t.user_id = $2 AND t.valid_to IS NULL
+          AND p.assignment_id = $3 AND p.principal_id = $4`,
+      [groups.g1, people.marko, returnAssignmentId, people.boris],
+    );
+    expect(order.rows).toEqual([{ after: true }]);
+    // Positive control: Nina's place in group 1 started before the work.
+    expect({
+      marko: await can("marko", documentId),
+      nina: await can("nina", documentId),
+      vesna: await can("vesna", documentId),
+      boris: await can("boris", documentId),
+    }).toStrictEqual({ marko: false, nina: true, vesna: true, boris: true });
   });
 });

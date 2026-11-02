@@ -328,14 +328,19 @@ BEGIN
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
   PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
-  SELECT array_agg(l.user_id) INTO v_students
-    FROM (SELECT m.user_id
-            FROM institution.course_member m
-            JOIN institution.seminar_group_member s ON s.course_id = m.course_id AND s.user_id = m.user_id
-           WHERE s.group_id = p_group_id AND s.valid_to IS NULL
-             AND m.course_id = v_course AND m.role = 'student' AND m.member_to IS NULL
-           ORDER BY m.id
-             FOR UPDATE OF m) l;
+  PERFORM 1
+     FROM (SELECT m.id
+             FROM institution.course_member m
+             JOIN institution.seminar_group_member s ON s.course_id = m.course_id AND s.user_id = m.user_id
+            WHERE s.group_id = p_group_id AND s.valid_to IS NULL
+              AND m.course_id = v_course AND m.role = 'student' AND m.member_to IS NULL
+            ORDER BY m.id
+              FOR UPDATE OF m) l;
+  -- The boundary covers every open place of the group, also of a student
+  -- removed from the course after this transaction began: a work started
+  -- before that removal stays theirs when they return (Codex, #1372).
+  v_students := ARRAY(SELECT s.user_id FROM institution.seminar_group_member s
+                       WHERE s.group_id = p_group_id AND s.valid_to IS NULL);
   v_last := collaboration.works_started_last(
               actor.institution_id,
               ARRAY(SELECT a.id FROM institution.assignment a
