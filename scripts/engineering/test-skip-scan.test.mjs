@@ -95,8 +95,9 @@ export function tokenize(src) {
     const t = last();
     if (!t) return true;
     if (t.type === "id") return KEYWORDS_BEFORE_EXPRESSION.has(t.value);
+    // A regular expression cannot follow `++` or `--`, so `/` there divides.
     if (t.type === "punct")
-      return !(t.value === ")" || t.value === "]" || t.value === "}");
+      return ![")", "]", "}", "++", "--"].includes(t.value);
     return false;
   };
   const template = (fresh) => {
@@ -213,6 +214,9 @@ export function tokenize(src) {
     } else if (c === "." && src.startsWith("...", i)) {
       push("punct", "...", line);
       i += 3;
+    } else if ((c === "+" || c === "-") && src[i + 1] === c) {
+      push("punct", c + c, line);
+      i += 2;
     } else {
       if (c === "{" || c === "(" || c === "[") stack.push(c);
       else if (c === "}" && stack[stack.length - 1] === "${") {
@@ -381,6 +385,8 @@ const POSITIVE = [
   ['test("x", { get only() { return true; } }, () => {});', [1]],
   ['test("x", { a: 1, async todo() {} }, () => {});', [1]],
   ['test("x", { *skip() {} }, () => {});', [1]],
+  ['n++ / 2; t.skip("r"); /x/.test("x");', [1]],
+  ["n-- / 2; t.todo(); /x/;", [1]],
 ];
 const NEGATIVE = [
   "// t.skip() in a comment",
@@ -398,6 +404,7 @@ const NEGATIVE = [
   "function f() { only(1); }",
   "if (x) { only(1) }",
   "const \\u0073kipped = 1;",
+  "a = b + +/skip/.source;",
 ];
 
 test("F-035 c: the scanner finds every marker form and nothing else", () => {
