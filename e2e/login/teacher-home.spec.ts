@@ -371,6 +371,17 @@ test("a teacher publishes a new version after its preview, and a stale tab is to
   }
   await page.setViewportSize({ width: 1440, height: 900 });
 
+  // T027: a refused or unconfirmed publish says so, keeps the edits and may be tried again.
+  const versions = /^\/api\/institution\/assignments\/[0-9a-f-]{36}\/versions$/;
+  for (const [status, message] of [[422, n.errors.invalid], [503, n.errors.unavailable]] as const) {
+    await page.route((url) => versions.test(url.pathname),
+      (route) => route.fulfill({ status, contentType: "application/json", body: "{}" }), { times: 1 });
+    await publish.click();
+    await expect(page.getByRole("alert").filter({ hasText: message })).toBeVisible();
+    await expect(page.getByLabel(a.title)).toHaveValue(`${title} (dopunjeno)`);
+    await expect(publish).toBeEnabled();
+  }
+
   await publish.click();
   await expect(page.getByRole("status").filter({ hasText: n.published.replace("{n}", "2") })).toBeVisible();
   await expect(publish).toBeDisabled();
