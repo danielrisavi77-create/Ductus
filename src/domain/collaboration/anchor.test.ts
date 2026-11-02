@@ -92,4 +92,24 @@ describe("TextAnchor", () => {
     expect(() => createTextAnchor({ nodeId: ID, nodeText: "abc", start: 2, end: 2 })).toThrow("invalid range");
     expect(() => createTextAnchor({ nodeId: ID, nodeText: "abc", start: -1, end: 1 })).toThrow("invalid range");
   });
+
+  it("never cuts the context inside an emoji (#535 t. 2)", () => {
+    const emoji = "😀";
+    const text = `${emoji}${"a".repeat(23)}CILJ${"b".repeat(23)}${emoji}`;
+    const start = text.indexOf("CILJ");
+    const a = createTextAnchor({ nodeId: ID, nodeText: text, start, end: start + 4 });
+    // 24 units before CILJ would end in the middle of the first emoji.
+    expect(a.prefix).toBe("a".repeat(23));
+    expect(a.suffix).toBe("b".repeat(23));
+    for (const part of [a.prefix, a.suffix]) expect(part).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
+    expect(resolveTextAnchor(a, ID, text)).toEqual({ status: "exact", start, end: start + 4 });
+  });
+
+  it("keeps a whole emoji that fits in the context", () => {
+    const text = `${"😀"}${"a".repeat(22)}CILJ${"b".repeat(22)}${"😀"}`;
+    const start = text.indexOf("CILJ");
+    const a = createTextAnchor({ nodeId: ID, nodeText: text, start, end: start + 4 });
+    expect(a.prefix).toBe(`😀${"a".repeat(22)}`);
+    expect(a.suffix).toBe(`${"b".repeat(22)}😀`);
+  });
 });

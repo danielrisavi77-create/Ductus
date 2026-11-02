@@ -17,6 +17,10 @@ export interface Misbehaviour {
   claims?: (claims: Record<string, unknown>) => Record<string, unknown>;
   /** "none", "HS256" (keyed with the client secret), or a foreign RSA key. */
   signing?: "none" | "HS256" | "foreign-key" | "unknown-kid";
+  /** Signs with the published key of this kid instead of the current one. */
+  signingKid?: string;
+  /** Leaves `kid` out of the ID token header. */
+  noKid?: boolean;
   userinfo?: (userinfo: Record<string, unknown>) => Record<string, unknown>;
   /** Raw userinfo body, e.g. 5 MB; streamed without Content-Length. */
   userinfoBody?: () => ReadableStream<Uint8Array>;
@@ -85,8 +89,10 @@ export function createTestIdp(
   spelledIssuer: string = ISSUER,
   shape: IdpShape = "fake",
 ) {
-  const key = rsaKey();
   const foreign = rsaKey();
+  /** Every key the provider holds, by kid; `published` is what /jwks lists. */
+  const keys = new Map([["test-kid", rsaKey()]]);
+  const signing = { kid: "test-kid", published: ["test-kid"] };
   const grants = new Map<string, Grant>();
   const accessTokens = new Map<string, Grant>();
   const tokenRequests: URLSearchParams[] = [];
@@ -105,13 +111,14 @@ export function createTestIdp(
       nonce: grant.nonce,
     };
     if (state.next.claims) claims = state.next.claims(claims);
-    const signing = state.next.signing;
-    const alg = signing === "none" ? "none" : signing === "HS256" ? "HS256" : "RS256";
-    const kid = signing === "unknown-kid" ? "other-kid" : "test-kid";
-    const input = `${b64({ alg, kid, typ: "JWT" })}.${b64(claims)}`;
+    const how = state.next.signing;
+    const alg = how === "none" ? "none" : how === "HS256" ? "HS256" : "RS256";
+    const own = state.next.signingKid ?? signing.kid;
+    const kid = how === "unknown-kid" ? "other-kid" : own;
+    const input = `${b64(state.next.noKid ? { alg, typ: "JWT" } : { alg, kid, typ: "JWT" })}.${b64(claims)}`;
     if (alg === "none") return `${input}.`;
     if (alg === "HS256") return `${input}.${createHmac("sha256", CLIENT_SECRET).update(input).digest("base64url")}`;
-    const signer = signing === "foreign-key" ? foreign.privateKey : key.privateKey;
+    const signer = how === "foreign-key" ? foreign.privateKey : keys.get(own)!.privateKey;
     return `${input}.${sign("sha256", Buffer.from(input), signer).toString("base64url")}`;
   }
 
@@ -138,7 +145,9 @@ export function createTestIdp(
           ...(state.next.endSessionEndpoint === undefined ? {} : { end_session_endpoint: state.next.endSessionEndpoint }),
         });
       case "/jwks":
-        return json({ keys: [{ ...key.jwk, kid: "test-kid", alg: "RS256", use: "sig" }] });
+        return json({
+          keys: signing.published.map((kid) => ({ ...keys.get(kid)!.jwk, kid, alg: "RS256", use: "sig" })),
+        });
       case "/token": {
         if (state.next.tokenStatus) return json({ error: "server_error" }, state.next.tokenStatus);
         // RFC 6749 2.3.1: both parts form-encoded before base64.
@@ -201,6 +210,16 @@ export function createTestIdp(
     state,
     tokenRequests,
     requests,
+    /** Key rotation: a new key under `kid` is published and signs from now on. */
+    rotate(kid: string) {
+      keys.set(kid, rsaKey());
+      signing.published.push(kid);
+      signing.kid = kid;
+    },
+    /** The provider stops publishing `kid`; tokens it signed no longer verify. */
+    retire(kid: string) {
+      signing.published = signing.published.filter((k) => k !== kid);
+    },
     fetch: (async (input: string | URL | Request, init: RequestInit = {}) => {
       if (state.next.down) throw new TypeError("fetch failed");
       return handle(new URL(String(input instanceof Request ? input.url : input)), init);

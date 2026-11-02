@@ -128,6 +128,7 @@ SELECT bag_eq(
     'actor_has_role(p_role text) definer app',
     'actor_course_role(p_course_id uuid) definer app',
     'confirm_teacher_role(p_candidate_id uuid) definer app',
+    'list_teacher_candidates() definer app',
     'create_course(p_name text, p_academic_year text, p_ai_policy text) definer app',
     'create_enrollment_code(p_course_id uuid, p_valid_until timestamp with time zone) definer app',
     'revoke_enrollment_code(p_course_id uuid) definer app',
@@ -156,7 +157,8 @@ SELECT bag_eq(
     'create_seminar_group(p_course_id uuid, p_name text) definer app',
     'assign_group_teacher(p_group_id uuid, p_teacher_id uuid) definer app',
     'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
-    'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app'
+    'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app',
+    'can(p_action text, p_document_id text) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
