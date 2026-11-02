@@ -3,8 +3,14 @@
 // and WebKit stores it only on a secure origin); every other local flow keeps
 // http, so both are registered by default.
 
-export const DEFAULT_REDIRECT_URIS = ["http://localhost:3000/api/auth/callback", "https://localhost:3000/api/auth/callback"];
-export const DEFAULT_POST_LOGOUT_REDIRECT_URIS = ["http://localhost:3000/", "https://localhost:3000/"];
+// The login E2E uses https://127.0.0.1:3000: browsers do not note an IP address
+// as an HSTS host, so the redirect to this provider (http) is not upgraded.
+export const DEFAULT_REDIRECT_URIS = [
+  "http://localhost:3000/api/auth/callback",
+  "https://localhost:3000/api/auth/callback",
+  "https://127.0.0.1:3000/api/auth/callback",
+];
+export const DEFAULT_POST_LOGOUT_REDIRECT_URIS = ["http://localhost:3000/", "https://localhost:3000/", "https://127.0.0.1:3000/"];
 
 /**
  * A comma separated list from the environment. Unset, empty or blank gives the

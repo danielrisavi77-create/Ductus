@@ -33,6 +33,10 @@ for (const [name, value] of REFUSED) {
 }
 
 test("the defaults register the callback and the way back for http and https, on the one app origin", () => {
-  assert.deepEqual(DEFAULT_REDIRECT_URIS, ["http://localhost:3000/api/auth/callback", "https://localhost:3000/api/auth/callback"]);
-  assert.deepEqual(DEFAULT_POST_LOGOUT_REDIRECT_URIS, ["http://localhost:3000/", "https://localhost:3000/"]);
+  assert.deepEqual(DEFAULT_REDIRECT_URIS, [
+    "http://localhost:3000/api/auth/callback",
+    "https://localhost:3000/api/auth/callback",
+    "https://127.0.0.1:3000/api/auth/callback",
+  ]);
+  assert.deepEqual(DEFAULT_POST_LOGOUT_REDIRECT_URIS, ["http://localhost:3000/", "https://localhost:3000/", "https://127.0.0.1:3000/"]);
 });

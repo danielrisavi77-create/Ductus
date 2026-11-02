@@ -5,8 +5,10 @@ import { LOGIN_PORT, loginOrigin } from "./scripts/demo/login-e2e-https.mjs";
 import webkitSpecs from "./scripts/engineering/login-webkit-specs.json" with { type: "json" };
 import { playwrightConsoleReporter } from "./test-output";
 
-// The fake provider redirects to localhost:3000 alone (infra/fake-oidc), so the
-// port and the host name are fixed. Our own dev server runs over https (see
+// The fake provider redirects to port 3000 alone (infra/fake-oidc), so the port
+// is fixed. Our own dev server runs over https at 127.0.0.1, not localhost: an
+// IP address is never kept as an HSTS host, so WebKit does not upgrade the
+// redirect to the http-only fake provider on localhost:8090 (see
 // scripts/demo/login-e2e-https.mjs); against a server reused with
 // E2E_REUSE_SERVER=1 the origin stays http, as `pnpm demo:up` starts it.
 const BASE_URL = loginOrigin(process.env);
@@ -25,14 +27,7 @@ const SECURE = BASE_URL.startsWith("https:");
  * and seeded database, and AUTH_DATABASE_URL, which has no default because
  * its password is made per run (CI) or chosen locally (.env.example).
  */
-// TEMPORARY (DAN-232 diagnosis): GnuTLS and browser logs for the WebKit handshake.
-if (process.env.CI && SECURE) {
-  process.env.GNUTLS_DEBUG_LEVEL = "3";
-  process.env.DEBUG = "pw:browser";
-}
-
 export default defineConfig({
-  globalSetup: process.env.CI && SECURE ? "./scripts/demo/login-tls-probe.mjs" : undefined,
   testDir: "e2e/login",
   retries: 0,
   // The tests share the demo account and the dev server compiles on first

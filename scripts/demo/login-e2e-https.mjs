@@ -12,12 +12,16 @@ import { fileURLToPath } from "node:url";
 export const LOGIN_PORT = 3000;
 
 /**
- * The one origin of the login stack. Our own server runs over https; with
- * E2E_REUSE_SERVER=1 the server is one started elsewhere (`pnpm demo:up`, the
- * native runner), which stays on http as it always was.
+ * The one origin of the login stack. Our own server runs over https, at the
+ * address 127.0.0.1: the app sends Strict-Transport-Security, WebKit keeps it
+ * per host name and then upgrades the redirect to the fake provider
+ * (http://localhost:8090, http only) to https, which fails the handshake. An IP
+ * address is never noted as an HSTS host (RFC 6797 §8.1). With E2E_REUSE_SERVER=1
+ * the server is one started elsewhere (`pnpm demo:up`, the native runner),
+ * which stays on http://localhost as it always was.
  */
 export function loginOrigin(env = process.env) {
-  return `${env.E2E_REUSE_SERVER === "1" ? "http" : "https"}://localhost:${LOGIN_PORT}`;
+  return env.E2E_REUSE_SERVER === "1" ? `http://localhost:${LOGIN_PORT}` : `https://127.0.0.1:${LOGIN_PORT}`;
 }
 
 /** The openssl request for a self-signed certificate that is good for two days. */

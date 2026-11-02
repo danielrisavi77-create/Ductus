@@ -6,7 +6,7 @@ import { THEME_KEY } from "../../src/components/shell/theme";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { SESSION_COOKIE, signIn } from "./support";
 import { localAdminUrl } from "./local-db-url";
-import { APP_ORIGIN } from "./origin";
+import { APP_HOST, APP_ORIGIN } from "./origin";
 
 // DAN-378 (M1.8): Z-03 for a closed session, "not signed in" without one and
 // Z-05 for a signed-in person without the teacher role, after the UX pass of
@@ -46,7 +46,7 @@ async function expectNoAxeViolations(page: Page): Promise<void> {
 /** A cookie of the right shape that no open session has (as in home-shell.spec.ts). */
 async function closedSessionCookie(page: Page): Promise<void> {
   await page.context().addCookies([{
-    name: SESSION_COOKIE, value: "Z".repeat(43), domain: "localhost", path: "/",
+    name: SESSION_COOKIE, value: "Z".repeat(43), domain: APP_HOST, path: "/",
     secure: true, httpOnly: true, sameSite: "Lax",
   }]);
 }

@@ -4,7 +4,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
   appCookie, clickSignOut, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
-import { APP_ORIGIN } from "./origin";
+import { APP_HOST, APP_ORIGIN } from "./origin";
 
 // F-5 (DAN-34, plan #376): the writing page of a signed-in person and the
 // sign-out that always ends the session (D-118). Every test runs in a
@@ -45,7 +45,7 @@ test("row 1: without a session /rad shows no one as signed in", async ({ page, c
   // A cookie of the right shape that no open session has: nothing is shown
   // as signed in, no journal opens, and signing in again is offered.
   await context.addCookies([{
-    name: SESSION_COOKIE, value: "Z".repeat(43), domain: "localhost", path: "/",
+    name: SESSION_COOKIE, value: "Z".repeat(43), domain: APP_HOST, path: "/",
     secure: true, httpOnly: true, sameSite: "Lax",
   }]);
   await page.goto("/rad");
