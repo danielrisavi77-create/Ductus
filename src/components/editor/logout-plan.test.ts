@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
@@ -11,6 +14,7 @@ import {
   copyText,
   heldAfterSubmission,
   DISCARD_LIMIT_MS,
+  logoutActions,
   logoutText,
   nextDiscardStep,
   nothingHeld,
@@ -308,7 +312,7 @@ describe("work kept without an owed row", () => {
   });
 
   it("uses no forbidden term in any text the shell dialog can show", () => {
-    const shown = [t.logout, t.loggingOut, t.logoutTitle, t.logoutConfirm, t.logoutStay, t.logoutPlain, t.logoutKept,
+    const shown = [t.logout, t.loggingOut, t.logoutTitle, t.logoutConfirm, t.logoutConfirmUnsaved, t.logoutStay, t.logoutPlain, t.logoutKept,
       t.logoutCopyKept, ...Object.values(t.logoutPending), ...Object.values(t.logoutCopy), messagesHr.shell.signOut];
     for (const text of shown) expect(findForbiddenTerms(text)).toEqual([]);
   });
@@ -332,5 +336,22 @@ describe("nothingHeld (O1, U6)", () => {
     ["a failed read", { unsaved: false, pending: null }],
   ])("is false for %s", (_name, plan: LogoutPlan) => {
     expect(nothingHeld(plan)).toBe(false);
+  });
+});
+
+// #1331: with unsaved text the export is the main action and sign-out is plain.
+describe("logoutActions (#1331)", () => {
+  it("makes the export main and names sign-out 'bez izvoza' only for unsaved text", () => {
+    expect(logoutActions({ unsaved: true, pending: null })).toEqual({ exportFirst: true, confirmLabel: t.logoutConfirmUnsaved });
+    for (const plan of [{ unsaved: false, pending: 0 }, { unsaved: false, pending: 3, submitted: true, afterSubmission: 2 }]) {
+      expect(logoutActions(plan)).toEqual({ exportFirst: false, confirmLabel: t.logoutConfirm });
+    }
+  });
+
+  it("does not remove sign-out: the dialog still renders the confirm action for unsaved text", () => {
+    const source = readFileSync(join(process.cwd(), "src/components/editor/LogoutDialog.tsx"), "utf8");
+    expect(source).toContain("className={exportFirst ? styles.secondary : styles.confirm}");
+    expect(source).toContain("onClick={onConfirm}");
+    expect(source).toContain("className={exportFirst ? styles.confirm : styles.secondary}");
   });
 });

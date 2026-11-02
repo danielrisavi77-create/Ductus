@@ -27,6 +27,7 @@ import {
   closeReply,
   afterSubmissionPart,
   copyPart,
+  logoutActions,
   logoutText,
   nextDiscardStep,
   settleDiscard,
@@ -79,6 +80,7 @@ export default function LogoutDialog({
   const titleId = useId();
   const textId = useId();
   const { text, note, offerExport } = logoutText(plan);
+  const { exportFirst, confirmLabel } = logoutActions(plan);
   const copy = copyPart(copies, Boolean(onRestoreCopy && onDiscardCopy));
   const [discard, setDiscard] = useState<DiscardStep>("idle");
   const step = (event: DiscardEvent) => setDiscard((now) => nextDiscardStep(now, event));
@@ -207,6 +209,18 @@ export default function LogoutDialog({
     if (event.target === event.currentTarget && !busy && !asking) onStay();
   };
 
+  // With unsaved text the export is the main action (#1331); otherwise it stays plain.
+  const exportButton = (
+    <button
+      type="button"
+      className={exportFirst ? styles.confirm : styles.secondary}
+      onClick={onExport}
+      disabled={busy || asking}
+    >
+      {messagesHr.editor.exportText}
+    </button>
+  );
+
   return (
     <dialog
       ref={dialogRef}
@@ -269,14 +283,16 @@ export default function LogoutDialog({
           {discard === "failed" ? <p className={styles.error}>{t.copyDiscardFailed}</p> : null}
         </div>
         <div className={styles.actions}>
-          <button type="button" className={styles.confirm} onClick={onConfirm} disabled={busy || asking}>
-            {working ? t.loggingOut : t.logoutConfirm}
+          {offerExport && exportFirst ? exportButton : null}
+          <button
+            type="button"
+            className={exportFirst ? styles.secondary : styles.confirm}
+            onClick={onConfirm}
+            disabled={busy || asking}
+          >
+            {working ? t.loggingOut : confirmLabel}
           </button>
-          {offerExport ? (
-            <button type="button" className={styles.secondary} onClick={onExport} disabled={busy || asking}>
-              {messagesHr.editor.exportText}
-            </button>
-          ) : null}
+          {offerExport && !exportFirst ? exportButton : null}
           <button ref={stayRef} type="button" className={styles.stay} onClick={onStay} disabled={busy || asking}>
             {t.logoutStay}
           </button>

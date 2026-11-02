@@ -1084,6 +1084,8 @@ export const hr = {
     // app sends nothing to the server yet, so it promises no sending (#476).
     logoutTitle: "Odjava",
     logoutConfirm: "Odjavi se",
+    // Unsaved text (#1331): sign-out is still allowed (D-118) but named for what it costs.
+    logoutConfirmUnsaved: "Odjavi se bez izvoza",
     logoutStay: "Ostani",
     logoutPlain: "Odjava zatvara sesiju na ovom uređaju.",
     logoutPending: {
