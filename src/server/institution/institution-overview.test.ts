@@ -89,7 +89,7 @@ describe("readInstitutionOverview", () => {
     ["more unaffiliated than teachers", [row({ teachers_without_affiliation: 5 })]],
     ["an empty name", [row({ institution_name: "" })]],
     ["a name with a control character", [row({ institution_name: "Fakultet\nA" })]],
-    ["a padded name", [row({ institution_name: " Fakultet A" })]],
+    ["a name over 200 characters", [row({ institution_name: "\u{1D49C}".repeat(201) })]],
   ])("is unavailable, never zeros, for %s", async (_label, rows) => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await readInstitutionOverview(TOKEN, database({ rows: rows as Row[] }).withActor)).toEqual({ kind: "unavailable" });
@@ -100,6 +100,14 @@ describe("readInstitutionOverview", () => {
 describe("overviewOf", () => {
   it("accepts an institution without a display name", () => {
     expect(overviewOf([row({ institution_name: null })])).toEqual({ ...OVERVIEW, institutionName: null });
+  });
+
+  // The database rule (is_plain_label) accepts edge spaces and counts characters.
+  it.each([
+    ["a padded name", " Fakultet A "],
+    ["200 characters outside the BMP", "\u{1D49C}".repeat(200)],
+  ])("accepts %s that the database constraint accepts", (_label, name) => {
+    expect(overviewOf([row({ institution_name: name })])).toEqual({ ...OVERVIEW, institutionName: name });
   });
 
   it("accepts all zeros as a real answer", () => {
