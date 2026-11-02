@@ -30,6 +30,7 @@ export type InstitutionReply =
   | { error: string }
   | { code: string }
   | { revoked: boolean }
+  | { confirmed: true }
   | { removed: boolean }
   | { allowed: boolean }
   | { assignmentId: string; versionNo: number };
