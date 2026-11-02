@@ -1451,6 +1451,55 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     expect(entries()).toEqual([]);
   });
 
+  // F-024: a module of the repository outside app/ and src/ is not read, so a
+  // page that imports one would show its text unchecked.
+  const OUTSIDE: readonly [string, string, string][] = [
+    ["a module at the repository root", "app/qa-root/page.tsx", 'import { TEXT } from "../../ui/text";'],
+    ["a component at the repository root", "src/components/Page.tsx", 'import Flag from "../../components/Flag.tsx";'],
+    ["a module handed on", "src/domain/sync/labels.ts", 'export * from "../../../ui/labels";'],
+    ["a module loaded later", "src/components/Page.tsx", 'export const Flag = lazy(() => import("../../components/Flag"));'],
+    ["a module required", "src/domain/sync/state.ts", 'export const words = require("../../../scripts/words.cjs");'],
+    ["a module in the old form", "src/domain/sync/state.ts", 'import words = require("../../../ui/words");'],
+    ["a module for its side effects", "app/layout.tsx", 'import "../ui/setup";'],
+    ["a module by a path with backslashes", "src/components/Page.tsx", 'import { TEXT } from "..\\\\..\\\\ui\\\\text";'],
+    ["the repository root itself", "src/index.ts", 'import all from "..";'],
+    ["a module outside the repository", "src/components/Page.tsx", 'import { TEXT } from "../../../outside/text";'],
+    // Codex review of e458c450 (#1169): the alias leaves src/ through "..".
+    ["a module through the alias out of src", "app/page.tsx", 'import { TEXT } from "@/../ui/text";'],
+    ["a module through the alias out of the repository", "app/page.tsx", 'import { TEXT } from "@/../../ui/text";'],
+    // Codex review of 9ae00a55 (#1169): an absolute path is not a package.
+    ["a module by an absolute path", "app/page.tsx", 'import { TEXT } from "/ui/text";'],
+    ["a module by a path from a drive", "src/components/Page.tsx", 'import { TEXT } from "C:\\\\repo\\\\ui\\\\text";'],
+    ["a module by a path from a drive with slashes", "src/components/Page.tsx", 'import { TEXT } from "c:/repo/ui/text";'],
+  ];
+
+  it.each(OUTSIDE)("reports the import of %s", (_, file, line) => {
+    write("ui/text.ts", 'export const TEXT = "Sumnjivo";\n');
+    write(file, `export const A = 1;\n${line}\n`);
+    const name = /"([^"]+)"/.exec(line)![1]!.replaceAll("\\\\", "\\");
+    expect(reasons()).toEqual([[file, 2, `import of "${name}", a module outside app/ and src/ (${UNREADABLE_HINTS.outsideModule})`]]);
+    expect(UNREADABLE_HINTS.outsideModule).toMatch(/move the module under src\//);
+  });
+
+  it("does not report a module under app/ or src/, a package, the alias or data outside them", () => {
+    write("config/x/citation.json", '{"style":"Rok"}');
+    write("src/lib/words.ts", 'export const W = "Rok";\n');
+    write("app/rad/parts.ts", 'export const P = "Rok";\n');
+    write(
+      "app/rad/page.tsx",
+      [
+        'import { W } from "../../src/lib/words";',
+        'import { P } from "./parts";',
+        'import { X } from "@/lib/words";',
+        'import React from "react";',
+        'import style from "../../config/x/citation.json";',
+        "export const all = [W, P, X, React, style];",
+        "",
+      ].join("\n"),
+    );
+    expect(reasons()).toEqual([]);
+  });
+
   it("stops on imported data that is not JSON or not UTF-8, like a catalogue", () => {
     write("src/components/Page.tsx", 'import words from "./words.json";\nexport const all = words;\n');
     write("src/components/words.json", '{ "title": "Rok" ');
