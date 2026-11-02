@@ -324,12 +324,16 @@ describe("catalogue parser", () => {
       [
         "const note = 0; /* institution.create_course( */",
         "// institution.remove_student(",
+        '// import "@/server/probe";',
+        '/* import { x } from "./hidden"; */',
         "const url = 'https://example.test/a';",
         "await sql`SELECT institution.publish_assignment_version(${id})`;",
       ].join("\n"),
     );
     expect(stripped).not.toContain("institution.create_course(");
     expect(stripped).not.toContain("institution.remove_student(");
+    expect(stripped).not.toContain("@/server/probe");
+    expect(stripped).not.toContain("./hidden");
     expect(stripped).toContain("https://example.test/a");
     expect(stripped).toContain("institution.publish_assignment_version(");
   });
