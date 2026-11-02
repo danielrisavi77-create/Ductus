@@ -1076,7 +1076,7 @@ function importedData(root: string, file: string, name: string): string | null |
  * Whether an import in `file` names a module of the repository outside `app/`
  * and `src/`, which the scan does not read (F-024). A `.json` file is read
  * wherever it is (`importedData`). `@/` is followed from `src/`, as the
- * project sets it; any other name that is not a path from the file is a package.
+ * project sets it, and an absolute path is always outside; any other name is a package.
  */
 function importedOutside(file: string, name: string): boolean {
   if (name.toLowerCase().endsWith(".json")) return false;
@@ -1085,6 +1085,8 @@ function importedOutside(file: string, name: string): boolean {
   let target: string;
   if (written.startsWith("@/")) target = path.posix.normalize(`src/${written.slice(2)}`);
   else if (written.startsWith(".")) target = path.posix.join(path.posix.dirname(file), written);
+  // An absolute path, from the root or a drive, is not a package and is not read.
+  else if (written.startsWith("/") || /^[A-Za-z]:\//.test(written)) return true;
   else return false;
   return !SCANNED_DIRS.some((dir) => target === dir || target.startsWith(`${dir}/`));
 }

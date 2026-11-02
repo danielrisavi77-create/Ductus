@@ -1467,6 +1467,10 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     // Codex review of e458c450 (#1169): the alias leaves src/ through "..".
     ["a module through the alias out of src", "app/page.tsx", 'import { TEXT } from "@/../ui/text";'],
     ["a module through the alias out of the repository", "app/page.tsx", 'import { TEXT } from "@/../../ui/text";'],
+    // Codex review of 9ae00a55 (#1169): an absolute path is not a package.
+    ["a module by an absolute path", "app/page.tsx", 'import { TEXT } from "/ui/text";'],
+    ["a module by a path from a drive", "src/components/Page.tsx", 'import { TEXT } from "C:\\\\repo\\\\ui\\\\text";'],
+    ["a module by a path from a drive with slashes", "src/components/Page.tsx", 'import { TEXT } from "c:/repo/ui/text";'],
   ];
 
   it.each(OUTSIDE)("reports the import of %s", (_, file, line) => {
