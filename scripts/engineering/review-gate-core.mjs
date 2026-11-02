@@ -364,7 +364,9 @@ function prevailing({ current, carried }) {
 // blocks; a PASS counts only in its exact form. Any verdict line of the block,
 // also with markdown or spaces around its name, that names FAIL or BLOCK (or
 // BLOK) makes the comment negative. Read here only to find a negative.
-const NEGATIVE_WORD_RE = /\b(FAIL|BLOC?K)[A-Z]*\b/;
+// Letters and digits bound the word, not `\b`, so markdown such as `_` around
+// it still reads as FAIL or BLOCK.
+const NEGATIVE_WORD_RE = /(?<![A-Z0-9])(FAIL|BLOC?K)[A-Z]*(?![A-Z0-9])/;
 // One literal pattern per verdict field, with markdown or spaces around its name.
 const VERDICT_LINE_RE = new Map([
   ["Review-Verdict", /^[\s*_`>~+-]*Review-Verdict[\s*_`>~+-]*:(.*)$/i],
@@ -385,10 +387,14 @@ function negativeWord(body, name) {
 // is elsewhere (null). Anything else, missing, words, fewer than seven or more
 // than forty hex digits (r4434690343), is the current head, since nothing
 // readable names another one.
+function readableHead(value) {
+  const named = (value ?? "").replace(/^[\s*_`]+|[\s*_`.,;]+$/g, "").toLowerCase();
+  return /^[0-9a-f]{7,40}$/.test(named) ? named : null;
+}
 function negativeHead(value, headSha, carriedHeads) {
   const sha = headSha.toLowerCase();
-  const named = (value ?? "").replace(/^[\s*_`]+|[\s*_`.,;]+$/g, "").toLowerCase();
-  if (!/^[0-9a-f]{7,40}$/.test(named) || sha.startsWith(named)) return { head: sha, current: true };
+  const named = readableHead(value);
+  if (!named || sha.startsWith(named)) return { head: sha, current: true };
   const onCarried = [...carriedHeads].find((carriedSha) => carriedSha.toLowerCase().startsWith(named));
   return onCarried ? { head: onCarried.toLowerCase(), current: false } : null;
 }
@@ -791,14 +797,15 @@ export function carriedHeadCandidates(comments, headSha, path) {
   const steps = path ?? [];
   // The walk may stop once it has seen every named head (F-148): no verdict
   // head is then beyond it, so none can be dropped silently.
-  const seen = new Set(steps.map((commit) => commit?.sha?.toLowerCase()));
-  const allSeen = [...named].every((sha) => seen.has(sha));
+  // A negative may name its head by a prefix (F-027), so a named head is
+  // matched as a prefix of a walked commit; a full SHA matches only itself.
+  const shas = steps.map((commit) => commit?.sha?.toLowerCase()).filter(Boolean);
+  const names = (sha) => [...named].some((head) => sha.startsWith(head));
+  const allSeen = [...named].every((head) => shas.some((sha) => sha.startsWith(head)));
   if (!allSeen && !steps.some((commit) => (commit?.parents?.length ?? 0) < 2)) {
     return { heads: [], reason: "first-parent walk did not reach a non-merge commit" };
   }
-  const heads = steps
-    .map((commit) => commit?.sha?.toLowerCase())
-    .filter((sha) => named.has(sha) && onlyBaseMerges(steps, sha));
+  const heads = shas.filter((sha) => names(sha) && onlyBaseMerges(steps, sha));
   if (heads.length > MAX_CARRIED_HEADS) {
     return { heads: [], reason: `more than ${MAX_CARRIED_HEADS} verdict heads behind base merges` };
   }
@@ -820,6 +827,11 @@ export function namedCarryHeads(comments, headSha) {
       if (block === "Owner-Command" && !validCommandShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
+      // F-027: a negative names its head as `negativeHead` reads it, so a
+      // prefix or a decorated SHA of an earlier head is walked for too.
+      const verdictField = { "Agent-Review": "Review-Verdict", "QA-Agent": "QA-Verdict" }[block];
+      const negativeAt = verdictField && negativeWord(entry.body, verdictField) ? readableHead(field(entry.body, headField)) : null;
+      if (negativeAt && !headSha.toLowerCase().startsWith(negativeAt)) named.add(negativeAt);
     }
   }
   return named;

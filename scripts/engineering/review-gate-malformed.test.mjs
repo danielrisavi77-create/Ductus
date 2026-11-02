@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { evaluateGate } from "./review-gate-core.mjs";
+import { carriedHeads as walkCarriedHeads, createApi } from "./review-gate-api.mjs";
 
 const head = "1234567890abcdef1234567890abcdef12345678";
 const newer = "2468ace02468ace02468ace02468ace02468ace0";
@@ -61,6 +62,8 @@ const NEGATIVES = [
   ["3 code value", ({ H, V }) => [`${H}: ${head}`, `${V}: \`FAIL\``]],
   ["3 value with words", ({ H, V }) => [`${H}: ${head}`, `${V}: BLOCK - see below`]],
   ["3 value with a full stop", ({ H, V }) => [`${H}: ${head}`, `${V}: FAIL.`]],
+  ["3 value in underscores", ({ H, V }) => [`${H}: ${head}`, `${V}: _FAIL_`]],
+  ["3 value in double underscores", ({ H, V }) => [`${H}: ${head}`, `${V}: __BLOCK__`]],
   ["4 bold field name", ({ H, V }) => [`${H}: ${head}`, `**${V}:** BLOCK`]],
   ["4 list item line", ({ H, V }) => [`${H}: ${head}`, `- ${V}: FAIL`]],
   ["4 emphasised field name", ({ H, V }) => [`${H}: ${head}`, `_${V}_: BLOCK`]],
@@ -278,3 +281,70 @@ test("a negative quoted inside a code block is a quote and does not block", () =
   );
   assert.equal(gate([quoted]).state, "success");
 });
+
+// Contract (d) through the real carry-over chain: a negative that names an
+// earlier head as a prefix or a decorated SHA is walked for and carried, so it
+// holds after a clean merge of main like one with the full SHA.
+const mainParent = "9".repeat(40);
+const prBase = "8".repeat(40);
+const prChange = { files: [{ filename: "a.mjs", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b", sha: "7".repeat(40) }] };
+const mergedPr = { head: { sha: head }, base: { sha: prBase, ref: "main" } };
+const mergeApi = () =>
+  createApi({
+    baseUrl: "https://api.test",
+    token: "t",
+    timeoutMs: 1000,
+    fetchImpl: async (url) => {
+      const path = url.replace("https://api.test", "");
+      let value;
+      if (path.endsWith(`/commits/${head}`)) value = { sha: head, parents: [{ sha: carried }, { sha: mainParent }] };
+      else if (path.endsWith(`/commits/${carried}`)) value = { sha: carried, parents: [{ sha: "6".repeat(40) }] };
+      else if (path.includes(`/compare/main...${mainParent}`)) value = { status: "behind", files: [] };
+      else if (path.includes("/compare/")) value = prChange;
+      else throw new Error(`unexpected ${path}`);
+      return { ok: true, status: 200, json: async () => value, text: async () => JSON.stringify(value) };
+    },
+  });
+const walk = (comments) => walkCarriedHeads(mergeApi(), "o", "r", mergedPr, comments, { log: () => {} });
+
+for (const [name, named] of [
+  ["a seven digit prefix", carried.slice(0, 7)],
+  ["a bold full SHA", `**${carried}**`],
+  ["a full SHA in code", `\`${carried}\``],
+]) {
+  for (const kind of ["review", "qa"]) {
+    test(`${kind}: a negative naming an earlier head as ${name} is carried after a clean main merge (contract d)`, async () => {
+      const negative = block(kind, kind === "review" ? "r2" : "q2", ({ H, V }) => [`${H}: ${named}`, `${V}: BLOCK`]);
+      const passes = kind === "review"
+        ? [exact("review", "r1", "PASS", carried)]
+        : [exact("review", "r1", "PASS", carried), exact("qa", "q1", "PASS", carried)];
+      const risk = kind === "review" ? "standard" : "critical";
+      assert.equal(gate(passes, { risk, carriedHeads: await walk(passes) }).state, "success");
+      const comments = [...passes, negative];
+      const heads = await walk(comments);
+      assert.deepEqual([...heads], [carried]);
+      assert.notEqual(gate(comments, { risk, carriedHeads: heads }).state, "success");
+    });
+  }
+}
+
+test("a negative naming only a prefix of an earlier head is still walked for (contract d)", async () => {
+  const negative = block("review", "r2", ({ H, V }) => [`${H}: ${carried.slice(0, 9)}`, `${V}: FAIL`]);
+  assert.deepEqual([...(await walk([negative]))], [carried]);
+  const pass = block("review", "r2", ({ H, V }) => [`${H}: ${carried.slice(0, 9)}`, `${V}: PASS`]);
+  assert.equal((await walk([pass])).size, 0, "a PASS still needs the full SHA");
+});
+
+for (const kind of ["review", "qa"]) {
+  test(`${kind}: a negative naming only a prefix of an earlier head blocks like one with the full SHA (contract d)`, async () => {
+    const risk = kind === "review" ? "standard" : "critical";
+    const current = kind === "review" ? [exact("review", "r1")] : [exact("review", "r1"), exact("qa", "q1")];
+    const slot = kind === "review" ? "r2" : "q2";
+    for (const named of [carried, carried.slice(0, 7), `**${carried}**`]) {
+      const comments = [...current, block(kind, slot, ({ H, V }) => [`${H}: ${named}`, `${V}: FAIL`])];
+      const heads = await walk(comments);
+      assert.deepEqual([...heads], [carried], named);
+      assert.notEqual(gate(comments, { risk, carriedHeads: heads }).state, "success", named);
+    }
+  });
+}
