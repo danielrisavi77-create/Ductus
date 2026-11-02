@@ -223,28 +223,62 @@ function listHead(author: Source["authors"][number]): string {
   return author.kind === "person" ? `${author.family}, ` : author.name;
 }
 
+// The name of an author in an in-text citation, as the domain's formatInText gives it.
+function citedName(author: Source["authors"][number]): string {
+  return author.kind === "person" ? author.family : (author.acronym?.trim() || author.name);
+}
+
+// The in-text form of a list of cited names: every name up to the style's
+// limit, else the first and "i sur." (here the empty string after it).
+function citedForm(names: readonly string[]): readonly string[] {
+  return names.length > fpzgCitationStyle.inText.maxNamedAuthors ? [names[0]!, ""] : names;
+}
+
 /**
- * Whether an entry would be cited in the text as `work` is: the same family
- * names in the same order and the same year, with or without a letter. The
- * year is read at its place, in the first bracket after the first author that
- * opens with four digits, never in a title, place, publisher or journal such
- * as "Analiza (2021)" (QA on #1407, c.6586313749).
+ * The family names of an entry's authors after its first, read from what
+ * follows the first author's family name and comma: "Marko, Babić, Iva i
+ * Kovač, Luka" gives ["Babić", "Kovač"]. A joiner with no comma after it is
+ * part of a name ("Ana i Marija"). `null` when the list is not one of
+ * persons (an organisation among them): it cannot be read safely.
+ */
+function laterFamilies(rest: string): string[] | null {
+  const { authorJoiner } = fpzgCitationStyle.bibliography;
+  const joined = rest.lastIndexOf(authorJoiner);
+  const last = joined === -1 ? -1 : rest.indexOf(", ", joined + authorJoiner.length);
+  const before = last === -1 ? rest : rest.slice(0, joined);
+  // The first author's given name, then (family, given) pairs.
+  const parts = before.split(", ");
+  if (parts.length % 2 === 0) return null;
+  const families = parts.filter((_, i) => i % 2 === 1);
+  if (last !== -1) families.push(rest.slice(joined + authorJoiner.length, last));
+  return families;
+}
+
+/**
+ * Whether an entry would be cited in the text as `work` is: the same in-text
+ * form (every family name in order up to two authors, else the first author
+ * and "i sur.") and the same year, with or without a letter. The year is read
+ * at its place, in the first bracket after the first author that opens with
+ * four digits, never in a title, place, publisher or journal such as
+ * "Analiza (2021)" (QA on #1407, c.6586313749). "Horvat, Marko, Babić, Iva i
+ * Kovač, Luka (2021)" is "(Horvat i sur., 2021)", not "(Horvat i Kovač, 2021)"
+ * (QA on #1407, c.6587528637). An entry that cannot be read counts as shared,
+ * so the student's citations stay as written.
  */
 function sharesCitation(text: string, work: Source): boolean {
-  const [first, second] = work.authors;
-  const head = listHead(first!);
+  const first = work.authors[0]!;
+  const head = listHead(first);
   if (!text.startsWith(head)) return false;
   const year = /\((\d{4})([^)]*)\)/.exec(text.slice(head.length));
   if (year === null || year[1] !== String(work.year) || !/^[a-z]?$/.test(year[2]!)) return false;
-  // What stands between the first author and the year: a given name, or more authors.
-  const authors = text.slice(head.length, head.length + year.index);
-  const { authorJoiner } = fpzgCitationStyle.bibliography;
-  if (second === undefined) {
-    // "Horvat, Marko i Kovač, Luka (2021)" is cited "(Horvat i Kovač, 2021)", not "(Horvat, 2021)".
-    const joined = authors.indexOf(authorJoiner);
-    return joined === -1 || !authors.includes(", ", joined + authorJoiner.length);
-  }
-  return authors.includes(`${authorJoiner}${listHead(second)}`);
+  // What stands between the first author's head and the year: a given name, or
+  // more authors. An organisation has no given name: a stand-in keeps the shape.
+  const rest = text.slice(head.length, head.length + year.index).trimEnd();
+  const later = laterFamilies(first.kind === "person" ? rest : `-${rest}`);
+  if (later === null) return true;
+  const theirs = citedForm([citedName(first), ...later]);
+  const ours = citedForm(work.authors.map(citedName));
+  return theirs.length === ours.length && theirs.every((name, i) => name === ours[i]);
 }
 
 /**
