@@ -3,7 +3,7 @@
 -- "Demo nastavnik" (demo-teacher, the default) or, for K-4d (#655),
 -- "Demo nastavnica" (demo-teacher-2, psql -v account=demo-teacher-2).
 -- This is NOT a migration, production path, identity mapping, HTTP endpoint,
--- or rule that promotes the OIDC "employee" affiliation to a teacher.
+-- or rule that promotes the OIDC staff affiliation ("djelatnik") to a teacher.
 -- The local operator uses the compose superuser over the container socket.
 \set ON_ERROR_STOP on
 SELECT (

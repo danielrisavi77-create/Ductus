@@ -62,9 +62,10 @@ BEGIN
   -- with the callback's role. The account is created on the first call. A
   -- token has the cookie's format and never leaves this transaction.
   -- DAN-304: the eight-argument form is the only one the login role keeps.
-  -- The provider's "employee" gives no teacher right (#1181, item 28), so,
-  -- as in the callback, none of the three gets one; the demo teacher's role
-  -- is the operator grant of step 2.
+  -- The fake provider's teacher affiliation gives the right to have a role
+  -- confirmed (DAN-483), never the role; this script records none of the
+  -- three as eligible, and the demo teacher's role is the operator grant of
+  -- step 2.
   SET LOCAL ROLE ductus_auth_local;
   FOR i IN 1 .. cardinality(c_subjects) LOOP
     v_subject := c_subjects[i];

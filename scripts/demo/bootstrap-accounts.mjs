@@ -17,6 +17,9 @@ const ACCOUNTS = [
   { id: "demo-teacher", name: "Demo nastavnik" },
   { id: "demo-teacher-2", name: "Demo nastavnica" },
 ];
+// The chooser also offers the accounts of "Demo fakultet B" (DAN-483); this
+// script signs in and grants only the accounts above.
+const OTHER_CHOOSER_NAMES = ["Ustanova B: nastavnica", "Ustanova B: student"];
 // Both teachers get the explicit operator grant; the students never do.
 const TEACHERS = ["demo-teacher", "demo-teacher-2"];
 const SESSION_COOKIE = "__Host-ductus_session";
@@ -159,7 +162,8 @@ export async function signInAccount(browser, db, account, origins = [APP, OIDC],
     const interaction = assertLocalUrl(page.url(), origins);
     if (interaction.origin !== origins[1] || !/^\/interaction\/[^/]+$/.test(interaction.pathname)) fail("Unexpected OIDC interaction.");
     const names = await page.locator('button[name="account"]').allTextContents();
-    if (names.length !== ACCOUNTS.length || ACCOUNTS.some((entry) => !names.includes(entry.name))) fail("Unexpected fake-OIDC account chooser.");
+    const expected = [...ACCOUNTS.map((entry) => entry.name), ...OTHER_CHOOSER_NAMES];
+    if (names.length !== expected.length || expected.some((name) => !names.includes(name))) fail("Unexpected fake-OIDC account chooser.");
     stage = "OIDC callback";
     await page.getByRole("button", { name: account.name, exact: true }).click();
     await page.waitForURL(`${origins[0]}/`);

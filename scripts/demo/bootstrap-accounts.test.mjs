@@ -83,7 +83,9 @@ test("real browser redirects: wrong target and partial failure block grant; retr
     <button name="account" value="demo-student">Demo studentica</button>
     <button name="account" value="demo-student-2">Demo student 2</button>
     <button name="account" value="demo-teacher">Demo nastavnik</button>
-    <button name="account" value="demo-teacher-2">Demo nastavnica</button></form>`;
+    <button name="account" value="demo-teacher-2">Demo nastavnica</button>
+    <button name="account" value="demo-b-teacher">Ustanova B: nastavnica</button>
+    <button name="account" value="demo-b-student">Ustanova B: student</button></form>`;
   oidc = await serve(async (req, res) => {
     if (req.url === "/interaction/one") {
       const hop = `${oidc}/redirect/first?account=demo-student`;
