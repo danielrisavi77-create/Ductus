@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { answer, decide, isCdToRoot, isInstallCommand, runCli } from "../hooks/safety-net.mjs";
+import { answer, decide, isCdToRoot, isInstallCommand, main, runCli } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -35,6 +35,9 @@ const FAKES = {
   deny: "process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny'}}));process.exit(0)});",
   hang: "setInterval(()=>{},1000);",
   block2: "process.stdin.resume();process.stdin.on('end',()=>{console.error('nope');process.exit(2)});",
+  // Run 1 (cwd SN_SUB), run 2 and the probes each behave as told: allow, deny, hang or crash, after SN_DELAY ms.
+  split:
+    "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const e=JSON.parse(d),v=process.env;const probe=/ductus-probe|^git add -A$/.test(e.tool_input.command);const mode=probe?v.SN_PROBE||'deny':e.cwd===v.SN_SUB?v.SN_RUN1:v.SN_RUN2;setTimeout(()=>{if(mode==='hang')return setInterval(()=>{},1000);if(mode==='crash')process.exit(1);if(mode==='deny')process.stdout.write(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny'}}));process.exit(0)},+(v.SN_DELAY||0))});",
 };
 
 // bin: a FAKES key, "empty" or "missing"; pkg: false = no package directory;
@@ -77,14 +80,19 @@ function makeTree({ dir = "tree", bin = "allow", pkg = true, modules = true, ver
 }
 
 const run = (tree, tool, command, cwd, env) => decide({ root: tree.root, input: event(tool, command, cwd), ...(env ? { env } : {}) });
+// fn may be async: the tree is removed once its promise settles.
 const withTree = (options, fn) => {
   const tree = makeTree(options);
+  let result;
   try {
-    return fn(tree);
+    result = fn(tree);
   } finally {
-    tree.done();
+    if (typeof result?.then !== "function") tree.done();
   }
+  return typeof result?.then === "function" ? result.finally(() => tree.done()) : result;
 };
+// Run 1 and the probes start together, so the log is compared as a tally.
+const tally = (log) => [...log].sort().join("");
 const blocked = (result, label) => {
   assert.equal(result.code, 2, label);
   assert.match(result.stderr, /pnpm install --frozen-lockfile/, label);
@@ -128,44 +136,44 @@ test("analysis limit stays below the hook timeout in settings.json", async () =>
 
 for (const tool of TOOLS) {
   test(`A1 no node_modules at all blocks (${tool})`, () =>
-    withTree({ modules: false }, (tree) => {
-      blocked(run(tree, tool, "git reset --hard origin/main"), "A1");
+    withTree({ modules: false }, async (tree) => {
+      blocked(await run(tree, tool, "git reset --hard origin/main"), "A1");
     }));
 
   test(`A2 node_modules without the package blocks (${tool})`, () =>
-    withTree({ pkg: false }, (tree) => {
-      blocked(run(tree, tool, "git reset --hard origin/main"), "A2");
+    withTree({ pkg: false }, async (tree) => {
+      blocked(await run(tree, tool, "git reset --hard origin/main"), "A2");
     }));
 
-  test(`A3 missing or empty binary blocks (${tool})`, () => {
+  test(`A3 missing or empty binary blocks (${tool})`, async () => {
     for (const bin of ["missing", "empty"]) {
-      withTree({ bin }, (tree) => blocked(run(tree, tool, "git reset --hard origin/main"), `A3 ${bin}`));
+      await withTree({ bin }, async (tree) => blocked(await run(tree, tool, "git reset --hard origin/main"), `A3 ${bin}`));
     }
   });
 
-  test(`A4 crash, odd exit, exception and non-JSON output all block (${tool})`, () => {
+  test(`A4 crash, odd exit, exception and non-JSON output all block (${tool})`, async () => {
     for (const bin of ["crash1", "crash3", "throws", "garbage"]) {
-      withTree({ bin }, (tree) => blocked(run(tree, tool, "git status"), `A4 ${bin}`));
+      await withTree({ bin }, async (tree) => blocked(await run(tree, tool, "git status"), `A4 ${bin}`));
     }
   });
 
   test(`A4 the package's own exit 2 block is passed through (${tool})`, () =>
-    withTree({ bin: "block2" }, (tree) => {
-      const result = run(tree, tool, "git status");
+    withTree({ bin: "block2" }, async (tree) => {
+      const result = await run(tree, tool, "git status");
       assert.equal(result.code, 2);
       assert.match(result.stderr, /nope/);
     }));
 
   test(`A5 a hanging analysis is killed by the wrapper and blocks (${tool})`, { timeout: 20000 }, () =>
-    withTree({ bin: "hang" }, (tree) => {
+    withTree({ bin: "hang" }, async (tree) => {
       const started = Date.now();
-      const result = decide({ root: tree.root, input: event(tool, "git status"), timeoutMs: 400 });
+      const result = await decide({ root: tree.root, input: event(tool, "git status"), timeoutMs: 400 });
       blocked(result, "A5");
       assert.match(result.stderr, /did not answer/);
       assert.ok(Date.now() - started < 5000);
     }));
 
-  test(`A7/A8 install exception does not survive chaining, operators or other pnpm commands (${tool})`, () => {
+  test(`A7/A8 install exception does not survive chaining, operators or other pnpm commands (${tool})`, async () => {
     const attacks = [
       "pnpm install && git reset --hard origin/main",
       "pnpm install; git push -f",
@@ -193,58 +201,58 @@ for (const tool of TOOLS) {
       "",
     ];
     for (const command of attacks) {
-      withTree({ pkg: false }, (tree) => blocked(run(tree, tool, command), `A7 ${JSON.stringify(command)}`));
+      await withTree({ pkg: false }, async (tree) => blocked(await run(tree, tool, command), `A7 ${JSON.stringify(command)}`));
     }
   });
 
-  test(`F2 the exact install commands are allowed while the package is unusable (${tool})`, () => {
+  test(`F2 the exact install commands are allowed while the package is unusable (${tool})`, async () => {
     for (const command of ["pnpm install", "pnpm install --frozen-lockfile", "pnpm install\n"]) {
       for (const options of [{ modules: false }, { pkg: false }, { bin: "empty" }, { version: "0.0.1" }]) {
-        withTree(options, (tree) => assert.equal(run(tree, tool, command).code, 0, `${JSON.stringify(command)} ${JSON.stringify(options)}`));
+        await withTree(options, async (tree) => assert.equal((await run(tree, tool, command)).code, 0, `${JSON.stringify(command)} ${JSON.stringify(options)}`));
       }
     }
   });
 
-  test(`A9 with a healthy package the install command goes through the analysis (${tool})`, () => {
-    withTree({ bin: "deny" }, (tree) => {
-      const result = run(tree, tool, "pnpm install");
+  test(`A9 with a healthy package the install command goes through the analysis (${tool})`, async () => {
+    await withTree({ bin: "deny" }, async (tree) => {
+      const result = await run(tree, tool, "pnpm install");
       assert.equal(result.code, 0);
       assert.match(result.stdout, /deny/);
     });
-    withTree({ bin: "allow" }, (tree) => {
-      assert.equal(run(tree, tool, "pnpm install").code, 0);
+    await withTree({ bin: "allow" }, async (tree) => {
+      assert.equal((await run(tree, tool, "pnpm install")).code, 0);
       assert.ok(fs.existsSync(tree.calls), "analysis ran");
     });
-    withTree({ bin: "crash1" }, (tree) => blocked(run(tree, tool, "pnpm install"), "healthy but crashing"));
+    await withTree({ bin: "crash1" }, async (tree) => blocked(await run(tree, tool, "pnpm install"), "healthy but crashing"));
   });
 
   test(`A12 a package of the wrong version blocks, install still allowed (${tool})`, () =>
-    withTree({ version: "0.0.1" }, (tree) => {
-      const result = run(tree, tool, "git status");
+    withTree({ version: "0.0.1" }, async (tree) => {
+      const result = await run(tree, tool, "git status");
       blocked(result, "A12");
       assert.match(result.stderr, /0\.0\.1/);
-      assert.equal(run(tree, tool, "pnpm install --frozen-lockfile").code, 0);
+      assert.equal((await run(tree, tool, "pnpm install --frozen-lockfile")).code, 0);
     }));
 
   test(`A10/F5 a project path with spaces is analysed, not blocked (${tool})`, () =>
-    withTree({ dir: "Moji radovi 'a b'/Ductus" }, (tree) => {
-      assert.equal(run(tree, tool, "git status").code, 0);
+    withTree({ dir: "Moji radovi 'a b'/Ductus" }, async (tree) => {
+      assert.equal((await run(tree, tool, "git status")).code, 0);
       assert.ok(fs.existsSync(tree.calls));
     }));
 
-  test(`F1 real package: routine commands pass, force push is denied (${tool})`, () => {
+  test(`F1 real package: routine commands pass, force push is denied (${tool})`, async () => {
     assert.ok(fs.existsSync(path.join(repo, "node_modules", "cc-safety-net", "dist", "bin", "cc-safety-net.js")), "cc-safety-net is not installed: run `pnpm install --frozen-lockfile`");
     for (const command of ["git status", "pnpm test", "git push -u origin feat/x"]) {
-      const result = decide({ input: event(tool, command) });
+      const result = await decide({ input: event(tool, command) });
       assert.equal(result.code, 0, command);
       assert.equal(result.stdout.trim(), "", command);
     }
-    const result = decide({ input: event(tool, "git push --force origin x") });
+    const result = await decide({ input: event(tool, "git push --force origin x") });
     assert.equal(result.code, 0);
     assert.match(result.stdout, /"permissionDecision":\s*"deny"/);
   });
 
-  test(`F-017 a command that names the secret-scan skip is blocked, before and without the package (${tool})`, () => {
+  test(`F-017 a command that names the secret-scan skip is blocked, before and without the package (${tool})`, async () => {
     const name = "DUCTUS_ALLOW_SECRET_SCAN_SKIP";
     for (const command of [
       `${name}=$(git write-tree) git commit -m x`,
@@ -253,88 +261,88 @@ for (const tool of TOOLS) {
       `env ${name.toLowerCase()}=1 git commit -m x`,
       `echo ${name}`,
     ]) {
-      const result = decide({ input: event(tool, command) });
+      const result = await decide({ input: event(tool, command) });
       assert.equal(result.code, 2, command);
       assert.match(result.stderr, /for a human only/, command);
       // A root without the package would otherwise only allow the install command.
-      assert.equal(decide({ root: path.join(os.tmpdir(), "no-such-ductus-root"), input: event(tool, command) }).code, 2, command);
+      assert.equal((await decide({ root: path.join(os.tmpdir(), "no-such-ductus-root"), input: event(tool, command) })).code, 2, command);
     }
-    assert.equal(decide({ input: event(tool, "git commit -m 'secret scan passed'") }).code, 0);
+    assert.equal((await decide({ input: event(tool, "git commit -m 'secret scan passed'") })).code, 0);
   });
 }
 
 for (const tool of TOOLS) {
-  test(`B1 a hollowed-out analysis module blocks, install allowed (${tool})`, { timeout: 60000 }, () => {
+  test(`B1 a hollowed-out analysis module blocks, install allowed (${tool})`, { timeout: 60000 }, async () => {
     for (const hook of ["missing", "empty", "spaces", "exit0"]) {
-      withTree({ real: true, hook }, (tree) => {
-        for (const command of ["git push --force origin x", "git add -A", "ls"]) blocked(run(tree, tool, command), `${hook}: ${command}`);
-        assert.equal(run(tree, tool, "pnpm install --frozen-lockfile").code, 0, hook);
-        assert.equal(run(tree, tool, "pnpm install && git push -f").code, 2, hook);
+      await withTree({ real: true, hook }, async (tree) => {
+        for (const command of ["git push --force origin x", "git add -A", "ls"]) blocked(await run(tree, tool, command), `${hook}: ${command}`);
+        assert.equal((await run(tree, tool, "pnpm install --frozen-lockfile")).code, 0, hook);
+        assert.equal((await run(tree, tool, "pnpm install && git push -f")).code, 2, hook);
       });
     }
   });
 
   test(`B1 a silent package fails the control probe (${tool})`, () =>
-    withTree({ bin: "silent" }, (tree) => {
-      const result = run(tree, tool, "git status");
+    withTree({ bin: "silent" }, async (tree) => {
+      const result = await run(tree, tool, "git status");
       blocked(result, "silent");
       assert.match(result.stderr, /control probe/);
     }));
 
   test(`B1/M1 intact real package: project and built-in rules deny, routine passes (${tool})`, { timeout: 60000 }, () =>
-    withTree({ real: true }, (tree) => {
+    withTree({ real: true }, async (tree) => {
       for (const command of ["git add -A", "git push --force origin x"]) {
-        const result = run(tree, tool, command);
+        const result = await run(tree, tool, command);
         assert.equal(result.code, 0, command);
         assert.match(result.stdout, /"permissionDecision":\s*"deny"/, command);
       }
-      const ok = run(tree, tool, "ls");
+      const ok = await run(tree, tool, "ls");
       assert.equal(ok.code, 0);
       assert.equal(ok.stdout.trim(), "");
     }));
 
   test(`M1 a missing project rulebook is caught by the probe (${tool})`, { timeout: 60000 }, () =>
-    withTree({ real: true, rulebook: false }, (tree) => {
-      const result = run(tree, tool, "ls");
+    withTree({ real: true, rulebook: false }, async (tree) => {
+      const result = await run(tree, tool, "ls");
       assert.equal(result.code, 2);
       assert.match(result.stderr, /no project rulebook/);
-      assert.equal(run(tree, tool, "pnpm install").code, 0);
+      assert.equal((await run(tree, tool, "pnpm install")).code, 0);
     }));
 }
 
-test("B1 the probe verdict is remembered per package state, and a changed module is probed again", { timeout: 60000 }, () => {
-  withTree({ bin: "allow" }, (tree) => {
-    for (let i = 0; i < 3; i++) assert.equal(run(tree, "Bash", "ls").code, 0);
-    assert.equal(fs.readFileSync(tree.calls, "utf8"), "xppxx", "the call, two probes once, then one run per call");
+test("B1 the probe verdict is remembered per package state, and a changed module is probed again", { timeout: 60000 }, async () => {
+  await withTree({ bin: "allow" }, async (tree) => {
+    for (let i = 0; i < 3; i++) assert.equal((await run(tree, "Bash", "ls")).code, 0);
+    assert.equal(tally(fs.readFileSync(tree.calls, "utf8")), tally("xppxx"), "the call, two probes once, then one run per call");
   });
-  withTree({ real: true }, (tree) => {
-    assert.equal(run(tree, "Bash", "ls").code, 0);
-    assert.equal(run(tree, "Bash", "ls").code, 0);
+  await withTree({ real: true }, async (tree) => {
+    assert.equal((await run(tree, "Bash", "ls")).code, 0);
+    assert.equal((await run(tree, "Bash", "ls")).code, 0);
     fs.writeFileSync(path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin", "hook.js"), "process.exit(0);");
-    blocked(run(tree, "Bash", "ls"), "hook.js replaced after a good verdict");
+    blocked(await run(tree, "Bash", "ls"), "hook.js replaced after a good verdict");
   });
 });
 
 test("review: a stub that prints JSON instead of nothing fails the probe too", () =>
-  withTree({ bin: "stubjson" }, (tree) => blocked(run(tree, "Bash", "git push --force origin x"), "stubjson")));
+  withTree({ bin: "stubjson" }, async (tree) => blocked(await run(tree, "Bash", "git push --force origin x"), "stubjson")));
 
-test("review: the verdict follows the event cwd; a cwd without the project rulebook loses no rule silently", { timeout: 60000 }, () => {
-  withTree({ real: true }, (tree) => {
+test("review: the verdict follows the event cwd; a cwd without the project rulebook loses no rule silently", { timeout: 60000 }, async () => {
+  await withTree({ real: true }, async (tree) => {
     // A good verdict for the project root exists ...
-    assert.equal(run(tree, "Bash", "ls").code, 0);
-    assert.equal(run(tree, "Bash", "git add -A").code, 0);
+    assert.equal((await run(tree, "Bash", "ls")).code, 0);
+    assert.equal((await run(tree, "Bash", "git add -A")).code, 0);
     // ... but a worktree or any other cwd without .cc-safety-net must not inherit it.
     const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-bare-"));
     const withRules = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-rules-"));
     try {
       fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(withRules, ".cc-safety-net"), { recursive: true });
       for (const tool of TOOLS) {
-        const lost = run(tree, tool, "git add -A", bare);
+        const lost = await run(tree, tool, "git add -A", bare);
         assert.equal(lost.code, 2, "cwd without rulebook");
         assert.match(lost.stderr, /rulebook/);
-        assert.equal(run(tree, tool, "ls", bare).code, 2);
-        assert.equal(run(tree, tool, "pnpm install", bare).code, 0, "install stays possible");
-        const ok = run(tree, tool, "git add -A", withRules);
+        assert.equal((await run(tree, tool, "ls", bare)).code, 2);
+        assert.equal((await run(tree, tool, "pnpm install", bare)).code, 0, "install stays possible");
+        const ok = await run(tree, tool, "git add -A", withRules);
         assert.equal(ok.code, 0);
         assert.match(ok.stdout, /deny/);
       }
@@ -346,21 +354,21 @@ test("review: the verdict follows the event cwd; a cwd without the project ruleb
 });
 
 test("review: a same-size stub with the old mtime does not keep an old verdict", { timeout: 60000 }, () =>
-  withTree({ real: true }, (tree) => {
+  withTree({ real: true }, async (tree) => {
     const hook = path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin", "hook.js");
     // Whole seconds, so that restoring the time is exact on every file system.
     fs.utimesSync(hook, 1_700_000_000, 1_700_000_000);
-    assert.equal(run(tree, "Bash", "ls").code, 0);
+    assert.equal((await run(tree, "Bash", "ls")).code, 0);
     const { size, mtimeMs } = fs.statSync(hook);
     fs.writeFileSync(hook, "process.exit(0);".padEnd(size, " "));
     fs.utimesSync(hook, 1_700_000_000, 1_700_000_000);
     assert.equal(fs.statSync(hook).size, size);
     assert.equal(fs.statSync(hook).mtimeMs, mtimeMs, "size and mtime identical to the verdict's");
-    blocked(run(tree, "Bash", "git push --force origin x"), "same-size stub");
+    blocked(await run(tree, "Bash", "git push --force origin x"), "same-size stub");
   }));
 
-test("review: in a subdirectory the root rulebook still applies; no checkout above is inherited", { timeout: 90000 }, () => {
-  withTree({ real: true }, (tree) => {
+test("review: in a subdirectory the root rulebook still applies; no checkout above is inherited", { timeout: 90000 }, async () => {
+  await withTree({ real: true }, async (tree) => {
     fs.writeFileSync(path.join(tree.root, ".git"), "gitdir: elsewhere");
     const src = path.join(tree.root, "src", "deep");
     fs.mkdirSync(src, { recursive: true });
@@ -376,15 +384,15 @@ test("review: in a subdirectory the root rulebook still applies; no checkout abo
       for (const tool of TOOLS) {
         // ls and cd .. work from a subdirectory, and the project rule still denies.
         for (const cwd of [src, path.join(tree.root, "src")]) {
-          assert.equal(run(tree, tool, "ls", cwd).code, 0, `ls in ${cwd}`);
-          assert.equal(run(tree, tool, "cd ..", cwd).code, 0, `cd .. in ${cwd}`);
-          const denied = run(tree, tool, "git add -A", cwd);
+          assert.equal((await run(tree, tool, "ls", cwd)).code, 0, `ls in ${cwd}`);
+          assert.equal((await run(tree, tool, "cd ..", cwd)).code, 0, `cd .. in ${cwd}`);
+          const denied = await run(tree, tool, "git add -A", cwd);
           assert.equal(denied.code, 0);
           assert.match(denied.stdout, /deny/, `git add -A in ${cwd}`);
-          assert.match(run(tree, tool, "git push --force origin x", cwd).stdout, /deny/);
+          assert.match((await run(tree, tool, "git push --force origin x", cwd)).stdout, /deny/);
         }
         for (const cwd of [worktree, path.join(worktree, "sub"), path.join(outer, "child")]) {
-          const result = run(tree, tool, "ls", cwd);
+          const result = await run(tree, tool, "ls", cwd);
           assert.equal(result.code, 2, `no inherited rulebook for ${cwd}`);
           assert.match(result.stderr, /no project rulebook/);
           assert.match(result.stderr, /git -C <this directory> merge origin\/main/);
@@ -400,8 +408,8 @@ test("review: in a subdirectory the root rulebook still applies; no checkout abo
 // A command of the rulebook is either blocked or denied by the package, never let through.
 const safe = (result) => result.code === 2 || (result.code === 0 && /"permissionDecision":\s*"deny"/.test(result.stdout));
 
-test("QA B1: no configuration input of the package can be changed, removed or corrupted behind a remembered verdict", { timeout: 280000 }, () => {
-  withTree({ real: true }, (tree) => {
+test("QA B1: no configuration input of the package can be changed, removed or corrupted behind a remembered verdict", { timeout: 280000 }, async () => {
+  await withTree({ real: true }, async (tree) => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-home-"));
     try {
       const userDir = path.join(home, ".cc-safety-net");
@@ -423,19 +431,19 @@ test("QA B1: no configuration input of the package can be changed, removed or co
         ["emptied", (file) => fs.writeFileSync(file, "")],
         ["deleted", (file) => fs.rmSync(file, { force: true })],
       ];
-      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "baseline");
+      assert.equal((await run(tree, "Bash", "ls", undefined, env)).code, 0, "baseline");
       for (const file of files) {
         const original = fs.existsSync(file) ? fs.readFileSync(file) : null;
         for (const [label, mutate] of mutations) {
           mutate(file);
           for (const command of ["git add -A", "git push --force origin x", "git commit --no-verify -m x"]) {
-            const result = run(tree, "Bash", command, undefined, env);
+            const result = await run(tree, "Bash", command, undefined, env);
             assert.ok(safe(result), `${path.relative(tree.root, file)} ${label}: ${command} -> ${result.code} ${result.stdout}`);
           }
           if (original === null) fs.rmSync(file, { force: true });
           else fs.writeFileSync(file, original);
         }
-        assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, `restored ${file}`);
+        assert.equal((await run(tree, "Bash", "ls", undefined, env)).code, 0, `restored ${file}`);
       }
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
@@ -443,9 +451,9 @@ test("QA B1: no configuration input of the package can be changed, removed or co
   });
 });
 
-test("QA V1: the only way out of a directory without rules is the exact cd to the project root", () => {
+test("QA V1: the only way out of a directory without rules is the exact cd to the project root", async () => {
   for (const dir of ["tree", "dir with spaces"]) {
-    withTree({ dir, bin: "allow" }, (tree) => {
+    await withTree({ dir, bin: "allow" }, async (tree) => {
       const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-bare-"));
       const nested = path.join(tree.root, "nested");
       fs.mkdirSync(path.join(nested, ".cc-safety-net"), { recursive: true });
@@ -459,11 +467,11 @@ test("QA V1: the only way out of a directory without rules is the exact cd to th
         ];
         for (const tool of TOOLS) {
           for (const cwd of [bare, nested]) {
-            for (const command of allowed) assert.equal(run(tree, tool, command, cwd).code, 0, `${tool} ${JSON.stringify(command)} in ${cwd}`);
-            for (const command of refused) assert.equal(run(tree, tool, command, cwd).code, 2, `${tool} ${JSON.stringify(command)} in ${cwd}`);
+            for (const command of allowed) assert.equal((await run(tree, tool, command, cwd)).code, 0, `${tool} ${JSON.stringify(command)} in ${cwd}`);
+            for (const command of refused) assert.equal((await run(tree, tool, command, cwd)).code, 2, `${tool} ${JSON.stringify(command)} in ${cwd}`);
           }
           // After the cd the session is at the root, where everything works again.
-          assert.equal(run(tree, tool, "ls", R).code, 0);
+          assert.equal((await run(tree, tool, "ls", R)).code, 0);
         }
       } finally {
         fs.rmSync(bare, { recursive: true, force: true });
@@ -477,31 +485,31 @@ test("QA V1: the only way out of a directory without rules is the exact cd to th
 });
 
 test("QA M1: each part of the verdict key triggers a new probe", { timeout: 60000 }, () =>
-  withTree({ bin: "allow" }, (tree) => {
+  withTree({ bin: "allow" }, async (tree) => {
     const rulebook = path.join(tree.root, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json");
-    const log = () => fs.readFileSync(tree.calls, "utf8");
-    run(tree, "Bash", "ls");
-    run(tree, "Bash", "ls");
-    assert.equal(log(), "xppx", "one probe for two calls");
+    const log = () => tally(fs.readFileSync(tree.calls, "utf8"));
+    await run(tree, "Bash", "ls");
+    await run(tree, "Bash", "ls");
+    assert.equal(log(), tally("xppx"), "one probe for two calls");
     fs.writeFileSync(rulebook, '{"changed":1}');
-    run(tree, "Bash", "ls");
-    assert.equal(log(), "xppxxpp", "changed rulebook probes again");
+    await run(tree, "Bash", "ls");
+    assert.equal(log(), tally("xppxxpp"), "changed rulebook probes again");
     // The same rulebook content in another checkout directory is another state.
     const other = path.join(tree.root, "other");
     fs.mkdirSync(path.join(other, ".cc-safety-net", "rules", "ductus-rules"), { recursive: true });
     fs.copyFileSync(rulebook, path.join(other, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"));
     fs.writeFileSync(path.join(other, ".git"), "gitdir: elsewhere");
-    run(tree, "Bash", "ls", other);
-    assert.equal(log(), "xppxxppxpp", "another directory probes again");
+    await run(tree, "Bash", "ls", other);
+    assert.equal(log(), tally("xppxxppxpp"), "another directory probes again");
     // Another file of the project config directory is part of the state too.
     fs.writeFileSync(path.join(tree.root, ".cc-safety-net", "policy.json"), "{}");
-    run(tree, "Bash", "ls");
-    assert.equal(log(), "xppxxppxppxpp");
+    await run(tree, "Bash", "ls");
+    assert.equal(log(), tally("xppxxppxppxpp"));
   }));
 
 // Fake package, probes counted: each part of the verdict key must start a new probe on its own.
-test("review: every part of the verdict key starts a new probe", { timeout: 180000 }, () => {
-  withTree({ bin: "allow" }, (tree) => {
+test("review: every part of the verdict key starts a new probe", { timeout: 180000 }, async () => {
+  await withTree({ bin: "allow" }, async (tree) => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-keyhome-"));
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-keyprofile-"));
     const other = path.join(tree.root, "other");
@@ -510,13 +518,13 @@ test("review: every part of the verdict key starts a new probe", { timeout: 1800
       for (const name of Object.keys(env)) if (name.startsWith("CC_SAFETY_NET_") || name.startsWith("SAFETY_NET_")) delete env[name];
       const probes = () => (fs.readFileSync(tree.calls, "utf8").match(/p/g) ?? []).length;
       const ls = (cwd) => run(tree, "Bash", "ls", cwd, env);
-      const step = (label, change, cwd) => {
-        assert.equal(ls(cwd).code, 0, `${label}: settle`);
+      const step = async (label, change, cwd) => {
+        assert.equal((await ls(cwd)).code, 0, `${label}: settle`);
         const before = probes();
         change();
-        assert.equal(ls(cwd).code, 0, label);
+        assert.equal((await ls(cwd)).code, 0, label);
         assert.equal(probes() - before, 2, `${label}: a changed input must start a new probe`);
-        assert.equal(ls(cwd).code, 0);
+        assert.equal((await ls(cwd)).code, 0);
         assert.equal(probes() - before, 2, `${label}: and then be remembered`);
       };
       const bin = path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin");
@@ -525,34 +533,34 @@ test("review: every part of the verdict key starts a new probe", { timeout: 1800
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.writeFileSync(file, content);
       };
-      step("loader", () => fs.appendFileSync(path.join(bin, "cc-safety-net.js"), "\n//changed"));
-      step("hook.js", () => write(path.join(bin, "hook.js"), "//changed"));
-      step("rulebook", () => write(path.join(project, "rules", "ductus-rules", "rulebook.json"), '{"changed":1}'));
-      step("project rule list", () => write(path.join(project, "rules", "rule.json"), "{}"));
-      step("project policy", () => write(path.join(project, "policy.json"), "{}"));
-      step("user config under HOME", () => write(path.join(home, ".cc-safety-net", "policy.json"), "{}"));
-      step("user config under USERPROFILE", () => write(path.join(profile, ".cc-safety-net", "policy.json"), "{}"));
+      await step("loader", () => fs.appendFileSync(path.join(bin, "cc-safety-net.js"), "\n//changed"));
+      await step("hook.js", () => write(path.join(bin, "hook.js"), "//changed"));
+      await step("rulebook", () => write(path.join(project, "rules", "ductus-rules", "rulebook.json"), '{"changed":1}'));
+      await step("project rule list", () => write(path.join(project, "rules", "rule.json"), "{}"));
+      await step("project policy", () => write(path.join(project, "policy.json"), "{}"));
+      await step("user config under HOME", () => write(path.join(home, ".cc-safety-net", "policy.json"), "{}"));
+      await step("user config under USERPROFILE", () => write(path.join(profile, ".cc-safety-net", "policy.json"), "{}"));
       const named = path.join(home, "named-config");
-      step("CC_SAFETY_NET_HOME set", () => {
+      await step("CC_SAFETY_NET_HOME set", () => {
         env = { ...env, CC_SAFETY_NET_HOME: named };
         fs.mkdirSync(named);
       });
-      step("user config under CC_SAFETY_NET_HOME", () => write(path.join(named, "rules", "rule.json"), "{}"));
-      step("user config under a relative CC_SAFETY_NET_HOME is read relative to the project root", () => {
+      await step("user config under CC_SAFETY_NET_HOME", () => write(path.join(named, "rules", "rule.json"), "{}"));
+      await step("user config under a relative CC_SAFETY_NET_HOME is read relative to the project root", () => {
         env = { ...env, CC_SAFETY_NET_HOME: "relative-config" };
         write(path.join(tree.root, "relative-config", "policy.json"), "{}");
       });
-      step("file inside it", () => write(path.join(tree.root, "relative-config", "policy.json"), '{"a":1}'));
-      step("same-size change of a file", () => write(path.join(tree.root, "relative-config", "policy.json"), '{"a":2}'));
-      step("CC_SAFETY_NET_ variable", () => (env = { ...env, CC_SAFETY_NET_STRICT: "1" }));
-      step("legacy SAFETY_NET_ variable", () => (env = { ...env, SAFETY_NET_WORKTREE: "1" }));
-      step("listed tool-directory variable", () => (env = { ...env, XDG_CONFIG_HOME: path.join(home, "xdg") }));
+      await step("file inside it", () => write(path.join(tree.root, "relative-config", "policy.json"), '{"a":1}'));
+      await step("same-size change of a file", () => write(path.join(tree.root, "relative-config", "policy.json"), '{"a":2}'));
+      await step("CC_SAFETY_NET_ variable", () => (env = { ...env, CC_SAFETY_NET_STRICT: "1" }));
+      await step("legacy SAFETY_NET_ variable", () => (env = { ...env, SAFETY_NET_WORKTREE: "1" }));
+      await step("listed tool-directory variable", () => (env = { ...env, XDG_CONFIG_HOME: path.join(home, "xdg") }));
       {
         // Same rulebook content in another checkout directory: another state.
         write(path.join(other, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"), "{}");
         write(path.join(other, ".git"), "gitdir: elsewhere");
         const before = probes();
-        assert.equal(ls(other).code, 0);
+        assert.equal((await ls(other)).code, 0);
         assert.equal(probes() - before, 2, "rulebook directory is part of the key");
       }
       // Links in the user configuration: what they point to counts.
@@ -573,12 +581,12 @@ test("review: every part of the verdict key starts a new probe", { timeout: 1800
       };
       const dirType = process.platform === "win32" ? "junction" : "dir";
       if (link(targetDir, path.join(config, "linked-dir"), dirType)) {
-        step("file inside a linked directory", () => fs.writeFileSync(path.join(targetDir, "inner.json"), '{"changed":1}'));
-        if (link(config, path.join(targetDir, "loop"), dirType)) step("link loop does not hang or break the key", () => fs.writeFileSync(path.join(config, "x.json"), "{}"));
+        await step("file inside a linked directory", () => fs.writeFileSync(path.join(targetDir, "inner.json"), '{"changed":1}'));
+        if (link(config, path.join(targetDir, "loop"), dirType)) await step("link loop does not hang or break the key", () => fs.writeFileSync(path.join(config, "x.json"), "{}"));
       }
       if (link(target, path.join(config, "linked-file.json"), "file")) {
-        step("target of a linked file", () => fs.writeFileSync(target, '{"changed":1}'));
-        step("link target removed", () => fs.rmSync(target));
+        await step("target of a linked file", () => fs.writeFileSync(target, '{"changed":1}'));
+        await step("link target removed", () => fs.rmSync(target));
       }
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
@@ -587,8 +595,8 @@ test("review: every part of the verdict key starts a new probe", { timeout: 1800
   });
 });
 
-test("review: the real package never lets a changed linked policy through behind a remembered verdict", { timeout: 180000 }, () => {
-  withTree({ real: true }, (tree) => {
+test("review: the real package never lets a changed linked policy through behind a remembered verdict", { timeout: 180000 }, async () => {
+  await withTree({ real: true }, async (tree) => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-linkhome-"));
     try {
       const userDir = path.join(home, ".cc-safety-net");
@@ -598,7 +606,7 @@ test("review: the real package never lets a changed linked policy through behind
       fs.writeFileSync(target, "{}");
       fs.mkdirSync(targetDir);
       const env = { ...process.env, HOME: home, USERPROFILE: home, CC_SAFETY_NET_HOME: userDir };
-      const base = run(tree, "Bash", "ls", undefined, env);
+      const base = await run(tree, "Bash", "ls", undefined, env);
       assert.equal(base.code, 0, `baseline: ${base.stderr}`);
       const policy = path.join(userDir, "policy.json");
       // A policy that really switches a built-in protection off (checked against the package).
@@ -628,7 +636,7 @@ test("review: the real package never lets a changed linked policy through behind
       ]) {
         change();
         for (const command of ["git add -A", "git push --force origin x", "git commit --no-verify -m x"]) {
-          const result = run(tree, "Bash", command, undefined, env);
+          const result = await run(tree, "Bash", command, undefined, env);
           assert.ok(safe(result), `${label}: ${command} -> ${result.code} ${result.stdout}`);
         }
       }
@@ -636,11 +644,11 @@ test("review: the real package never lets a changed linked policy through behind
       // policy, then its target is swapped for one that really switches a built-in
       // protection off. The package alone would then let the force push through.
       setTarget('{"version":1}');
-      const ok = run(tree, "Bash", "ls", undefined, env);
+      const ok = await run(tree, "Bash", "ls", undefined, env);
       assert.equal(ok.code, 0, `harmless linked policy: ${ok.stderr}`);
-      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0);
+      assert.equal((await run(tree, "Bash", "ls", undefined, env)).code, 0);
       setTarget(weakening);
-      const swapped = run(tree, "Bash", "git push --force origin x", undefined, env);
+      const swapped = await run(tree, "Bash", "git push --force origin x", undefined, env);
       assert.equal(swapped.code, 2, `weakening policy behind the link: ${swapped.stdout}`);
       assert.equal(swapped.stdout, "");
       // And the package really does let it through on its own with that policy.
@@ -657,8 +665,8 @@ test("review: the real package never lets a changed linked policy through behind
   });
 });
 
-test("review: a configuration too large or too slow to read is refused within the budget, never let through", { timeout: 120000 }, () => {
-  withTree({ bin: "allow" }, (tree) => {
+test("review: a configuration too large or too slow to read is refused within the budget, never let through", { timeout: 120000 }, async () => {
+  await withTree({ bin: "allow" }, async (tree) => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-limit-"));
     try {
       const config = path.join(home, ".cc-safety-net");
@@ -672,10 +680,10 @@ test("review: a configuration too large or too slow to read is refused within th
       const env = { ...process.env, HOME: home, USERPROFILE: home };
       const linkDir = (target, name) => fs.symlinkSync(target, path.join(config, name), process.platform === "win32" ? "junction" : "dir");
       const probes = () => (fs.readFileSync(tree.calls, "utf8").match(/p/g) ?? []).length;
-      const refused = (limits, label) => {
+      const refused = async (limits, label) => {
         const before = probes();
         const started = Date.now();
-        const result = decide({ root: tree.root, input: event("Bash", "ls"), env, limits });
+        const result = await decide({ root: tree.root, input: event("Bash", "ls"), env, limits });
         assert.equal(result.code, 2, `${label}: ${result.stdout}`);
         assert.equal(result.stdout, "", label);
         assert.match(result.stderr, /too large or too slow/, label);
@@ -683,20 +691,20 @@ test("review: a configuration too large or too slow to read is refused within th
         // The refusal comes before any probe: nothing was asked of the package for it.
         assert.equal(probes(), before, label);
       };
-      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "baseline under the default limits");
+      assert.equal((await run(tree, "Bash", "ls", undefined, env)).code, 0, "baseline under the default limits");
       linkDir(many, "many");
-      refused({ maxEntries: 20 }, "many entries behind a link");
-      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "within the default limits it still works");
+      await refused({ maxEntries: 20 }, "many entries behind a link");
+      assert.equal((await run(tree, "Bash", "ls", undefined, env)).code, 0, "within the default limits it still works");
       fs.rmSync(path.join(config, "many"), { recursive: true, force: true });
       linkDir(big, "big");
-      refused({ maxBytes: 1024 * 1024 }, "a big file behind a link");
-      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "within the default limits it still works (2 MiB)");
-      refused({ maxMs: -1 }, "time budget");
+      await refused({ maxBytes: 1024 * 1024 }, "a big file behind a link");
+      assert.equal((await run(tree, "Bash", "ls", undefined, env)).code, 0, "within the default limits it still works (2 MiB)");
+      await refused({ maxMs: -1 }, "time budget");
       // A big file linked directly (needs a privilege on Windows; CI must have it).
       fs.rmSync(path.join(config, "big"), { recursive: true, force: true });
       try {
         fs.symlinkSync(path.join(big, "huge.bin"), path.join(config, "huge.bin"), "file");
-        refused({ maxBytes: 1024 * 1024 }, "a big file linked directly");
+        await refused({ maxBytes: 1024 * 1024 }, "a big file linked directly");
       } catch (error) {
         if (error?.code !== "EPERM") throw error;
         assert.ok(!IN_CI, "symlinks must be available in CI");
@@ -708,8 +716,8 @@ test("review: a configuration too large or too slow to read is refused within th
 });
 
 // Several trees, each under the limit and together over it: the budget is one for all of them.
-test("review: the limits are one shared budget across all trees (entries, bytes, time)", { timeout: 120000 }, () => {
-  withTree({ bin: "allow" }, (tree) => {
+test("review: the limits are one shared budget across all trees (entries, bytes, time)", { timeout: 120000 }, async () => {
+  await withTree({ bin: "allow" }, async (tree) => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-shared-"));
     const realNow = Date.now;
     try {
@@ -730,47 +738,47 @@ test("review: the limits are one shared budget across all trees (entries, bytes,
           for (let i = 0; i < count; i++) fs.writeFileSync(path.join(dir, `f${i}.json`), size ? Buffer.alloc(size) : "{}");
         }
       };
-      const expectShared = (limits, label) => {
-        assert.equal(attempt(onlyA, limits).code, 0, `${label}: the first tree alone is under the limit`);
-        assert.equal(attempt(onlyB, limits).code, 0, `${label}: the second tree alone is under the limit`);
-        const together = attempt(both, limits);
+      const expectShared = async (limits, label) => {
+        assert.equal((await attempt(onlyA, limits)).code, 0, `${label}: the first tree alone is under the limit`);
+        assert.equal((await attempt(onlyB, limits)).code, 0, `${label}: the second tree alone is under the limit`);
+        const together = await attempt(both, limits);
         assert.equal(together.code, 2, `${label}: together they are over it`);
         assert.equal(together.stdout, "", label);
         assert.match(together.stderr, /too large or too slow/, label);
       };
       // Entries: 15 + 15 (+ the project's few) against 25.
       fill(15, 0);
-      expectShared({ maxEntries: 25 }, "entries");
+      await expectShared({ maxEntries: 25 }, "entries");
       // Bytes: 600 KiB + 600 KiB against 1 MiB.
       fill(1, 600 * 1024);
-      expectShared({ maxBytes: 1024 * 1024 }, "bytes");
+      await expectShared({ maxBytes: 1024 * 1024 }, "bytes");
       // Time, on a clock that advances one millisecond per reading: 20 + 20 entries against 40 ms.
       fill(20, 0);
       let now = 1_700_000_000_000;
       Date.now = () => now++;
-      expectShared({ maxMs: 40 }, "time");
+      await expectShared({ maxMs: 40 }, "time");
       // The project's own tree draws on the same budget as the user's.
       const project = path.join(tree.root, ".cc-safety-net");
       fs.rmSync(treeA, { recursive: true, force: true });
       fs.rmSync(named, { recursive: true, force: true });
       fs.mkdirSync(named, { recursive: true });
       const onlyNamed = { ...onlyB };
-      const withProject = (count, size, limits, label) => {
+      const withProject = async (count, size, limits, label) => {
         const extra = path.join(project, "extra");
         fs.rmSync(extra, { recursive: true, force: true });
-        assert.equal(attempt(onlyNamed, limits).code, 0, `${label}: the project tree alone is under the limit`);
+        assert.equal((await attempt(onlyNamed, limits)).code, 0, `${label}: the project tree alone is under the limit`);
         fs.mkdirSync(extra, { recursive: true });
         for (let i = 0; i < count; i++) fs.writeFileSync(path.join(extra, `p${i}.json`), size ? Buffer.alloc(size) : "{}");
         fs.rmSync(named, { recursive: true, force: true });
         fs.mkdirSync(named, { recursive: true });
         for (let i = 0; i < count; i++) fs.writeFileSync(path.join(named, `u${i}.json`), size ? Buffer.alloc(size) : "{}");
-        const together = attempt(onlyNamed, limits);
+        const together = await attempt(onlyNamed, limits);
         assert.equal(together.code, 2, `${label}: project and user together are over it`);
         assert.match(together.stderr, /too large or too slow/, label);
         fs.rmSync(extra, { recursive: true, force: true });
       };
-      withProject(15, 0, { maxEntries: 30 }, "project entries");
-      withProject(1, 600 * 1024, { maxBytes: 1024 * 1024 }, "project bytes");
+      await withProject(15, 0, { maxEntries: 30 }, "project entries");
+      await withProject(1, 600 * 1024, { maxBytes: 1024 * 1024 }, "project bytes");
     } finally {
       Date.now = realNow;
       fs.rmSync(base, { recursive: true, force: true });
@@ -778,27 +786,27 @@ test("review: the limits are one shared budget across all trees (entries, bytes,
   });
 });
 
-test("review: the instruction in the message is a command that passes", () => {
+test("review: the instruction in the message is a command that passes", async () => {
   for (const dir of ["tree", "dir with spaces"]) {
-    withTree({ dir, bin: "allow" }, (tree) => {
+    await withTree({ dir, bin: "allow" }, async (tree) => {
       const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-hint-"));
       try {
-        const result = run(tree, "Bash", "ls", bare);
+        const result = await run(tree, "Bash", "ls", bare);
         assert.equal(result.code, 2);
         const quoted = /Run exactly: (cd "[^"]+") \(/.exec(result.stderr)?.[1];
         assert.ok(quoted, result.stderr);
         assert.ok(isCdToRoot(quoted, tree.root));
-        assert.equal(run(tree, "Bash", quoted, bare).code, 0);
+        assert.equal((await run(tree, "Bash", quoted, bare)).code, 0);
       } finally {
         fs.rmSync(bare, { recursive: true, force: true });
       }
     });
   }
   // A root with characters a shell reads specially gets no cd instruction at all.
-  withTree({ dir: "odd$dir", bin: "allow" }, (tree) => {
+  await withTree({ dir: "odd$dir", bin: "allow" }, async (tree) => {
     const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-hint-"));
     try {
-      assert.doesNotMatch(run(tree, "Bash", "ls", bare).stderr, /Run exactly/);
+      assert.doesNotMatch((await run(tree, "Bash", "ls", bare)).stderr, /Run exactly/);
     } finally {
       fs.rmSync(bare, { recursive: true, force: true });
     }
@@ -817,32 +825,32 @@ test("QA M1: answer() rejects non-JSON output, signals, bad statuses and errors 
 });
 
 test("M2 a package that floods stdout is stopped by the buffer limit", () =>
-  withTree({ bin: "big" }, (tree) => {
-    const result = run(tree, "Bash", "git status");
+  withTree({ bin: "big" }, async (tree) => {
+    const result = await run(tree, "Bash", "git status");
     blocked(result, "big");
     assert.match(result.stderr, /ENOBUFS|could not run/);
   }));
 
-test("M2 unreadable or mismatching version information blocks", () => {
-  withTree({}, (tree) => {
+test("M2 unreadable or mismatching version information blocks", async () => {
+  await withTree({}, async (tree) => {
     fs.writeFileSync(path.join(tree.root, "node_modules", "cc-safety-net", "package.json"), "{ not json");
-    const result = run(tree, "Bash", "git status");
+    const result = await run(tree, "Bash", "git status");
     blocked(result, "bad package.json");
     assert.match(result.stderr, /could not be verified/);
   });
-  withTree({}, (tree) => {
+  await withTree({}, async (tree) => {
     fs.writeFileSync(path.join(tree.root, "package.json"), "{}");
-    const result = run(tree, "Bash", "git status");
+    const result = await run(tree, "Bash", "git status");
     blocked(result, "no pin");
     assert.match(result.stderr, /differs/);
   });
 });
 
-test("M2 the entry point turns any internal error into a block", () => {
-  const thrown = runCli({ read: () => "", decideFn: () => { throw new Error("boom"); } });
+test("M2 the entry point turns any internal error into a block", async () => {
+  const thrown = await runCli({ read: () => "", decideFn: () => { throw new Error("boom"); } });
   assert.equal(thrown.code, 2);
   assert.match(thrown.stderr, /wrapper error \(boom\)/);
-  const unreadable = runCli({ read: () => { throw new Error("no stdin"); }, decideFn: ({ input }) => ({ code: input === "" ? 2 : 0, stdout: "", stderr: "" }) });
+  const unreadable = await runCli({ read: () => { throw new Error("no stdin"); }, decideFn: ({ input }) => ({ code: input === "" ? 2 : 0, stdout: "", stderr: "" }) });
   assert.equal(unreadable.code, 2);
 });
 
@@ -854,11 +862,84 @@ test("isInstallCommand accepts only the two literal spellings", () => {
 });
 
 test("malformed hook input never counts as an install", () =>
-  withTree({ pkg: false }, (tree) => {
+  withTree({ pkg: false }, async (tree) => {
     for (const input of ["", "not json", "null", "[]", JSON.stringify({ tool_input: { command: ["pnpm install"] } })]) {
-      blocked(decide({ root: tree.root, input }), JSON.stringify(input));
+      blocked(await decide({ root: tree.root, input }), JSON.stringify(input));
     }
   }));
+
+// DAN-480: run 1, run 2 and the probes start together; the verdict is put together in the old order.
+const denied = (result) => result.code === 0 && /"permissionDecision":\s*"deny"/.test(result.stdout);
+const withSubdir = (options, fn) =>
+  withTree(options, (tree) => {
+    fs.writeFileSync(path.join(tree.root, ".git"), "gitdir: elsewhere");
+    const sub = path.join(tree.root, "src");
+    fs.mkdirSync(sub);
+    return fn(tree, sub);
+  });
+
+test("DAN-480 real package: chaining, substitution and redirection are denied from the root and from a subdirectory", { timeout: 90000 }, () =>
+  withSubdir({ real: true }, async (tree, sub) => {
+    const attacks = ["ls; git add -A", "ls && git add -A", "ls || git add -A", "ls | git add -A", "echo $(git add -A)", "echo `git add -A`", "cat README.md > /dev/null; git add -A", "ls && git push --force origin x"];
+    for (const cwd of [tree.root, sub]) {
+      for (const command of attacks) assert.ok(denied(await run(tree, "Bash", command, cwd)), `${command} in ${cwd}`);
+      assert.equal((await run(tree, "Bash", "ls", cwd)).stdout.trim(), "", `ls in ${cwd}`);
+    }
+    // Aliases are a gap of the rulebook, not of the wrapper: the verdict is the same from both directories.
+    for (const command of ["alias ll='git add -A'; ll", "git -c alias.st='add -A' st"]) {
+      const [atRoot, below] = [await run(tree, "Bash", command, tree.root), await run(tree, "Bash", command, sub)];
+      assert.deepEqual([below.code, denied(below)], [atRoot.code, denied(atRoot)], command);
+    }
+  }));
+
+test("DAN-480 a run that denies wins, and a run that hangs or crashes blocks, whichever finishes first", { timeout: 60000 }, () =>
+  withSubdir({ bin: "split" }, async (tree, sub) => {
+    const ask = (modes) => decide({ root: tree.root, input: event("Bash", "ls", sub), timeoutMs: 1500, env: { ...process.env, SN_SUB: sub, ...modes } });
+    for (const run2 of ["hang", "crash", "allow"]) assert.ok(denied(await ask({ SN_RUN1: "deny", SN_RUN2: run2 })), `run 1 denies, run 2 ${run2}`);
+    assert.ok(denied(await ask({ SN_RUN1: "allow", SN_RUN2: "deny" })), "run 2 denies, run 1 allows");
+    for (const [run1, run2] of [["allow", "hang"], ["allow", "crash"], ["hang", "allow"], ["crash", "allow"]]) {
+      const result = await ask({ SN_RUN1: run1, SN_RUN2: run2 });
+      assert.equal(result.code, 2, `run 1 ${run1}, run 2 ${run2}: ${result.stdout}`);
+      assert.equal(result.stdout, "");
+    }
+    assert.equal((await ask({ SN_RUN1: "allow", SN_RUN2: "allow" })).code, 0);
+  }));
+
+test("DAN-480 a probe that fails while both runs allow blocks", { timeout: 60000 }, async () => {
+  for (const probe of ["allow", "hang", "crash"]) {
+    await withSubdir({ bin: "split" }, async (tree, sub) => {
+      const result = await decide({ root: tree.root, input: event("Bash", "ls", sub), timeoutMs: 1500, env: { ...process.env, SN_SUB: sub, SN_RUN1: "allow", SN_RUN2: "allow", SN_PROBE: probe } });
+      blocked(result, `probe ${probe}`);
+      assert.match(result.stderr, /control probe/);
+    });
+  }
+});
+
+test("DAN-480 in a subdirectory with a cold probe the four runs overlap", { timeout: 60000 }, () =>
+  withSubdir({ bin: "split" }, async (tree, sub) => {
+    const started = Date.now();
+    const result = await decide({ root: tree.root, input: event("Bash", "ls", sub), env: { ...process.env, SN_SUB: sub, SN_RUN1: "allow", SN_RUN2: "allow", SN_DELAY: "400" } });
+    assert.equal(result.code, 0, result.stderr);
+    // One after another the four runs take at least 1600 ms.
+    assert.ok(Date.now() - started < 1200, `${Date.now() - started} ms`);
+  }));
+
+test("DAN-480 the exit code is 2 until a verdict exists, and stays 2 when the verdict fails", async () => {
+  const saved = process.exitCode;
+  const write = process.stderr.write;
+  try {
+    process.stderr.write = () => true;
+    main(() => new Promise(() => {}));
+    assert.equal(process.exitCode, 2, "a verdict that never comes leaves exit 2");
+    await main(() => Promise.reject(new Error("late")));
+    assert.equal(process.exitCode, 2, "a rejected verdict");
+    await main(() => ({ code: 0, stdout: "", stderr: "" }));
+    assert.equal(process.exitCode, 0, "only a verdict sets another code");
+  } finally {
+    process.stderr.write = write;
+    process.exitCode = saved;
+  }
+});
 
 shellTest("A1/A2/A7 through the real settings.json command: blocked with exit 2 (both tools)", () => {
   for (const tool of TOOLS) {

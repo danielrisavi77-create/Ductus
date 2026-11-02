@@ -9,7 +9,7 @@
 //
 // Exit 0: allowed (package answered cleanly, or the exact install command ran
 // while the package is unusable). Exit 2: blocked, reason on stderr.
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -292,16 +292,47 @@ function hasVerdict(dir, key) {
   }
 }
 
-function runPackage(root, input, timeout, env) {
+// One package run, resolved (never rejected) with the fields of a spawnSync
+// result. Runs that do not depend on each other start together (DAN-480), so
+// the time limit and the output limit are enforced here: past either the child
+// is killed with SIGKILL and the run carries ETIMEDOUT or ENOBUFS.
+const MAX_OUTPUT = 4 * 1024 * 1024;
+export function runPackage(root, input, timeout, env) {
   const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin", "cc-safety-net.js");
-  return spawnSync(process.execPath, [bin, "hook", "--coding-cli"], {
-    input,
-    encoding: "utf8",
-    timeout: Math.max(1, timeout),
-    killSignal: "SIGKILL",
-    cwd: root,
-    env,
-    maxBuffer: 4 * 1024 * 1024,
+  return new Promise((resolve) => {
+    const out = { stdout: [], stderr: [] };
+    let size = 0;
+    let error;
+    let child;
+    let timer;
+    const kill = (code, message) => {
+      error ??= Object.assign(new Error(message), { code });
+      child?.kill("SIGKILL");
+    };
+    try {
+      child = spawn(process.execPath, [bin, "hook", "--coding-cli"], { cwd: root, env, stdio: ["pipe", "pipe", "pipe"] });
+    } catch (thrown) {
+      resolve({ error: thrown, status: null, signal: null, stdout: "", stderr: "" });
+      return;
+    }
+    timer = setTimeout(() => kill("ETIMEDOUT", "timed out"), Math.max(1, timeout));
+    for (const name of ["stdout", "stderr"]) {
+      child[name].on("data", (chunk) => {
+        size += chunk.length;
+        if (size > MAX_OUTPUT) kill("ENOBUFS", "output over the limit");
+        else out[name].push(chunk);
+      });
+    }
+    child.stdin.on("error", () => {}); // a child that exits without reading its input still answers
+    child.on("error", (thrown) => {
+      error ??= thrown;
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timer);
+      const text = (name) => Buffer.concat(out[name]).toString("utf8");
+      resolve({ error, status, signal, stdout: text("stdout"), stderr: text("stderr") });
+    });
+    child.stdin.end(input);
   });
 }
 
@@ -311,7 +342,7 @@ function runPackage(root, input, timeout, env) {
 // rulebook applies. The verdict is remembered per state key, so the extra runs
 // happen once per state.
 const failure = (problem, hint) => ({ problem, hint });
-function probe(root, rulebookDir, deadline, env, limits) {
+async function probe(root, rulebookDir, deadline, env, limits) {
   let key;
   try {
     key = stateKey(root, rulebookDir, env, limits);
@@ -324,11 +355,13 @@ function probe(root, rulebookDir, deadline, env, limits) {
   }
   const dir = markDir();
   if (dir && hasVerdict(dir, key)) return null;
-  for (const command of PROBES) {
-    const left = deadline - Date.now();
-    if (left <= 0) return failure("the control probe ran out of time");
-    const event = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd: rulebookDir, tool_input: { command } });
-    const run = runPackage(root, event, left, env);
+  const left = deadline - Date.now();
+  if (left <= 0) return failure("the control probe ran out of time");
+  const runs = await Promise.all(
+    PROBES.map((command) => runPackage(root, JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd: rulebookDir, tool_input: { command } }), left, env)),
+  );
+  for (const [index, command] of PROBES.entries()) {
+    const run = runs[index];
     let decision;
     try {
       decision = JSON.parse(run.stdout || "{}").hookSpecificOutput?.permissionDecision;
@@ -407,8 +440,11 @@ const SECRET_SCAN_SKIP_BLOCK = {
     "Safety hook blocked this command: DUCTUS_ALLOW_SECRET_SCAN_SKIP is for a human only (lefthook.yml). An agent without a secret scanner stops and reports instead.\n",
 };
 
-// Pure decision: { code, stdout, stderr }. `input` is the raw hook stdin.
-export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS, env = process.env, limits }) {
+// Pure decision, resolved to { code, stdout, stderr }. `input` is the raw hook
+// stdin. Run 1, run 2 and the probe do not depend on each other, so they start
+// together; their answers are then read in the order a sequential decision
+// would read them, so every input gets the same verdict as before.
+export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS, env = process.env, limits }) {
   const deadline = Date.now() + timeoutMs;
   const command = commandOf(input);
   // F-017: the secret-scan skip in lefthook.yml is for a human only.
@@ -418,12 +454,32 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   const problem = packageProblem(root);
   if (problem) return unusable(problem);
 
-  // Run 1: the event as sent (built-in rules, relative paths keep their meaning).
-  const first = answer(runPackage(root, input, timeoutMs, env), timeoutMs);
-  if (first.block) return first.block;
-
   const cwd = eventCwd(input, root);
   const rulebookDir = findRulebookDir(cwd);
+  const below = Boolean(rulebookDir) && rulebookDir !== cwd;
+  // The package reads configuration from the exact cwd too; one below the
+  // rulebook directory would change the first run in ways the probe cannot see.
+  const ownConfig = below && fs.existsSync(path.join(cwd, PROJECT_CONFIG));
+  // Run 1: the event as sent (built-in rules, relative paths keep their meaning).
+  const firstRun = runPackage(root, input, timeoutMs, env);
+  // Run 2: in a subdirectory the project rules live in a parent the package does not search.
+  let secondRun = null;
+  if (below && !ownConfig) {
+    let moved;
+    try {
+      moved = JSON.stringify({ ...JSON.parse(input), cwd: rulebookDir });
+    } catch {
+      moved = null;
+    }
+    if (moved) secondRun = runPackage(root, moved, deadline - Date.now(), env);
+  }
+  // Any clean answer is checked once per state, not only a silent one: a stub
+  // that prints "{}" or an allow decision is as useless as one that prints nothing.
+  const probeRun = rulebookDir && !ownConfig ? probe(root, rulebookDir, deadline, env, limits) : null;
+  const [firstResult, secondResult, refused] = await Promise.all([firstRun, secondRun, probeRun]);
+
+  const first = answer(firstResult, timeoutMs);
+  if (first.block) return first.block;
   // Without usable project rules here, only the way back to the project root stays open.
   const noRules = (problem) => {
     if (isCdToRoot(command, root)) return { code: 0, stdout: first.stdout, stderr: first.stderr };
@@ -435,35 +491,18 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   if (!rulebookDir) {
     return noRules(`no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`);
   }
-  // The package reads configuration from the exact cwd too; one below the
-  // rulebook directory would change the first run in ways the probe cannot see.
-  if (rulebookDir !== cwd && fs.existsSync(path.join(cwd, PROJECT_CONFIG))) {
-    return noRules(`${cwd} has its own ${PROJECT_CONFIG} directory below the project's, which the safety check does not accept`);
-  }
-  // Any clean answer is checked once per state, not only a silent one: a stub
-  // that prints "{}" or an allow decision is as useless as one that prints nothing.
-  const refused = probe(root, rulebookDir, deadline, env, limits);
+  if (ownConfig) return noRules(`${cwd} has its own ${PROJECT_CONFIG} directory below the project's, which the safety check does not accept`);
   if (refused) return unusable(refused.problem, refused.hint);
-
-  // Run 2: in a subdirectory the project rules live in a parent the package does not search.
-  if (rulebookDir !== cwd && !denies(first.stdout)) {
-    let moved;
-    try {
-      moved = JSON.stringify({ ...JSON.parse(input), cwd: rulebookDir });
-    } catch {
-      moved = null;
-    }
-    if (moved) {
-      const second = answer(runPackage(root, moved, deadline - Date.now(), env), timeoutMs);
-      if (second.block) return second.block;
-      if (second.stdout.trim()) return { code: 0, stdout: second.stdout, stderr: second.stderr };
-    }
+  if (secondResult && !denies(first.stdout)) {
+    const second = answer(secondResult, timeoutMs);
+    if (second.block) return second.block;
+    if (second.stdout.trim()) return { code: 0, stdout: second.stdout, stderr: second.stderr };
   }
   return { code: 0, stdout: first.stdout, stderr: first.stderr };
 }
 
 // Process entry point: reads stdin; an error never becomes a pass.
-export function runCli({ read = () => fs.readFileSync(0, "utf8"), decideFn = decide } = {}) {
+export async function runCli({ read = () => fs.readFileSync(0, "utf8"), decideFn = decide } = {}) {
   let input = "";
   try {
     input = read();
@@ -471,15 +510,27 @@ export function runCli({ read = () => fs.readFileSync(0, "utf8"), decideFn = dec
     // An unreadable stdin is handled by the decision: no command, not an install.
   }
   try {
-    return decideFn({ input });
+    return await decideFn({ input });
   } catch (error) {
     return blockedFor(`wrapper error (${error?.message})`);
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const result = runCli();
-  process.stdout.write(result.stdout);
-  process.stderr.write(result.stderr);
-  process.exitCode = result.code;
+// The exit code is 2 until a decision is written, so a decision that never
+// settles (the event loop empties and Node exits) or a crash still blocks.
+export function main(cli = runCli) {
+  process.exitCode = 2;
+  return Promise.resolve()
+    .then(() => cli())
+    .then((result) => {
+      process.stdout.write(result.stdout);
+      process.stderr.write(result.stderr);
+      process.exitCode = result.code;
+    })
+    .catch((error) => {
+      process.exitCode = 2;
+      process.stderr.write(`Safety hook blocked this command: wrapper error (${error?.message}). ${RECOVERY}\n`);
+    });
 }
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
