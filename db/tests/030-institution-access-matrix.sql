@@ -6,7 +6,7 @@ BEGIN;
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(1219);
+SELECT plan(1283);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
@@ -16,8 +16,8 @@ SELECT bag_eq(
   ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
         'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
         'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
-        'course_editor', 'team_substitution'],
-  'the institution schema holds exactly the eighteen tables of this matrix'
+        'course_editor', 'team_substitution', 'work_grant'],
+  'the institution schema holds exactly the nineteen tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -56,7 +56,8 @@ SELECT bag_eq(
     'ductus_app SELECT seminar_group_teacher',
     'ductus_app SELECT seminar_group_member',
     'ductus_app SELECT course_editor',
-    'ductus_app SELECT team_substitution'
+    'ductus_app SELECT team_substitution',
+    'ductus_app SELECT work_grant'
   ],
   'besides the owner only ductus_app holds a privilege on an institution table, and only SELECT'
 );
@@ -103,7 +104,9 @@ SELECT bag_eq(
     'course_editor: course_editor_owner ALL to ductus_identity',
     'course_editor: course_editor_read SELECT to ductus_app',
     'team_substitution: team_substitution_owner ALL to ductus_identity',
-    'team_substitution: team_substitution_read SELECT to ductus_app'
+    'team_substitution: team_substitution_read SELECT to ductus_app',
+    'work_grant: work_grant_owner ALL to ductus_identity',
+    'work_grant: work_grant_read SELECT to ductus_app'
   ],
   'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
@@ -173,7 +176,12 @@ SELECT bag_eq(
     'end_course_editor(p_course_id uuid) definer app',
     'set_team_substitution(p_course_id uuid, p_absent_id uuid, p_substitute_id uuid, p_valid_to timestamp with time zone) definer app',
     'end_team_substitution(p_substitution_id uuid) definer app',
-    'team_notification_recipients(p_course_id uuid, p_student_id uuid)'
+    'team_notification_recipients(p_course_id uuid, p_student_id uuid)',
+    'is_grant_action_set(p_actions text[])',
+    'work_relation(p_user_id uuid, p_assignment_id uuid)',
+    'grant_work_access(p_assignment_id uuid, p_student_id uuid, p_grantee_id uuid, p_kind text, p_actions text[], p_valid_from timestamp with time zone, p_valid_to timestamp with time zone) definer app',
+    'revoke_work_access(p_grant_id uuid) definer app',
+    'grant_can(p_action text, p_document_id text) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
@@ -229,7 +237,7 @@ CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'c
                         'course_member', 'enrollment_attempt', 'assignment', 'assignment_version',
                         'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
                         'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
-                        'course_editor', 'team_substitution']) WITH ORDINALITY AS t (tbl, n)
+                        'course_editor', 'team_substitution', 'work_grant']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(

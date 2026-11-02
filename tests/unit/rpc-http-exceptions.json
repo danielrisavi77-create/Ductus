@@ -83,6 +83,18 @@
     "ticket": "DAN-351"
   },
   {
+    "function": "institution.grant_work_access",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik rada daje komentoru ili članu povjerenstva vremenski ograničeno pravo na jedan rad (M2.8-P01, D-205); RPC postoji za ductus_app, ruta i sučelje čekaju odluku U-1.",
+    "ticket": "DAN-379"
+  },
+  {
+    "function": "institution.revoke_work_access",
+    "status": "ruta dolazi",
+    "reason": "Davatelj ili nastavnik rada opoziva pravo prije isteka (M2.8-P01, D-205); RPC postoji za ductus_app, ruta i sučelje čekaju odluku U-1.",
+    "ticket": "DAN-379"
+  },
+  {
     "function": "institution.set_course_editor",
     "status": "ruta dolazi",
     "reason": "Nastavnik kolegija imenuje urednika kolegija i zatvara prethodnog (M2.7-P03); RPC postoji za ductus_app, ruta još nije spojena.",
