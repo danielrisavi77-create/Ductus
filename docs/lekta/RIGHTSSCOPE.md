@@ -88,8 +88,24 @@ Lekta za ove staze kaže `PUBLIC`/`allowed`. To je samo razred bundlea (§2), ne
 
 ## 6. Otvoreno za vlasnika (Owner queue, bez čekanja)
 
-1. Pisana dozvola za §3 (oblik: komentar na #87 ili datoteka LICENSE/NOTICE u Lekti) s rokom 15. 12. 2026. (D-218).
+1. ~~Pisana dozvola za §3~~ zapisana 2. 11. 2026. (§6a). Ostaje neobavezan LICENSE/NOTICE u Lekti, ako ga vlasnik poželi.
 2. Hoće li Lekta dobiti licencu i ostati javna (D-217: vidljivost Lekte je zasebna odluka).
 3. Potvrda FPZG-a za primjenjivost na eseje i podneske i za objavu pravila (D-219).
+
+## 6a. Zapis dozvole i opseg distribucije (M4.1-P02, DAN-513)
+
+Izvor: #87 [c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6578722946), zapisao orkestrator `claude:b:orchestrator`; uvjet iz D-217 i M4-Q1 (O1).
+
+**Pisana dozvola vlasnika Lekte** (Daniel, 2. 11. 2026., doslovno): „Odobravam sve, pogotovo ovo za letku, pa to je moj projekt tako da mož.”
+
+| Pitanje | Zapis |
+| --- | --- |
+| Što dozvola pokriva | Vlasnikov kod i podaci Lekte, u opsegu §3 (minimalna projekcija u `config/faculties/`, samo FPZG profili, samo vrste rada sa službenim izvorom, D-219) |
+| Što dozvola ne mijenja | Isključenja iz §4 ostaju (to su odluke Ductusa, ne pravna ograničenja). Prava trećih iz §5 ostaju NEPROVJERENO; vlasnik ne može dati dozvolu za tuđe dokumente, fontove ni ovisnosti |
+| Lektin kod (zajednički modul citiranja) | Nije potvrđeno da ga ovaj citat izričito obuhvaća: ostaje zasebna pisana potvrda i zasebni zadatak (§4). Pitanje je postavljeno na #1091 |
+| Rok | Dozvola je stigla prije roka 15. 12. 2026. (D-218) |
+| Oblik zapisa | Komentar na #87 i ovaj zapis (§6 t. 1 ranije); LICENSE/NOTICE u Lekti nije uvjet |
+
+**Opseg distribucije paketa (O1, opcija 2):** oba repoa su javna, pa „privatni izvor” iz M4-Q1 znači privatni kanal. Paket izvodi Lekta sesija (D-224) i do Ductusa stiže privatnim kanalom (vlasnikov privatni prijenos), a ne kao javni artefakt Lekte. U javni repo Ductusa ulazi samo minimalna projekcija iz §3, uz verziju i hash paketa. Svaki uvoz paketa spaja se isključivo na „Spoji n” (D-217). Dozvola ne daje pravo na drugu distribuciju (npr. javno objavljen cijeli paket od 135 jedinica i 423 profila). Zapis ne rješava vidljivost ni licencu Lekte (§6 t. 2); ako Lekta postane privatna, privatni kanal ostaje bez promjene.
 
 Sljedeći koraci (Lekta strana): M4.2, paket i test zanošenja, izvodi Lekta sesija uz tiket povezan s DAN-392 (D-224). Ovaj dokument ga ne zamjenjuje.
