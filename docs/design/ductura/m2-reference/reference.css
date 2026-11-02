@@ -30,11 +30,14 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 /* Oznake varijanti nisu dio sučelja. */
 .ref-tag { font: 12px/1.4 var(--ff-mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
 
-/* Ljuska administracije (kao A-04) */
-.shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
-.side { background: var(--chrome); border-right: 1px solid var(--rule-2); padding: 20px 12px; }
-.side .brand { font: 500 19px/1 var(--ff-display); padding: 0 10px 18px; }
-.side nav a { display: block; padding: 8px 10px; border-radius: 5px; color: var(--ink-2); text-decoration: none; min-height: 32px; }
+/* Ljuska administracije: uska bočna traka od 64 px (D-202 t. 1). Ikone iz
+   paketa se ne koriste (D-203 t. 8), pa stavke nose kratak tekst. */
+.shell { display: grid; grid-template-columns: 64px minmax(0, 1fr); min-height: 100vh; }
+.side { background: var(--chrome); border-right: 1px solid var(--rule-2); padding: 14px 4px; display: grid; align-content: start; gap: 14px; }
+.side .brand { display: grid; place-items: center; min-height: 44px; color: var(--ink); text-decoration: none; font: 500 24px/1 var(--ff-display); }
+.side .brand .word { display: none; }
+.side nav { display: grid; gap: 4px; }
+.side nav a { display: grid; place-items: center; text-align: center; min-height: 44px; padding: 6px 2px; border-radius: 5px; color: var(--ink-2); text-decoration: none; font-size: 11px; line-height: 1.2; }
 .side nav a[aria-current] { background: var(--well); color: var(--ink); font-weight: 600; }
 .menu { display: none; }
 .main { padding: 32px 40px 56px; max-width: 1040px; display: grid; gap: 32px; min-width: 0; }
@@ -85,7 +88,9 @@ dl.kv dd { margin: 0; }
   .shell { grid-template-columns: minmax(0, 1fr); }
   .side { border-right: 0; border-bottom: 1px solid var(--rule-2); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
   .side nav { display: none; }
-  .side .brand { padding: 0; }
+  .side .brand { padding: 0; min-height: 0; }
+  .side .brand .mark { display: none; }
+  .side .brand .word { display: inline; font-size: 19px; }
   .menu { display: inline-block; }
 }
 @media (max-width: 640px) {

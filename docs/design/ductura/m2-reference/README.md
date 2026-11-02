@@ -55,7 +55,8 @@ Snimljeno Playwrightovim Chromiumom, cijela stranica, `deviceScaleFactor` 1. Svi
 
 ## Granice
 
-- Ikone iz dizajnerskog paketa nisu korištene (D-203 t. 8).
+- Ljuska je uska bočna traka od 64 px (D-202 t. 1). Ikone iz dizajnerskog paketa nisu korištene (D-203 t. 8), pa stavke trake nose kratak tekst u metama od 44 px. Ispod 800 px traka postaje izbornik iza gumba „Izbornik”.
+- Znak „D” na vrhu trake je poveznica na početnu stranicu uloge (D-202 t. 2); na uskom zaslonu prikazuje se puni naziv.
 - Svi su podaci izmišljeni: osobe, kolegiji, datumi i brojevi studenata. Nema stvarnih osoba.
 - Oznake u velikim slovima („Stanje 3 · potvrda · dijalog i ishod”) opisuju referencu i nisu tekst sučelja.
 - Administrator ne vidi radove ni njihov sadržaj (`docs/PRODUCT.md` §6); A-03 prikazuje samo brojeve upisanih studenata po kolegiju i grupi.
