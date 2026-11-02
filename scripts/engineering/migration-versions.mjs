@@ -7,7 +7,8 @@
 //   node scripts/engineering/migration-versions.mjs
 //
 // On a pull_request event it reads GITHUB_EVENT_PATH, GITHUB_TOKEN and
-// GITHUB_REPOSITORY. Any API error fails the step: the check is fail-closed.
+// GITHUB_REPOSITORY. Any API error, incomplete file list or head that moves
+// while a PR is read fails the step: the check is fail-closed.
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -21,6 +22,7 @@ const MIGRATION = /^(\d+).*\.sql$/;
 const INTRODUCING = new Set(["added", "renamed", "copied"]);
 const PER_PAGE = 100;
 const FILE_PAGES = 30; // GitHub lists at most 3000 files of a pull request.
+const READS = 2; // A PR whose head moves during both reads fails the step.
 
 /** Version of a repository path that dbmate would run as a migration, else null. */
 export function migrationVersion(file) {
@@ -92,33 +94,36 @@ async function pages(api, url, maxPages) {
   const items = [];
   for (let page = 1; page <= maxPages; page += 1) {
     const batch = await api(`${url}${url.includes("?") ? "&" : "?"}per_page=${PER_PAGE}&page=${page}`);
+    if (!Array.isArray(batch)) throw new Error(`GitHub answer for ${url} is not a list.`);
     items.push(...batch);
     if (batch.length < PER_PAGE) return { items, complete: true };
   }
   return { items, complete: false };
 }
 
-/** Reads the PR, main and (when the PR introduces a migration) every open PR. */
-// Another PR's file list counts only when it holds at least `changed_files`
-// entries and its head did not move while the list was read (#1399 c.6585772874).
-async function readPull(api, base, number) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+/**
+ * Files of one PR, read between two reads of its head. The list counts only
+ * when the head did not move, the last page was short and it holds at least
+ * changed_files entries; a moved head is read once more, anything else throws.
+ */
+export async function readPull(api, base, number) {
+  for (let read = 1; read <= READS; read += 1) {
     const before = await api(`${base}/pulls/${number}`);
+    if (!before?.head?.sha) throw new Error(`#${number} has no head.`);
     const files = await pages(api, `${base}/pulls/${number}/files`, FILE_PAGES);
-    if (!files.complete || !(before.changed_files <= files.items.length)) throw new Error(`Cannot read all files of #${number}.`);
     const after = await api(`${base}/pulls/${number}`);
-    if (typeof before.head?.sha === "string" && after.head?.sha === before.head.sha) return { number, state: before.state, files: files.items };
+    if (after?.head?.sha !== before.head.sha) continue;
+    if (!files.complete || !(after.changed_files <= files.items.length)) throw new Error(`File list of #${number} is incomplete.`);
+    return { number, head: after.head.sha, state: after.state, files: files.items };
   }
-  throw new Error(`#${number} kept changing while its files were read.`);
+  throw new Error(`#${number} kept changing while its files were read; rerun the check.`);
 }
 
+/** Reads the PR, main and (when the PR introduces a migration) every open PR. */
 export async function checkPullRequest({ api, owner, repo, number, headSha }) {
   const base = `/repos/${owner}/${repo}`;
-  const current = await api(`${base}/pulls/${number}`);
-  if (current.head?.sha !== headSha) throw new Error("PR changed after this CI run started; a newer run decides.");
-  const own = await pages(api, `${base}/pulls/${number}/files`, FILE_PAGES);
-  if (!own.complete || !(current.changed_files <= own.items.length)) throw new Error(`File list of #${number} is incomplete.`);
-  const self = { number, files: own.items };
+  const self = await readPull(api, base, number);
+  if (self.head !== headSha) throw new Error("PR changed after this CI run started; a newer run decides.");
   if (introduced(self.files).length === 0) return [];
 
   const listing = await api(`${base}/contents/${DIR}?ref=main`);
