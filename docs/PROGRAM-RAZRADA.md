@@ -28,7 +28,7 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M0.1 | Zapis prijenosa jezgre: broj testova u izvoru i na mainu (`docs/engineering/prijenos-jezgre-M0.1.md`) | P | | DAN-376 |
-| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776) | P | | DAN-71 |
+| M0.2 | Zaštitne mjere za dbmate (D-91) 1, 2, 4 i 6; mjere 3, 5 i 7 traže deploy i stvarna okruženja pa idu u B0.x (#87 c.6557413776); uvjet (mjere D-91 1, 2, 4 i 6 spojene) ispunjen 2. 11. 2026., dokaz u `docs/engineering/d91-mjere.md` | P | | DAN-71 |
 | M0.3 | E2E na Firefoxu i WebKitu kao obvezna provjera | P | | DAN-114, DAN-232; gotovo: #1097 (`34b94dab`) |
 | M0.4 | Skener zabranjenih izraza i za tekst izvan JSX-a | P | | DAN-133; gotovo: #552 (`247efb68`) |
 | M0.5 | Ljuska u konačnom vizualnom smjeru „papir i grafit”: tokeni, navigacija, dijalozi, mobilni raspored | F | D-188 (#972) | DAN-344 (#973, #974) |
