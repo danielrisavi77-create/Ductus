@@ -57,6 +57,8 @@ Verzija i hash paketa upisuju se uz projekciju, a zadatak pamti verziju paketa (
 
 ### Ostala pravila Lektine klasifikacije (potpunost)
 
+Izvor popisa: pravila 1 do 64 iz `data/classification.json` na SHA-u `c445a7193f08d1ca0f4c6a30b65fbbdbdbd338d2` (polje `note` izostavljeno). Vrijedi zadnje pravilo koje pogodi stazu (semantika kao `.gitignore`), pa npr. `data/profiles/fpzg-partial.json` (`PUBLIC`/`allowed`) nadjačava opće `data/**` (`PROPRIETARY-DATA`/`forbidden`). Zbog toga razred `PUBLIC` dolje nije licenca (§2).
+
 Lekta za ove staze kaže `PUBLIC`/`allowed`. To je samo razred bundlea (§2), ne licenca. Sve niže je isključeno iz projekcije dok vlasnik ne da pisanu dozvolu i dok se sadržaj ne pregleda; iznimka su stavke već dopuštene u §3.
 
 | Staza (pravilo) | Odluka | Razlog |
@@ -71,6 +73,7 @@ Lekta za ove staze kaže `PUBLIC`/`allowed`. To je samo razred bundlea (§2), ne
 | `data/competitors/**`, `data/work-type-labels.json`, `data/work-type-scope.json`, `data/checks/**` | Ne ulaze (vidi i §5) | Nisu pregledane; `PUBLIC` nije licenca |
 | `data/classification.json` | Ne ulazi | Lektin `PRIVATE-IP`; ovdje se samo čita kao izvor ovog inventara |
 | `public/**`, `*.html`, `rad/*.html`, `moji-radovi/*.html`, `saznaj-vise/*.html`, `src/routes/shared/public-route-directory.json`, `src/assets/fonts/**` | Ne ulaze | Lektino sučelje, marketing i fontovi; nisu pravila oblika (fontovi: §5) |
+| `src/ui/verification-console.ts`, `src/profiles/drafts-runtime.ts`, `src/profiles/advisory-demotion.ts`, `src/analysis/golden-entry.ts`, `src/repair/recipe.ts`, `src/repair/param-authority.ts`, `src/build/bundle-entry-graph.ts`, `src/corpus/{docx-shapes,prose-schema,tool-comparison,tool-feedback,tool-evals,defect-catalog,eval-catalog}.ts` | Ne ulaze | Lekta ih izdvaja kao `PRIVATE-IP` ili `SECURITY-SENSITIVE` (`forbidden`) unutar inače `PUBLIC` staze `src/**`; ionako je cijeli `src/**` isključen (§4) |
 | Sve što nijedno pravilo ne pokriva | Ne ulazi | Lekta primjenjuje „deny-by-default”; isto vrijedi ovdje |
 
 ## 5. Prava trećih i nepotvrđene stavke
