@@ -51,7 +51,7 @@ async function asTeacher(page: Page): Promise<void> {
 }
 
 async function snapshot(page: Page, name: string): Promise<void> {
-  await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+  await test.info().attach(name, { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
 }
 
 // DAN-378: Z-05 tells the student the page is not theirs and offers no new sign-in (#1233).
