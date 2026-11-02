@@ -19,7 +19,11 @@ const PG_SPECIFIER_RE = new RegExp(PG_SPECIFIER, "iu");
 // "pg-like", which is not the package.
 const PG_PATH_RE = /(?:^|\/)node_modules\/(?:\.pnpm\/)?pg(?:$|[/@+-])/iu;
 const normalized = (specifier) => posix.normalize(specifier.replace(/\\/g, "/"));
-const isPg = (specifier) => PG_SPECIFIER_RE.test(specifier) || PG_PATH_RE.test(normalized(specifier));
+// A query or fragment suffix ("?", "#") does not change the module that is
+// loaded (DAN-448, F-033). Test what comes before the first of them as well as
+// the whole text, so the cut only ever adds reports.
+const matchesPg = (path) => PG_SPECIFIER_RE.test(path) || PG_PATH_RE.test(normalized(path));
+const isPg = (specifier) => matchesPg(specifier) || matchesPg(specifier.replace(/[?#].*$/su, ""));
 
 const databaseBoundaryPlugin = {
   rules: {
