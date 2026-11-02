@@ -19,6 +19,7 @@ import {
   type VersionDraft,
   type VersionPublish,
 } from "./assignment-version";
+import own from "./AssignmentVersionForm.module.css";
 import styles from "./TeacherSetup.module.css";
 
 const n = t.teacher.newVersion;
@@ -45,7 +46,7 @@ function Values({ lines }: { lines: string[] }) {
 // The changes the next version makes, each with its value now and after publishing.
 function Changes({ current, body, changes }: { current: CurrentVersion; body: VersionBody; changes: ChangedField[] }) {
   return (
-    <dl>
+    <dl className={own.changes}>
       {changes.map((field) => (
         <div key={field}>
           <dt className={styles.listHead}>{n.fields[field]}</dt>
@@ -129,12 +130,12 @@ function VersionEditor({ current }: { current: CurrentVersion }) {
               onChange={(e) => edit("title", e.target.value)} />
           </label>
           <div className={styles.pair}>
-            <label className={styles.field}>
+            <label className={`${styles.field} ${own.time}`}>
               <span>{a.opensAt}</span>
               <input className={styles.control} type="datetime-local" value={draft.opensAt}
                 onChange={(e) => edit("opensAt", e.target.value)} />
             </label>
-            <label className={styles.field}>
+            <label className={`${styles.field} ${own.time}`}>
               <span>{a.dueAt}</span>
               <input className={styles.control} type="datetime-local" value={draft.dueAt}
                 onChange={(e) => edit("dueAt", e.target.value)} />
@@ -181,7 +182,7 @@ function VersionEditor({ current }: { current: CurrentVersion }) {
         {check.kind === "ready" ? <Changes current={current} body={check.body} changes={check.changes} /> : null}
         {blocked && !published ? <p className={styles.notice} role="status">{blocked}</p> : null}
         {check.kind === "ready" && !published ? (
-          <p className={styles.hint}>{n.consequence.replace("{n}", String(next))}</p>
+          <p className={`${styles.hint} ${own.consequence}`}>{n.consequence.replace("{n}", String(next))}</p>
         ) : null}
         <button className="btn" type="submit" disabled={locked || check.kind !== "ready"}>
           {pending ? n.pending : n.publish.replace("{n}", String(next))}
