@@ -92,13 +92,16 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
     if (pending && pending.size === 0) break;
     const commit = await api(`/repos/${owner}/${repo}/commits/${sha}`, { signal });
     const parents = commit.parents;
-    const mergesBase =
-      parents.length === 2 && typeof baseRef === "string" && baseRef !== "" && typeof parents[1]?.sha === "string"
-        ? await inBase(api, owner, repo, baseRef, parents[1].sha, signal)
-        : false;
-    path.push({ sha: commit.sha, parents, mergesBase });
+    // p06f: a reached commit is in `path` before its own second parent is
+    // checked, so an error on that check keeps it readable; it stays
+    // `mergesBase: false` until GitHub confirms, so nothing behind it carries.
+    const reached = { sha: commit.sha, parents, mergesBase: false };
+    path.push(reached);
     const walked = String(commit.sha).toLowerCase();
     for (const name of pending ?? []) if (walked.startsWith(name)) pending.delete(name);
+    if (parents.length === 2 && typeof baseRef === "string" && baseRef !== "" && typeof parents[1]?.sha === "string") {
+      reached.mergesBase = await inBase(api, owner, repo, baseRef, parents[1].sha, signal);
+    }
     if (parents.length < 2) break;
     sha = parents[0]?.sha;
   }

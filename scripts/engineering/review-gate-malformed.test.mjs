@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateGate } from "./review-gate-core.mjs";
+import { MAX_MERGE_STEPS, evaluateGate } from "./review-gate-core.mjs";
 import { carriedHeads as walkCarriedHeads, createApi } from "./review-gate-api.mjs";
 
 const head = "1234567890abcdef1234567890abcdef12345678";
@@ -386,7 +386,7 @@ const twinA = "abcdef1111111111111111111111111111111111";
 const twinB = "abcdef1222222222222222222222222222222222";
 const behind = "b".repeat(40);
 const mainParent2 = "5".repeat(40);
-const walkApi = (parents, { broken = new Set(), hanging = new Set(), asked = [] } = {}) =>
+const walkApi = (parents, { broken = new Set(), hanging = new Set(), asked = [], brokenBase = new Set(), hangingBase = new Set() } = {}) =>
   createApi({
     baseUrl: "https://api.test",
     token: "t",
@@ -401,8 +401,17 @@ const walkApi = (parents, { broken = new Set(), hanging = new Set(), asked = [] 
         if (hanging.has(sha)) return new Promise(() => {});
         if (!parents[sha]) throw new Error(`unexpected ${path}`);
         value = { sha, parents: parents[sha].map((p) => ({ sha: p })) };
-      } else if (/\/compare\/main\.\.\.(9{40}|5{40})/.test(path)) value = { status: "behind", files: [] };
-      else if (path.includes(`/compare/${prBase}...`)) value = prChange;
+      } else if (path.startsWith("/repos/o/r/compare/main...")) {
+        // p06f: the check that a merge's second parent is in main.
+        const second = path.match(/\.\.\.([0-9a-f]{40})/)?.[1];
+        if (brokenBase.has(second)) {
+          const value503 = { message: "Service Unavailable" };
+          return { ok: false, status: 503, json: async () => value503, text: async () => JSON.stringify(value503) };
+        }
+        if (hangingBase.has(second)) return new Promise(() => {});
+        if (!/^(9{40}|5{40})$/.test(second ?? "")) throw new Error(`unexpected ${path}`);
+        value = { status: "behind", files: [] };
+      } else if (path.includes(`/compare/${prBase}...`)) value = prChange;
       else throw new Error(`unexpected ${path}`);
       return { ok: true, status: 200, json: async () => value, text: async () => JSON.stringify(value) };
     },
@@ -475,4 +484,92 @@ test("a push between reading the comments and the walk keeps the carried negativ
   assert.ok(!asked.includes(newer), "the walk never asks for the new head");
   assert.equal(asked[0], head);
   assert.notEqual(gate(comments, { carriedHeads: heads }).state, "success");
+});
+
+// p06f (owner "Suzi 1396", #87 c.6587584491), finding 1 of QA c.6587122242 and
+// c.6587129054: a negative verdict line behind a numbered list marker, alone or
+// with a heading, quote, bold or code, still blocks; a PASS so written does not
+// count.
+const NUMBERED = [
+  ["numbered list", (V) => `1. ${V}: FAIL`],
+  ["numbered list with a parenthesis", (V) => `2) ${V}: BLOCK`],
+  ["two digit number", (V) => `10. ${V}: BLOK`],
+  ["escaped full stop", (V) => `1\\. ${V}: FAIL`],
+  ["heading and number", (V) => `## 1. ${V}: FAIL`],
+  ["heading and number with a parenthesis", (V) => `### 2) ${V}: BLOCK`],
+  ["number and bold field name", (V) => `1. **${V}:** FAIL`],
+  ["number and bold line", (V) => `1. **${V}: BLOCK**`],
+  ["quote and number", (V) => `> 1. ${V}: FAIL`],
+  ["quote, heading and number", (V) => `> ## 1. ${V}: BLOCK`],
+  ["number inside code", (V) => `\`1. ${V}: FAIL\``],
+  ["number and field name in code", (V) => `1. \`${V}\`: BLOCK`],
+  ["bullet and number", (V) => `- 1. ${V}: FAIL`],
+];
+for (const kind of ["review", "qa"]) {
+  const slot = kind === "review" ? "r2" : "q2";
+  for (const [name, line] of NUMBERED) {
+    test(`${kind}: a negative verdict as "${name}" blocks beside a valid PASS (p06f, 1)`, () => {
+      const { comments, risk } = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, line(V)]));
+      assert.notEqual(gate(comments, { risk }).state, "success", line(KINDS[kind].V));
+    });
+  }
+  test(`${kind}: a numbered negative names its earlier head and is walked for (p06f, 1)`, async () => {
+    const comments = [...passesFor(kind), block(kind, slot, ({ H, V }) => [`${H}: ${mergeHead.slice(0, 7)}`, `1. ${V}: FAIL`])];
+    const heads = await walkWith(comments, { broken: new Set([behind]) });
+    assert.deepEqual([...heads], [mergeHead]);
+    assert.notEqual(gate(comments, { risk: riskFor(kind), carriedHeads: heads }).state, "success");
+  });
+  test(`${kind}: a numbered negative in a fenced code block is a quote and a numbered PASS is not a PASS (p06f, 1)`, () => {
+    const fenced = withPasses(kind, block(kind, slot, ({ H, V }) => [`${H}: ${head}`, "```", `1. ${V}: FAIL`, "```"]));
+    assert.equal(gate(fenced.comments, { risk: fenced.risk }).state, "success");
+    const onlyPass = kind === "review"
+      ? [block("review", "r1", ({ H, V }) => [`${H}: ${head}`, `1. ${V}: PASS`])]
+      : [exact("review", "r1"), block("qa", "q1", ({ H, V }) => [`${H}: ${head}`, `1. ${V}: PASS`])];
+    assert.notEqual(gate(onlyPass, { risk: riskFor(kind) }).state, "success");
+  });
+}
+
+// p06f, finding 2 of review c.6587055610 and QA c.6587122242 / c.6587129054: a
+// head the walk reached stays in the path when the check of its own second
+// parent fails or times out, so a negative on it still blocks. It still
+// carries no PASS and no Owner-Override.
+const deep = (i) => (i + 0x10).toString(16).padStart(2, "0").repeat(20);
+const deepChain = (depth) => {
+  const parents = { [head]: [deep(1), mainParent] };
+  for (let i = 1; i <= depth; i += 1) parents[deep(i)] = [i === depth ? behind : deep(i + 1), i === depth ? mainParent2 : mainParent];
+  return parents;
+};
+const PATHS = [
+  ["head equal to the parent, 503", { parents: chain, named: mergeHead, brokenBase: new Set([mainParent2]) }],
+  ["merge commit, timeout", { parents: chain, named: mergeHead, hangingBase: new Set([mainParent2]), budgetMs: 300 }],
+  ["depth 2, 503", { parents: deepChain(2), named: deep(2), brokenBase: new Set([mainParent2]) }],
+  ["depth MAX_MERGE_STEPS, 503", { parents: deepChain(MAX_MERGE_STEPS), named: deep(MAX_MERGE_STEPS), brokenBase: new Set([mainParent2]) }],
+];
+for (const kind of ["review", "qa"]) {
+  for (const [name, { named, budgetMs, ...opts }] of PATHS) {
+    test(`${kind}: ${name} on the check of a reached head's parent keeps its negative (p06f, 2)`, async () => {
+      for (const as of [named, named.slice(0, 7)]) {
+        const comments = [...passesFor(kind), negativeAt(kind, as)];
+        const heads = await walkWith(comments, opts, budgetMs);
+        assert.equal(heads.size, 0, `${as}: nothing carries`);
+        assert.deepEqual([...heads.heldNegatives], [named], as);
+        assert.notEqual(gate(comments, { risk: riskFor(kind), carriedHeads: heads }).state, "success", as);
+      }
+    });
+  }
+}
+
+test("a reached head kept after a failed parent check carries no PASS and no Owner-Override (p06f, 2)", async () => {
+  const opts = { brokenBase: new Set([mainParent2]) };
+  const pass = [exact("review", "r1", "PASS", mergeHead)];
+  assert.notEqual(gate(pass, { carriedHeads: await walkWith(pass, opts) }).state, "success");
+  const owner = [override(mergeHead)];
+  assert.notEqual(gate(owner, { carriedHeads: await walkWith(owner, opts) }).state, "success");
+});
+
+test("a failed parent check before the named head still keeps nothing, as before (p06f, 2)", async () => {
+  const comments = [...passesFor("review"), negativeAt("review", mergeHead.slice(0, 7))];
+  const heads = await walkWith(comments, { brokenBase: new Set([mainParent]) });
+  assert.equal(heads.size, 0);
+  assert.equal(heads.heldNegatives?.size ?? 0, 0);
 });
