@@ -99,8 +99,9 @@ export function widensWords(current: CurrentVersion, wordMin: number | null, wor
 /**
  * The body of the next version, or why there is none. Work type, evidence
  * profile and import travel unchanged: the form has no field for them. A
- * purpose the current version does not allow is never sent, and with none
- * left the version prohibits use; otherwise it keeps the current rule.
+ * purpose the current version does not allow is never sent. Removing the last
+ * allowed purpose prohibits use; otherwise the version keeps the current rule,
+ * also when that rule already allows no purpose (T032: nothing changes then).
  */
 export function checkVersion(current: CurrentVersion, draft: VersionDraft): VersionCheck {
   const title = draft.title.trim();
@@ -118,7 +119,7 @@ export function checkVersion(current: CurrentVersion, draft: VersionDraft): Vers
     workType: current.workType,
     opensAt,
     dueAt,
-    aiPolicy: aiPurposes.length === 0 ? "prohibited" : current.aiPolicy,
+    aiPolicy: aiPurposes.length === 0 && current.aiPurposes.length > 0 ? "prohibited" : current.aiPolicy,
     aiPurposes,
     evidenceProfile: current.evidenceProfile,
     importAllowed: current.importAllowed,

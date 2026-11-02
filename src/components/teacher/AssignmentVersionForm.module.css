@@ -1,7 +1,13 @@
 /* DAN-310 (M2.4-P02): only what the new version form adds to TeacherSetup.module.css. */
 
-/* A grid item keeps its content's width by default; a date field may not push past its card. */
+/* A grid item keeps its content's width by default, and a date input keeps its
+   own minimum width; neither may push the field past its card (D-183). */
 .time {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.time input {
   min-width: 0;
 }
 

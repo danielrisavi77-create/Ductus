@@ -34,6 +34,14 @@ describe("DAN-310 new version: what is sent", () => {
     expect(checkVersion(CURRENT, { ...draftOf(CURRENT), title: "  Izmišljeni esej  " })).toEqual({ kind: "unchanged" });
   });
 
+  it("keeps a rule that allows use with no purpose instead of quietly prohibiting it (T032)", () => {
+    const empty: CurrentVersion = { ...CURRENT, aiPolicy: "partially_allowed", aiPurposes: [] };
+    expect(checkVersion(empty, draftOf(empty))).toEqual({ kind: "unchanged" });
+    const edited = checkVersion(empty, { ...draftOf(empty), title: "Novi naslov" });
+    expect(edited.kind === "ready" && [edited.body.aiPolicy, edited.body.aiPurposes, edited.changes]).toEqual(
+      ["partially_allowed", [], ["title"]]);
+  });
+
   it("carries what the form has no field for, and names each change (T025, T026)", () => {
     const draft = { ...draftOf(CURRENT), title: "Novi naslov", dueAt: "2026-12-05T12:00", wordMin: "800", wordMax: "" };
     const check = checkVersion(CURRENT, draft);
