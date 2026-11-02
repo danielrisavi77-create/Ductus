@@ -86,7 +86,14 @@ test("rows tell each state, the filter narrows, and a row returns to the same wo
   await expect(page.getByText(w.noMatch)).toBeVisible();
   await page.goBack();
   await expect(rowOf(page, freshTitle)).toBeVisible();
+  await expect(page.getByLabel(w.search)).toHaveValue("");
+  await expect(page.getByLabel(w.year)).toHaveValue("2025/2026");
   await page.getByRole("link", { name: w.reset }).click();
+  await expect(rowOf(page, submittedTitle)).toBeVisible();
+  // The fields follow the cleared filter, so applying again does not bring it back.
+  await expect(page.getByLabel(w.year)).toHaveValue("");
+  await expect(page.getByLabel(w.search)).toHaveValue("");
+  await page.getByRole("button", { name: w.apply }).click();
   await expect(rowOf(page, submittedTitle)).toBeVisible();
 
   // Back from the editor, the row opens the same assignment and the same document.

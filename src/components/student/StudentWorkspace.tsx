@@ -79,7 +79,9 @@ function body(read: StudentWorkspaceRead, filter: WorkspaceFilter) {
   const years = yearsOf(read.items);
   if (filter.year !== "" && !years.includes(filter.year)) years.push(filter.year);
   return h("div", null,
-    h("form", { className: styles.filter, method: "get", action: HERE, role: "search" },
+    // Keyed by the filter: a client navigation (Poništi, back) keeps the form
+    // mounted, so its default values would otherwise stay on the old filter.
+    h("form", { key: JSON.stringify([filter.q, filter.year]), className: styles.filter, method: "get", action: HERE, role: "search" },
       h("label", { className: styles.field },
         h("span", { className: styles.label }, t.search),
         h("input", { type: "search", name: "q", defaultValue: filter.q, maxLength: 200, className: styles.input })),
