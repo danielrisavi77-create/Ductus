@@ -32,7 +32,8 @@ const NoSuchKey = () =>
 
 /**
  * In-process S3: path-style buckets, atomic conditional create, the checksum
- * echoed on a stored write and `NoSuchKey` for a missing object.
+ * echoed on a stored write and `NoSuchKey` for a missing object. A PUT
+ * without `If-None-Match: *` is refused, so an unconditional write cannot pass.
  */
 function fakeS3() {
   const objects = new Map<string, Uint8Array>();
@@ -44,6 +45,9 @@ function fakeS3() {
     if ((init?.method ?? "GET") === "GET") {
       const found = objects.get(path);
       return found ? new Response(found.slice(), { status: 200 }) : NoSuchKey();
+    }
+    if (new Headers(init?.headers).get("if-none-match") !== "*") {
+      return new Response(null, { status: 400 });
     }
     if (objects.has(path)) return new Response(null, { status: 412 });
     const body = (init?.body as Uint8Array).slice();
@@ -82,6 +86,8 @@ type Subject = {
   readImmutable(input: ReturnType<typeof keyOf>): ReturnType<InMemoryEvidencePayloadStore["readImmutable"]>;
   /** Puts other bytes under a key directly, as a damaged or older object would be. */
   plant(institutionId: string, text: string, bytes: string): Promise<void>;
+  /** What the store holds, to see that a refused write changed nothing. */
+  snapshot(): string[];
   /** What a put of other bytes under a hash already stored answers. */
   otherBytesUnderStoredHash: "conflict" | "invalid";
 };
@@ -89,6 +95,9 @@ type Subject = {
 const bucketOf: Record<string, string> = { [FAK_A]: "ductus-evidence-a", [FAK_B]: "ductus-evidence-b" };
 const objectPath = (institutionId: string, text: string) =>
   `/${bucketOf[institutionId]}/v2/${institutionId}/${PACKAGE}/${sha256(payload(text))}.json`;
+
+const snapshotOf = (s3: ReturnType<typeof fakeS3>) =>
+  [...s3.objects].map(([path, bytes]) => `${path}=${sha256(bytes)}`).sort();
 
 const subjects: [string, () => Subject][] = [
   [
@@ -102,6 +111,7 @@ const subjects: [string, () => Subject][] = [
         plant: async (institutionId, text, bytes) => {
           expect((await store.putImmutable(putOf(institutionId, text, bytes))).status).toBe("stored");
         },
+        snapshot: () => [`size:${store.size}`],
         otherBytesUnderStoredHash: "conflict",
       };
     },
@@ -121,6 +131,7 @@ const subjects: [string, () => Subject][] = [
         plant: async (institutionId, text, bytes) => {
           s3.objects.set(objectPath(institutionId, text), new TextEncoder().encode(bytes));
         },
+        snapshot: () => snapshotOf(s3),
         otherBytesUnderStoredHash: "invalid",
       };
     },
@@ -148,6 +159,7 @@ const subjects: [string, () => Subject][] = [
         plant: async (institutionId, text, bytes) => {
           s3.objects.set(objectPath(institutionId, text), new TextEncoder().encode(bytes));
         },
+        snapshot: () => snapshotOf(s3),
         otherBytesUnderStoredHash: "invalid",
       };
     },
@@ -205,8 +217,10 @@ describe.each(subjects)("EvidencePayloadStore contract: %s", (_, make) => {
     ["a hash that is not SHA-256 hex", { segmentHash: "abc" }],
   ])("refuses %s as invalid and stores nothing", async (_, change) => {
     const store = make();
+    await store.putImmutable(putOf(FAK_A, "prvi odlomak"));
+    const before = store.snapshot();
     await expect(store.putImmutable({ ...putOf(FAK_A, "odlomak"), ...change })).resolves.toEqual({ status: "invalid" });
-    await expect(store.readImmutable(keyOf(FAK_A, "odlomak"))).resolves.toEqual({ status: "not_found" });
+    expect(store.snapshot()).toEqual(before);
   });
 
   it("does not show one institution's write to another", async () => {
