@@ -344,6 +344,84 @@ BEGIN
 END
 $$;
 
+-- As 20261010190000, with the open group places of a returning student held
+-- before the course membership is written, so a return and the assignment of
+-- a teacher to that group are serialised (#1372, review c.6589792083).
+CREATE OR REPLACE FUNCTION institution.enroll_with_code(p_code text, OUT outcome text, OUT enrolled_course_id uuid)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  actor record;
+  settings record;
+  v_code text;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The count below must see what a parallel request has just committed.
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'READ COMMITTED required' USING ERRCODE = 'ZD500';
+  END IF;
+  SELECT s.enrollment_attempt_limit AS attempt_limit, s.enrollment_attempt_window AS attempt_window
+    INTO settings
+    FROM institution.institution_settings s WHERE s.institution_id = actor.institution_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'institution is not configured' USING ERRCODE = 'ZD503';
+  END IF;
+
+  -- One attempt of a user at a time, so parallel requests cannot pass the limit.
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.enroll_with_code:' || actor.user_id, 0));
+  DELETE FROM institution.enrollment_attempt t
+   WHERE t.user_id = actor.user_id AND t.attempted_at <= now() - settings.attempt_window;
+  IF (SELECT count(*) FROM institution.enrollment_attempt t WHERE t.user_id = actor.user_id)
+     >= settings.attempt_limit THEN
+    outcome := 'too_many_attempts';
+    RETURN;
+  END IF;
+
+  -- Spaces, hyphens and letter case do not matter; only the hash is compared.
+  IF length(p_code) <= 64 THEN
+    v_code := regexp_replace(p_code, '[\s-]', '', 'g');
+  END IF;
+  IF v_code ~ '^[0-9A-Za-z]{8,32}$' THEN
+    SELECT c.id INTO enrolled_course_id
+      FROM institution.course_enrollment_code e
+      JOIN institution.course c ON c.id = e.course_id
+     WHERE e.code_hash = sha256(convert_to(upper(v_code), 'UTF8'))
+       AND e.active AND e.valid_until > now()
+       AND c.institution_id = actor.institution_id
+       AND NOT EXISTS (
+         SELECT 1 FROM institution.course_member m
+          WHERE m.course_id = c.id AND m.user_id = actor.user_id
+            AND m.removed_by IS NOT NULL AND m.return_allowed_at IS NULL
+       );
+  END IF;
+  IF enrolled_course_id IS NOT NULL THEN
+    -- A student who comes back to the course may still hold an open place in
+    -- one of its seminar groups (#1372, repair round 4). Those group rows are
+    -- held FOR SHARE before the new course membership is written, so a
+    -- return waits for assign_group_teacher, which holds the group row FOR NO
+    -- KEY UPDATE until it commits, and no work of the returning student can
+    -- start, and commit, while a new teacher of that group is being assigned.
+    -- A student without an open place waits for nothing new.
+    PERFORM 1 FROM institution.seminar_group g
+      JOIN institution.seminar_group_member s ON s.group_id = g.id AND s.institution_id = g.institution_id
+     WHERE s.course_id = enrolled_course_id AND s.institution_id = actor.institution_id
+       AND s.user_id = actor.user_id AND s.valid_to IS NULL
+     ORDER BY g.id
+       FOR SHARE OF g;
+    INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
+    VALUES (enrolled_course_id, actor.institution_id, actor.user_id, 'student')
+    ON CONFLICT (course_id, user_id) WHERE member_to IS NULL DO NOTHING;
+    IF institution.actor_course_role(enrolled_course_id) IS NOT NULL THEN
+      outcome := 'enrolled';
+      RETURN;
+    END IF;
+  END IF;
+  enrolled_course_id := NULL;
+  INSERT INTO institution.enrollment_attempt (user_id) VALUES (actor.user_id);
+  outcome := 'refused';
+END
+$$;
+
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA institution, app, collaboration FROM ductus_identity;
@@ -352,7 +430,7 @@ REVOKE USAGE, CREATE ON SCHEMA collaboration FROM ductus_evidence;
 -- migrate:down
 -- Local only: staging and production migrate forward (docs/BACKEND.md 6).
 -- The definitions of 20261017120000, 20261102200000, 20261101150000,
--- 20261028140000 and 20261102160000.
+-- 20261028140000, 20261102160000 and 20261010190000.
 SET LOCAL ROLE ductus_migrator;
 GRANT CREATE ON SCHEMA institution, app, collaboration TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
@@ -510,6 +588,68 @@ $$;
 
 DROP FUNCTION institution.actor_group_work(uuid, uuid);
 DROP FUNCTION institution.actor_group_student(uuid, uuid);
+
+CREATE OR REPLACE FUNCTION institution.enroll_with_code(p_code text, OUT outcome text, OUT enrolled_course_id uuid)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  actor record;
+  settings record;
+  v_code text;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The count below must see what a parallel request has just committed.
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'READ COMMITTED required' USING ERRCODE = 'ZD500';
+  END IF;
+  SELECT s.enrollment_attempt_limit AS attempt_limit, s.enrollment_attempt_window AS attempt_window
+    INTO settings
+    FROM institution.institution_settings s WHERE s.institution_id = actor.institution_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'institution is not configured' USING ERRCODE = 'ZD503';
+  END IF;
+
+  -- One attempt of a user at a time, so parallel requests cannot pass the limit.
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.enroll_with_code:' || actor.user_id, 0));
+  DELETE FROM institution.enrollment_attempt t
+   WHERE t.user_id = actor.user_id AND t.attempted_at <= now() - settings.attempt_window;
+  IF (SELECT count(*) FROM institution.enrollment_attempt t WHERE t.user_id = actor.user_id)
+     >= settings.attempt_limit THEN
+    outcome := 'too_many_attempts';
+    RETURN;
+  END IF;
+
+  -- Spaces, hyphens and letter case do not matter; only the hash is compared.
+  IF length(p_code) <= 64 THEN
+    v_code := regexp_replace(p_code, '[\s-]', '', 'g');
+  END IF;
+  IF v_code ~ '^[0-9A-Za-z]{8,32}$' THEN
+    SELECT c.id INTO enrolled_course_id
+      FROM institution.course_enrollment_code e
+      JOIN institution.course c ON c.id = e.course_id
+     WHERE e.code_hash = sha256(convert_to(upper(v_code), 'UTF8'))
+       AND e.active AND e.valid_until > now()
+       AND c.institution_id = actor.institution_id
+       AND NOT EXISTS (
+         SELECT 1 FROM institution.course_member m
+          WHERE m.course_id = c.id AND m.user_id = actor.user_id
+            AND m.removed_by IS NOT NULL AND m.return_allowed_at IS NULL
+       );
+  END IF;
+  IF enrolled_course_id IS NOT NULL THEN
+    INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
+    VALUES (enrolled_course_id, actor.institution_id, actor.user_id, 'student')
+    ON CONFLICT (course_id, user_id) WHERE member_to IS NULL DO NOTHING;
+    IF institution.actor_course_role(enrolled_course_id) IS NOT NULL THEN
+      outcome := 'enrolled';
+      RETURN;
+    END IF;
+  END IF;
+  enrolled_course_id := NULL;
+  INSERT INTO institution.enrollment_attempt (user_id) VALUES (actor.user_id);
+  outcome := 'refused';
+END
+$$;
 
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;

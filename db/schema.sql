@@ -3850,6 +3850,19 @@ BEGIN
        );
   END IF;
   IF enrolled_course_id IS NOT NULL THEN
+    -- A student who comes back to the course may still hold an open place in
+    -- one of its seminar groups (#1372, repair round 4). Those group rows are
+    -- held FOR SHARE before the new course membership is written, so a
+    -- return waits for assign_group_teacher, which holds the group row FOR NO
+    -- KEY UPDATE until it commits, and no work of the returning student can
+    -- start, and commit, while a new teacher of that group is being assigned.
+    -- A student without an open place waits for nothing new.
+    PERFORM 1 FROM institution.seminar_group g
+      JOIN institution.seminar_group_member s ON s.group_id = g.id AND s.institution_id = g.institution_id
+     WHERE s.course_id = enrolled_course_id AND s.institution_id = actor.institution_id
+       AND s.user_id = actor.user_id AND s.valid_to IS NULL
+     ORDER BY g.id
+       FOR SHARE OF g;
     INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
     VALUES (enrolled_course_id, actor.institution_id, actor.user_id, 'student')
     ON CONFLICT (course_id, user_id) WHERE member_to IS NULL DO NOTHING;
