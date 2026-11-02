@@ -286,6 +286,70 @@ describe("find and replace: evidence", () => {
   });
 });
 
+
+/**
+ * Invariant 2 for history (review c.6587845533, QA c.6587903364): a
+ * replacement is an undo step of its own against typing before it and typing
+ * after it, within the history's 500 ms grouping delay or after it.
+ */
+type HistoryStep =
+  | { type: string; at: number; pos?: number }
+  | { replace: string; with: string; at: number; one?: boolean }
+  | { select: number; at: number };
+
+type HistoryRow = { name: string; text: string; steps: HistoryStep[]; texts: string[]; refused?: true };
+
+const HISTORY_ROWS: HistoryRow[] = [
+  { name: "H1 typing before, next to the match", text: "a", steps: [{ type: "b", at: 0 }, { replace: "b", with: "c", at: 10 }], texts: ["ac", "ab", "a"] },
+  { name: "H2 typing right after, next to the match", text: "ab", steps: [{ replace: "b", with: "c", at: 0 }, { type: "x", at: 10 }], texts: ["acx", "ac", "ab"] },
+  {
+    name: "H3 typing right after, a selection change between", text: "ab",
+    steps: [{ replace: "b", with: "c", at: 0 }, { select: 2, at: 5 }, { type: "x", at: 10, pos: 3 }], texts: ["acx", "ac", "ab"],
+  },
+  { name: "H4 typing after the delay", text: "ab", steps: [{ replace: "b", with: "c", at: 0 }, { type: "x", at: 2_000 }], texts: ["acx", "ac", "ab"] },
+  {
+    name: "H5 two replacements in a row", text: "ab",
+    steps: [{ replace: "b", with: "c", at: 0 }, { replace: "c", with: "d", at: 10 }, { type: "x", at: 20 }], texts: ["adx", "ad", "ac", "ab"],
+  },
+  {
+    name: "H6 a replacement without a match changes no history", text: "ab", refused: true,
+    steps: [{ type: "x", at: 0 }, { replace: "q", with: "c", at: 10 }, { type: "y", at: 20 }], texts: ["abxy", "ab"],
+  },
+];
+
+describe("find and replace: its own undo step, before and after typing", () => {
+  const T = Date.parse("2026-11-02T10:00:00.000Z");
+  for (const one of [false, true]) {
+    for (const row of HISTORY_ROWS) {
+      it(`${row.name} (${one ? "replace one" : "replace all"})`, () => {
+        const t = recorded([p(row.text)]);
+        const { editor } = t;
+        for (const step of row.steps) {
+          if ("type" in step) {
+            const tr = editor.state.tr.insertText(step.type, step.pos ?? editor.state.doc.content.size - 1);
+            editor.view.dispatch(tr.setTime(T + step.at));
+          } else if ("select" in step) {
+            editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, step.select)).setTime(T + step.at));
+          } else {
+            const result = searchDocument(editor.state.doc, { text: step.replace, matchCase: true })!;
+            const outcome = one ? replaceMatchTransaction(editor.state, result, 0, step.with) : replaceAllTransaction(editor.state, result, step.with);
+            expect(outcome.ok).toBe(row.refused !== true);
+            if (outcome.ok) editor.view.dispatch(outcome.tr.setTime(T + step.at));
+          }
+        }
+        const seen = [texts(editor)[0]];
+        for (let i = 1; i < row.texts.length; i += 1) {
+          t.undo();
+          seen.push(texts(editor)[0]);
+        }
+        expect(seen).toEqual(row.texts);
+        // Nothing is left to take back.
+        expect(editor.can().undo()).toBe(false);
+      });
+    }
+  }
+});
+
 describe("Istodobnost: the text changes between search and replace", () => {
   const stale = (t: Recorded, result: SearchResult) => {
     const json = t.editor.getJSON();
