@@ -7,8 +7,9 @@
 //   node scripts/engineering/migration-versions.mjs
 //
 // On a pull_request event it reads GITHUB_EVENT_PATH, GITHUB_TOKEN and
-// GITHUB_REPOSITORY. Any API error, incomplete file list or head that moves
-// while a PR is read fails the step: the check is fail-closed.
+// GITHUB_REPOSITORY. Any API error, incomplete file list, head that moves
+// while a PR is read, or main and the PRs changing during both reads of the
+// inventory fails the step: the check is fail-closed.
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -22,7 +23,8 @@ const MIGRATION = /^(\d+).*\.sql$/;
 const INTRODUCING = new Set(["added", "renamed", "copied"]);
 const PER_PAGE = 100;
 const FILE_PAGES = 30; // GitHub lists at most 3000 files of a pull request.
-const READS = 2; // A PR whose head moves during both reads fails the step.
+const READS = 2; // A PR (or the inventory) that moves during both reads fails the step.
+const ALL_PAGES = 100; // At most 10000 PRs, open or not, in the inventory.
 
 /** Version of a repository path that dbmate would run as a migration, else null. */
 export function migrationVersion(file) {
@@ -119,25 +121,50 @@ export async function readPull(api, base, number) {
   throw new Error(`#${number} kept changing while its files were read; rerun the check.`);
 }
 
-/** Reads the PR, main and (when the PR introduces a migration) every open PR. */
+/**
+ * One state of the repository: main's SHA and every PR, read oldest first
+ * (`state=all`, so a PR that closes or merges between two pages stays in place
+ * and shifts no page; new PRs come last). `key` compares two states: main and
+ * every open PR with its head.
+ */
+export async function inventory(api, base) {
+  const main = (await api(`${base}/git/ref/heads/main`))?.object?.sha;
+  if (!main) throw new Error("Cannot read the SHA of main.");
+  const all = await pages(api, `${base}/pulls?state=all&sort=created&direction=asc`, ALL_PAGES);
+  if (!all.complete) throw new Error("Cannot read every PR, so not every open PR is known.");
+  const open = all.items.filter((p) => p.state === "open").map((p) => ({ number: p.number, head: p.head?.sha ?? null }));
+  return { main, open, key: JSON.stringify([main, ...open.map((p) => [p.number, p.head]).sort(([a], [b]) => a - b)]) };
+}
+
+/**
+ * Reads the PR, then (when it introduces a migration) main at a fixed SHA and
+ * every open PR between two reads of the inventory. A result counts only when
+ * both inventories are equal and every PR was read open at its listed head;
+ * otherwise everything is read once more, and a second change throws.
+ */
 export async function checkPullRequest({ api, owner, repo, number, headSha }) {
   const base = `/repos/${owner}/${repo}`;
   const self = await readPull(api, base, number);
   if (self.head !== headSha) throw new Error("PR changed after this CI run started; a newer run decides.");
   if (introduced(self.files).length === 0) return [];
 
-  const listing = await api(`${base}/contents/${DIR}?ref=main`);
-  // The contents API lists at most 1000 entries of a directory.
-  if (!Array.isArray(listing) || listing.length >= 1000) throw new Error(`Cannot list ${DIR} on main completely.`);
-  const main = listing.filter((e) => e.type === "file").map((e) => ({ name: e.name, sha: e.sha }));
-
-  const open = await pages(api, `${base}/pulls?state=open`, 10);
-  if (!open.complete) throw new Error("Cannot list every open PR.");
-  const pulls = [];
-  for (const p of open.items) {
-    if (p.number !== number) pulls.push(await readPull(api, base, p.number));
+  for (let read = 1; read <= READS; read += 1) {
+    const before = await inventory(api, base);
+    const listing = await api(`${base}/contents/${DIR}?ref=${before.main}`);
+    // The contents API lists at most 1000 entries of a directory.
+    if (!Array.isArray(listing) || listing.length >= 1000) throw new Error(`Cannot list ${DIR} on main completely.`);
+    const main = listing.filter((e) => e.type === "file").map((e) => ({ name: e.name, sha: e.sha }));
+    const pulls = [];
+    let stable = true;
+    for (const p of before.open) {
+      if (p.number === number) continue;
+      const pull = await readPull(api, base, p.number);
+      if (pull.state !== "open" || pull.head !== p.head) stable = false;
+      pulls.push(pull);
+    }
+    if (stable && (await inventory(api, base)).key === before.key) return findCollisions({ self, main, pulls });
   }
-  return findCollisions({ self, main, pulls });
+  throw new Error("main or the PRs changed during both reads of the inventory; rerun the check.");
 }
 
 async function main() {

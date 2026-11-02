@@ -135,6 +135,12 @@ const page = (items, match) => {
   return items.slice((n - 1) * 100, n * 100);
 };
 
+// main at one SHA: its ref and its db/migrations at that SHA.
+const MAIN_ROUTES = [
+  [/^\/repos\/o\/r\/git\/ref\/heads\/main$/, { object: { sha: "m".repeat(40) } }],
+  [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=m{40}$/, MAIN.map((f) => ({ ...f, type: "file" }))],
+];
+
 const pr = (number, extra = {}) => ({ number, state: "open", head: { sha: "h".repeat(40) }, changed_files: 1, ...extra });
 
 test("checkPullRequest reads every page of open PRs and files and finds the collision", async () => {
@@ -144,8 +150,8 @@ test("checkPullRequest reads every page of open PRs and files and finds the coll
   const { api } = fakeApi([
     [/^\/repos\/o\/r\/pulls\/1$/, pr(1)],
     [/^\/repos\/o\/r\/pulls\/1\/files\?/, (m) => page([add(A)], m)],
-    [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=main$/, MAIN.map((f) => ({ ...f, type: "file" }))],
-    [/^\/repos\/o\/r\/pulls\?state=open/, (m) => page([pr(1), ...others], m)],
+    ...MAIN_ROUTES,
+    [/^\/repos\/o\/r\/pulls\?state=all/, (m) => page([pr(1), ...others], m)],
     [/^\/repos\/o\/r\/pulls\/249$/, pr(249, { changed_files: bigFiles.length })],
     [/^\/repos\/o\/r\/pulls\/(\d+)$/, (m) => pr(Number(m[1]), { changed_files: 0 })],
     [/^\/repos\/o\/r\/pulls\/249\/files\?/, (m) => page(bigFiles, m)],
@@ -167,16 +173,16 @@ test("checkPullRequest without migrations reads no other PR", async () => {
 test("checkPullRequest fails closed", async () => {
   const head = "h".repeat(40);
   const base = [
-    [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=main$/, MAIN.map((f) => ({ ...f, type: "file" }))],
-    [/^\/repos\/o\/r\/pulls\?state=open/, (m) => page([pr(1), pr(7)], m)],
+    ...MAIN_ROUTES,
+    [/^\/repos\/o\/r\/pulls\?state=all/, (m) => page([pr(1), pr(7)], m)],
   ];
   const selfFiles = [/^\/repos\/o\/r\/pulls\/1\/files\?/, (m) => page([add(A)], m)];
   const seven = [/^\/repos\/o\/r\/pulls\/7$/, pr(7, { changed_files: 3000 })];
   const cases = [
     ["moved head", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1, { head: { sha: "x".repeat(40) } })], selfFiles, ...base], /changed after this CI run/],
     ["incomplete own file list", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1, { changed_files: 5 })], selfFiles, ...base], /incomplete/],
-    ["more open PRs than the listing reads", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, base[0],
-      [/^\/repos\/o\/r\/pulls\?state=open/, () => Array.from({ length: 100 }, (_, i) => pr(2 + i))]], /every open PR/],
+    ["more open PRs than the listing reads", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...MAIN_ROUTES,
+      [/^\/repos\/o\/r\/pulls\?state=all/, () => Array.from({ length: 100 }, (_, i) => pr(2 + i))]], /every open PR/],
     ["API error on another PR", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base], /404/],
     ["other PR at the 3000 file limit", [[/^\/repos\/o\/r\/pulls\/1$/, pr(1)], selfFiles, ...base, seven,
       [/^\/repos\/o\/r\/pulls\/7\/files\?/, () => Array.from({ length: 100 }, () => ({ filename: "x", status: "added", sha: "s" }))]], /incomplete/],
@@ -214,8 +220,9 @@ function world({ other, onFiles = () => {}, self = { head: "h".repeat(40) }, onS
       onSelfFiles(own);
       return batch;
     }
-    if (u === "/contents/db/migrations?ref=main") return MAIN.map((f) => ({ ...f, type: "file" }));
-    if (u.startsWith("/pulls?state=open")) return slice([pr(1), pr(7)], u)[1];
+    if (u === "/git/ref/heads/main") return { object: { sha: "m".repeat(40) } };
+    if (u === `/contents/db/migrations?ref=${"m".repeat(40)}`) return MAIN.map((f) => ({ ...f, type: "file" }));
+    if (u.startsWith("/pulls?state=all")) return slice([pr(1), pr(7, { head: { sha: state.head } })], u)[1];
     if (u === "/pulls/7") {
       const meta = { number: 7, state: "open", changed_files: state.changed };
       return state.head === undefined ? meta : { ...meta, head: { sha: state.head } };
@@ -288,8 +295,8 @@ test("checkPullRequest rereads another PR that pushed between two pages of its f
   const { api } = fakeApi([
     [/^\/repos\/o\/r\/pulls\/1$/, pr(1)],
     [/^\/repos\/o\/r\/pulls\/1\/files\?/, (m) => page([add(A)], m)],
-    [/^\/repos\/o\/r\/contents\/db\/migrations\?ref=main$/, MAIN.map((f) => ({ ...f, type: "file" }))],
-    [/^\/repos\/o\/r\/pulls\?state=open/, (m) => page([pr(1), pr(7)], m)],
+    ...MAIN_ROUTES,
+    [/^\/repos\/o\/r\/pulls\?state=all/, (m) => page([pr(1), pr(7, { head: { sha: (pushed ? "b" : "a").repeat(40) } })], m)],
     [/^\/repos\/o\/r\/pulls\/7$/, () => (pushed ? pr(7, { head: { sha: "b".repeat(40) } }) : pr(7, { head: { sha: "a".repeat(40) }, changed_files: 101 }))],
     [/^\/repos\/o\/r\/pulls\/7\/files\?/, (m) => {
       const n = Number(new URLSearchParams(m.input.split("?")[1]).get("page"));
@@ -329,6 +336,104 @@ test("concurrency: pushes during both reads of another PR fail the step", async 
     },
   });
   await assert.rejects(check(always), /#7 kept changing/);
+});
+
+// --- One stable state of main and every PR (review c.6586947811, QA
+// c.6587031133): contract #1091 c.6587132517, classes I1-I10. `repo()` is a
+// fake GitHub that also serves the old URLs (`ref=main`, `state=open`), so I3
+// and I4 return [] on ac58be51. `act(s, u, seen)` changes the repository after
+// the request `u` is served; `seen(prefix)` counts requests so far.
+
+function repo({ prs, act = () => {} }) {
+  const s = { main: "m1", trees: { m1: MAIN }, prs: [{ number: 1, head: "h".repeat(40), files: [add(A)] }, ...prs].map((p) => ({ state: "open", ...p })) };
+  const urls = [];
+  const seen = (prefix) => urls.filter((u) => u.startsWith(prefix)).length;
+  const serve = (u) => {
+    const q = new URLSearchParams(u.split("?")[1] ?? "");
+    const slice = (items) => structuredClone(items.slice((q.get("page") - 1) * 100, q.get("page") * 100));
+    if (u === "/git/ref/heads/main") return { object: { sha: s.main } };
+    if (u.startsWith("/contents/db/migrations?")) return s.trees[q.get("ref") === "main" ? s.main : q.get("ref")].map((f) => ({ ...f, type: "file" }));
+    const meta = (p) => ({ number: p.number, state: p.state, head: { sha: p.head }, changed_files: p.files.length });
+    if (u.startsWith("/pulls?")) return slice(s.prs.filter((p) => q.get("state") === "all" || p.state === "open").map(meta));
+    const [, n, files] = /^\/pulls\/(\d+)(\/files)?/.exec(u);
+    const p = s.prs.find((x) => x.number === Number(n));
+    return files ? slice(p.files) : meta(p);
+  };
+  const api = async (url) => {
+    const u = url.replace(/^\/repos\/o\/r/, "");
+    urls.push(u);
+    const reply = serve(u);
+    act(s, u, seen);
+    return reply;
+  };
+  return { api, seen };
+}
+
+const pull = (s, n) => s.prs.find((p) => p.number === n);
+const commit = (s, files = []) => {
+  const sha = `m${Object.keys(s.trees).length + 1}`;
+  s.trees[sha] = [...s.trees[s.main], ...files.map((f) => ({ name: path.posix.basename(f.filename), sha: f.sha }))];
+  s.main = sha;
+};
+const merge = (s, n) => { pull(s, n).state = "closed"; commit(s, pull(s, n).files); };
+// Fillers: 99 open PRs without migrations, older than B (#200), so B is 101st.
+const fillers = Array.from({ length: 99 }, (_, i) => ({ number: 2 + i, head: "f".repeat(40), files: [] }));
+const prB = (files = [add(B)]) => ({ number: 200, head: "b".repeat(40), files });
+const firstMain = (u, seen) => u.startsWith("/contents/") && seen("/contents/") === 1;
+const listPage = (u, n) => u.startsWith("/pulls?") && new URLSearchParams(u.split("?")[1]).get("page") === `${n}`;
+
+const STATES = [
+  ["I1 stable state, B open", { prs: [prB()] }, [`${M(A)}|200`], 1],
+  ["I1b stable state, no collision", { prs: [prB([add(C)])] }, [], 1],
+  ["I2 main moves (an unrelated commit) during the read", { prs: [prB([add(C)])],
+    act: (s, u, seen) => { if (firstMain(u, seen)) commit(s); } }, [], 2],
+  ["I3 B merges after main was read (QA scenario 1)", { prs: [prB()],
+    act: (s, u, seen) => { if (firstMain(u, seen)) merge(s, 200); } }, [`${M(A)}|main`], 2],
+  ["I4 an unrelated PR closes between two pages, B is 101st (QA scenario 2)", { prs: [...fillers, prB()],
+    act: (s, u, seen) => { if (listPage(u, 1) && seen("/pulls?") === 1) pull(s, 50).state = "closed"; } }, [`${M(A)}|200`], 2],
+  ["I5 a new PR of the same version opens during the read", { prs: [prB([add(C)])],
+    act: (s, u, seen) => { if (firstMain(u, seen)) s.prs.push({ number: 300, state: "open", head: "n".repeat(40), files: [add(B)] }); } }, [`${M(A)}|300`], 2],
+  ["I6 B pushes the migration between the inventory and its read", { prs: [prB([add(C)])],
+    act: (s, u, seen) => { if (firstMain(u, seen)) Object.assign(pull(s, 200), { head: "c".repeat(40), files: [add(B)] }); } }, [`${M(A)}|200`], 2],
+  ["I6b B force-pushes a head without the migration while it is read, then back", { prs: [prB()],
+    act: (s, u, seen) => {
+      if (firstMain(u, seen)) Object.assign(pull(s, 200), { head: "c".repeat(40), files: [add(C)] });
+      else if (u === "/pulls/200" && seen("/pulls/200") === 3) Object.assign(pull(s, 200), { head: "b".repeat(40), files: [add(B)] });
+    } }, [`${M(A)}|200`], 2],
+  ["I6c B pushes the migration after it was read, before the second inventory", { prs: [prB([add(C)])],
+    act: (s, u, seen) => { if (u === "/pulls/200" && seen("/pulls/200") === 3) Object.assign(pull(s, 200), { head: "c".repeat(40), files: [add(B)] }); } },
+    [`${M(A)}|200`], 2],
+  ["I7 B closes and reopens while it is read", { prs: [prB()],
+    act: (s, u, seen) => {
+      if (u.startsWith("/pulls/200/files") && seen("/pulls/200/files") === 1) pull(s, 200).state = "closed";
+      else if (u === "/pulls/200" && pull(s, 200).state === "closed") pull(s, 200).state = "open";
+    } }, [`${M(A)}|200`], 2],
+  ["I8 an unrelated PR closes and reopens between pages of both inventories", { prs: [...fillers, prB()],
+    act: (s, u) => { if (listPage(u, 1)) pull(s, 50).state = "closed"; else if (listPage(u, 2)) pull(s, 50).state = "open"; } }, [`${M(A)}|200`], 1],
+  ["I11 a closed PR older than B vanishes between two pages (B shifts back a page)", { prs: [...fillers.slice(0, 97), { number: 150, state: "closed", head: "d", files: [] }, { number: 151, state: "closed", head: "e", files: [] }, prB()],
+    act: (s, u) => {
+      const gone = listPage(u, 1) && s.prs.find((p) => p.state === "closed");
+      if (gone) s.prs = s.prs.filter((p) => p !== gone);
+    } },
+    [`${M(A)}|200`], 2],
+  ["I9 main moves during both reads", { prs: [prB([add(C)])],
+    act: (s, u) => { if (u.startsWith("/contents/")) commit(s); } }, /changed during both reads/, 2],
+  ["I10a main's ref without a SHA", { prs: [prB()],
+    act: (s) => { s.main = undefined; } }, /SHA of main/, 0],
+];
+
+for (const [name, input, expected, mainReads] of STATES) {
+  test(`state ${name}`, async () => {
+    const { api, seen } = repo(input);
+    if (expected instanceof RegExp) await assert.rejects(check(api), expected);
+    else assert.deepEqual(by(await check(api)), expected);
+    assert.equal(seen("/contents/"), mainReads, "reads of main");
+  });
+}
+
+test("state I10b more PRs than the inventory reads fails the step", async () => {
+  const { api } = repo({ prs: Array.from({ length: 10000 }, (_, i) => ({ number: 2 + i, head: "f".repeat(40), files: [] })) });
+  await assert.rejects(check(api), /every open PR/);
 });
 
 test("CI runs the check in the build job with the workflow token", () => {
