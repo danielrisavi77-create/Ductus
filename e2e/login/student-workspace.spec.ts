@@ -85,7 +85,11 @@ test("rows tell each state, the filter narrows, and a row returns to the same wo
   await page.getByRole("button", { name: w.apply }).click();
   await expect(page.getByText(w.noMatch)).toBeVisible();
   await page.goBack();
+  // Back shows the previous filter, and the fields show that filter, not the text typed after it.
+  await expect(page).toHaveURL(/[?&]q=(&|$)/);
+  await expect(page).toHaveURL(/[?&]godina=2025%2F2026(&|$)/);
   await expect(rowOf(page, freshTitle)).toBeVisible();
+  await expect(rowOf(page, submittedTitle)).toHaveCount(0);
   await expect(page.getByLabel(w.search)).toHaveValue("");
   await expect(page.getByLabel(w.year)).toHaveValue("2025/2026");
   await page.getByRole("link", { name: w.reset }).click();

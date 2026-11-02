@@ -81,13 +81,15 @@ function body(read: StudentWorkspaceRead, filter: WorkspaceFilter) {
   return h("div", null,
     // Keyed by the filter: a client navigation (Poništi, back) keeps the form
     // mounted, so its default values would otherwise stay on the old filter.
+    // autoComplete off: on back after a GET submit the browser would restore the
+    // text typed before submitting, so the fields would not match the list.
     h("form", { key: JSON.stringify([filter.q, filter.year]), className: styles.filter, method: "get", action: HERE, role: "search" },
       h("label", { className: styles.field },
         h("span", { className: styles.label }, t.search),
-        h("input", { type: "search", name: "q", defaultValue: filter.q, maxLength: 200, className: styles.input })),
+        h("input", { type: "search", name: "q", defaultValue: filter.q, maxLength: 200, autoComplete: "off", className: styles.input })),
       h("label", { className: styles.field },
         h("span", { className: styles.label }, t.year),
-        h("select", { name: "godina", defaultValue: filter.year, className: styles.input },
+        h("select", { name: "godina", defaultValue: filter.year, autoComplete: "off", className: styles.input },
           h("option", { value: "" }, t.allYears),
           years.map((year) => h("option", { key: year, value: year }, year)))),
       h("button", { type: "submit", className: "btn" }, t.apply),
