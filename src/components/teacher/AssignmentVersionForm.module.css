@@ -11,6 +11,11 @@
   min-width: 0;
 }
 
+/* Two date fields sit side by side only while each shows its whole value. */
+div.times {
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+}
+
 .changes {
   display: grid;
   gap: 14px;

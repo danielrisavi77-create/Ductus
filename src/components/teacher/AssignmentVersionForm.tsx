@@ -129,7 +129,7 @@ function VersionEditor({ current }: { current: CurrentVersion }) {
             <input className={styles.control} value={draft.title} maxLength={200} autoComplete="off"
               onChange={(e) => edit("title", e.target.value)} />
           </label>
-          <div className={styles.pair}>
+          <div className={`${styles.pair} ${own.times}`}>
             <label className={`${styles.field} ${own.time}`}>
               <span>{a.opensAt}</span>
               <input className={styles.control} type="datetime-local" value={draft.opensAt}
