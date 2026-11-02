@@ -204,29 +204,38 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 **Cilj:** mentor i nastavnik zadatka prate rad uživo, komentiraju i predlažu izmjene, a svaka izmjena pripisana je autoru (pravila 7 i 8).
 
-**Gotovo na mainu:** komentari uz odlomak (B-10, `app/api/comments/[action]`); prikaz uživo kroz zaseban kanal zadnjeg stanja (`docs/BACKEND.md` §4.12, `app/api/live/[documentId]`, `/nastavnik/rad/[id]`); „Kako vidi nastavnik” (#815); čitanje reprodukcije na poslužitelju (#927, pgTAP 089). Napomena: PROGRAM za M6 još piše „polling, D-74”; prikaz uživo od D-142 radi prema §4.12, a D-74 ostaje za obavijesti. **Nema:** prijedloga izmjena, izravnih izmjena nastavnika, sučelja reprodukcije, zahtjeva za doradu, obavijesti.
+**Gotovo na mainu:** komentari uz odlomak (B-10, `app/api/comments/[action]`); prikaz uživo kroz zaseban kanal zadnjeg stanja (`docs/BACKEND.md` §4.12, `app/api/live/[documentId]`, `/nastavnik/rad/[id]`); „Kako vidi nastavnik” (#815); čitanje reprodukcije na poslužitelju (#927, pgTAP 089). Prikaz uživo od D-142 radi prema §4.12; „polling, D-74” u `docs/PROGRAM.md` ispravljen je u M6.0a, D-74 vrijedi za obavijesti. **Nema:** prijedloga izmjena, izravnih izmjena nastavnika, sučelja reprodukcije, zahtjeva za doradu, obavijesti.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M6.1 | Prikaz uživo: predani rad prikazan kao predan; mentorski prikaz s komentarom | F, B | | DAN-332 (#911), DAN-215 |
-| M6.2 | Reprodukcija znak po znak za mentora, odnosno nastavnika zadatka, i za studenta (D-143, D-154) | F | M3.1 | DAN-344 (#932) |
+| M6.2 | Reprodukcija za mentora, odnosno nastavnika zadatka, i za studenta (D-143, D-154); val 1 prikazuje samo redoslijed promjena, vremenski podaci tek uz DPIA (D-239) | F | M3.1 | DAN-344 (#932) |
 | M6.3 | Prijedlozi izmjena s prihvaćanjem kao zasebnom promjenom s izvorom | B, F | M5.1 | DAN-419 |
 | M6.4 | Izravne izmjene nastavnika s pripisivanjem i postavkom vidljivom na radu (D-21, D-34); val 1, cijeli tok po D-34 (D-203 B1) | B, F | M6.3 | DAN-420 |
 | M6.5 | Zahtjev za doradu i odgovor studenta (D-45), uključujući „promijenjeno nakon prihvaćanja” | B, F | | DAN-314, DAN-266 |
-| M6.6 | Obavijesti u aplikaciji i e-poštom, podsjetnici o roku (N-01, N-02) | B, F | | DAN-305 (#950) |
-| M6.7 | Odgođeno objavljivanje komentara (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | F, B | | DAN-421 |
+| M6.6 | Obavijesti u aplikaciji, podsjetnici o roku (N-01, N-02); e-pošta tek nakon izbora pružatelja i DPA, bez tvrdnje „poslano točno jednom” (D-241) | B, F | | DAN-305 (#950) za spojeni dio, novi uski tiket za ostatak (D-246) |
+| M6.7 | Odgođeno objavljivanje komentara (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | F, B | | DAN-421, novi uski tiket (D-246) |
 | M6.8 | Mentorov pregled rada i komentari na mobitelu | F | M6.1 | DAN-422 |
 | M6.9 | Konzultacije vezane uz verziju rada (D-47); dio „Bilješka mentora” je uvjetan (U-2, D-135) | B, F | M2.6 | DAN-423 |
-| M6.10 | Zbirni pregled kolegija bez imena (N-11) | B, F | | DAN-425 |
+| M6.10 | Zbirni pregled kolegija bez imena (N-11, ekran N-17); val 2, prag od najmanje 5 studenata, zaštita komplementa, zatvoren popis mjera, bez ljestvice (D-242) | B, F | | DAN-425 |
 | M6.11 | Ključni rokovi mentorskog rada (N-07 iz `docs/FEATURES.md`) | B, F | M2.6, M6.6 | novo |
-| M6.12 | (uvjetno) Sučelje komentora i povjerenstva s vremenski ograničenim pristupom (N-08, N-09, ekran P-01 povjerenstvo); model je M2.8 | F, B | M2.8, M6.1, uvjet U-1 | novo |
-| M6.13 | (uvjetno) Etape mentorskog rada s odobravanjem (N-15 etape) | B, F | M6.9, uvjet U-2 | novo |
-| M6.14 | (uvjetno) Rubrika i nacrt izvješća kao mentorovi radni zapisi (N-15 rubrika i izvješće, D-130, D-135) | B, F | M6.13, uvjet U-2 | novo |
-| M6.15 | (uvjetno) Ocjena vidljiva studentu tek nakon objave (N-15 ocjena, D-135) | B, F | M6.14, uvjet U-2 | novo |
+| M6.12 | (uvjetno) Sučelje komentora i povjerenstva s vremenski ograničenim pristupom (N-08, N-09, ekran P-01 povjerenstvo); model je M2.8; povjerenstvo ne vidi reprodukciju dok se ne izmijene Ustav v1.4 i D-154 (D-238) | F, B | M2.8, M6.1, uvjet U-1 | novo (D-246) |
+| M6.13 | (uvjetno) Etape mentorskog rada s odobravanjem (N-15 etape) — u M6 se ne gradi (D-249) | B, F | M6.9, uvjet U-2 | novo |
+| M6.14 | (uvjetno) Rubrika i nacrt izvješća kao mentorovi radni zapisi (N-15 rubrika i izvješće, D-130, D-135) — u M6 se ne gradi (D-249) | B, F | M6.13, uvjet U-2 | novo |
+| M6.15 | (uvjetno) Ocjena vidljiva studentu tek nakon objave (N-15 ocjena, D-135) — u M6 se ne gradi (D-249) | B, F | M6.14, uvjet U-2 | novo |
+
+**Odluke M6 (D-237 do D-250, #87 c.6581656612):**
+- Usporedba poslanih verzija u oba profila, bez oznake i ocjene (D-237). Ponovni pregled nakon dorade je novi ciklus odgovora na novoj verziji zahtjeva, bez automatske presude (D-243).
+- Zadano su prijedlozi; izravne izmjene samo uz vidljivu i opozivu postavku koju uključi student (D-244; M6.3, M6.4).
+- Glasovni komentar (N-04) u val 2 sa sintetičkim podacima, za stvarne studente isključen do DPIA (D-240).
+- Referentne slike za nove ekrane izrađuje M6.UX-R; UI čeka odobrenje slika, backend ne čeka (D-245). Linear: novi uski tiketi za reproduktor, ostatak obavijesti, M6.7 i M6.11 do M6.15; DAN-344 i DAN-305 se ne otvaraju ponovno (D-246).
+- Samo hrvatski, engleski s M11 (D-247). Razina pristupačnosti koju repo već traži; WCAG 2.2 AA je cilj za nove ekrane (D-248).
+- M6.13 do M6.15 (etape, rubrika, ocjena) i uvjet U-2 u M6 se ne grade (D-249); rez 1 iz `docs/PROGRAM.md` više ne vrijedi.
+- M6.0a (ovaj docs PR) i M6.UX-R idu na „Spoji n”; M6 ulazi u automatski red.
 
 **Ekrani:** S-12 komentari studenta, S-17 kako vidi nastavnik, S-34 reprodukcija vlastitog rada, S-40 komentari na mobitelu, S-41 i Z-07 obavijesti, N-06 rad uživo, N-07 pregled rada, N-08 komentari, prijedlozi i dorada, N-09 reprodukcija, N-12 konzultacije, N-17 zbirni pregled.
 
-**Uvjet završetka:** izlazni kriterij M6 iz `docs/PROGRAM.md`; uz to pgTAP i E2E dokazuju da reprodukciju vide samo mentor, odnosno nastavnik zadatka, i student, a nitko drugi (pravilo 7); obavijest nastavniku ne stiže češće od P-03. Koraci M6.12 do M6.15 (uvjetno) nisu dio uvjeta završetka.
+**Uvjet završetka:** izlazni kriterij M6 iz `docs/PROGRAM.md`; uz to pgTAP i E2E dokazuju da reprodukciju vide samo mentor, odnosno nastavnik zadatka, i student, a nitko drugi (pravilo 7); obavijest nastavniku ne stiže češće od P-03. Koraci M6.12 do M6.15 (uvjetno) nisu dio uvjeta završetka; M6.13 do M6.15 se u M6 ne grade (D-249).
 
 ## M7 Predaja i sažetak
 
