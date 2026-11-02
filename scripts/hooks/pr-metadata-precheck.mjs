@@ -3,13 +3,15 @@
 // CI applies (pr-metadata-core). Exit 2 blocks the tool call and shows the
 // reason to the agent. For a PR command an internal error blocks too (DAN-137);
 // every other command passes untouched.
-import { evaluateMetadata } from "../engineering/pr-metadata-core.mjs";
-import { changedFiles, extractBody, prAction, readInput } from "./pr-command.mjs";
+import { changedFiles, extractBody, mayConcernPr, prAction, readInput } from "./pr-command.mjs";
 
 const input = readInput();
 const command = input.tool_input?.command ?? "";
+// DAN-481: most Bash calls are not PR commands; leave before the heavy import.
+if (!mayConcernPr(command)) process.exit(0);
 const action = prAction(command);
 if (!action) process.exit(0);
+const { evaluateMetadata } = await import("../engineering/pr-metadata-core.mjs");
 
 try {
   const cwd = input.cwd ?? process.cwd();
