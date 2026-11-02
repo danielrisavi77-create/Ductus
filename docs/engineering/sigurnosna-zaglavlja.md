@@ -169,7 +169,7 @@ frame-ancestors 'none'
 - `THEME_SCRIPT` je dopušten svojim hashom, a ne nonceom. Unit test hash ponovno računa iz skripte, pa promjena skripte bez nove konstante pada.
 - `form-action` uz `'self'` sadrži ishodište davatelja identiteta, jer 303 odjave vodi na `end_session`. Ako `OIDC_ISSUER` nedostaje ili nije http(s) URL, ostaje samo `'self'`.
 - Samo `next dev` dodaje `'unsafe-eval'` u `script-src` i `'unsafe-inline'` u `style-src`.
-- Middleware ne obuhvaća `/api/*`, `/_next/static/*`, `/_next/image/*` ni `/favicon.ico`.
+- Middleware ne obuhvaća `/api/*`, `/_next/static/*` ni `/favicon.ico`. `/_next/image` ostaje obuhvaćen: odgovor 400 krajnje točke za slike nosi politiku stranice, optimizator na slike stavlja vlastitu politiku sa `sandbox`, a svaka putanja ispod nje je HTML 404 kojem treba nonce. Prvotno izuzeće `_next/image/` hvatalo je samo takve podputanje, pa je njihov 404 ostajao bez politike (nalaz drugog reviewa na PR-u 2).
 - Izostavljeno u odnosu na 6.1: `upgrade-insecure-requests` (ruši `http://localhost`) i Report-Only razdoblje.
 
 ### 9.2 Promjene koje politika traži u aplikaciji

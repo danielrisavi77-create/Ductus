@@ -82,6 +82,22 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
     expect(response.headers()["cache-control"]).toBe(DYNAMIC_HTML_CACHE);
   });
 
+  test("an unknown path below /_next/image is an HTML 404 under the page policy", async ({ request }) => {
+    // DAN-489 review finding: the matcher excluded `_next/image/`, which only
+    // ever matched such paths, so their HTML 404 had no policy at all.
+    const response = await request.get("/_next/image/nepostoji-dan489", { maxRedirects: 0 });
+    expect(response.status()).toBe(404);
+    expect(response.headers()["content-type"]).toMatch(/^text\/html/);
+    expectConfigHeaders(response, "page");
+    expect(response.headers()["cache-control"]).toBe(DYNAMIC_HTML_CACHE);
+  });
+
+  test("the image endpoint's own error keeps the page policy", async ({ request }) => {
+    const response = await request.get("/_next/image", { maxRedirects: 0 });
+    expect(response.status()).toBe(400);
+    expectConfigHeaders(response, "page");
+  });
+
   test("hashed static chunks are public and immutable", async ({ request }) => {
     const page = await request.get("/prijava");
     const chunk = (await page.text()).match(/\/_next\/static\/chunks\/[^"'\s]+\.js/)?.[0];

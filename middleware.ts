@@ -21,6 +21,8 @@ export function middleware(request: NextRequest) {
 export const config = {
   // /api/* stays out: the middleware would buffer request bodies, and API
   // responses get their own static policy from next.config.ts. Hashed static
-  // files and the icon run no markup.
-  matcher: ["/((?!api/|_next/static/|_next/image/|favicon\\.ico$).*)"],
+  // files and the icon run no markup. /_next/image stays in: its own error
+  // answers keep the page policy, the optimizer puts its own sandbox policy on
+  // images, and any path below it is an HTML 404 that needs the nonce.
+  matcher: ["/((?!api/|_next/static/|favicon\\.ico$).*)"],
 };

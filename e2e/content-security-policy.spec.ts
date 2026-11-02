@@ -36,7 +36,7 @@ async function inject(page: Page, path: string, markup: (nonce: string) => strin
 }
 
 test.describe("pages run under the policy without a violation", () => {
-  for (const path of ["/", "/prijava", "/zadaci", "/nepostoji-dan489"]) {
+  for (const path of ["/", "/prijava", "/zadaci", "/nepostoji-dan489", "/_next/image/nepostoji-dan489"]) {
     test(`${path}`, async ({ page }) => {
       await watchViolations(page);
       const response = await page.goto(path);
