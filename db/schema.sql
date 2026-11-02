@@ -3189,6 +3189,63 @@ $$;
 
 
 --
+-- Name: assign_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assign_group_student(p_group_id uuid, p_student_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  IF NOT EXISTS (
+       SELECT 1 FROM institution.course_member m
+       WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by)
+  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id)
+  ON CONFLICT (course_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+  IF NOT FOUND AND NOT EXISTS (
+       SELECT 1 FROM institution.seminar_group_member s
+       WHERE s.group_id = p_group_id AND s.user_id = p_student_id AND s.valid_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+END
+$$;
+
+
+--
+-- Name: assign_group_teacher(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assign_group_teacher(p_group_id uuid, p_teacher_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by)
+  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id)
+  ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+END
+$$;
+
+
+--
 -- Name: check_mentorship_version(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3455,6 +3512,55 @@ $$;
 
 
 --
+-- Name: create_seminar_group(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.create_seminar_group(p_course_id uuid, p_name text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_group uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF NOT coalesce(institution.is_plain_label(p_name), false) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  INSERT INTO institution.seminar_group (course_id, institution_id, name, created_by)
+  VALUES (p_course_id, actor.institution_id, p_name, actor.user_id)
+  ON CONFLICT (course_id, name) DO NOTHING
+  RETURNING id INTO v_group;
+  IF v_group IS NULL THEN
+    SELECT g.id INTO STRICT v_group FROM institution.seminar_group g WHERE g.course_id = p_course_id AND g.name = p_name;
+  END IF;
+  RETURN v_group;
+END
+$$;
+
+
+--
+-- Name: end_group_assignment(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.end_group_assignment(p_group_id uuid, p_user_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  PERFORM institution.require_course_teacher(v_course);
+  UPDATE institution.seminar_group_teacher t SET valid_to = now()
+   WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
+  UPDATE institution.seminar_group_member s SET valid_to = now()
+   WHERE s.group_id = p_group_id AND s.user_id = p_user_id AND s.valid_to IS NULL;
+END
+$$;
+
+
+--
 -- Name: enroll_with_code(text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3562,6 +3668,22 @@ CREATE FUNCTION institution.is_assignment_content(p_title text, p_instructions t
     AND p_evidence_profile IN ('basic', 'extended')
     AND p_import_allowed IS NOT NULL,
     false)
+$$;
+
+
+--
+-- Name: is_confirmed_teacher(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_confirmed_teacher(p_user_id uuid, p_course_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM institution.institution_role r JOIN institution.course c ON c.institution_id = r.institution_id
+    WHERE c.id = p_course_id AND r.user_id = p_user_id AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  )
 $$;
 
 
@@ -3759,6 +3881,23 @@ $$;
 
 
 --
+-- Name: require_course_teacher(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid) RETURNS record
+    LANGUAGE plpgsql STABLE
+    SET search_path TO ''
+    AS $$
+BEGIN
+  SELECT a.user_id, a.institution_id INTO user_id, institution_id FROM institution.require_actor() a;
+  IF institution.actor_course_role(p_course_id) IS DISTINCT FROM 'teacher' THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+END
+$$;
+
+
+--
 -- Name: revoke_enrollment_code(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3810,6 +3949,37 @@ BEGIN
    WHERE r.institution_id = actor.institution_id AND r.user_id = p_teacher_id
      AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL;
   RETURN FOUND;
+END
+$$;
+
+
+--
+-- Name: set_course_holder(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_course_holder(p_course_id uuid, p_holder_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF NOT institution.is_confirmed_teacher(p_holder_id, p_course_id) OR NOT EXISTS (
+       SELECT 1 FROM institution.course_member m
+       WHERE m.course_id = p_course_id AND m.user_id = p_holder_id AND m.role = 'teacher' AND m.member_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- Two replacements of the same course wait for each other here.
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  IF EXISTS (SELECT 1 FROM institution.course_holder h
+             WHERE h.course_id = p_course_id AND h.user_id = p_holder_id AND h.valid_to IS NULL) THEN
+    RETURN;
+  END IF;
+  UPDATE institution.course_holder h SET valid_to = now() WHERE h.course_id = p_course_id AND h.valid_to IS NULL;
+  INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by)
+  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id);
 END
 $$;
 
@@ -4453,6 +4623,24 @@ ALTER TABLE ONLY institution.course_enrollment_code FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: course_holder; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.course_holder (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT course_holder_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.course_holder FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: course_member; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -4601,6 +4789,61 @@ CREATE TABLE institution.notification (
 );
 
 ALTER TABLE ONLY institution.notification FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: seminar_group; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.seminar_group (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    name text NOT NULL,
+    created_by uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT seminar_group_name_check CHECK (institution.is_plain_label(name))
+);
+
+ALTER TABLE ONLY institution.seminar_group FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: seminar_group_member; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.seminar_group_member (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    group_id uuid NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT seminar_group_member_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.seminar_group_member FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: seminar_group_teacher; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.seminar_group_teacher (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    group_id uuid NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT seminar_group_teacher_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.seminar_group_teacher FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5165,6 +5408,14 @@ ALTER TABLE ONLY institution.course_enrollment_code
 
 
 --
+-- Name: course_holder course_holder_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: course course_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -5274,6 +5525,54 @@ ALTER TABLE ONLY institution.notification
 
 ALTER TABLE ONLY institution.notification
     ADD CONSTRAINT notification_recipient_id_event_key_key UNIQUE (recipient_id, event_key);
+
+
+--
+-- Name: seminar_group seminar_group_course_id_name_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_course_id_name_key UNIQUE (course_id, name);
+
+
+--
+-- Name: seminar_group seminar_group_id_course_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_id_course_id_institution_id_key UNIQUE (id, course_id, institution_id);
+
+
+--
+-- Name: seminar_group seminar_group_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_id_institution_id_key UNIQUE (id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: seminar_group seminar_group_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_pkey PRIMARY KEY (id);
 
 
 --
@@ -5453,6 +5752,13 @@ CREATE UNIQUE INDEX course_enrollment_code_active_idx ON institution.course_enro
 
 
 --
+-- Name: course_holder_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX course_holder_open_idx ON institution.course_holder USING btree (course_id) WHERE (valid_to IS NULL);
+
+
+--
 -- Name: course_member_open_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
@@ -5513,6 +5819,20 @@ CREATE INDEX notice_acknowledgment_student_idx ON institution.notice_acknowledgm
 --
 
 CREATE INDEX notification_recipient_order_idx ON institution.notification USING btree (recipient_id, created_at DESC, id DESC);
+
+
+--
+-- Name: seminar_group_member_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX seminar_group_member_open_idx ON institution.seminar_group_member USING btree (course_id, user_id) WHERE (valid_to IS NULL);
+
+
+--
+-- Name: seminar_group_teacher_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX seminar_group_teacher_open_idx ON institution.seminar_group_teacher USING btree (group_id, user_id) WHERE (valid_to IS NULL);
 
 
 --
@@ -6274,6 +6594,30 @@ ALTER TABLE ONLY institution.course_enrollment_code
 
 
 --
+-- Name: course_holder course_holder_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_holder course_holder_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: course_holder course_holder_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: course course_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -6399,6 +6743,70 @@ ALTER TABLE ONLY institution.notice_acknowledgment
 
 ALTER TABLE ONLY institution.notification
     ADD CONSTRAINT notification_recipient_id_institution_id_fkey FOREIGN KEY (recipient_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group seminar_group_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: seminar_group seminar_group_created_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_created_by_institution_id_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_group_id_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_group_id_course_id_institution_id_fkey FOREIGN KEY (group_id, course_id, institution_id) REFERENCES institution.seminar_group(id, course_id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_group_id_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_group_id_course_id_institution_id_fkey FOREIGN KEY (group_id, course_id, institution_id) REFERENCES institution.seminar_group(id, course_id, institution_id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -6883,6 +7291,26 @@ CREATE POLICY course_enrollment_code_read ON institution.course_enrollment_code 
 
 
 --
+-- Name: course_holder; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.course_holder ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: course_holder course_holder_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_holder_owner ON institution.course_holder TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: course_holder course_holder_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_holder_read ON institution.course_holder FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
 -- Name: course_member; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -7036,6 +7464,66 @@ CREATE POLICY notification_owner ON institution.notification TO ductus_identity 
 
 
 --
+-- Name: seminar_group; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.seminar_group ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seminar_group_member; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.seminar_group_member ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seminar_group_member seminar_group_member_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_member_owner ON institution.seminar_group_member TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_member_read ON institution.seminar_group_member FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
+-- Name: seminar_group seminar_group_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_owner ON institution.seminar_group TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: seminar_group seminar_group_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_read ON institution.seminar_group FOR SELECT TO ductus_app USING ((institution.actor_course_role(course_id) = 'teacher'::text));
+
+
+--
+-- Name: seminar_group_teacher; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.seminar_group_teacher ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_teacher_owner ON institution.seminar_group_teacher TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_teacher_read ON institution.seminar_group_teacher FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -7107,4 +7595,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261101190000'),
     ('20261101200000'),
     ('20261101201000'),
-    ('20261101210000');
+    ('20261101210000'),
+    ('20261102160000');

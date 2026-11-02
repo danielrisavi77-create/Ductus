@@ -6,7 +6,7 @@ BEGIN;
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(835);
+SELECT plan(1091);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
@@ -14,8 +14,9 @@ SELECT bag_eq(
   $$ SELECT c.relname::text FROM pg_class c
      WHERE c.relnamespace = 'institution'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f') $$,
   ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
-        'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification'],
-  'the institution schema holds exactly the twelve tables of this matrix'
+        'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
+        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member'],
+  'the institution schema holds exactly the sixteen tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -48,7 +49,11 @@ SELECT bag_eq(
     'ductus_app SELECT assignment',
     'ductus_app SELECT assignment_version',
     'ductus_app SELECT notice_acknowledgment',
-    'ductus_app SELECT mentorship'
+    'ductus_app SELECT mentorship',
+    'ductus_app SELECT course_holder',
+    'ductus_app SELECT seminar_group',
+    'ductus_app SELECT seminar_group_teacher',
+    'ductus_app SELECT seminar_group_member'
   ],
   'besides the owner only ductus_app holds a privilege on an institution table, and only SELECT'
 );
@@ -83,7 +88,15 @@ SELECT bag_eq(
     'faculty_work_rule: faculty_work_rule_owner ALL to ductus_identity',
     'mentorship: mentorship_owner ALL to ductus_identity',
     'mentorship: mentorship_read SELECT to ductus_app',
-    'notification: notification_owner ALL to ductus_identity'
+    'notification: notification_owner ALL to ductus_identity',
+    'course_holder: course_holder_owner ALL to ductus_identity',
+    'course_holder: course_holder_read SELECT to ductus_app',
+    'seminar_group: seminar_group_owner ALL to ductus_identity',
+    'seminar_group: seminar_group_read SELECT to ductus_app',
+    'seminar_group_teacher: seminar_group_teacher_owner ALL to ductus_identity',
+    'seminar_group_teacher: seminar_group_teacher_read SELECT to ductus_app',
+    'seminar_group_member: seminar_group_member_owner ALL to ductus_identity',
+    'seminar_group_member: seminar_group_member_read SELECT to ductus_app'
   ],
   'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
@@ -135,7 +148,14 @@ SELECT bag_eq(
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',
     'check_mentorship_version() definer',
-    'notify_assignment_version() definer'
+    'notify_assignment_version() definer',
+    'require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid)',
+    'is_confirmed_teacher(p_user_id uuid, p_course_id uuid)',
+    'set_course_holder(p_course_id uuid, p_holder_id uuid) definer app',
+    'create_seminar_group(p_course_id uuid, p_name text) definer app',
+    'assign_group_teacher(p_group_id uuid, p_teacher_id uuid) definer app',
+    'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
+    'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
@@ -189,7 +209,8 @@ FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_aut
                   'ductus_migrator', 'ductus_test_stranger']) WITH ORDINALITY AS r (role, n)
 CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code',
                         'course_member', 'enrollment_attempt', 'assignment', 'assignment_version',
-                        'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification']) WITH ORDINALITY AS t (tbl, n)
+                        'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
+                        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(
