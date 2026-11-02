@@ -85,6 +85,35 @@ export const DEFAULT_LIMITS = { maxEntries: 5000, maxBytes: 8 * 1024 * 1024, max
 export class LimitError extends Error {}
 export const newBudget = (limits = DEFAULT_LIMITS) => ({ ...DEFAULT_LIMITS, ...limits, entries: 0, bytes: 0, deadline: Date.now() + (limits.maxMs ?? DEFAULT_LIMITS.maxMs) });
 
+// Reads a regular file of at most `max` bytes, or returns null. The open never
+// waits (a FIFO or device opens at once and is then refused by fstat), never
+// follows a final link unless `follow` is set, and the size is checked on the
+// open descriptor, so a file swapped after a name check is not read either.
+const READ_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0);
+const NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+export function readRegular(file, { max = 4096, follow = false } = {}) {
+  let fd;
+  try {
+    if (!follow && !NOFOLLOW && fs.lstatSync(file).isSymbolicLink()) return null;
+    fd = fs.openSync(file, READ_FLAGS | (follow ? 0 : NOFOLLOW));
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.size > max) return null;
+    const chunks = [];
+    let total = 0;
+    const chunk = Buffer.alloc(Math.min(Math.max(stat.size, 1), 64 * 1024) + 1);
+    for (let read = fs.readSync(fd, chunk); read > 0; read = fs.readSync(fd, chunk)) {
+      total += read;
+      if (total > max) return null;
+      chunks.push(Buffer.from(chunk.subarray(0, read)));
+    }
+    return Buffer.concat(chunks, total);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
 export function treeDigest(dir, skip = [], budget = newBudget()) {
   try {
     fs.lstatSync(dir);
@@ -159,11 +188,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         budget.bytes += size;
         if (budget.bytes > budget.maxBytes) throw new LimitError(`more than ${budget.maxBytes} bytes`);
         hash.update(`f:${name}:`);
-        try {
-          hash.update(fs.readFileSync(full));
-        } catch {
-          hash.update("unreadable");
-        }
+        hash.update(readRegular(full, { max: budget.maxBytes, follow: true }) ?? "unreadable");
         hash.update("\n");
       } else {
         hash.update(`other:${name}\n`);
@@ -210,6 +235,54 @@ export function findRulebookDir(cwd) {
     dir = parent;
   }
   return (bounded ? chain : [cwd]).find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
+}
+
+// The common git directory of the checkout at `dir`, or null when `dir` is not
+// verifiably one. A `.git` directory is its own common directory. A `.git` file
+// counts only as a genuine linked worktree: its admin directory sits directly
+// in `<common>/worktrees/` and links back to this very `.git` file. Every file
+// is read with readRegular, so a link or a FIFO in the chain is not followed.
+const samePath = (a, b) => (process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
+const lineOf = (buffer) => buffer?.toString("utf8").split(/\r?\n/)[0].trim() || null;
+function commonGitDir(dir) {
+  try {
+    const dotGit = path.join(dir, ".git");
+    if (fs.lstatSync(dotGit).isDirectory()) return fs.realpathSync(dotGit);
+    const named = /^gitdir: (.+)$/m.exec(readRegular(dotGit)?.toString("utf8") ?? "")?.[1]?.trim();
+    if (!named) return null;
+    const adminDir = fs.realpathSync(path.resolve(dir, named));
+    const back = lineOf(readRegular(path.join(adminDir, "gitdir")));
+    const common = lineOf(readRegular(path.join(adminDir, "commondir")));
+    if (!back || !common) return null;
+    const commonDir = fs.realpathSync(path.resolve(adminDir, common));
+    if (!samePath(path.dirname(adminDir), path.join(commonDir, "worktrees"))) return null;
+    if (!samePath(fs.realpathSync(path.resolve(adminDir, back)), fs.realpathSync(dotGit))) return null;
+    return commonDir;
+  } catch {
+    return null;
+  }
+}
+
+// F-035: the project rules may come from a directory other than the project
+// root only when it is a checkout of the same repository (the root itself, or a
+// worktree sharing its git directory) or holds a byte-identical configuration.
+// Otherwise a reduced rulebook there would pass the probe, which only checks
+// two denials. Returns null when the rules are acceptable, else the problem.
+export function foreignRules(rulebookDir, root, limits) {
+  try {
+    if (samePath(fs.realpathSync(rulebookDir), fs.realpathSync(root))) return null;
+  } catch {
+    // compared below
+  }
+  const own = commonGitDir(rulebookDir);
+  if (own && own === commonGitDir(root)) return null;
+  try {
+    const budget = newBudget(limits);
+    if (treeDigest(path.join(rulebookDir, PROJECT_CONFIG), [], budget) === treeDigest(path.join(root, PROJECT_CONFIG), [], budget)) return null;
+    return `${rulebookDir} is not a checkout of this repository and its ${PROJECT_CONFIG} differs from the project root's`;
+  } catch (error) {
+    return `the ${PROJECT_CONFIG} of ${rulebookDir} could not be compared with the project root's (${error.message})`;
+  }
 }
 
 // Every input of the package 2.6.1 that can change what it denies, for the key
@@ -477,9 +550,10 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
   const ownConfig = below && fs.existsSync(path.join(cwd, PROJECT_CONFIG));
   // Run 1: the event as sent (built-in rules, relative paths keep their meaning).
   const firstRun = runPackage(root, input, timeoutMs, env);
+  const foreign = rulebookDir && !ownConfig ? foreignRules(rulebookDir, root, limits) : null;
   // Run 2: in a subdirectory the project rules live in a parent the package does not search.
   let secondRun = null;
-  if (below && !ownConfig) {
+  if (below && !ownConfig && !foreign) {
     let moved;
     try {
       moved = JSON.stringify({ ...JSON.parse(input), cwd: rulebookDir });
@@ -490,7 +564,7 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
   }
   // Any clean answer is checked once per state, not only a silent one: a stub
   // that prints "{}" or an allow decision is as useless as one that prints nothing.
-  const probeRun = rulebookDir && !ownConfig ? probe(root, rulebookDir, deadline, env, limits) : null;
+  const probeRun = rulebookDir && !ownConfig && !foreign ? probe(root, rulebookDir, deadline, env, limits) : null;
   const [firstResult, secondResult, refused] = await Promise.all([firstRun, secondRun, probeRun]);
 
   const first = answer(firstResult, timeoutMs);
@@ -507,6 +581,7 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
     return noRules(`no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`);
   }
   if (ownConfig) return noRules(`${cwd} has its own ${PROJECT_CONFIG} directory below the project's, which the safety check does not accept`);
+  if (foreign) return noRules(foreign);
   if (refused) return unusable(refused.problem, refused.hint);
   if (secondResult && !denies(first.stdout)) {
     const second = answer(secondResult, timeoutMs);

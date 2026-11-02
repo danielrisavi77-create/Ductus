@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { answer, decide, isCdToRoot, isInstallCommand, main, runCli } from "../hooks/safety-net.mjs";
+import { answer, decide, isCdToRoot, isInstallCommand, main, readRegular, runCli } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -561,8 +561,8 @@ test("review: every part of the verdict key starts a new probe", { timeout: 1800
       await step("legacy SAFETY_NET_ variable", () => (env = { ...env, SAFETY_NET_WORKTREE: "1" }));
       await step("listed tool-directory variable", () => (env = { ...env, XDG_CONFIG_HOME: path.join(home, "xdg") }));
       {
-        // Same rulebook content in another checkout directory: another state.
-        write(path.join(other, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"), "{}");
+        // Same configuration in another checkout directory: another state.
+        fs.cpSync(project, path.join(other, ".cc-safety-net"), { recursive: true });
         write(path.join(other, ".git"), "gitdir: elsewhere");
         const before = probes();
         assert.equal((await ls(other)).code, 0);
@@ -1100,3 +1100,210 @@ test("A13 the PR metadata precheck blocks when it throws on a PR command, and ig
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+// F-035 (a): rules count only from the project root, from the top of a checkout
+// that shares the root's git directory, or as a byte-identical copy of the
+// root's project config. Any other rule source is refused, also when its
+// reduced rulebook still denies the two probe commands.
+const RULES = [".cc-safety-net", "rules", "ductus-rules", "rulebook.json"];
+const plantRules = (dir, content = '{"reduced":1}') => {
+  fs.mkdirSync(path.join(dir, ...RULES.slice(0, -1)), { recursive: true });
+  fs.writeFileSync(path.join(dir, ...RULES), content);
+};
+const foreign = (result, label) => {
+  assert.equal(result.code, 2, `${label}: ${result.stdout}`);
+  assert.match(result.stderr, /not a checkout of this repository|could not be compared/, label);
+};
+const gitRepo = (dir) => {
+  for (const args of [["init", "-q", "-b", "main"], ["add", "package.json"], ["commit", "-q", "-m", "init"]]) {
+    const done = gitIn(dir, ...args);
+    assert.equal(done.status, 0, done.stderr);
+  }
+};
+// What `git worktree add` writes, by hand: the admin directory under the common
+// git directory and the `.git` file of the worktree that names it.
+const linkWorktree = (common, top, name, { back = path.join(top, ".git") } = {}) => {
+  const admin = path.join(common, "worktrees", name);
+  fs.mkdirSync(admin, { recursive: true });
+  fs.writeFileSync(path.join(admin, "gitdir"), `${back}\n`);
+  fs.writeFileSync(path.join(admin, "commondir"), "../..\n");
+  fs.writeFileSync(path.join(top, ".git"), `gitdir: ${admin}\n`);
+  return admin;
+};
+const scratch = (fn) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-f035-"));
+  const done = () => fs.rmSync(base, { recursive: true, force: true });
+  let result;
+  try {
+    result = fn(base);
+  } finally {
+    if (typeof result?.then !== "function") done();
+  }
+  return typeof result?.then === "function" ? result.finally(done) : result;
+};
+
+test("F-035 a: rules outside the checkout count only as a byte-identical copy of the project's", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const ask = (cwd, command = "ls") => run(tree, "Bash", command, cwd);
+      const cases = {
+        "no .git": () => {},
+        "a .git file naming nothing": (dir) => fs.writeFileSync(path.join(dir, ".git"), "gitdir: elsewhere\n"),
+        "a git directory of another repository": (dir) => assert.equal(gitIn(dir, "init", "-q").status, 0),
+        "a .git link to the project's git directory": (dir) => fs.symlinkSync(path.join(tree.root, ".git"), path.join(dir, ".git")),
+      };
+      for (const [label, plant] of Object.entries(cases)) {
+        const dir = path.join(base, label.replace(/\W+/g, "-"));
+        fs.mkdirSync(path.join(dir, "sub"), { recursive: true });
+        plantRules(dir);
+        plant(dir);
+        foreign(await ask(dir), label);
+        const below = await ask(path.join(dir, "sub"));
+        // Without a checkout boundary the search looks only at the cwd itself,
+        // so from below there is no rulebook at all: blocked either way.
+        if (label === "no .git") assert.equal(below.code, 2, `${label}, from below`);
+        else foreign(below, `${label}, from below`);
+        // The way back to the project root stays open.
+        assert.equal((await ask(dir, `cd "${tree.root}"`)).code, 0, `${label}: cd to the root`);
+      }
+      const copy = path.join(base, "copy");
+      fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(copy, ".cc-safety-net"), { recursive: true });
+      assert.equal((await ask(copy)).code, 0, "a byte-identical copy is accepted");
+      fs.appendFileSync(path.join(copy, ...RULES), " ");
+      foreign(await ask(copy), "one byte more");
+      assert.equal((await ask(tree.root)).code, 0, "the root itself");
+    })));
+
+test("F-035 a: a subdirectory with its own reduced rules is refused, the root's rules still apply below it", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, async (tree) => {
+    fs.writeFileSync(path.join(tree.root, ".git"), "gitdir: elsewhere");
+    const sub = path.join(tree.root, "src");
+    fs.mkdirSync(path.join(sub, "deep"), { recursive: true });
+    assert.equal((await run(tree, "Bash", "ls", path.join(sub, "deep"))).code, 0, "before");
+    plantRules(sub);
+    for (const cwd of [sub, path.join(sub, "deep")]) foreign(await run(tree, "Bash", "ls", cwd), cwd);
+  }));
+
+test("F-035 a: a genuine worktree of the repository keeps its own rules, inside or outside the checkout", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const inside = path.join(tree.root, ".claude", "worktrees", "w");
+      const outside = path.join(base, "wt");
+      for (const [dir, branch] of [[inside, "w"], [outside, "o"]]) {
+        const added = gitIn(tree.root, "worktree", "add", "-q", "-b", branch, dir);
+        assert.equal(added.status, 0, added.stderr);
+        plantRules(dir, `{"branch":"${branch}"}`);
+        fs.mkdirSync(path.join(dir, "sub"));
+        for (const cwd of [dir, path.join(dir, "sub")]) assert.equal((await run(tree, "Bash", "ls", cwd)).code, 0, cwd);
+      }
+      // The project root may itself be a worktree; the main checkout is then the same repository.
+      const main = path.join(base, "main");
+      fs.mkdirSync(main);
+      fs.writeFileSync(path.join(main, "package.json"), "{}");
+      gitRepo(main);
+      fs.rmSync(path.join(tree.root, ".git"), { recursive: true, force: true });
+      linkWorktree(path.join(main, ".git"), tree.root, "tree");
+      plantRules(main, '{"main":1}');
+      assert.equal((await run(tree, "Bash", "ls", main)).code, 0, "main checkout of a worktree root");
+    })));
+
+test("F-035 a: a forged or copied worktree link is refused", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const common = path.join(tree.root, ".git");
+      const genuine = path.join(base, "genuine");
+      assert.equal(gitIn(tree.root, "worktree", "add", "-q", "-b", "g", genuine).status, 0);
+      const cases = {
+        "admin directory links back to another checkout": (dir) => linkWorktree(common, dir, "forged", { back: path.join(genuine, ".git") }),
+        "the .git file of a genuine worktree, copied": (dir) => fs.copyFileSync(path.join(genuine, ".git"), path.join(dir, ".git")),
+        "admin directory outside worktrees/": (dir) => {
+          const admin = path.join(base, "admin", "x");
+          fs.mkdirSync(admin, { recursive: true });
+          fs.writeFileSync(path.join(admin, "gitdir"), path.join(dir, ".git"));
+          fs.writeFileSync(path.join(admin, "commondir"), common);
+          fs.writeFileSync(path.join(dir, ".git"), `gitdir: ${admin}`);
+        },
+        "gitdir of the admin directory is a link": (dir) => {
+          const admin = linkWorktree(common, dir, "linked");
+          fs.renameSync(path.join(admin, "gitdir"), path.join(base, "gitdir-target"));
+          fs.symlinkSync(path.join(base, "gitdir-target"), path.join(admin, "gitdir"));
+        },
+        "the .git file is a link to a genuine one": (dir) => {
+          linkWorktree(common, dir, "viaLink", { back: path.join(dir, ".git") });
+          fs.renameSync(path.join(dir, ".git"), path.join(base, "dotgit-target"));
+          fs.symlinkSync(path.join(base, "dotgit-target"), path.join(dir, ".git"));
+        },
+      };
+      for (const [label, plant] of Object.entries(cases)) {
+        const dir = path.join(base, label.replace(/\W+/g, "-"));
+        fs.mkdirSync(dir);
+        plantRules(dir);
+        plant(dir);
+        foreign(await run(tree, "Bash", "ls", dir), label);
+      }
+    })));
+
+test("F-035 a (r4435902776): a FIFO in place of .git, gitdir or commondir blocks at once", { timeout: 60000 }, (t) => {
+  if (process.platform !== "linux") {
+    assert.ok(!IN_CI, "CI runs on Linux, where mkfifo exists");
+    return t.skip("mkfifo is Linux-only here; this case runs on Linux CI");
+  }
+  return withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const common = path.join(tree.root, ".git");
+      const fifo = (file) => {
+        fs.rmSync(file, { force: true });
+        assert.equal(spawnSync("mkfifo", [file]).status, 0, `mkfifo ${file}`);
+      };
+      const cases = {
+        ".git": (dir) => fifo(path.join(dir, ".git")),
+        gitdir: (dir) => fifo(path.join(linkWorktree(common, dir, "fifo-gitdir"), "gitdir")),
+        commondir: (dir) => fifo(path.join(linkWorktree(common, dir, "fifo-commondir"), "commondir")),
+        "a rule file": (dir) => fifo(path.join(dir, ".cc-safety-net", "rules", "extra.json")),
+      };
+      for (const [label, plant] of Object.entries(cases)) {
+        const dir = path.join(base, label.replace(/\W+/g, "-"));
+        fs.mkdirSync(dir);
+        plantRules(dir);
+        plant(dir);
+        const started = Date.now();
+        const result = await decide({ root: tree.root, input: event("Bash", "ls", dir), timeoutMs: 1500 });
+        foreign(result, label);
+        assert.ok(Date.now() - started < 3000, `${label}: ${Date.now() - started} ms`);
+      }
+    }));
+});
+
+test("F-035 a: the file reader returns only regular files within the limit, never waits and follows links only when told", () =>
+  scratch((base) => {
+    const file = path.join(base, "file");
+    fs.writeFileSync(file, "abc");
+    const link = path.join(base, "link");
+    fs.symlinkSync(file, link);
+    assert.equal(readRegular(file)?.toString(), "abc");
+    assert.equal(readRegular(file, { max: 2 }), null, "too big");
+    assert.equal(readRegular(link), null, "a link is refused by default");
+    assert.equal(readRegular(link, { follow: true })?.toString(), "abc");
+    assert.equal(readRegular(base), null, "a directory");
+    assert.equal(readRegular(path.join(base, "missing")), null);
+    if (process.platform === "linux") {
+      const fifo = path.join(base, "fifo");
+      assert.equal(spawnSync("mkfifo", [fifo]).status, 0);
+      assert.equal(readRegular(fifo), null, "a FIFO without a writer");
+      assert.equal(readRegular(fifo, { follow: true }), null);
+    }
+  }));
+
+test("F-035 a: a project config too large to compare is refused", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      plantRules(base);
+      for (let i = 0; i < 30; i++) fs.writeFileSync(path.join(base, ".cc-safety-net", `f${i}.json`), "{}");
+      const result = await decide({ root: tree.root, input: event("Bash", "ls", base), limits: { maxEntries: 10 } });
+      foreign(result, "over the entry limit");
+      assert.match(result.stderr, /could not be compared/);
+    })));
