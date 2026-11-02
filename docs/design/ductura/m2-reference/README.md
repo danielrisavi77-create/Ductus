@@ -60,6 +60,7 @@ Snimljeno Playwrightovim Chromiumom, cijela stranica, `deviceScaleFactor` 1. Svi
 - Svi su podaci izmišljeni: osobe, kolegiji, datumi i brojevi studenata. Nema stvarnih osoba.
 - Oznake u velikim slovima („Stanje 3 · potvrda · dijalog i ishod”) opisuju referencu i nisu tekst sučelja.
 - Administrator ne vidi radove ni njihov sadržaj (`docs/PRODUCT.md` §6); A-03 prikazuje samo brojeve upisanih studenata po kolegiju i grupi.
+- Administrator u A-03 ne mijenja nositelja kolegija: na `main` to radi samo nastavnik tog kolegija (`institution.set_course_holder`, #1302), a opoziv uloge ne zatvara zapis o nositelju. Zato dijalog opoziva u A-02 ne upućuje na A-03 za promjenu nositelja.
 - Nije odlučeno uređuje li nastavni tim i grupe administrator ili nositelj kolegija. Referenca crta radnje u A-03 kao administratorove; ako odluka padne drukčije, A-03 postaje samo čitanje, a radnje prelaze na zaslon nositelja.
 - Upis promjena tima i grupa u revizijski trag još nije na `main`, pa A-03 namjerno ne tvrdi da se dodjela upisuje u revizijski trag. A-02 to tvrdi za potvrdu i opoziv uloge (`audit.teacher_role_event`).
 - Tekst sučelja i atributi (`aria-label`, naslov stranice) provjereni su funkcijom `findForbiddenTermsInMarkup` iz `scripts/forbidden-terms/terms.ts` i nemaju nalaza.
