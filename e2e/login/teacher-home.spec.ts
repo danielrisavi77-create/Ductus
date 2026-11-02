@@ -389,7 +389,7 @@ test("a teacher publishes a new version after its preview, and a stale tab is to
 });
 
 // T031: someone else's, a missing and a malformed assignment read alike.
-test("a teacher reads an assignment outside their own as not available, with no publish button", async ({ page }) => {
+test("a teacher reads an assignment outside their own as not available, with no publish button", async ({ page, browser }) => {
   const n = messagesHr.teacher.newVersion;
   await asTeacher(page);
   for (const id of ["00000000-0000-4000-8000-00000000dead", "nije-zadatak"]) {
@@ -397,7 +397,14 @@ test("a teacher reads an assignment outside their own as not available, with no 
     await expect(page.getByRole("alert").filter({ hasText: n.missing })).toBeVisible();
     await expect(page.getByRole("button", { name: /Objavi verziju/u })).toHaveCount(0);
   }
-  await signIn(page, "/nastavnik/zadatak/00000000-0000-4000-8000-00000000dead/uredi", "Demo studentica");
-  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Objavi verziju/u })).toHaveCount(0);
+  // A student signs in in a context of their own: the teacher's session would skip the provider.
+  const context = await browser.newContext();
+  try {
+    const student = await context.newPage();
+    await signIn(student, "/nastavnik/zadatak/00000000-0000-4000-8000-00000000dead/uredi", "Demo studentica");
+    await expect(student.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
+    await expect(student.getByRole("button", { name: /Objavi verziju/u })).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
 });
