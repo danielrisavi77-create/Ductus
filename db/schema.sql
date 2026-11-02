@@ -2727,6 +2727,107 @@ $_$;
 
 
 --
+-- Name: close_sessions_on_home_org_change(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_home_org_change() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'institution_changed'
+   WHERE institution_id = OLD.id
+     AND closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_sessions_on_issuer_removal(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_issuer_removal() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND NEW.institution_id = OLD.institution_id
+     AND NEW.oidc_issuer = OLD.oidc_issuer COLLATE "C" THEN
+    RETURN NULL;
+  END IF;
+  UPDATE identity.session s
+     SET closed_at = pg_catalog.now(), close_reason = 'issuer_removed'
+    FROM identity.user_account u
+   WHERE u.id = s.user_id
+     AND s.institution_id = OLD.institution_id
+     AND u.oidc_issuer = OLD.oidc_issuer COLLATE "C"
+     AND s.closed_at IS NULL
+     AND s.expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_sessions_on_issuer_truncate(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_issuer_truncate() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'issuer_removed'
+   WHERE closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_user_sessions(uuid); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_user_sessions(p_user_id uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  closed integer;
+BEGIN
+  IF p_user_id IS NULL THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'operator'
+   WHERE user_id = p_user_id
+     AND closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  GET DIAGNOSTICS closed = ROW_COUNT;
+  RETURN closed;
+END
+$$;
+
+
+--
 -- Name: open_session(text, text, text, text, bytea); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -2779,12 +2880,19 @@ BEGIN
   -- queries, not equal duration. With no institution the issuer lookup
   -- still reads the table, under the nil id that gen_random_uuid never
   -- gives; a match there could not open a session anyway.
-  SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org;
-  v_issuer_ok := EXISTS (
-    SELECT 1 FROM identity.institution_issuer ii
-    WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)
-      AND ii.oidc_issuer = p_issuer COLLATE "C"
-  );
+  --
+  -- Both rows are read FOR SHARE and stay locked until the login commits
+  -- (F-036, DAN-169). A change to aai_home_org or to the issuer row then
+  -- waits for this login, and its trigger closes the session it opened; a
+  -- change committed first is seen here, under READ COMMITTED the row is
+  -- read again, and the login gets the same ZD503. The change itself must
+  -- run under READ COMMITTED; its triggers refuse any other level. Shared
+  -- locks do not block each other, so logins do not wait for one another.
+  SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org FOR SHARE;
+  SELECT true INTO v_issuer_ok FROM identity.institution_issuer ii
+  WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)
+    AND ii.oidc_issuer = p_issuer COLLATE "C"
+  FOR SHARE;
   IF v_institution IS NULL OR v_shape_ok IS NOT TRUE OR v_issuer_ok IS NOT TRUE THEN
     RAISE EXCEPTION 'institution not set up' USING ERRCODE = 'ZD503';
   END IF;
@@ -4219,7 +4327,7 @@ CREATE TABLE identity.session (
     last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
-    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text]))),
+    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text]))),
     CONSTRAINT session_last_seen_check CHECK ((last_seen_at >= created_at)),
     CONSTRAINT session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
@@ -5594,6 +5702,27 @@ CREATE TRIGGER submission_receipt_issuance_no_truncate BEFORE TRUNCATE ON eviden
 --
 
 CREATE TRIGGER submission_receipt_no_truncate BEFORE TRUNCATE ON evidence.submission_receipt FOR EACH STATEMENT EXECUTE FUNCTION evidence.reject_append_only_change();
+
+
+--
+-- Name: institution close_sessions_on_home_org_change; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_home_org_change AFTER UPDATE OF aai_home_org ON identity.institution FOR EACH ROW WHEN (((old.aai_home_org IS NOT NULL) AND (old.aai_home_org IS DISTINCT FROM new.aai_home_org))) EXECUTE FUNCTION identity.close_sessions_on_home_org_change();
+
+
+--
+-- Name: institution_issuer close_sessions_on_issuer_removal; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_issuer_removal AFTER DELETE OR UPDATE ON identity.institution_issuer FOR EACH ROW EXECUTE FUNCTION identity.close_sessions_on_issuer_removal();
+
+
+--
+-- Name: institution_issuer close_sessions_on_issuer_truncate; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_issuer_truncate AFTER TRUNCATE ON identity.institution_issuer FOR EACH STATEMENT EXECUTE FUNCTION identity.close_sessions_on_issuer_truncate();
 
 
 --
@@ -6976,4 +7105,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261101160000'),
     ('20261101180000'),
     ('20261101190000'),
-    ('20261101200000');
+    ('20261101200000'),
+    ('20261101210000');
