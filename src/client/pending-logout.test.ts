@@ -4,7 +4,9 @@ import {
   completePendingLogout, completePendingLogoutOnce, endSignOut, holdServerLogout, pendingLogout, pendingLogoutStep,
   PENDING_LOGOUT_KEY, PENDING_LOGOUT_LOCK, postLogout, type PendingLogoutEnv,
 } from "./pending-logout";
-import { currentSession, endAfterLogout, hasEnded, observeSession, type MarkStore } from "./session-marks";
+import {
+  type CookieJar, currentSession, ENDED_COOKIE, endAfterLogout, hasEnded, observeSession, type MarkStore,
+} from "./session-marks";
 
 // #1330 (D-118): a sign-out the logout route did not answer still ends the
 // session on this device; the route is called again later, and never once a
@@ -227,3 +229,102 @@ describe("a sign-in in another tab while the sign-out waits for the route", () =
   });
 });
 
+
+// c.6590579384, c.6590647037: the sign-out ends on the device even when
+// localStorage refuses the record. After a reload under the same cookie the
+// sheet must stay closed; the journal itself is kept (no rows are deleted
+// here, only the fence is written).
+
+/** `document.cookie` of one origin: a write sets one cookie, a read lists them. */
+function memoryJar(): CookieJar & { cookies: Map<string, string>; writes: string[] } {
+  const cookies = new Map<string, string>();
+  const writes: string[] = [];
+  return {
+    cookies, writes, secure: false,
+    read: () => [...cookies].map(([name, value]) => `${name}=${value}`).join("; "),
+    write: (cookie) => {
+      writes.push(cookie);
+      const [pair = "", ...attributes] = cookie.split(";").map((part) => part.trim());
+      const at = pair.indexOf("=");
+      const name = pair.slice(0, at);
+      if (attributes.some((one) => /^max-age=(0|-)/i.test(one))) cookies.delete(name);
+      else cookies.set(name, pair.slice(at + 1));
+    },
+  };
+}
+
+function quota(): DOMException {
+  return new DOMException("The quota has been exceeded.", "QuotaExceededError");
+}
+
+/** localStorage of a browser where A is current, then writes start failing (class 2) or everything does (class 3). */
+const storeClasses: [string, () => MarkStore | null, boolean][] = [
+  ["1: the write succeeds", () => { const s = memoryStore(); observeSession(s, A, 1_000); return s; }, true],
+  ["2: the write throws QuotaExceededError, reads work", () => {
+    const s = memoryStore();
+    observeSession(s, A, 1_000);
+    return { ...s, setItem: () => { throw quota(); } };
+  }, false],
+  ["3: neither reads nor writes work", () => ({
+    getItem: () => { throw new DOMException("denied", "SecurityError"); },
+    setItem: () => { throw new DOMException("denied", "SecurityError"); },
+    removeItem: () => { throw new DOMException("denied", "SecurityError"); },
+  }), false],
+  ["3: no storage at all", () => null, false],
+];
+
+describe("a sign-out whose end cannot be written to localStorage (reload after logout)", () => {
+  it.each(storeClasses)("class %s: a reload under the same cookie finds the session ended", (_name, makeStore, writable) => {
+    const store = makeStore();
+    const jar = memoryJar();
+    expect(endSignOut(store, A, currentSession(store)?.tag ?? null, false, jar)).toEqual([A]);
+    // The reload: a page of A, rendered later by the server, asks again.
+    for (const at of [1_000, 5_000]) expect(hasEnded(store, { tag: A, at }, jar)).toBe(true);
+    if (writable) {
+      // localStorage holds the fence; no cookie is needed.
+      expect(jar.writes).toEqual([]);
+      expect(pendingLogout(store)).toEqual([A]);
+    } else {
+      expect(jar.cookies.has(ENDED_COOKIE)).toBe(true);
+      // Without a working localStorage no later call is recorded: it could
+      // not tell a newer session from A's (see Istodobnost below).
+      expect(pendingLogoutStep(store)).toBe("none");
+    }
+  });
+
+  it("class 2 without the cookie fallback would reopen the sheet: the fence is the cookie", () => {
+    const store = storeClasses[1]![1]();
+    endSignOut(store, A, A, false, memoryJar());
+    expect(hasEnded(store, { tag: A, at: 1_000 }, null)).toBe(false);
+  });
+
+  it.each(storeClasses.slice(1))(
+    "Istodobnost (negative), class %s: B signing in after A's sign-out is not ended, and no call is made under B's cookie",
+    async (_name, makeStore) => {
+      const store = makeStore();
+      const jar = memoryJar();
+      endSignOut(store, A, currentSession(store)?.tag ?? null, false, jar);
+      // Another person signs in; the browser now holds B's cookie.
+      observeSession(store, B, 2_000);
+      expect(hasEnded(store, { tag: B, at: 2_000 }, jar)).toBe(false);
+      expect(hasEnded(store, { tag: A, at: 1_000 }, jar)).toBe(true);
+      expect(pendingLogoutStep(store)).toBe("none");
+      const run = { ...env(memoryStore(), true), store };
+      await expect(completePendingLogout(run)).resolves.toBe(false);
+      expect(run.post).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a store that ends the session but cannot hold the later call still fences A", () => {
+    const s = memoryStore();
+    observeSession(s, A, 1_000);
+    const store: MarkStore = {
+      ...s,
+      setItem: (key, value) => { if (key === PENDING_LOGOUT_KEY) throw quota(); s.setItem(key, value); },
+    };
+    const jar = memoryJar();
+    endSignOut(store, A, A, false, jar);
+    expect(hasEnded(store, { tag: A, at: 1_000 }, null)).toBe(true);
+    expect(jar.writes).toEqual([]);
+  });
+});

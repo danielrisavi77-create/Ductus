@@ -14,7 +14,10 @@
  * Nothing here is a secret: a tag is a digest of the cookie, not the cookie.
  */
 
-import { browserMarkStore, currentSession, endAfterLogout, endSessions, type MarkStore } from "./session-marks";
+import {
+  browserCookieJar, browserMarkStore, type CookieJar, currentSession, endAfterLogout, endSessions, endSessionsInCookie,
+  type MarkStore,
+} from "./session-marks";
 
 export const PENDING_LOGOUT_KEY = "ductus-logout-pending";
 /** The Web Lock under which one tab of the browser makes the later call. */
@@ -57,11 +60,19 @@ export function holdServerLogout(store: MarkStore | null, tags: readonly string[
  */
 export function endSignOut(
   store: MarkStore | null, tag: string | null, before: string | null, reached: boolean,
+  jar: CookieJar | null = browserCookieJar(),
 ): string[] {
   if (reached) return endAfterLogout(store, tag);
   const tags = [...new Set([tag, before].filter((one): one is string => one !== null))];
-  endSessions(store, tags);
-  holdServerLogout(store, tags);
+  if (endSessions(store, tags)) {
+    holdServerLogout(store, tags);
+  } else {
+    // localStorage refused the record: the cookie fences a reload instead
+    // (#1444). No later call is recorded, since a newer session could not be
+    // recorded here either and the call would end it; the next sign-in
+    // closes this session on the server.
+    endSessionsInCookie(jar, tags);
+  }
   return tags;
 }
 

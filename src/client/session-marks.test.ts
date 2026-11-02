@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CURRENT_KEY, ENDED_KEY, endAfterLogout, endSessions, hasEnded, observeSession, type MarkStore,
+  browserCookieJar, type CookieJar, CURRENT_KEY, ENDED_COOKIE, ENDED_KEY, endAfterLogout, endSessions,
+  endSessionsInCookie, hasEnded, observeSession, type MarkStore,
 } from "./session-marks";
 
 // F-5, D-118: which tabs of one browser belong to a session that has ended.
@@ -94,5 +95,60 @@ describe("session marks", () => {
     expect(observeSession(refusing, A, 1)).toBeNull();
     expect(endAfterLogout(refusing, A)).toEqual([A]);
     expect(hasEnded(null, { tag: A, at: 1 })).toBe(false);
+  });
+});
+
+// c.6590579384: where localStorage refuses the record, the ended sessions go
+// to a cookie that only this page's script reads. Tags are made-up digests.
+describe("the ended-session cookie", () => {
+  /** Holds what was last written, as `document.cookie` would list it. */
+  function jar(listed = "", secure = false): CookieJar & { writes: string[] } {
+    let cookies = listed;
+    const writes: string[] = [];
+    return {
+      writes, secure,
+      read: () => cookies,
+      write: (cookie) => {
+        writes.push(cookie);
+        const pair = cookie.split(";")[0]!;
+        cookies = [...cookies.split("; ").filter((one) => one && !one.startsWith(`${ENDED_COOKIE}=`)), pair].join("; ");
+      },
+    };
+  }
+
+  it("is written for the whole site, outlives a session, and is never sent cross-site", () => {
+    const plain = jar();
+    expect(endSessionsInCookie(plain, [A])).toBe(true);
+    expect(plain.writes).toEqual([`${ENDED_COOKIE}=${A}; Path=/; Max-Age=86400; SameSite=Strict`]);
+    const secure = jar("", true);
+    expect(endSessionsInCookie(secure, [A])).toBe(true);
+    expect(secure.writes[0]).toMatch(/; Secure$/);
+  });
+
+  it("joins the sessions already there, keeps other cookies, and stays short", () => {
+    const one = jar(`other=1; ${ENDED_COOKIE}=${B}`);
+    expect(endSessionsInCookie(one, [A])).toBe(true);
+    expect(one.read()).toBe(`other=1; ${ENDED_COOKIE}=${B}.${A}`);
+    expect(hasEnded(null, { tag: B, at: 0 }, one)).toBe(true);
+    const many = jar();
+    const tags = Array.from({ length: 12 }, (_, i) => i.toString(16).repeat(64));
+    for (const tag of tags) endSessionsInCookie(many, [tag]);
+    expect(many.read().split("=")[1]!.split(".")).toEqual(tags.slice(-8));
+  });
+
+  it("is false when the browser does not keep it, and a damaged value ends nobody", () => {
+    const refusing: CookieJar = { read: () => "", write: () => {}, secure: false };
+    expect(endSessionsInCookie(refusing, [A])).toBe(false);
+    expect(endSessionsInCookie(null, [A])).toBe(false);
+    const throwing: CookieJar = { read: () => { throw new Error("denied"); }, write: () => {}, secure: false };
+    expect(endSessionsInCookie(throwing, [A])).toBe(false);
+    expect(hasEnded(null, { tag: A, at: 0 }, throwing)).toBe(false);
+    for (const listed of [`${ENDED_COOKIE}=`, `${ENDED_COOKIE}=%3Cx%3E.${"a".repeat(200)}`, `x${ENDED_COOKIE}=${A}`]) {
+      expect(hasEnded(null, { tag: A, at: 0 }, jar(listed))).toBe(false);
+    }
+  });
+
+  it("is not reachable outside a browser", () => {
+    expect(browserCookieJar()).toBeNull();
   });
 });

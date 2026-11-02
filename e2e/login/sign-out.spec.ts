@@ -225,6 +225,62 @@ test("Istodobnost: a sign-in in another tab while the sign-out waits keeps the n
   expect(await second.evaluate(() => localStorage.getItem("ductus-logout-pending"))).toBeNull();
 });
 
+// #1444 (review c.6590579384, QA c.6590647037): localStorage refuses the
+// record of the ended session (full, or not readable either) and the server
+// refuses the sign-out. A reload under the cookie that stays still shows
+// nothing; the text waits in the journal for the same person's next sign-in.
+// Class 1 (the write succeeds) is row 3 above.
+for (const [name, broken] of [
+  ["class 2: the write throws QuotaExceededError, reads work", ["setItem"]],
+  ["class 3: neither reads nor writes work", ["getItem", "setItem", "removeItem"]],
+] as const) {
+  test(`${name}: a reload after a sign-out the server refused does not reopen the text`, async ({ page, context }) => {
+    await signIn(page, "/rad");
+    const token = (await appCookie(context, SESSION_COOKIE))!.value;
+    await writeAndWait(page, " Nacrt C: smeđa mapa");
+    const breakStorage = (calls: readonly string[]) => {
+      for (const call of calls) {
+        const original = Reflect.get(Storage.prototype, call) as (this: Storage, ...args: string[]) => unknown;
+        Reflect.set(Storage.prototype, call, function (this: Storage, ...args: string[]) {
+          if (args[0]?.startsWith("ductus-")) {
+            throw new DOMException("Storage refused.", call === "setItem" ? "QuotaExceededError" : "SecurityError");
+          }
+          return original.apply(this, args);
+        });
+      }
+    };
+    await page.evaluate(breakStorage, broken);
+    await page.addInitScript(breakStorage, broken);
+    await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503, body: "" }));
+
+    const dialog = logoutDialogOf(page);
+    await clickSignOut(page);
+    await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice);
+    await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+    await expectStillSignedIn(page, token);
+
+    for (const path of ["/rad", null]) {
+      if (path === null) await page.reload();
+      else await page.goto(path);
+      await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+      await expect(editorOf(page)).toHaveText("");
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+      await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
+      await expectStillSignedIn(page, token);
+      expect(await journalNames(page)).toHaveLength(1);
+    }
+
+    // The same person signs in anew: a new session opens and the text is back.
+    await forgetProviderLogin(context);
+    await signIn(page, "/rad");
+    const renewed = (await appCookie(context, SESSION_COOKIE))!.value;
+    expect(renewed).not.toBe(token);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page)).toContainText("Nacrt C: smeđa mapa");
+  });
+}
+
 // #1444 (review c.6588776166): the sign-out ended on this device, the server
 // refused it and the cookie stays. "Prijavi se" is a new sign-in through the
 // login route, back to the same page, never a loop through /prijava.

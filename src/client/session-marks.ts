@@ -52,8 +52,65 @@ export function currentSession(store: MarkStore | null): SessionMark | null {
   }
 }
 
+/**
+ * Where localStorage refuses the record (full, or not there at all), the
+ * ended sessions go to a cookie instead, so a reload under the cookie that
+ * stays still finds them (#1444). Only this page's script reads it; it holds
+ * tags, outlives the longest session and is never sent cross-site.
+ */
+export const ENDED_COOKIE = "ductus-ended";
+const ENDED_COOKIE_LIMIT = 8;
+const ENDED_COOKIE_MAX_AGE_S = 86_400;
+const COOKIE_TAG = /^[0-9A-Za-z_-]{1,128}$/;
+
+/** `document.cookie`: a read lists the cookies, a write sets one. */
+export type CookieJar = { read(): string; write(cookie: string): void; secure: boolean };
+
+/** `document.cookie`, or null outside a browser. */
+export function browserCookieJar(): CookieJar | null {
+  try {
+    if (typeof document === "undefined") return null;
+    return {
+      read: () => document.cookie,
+      write: (cookie) => { document.cookie = cookie; },
+      secure: location.protocol === "https:",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readEndedCookie(jar: CookieJar | null): string[] {
+  if (!jar) return [];
+  try {
+    for (const part of jar.read().split(";")) {
+      const pair = part.trim();
+      if (!pair.startsWith(`${ENDED_COOKIE}=`)) continue;
+      return pair.slice(ENDED_COOKIE.length + 1).split(".").filter((tag) => COOKIE_TAG.test(tag));
+    }
+  } catch {
+    // An unreadable cookie ends nobody.
+  }
+  return [];
+}
+
+/** Records the ended sessions in the cookie; true once a read finds them there. */
+export function endSessionsInCookie(jar: CookieJar | null, tags: readonly string[]): boolean {
+  if (!jar) return false;
+  try {
+    const kept = readEndedCookie(jar).filter((tag) => !tags.includes(tag));
+    const value = [...kept, ...tags.filter((tag) => COOKIE_TAG.test(tag))].slice(-ENDED_COOKIE_LIMIT).join(".");
+    jar.write(`${ENDED_COOKIE}=${value}; Path=/; Max-Age=${ENDED_COOKIE_MAX_AGE_S}; SameSite=Strict${jar.secure ? "; Secure" : ""}`);
+    const written = readEndedCookie(jar);
+    return tags.every((tag) => written.includes(tag));
+  } catch {
+    return false;
+  }
+}
+
 /** Whether a page rendered under `mark` belongs to a session that has ended. */
-export function hasEnded(store: MarkStore | null, mark: SessionMark): boolean {
+export function hasEnded(store: MarkStore | null, mark: SessionMark, jar: CookieJar | null = browserCookieJar()): boolean {
+  if (readEndedCookie(jar).includes(mark.tag)) return true;
   if (!store) return false;
   try {
     if (readEnded(store).includes(mark.tag)) return true;
