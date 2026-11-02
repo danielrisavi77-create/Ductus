@@ -436,7 +436,7 @@ test("in the shell /rad keeps one sign-out, the one that knows the device", asyn
   await expect(page.getByRole("banner").getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
   await page.getByRole("button", { name: t.shell.openNav }).click();
   const nav = side.getByRole("navigation", { name: t.shell.workNav });
-  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.courses, t.shell.nav.workspace, t.shell.nav.enroll]);
+  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.courses, t.shell.nav.works, t.shell.nav.workspace, t.shell.nav.enroll]);
   await expect(nav.getByRole("link", { name: t.shell.nav.workspace })).toHaveAttribute("aria-current", "page");
   await page.keyboard.press("Escape");
   await expect(side).toBeHidden();
