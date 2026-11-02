@@ -1,11 +1,14 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
+// Next.js's own method table for a route module, as its dispatcher builds it.
+import { autoImplementMethods } from "next/dist/server/route-modules/app-route/helpers/auto-implement-methods";
+import { HTTP_METHODS } from "next/dist/server/web/http";
 import { NextRequest } from "next/server";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { GET as getList, OPTIONS as optionsList } from "../../app/api/teacher/mentorships/route";
-import { GET as getDetail, OPTIONS as optionsDetail } from "../../app/api/teacher/mentorships/[mentorshipId]/route";
+import * as listRoute from "../../app/api/teacher/mentorships/route";
+import * as detailRoute from "../../app/api/teacher/mentorships/[mentorshipId]/route";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { createWithActor } from "@/server/db/with-actor";
 import { handleMentoredWorkRequest, handleMentoredWorksRequest } from "@/server/institution/mentored-works";
@@ -60,8 +63,8 @@ const documents = { ana: `doc-ana-${suffix}`, boris: `doc-boris-${suffix}` } as 
 const cookie = (session: string | null): Record<string, string> =>
   session === null ? {} : { cookie: `${SESSION_COOKIE_NAME}=${session}` };
 const list = (session: string | null, headers: Record<string, string> = {}) =>
-  getList(new NextRequest(`${ORIGIN}/api/teacher/mentorships`, { method: "GET", headers: { ...cookie(session), ...headers } }));
-const detail = (session: string | null, id: string, headers: Record<string, string> = {}) => getDetail(
+  listRoute.GET(new NextRequest(`${ORIGIN}/api/teacher/mentorships`, { method: "GET", headers: { ...cookie(session), ...headers } }));
+const detail = (session: string | null, id: string, headers: Record<string, string> = {}) => detailRoute.GET(
   new NextRequest(`${ORIGIN}/api/teacher/mentorships/${encodeURIComponent(id)}`, { method: "GET", headers: { ...cookie(session), ...headers } }),
   { params: Promise.resolve({ mentorshipId: id }) },
 );
@@ -291,15 +294,21 @@ describe("GET /api/teacher/mentorships over the real database", () => {
     const post = (path: string) => new Request(`${ORIGIN}${path}`, { method: "POST" });
     expect((await handleMentoredWorksRequest(post("/api/teacher/mentorships"), deps)).status).toBe(405);
     expect((await handleMentoredWorkRequest(post(`/api/teacher/mentorships/${ids.ms1.mentorship}`), deps, ids.ms1.mentorship)).status).toBe(405);
-    // Without an OPTIONS export Next.js answers OPTIONS itself with 204 (QA on #1278).
-    const options = (path: string) => new NextRequest(`${ORIGIN}${path}`, { method: "OPTIONS", headers: cookie(people.mira.token) });
-    for (const response of [
-      await optionsList(options("/api/teacher/mentorships")),
-      await optionsDetail(options(`/api/teacher/mentorships/${ids.ms1.mentorship}`), { params: Promise.resolve({ mentorshipId: ids.ms1.mentorship }) }),
-    ]) {
-      expect(response.status).toBe(405);
-      expect(response.headers.get("cache-control")).toBe("no-store");
-      expect(await response.json()).toEqual({ error: "method_not_allowed" });
+    // Through the method table Next.js builds for each module: a method the
+    // module leaves out gets Next.js's own 204 (OPTIONS) or empty 405 (#1278).
+    const context = { params: Promise.resolve({ mentorshipId: ids.ms1.mentorship }) };
+    const routes = [
+      ["/api/teacher/mentorships", autoImplementMethods(listRoute as never)],
+      [`/api/teacher/mentorships/${ids.ms1.mentorship}`, autoImplementMethods(detailRoute as never)],
+    ] as const;
+    for (const [path, methods] of routes) {
+      for (const method of HTTP_METHODS.filter((m) => m !== "GET" && m !== "HEAD")) {
+        const request = new NextRequest(`${ORIGIN}${path}`, { method, headers: cookie(people.mira.token) });
+        const response = (await methods[method](request, context as never)) as Response;
+        expect(response.status, `${method} ${path}`).toBe(405);
+        expect(response.headers.get("cache-control"), `${method} ${path}`).toBe("no-store");
+        expect(await response.json()).toEqual({ error: "method_not_allowed" });
+      }
     }
     for (const response of [
       await list(people.mira.token, { "sec-fetch-site": "cross-site" }),

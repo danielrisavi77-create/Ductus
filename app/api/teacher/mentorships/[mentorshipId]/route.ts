@@ -17,6 +17,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ men
   }, mentorshipId);
 }
 
-// Exported so Next.js does not answer OPTIONS itself with 204: the handler
-// refuses every method but GET and HEAD with the same 405 (QA on #1278).
+// Every other method goes through the same handler, which refuses all but
+// GET and HEAD with the contract 405 and no-store. Left unexported, Next.js
+// answers OPTIONS itself with 204 and the rest with an empty 405 (#1278).
 export const OPTIONS = GET;
+export const POST = GET;
+export const PUT = GET;
+export const PATCH = GET;
+export const DELETE = GET;
