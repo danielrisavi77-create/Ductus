@@ -74,7 +74,7 @@ const capability = {
   contractTest: "local-stack/s3-evidence-payload-store.integration",
 };
 
-async function rawGetStatus(path: string[]) {
+async function rawGet(path: string[]) {
   const signed = signS3Request({
     method: "GET",
     endpoint: new URL(S3_ENDPOINT),
@@ -86,15 +86,40 @@ async function rawGetStatus(path: string[]) {
     now: new Date(),
   });
   const response = await fetch(signed.url, { headers: signed.headers, redirect: "error" });
-  await response.arrayBuffer();
-  return response.status;
+  return { status: response.status, body: new Uint8Array(await response.arrayBuffer()) };
 }
+
+const rawGetStatus = async (path: string[]) => (await rawGet(path)).status;
 
 /** Lets the macrotask the router writes its log line in run. */
 const logged = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 const label = (institutionId: string) =>
   new TextEncoder().encode(JSON.stringify({ institutionId, region }));
+
+/**
+ * Writes the identity label once and accepts an earlier run's label only when
+ * its bytes are the expected ones. Every PUT is conditional (`If-None-Match`),
+ * so an existing label is never overwritten: 412 means it is already there.
+ */
+async function ensureIdentityLabel(bucket: string, institutionId: string) {
+  const expected = label(institutionId);
+  const status = await rawPut([bucket, STORAGE_IDENTITY_KEY], expected);
+  if (status === 200) return;
+  if (status !== 412) {
+    throw new Error(`identity label of ${bucket}: PUT answered ${status}`);
+  }
+  const existing = await rawGet([bucket, STORAGE_IDENTITY_KEY]);
+  if (existing.status !== 200) {
+    throw new Error(`identity label of ${bucket}: GET answered ${existing.status}`);
+  }
+  if (!sameBytes(existing.body, expected)) {
+    throw new Error(`identity label of ${bucket} names another institution`);
+  }
+}
+
+const sameBytes = (a: Uint8Array, b: Uint8Array) =>
+  a.length === b.length && a.every((byte, i) => byte === b[i]);
 
 function routerFromEnv(warn: (message: string, fields: Record<string, string>) => void = () => undefined) {
   const domains = Object.entries(buckets).map(([institutionId, bucket]) => ({
@@ -149,10 +174,27 @@ beforeAll(async () => {
     }
     expect([200, 409]).toContain(status);
   }
-  expect(await rawPut([buckets[FAK_A], STORAGE_IDENTITY_KEY], label(FAK_A))).toBe(200);
-  expect(await rawPut([buckets[FAK_B], STORAGE_IDENTITY_KEY], label(FAK_B))).toBe(200);
-  expect(await rawPut([buckets[FAK_C], STORAGE_IDENTITY_KEY], label(FAK_A))).toBe(200);
+  await ensureIdentityLabel(buckets[FAK_A], FAK_A);
+  await ensureIdentityLabel(buckets[FAK_B], FAK_B);
+  await ensureIdentityLabel(buckets[FAK_C], FAK_A);
 }, 60_000);
+
+describe("identity label setup against the local object store", () => {
+  it("accepts the label it finds on a second run without writing it again", async () => {
+    // beforeAll already wrote the label, so this PUT is the re-run case (412).
+    expect(await rawPut([buckets[FAK_A], STORAGE_IDENTITY_KEY], label(FAK_A))).toBe(412);
+    await expect(ensureIdentityLabel(buckets[FAK_A], FAK_A)).resolves.toBeUndefined();
+  });
+
+  it("refuses an existing label for another institution and leaves it as it was", async () => {
+    await expect(ensureIdentityLabel(buckets[FAK_C], FAK_C)).rejects.toThrow(
+      "names another institution",
+    );
+    const stored = await rawGet([buckets[FAK_C], STORAGE_IDENTITY_KEY]);
+    expect(stored.status).toBe(200);
+    expect(new TextDecoder().decode(stored.body)).toBe(new TextDecoder().decode(label(FAK_A)));
+  });
+});
 
 describe("InstitutionRoutedPayloadStore against the local object store", () => {
   it("verifies matching labels and disables the bucket labelled for another institution (P3)", async () => {
