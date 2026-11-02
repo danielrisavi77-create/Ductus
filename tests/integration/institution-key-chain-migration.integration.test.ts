@@ -1,0 +1,241 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import pg from "pg";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
+// The institution key chain migration (DAN-442, D-199) over rows that predate
+// it, against the compose stack (pnpm stack:up, pnpm db:migrate). As in
+// institution-key-migration.integration.test.ts, each case gets a database of
+// its own, migrated up to the one before the chain, filled with rows written
+// without the key on versions and enrollment codes, and only then given the
+// migration as dbmate runs it: the up section in one transaction, as
+// ductus_migrator. Every institution, person, course and code is random or
+// invented.
+const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
+requireLoopbackDatabaseUrl(ADMIN_URL, "The migration test runs only against a loopback database (DATABASE_URL).");
+const MIGRATIONS = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
+const TARGET = "20261103100000_institution_key_chain.sql";
+
+/** The up section of a dbmate migration file. */
+function upSection(file: string) {
+  const text = readFileSync(`${MIGRATIONS}${file}`, "utf8");
+  const up = text.indexOf("-- migrate:up");
+  const down = text.indexOf("-- migrate:down");
+  if (up < 0 || down < 0) throw new Error(`${file} is not a dbmate migration`);
+  return text.slice(0, down);
+}
+
+const admin = new pg.Pool({ connectionString: ADMIN_URL, max: 1 });
+const created: { name: string; clients: pg.Client[] }[] = [];
+// The connection dbmate would use: role=ductus_migrator in the URL, so that a
+// RESET ROLE inside a migration returns to the migrator, which
+// 20261101201000_roles_check.sql requires.
+const migrators = new WeakMap<pg.Client, pg.Client>();
+
+afterEach(async () => {
+  for (const { name, clients } of created.splice(0)) {
+    for (const client of clients) await client.end();
+    await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
+  }
+});
+afterAll(() => admin.end());
+
+/**
+ * A database of its own, migrated up to the one before the chain. The client
+ * returned is the compose superuser, which writes the old rows.
+ */
+async function beforeTheChain() {
+  const name = `ductus_chain_${randomBytes(6).toString("hex")}`;
+  await admin.query(`CREATE DATABASE ${name} OWNER ductus_migrator`);
+  const url = new URL(ADMIN_URL);
+  url.pathname = `/${name}`;
+  const client = new pg.Client({ connectionString: url.href });
+  const migrator = new pg.Client({ connectionString: url.href, options: "-c role=ductus_migrator" });
+  created.push({ name, clients: [client, migrator] });
+  await client.connect();
+  await migrator.connect();
+  migrators.set(client, migrator);
+  const earlier = readdirSync(MIGRATIONS)
+    .filter((file) => file.endsWith(".sql") && file < TARGET)
+    .sort();
+  for (const file of earlier) await migrator.query(`BEGIN;\n${upSection(file)}\nCOMMIT;`);
+  return client;
+}
+
+/** Runs the chain migration the way dbmate does; on failure nothing of it stays. */
+async function migrate(client: pg.Client) {
+  const migrator = migrators.get(client);
+  if (!migrator) throw new Error("no migrator connection for this database");
+  await migrator.query("BEGIN");
+  try {
+    await migrator.query(upSection(TARGET));
+    await migrator.query("COMMIT");
+  } catch (error) {
+    await migrator.query("ROLLBACK");
+    throw error;
+  }
+}
+
+type Ids = Awaited<ReturnType<typeof oldRows>>;
+
+/**
+ * Old rows, written as the compose superuser past every function, as the
+ * schema before the chain allowed them: fak-a has K1 with Z1 (two versions)
+ * and a revoked and an active code, fak-b has K3 with Z3 and one code; the
+ * revocation left an audit event of fak-a.
+ */
+async function oldRows(client: pg.Client) {
+  const ids = {
+    facultyA: randomUUID(),
+    facultyB: randomUUID(),
+    teacherA: randomUUID(),
+    teacherB: randomUUID(),
+    courseA: randomUUID(),
+    courseB: randomUUID(),
+    assignmentA: randomUUID(),
+    assignmentB: randomUUID(),
+    oldCodeA: randomUUID(),
+    codeA: randomUUID(),
+    codeB: randomUUID(),
+  };
+  await client.query("INSERT INTO identity.institution (id, slug) VALUES ($1, 'fak-a'), ($2, 'fak-b')", [
+    ids.facultyA,
+    ids.facultyB,
+  ]);
+  for (const [id, institution, name] of [
+    [ids.teacherA, ids.facultyA, "nastavnik-a"],
+    [ids.teacherB, ids.facultyB, "nastavnik-b"],
+  ]) {
+    await client.query(
+      `INSERT INTO identity.user_account (id, institution_id, oidc_issuer, oidc_subject, hr_edu_person_unique_id)
+       VALUES ($1, $2, 'https://issuer.test', $3, $3 || '@test.example')`,
+      [id, institution, `sub-${name}`],
+    );
+  }
+  await client.query(
+    `INSERT INTO institution.course (id, institution_id, name, academic_year, ai_policy, created_by)
+     VALUES ($1, $2, 'K1', '2026/2027', 'prohibited', $3), ($4, $5, 'K3', '2026/2027', 'prohibited', $6)`,
+    [ids.courseA, ids.facultyA, ids.teacherA, ids.courseB, ids.facultyB, ids.teacherB],
+  );
+  await assignment(client, ids.assignmentA, ids.courseA, ids.facultyA, ids.teacherA);
+  await version(client, ids.assignmentA, 2, ids.teacherA);
+  await assignment(client, ids.assignmentB, ids.courseB, ids.facultyB, ids.teacherB);
+  await code(client, ids.oldCodeA, ids.courseA, ids.teacherA, false);
+  await code(client, ids.codeA, ids.courseA, ids.teacherA, true);
+  await code(client, ids.codeB, ids.courseB, ids.teacherB, true);
+  await codeEvent(client, ids.facultyA, ids.courseA, ids.oldCodeA, ids.teacherA);
+  return ids;
+}
+
+/** An assignment with its first version, which its pointer needs by the end of the transaction. */
+async function assignment(client: pg.Client, id: string, course: string, institution: string, author: string) {
+  await client.query("BEGIN");
+  await client.query(
+    "INSERT INTO institution.assignment (id, course_id, institution_id, created_by) VALUES ($1, $2, $3, $4)",
+    [id, course, institution, author],
+  );
+  await version(client, id, 1, author);
+  await client.query("COMMIT");
+}
+
+async function version(client: pg.Client, assignmentId: string, versionNo: number, author: string) {
+  await client.query(
+    `INSERT INTO institution.assignment_version (
+       assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
+       evidence_profile, import_allowed, created_by)
+     VALUES ($1, $2, 'Zadatak', 'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days',
+             'prohibited', '{}', 'basic', false, $3)`,
+    [assignmentId, versionNo, author],
+  );
+}
+
+async function code(client: pg.Client, id: string, course: string, author: string, active: boolean) {
+  await client.query(
+    `INSERT INTO institution.course_enrollment_code (id, course_id, code_hash, valid_until, active, created_by)
+     VALUES ($1::uuid, $2, sha256(convert_to($1::text, 'UTF8')), now() + interval '7 days', $3, $4)`,
+    [id, course, active, author],
+  );
+}
+
+async function codeEvent(client: pg.Client, institution: string, course: string, codeId: string, actor: string) {
+  await client.query(
+    `INSERT INTO audit.enrollment_code_event (institution_id, course_id, code_id, kind, actor_id, occurred_at)
+     VALUES ($1, $2, $3, 'revoked', $4, now())`,
+    [institution, course, codeId, actor],
+  );
+}
+
+const VERSIONS = "SELECT * FROM institution.assignment_version ORDER BY assignment_id, version_no";
+const CODES = "SELECT * FROM institution.course_enrollment_code ORDER BY id";
+const EVENTS = "SELECT * FROM audit.enrollment_code_event ORDER BY id";
+const KEY_COLUMNS = `
+  SELECT table_name FROM information_schema.columns
+  WHERE table_schema = 'institution' AND table_name IN ('assignment_version', 'course_enrollment_code')
+    AND column_name = 'institution_id'`;
+
+describe("the institution key chain migration over old rows", () => {
+  it("gives every old version and code the institution of its parent and keeps the rest of it", async () => {
+    const client = await beforeTheChain();
+    const ids = await oldRows(client);
+    const versionsBefore = (await client.query(VERSIONS)).rows;
+    const codesBefore = (await client.query(CODES)).rows;
+    const eventsBefore = (await client.query(EVENTS)).rows;
+
+    await migrate(client);
+
+    const versions = (await client.query(VERSIONS)).rows;
+    expect(versions).toEqual(
+      versionsBefore.map((row) => ({
+        ...row,
+        institution_id: row.assignment_id === ids.assignmentA ? ids.facultyA : ids.facultyB,
+      })),
+    );
+    const codes = (await client.query(CODES)).rows;
+    expect(codes).toEqual(
+      codesBefore.map((row) => ({
+        ...row,
+        institution_id: row.course_id === ids.courseA ? ids.facultyA : ids.facultyB,
+      })),
+    );
+    expect((await client.query(EVENTS)).rows).toEqual(eventsBefore);
+    expect(versions).toHaveLength(3);
+    expect(codes).toHaveLength(3);
+    expect(eventsBefore).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      what: "a version of an assignment of fak-a whose author belongs to fak-b",
+      constraint: "assignment_version_created_by_institution_fkey",
+      write: (client: pg.Client, ids: Ids) => version(client, ids.assignmentA, 3, ids.teacherB),
+    },
+    {
+      what: "an enrollment code of a course of fak-a made by a teacher of fak-b",
+      constraint: "course_enrollment_code_created_by_institution_fkey",
+      write: (client: pg.Client, ids: Ids) => code(client, randomUUID(), ids.courseA, ids.teacherB, false),
+    },
+    {
+      what: "an audit event of fak-b about a code of a course of fak-a",
+      constraint: "enrollment_code_event_code_institution_fkey",
+      write: (client: pg.Client, ids: Ids) => codeEvent(client, ids.facultyB, ids.courseB, ids.codeA, ids.teacherB),
+    },
+  ])("refuses $what as a whole and leaves the old schema", async ({ constraint, write }) => {
+    const client = await beforeTheChain();
+    const ids = await oldRows(client);
+    await write(client, ids);
+    const versionsBefore = (await client.query(VERSIONS)).rows;
+    const codesBefore = (await client.query(CODES)).rows;
+    const eventsBefore = (await client.query(EVENTS)).rows;
+
+    await expect(migrate(client)).rejects.toMatchObject({ code: "23503", constraint });
+
+    expect((await client.query(KEY_COLUMNS)).rows).toEqual([]);
+    expect((await client.query(VERSIONS)).rows).toEqual(versionsBefore);
+    expect((await client.query(CODES)).rows).toEqual(codesBefore);
+    expect((await client.query(EVENTS)).rows).toEqual(eventsBefore);
+  });
+});
