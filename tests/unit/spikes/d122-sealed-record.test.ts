@@ -184,7 +184,7 @@ describe("Istodobnost", () => {
     await tabB.put({ documentId: DOC, synced: false, body: late });
     const reader = store(tabA.name);
     expect(await reader.read(DOC, CTX, await reader.existingKey())).toEqual({ ok: false, reason: "no_key" });
-    await expect(tabB.putGuarded({ documentId: DOC, synced: false, body: late })).rejects.toThrow("logout");
+    await expect(tabB.putGuarded({ documentId: DOC, synced: false, body: late }, keyB)).rejects.toThrow("logout");
   });
 
   it("a late guarded write after sign-out and a new key is refused and keeps the new record", async () => {
@@ -194,10 +194,26 @@ describe("Istodobnost", () => {
     await tabA.shredKey();
     const signIn = store(tabA.name);
     const keyNew = await signIn.deviceKey();
-    await signIn.putGuarded({ documentId: DOC, synced: false, body: await seal(keyNew, "novo", CTX, NOW) });
+    await signIn.putGuarded({ documentId: DOC, synced: false, body: await seal(keyNew, "novo", CTX, NOW) }, keyNew);
     const late = await seal(keyB, "kasni upis", CTX, NOW);
-    await expect(tabB.putGuarded({ documentId: DOC, synced: false, body: late })).rejects.toThrow("logout");
+    await expect(tabB.putGuarded({ documentId: DOC, synced: false, body: late }, keyB)).rejects.toThrow("logout");
     expect(await signIn.read(DOC, CTX, await signIn.existingKey())).toEqual({ ok: true, text: "novo" });
+  });
+
+  it("a late write sealed with the old key is refused even after the same tab obtains the new key", async () => {
+    const tabA = store(freshName());
+    const tabB = store(tabA.name);
+    const keyB = await tabB.deviceKey();
+    await tabA.shredKey();
+    const keyNew = await tabA.deviceKey();
+    await tabA.putGuarded({ documentId: DOC, synced: false, body: await seal(keyNew, "novo", CTX, NOW) }, keyNew);
+    const late = await seal(keyB, "kasni upis", CTX, NOW);
+    const keyBNow = await tabB.existingKey();
+    expect(keyBNow).not.toBeNull();
+    await expect(tabB.putGuarded({ documentId: DOC, synced: false, body: late }, keyB)).rejects.toThrow("logout");
+    expect(await tabB.read(DOC, CTX, keyBNow)).toEqual({ ok: true, text: "novo" });
+    await tabB.putGuarded({ documentId: DOC, synced: false, body: await seal(keyBNow!, "novije", CTX, NOW) }, keyBNow!);
+    expect(await tabA.read(DOC, CTX, keyNew)).toEqual({ ok: true, text: "novije" });
   });
 
   it("a shred while another tab keeps the database open still makes the record unreadable", async () => {

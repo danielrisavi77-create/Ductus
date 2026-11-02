@@ -100,11 +100,15 @@ export function freshness(at: unknown, synced: boolean, now: number, policy: Pol
 /** `gen` names one key generation: a new key after a shred is a new generation. */
 type KeyRow = { id: string; key: CryptoKey; gen: string };
 
+/**
+ * The generation each key object was read with. Fixed per object: obtaining
+ * the key again later gives a new object and does not change this one.
+ */
+const generationOf = new WeakMap<CryptoKey, string>();
+
 /** One tab's connection to the spike database (a stand-in for the journal). */
 export class SpikeStore {
   private readonly db: Dexie & { keys: Table<KeyRow, string>; records: Table<SpikeRecord, string> };
-  /** The generation of the key this tab last obtained; a guarded write needs it. */
-  private heldGen: string | null = null;
 
   constructor(readonly name: string, options?: DexieOptions) {
     this.db = new Dexie(name, options) as SpikeStore["db"];
@@ -137,7 +141,7 @@ export class SpikeStore {
   }
 
   private hold(row: KeyRow): CryptoKey {
-    this.heldGen = row.gen;
+    generationOf.set(row.key, row.gen);
     return row.key;
   }
 
@@ -156,13 +160,16 @@ export class SpikeStore {
   }
 
   /**
-   * Writes only while the key this tab holds is still the current one, checked
-   * in the same transaction: a shred, or a shred and a new key, refuses it.
+   * Writes only while `sealedWith`, the key that sealed `record`, is still the
+   * current one, checked in the same transaction: a shred, or a shred and a new
+   * key, refuses it. The check uses that key's own generation, so a tab that
+   * obtains the new key in the meantime cannot let an old write through.
    */
-  async putGuarded(record: SpikeRecord): Promise<void> {
+  async putGuarded(record: SpikeRecord, sealedWith: CryptoKey): Promise<void> {
+    const gen = generationOf.get(sealedWith);
     await this.db.transaction("rw", this.db.keys, this.db.records, async () => {
       const current = await this.db.keys.get(DEVICE_KEY_ID);
-      if (!current || current.gen !== this.heldGen) throw new Error("logout");
+      if (!current || gen === undefined || current.gen !== gen) throw new Error("logout");
       await this.db.records.put(record);
     });
   }
