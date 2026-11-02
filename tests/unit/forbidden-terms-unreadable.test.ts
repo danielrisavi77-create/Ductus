@@ -1471,7 +1471,25 @@ describe("text that reaches a page from outside the files the scan reads", () =>
     ["a module by an absolute path", "app/page.tsx", 'import { TEXT } from "/ui/text";'],
     ["a module by a path from a drive", "src/components/Page.tsx", 'import { TEXT } from "C:\\\\repo\\\\ui\\\\text";'],
     ["a module by a path from a drive with slashes", "src/components/Page.tsx", 'import { TEXT } from "c:/repo/ui/text";'],
+    // QA of 34947b9d (#1169): the folder itself may load a file at the root, such as src.ts.
+    ["the folder src itself", "app/page.tsx", 'import { TEXT } from "../src";'],
+    ["the folder app itself", "src/index.ts", 'import all from "../app";'],
+    ["the folder of the file itself at the top", "app/page.tsx", 'import all from ".";'],
+    ["the folder src by a path with backslashes", "app/page.tsx", 'import { TEXT } from "..\\\\src";'],
+    ["a module in a folder the scan skips", "src/components/Page.tsx", 'import { TEXT } from "./node_modules/ui/text";'],
+    ["a module in the build folder", "app/page.tsx", 'import { TEXT } from "./.next/text";'],
   ];
+
+  // Review of 34947b9d (#1169): a loader request names what the loader makes of a module.
+  it.each([
+    ["app/page.tsx", 'import { TEXT } from "!!../ui/text.ts";'],
+    ["app/rad/page.tsx", 'import { P } from "-!./parts";'],
+    ["app/page.tsx", 'import { TEXT } from "raw-loader!../ui/text";'],
+  ])("reports an import through a loader in %s: %s", (file, line) => {
+    write(file, `export const A = 1;\n${line}\n`);
+    const name = /"([^"]+)"/.exec(line)![1]!;
+    expect(reasons()).toEqual([[file, 2, `import of "${name}" through a loader (${UNREADABLE_HINTS.loaderRequest})`]]);
+  });
 
   it.each(OUTSIDE)("reports the import of %s", (_, file, line) => {
     write("ui/text.ts", 'export const TEXT = "Sumnjivo";\n');
@@ -1492,8 +1510,10 @@ describe("text that reaches a page from outside the files the scan reads", () =>
         'import { P } from "./parts";',
         'import { X } from "@/lib/words";',
         'import React from "react";',
+        'import Here from "./";',
+        'import Lib from "@/";',
         'import style from "../../config/x/citation.json";',
-        "export const all = [W, P, X, React, style];",
+        "export const all = [W, P, X, React, Here, Lib, style];",
         "",
       ].join("\n"),
     );
