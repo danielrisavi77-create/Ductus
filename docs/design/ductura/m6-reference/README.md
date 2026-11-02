@@ -25,8 +25,9 @@ Opseg M6.UX-R po odluci orkestratora (#1091): PR 1 M6.2 (S-34, N-09); PR 2 M6.3/
 | učitavanje, prazno, pogreška | „Učitavam promjene rada.”, „Nema zabilježenih promjena.”, pogreška koja studentu potvrđuje da rad može pisati i predati |
 | praznina u zapisu | „Praznina u zapisu” bez objašnjenja uzroka |
 | nema pristupa | „Reprodukcija nije dostupna ovom računu.”; isti tekst za povjerenstvo (D-238) |
-| veliki rad | prikaz po odlomcima, reprodukcija se ne blokira |
+| veliki rad | prikaz po odlomcima, reprodukcija se ne blokira; tekst odabranog odlomka prikazan je tijekom reprodukcije |
 | smanjeno kretanje | korak po koraku bez animacije; tipkovnica: razmaknica, strelice |
+| stalni tekst | „Ritam pisanja ne govori ništa o autorstvu ni o trudu.” (`docs/PRODUCT.md` §6) u svakom stanju s reprodukcijom, uključujući prazninu u zapisu i veliki rad |
 
 Student vidi isti prikaz i rečenicu „Isti prikaz vidi i Vaš mentor.” (pravilo 5 i 7). Obrisani tekst prikazan je prekriženo uz objašnjenje.
 
