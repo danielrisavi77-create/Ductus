@@ -128,7 +128,10 @@ describe("signPendingReceipt", () => {
     ["K2 extra field", RECEIPT, canonicalizeJcs({ ...PAYLOAD, extra: 1 }), "receipt_malformed"],
     ["K2 acceptedAt with seconds", RECEIPT, canonicalizeJcs({ ...PAYLOAD, acceptedAt: "2026-10-19T06:00:07.000Z" }), "receipt_malformed"],
     ["K2 row id is not the payload's", "00000000-0000-4000-8000-0000000000c2", TEXT, "receipt_id_mismatch"],
+    ["K2 lone surrogate escape", RECEIPT, TEXT.replace('"doc-1"', '"doc-\\ud800"'), "receipt_malformed"],
     ["K3 not its JCS form", RECEIPT, JSON.stringify(PAYLOAD, null, 1), "not_canonical"],
+    ["K3 trailing newline", RECEIPT, `${TEXT}\n`, "not_canonical"],
+    ["K3 duplicate key that parsing drops", RECEIPT, TEXT.replace("{", '{"documentId":"doc-9",'), "not_canonical"],
     ["K4 receipt v1", RECEIPT, canonicalizeJcs({ ...PAYLOAD, receiptSchema: "ductus-evidence-receipt-v1" }), "unsupported_schema"],
   ];
   it.each(refused)("%s is refused before the signer is asked", async (_, receiptId, text, reason) => {
@@ -210,7 +213,12 @@ describe("signPendingReceipt", () => {
     [{ outcome: "invalid" }, { status: "refused", reason: "invalid" }],
     [{ outcome: "unsupported_schema" }, { status: "refused", reason: "unsupported_schema" }],
     [{ outcome: "digest_mismatch" }, { status: "refused", reason: "digest_mismatch" }],
+    [{ outcome: "key_unknown" }, { status: "signer_rejected", reason: "key_unknown" }],
+    [{ outcome: "key_scope" }, { status: "signer_rejected", reason: "key_scope" }],
     [{ outcome: "key_revoked" }, { status: "signer_rejected", reason: "key_revoked" }],
+    [{ outcome: "key_not_valid" }, { status: "signer_rejected", reason: "key_not_valid" }],
+    [{ outcome: "signed", signature: { algorithm: "Ed25519", keyId: "k9" } }, { status: "unavailable", stage: "store", reason: "stored_signature_mismatch" }],
+    [{ outcome: "signed", signature: undefined }, { status: "unavailable", stage: "store", reason: "stored_signature_mismatch" }],
     [{ outcome: "unavailable", reason: "x" }, { status: "unavailable", stage: "store", reason: "store_unavailable" }],
     [{ outcome: "something_new" } as never, { status: "unavailable", stage: "store", reason: "unknown_outcome" }],
     ["throws", { status: "unavailable", stage: "store", reason: "store_unavailable" }],

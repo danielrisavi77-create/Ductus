@@ -77,8 +77,15 @@ function parsePending(row: PendingReceiptRow): Parsed {
     return { ok: false, reason: "receipt_malformed" };
   }
   // The database hashes the stored text, so only a text that is its own JCS
-  // form has the digest that the signature is made over.
-  if (canonicalizeJcs(parsed) !== text) {
+  // form has the digest that the signature is made over. A value JCS cannot
+  // write (a lone surrogate) is malformed, not an exception.
+  let canonical: string;
+  try {
+    canonical = canonicalizeJcs(parsed);
+  } catch {
+    return { ok: false, reason: "receipt_malformed" };
+  }
+  if (canonical !== text) {
     return { ok: false, reason: "not_canonical" };
   }
   if (parsed.receiptId !== row.receiptId) {
@@ -114,6 +121,14 @@ async function signWithin(
     return await Promise.race([signing, timeout]);
   } finally {
     clearTimeout(timer);
+  }
+}
+
+function sameSignature(stored: unknown, sent: SignatureEnvelope): boolean {
+  try {
+    return isSignatureEnvelope(stored) && canonicalizeJcs(stored) === canonicalizeJcs(sent);
+  } catch {
+    return false;
   }
 }
 
@@ -159,7 +174,11 @@ export function createSignPendingReceipt(deps: SignPendingReceiptDeps) {
   ): Promise<SignPendingReceiptOutcome> {
     switch (attached.outcome) {
       case "signed":
-        return { status: "signed", signedReceipt: own };
+        // `signed` must carry the signature this call sent; anything else is
+        // not known to be what was stored.
+        return sameSignature(attached.signature, own.signature)
+          ? { status: "signed", signedReceipt: own }
+          : { status: "unavailable", stage: "store", reason: "stored_signature_mismatch" };
       case "already_signed": {
         // The stored signature is answered only once it verifies as well.
         const stored = {
