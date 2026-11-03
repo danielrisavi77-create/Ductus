@@ -3246,6 +3246,14 @@ DECLARE
   v_mentorship uuid;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
+  -- The lock of request_mentorship comes before any row lock, in the same
+  -- order there; student and kind of a request never change.
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.teacher_id = actor.user_id;
+  IF FOUND THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended(
+      'institution.mentorship_request:' || req.institution_id || ':' || req.student_id || ':' || req.work_type, 0));
+  END IF;
   -- Two approvals of one request wait for each other here.
   SELECT * INTO req FROM institution.mentorship_request r
   WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.teacher_id = actor.user_id
@@ -4325,16 +4333,15 @@ BEGIN
      OR p_work_type NOT IN ('bachelor_thesis', 'master_thesis', 'specialist_thesis', 'doctoral_thesis') THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
+  -- Requests and approvals of one student's kind of work take turns, so a
+  -- request made and approved while this one runs cannot slip between the
+  -- check below and the insert. The approval takes the same lock first.
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    'institution.mentorship_request:' || actor.institution_id || ':' || actor.user_id || ':' || p_work_type, 0));
   IF p_teacher_id IS NOT DISTINCT FROM actor.user_id
      OR institution.lock_teacher_role(p_teacher_id) IS NULL THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
-  -- An approval of the open request of this kind holds its row until it
-  -- commits; waiting for it here lets the check below see its mentorship.
-  PERFORM 1 FROM institution.mentorship_request r
-  WHERE r.institution_id = actor.institution_id AND r.student_id = actor.user_id
-    AND r.work_type = p_work_type AND r.withdrawn_at IS NULL AND r.approved_at IS NULL
-  FOR SHARE;
   IF EXISTS (
     SELECT 1 FROM institution.mentorship m
     WHERE m.institution_id = actor.institution_id AND m.student_id = actor.user_id

@@ -369,6 +369,50 @@ describe("mentorship approval under concurrency (DAN-515)", () => {
     expect(open.rows[0].open).toBe(0);
   });
 
+  it("refuses a new request of the kind when another one is made and approved while it runs", async () => {
+    await resetCase();
+    // One held transaction makes ana's request and vesna's approval of it, so
+    // both commit together while ana's second request is between its checks
+    // and its insert: the window in which the open request appears and is
+    // approved again.
+    const client = await appPool.connect();
+    let again: Promise<string> | undefined;
+    try {
+      await client.query("BEGIN");
+      const as = (who: Person) =>
+        client.query(
+          "SELECT pg_catalog.set_config('app.session_token', $1, true)",
+          [tokens[who]],
+        );
+      await as("ana");
+      const made = await client.query<{ v: string }>(
+        "SELECT institution.request_mentorship($1, 'master_thesis') AS v",
+        [people.vesna],
+      );
+      await as("vesna");
+      await client.query(
+        "SELECT institution.approve_mentorship_request($1)",
+        [made.rows[0].v],
+      );
+      again = request("ana");
+      await untilLockWait();
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    expect(await outcome(again)).toBe("ZD409");
+    expect(await counts()).toStrictEqual({ mentorships: 1, approved: 1 });
+    const open = await admin.query<{ open: number }>(
+      `SELECT count(*)::int AS open FROM institution.mentorship_request
+       WHERE institution_id = $1 AND student_id = $2 AND approved_at IS NULL AND withdrawn_at IS NULL`,
+      [institutionId, people.ana],
+    );
+    expect(open.rows[0].open).toBe(0);
+  });
+
   it("leaves one open request when a student sends the same request twice at once", async () => {
     await resetCase();
     const results = await Promise.all([
