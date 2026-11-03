@@ -58,6 +58,7 @@
     "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "3.1155.0",
     "@tiptap/core": "^3.31.3",
     "@tiptap/extension-bold": "^3.31.3",
     "@tiptap/extension-document": "^3.31.3",
