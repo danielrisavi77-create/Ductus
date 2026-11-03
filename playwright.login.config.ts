@@ -62,6 +62,9 @@ export default defineConfig({
     command: SECURE ? "node scripts/demo/login-e2e-https.mjs" : `pnpm dev --port ${LOGIN_PORT}`,
     url: BASE_URL,
     ignoreHTTPSErrors: SECURE,
+    // Playwright stops the server group with SIGKILL unless told otherwise, and
+    // then the launcher could not delete the private key of this run.
+    gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     // F-152: only fixed local values here. A database URL set in the
     // environment reaches the server through the environment it inherits.
     env: {

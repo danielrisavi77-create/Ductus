@@ -42,7 +42,8 @@ test("a real certificate is made: localhost only, short lived, key private and m
   const dir = scratch();
   try {
     const { key, cert } = createLoginCertificate(dir);
-    assert.equal(statSync(key).mode & 0o077, 0, "the private key is readable by its owner alone");
+    // Windows has no owner/group/other permission bits to read back through chmod.
+    if (process.platform !== "win32") assert.equal(statSync(key).mode & 0o077, 0, "the private key is readable by its owner alone");
     const x509 = new X509Certificate(readFileSync(cert));
     assert.ok(x509.checkHost("localhost"));
     assert.ok(x509.checkIP("127.0.0.1"));
