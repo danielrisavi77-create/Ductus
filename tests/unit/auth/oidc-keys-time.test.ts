@@ -135,9 +135,23 @@ describe("time claims of the ID token", () => {
     await expect(login(claims((c) => ({ ...c, iat: now() + TOLERANCE - 1 })))).resolves.toBe("accepted");
   });
 
-  // An iat beyond the tolerance, in the future or long past, is accepted
-  // today, against docs/backend/prijava-i-ovlasti.md: issue #1327. Its test
-  // goes with the fix, so none is written here that would hold that state.
+  it("accepts an iat exactly at the tolerance ahead of this clock", async () => {
+    await expect(login(claims((c) => ({ ...c, iat: now() + TOLERANCE })))).resolves.toBe("accepted");
+  });
+
+  // #1327: the library only checks that iat is a number, so an iat beyond
+  // the allowed skew (docs/backend/prijava-i-ovlasti.md) is refused here.
+  it.each([
+    ["one second past the tolerance", TOLERANCE + 1],
+    ["an hour ahead", 3600],
+    ["a year ahead", 365 * 24 * 3600],
+  ] as const)("refuses an iat %s, before asking for userinfo", async (_name, ahead) => {
+    await expect(login(claims((c) => ({ ...c, iat: now() + ahead })))).resolves.toBe("refused");
+    expect(idp.requests).not.toContain("/me");
+  });
+
+  // How old an iat may be is an open owner decision (#1327); exp already
+  // bounds the token's life. No test here holds either answer.
 
   it.each([
     ["exactly at the tolerance", -TOLERANCE, "refused"],

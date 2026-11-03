@@ -6,7 +6,7 @@ BEGIN;
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(1155);
+SELECT plan(1283);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
@@ -15,8 +15,9 @@ SELECT bag_eq(
      WHERE c.relnamespace = 'institution'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f') $$,
   ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
         'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
-        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member', 'work_grant'],
-  'the institution schema holds exactly the seventeen tables of this matrix'
+        'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
+        'course_editor', 'team_substitution', 'work_grant'],
+  'the institution schema holds exactly the nineteen tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -54,6 +55,8 @@ SELECT bag_eq(
     'ductus_app SELECT seminar_group',
     'ductus_app SELECT seminar_group_teacher',
     'ductus_app SELECT seminar_group_member',
+    'ductus_app SELECT course_editor',
+    'ductus_app SELECT team_substitution',
     'ductus_app SELECT work_grant'
   ],
   'besides the owner only ductus_app holds a privilege on an institution table, and only SELECT'
@@ -98,6 +101,10 @@ SELECT bag_eq(
     'seminar_group_teacher: seminar_group_teacher_read SELECT to ductus_app',
     'seminar_group_member: seminar_group_member_owner ALL to ductus_identity',
     'seminar_group_member: seminar_group_member_read SELECT to ductus_app',
+    'course_editor: course_editor_owner ALL to ductus_identity',
+    'course_editor: course_editor_read SELECT to ductus_app',
+    'team_substitution: team_substitution_owner ALL to ductus_identity',
+    'team_substitution: team_substitution_read SELECT to ductus_app',
     'work_grant: work_grant_owner ALL to ductus_identity',
     'work_grant: work_grant_read SELECT to ductus_app'
   ],
@@ -110,8 +117,10 @@ SELECT bag_eq(
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
      WHERE c.relnamespace = 'institution'::regnamespace AND NOT t.tgisinternal $$,
   ARRAY['assignment_version: assignment_version_immutable 27 O', 'assignment_version: assignment_version_no_truncate 34 O',
-        'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O'],
-  'triggers: immutable versions, mentorship validation and transactional notification, all enabled'
+        'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O',
+        'assignment_version: assignment_version_institution_fill 7 O',
+        'course_enrollment_code: course_enrollment_code_institution_fill 7 O'],
+  'triggers: immutable versions, mentorship validation, transactional notification and the institution of the parent, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -154,6 +163,8 @@ SELECT bag_eq(
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',
     'check_mentorship_version() definer',
+    'assignment_version_institution_fill()',
+    'course_enrollment_code_institution_fill()',
     'notify_assignment_version() definer',
     'require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid)',
     'is_confirmed_teacher(p_user_id uuid, p_course_id uuid)',
@@ -163,6 +174,13 @@ SELECT bag_eq(
     'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
     'end_group_assignment(p_group_id uuid, p_user_id uuid) definer app',
     'can(p_action text, p_document_id text) definer app',
+    'is_course_team_member(p_user_id uuid, p_course_id uuid)',
+    'is_course_team_teacher(p_user_id uuid, p_course_id uuid)',
+    'set_course_editor(p_course_id uuid, p_editor_id uuid) definer app',
+    'end_course_editor(p_course_id uuid) definer app',
+    'set_team_substitution(p_course_id uuid, p_absent_id uuid, p_substitute_id uuid, p_valid_to timestamp with time zone) definer app',
+    'end_team_substitution(p_substitution_id uuid) definer app',
+    'team_notification_recipients(p_course_id uuid, p_student_id uuid)',
     'is_grant_action_set(p_actions text[])',
     'work_relation(p_user_id uuid, p_assignment_id uuid)',
     'grant_work_access(p_assignment_id uuid, p_student_id uuid, p_grantee_id uuid, p_kind text, p_actions text[], p_valid_from timestamp with time zone, p_valid_to timestamp with time zone) definer app',
@@ -223,7 +241,7 @@ CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'c
                         'course_member', 'enrollment_attempt', 'assignment', 'assignment_version',
                         'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
                         'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
-                        'work_grant']) WITH ORDINALITY AS t (tbl, n)
+                        'course_editor', 'team_substitution', 'work_grant']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(

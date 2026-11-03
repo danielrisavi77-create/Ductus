@@ -3,6 +3,7 @@
 Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:frontend` (`docs/ENGINEERING_SYSTEM.md` §4).
 
 ## Pročitaj na početku
+- Pisac u oblaku: zajednički postupak (ugovor, CI, Codex, SPREMAN/BLOK/GOTOVO na #1091) je u `pisac-oblak.md`.
 - Zadatak i samo odjeljke koje navodi; za sučelje `docs/PRODUCT.md` §5 i rječnik sučelja, za funkciju zapis u `docs/FEATURES.md`.
 - Vlasništvo mapa: `docs/SESSIONS.md` §1, red Frontend. `app/api/` nije tvoj; `src/domain/sync`, `document`, `diff` i `serverSync` smiješ mijenjati uz oznaku u opisu PR-a.
 - Skill `ductus-worker`; prije predaje kontrolni skill koji odgovara diffu: `ductus-ui-copy`, `ductus-sync-states`, `ductus-local-storage-logout`, `ductus-offline-recovery`.

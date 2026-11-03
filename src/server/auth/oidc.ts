@@ -128,6 +128,20 @@ export function accountIssuer(issuer: URL): string {
   return issuer.pathname === "/" && !issuer.search && !issuer.hash && href.endsWith("/") ? href.slice(0, -1) : href;
 }
 
+/**
+ * The upper bound of `iat` (#1327, docs/backend/prijava-i-ovlasti.md): the
+ * library only checks that it is a number, so a token issued later than this
+ * clock plus the allowed skew is refused here, as `nbf` is by the library.
+ * How old an `iat` may be is an open owner decision; `exp` bounds the token.
+ */
+export function issuedWithinSkew(
+  iat: unknown,
+  toleranceSeconds: number,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): boolean {
+  return typeof iat === "number" && Number.isFinite(iat) && iat <= nowSeconds + toleranceSeconds;
+}
+
 export function isProviderUnavailable(error: unknown): boolean {
   for (let e = error, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) {
     if (e instanceof ProviderUnavailableError || e.name === "TimeoutError" || e.name === "AbortError") return true;
@@ -201,6 +215,9 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
       });
       const idToken = tokens.claims();
       if (!idToken) throw new Error("token response has no ID token");
+      if (!issuedWithinSkew(idToken.iat, config.clockToleranceSeconds)) {
+        throw new Error("ID token iat is ahead of this clock beyond the allowed skew");
+      }
       const userinfo = await client.fetchUserInfo(oidc, tokens.access_token, idToken.sub);
       return { issuer: accountIssuer(config.issuer), idToken, userinfo };
     },
