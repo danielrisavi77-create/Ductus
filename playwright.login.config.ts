@@ -31,7 +31,9 @@ export default defineConfig({
   testDir: "e2e/login",
   retries: 0,
   // The tests share the demo account and the dev server compiles on first
-  // request; one worker keeps the sessions of one test out of another.
+  // request; one worker keeps the sessions of one test out of another. CI
+  // also selects exactly one engine per database via login-shard-plan.mjs.
+  // Locally use --project with a fresh synthetic database for each engine.
   workers: 1,
   timeout: 90_000,
   reporter: [
