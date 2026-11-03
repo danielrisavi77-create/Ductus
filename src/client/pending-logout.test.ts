@@ -2,10 +2,10 @@ import { describe, expect, it, vi, type Mock } from "vitest";
 
 import {
   completePendingLogout, completePendingLogoutOnce, endSignOut, holdServerLogout, pendingLogout, pendingLogoutStep,
-  PENDING_LOGOUT_KEY, PENDING_LOGOUT_LOCK, postLogout, type PendingLogoutEnv,
+  PENDING_LOGOUT_KEY, PENDING_LOGOUT_LOCK, postLogout, resumePendingLogout, type PendingLogoutEnv,
 } from "./pending-logout";
 import {
-  type CookieJar, currentSession, ENDED_COOKIE, endAfterLogout, hasEnded, observeSession, type MarkStore,
+  type CookieJar, CURRENT_KEY, currentSession, ENDED_COOKIE, endAfterLogout, hasEnded, observeSession, type MarkStore,
 } from "./session-marks";
 
 // #1330 (D-118): a sign-out the logout route did not answer still ends the
@@ -38,7 +38,7 @@ function signedOutOnDevice(): ReturnType<typeof memoryStore> {
 }
 
 function env(store: MarkStore, ok: boolean): PendingLogoutEnv & { post: Mock<() => Promise<boolean>>; follow: Mock<() => void> } {
-  return { store, post: vi.fn(async () => ok), follow: vi.fn<() => void>() };
+  return { pageTag: A, store, post: vi.fn(async () => ok), follow: vi.fn<() => void>() };
 }
 
 describe("what the logout route's answer means", () => {
@@ -77,7 +77,7 @@ describe("the server part of a sign-out that ended on the device", () => {
     const store = signedOutOnDevice();
     expect(pendingLogout(store)).toEqual([A]);
     // The browser holds A's cookie or none; nobody else's session is current.
-    expect(pendingLogoutStep(store)).toBe("retry");
+    expect(pendingLogoutStep(store, A)).toBe("retry");
     const run = env(store, true);
     await expect(completePendingLogout(run)).resolves.toBe(true);
     expect(run.post).toHaveBeenCalledTimes(1);
@@ -98,7 +98,10 @@ describe("the server part of a sign-out that ended on the device", () => {
       const store = signedOutOnDevice();
       // The ended session's page does not become current again (session-marks).
       observeSession(store, tag, 2_000);
-      expect(pendingLogoutStep(store)).toBe("retry");
+      expect(pendingLogoutStep(store, tag)).toBe("retry");
+      const run = { ...env(store, true), pageTag: tag };
+      await expect(completePendingLogout(run)).resolves.toBe(true);
+      expect(run.post).toHaveBeenCalledTimes(1);
     }
   });
 
@@ -112,7 +115,7 @@ describe("the server part of a sign-out that ended on the device", () => {
     expect(run.follow).not.toHaveBeenCalled();
     expect(pendingLogout(store)).toEqual([]);
     // And it stays dropped: a later chance does nothing.
-    expect(pendingLogoutStep(store)).toBe("none");
+    expect(pendingLogoutStep(store, A)).toBe("none");
   });
 
   it("nothing recorded: no call", async () => {
@@ -169,7 +172,7 @@ describe("Istodobnost", () => {
       }),
     } as unknown as Pick<LockManager, "request">;
     let finish: (ok: boolean) => void = () => {};
-    const first: PendingLogoutEnv = { store, post: () => new Promise((resolve) => { finish = resolve; }), follow: vi.fn() };
+    const first: PendingLogoutEnv = { pageTag: A, store, post: () => new Promise((resolve) => { finish = resolve; }), follow: vi.fn() };
     const second = env(store, true);
     const running = completePendingLogoutOnce(first, locks);
     // While the first call is on its way, the second tab finds the lock held.
@@ -184,7 +187,7 @@ describe("Istodobnost", () => {
     const store = memoryStore();
     observeSession(store, A, 1_000);
     // "online" fired before the record existed: nothing to do yet.
-    expect(pendingLogoutStep(store)).toBe("none");
+    expect(pendingLogoutStep(store, A)).toBe("none");
     holdServerLogout(store, endAfterLogout(store, A));
     const run = env(store, true);
     await completePendingLogoutOnce(run, null);
@@ -204,7 +207,7 @@ describe("a sign-in in another tab while the sign-out waits for the route", () =
     expect(ended).toEqual([A]);
     expect(currentSession(store)?.tag).toBe(B);
     expect(hasEnded(store, { tag: B, at: 2_000 })).toBe(false);
-    expect(pendingLogoutStep(store)).toBe("drop");
+    expect(pendingLogoutStep(store, A)).toBe("drop");
     const run = env(store, true);
     await expect(completePendingLogout(run)).resolves.toBe(false);
     expect(run.post).not.toHaveBeenCalled();
@@ -216,7 +219,7 @@ describe("a sign-in in another tab while the sign-out waits for the route", () =
     expect(endSignOut(store, A, currentSession(store)?.tag ?? null, false)).toEqual([A]);
     expect(currentSession(store)).toBeNull();
     expect(pendingLogout(store)).toEqual([A]);
-    expect(pendingLogoutStep(store)).toBe("retry");
+    expect(pendingLogoutStep(store, A)).toBe("retry");
   });
 
   it("answered: the route cleared the cookie the browser held, so the session recorded last ends too", () => {
@@ -288,7 +291,7 @@ describe("a sign-out whose end cannot be written to localStorage (reload after l
       expect(jar.cookies.has(ENDED_COOKIE)).toBe(true);
       // Without a working localStorage no later call is recorded: it could
       // not tell a newer session from A's (see Istodobnost below).
-      expect(pendingLogoutStep(store)).toBe("none");
+      expect(pendingLogoutStep(store, A)).toBe("none");
     }
   });
 
@@ -308,7 +311,7 @@ describe("a sign-out whose end cannot be written to localStorage (reload after l
       observeSession(store, B, 2_000);
       expect(hasEnded(store, { tag: B, at: 2_000 }, jar)).toBe(false);
       expect(hasEnded(store, { tag: A, at: 1_000 }, jar)).toBe(true);
-      expect(pendingLogoutStep(store)).toBe("none");
+      expect(pendingLogoutStep(store, A)).toBe("none");
       const run = { ...env(memoryStore(), true), store };
       await expect(completePendingLogout(run)).resolves.toBe(false);
       expect(run.post).not.toHaveBeenCalled();
@@ -321,7 +324,7 @@ describe("a sign-out whose end cannot be written to localStorage (reload after l
     expect(endSignOut(store, A, currentSession(store)?.tag ?? null, true, jar)).toEqual([A]);
     for (const at of [1_000, 5_000]) expect(hasEnded(store, { tag: A, at }, jar)).toBe(true);
     // The route answered: nothing waits for a later call, in any class.
-    expect(pendingLogoutStep(store)).toBe("none");
+    expect(pendingLogoutStep(store, A)).toBe("none");
     if (writable) expect(jar.writes).toEqual([]);
     else expect(jar.cookies.has(ENDED_COOKIE)).toBe(true);
   });
@@ -360,4 +363,134 @@ describe("a sign-out whose end cannot be written to localStorage (reload after l
     expect(hasEnded(store, { tag: A, at: 1_000 }, null)).toBe(true);
     expect(jar.writes).toEqual([]);
   });
+});
+
+// c.6592365510 / c.6592412800: the record predates the storage failure.
+describe("Istodobnost: storage fails after the pending sign-out was recorded", () => {
+  const failures: [string, (backing: ReturnType<typeof memoryStore>) => MarkStore | null][] = [
+    ["class 1: healthy storage", (s) => s],
+    ["class 2: quota on writes", (s) => ({ ...s, setItem: () => { throw quota(); } })],
+    ["class 2: only the current-session write fails", (s) => ({
+      ...s, setItem: (key, value) => { if (key === CURRENT_KEY) throw quota(); s.setItem(key, value); },
+    })],
+    ["class 3: all access denied", () => ({
+      getItem: () => { throw new DOMException("denied", "SecurityError"); },
+      setItem: () => { throw new DOMException("denied", "SecurityError"); },
+      removeItem: () => { throw new DOMException("denied", "SecurityError"); },
+    })],
+    ["class 3: current-session read denied", (s) => ({
+      ...s, getItem: (key) => { if (key === CURRENT_KEY) throw quota(); return s.getItem(key); },
+      setItem: () => { throw quota(); },
+    })],
+    ["class 3: reads work, writes and removal denied", (s) => ({
+      ...s, setItem: () => { throw quota(); }, removeItem: () => { throw quota(); },
+    })],
+    ["class 3: no storage", () => null],
+  ];
+
+  it.each(failures)("%s: the newly rendered page never posts the earlier logout", async (_name, fail) => {
+    const backing = memoryStore();
+    observeSession(backing, A, 1_000);
+    endSignOut(backing, A, A, false, memoryJar());
+    expect(pendingLogout(backing)).toEqual([A]);
+    expect(currentSession(backing)).toBeNull();
+    const store = fail(backing);
+    // The cookie has changed. This is the actual SessionObserver ordering.
+    observeSession(store, B, 2_000);
+    const run = { ...env(backing, true), store, pageTag: B };
+    await expect(completePendingLogoutOnce(run, null)).resolves.toBe(false);
+    await expect(completePendingLogoutOnce(run, null)).resolves.toBe(false);
+    expect(run.post).not.toHaveBeenCalled();
+    expect(run.follow).not.toHaveBeenCalled();
+  });
+
+  it("rechecks the rendered page after acquiring the lock even when removing the record fails", async () => {
+    const backing = signedOutOnDevice();
+    const store: MarkStore = {
+      ...backing, setItem: () => { throw quota(); }, removeItem: () => { throw quota(); },
+    };
+    const run = { ...env(store, true), pageTag: B };
+    const locks = {
+      request: vi.fn(async (_name: string, _options: LockOptions, call: (lock: Lock | null) => Promise<boolean>) => {
+        observeSession(store, B, 2_000);
+        return call({ name: PENDING_LOGOUT_LOCK, mode: "exclusive" });
+      }),
+    } as unknown as Pick<LockManager, "request">;
+    await expect(completePendingLogoutOnce(run, locks)).resolves.toBe(false);
+    expect(run.post).not.toHaveBeenCalled();
+    expect(run.follow).not.toHaveBeenCalled();
+    expect(pendingLogout(backing)).toEqual([A]);
+  });
+});
+
+
+describe("a pending sign-out without a server-rendered session context", () => {
+  it("leaves the record and never calls the route until the page is known", async () => {
+    const store = signedOutOnDevice();
+    const run = { ...env(store, true), pageTag: undefined };
+    expect(pendingLogoutStep(store)).toBe("none");
+    await expect(completePendingLogoutOnce(run, null)).resolves.toBe(false);
+    expect(run.post).not.toHaveBeenCalled();
+    expect(pendingLogout(store)).toEqual([A]);
+    await expect(completePendingLogoutOnce({ ...run, pageTag: A }, null)).resolves.toBe(true);
+    expect(run.post).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("the browser retry entry point", () => {
+  it("keeps the observer's page context for immediate retries when storage writes and removal fail", async () => {
+    const backing = signedOutOnDevice();
+    const store: MarkStore = {
+      ...backing, setItem: () => { throw quota(); }, removeItem: () => { throw quota(); },
+    };
+    const fetcher = answer("opaqueredirect");
+    vi.stubGlobal("localStorage", store);
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      observeSession(store, B, 2_000);
+      resumePendingLogout(B);
+      await Promise.resolve();
+      resumePendingLogout();
+      await Promise.resolve();
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(pendingLogout(backing)).toEqual([A]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+
+describe("Istodobnost: an older tab after storage recovers", () => {
+  it.each(["quota", "denied", "missing"])("%s: a newer observation survives the storage failure and an older page cannot retry", async (failure) => {
+    const backing = signedOutOnDevice();
+    const jar = memoryJar();
+    const broken: MarkStore | null = failure === "missing" ? null : {
+      ...backing,
+      getItem: (key) => { if (failure === "denied") throw quota(); return backing.getItem(key); },
+      setItem: () => { throw quota(); },
+      removeItem: () => { throw quota(); },
+    };
+    observeSession(broken, B, 2_000, jar);
+    // A missed B's channel. Storage later recovers before A's online event.
+    // Re-observing the older page must not erase the newer cookie mark.
+    observeSession(backing, A, 1_000, jar);
+    const run = { ...env(backing, true), pageTag: A, jar };
+    await expect(completePendingLogoutOnce(run, null)).resolves.toBe(false);
+    expect(run.post).not.toHaveBeenCalled();
+    expect(run.follow).not.toHaveBeenCalled();
+    expect(pendingLogout(backing)).toEqual([]);
+  });
+});
+
+it.each([A, null])("keeps ordinary retries on a page with cookie observation %s", async (pageTag) => {
+  const backing = signedOutOnDevice();
+  const jar = memoryJar();
+  observeSession(backing, pageTag, 2_000, jar);
+  const run = { ...env(backing, true), pageTag, jar };
+  await expect(completePendingLogoutOnce(run, null)).resolves.toBe(true);
+  expect(run.post).toHaveBeenCalledTimes(1);
+  expect(run.follow).toHaveBeenCalledTimes(1);
 });

@@ -13,7 +13,8 @@ import { browserMarkStore, observeSession, SESSION_END_CHANNEL } from "@/client/
  *
  * It also finishes a sign-out whose server part is still missing (#1330):
  * once the page loads and whenever the connection comes back. Only after this
- * page's own session was recorded, so a newer session drops it instead.
+ * page's own session was observed. Its server-rendered tag also guards the
+ * retry when recording that session in browser storage fails.
  */
 export default function SessionObserver({ tag, at }: { tag: string | null; at: number }) {
   useEffect(() => {
@@ -23,9 +24,10 @@ export default function SessionObserver({ tag, at }: { tag: string | null; at: n
       channel.postMessage(ended);
       channel.close();
     }
-    resumePendingLogout();
-    window.addEventListener("online", resumePendingLogout);
-    return () => window.removeEventListener("online", resumePendingLogout);
+    const resume = () => resumePendingLogout(tag);
+    resume();
+    window.addEventListener("online", resume);
+    return () => window.removeEventListener("online", resume);
   }, [tag, at]);
   return null;
 }

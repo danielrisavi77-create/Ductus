@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  browserCookieJar, type CookieJar, CURRENT_KEY, ENDED_COOKIE, ENDED_KEY, endAfterLogout, endSessions,
+  browserCookieJar, CURRENT_COOKIE, currentSessionInCookie, type CookieJar, CURRENT_KEY, ENDED_COOKIE, ENDED_KEY, endAfterLogout, endSessions,
   endSessionsInCookie, hasEnded, observeSession, type MarkStore,
 } from "./session-marks";
 
@@ -150,5 +150,43 @@ describe("the ended-session cookie", () => {
 
   it("is not reachable outside a browser", () => {
     expect(browserCookieJar()).toBeNull();
+  });
+});
+
+// The cookie is an independent observation when localStorage is unavailable.
+describe("the current-session cookie", () => {
+  function jar(secure = false): CookieJar & { writes: string[] } {
+    let value = "other=1";
+    const writes: string[] = [];
+    return {
+      secure, writes, read: () => value,
+      write: (cookie) => {
+        writes.push(cookie);
+        value = `other=1; ${cookie.split(";")[0]}`;
+      },
+    };
+  }
+
+  it("records a newer page without storage and an older page cannot overwrite it", () => {
+    const cookies = jar(true);
+    observeSession(null, B, 200, cookies);
+    observeSession(null, A, 100, cookies);
+    expect(currentSessionInCookie(cookies)).toEqual({ tag: B, at: 200 });
+    expect(cookies.writes).toEqual([`${CURRENT_COOKIE}=${B}.200; Path=/; Max-Age=86400; SameSite=Strict; Secure`]);
+    observeSession(null, null, 300, cookies);
+    expect(currentSessionInCookie(cookies)).toEqual({ tag: null, at: 300 });
+    expect(cookies.read()).toContain("other=1");
+  });
+
+  it("does not throw for refused cookies or accept malformed values", () => {
+    const denied: CookieJar = {
+      secure: false, read: () => { throw new Error("denied"); }, write: () => { throw new Error("denied"); },
+    };
+    expect(observeSession(null, B, 200, denied)).toBeNull();
+    expect(currentSessionInCookie(denied)).toBeNull();
+    expect(currentSessionInCookie(null)).toBeNull();
+    for (const value of ["", "b", "b.NaN", "b.", "b.200.extra", `${"a".repeat(129)}.200`]) {
+      expect(currentSessionInCookie({ secure: false, read: () => `${CURRENT_COOKIE}=${value}`, write: () => {} })).toBeNull();
+    }
   });
 });

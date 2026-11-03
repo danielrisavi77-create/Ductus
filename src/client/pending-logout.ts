@@ -15,7 +15,7 @@
  */
 
 import {
-  browserCookieJar, browserMarkStore, type CookieJar, currentSession, endAfterLogout, endSessions, endSessionsInCookie,
+  browserCookieJar, browserMarkStore, type CookieJar, currentSession, currentSessionInCookie, endAfterLogout, endSessions, endSessionsInCookie,
   type MarkStore,
 } from "./session-marks";
 
@@ -87,13 +87,19 @@ export function dropPendingLogout(store: MarkStore | null): void {
 /**
  * What to do about a recorded sign-out: nothing ("none"), drop it because a
  * newer session became current here ("drop"), or call the route ("retry").
- * The browser recorded no session, or only one that is waiting for it: the
- * cookie it holds is that session's or none, and either way the call ends no
- * one else's session.
+ * The server-rendered page must also belong to a pending session (or have
+ * no session). A missing storage mark alone cannot establish that: recording
+ * a newer page may have failed even though the pending record is readable.
  */
-export function pendingLogoutStep(store: MarkStore | null): "none" | "drop" | "retry" {
+export function pendingLogoutStep(
+  store: MarkStore | null, pageTag: string | null | undefined = undefined, jar: CookieJar | null = browserCookieJar(),
+): "none" | "drop" | "retry" {
   const pending = pendingLogout(store);
   if (pending.length === 0) return "none";
+  if (pageTag === undefined) return "none";
+  if (pageTag !== null && !pending.includes(pageTag)) return "drop";
+  const cookieSession = currentSessionInCookie(jar);
+  if (cookieSession?.tag != null && !pending.includes(cookieSession.tag)) return "drop";
   const current = currentSession(store);
   return current !== null && !pending.includes(current.tag) ? "drop" : "retry";
 }
@@ -136,6 +142,9 @@ export function followLogoutNatively(): void {
 }
 
 export type PendingLogoutEnv = {
+  /** Server-rendered session; undefined means it has not been observed yet. */
+  pageTag: string | null | undefined;
+  jar?: CookieJar | null;
   store: MarkStore | null;
   post: () => Promise<boolean>;
   /** Goes on to the provider's logout; leaves the page. */
@@ -148,7 +157,7 @@ export type PendingLogoutEnv = {
  * fails keeps the record for the next chance.
  */
 export async function completePendingLogout(env: PendingLogoutEnv): Promise<boolean> {
-  const step = pendingLogoutStep(env.store);
+  const step = pendingLogoutStep(env.store, env.pageTag, env.jar);
   if (step === "drop") dropPendingLogout(env.store);
   if (step !== "retry") return false;
   if (!(await env.post())) return false;
@@ -164,7 +173,7 @@ type Locks = Pick<LockManager, "request">;
  * held leaves it to that one, which drops the record once the route answered.
  */
 export async function completePendingLogoutOnce(env: PendingLogoutEnv, locks: Locks | null | undefined): Promise<boolean> {
-  if (pendingLogoutStep(env.store) === "none") return false;
+  if (pendingLogoutStep(env.store, env.pageTag, env.jar) === "none") return false;
   if (!locks) return completePendingLogout(env);
   try {
     return await locks.request(PENDING_LOGOUT_LOCK, { ifAvailable: true }, async (lock) =>
@@ -174,8 +183,13 @@ export async function completePendingLogoutOnce(env: PendingLogoutEnv, locks: Lo
   }
 }
 
+// The observer supplies this page's server-rendered tag before any retry.
+// Retain it for the immediate retry from LocalDocument after local sign-out.
+let renderedPageTag: string | null | undefined;
+
 /** In the browser: calls the logout route for a sign-out that ended on this device only. */
-export function resumePendingLogout(): void {
+export function resumePendingLogout(pageTag?: string | null): void {
+  if (pageTag !== undefined) renderedPageTag = pageTag;
   const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
-  void completePendingLogoutOnce({ store: browserMarkStore(), post: () => postLogout(), follow: followLogoutNatively }, locks);
+  void completePendingLogoutOnce({ pageTag: renderedPageTag, store: browserMarkStore(), post: () => postLogout(), follow: followLogoutNatively }, locks);
 }
