@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { answer, decide, isCdToRoot, isInstallCommand, main, readRegular, runCli } from "../hooks/safety-net.mjs";
+import { answer, decide, isCdToRoot, isInstallCommand, main, readRegular, runCli, treeDigest } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -1328,6 +1328,10 @@ test("F-035 a: foreign rules leave only cd to the root open, also for the instal
       const ownBelow = path.join(tree.root, "src");
       fs.mkdirSync(path.join(ownBelow, ".cc-safety-net"), { recursive: true });
       fs.writeFileSync(path.join(ownBelow, ".cc-safety-net", "config.json"), "{}");
+      // Review c.6591599265: a directory with its own config below foreign rules.
+      const foreignOwn = path.join(otherRepo, "own");
+      fs.mkdirSync(path.join(foreignOwn, ".cc-safety-net"), { recursive: true });
+      fs.writeFileSync(path.join(foreignOwn, ".cc-safety-net", "config.json"), "{}");
       const rows = [
         // [class, cwd, command, expected code, stderr pattern when blocked]
         ...installs.flatMap((command) => [
@@ -1337,8 +1341,10 @@ test("F-035 a: foreign rules leave only cd to the root open, also for the instal
           ["5 own rules, the project root", tree.root, command, 0],
           ["6 no rulebook, no foreign directory", empty, command, 0],
           ["7 own config below the rulebook", ownBelow, command, 0],
+          ["8 own config below foreign rules", foreignOwn, command, 2, /not a checkout of this repository/],
         ]),
-        ...[stranger, otherRepo, path.join(otherRepo, "sub")].map((cwd) => ["3 foreign, cd to the root", cwd, `cd "${tree.root}"`, 0]),
+        ["8 own config below foreign rules", foreignOwn, "ls", 2, /not a checkout of this repository/],
+        ...[stranger, otherRepo, path.join(otherRepo, "sub"), foreignOwn].map((cwd) => ["3 foreign, cd to the root", cwd, `cd "${tree.root}"`, 0]),
         // Controls: the same directories still block an ordinary command.
         ["6 control", empty, "ls", 2, /no project rulebook/],
         ["7 control", ownBelow, "ls", 2, /has its own \.cc-safety-net/],
@@ -1348,4 +1354,72 @@ test("F-035 a: foreign rules leave only cd to the root open, also for the instal
         assert.equal(result.code, code, `${label}: ${command} in ${cwd}\n${result.stderr}`);
         if (stderr) assert.match(result.stderr, stderr, `${label}: ${command}`);
       }
+    })));
+
+// F-035 (a), QA c.6591641283: the tree digest is an unambiguous encoding, so two
+// different configuration trees never give the same digest.
+test("F-035 a: different trees give different digests, identical copies the same", () =>
+  scratch((base) => {
+    let n = 0;
+    const tree = (build) => {
+      const dir = path.join(base, `t${n++}`, "cfg");
+      fs.mkdirSync(dir, { recursive: true });
+      build(dir);
+      return dir;
+    };
+    const file = (dir, rel, content = "") => {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(dir, rel), content);
+    };
+    const rulebook = "rules/ductus-rules/rulebook.json";
+    const rows = [
+      // [class, tree A, tree B, same digest]
+      [
+        "D1 file content continues as the record of the next file",
+        (d) => (file(d, rulebook, "R"), file(d, "rules/rule.json", "M")),
+        (d) => file(d, rulebook, "R\nf:rules/rule.json:M"),
+        false,
+      ],
+      ["D4 an empty file against no entry", (d) => file(d, "a"), () => {}, false],
+      ["D4 an empty file against an empty directory", (d) => file(d, "a"), (d) => fs.mkdirSync(path.join(d, "a")), false],
+      ["D6 a byte-identical copy", (d) => (file(d, rulebook, "R"), file(d, "rules/rule.json", "M")), (d) => (file(d, rulebook, "R"), file(d, "rules/rule.json", "M")), true],
+    ];
+    // Line breaks and colons in names and link targets exist outside Windows only.
+    if (process.platform !== "win32") {
+      rows.push(
+        ["D2 a name with a line break against two entries", (d) => fs.mkdirSync(path.join(d, "a\nd:b")), (d) => (fs.mkdirSync(path.join(d, "a")), fs.mkdirSync(path.join(d, "b"))), false],
+        ["D2 a name with a colon against a file and its content", (d) => file(d, "a:1", ""), (d) => file(d, "a", "1:"), false],
+        [
+          "D5 a link target with a line break against a link and an entry",
+          (d) => fs.symlinkSync("t\ndangling:l\nd:x", path.join(d, "l")),
+          (d) => (fs.symlinkSync("t", path.join(d, "l")), fs.mkdirSync(path.join(d, "x\ndangling:l"))),
+          false,
+        ],
+      );
+    }
+    if (process.platform === "linux") {
+      // A link to a file that cannot be read (EIO) against one to a file whose
+      // content is the placeholder the walk used for an unreadable file.
+      const via = (target) => (d) => {
+        fs.symlinkSync(target, path.join(d, "..", "t"));
+        fs.symlinkSync("../t", path.join(d, "a"));
+      };
+      const placeholder = path.join(base, "placeholder");
+      fs.writeFileSync(placeholder, "unreadable");
+      rows.push(["D3 an unreadable file against its placeholder", via("/proc/self/mem"), via(placeholder), false]);
+    } else assert.ok(!IN_CI, "CI runs on Linux, where /proc exists");
+    const wrong = rows.filter(([, a, b, same]) => (treeDigest(tree(a)) === treeDigest(tree(b))) !== same).map(([label]) => label);
+    assert.deepEqual(wrong, []);
+  }));
+
+test("F-035 a (QA c.6591641283): a copy whose rulebook spells out a missing file is not taken as identical", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      const rules = path.join(tree.root, ".cc-safety-net", "rules");
+      fs.writeFileSync(path.join(rules, "rule.json"), "M");
+      const rulebook = fs.readFileSync(path.join(tree.root, ...RULES), "utf8");
+      plantRules(base, `${rulebook}\nf:rules/rule.json:M`);
+      foreign(await run(tree, "Bash", "ls", base), "forged copy");
+      fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(base, "copy", ".cc-safety-net"), { recursive: true });
+      assert.equal((await run(tree, "Bash", "ls", path.join(base, "copy"))).code, 0, "a byte-identical copy is still accepted");
     })));

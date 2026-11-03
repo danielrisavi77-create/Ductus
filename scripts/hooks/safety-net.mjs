@@ -77,7 +77,9 @@ const fingerprint = (file) => {
 };
 
 // Content hash of a whole directory tree (names, kinds, file contents, link
-// targets). `skip` lists relative paths left out. The walk is bounded by entry
+// targets). Every record is a tag with a fixed number of length-prefixed
+// fields, so the hashed stream decodes to exactly one tree (F-035a). `skip`
+// lists relative paths left out. The walk is bounded by entry
 // count, bytes read and time, shared through `budget`: the first overrun throws
 // a LimitError, so a link to a huge directory or file is refused quickly instead
 // of being read to the end. A caller that gets the error must block.
@@ -125,6 +127,13 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
     if (Date.now() > budget.deadline) throw new LimitError(`more than ${budget.maxMs} ms`);
   };
   const hash = createHash("sha256");
+  const put = (...fields) => {
+    for (const field of fields) {
+      const bytes = Buffer.isBuffer(field) ? field : Buffer.from(field, "utf8");
+      hash.update(`${bytes.length}:`);
+      hash.update(bytes);
+    }
+  };
   const seen = new Set();
   const walk = (current, rel) => {
     const entries = [];
@@ -140,7 +149,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
       }
     } catch (error) {
       if (error instanceof LimitError) throw error;
-      hash.update(`unreadable:${rel}\n`);
+      put("unreadable-dir", rel);
       return;
     }
     entries.sort((a, b) => (a.name < b.name ? -1 : 1));
@@ -159,7 +168,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         } catch {
           // keep the placeholder
         }
-        hash.update(`l:${name}:${target}\n`);
+        put("l", name, target);
         try {
           const stat = fs.statSync(full);
           kind = stat.isDirectory() ? "d" : stat.isFile() ? "f" : "o";
@@ -170,12 +179,12 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
             seen.add(real);
           }
         } catch {
-          hash.update(`dangling:${name}\n`);
+          put("dangling", name);
           continue;
         }
       }
       if (kind === "d") {
-        hash.update(`d:${name}\n`);
+        put("d", name);
         walk(full, name);
       } else if (kind === "f") {
         if (!size) {
@@ -187,11 +196,11 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         }
         budget.bytes += size;
         if (budget.bytes > budget.maxBytes) throw new LimitError(`more than ${budget.maxBytes} bytes`);
-        hash.update(`f:${name}:`);
-        hash.update(readRegular(full, { max: budget.maxBytes, follow: true }) ?? "unreadable");
-        hash.update("\n");
+        const content = readRegular(full, { max: budget.maxBytes, follow: true });
+        if (content) put("f", name, content);
+        else put("unreadable-file", name);
       } else {
-        hash.update(`other:${name}\n`);
+        put("other", name);
       }
     }
   };
@@ -554,7 +563,8 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
   const ownConfig = below && fs.existsSync(path.join(cwd, PROJECT_CONFIG));
   // Run 1: the event as sent (built-in rules, relative paths keep their meaning).
   const firstRun = runPackage(root, input, timeoutMs, env);
-  const foreign = rulebookDir && !ownConfig ? foreignRules(rulebookDir, root, limits) : null;
+  // Whose rules they are is settled first, also with a config of its own here.
+  const foreign = rulebookDir ? foreignRules(rulebookDir, root, limits) : null;
   // Run 2: in a subdirectory the project rules live in a parent the package does not search.
   let secondRun = null;
   if (below && !ownConfig && !foreign) {
@@ -583,8 +593,8 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
   if (!rulebookDir) {
     return noRules(`no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`);
   }
-  if (ownConfig) return noRules(`${cwd} has its own ${PROJECT_CONFIG} directory below the project's, which the safety check does not accept`);
   if (foreign) return noRules(foreign, { install: false });
+  if (ownConfig) return noRules(`${cwd} has its own ${PROJECT_CONFIG} directory below the project's, which the safety check does not accept`);
   if (refused) return unusable(refused.problem, refused.hint);
   if (secondResult && !denies(first.stdout)) {
     const second = answer(secondResult, timeoutMs);
