@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-13 — Kartica Literatura (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca M5.UX-R · DAN-510 · prijedlog slike · #1382</div>
+  <h1>S-13 — Kartica Literatura</h1>
+  <p>Šest stanja kartice u desnom panelu rada. Popis izvora ostaje uz rad i nakon ponovnog otvaranja. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="a1">
+    <div class="ref-tag">Stanje 1 · prazno</div>
+    <div class="panel"><div class="panel-top"><h2 id="a1">Literatura</h2></div>
+      <div class="panel-body">
+        <p class="note">Rad još nema izvora. Dodajte prvi; navod i unos u popisu literature upisuju se u stilu FPZG-a.</p>
+        <button class="btn" type="button">Dodaj izvor</button>
+      </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="a2">
+    <div class="ref-tag">Stanje 2 · popis učitan</div>
+    <div class="panel"><div class="panel-top"><h2 id="a2">Literatura</h2><button class="btn small" type="button">Dodaj izvor</button></div>
+      <div class="panel-body">
+        <ul class="list">
+          <li class="item"><span class="title">Horvat, A. (2019). Primjer knjige o pisanju</span><span class="meta">citirano 3 puta</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button><button class="btn small ghost" type="button">Ukloni</button></span></li>
+          <li class="item"><span class="title">Kovač, B. i Novak, C. (2021). Primjer članka</span><span class="meta">citirano 1 put</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button><button class="btn small ghost" type="button">Ukloni</button></span></li>
+          <li class="item"><span class="title">Primjer, D. (2020). Zbornik radova</span><span class="meta">Nije citirano u tekstu</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button><button class="btn small ghost" type="button">Ukloni</button></span></li>
+        </ul>
+        <p class="foot">Popis je spremljen na poslužitelju.</p>
+      </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="a3">
+    <div class="ref-tag">Stanje 3 · učitavanje i greška</div>
+    <div class="panel" aria-busy="true"><div class="panel-top"><h2 id="a3">Literatura</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam popis izvora.</p><div class="skel w80"></div><div class="skel w60"></div></div></div>
+    <div class="panel"><div class="panel-top"><h2>Literatura</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Popis izvora trenutačno nije moguće učitati. Tekst rada nije zahvaćen.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="a4">
+    <div class="ref-tag">Stanje 4 · uklanjanje citiranog izvora</div>
+    <div class="dialog" role="dialog" aria-labelledby="a4">
+      <h2 id="a4" style="font-size:19px">Ukloniti izvor?</h2>
+      <p class="note">Izvor je citiran u tekstu 3 puta. Navodi ostaju u tekstu kao otvorena mjesta za izvor, a unos se uklanja iz popisa.</p>
+      <p class="meta">Horvat, A. (2019). Primjer knjige o pisanju</p>
+      <div class="acts"><button class="btn" type="button">Ukloni</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+    <p class="meta">Po zatvaranju fokus se vraća na gumb Ukloni uz izvor.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="a5">
+    <div class="ref-tag">Stanje 5 · samo za čitanje</div>
+    <div class="panel"><div class="panel-top"><h2 id="a5">Literatura</h2></div>
+      <div class="panel-body">
+        <p class="note">Rad je predan. Popis izvora možete samo čitati.</p>
+        <ul class="list">
+          <li class="item"><span class="title">Horvat, A. (2019). Primjer knjige o pisanju</span><span class="meta">citirano 3 puta</span></li>
+          <li class="item"><span class="title">Kovač, B. i Novak, C. (2021). Primjer članka</span><span class="meta">citirano 1 put</span></li>
+        </ul>
+      </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="a6">
+    <div class="ref-tag">Stanje 6 · bez mreže</div>
+    <div class="panel"><div class="panel-top"><h2 id="a6">Literatura</h2><button class="btn small" type="button">Dodaj izvor</button></div>
+      <div class="panel-body">
+        <p class="note" role="status">Bez mreže. Izvor koji dodate sprema se na ovom uređaju.</p>
+        <ul class="list">
+          <li class="item"><span class="title">Primjer, E. (2022). Novi unos</span><span class="meta">Sprema se na ovom uređaju</span></li>
+        </ul>
+      </div></div>
+  </section>
+
+</div></main>
+</body>
+</html>
