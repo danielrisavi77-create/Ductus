@@ -315,6 +315,39 @@ describe("a sign-out whose end cannot be written to localStorage (reload after l
     },
   );
 
+  it.each(storeClasses)("class %s, the route answered: a page of A that loads later finds the session ended", (_name, makeStore, writable) => {
+    const store = makeStore();
+    const jar = memoryJar();
+    expect(endSignOut(store, A, currentSession(store)?.tag ?? null, true, jar)).toEqual([A]);
+    for (const at of [1_000, 5_000]) expect(hasEnded(store, { tag: A, at }, jar)).toBe(true);
+    // The route answered: nothing waits for a later call, in any class.
+    expect(pendingLogoutStep(store)).toBe("none");
+    if (writable) expect(jar.writes).toEqual([]);
+    else expect(jar.cookies.has(ENDED_COOKIE)).toBe(true);
+  });
+
+  it.each(storeClasses.slice(1))(
+    "Istodobnost (negative), class %s: a second tab of A reads before and after an answered sign-out, then B signs in and the connection returns",
+    async (_name, makeStore) => {
+      const store = makeStore();
+      const jar = memoryJar();
+      const late = { tag: A, at: 1_000 };
+      // The second tab's first read (mount), before the sign-out: still A's.
+      expect(hasEnded(store, late, jar)).toBe(false);
+      endSignOut(store, A, currentSession(store)?.tag ?? null, true, jar);
+      // It missed the channel; its second read (under the journal lock) must stop it.
+      expect(hasEnded(store, late, jar)).toBe(true);
+      // Another person signs in, and this store cannot record it either.
+      observeSession(store, B, 2_000);
+      expect(hasEnded(store, { tag: B, at: 2_000 }, jar)).toBe(false);
+      // The connection comes back: no call is made under B's cookie.
+      const run = { ...env(memoryStore(), true), store };
+      await expect(completePendingLogoutOnce(run, null)).resolves.toBe(false);
+      expect(run.post).not.toHaveBeenCalled();
+      expect(run.follow).not.toHaveBeenCalled();
+    },
+  );
+
   it("a store that ends the session but cannot hold the later call still fences A", () => {
     const s = memoryStore();
     observeSession(s, A, 1_000);

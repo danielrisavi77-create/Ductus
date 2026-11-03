@@ -138,13 +138,16 @@ export function endSessions(store: MarkStore | null, tags: readonly string[]): b
 /**
  * After the logout route answered: the page's own session and the one the
  * browser recorded last both ended, since the route cleared whatever cookie
- * the browser held. Returns the tags for the other tabs.
+ * the browser held. Where localStorage refuses the record, the cookie fences
+ * a tab of them that loads later (#1444). Returns the tags for the other tabs.
  */
-export function endAfterLogout(store: MarkStore | null, tag: string | null): string[] {
+export function endAfterLogout(
+  store: MarkStore | null, tag: string | null, jar: CookieJar | null = browserCookieJar(),
+): string[] {
   const tags = new Set<string>(tag === null ? [] : [tag]);
   const current = store ? readCurrent(store) : null;
   if (current) tags.add(current.tag);
-  endSessions(store, [...tags]);
+  if (!endSessions(store, [...tags])) endSessionsInCookie(jar, [...tags]);
   return [...tags];
 }
 

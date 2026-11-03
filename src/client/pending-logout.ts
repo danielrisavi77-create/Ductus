@@ -62,7 +62,7 @@ export function endSignOut(
   store: MarkStore | null, tag: string | null, before: string | null, reached: boolean,
   jar: CookieJar | null = browserCookieJar(),
 ): string[] {
-  if (reached) return endAfterLogout(store, tag);
+  if (reached) return endAfterLogout(store, tag, jar);
   const tags = [...new Set([tag, before].filter((one): one is string => one !== null))];
   if (endSessions(store, tags)) {
     holdServerLogout(store, tags);
