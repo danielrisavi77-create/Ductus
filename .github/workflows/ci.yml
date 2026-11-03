@@ -101,6 +101,13 @@ jobs:
           else
             node scripts/engineering/migrations-ledger.mjs
           fi
+      # P6, DAN-499: no two migrations share a dbmate version, in the checkout
+      # (the merge commit on a PR) and, on a PR, against main and every other
+      # open PR (read through the API, so a PR opened later fails too).
+      - name: Migration version collisions (P6, DAN-499)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/engineering/migration-versions.mjs
       # DAN-319: Squawk lints the up part of every migration the base lacks.
       # The release has no signature; the pin equals the GitHub API digest
       # (SQUAWK in squawk-migrations.mjs, which checks it again before each run).

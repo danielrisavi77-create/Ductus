@@ -1,0 +1,97 @@
+/* Referenca M3 (DAN-504): tokeni „papir i grafit” iz docs/design/DESIGN-SYSTEM.md §3. Nije produktni kod. */
+@font-face { font-family: "Instrument Sans"; src: url("../../../../app/fonts/InstrumentSans-latin-ext.woff2") format("woff2"); font-weight: 400 700; }
+@font-face { font-family: "Instrument Sans"; src: url("../../../../app/fonts/InstrumentSans-latin.woff2") format("woff2"); font-weight: 400 700; }
+@font-face { font-family: "Newsreader"; src: url("../../../../app/fonts/Newsreader-latin-ext.woff2") format("woff2"); font-weight: 400 600; }
+@font-face { font-family: "Newsreader"; src: url("../../../../app/fonts/Newsreader-latin.woff2") format("woff2"); font-weight: 400 600; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../../app/fonts/JetBrainsMono-latin-ext.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../../app/fonts/JetBrainsMono-latin.woff2") format("woff2"); }
+
+:root {
+  --ground: #242422; --chrome: #292a28; --well: #3a3a36;
+  --ink: #faf9f5; --ink-2: #dedbd3; --ink-3: #c9c5bb; --rule: #8c887f; --rule-2: #5a5853;
+  --accent: #c8aa6e; --accent-ink: #242422; --link-rule: #b3aea3;
+  --warn: #e9c58b; --warn-soft: #3a2f22; --error: #f0a08f; --error-soft: #3e302b;
+  --synced: #a2c6e5; --cmt: #e9c58b; --cmt-bg: #e9c58b26;
+  --ff-ui: "Instrument Sans", Arial, sans-serif; --ff-display: "Newsreader", "Times New Roman", serif;
+  --ff-mono: "JetBrains Mono", monospace;
+}
+:root[data-theme="light"] {
+  --ground: #f3f2ee; --chrome: #faf9f6; --well: #ecebe5;
+  --ink: #242422; --ink-2: #55534d; --ink-3: #5c5a54; --rule: #cfccc4; --rule-2: #e2e0d9;
+  --accent: #806529; --accent-ink: #fcfbf8; --link-rule: #8a7550;
+  --warn: #7a5420; --warn-soft: #f3e6cf; --error: #9c3f33; --error-soft: #f7e4dd;
+  --synced: #355b81; --cmt: #7a5420; --cmt-bg: #e9c58b40;
+}
+/* Zadani bijeli list u obje ljuske (D-188). */
+.sheet { --s-bg: #fcfbf8; --s-ink: #242422; --s-ink-2: #55534d; --s-rule: #cfccc4; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 13.5px/1.5 var(--ff-ui); }
+h1, h2 { font-family: var(--ff-display); font-weight: 500; letter-spacing: -0.015em; margin: 0; }
+p { margin: 0; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+
+/* Okvir reference: oznake varijanti i bilješke nisu dio sučelja. */
+.ref-head { max-width: 1200px; margin: 0 auto; padding: 32px 24px 8px; }
+.ref-head h1 { font-size: 29px; }
+.ref-head p { color: var(--ink-2); margin-top: 6px; max-width: 80ch; }
+.ref-tag { font: 12px/1.4 var(--ff-mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+.ref-note { color: var(--ink-3); font-size: 12.5px; margin-top: 8px; max-width: 90ch; }
+.stack { max-width: 1200px; margin: 0 auto; padding: 16px 24px 48px; display: grid; gap: 32px; }
+
+/* Okvir editora: gornja traka, obavijest, list, statusna traka. Bočna traka i panel izostavljeni. */
+.frame { border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; background: var(--ground); }
+.bar { display: flex; align-items: center; gap: 16px; min-height: 48px; padding: 0 16px; background: var(--chrome); border-bottom: 1px solid var(--rule-2); }
+.brand { font: 500 19px/1 var(--ff-display); }
+.brand b { font-weight: 500; color: var(--accent); }
+.ctx { color: var(--ink-2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.banner { padding: 8px 16px; border-bottom: 1px solid var(--rule); background: var(--cmt-bg); color: var(--ink); font-size: 14px; display: grid; gap: 2px; }
+.area { padding: 20px 24px; display: grid; gap: 12px; justify-items: center; }
+.notice { width: 100%; max-width: 720px; padding: 10px 16px; border: 1px solid var(--rule); border-left-width: 3px; background: var(--chrome); font-size: 14px; display: grid; gap: 8px; }
+.notice.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.notice.error { border-left-color: var(--error); background: var(--error-soft); }
+.sheet { width: 100%; max-width: 720px; background: var(--s-bg); color: var(--s-ink); border-radius: 6px; padding: 28px 40px; box-shadow: 0 1px 2px #0002, 0 8px 24px #0002; font: 16.5px/1.7 var(--ff-display); display: grid; gap: 10px; }
+.sheet h2 { font-size: 19px; }
+.sheet.readonly { opacity: 0.72; }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; min-height: 36px; padding: 6px 16px; background: var(--chrome); border-top: 1px solid var(--rule-2); color: var(--ink-2); font-size: 13px; }
+.status .words { margin-left: auto; }
+.status .words b { color: var(--ink); font-weight: 600; }
+
+/* Oznaka stanja: tekst nosi značenje, točka je samo pomoć (boja nikad sama). */
+.chip { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink-3); flex: none; }
+.chip.progress .dot { border-color: var(--accent); }
+.chip.received .dot { border-color: var(--synced); }
+.chip.received-late { color: var(--ink); font-weight: 600; }
+.chip.received-late .dot { border-color: var(--warn); background: var(--warn); }
+.chip.ok { color: var(--ink); font-weight: 600; }
+.chip.ok .dot { border-color: var(--synced); background: var(--synced); }
+.chip.warn { color: var(--ink); font-weight: 600; }
+.chip.warn .dot { border-color: var(--cmt); background: var(--cmt); }
+.chip.error { color: var(--ink); font-weight: 600; }
+.chip.error .dot { border-color: var(--error); background: var(--error); }
+.chip.recovery { color: var(--ink); font-weight: 600; }
+.chip.recovery .dot { border-color: var(--ink); background: var(--ink); }
+.net { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
+.net svg { color: var(--cmt); }
+
+.btn { font: 600 13.5px/1 var(--ff-ui); min-height: 32px; padding: 0 14px; border-radius: 5px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; justify-self: start; }
+.btn.secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
+.btn.small { min-height: 28px; padding: 0 10px; font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+
+@media (max-width: 1050px) { .pair { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .ref-tag, .ref-note { font-size: 13px; }
+  .stack { padding: 12px 16px 32px; gap: 28px; }
+  .ref-head { padding: 24px 16px 4px; }
+  .area { padding: 12px; }
+  .sheet { padding: 18px 18px; font-size: 16px; }
+  .status { padding: 8px 12px; gap: 8px 12px; }
+  .status .words { margin-left: 0; }
+  .status .btn.small, .btn { min-height: 44px; }
+  .ctx { display: none; }
+  .bar { justify-content: space-between; }
+}
