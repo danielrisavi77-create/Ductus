@@ -58,6 +58,7 @@
     "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "3.1155.0",
     "@tiptap/core": "^3.31.3",
     "@tiptap/extension-bold": "^3.31.3",
     "@tiptap/extension-document": "^3.31.3",
@@ -82,7 +83,7 @@
     "@fast-check/vitest": "^0.5.0",
     "@playwright/test": "^1.63.0",
     "@smithy/signature-v4": "5.7.4",
-    "@types/node": "^24.10.2",
+    "@types/node": "^26.6.4",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

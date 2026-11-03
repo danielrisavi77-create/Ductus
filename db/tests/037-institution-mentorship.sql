@@ -219,8 +219,10 @@ LANGUAGE sql AS $$
                       assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy,
                       ai_purposes, evidence_profile, import_allowed, created_by)
                     VALUES (%s, 2, 'Druga verzija', 'Upute.', %L, now(), now() + interval '30 days', %L, %L::text[],
-                            %L, %L::boolean, {marko}) $q$,
-                p_assignment, p_work_type, p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed)
+                            %L, %L::boolean, %s) $q$,
+                p_assignment, p_work_type, p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed,
+                -- The author is of the assignment's institution, which the key requires (DAN-442).
+                CASE p_assignment WHEN '{z3}' THEN '{petra}' ELSE '{marko}' END)
 $$;
 
 SELECT is(pg_temp.try(v.statement), v.expected, v.note)

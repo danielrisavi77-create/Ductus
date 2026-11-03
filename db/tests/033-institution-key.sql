@@ -1,13 +1,15 @@
 -- The institution key on assignments and acknowledgments (B-8 prerequisite;
 -- owner decision of 11 Oct 2026, issue #87; supplement to the plan of attack
--- on tables, items U1, U4, U7, U8, U11 and the catalogue guard).
+-- on tables, items U1, U4, U7, U8, U11 and the catalogue guard), and through
+-- assignment versions, enrollment codes and signing keys (DAN-442, D-199,
+-- plan of attack #1432, items A1 to A5, B1 to B4, E1 to E3).
 -- Synthetic fixtures only (fixtures/institution.inc): fak-a holds K1 with Z1,
 -- fak-b holds K3 with Z3.
 BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(38);
+SELECT plan(60);
 
 -- Every schema of the application; pgTAP lives in public.
 CREATE TEMP VIEW app_class AS
@@ -21,9 +23,9 @@ $$;
 
 -- 1. The column itself (U11): set, without a default anybody could lean on.
 SELECT col_not_null('institution', t, 'institution_id', t || '.institution_id is NOT NULL')
-FROM unnest(ARRAY['assignment', 'notice_acknowledgment']) AS t;
+FROM unnest(ARRAY['assignment', 'notice_acknowledgment', 'assignment_version', 'course_enrollment_code']) AS t;
 SELECT col_hasnt_default('institution', t, 'institution_id', t || '.institution_id has no default')
-FROM unnest(ARRAY['assignment', 'notice_acknowledgment']) AS t;
+FROM unnest(ARRAY['assignment', 'notice_acknowledgment', 'assignment_version', 'course_enrollment_code']) AS t;
 SELECT is_empty(
   $$ SELECT k.name FROM app_class k JOIN pg_attribute a ON a.attrelid = k.oid
      WHERE a.attname = 'institution_id' AND a.atthasdef $$,
@@ -31,17 +33,23 @@ SELECT is_empty(
 );
 SELECT col_is_unique('institution', 'assignment', ARRAY['id', 'institution_id'],
                      'assignment is unique on (id, institution_id), so its children can carry the key');
+SELECT col_is_unique('institution', 'assignment_version', ARRAY['assignment_id', 'version_no', 'institution_id'],
+                     'a version is unique with its institution, so a request, a submission and an acknowledgment name both');
+SELECT col_is_unique('institution', 'course_enrollment_code', ARRAY['id', 'institution_id'],
+                     'an enrollment code is unique with its institution, so its audit event names both');
+SELECT col_is_unique('evidence', 'signing_key', ARRAY['key_id', 'institution_id'],
+                     'a signing key is unique with its institution, so a receipt issuance names both');
 
 -- 2. The catalogue guard. A new table without the key, a foreign key that
 -- leaves the institution out or a cascade changes one of these, so it cannot
--- arrive without a row here. The four tables listed carry no key: the
--- institution itself, and three the B-7 tables left without one, each read
--- only through a function or a policy on its parent (open, PR description).
+-- arrive without a row here. The two tables listed carry no key: the
+-- institution itself, and the record of enrollment attempts, which counts
+-- the attempts of one person and is read only by the function that limits
+-- them (DAN-442 left it so, PR description).
 SELECT bag_eq(
   $$ SELECT name FROM app_class WHERE NOT pg_temp.has_key(oid) $$,
-  ARRAY['identity.institution', 'institution.course_enrollment_code', 'institution.enrollment_attempt',
-        'institution.assignment_version'],
-  'every application table carries institution_id, but for the four listed'
+  ARRAY['identity.institution', 'institution.enrollment_attempt'],
+  'every application table carries institution_id, but for the two listed'
 );
 SELECT is_empty(
   $$ SELECT f.conrelid::regclass || ' ' || f.conname
@@ -57,6 +65,22 @@ SELECT is_empty(
                        JOIN pg_attribute d ON d.attrelid = f.confrelid AND d.attnum = p.dst
                        WHERE s.attname = 'institution_id' AND d.attname = 'institution_id') $$,
   'every foreign key from a keyed table to user_account or to a keyed parent includes institution_id'
+);
+-- A5: wider than the one above, whatever the parent's unique key: every
+-- foreign key of the application to a table that carries the institution
+-- pairs institution_id with institution_id. The one exception has no
+-- institution of its own to pair; when it gets one, this fails until the
+-- exception goes.
+SELECT bag_eq(
+  $$ SELECT f.conrelid::regclass || ' ' || f.conname
+     FROM pg_constraint f JOIN app_class k ON k.oid = f.conrelid
+     WHERE f.contype = 'f' AND pg_temp.has_key(f.confrelid)
+       AND NOT EXISTS (SELECT 1 FROM unnest(f.conkey, f.confkey) AS p (src, dst)
+                       JOIN pg_attribute s ON s.attrelid = f.conrelid AND s.attnum = p.src
+                       JOIN pg_attribute d ON d.attrelid = f.confrelid AND d.attnum = p.dst
+                       WHERE s.attname = 'institution_id' AND d.attname = 'institution_id') $$,
+  ARRAY['institution.enrollment_attempt enrollment_attempt_user_id_fkey'],
+  'every foreign key to a table that carries institution_id includes it, but for the one listed'
 );
 SELECT is_empty(
   $$ SELECT f.conrelid::regclass || ' ' || f.conname
@@ -80,6 +104,8 @@ INSERT INTO called VALUES
   ('create', pg_temp.ask('vesna', $$ SELECT institution.create_assignment({k1}, 'Ključ ustanove', 'Upute.',
     'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false, NULL, NULL) $$));
 INSERT INTO called VALUES ('acknowledge', pg_temp.ask('dora', 'SELECT institution.acknowledge_notice({z1}, 2)'));
+INSERT INTO called VALUES
+  ('code', pg_temp.ask('vesna', $$ SELECT institution.create_enrollment_code({k1}, now() + interval '7 days') $$));
 SELECT is(
   (SELECT a.institution_id::text FROM institution.assignment a JOIN called c ON c.name = 'create' AND c.result = a.id::text),
   pg_temp.id('fak_a')::text,
@@ -90,6 +116,20 @@ SELECT is(
     WHERE n.student_id = pg_temp.id('dora') AND n.assignment_id = pg_temp.id('z1') AND n.version_no = 2),
   pg_temp.id('fak_a')::text,
   'acknowledge_notice stores the institution of the session, which is the assignment''s'
+);
+-- B4: the functions that write versions and codes name no institution; the
+-- row takes the one of its parent.
+SELECT is(
+  (SELECT v.institution_id::text FROM institution.assignment_version v
+     JOIN called c ON c.name = 'create' AND c.result = v.assignment_id::text),
+  pg_temp.id('fak_a')::text,
+  'the first version of a created assignment carries the institution of its assignment'
+);
+SELECT is(
+  (SELECT e.institution_id::text FROM institution.course_enrollment_code e
+    WHERE e.course_id = pg_temp.id('k1') AND e.active),
+  pg_temp.id('fak_a')::text,
+  'a new enrollment code carries the institution of its course'
 );
 
 -- 4. U4: a row that mixes institutions fails on the foreign key, even when
@@ -109,15 +149,37 @@ FROM (VALUES
       VALUES ({z3}, 1, {ana}, {fak_a}) $$),
   (4, 'an acknowledgment of fak-a by a student of fak-b', 'notice_acknowledgment_student_institution_fkey',
    $$ INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
-      VALUES ({z1}, 2, {tomo}, {fak_a}) $$)
+      VALUES ({z1}, 2, {tomo}, {fak_a}) $$),
+  -- B1 to B3: a version or a code given an institution other than its
+  -- parent's keeps it, and the foreign key refuses it.
+  (5, 'a version of fak-a of an assignment of fak-b', 'assignment_version_assignment_institution_fkey',
+   $$ INSERT INTO institution.assignment_version (
+        assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
+        evidence_profile, import_allowed, created_by, institution_id)
+      VALUES ({z3}, 2, 'Z3', 'Upute.', 'essay', now(), now() + interval '30 days', 'prohibited', '{}', 'basic',
+              false, {vesna}, {fak_a}) $$),
+  (6, 'a version of fak-a written by a teacher of fak-b', 'assignment_version_created_by_institution_fkey',
+   $$ INSERT INTO institution.assignment_version (
+        assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
+        evidence_profile, import_allowed, created_by)
+      VALUES ({z1}, 3, 'Z1', 'Upute.', 'essay', now(), now() + interval '30 days', 'prohibited', '{}', 'basic',
+              false, {petra}) $$),
+  (7, 'an enrollment code of fak-a for a course of fak-b', 'course_enrollment_code_course_institution_fkey',
+   $$ INSERT INTO institution.course_enrollment_code (course_id, code_hash, valid_until, active, created_by, institution_id)
+      VALUES ({k3}, sha256('KOD-B2'::bytea), now() + interval '1 day', false, {vesna}, {fak_a}) $$),
+  (8, 'an enrollment code of fak-a made by a teacher of fak-b', 'course_enrollment_code_created_by_institution_fkey',
+   $$ INSERT INTO institution.course_enrollment_code (course_id, code_hash, valid_until, active, created_by)
+      VALUES ({k1}, sha256('KOD-B3'::bytea), now() + interval '1 day', false, {petra}) $$)
 ) AS v (n, what, constraint_name, statement)
 ORDER BY v.n;
 
 -- 5. U7: a person with rows cannot be moved to another institution. Eva and
 -- Emil exist only here, with nothing else that holds them: Emil created an
--- assignment, Eva acknowledged one.
+-- assignment, Eva acknowledged one. Nor can a parent with keyed children:
+-- K9 holds only an enrollment code, Z7 only its version (DAN-442, B5).
 INSERT INTO ref VALUES ('eva', '00000000-0000-4000-8000-000000000111'), ('emil', '00000000-0000-4000-8000-000000000112'),
-                       ('z9', '00000000-0000-4000-8000-0000000000a9');
+                       ('z9', '00000000-0000-4000-8000-0000000000a9'), ('z7', '00000000-0000-4000-8000-0000000000a7'),
+                       ('k9', '00000000-0000-4000-8000-0000000000c9');
 INSERT INTO identity.user_account (id, institution_id, oidc_issuer, oidc_subject, hr_edu_person_unique_id)
 SELECT pg_temp.id(p.name), pg_temp.id('fak_a'), 'https://issuer.test', 'sub-' || p.name, p.name || '@a.example'
 FROM unnest(ARRAY['eva', 'emil']) AS p (name);
@@ -142,6 +204,30 @@ FROM (VALUES
   (1, 'emil', 'an assignment names him as its author', 'assignment_created_by_institution_fkey'),
   (2, 'eva', 'her acknowledgment exists', 'notice_acknowledgment_student_institution_fkey')
 ) AS v (n, person, what, constraint_name)
+ORDER BY v.n;
+INSERT INTO institution.course (id, institution_id, name, academic_year, ai_policy, created_by)
+VALUES (pg_temp.id('k9'), pg_temp.id('fak_a'), 'K9', '2026/2027', 'prohibited', pg_temp.id('vesna'));
+INSERT INTO institution.course_enrollment_code (course_id, code_hash, valid_until, created_by)
+VALUES (pg_temp.id('k9'), sha256('KOD-K9'::bytea), now() + interval '1 day', pg_temp.id('vesna'));
+INSERT INTO institution.assignment (id, course_id, institution_id, created_by)
+VALUES (pg_temp.id('z7'), pg_temp.id('k2'), pg_temp.id('fak_a'), pg_temp.id('marko'));
+INSERT INTO institution.assignment_version (
+  assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
+  evidence_profile, import_allowed, created_by
+)
+VALUES (pg_temp.id('z7'), 1, 'Z7', 'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days',
+        'prohibited', '{}', 'basic', false, pg_temp.id('marko'));
+SELECT alike(
+  pg_temp.ask_as('ductus_identity', 'anon', format('WITH x AS (%s RETURNING 1) SELECT count(*) FROM x', v.statement)),
+  '23503: %"' || v.constraint_name || '"%',
+  format('%s cannot be moved to fak-b while %s', v.parent, v.what)
+)
+FROM (VALUES
+  (1, 'K9', 'its enrollment code exists', 'course_enrollment_code_course_institution_fkey',
+   'UPDATE institution.course SET institution_id = {fak_b}, created_by = {petra} WHERE id = {k9}'),
+  (2, 'Z7', 'its version exists', 'assignment_version_assignment_institution_fkey',
+   'UPDATE institution.assignment SET institution_id = {fak_b}, course_id = {k3}, created_by = {petra} WHERE id = {z7}')
+) AS v (n, parent, what, constraint_name, statement)
 ORDER BY v.n;
 
 -- 6. U8: an institution with data cannot be removed; nothing cascades.
@@ -190,6 +276,79 @@ ALTER TABLE institution.assignment DROP CONSTRAINT assignment_course_institution
 ALTER TABLE institution.notice_acknowledgment
   DROP CONSTRAINT notice_acknowledgment_assignment_institution_fkey,
   DROP CONSTRAINT notice_acknowledgment_student_institution_fkey;
+-- B6: without the key to the assignment, the key to its version alone still
+-- keeps an acknowledgment in the version's institution (DAN-442).
+SELECT alike(
+  pg_temp.ask_as('ductus_identity', 'anon', $$ WITH x AS (
+    INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
+    VALUES ({z3}, 1, {ana}, {fak_a}) RETURNING 1) SELECT count(*) FROM x $$),
+  '23503: %"notice_acknowledgment_version_institution_fkey"%',
+  'the version''s key alone refuses an acknowledgment of fak-a for a version of fak-b'
+);
+-- B7, B8: the same for a submission request and a submission. Every other
+-- foreign key of the two tables is dropped, so the key to the version is the
+-- only one left to refuse a row of fak-a that names version 1 of Z3 (fak-b);
+-- the submission names that version's own deadline (DAN-442, K-a). B10 does
+-- the same for a receipt issuance of fak-a signed with a key of fak-b (K-e).
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT conrelid::regclass AS rel, conname FROM pg_constraint
+           WHERE contype = 'f'
+             AND conrelid IN ('evidence.submission_request'::regclass, 'evidence.submission'::regclass,
+                              'evidence.submission_receipt_issuance'::regclass, 'evidence.signing_key'::regclass)
+             AND conname NOT IN ('submission_request_version_institution_fkey', 'submission_version_institution_fkey',
+                                 'submission_receipt_issuance_key_institution_fkey')
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.rel, r.conname);
+  END LOOP;
+END
+$$;
+INSERT INTO evidence.signing_key (key_id, key_version, evidence_domain_id, institution_id, purpose, algorithm,
+                                  key_base64url, valid_from)
+VALUES ('kljuc-b10', '1', gen_random_uuid(), pg_temp.id('fak_b'), 'receipt', 'Ed25519',
+        'MCowBQYDK2VwAyEA' || repeat('B', 42) || 'A', date_trunc('minute', now()));
+SELECT alike(
+  pg_temp.ask_as('ductus_evidence', 'anon', v.statement),
+  '23503: %"' || v.constraint_name || '"%',
+  format('the version''s key alone refuses %s of fak-a for a version of fak-b', v.what)
+)
+FROM (VALUES
+  (1, 'a submission request', 'submission_request_version_institution_fkey', $$ WITH x AS (
+     INSERT INTO evidence.submission_request (institution_id, assignment_id, assignment_version, project_id, document_id,
+                                              principal_id, revision, content_hash, requested_at)
+     VALUES ({fak_a}, {z3}, 1, 'projekt-b7', 'dokument-b7', {ana}, 1, repeat('a', 64), now()) RETURNING 1)
+     SELECT count(*) FROM x $$),
+  (2, 'a submission', 'submission_version_institution_fkey', format($$ WITH x AS (
+     INSERT INTO evidence.submission (submission_request_id, institution_id, principal_id, assignment_id,
+                                      assignment_version, revision, artifact_hash, requested_at, due_at, recorded_at)
+     VALUES (gen_random_uuid(), {fak_a}, {ana}, {z3}, 1, 1, repeat('b', 64), now(), %L, now()) RETURNING 1)
+     SELECT count(*) FROM x $$,
+     (SELECT due_at FROM institution.assignment_version WHERE assignment_id = pg_temp.id('z3') AND version_no = 1))),
+  (3, 'a receipt issuance', 'submission_receipt_issuance_key_institution_fkey', $$ WITH x AS (
+     INSERT INTO evidence.submission_receipt_issuance (submission_id, institution_id, principal_id, key_id, key_version,
+                                                      signed_at, receipt_payload, payload_digest_sha256)
+     VALUES (gen_random_uuid(), {fak_a}, {ana}, 'kljuc-b10', '1', now(), '{}', encode(sha256('{}'::bytea), 'hex'))
+     RETURNING 1) SELECT count(*) FROM x $$)
+) AS v (n, what, constraint_name, statement)
+ORDER BY v.n;
+-- B9: with the key from a version to its assignment dropped, Z7 moves to
+-- fak-b over its version of fak-a; the pointer to its current version, which
+-- carries the key, refuses the move when its deferred check runs (K-f).
+ALTER TABLE institution.assignment_version DROP CONSTRAINT assignment_version_assignment_institution_fkey;
+SELECT is(
+  pg_temp.ask_as('ductus_identity', 'anon', $$ WITH x AS (
+    UPDATE institution.assignment SET institution_id = {fak_b}, course_id = {k3}, created_by = {petra}
+    WHERE id = {z7} RETURNING 1) SELECT count(*) FROM x $$),
+  '1',
+  'Z7 moves to fak-b while the check of its current version waits for the end of the transaction'
+);
+SELECT alike(
+  pg_temp.ask_as('ductus_identity', 'anon', 'SET CONSTRAINTS institution.assignment_current_version_institution_fkey IMMEDIATE'),
+  '23503: %"assignment_current_version_institution_fkey"%',
+  'the current version of fak-a refuses its assignment moved to fak-b'
+);
+ALTER TABLE institution.notice_acknowledgment DROP CONSTRAINT notice_acknowledgment_version_institution_fkey;
 INSERT INTO ref VALUES ('z8', '00000000-0000-4000-8000-0000000000a8');
 INSERT INTO institution.assignment (id, course_id, institution_id, created_by)
 VALUES (pg_temp.id('z8'), pg_temp.id('k1'), pg_temp.id('fak_b'), pg_temp.id('petra'));
