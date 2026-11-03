@@ -32,7 +32,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Pristup podrške sadržaju rada (D-199 t. 3, dopunjuje D-172): ADR (tko na fakultetu daje pristanak, potvrda, najdulji istek, obavijest studentu) prije bilo kakve izgradnje.
 - [ ] FPZG AAI: ovlast za AAI@EduHr Lab i kasnije registracija Ductusa kao usluge. Blokira M1, ne demo.
 - [ ] M8 Document Provenance (D-198): Word i Google Docs dodaci idu u sljedeći val (t. 2, ODLUČENO 1. 11. 2026.); FPZG DPO i pravno mišljenje za rok čuvanja uvezenih verzija (t. 3) i za čitanje verzija iz clouda (t. 1); FPZG IT: admin consent za Microsoft Graph u tenantu fakulteta (DAN-438).
-- [ ] Lekta: licenca/pravo redistribucije prije punog M4 paketa.
+- [ ] Lekta: pisana dozvola vlasnika za projekciju dana i zapisana 2. 11. 2026. (#87 `issuecomment-6588746985`, doslovno: „Oodobravam sve, pogotovo ovo za letku, pa to je moj projekt tako da mož. Zadaj posao dodatni, pogotovo za m0”; `docs/lekta/RIGHTSSCOPE.md` §6a, DAN-513). Otvoreno: vidljivost/licenca Lekte, potvrda za Lektin kod, kanal isporuke (privatni kanal prema zadatku DAN-513 naspram D-217, nesklad otvoren) i FPZG potvrda (D-219) prije punog M4 paketa.
 - [ ] Dobavljači: UpCloud, Scaleway i AWS KMS računi + 2FA i uski ključevi. B0.1 je pomaknut naprijed (rok 16. 11. 2026., tri dodatne provjere) i čeka ove račune.
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
 - [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
