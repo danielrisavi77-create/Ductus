@@ -3290,6 +3290,23 @@ $$;
 
 
 --
+-- Name: assignment_version_institution_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assignment_version_institution_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.institution_id IS NULL THEN
+    SELECT a.institution_id INTO NEW.institution_id FROM institution.assignment a WHERE a.id = NEW.assignment_id;
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+--
 -- Name: can(text, text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3430,6 +3447,23 @@ BEGIN
   INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
   SELECT confirmed.institution_id, confirmed.id, confirmed.user_id, confirmed.role, 'confirmed', actor.user_id, now()
   FROM confirmed;
+END
+$$;
+
+
+--
+-- Name: course_enrollment_code_institution_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.course_enrollment_code_institution_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.institution_id IS NULL THEN
+    SELECT c.institution_id INTO NEW.institution_id FROM institution.course c WHERE c.id = NEW.course_id;
+  END IF;
+  RETURN NEW;
 END
 $$;
 
@@ -5204,6 +5238,7 @@ CREATE TABLE institution.assignment_version (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     word_min integer,
     word_max integer,
+    institution_id uuid NOT NULL,
     CONSTRAINT assignment_version_check CHECK (institution.is_assignment_content(title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes, evidence_profile, import_allowed)),
     CONSTRAINT assignment_version_version_no_check CHECK ((version_no >= 1)),
     CONSTRAINT assignment_version_word_range_check CHECK (institution.is_word_range(word_min, word_max))
@@ -5262,6 +5297,7 @@ CREATE TABLE institution.course_enrollment_code (
     active boolean DEFAULT true NOT NULL,
     created_by uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    institution_id uuid NOT NULL,
     CONSTRAINT course_enrollment_code_code_hash_check CHECK ((octet_length(code_hash) = 32))
 );
 
@@ -5881,6 +5917,14 @@ ALTER TABLE ONLY evidence.signing_key
 
 
 --
+-- Name: signing_key signing_key_key_id_institution_key; Type: CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.signing_key
+    ADD CONSTRAINT signing_key_key_id_institution_key UNIQUE (key_id, institution_id);
+
+
+--
 -- Name: signing_key signing_key_pkey; Type: CONSTRAINT; Schema: evidence; Owner: -
 --
 
@@ -6089,11 +6133,27 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
+-- Name: assignment_version assignment_version_due_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.assignment_version
+    ADD CONSTRAINT assignment_version_due_institution_key UNIQUE (assignment_id, version_no, due_at, institution_id);
+
+
+--
 -- Name: assignment_version assignment_version_due_key; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
     ADD CONSTRAINT assignment_version_due_key UNIQUE (assignment_id, version_no, due_at);
+
+
+--
+-- Name: assignment_version assignment_version_id_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.assignment_version
+    ADD CONSTRAINT assignment_version_id_institution_key UNIQUE (assignment_id, version_no, institution_id);
 
 
 --
@@ -6118,6 +6178,14 @@ ALTER TABLE ONLY institution.course_editor
 
 ALTER TABLE ONLY institution.course_enrollment_code
     ADD CONSTRAINT course_enrollment_code_code_hash_key UNIQUE (code_hash);
+
+
+--
+-- Name: course_enrollment_code course_enrollment_code_id_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_enrollment_code
+    ADD CONSTRAINT course_enrollment_code_id_institution_key UNIQUE (id, institution_id);
 
 
 --
@@ -6847,6 +6915,13 @@ CREATE TRIGGER assignment_version_immutable BEFORE DELETE OR UPDATE ON instituti
 
 
 --
+-- Name: assignment_version assignment_version_institution_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER assignment_version_institution_fill BEFORE INSERT ON institution.assignment_version FOR EACH ROW EXECUTE FUNCTION institution.assignment_version_institution_fill();
+
+
+--
 -- Name: assignment_version assignment_version_mentorship_rule; Type: TRIGGER; Schema: institution; Owner: -
 --
 
@@ -6865,6 +6940,13 @@ CREATE TRIGGER assignment_version_no_truncate BEFORE TRUNCATE ON institution.ass
 --
 
 CREATE TRIGGER assignment_version_notify AFTER INSERT ON institution.assignment_version FOR EACH ROW WHEN ((new.version_no > 1)) EXECUTE FUNCTION institution.notify_assignment_version();
+
+
+--
+-- Name: course_enrollment_code course_enrollment_code_institution_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER course_enrollment_code_institution_fill BEFORE INSERT ON institution.course_enrollment_code FOR EACH ROW EXECUTE FUNCTION institution.course_enrollment_code_institution_fill();
 
 
 --
@@ -6932,11 +7014,11 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 
 --
--- Name: enrollment_code_event enrollment_code_event_code_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+-- Name: enrollment_code_event enrollment_code_event_code_institution_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
 --
 
 ALTER TABLE ONLY audit.enrollment_code_event
-    ADD CONSTRAINT enrollment_code_event_code_id_fkey FOREIGN KEY (code_id) REFERENCES institution.course_enrollment_code(id);
+    ADD CONSTRAINT enrollment_code_event_code_institution_fkey FOREIGN KEY (code_id, institution_id) REFERENCES institution.course_enrollment_code(id, institution_id);
 
 
 --
@@ -7196,14 +7278,6 @@ ALTER TABLE ONLY evidence.signing_key
 
 
 --
--- Name: submission submission_assignment_id_assignment_version_due_at_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
---
-
-ALTER TABLE ONLY evidence.submission
-    ADD CONSTRAINT submission_assignment_id_assignment_version_due_at_fkey FOREIGN KEY (assignment_id, assignment_version, due_at) REFERENCES institution.assignment_version(assignment_id, version_no, due_at);
-
-
---
 -- Name: submission submission_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
@@ -7228,11 +7302,11 @@ ALTER TABLE ONLY evidence.submission_receipt
 
 
 --
--- Name: submission_receipt_issuance submission_receipt_issuance_key_id_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+-- Name: submission_receipt_issuance submission_receipt_issuance_key_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
 ALTER TABLE ONLY evidence.submission_receipt_issuance
-    ADD CONSTRAINT submission_receipt_issuance_key_id_fkey FOREIGN KEY (key_id) REFERENCES evidence.signing_key(key_id);
+    ADD CONSTRAINT submission_receipt_issuance_key_institution_fkey FOREIGN KEY (key_id, institution_id) REFERENCES evidence.signing_key(key_id, institution_id);
 
 
 --
@@ -7241,14 +7315,6 @@ ALTER TABLE ONLY evidence.submission_receipt_issuance
 
 ALTER TABLE ONLY evidence.submission_receipt_issuance
     ADD CONSTRAINT submission_receipt_issuance_submission_id_institution_id_p_fkey FOREIGN KEY (submission_id, institution_id, principal_id) REFERENCES evidence.submission(id, institution_id, principal_id);
-
-
---
--- Name: submission_request submission_request_assignment_id_assignment_version_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
---
-
-ALTER TABLE ONLY evidence.submission_request
-    ADD CONSTRAINT submission_request_assignment_id_assignment_version_fkey FOREIGN KEY (assignment_id, assignment_version) REFERENCES institution.assignment_version(assignment_id, version_no);
 
 
 --
@@ -7292,11 +7358,27 @@ ALTER TABLE ONLY evidence.submission_request
 
 
 --
+-- Name: submission_request submission_request_version_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.submission_request
+    ADD CONSTRAINT submission_request_version_institution_fkey FOREIGN KEY (assignment_id, assignment_version, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id);
+
+
+--
 -- Name: submission submission_submission_request_id_institution_id_principal__fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
 ALTER TABLE ONLY evidence.submission
     ADD CONSTRAINT submission_submission_request_id_institution_id_principal__fkey FOREIGN KEY (submission_request_id, institution_id, principal_id, assignment_id, assignment_version, revision, artifact_hash, requested_at) REFERENCES evidence.submission_request(id, institution_id, principal_id, assignment_id, assignment_version, revision, content_hash, requested_at);
+
+
+--
+-- Name: submission submission_version_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.submission
+    ADD CONSTRAINT submission_version_institution_fkey FOREIGN KEY (assignment_id, assignment_version, due_at, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, due_at, institution_id);
 
 
 --
@@ -7356,11 +7438,11 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
--- Name: assignment assignment_current_version_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment assignment_current_version_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment
-    ADD CONSTRAINT assignment_current_version_fkey FOREIGN KEY (id, current_version) REFERENCES institution.assignment_version(assignment_id, version_no) DEFERRABLE INITIALLY DEFERRED;
+    ADD CONSTRAINT assignment_current_version_institution_fkey FOREIGN KEY (id, current_version, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id) DEFERRABLE INITIALLY DEFERRED;
 
 
 --
@@ -7372,19 +7454,19 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
--- Name: assignment_version assignment_version_assignment_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment_version assignment_version_assignment_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
-    ADD CONSTRAINT assignment_version_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES institution.assignment(id);
+    ADD CONSTRAINT assignment_version_assignment_institution_fkey FOREIGN KEY (assignment_id, institution_id) REFERENCES institution.assignment(id, institution_id);
 
 
 --
--- Name: assignment_version assignment_version_created_by_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment_version assignment_version_created_by_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
-    ADD CONSTRAINT assignment_version_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity.user_account(id);
+    ADD CONSTRAINT assignment_version_created_by_institution_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -7420,19 +7502,19 @@ ALTER TABLE ONLY institution.course_editor
 
 
 --
--- Name: course_enrollment_code course_enrollment_code_course_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: course_enrollment_code course_enrollment_code_course_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.course_enrollment_code
-    ADD CONSTRAINT course_enrollment_code_course_id_fkey FOREIGN KEY (course_id) REFERENCES institution.course(id);
+    ADD CONSTRAINT course_enrollment_code_course_institution_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
 
 
 --
--- Name: course_enrollment_code course_enrollment_code_created_by_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: course_enrollment_code course_enrollment_code_created_by_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.course_enrollment_code
-    ADD CONSTRAINT course_enrollment_code_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity.user_account(id);
+    ADD CONSTRAINT course_enrollment_code_created_by_institution_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -7556,14 +7638,6 @@ ALTER TABLE ONLY institution.mentorship
 
 
 --
--- Name: notice_acknowledgment notice_acknowledgment_assignment_id_version_no_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
---
-
-ALTER TABLE ONLY institution.notice_acknowledgment
-    ADD CONSTRAINT notice_acknowledgment_assignment_id_version_no_fkey FOREIGN KEY (assignment_id, version_no) REFERENCES institution.assignment_version(assignment_id, version_no);
-
-
---
 -- Name: notice_acknowledgment notice_acknowledgment_assignment_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -7577,6 +7651,14 @@ ALTER TABLE ONLY institution.notice_acknowledgment
 
 ALTER TABLE ONLY institution.notice_acknowledgment
     ADD CONSTRAINT notice_acknowledgment_student_institution_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_version_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.notice_acknowledgment
+    ADD CONSTRAINT notice_acknowledgment_version_institution_fkey FOREIGN KEY (assignment_id, version_no, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id);
 
 
 --
@@ -8591,4 +8673,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261102210000'),
     ('20261102220000'),
     ('20261103010000'),
-    ('20261103030000');
+    ('20261103030000'),
+    ('20261103100000');
