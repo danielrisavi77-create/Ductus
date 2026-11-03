@@ -344,6 +344,31 @@ describe("mentorship approval under concurrency (DAN-515)", () => {
     expect(other).toBe("ZD403");
   });
 
+  it("refuses a new request of the kind that waited for the approval of the open one", async () => {
+    await resetCase();
+    const requestId = await request("ana");
+    const approval = await hold(
+      "vesna",
+      "SELECT institution.approve_mentorship_request($1)::text AS v",
+      [requestId],
+    );
+    let again: Promise<string> | undefined;
+    try {
+      again = request("ana");
+      await untilLockWait();
+    } finally {
+      await approval.commit();
+    }
+    expect(await outcome(again)).toBe("ZD409");
+    expect(await counts()).toStrictEqual({ mentorships: 1, approved: 1 });
+    const open = await admin.query<{ open: number }>(
+      `SELECT count(*)::int AS open FROM institution.mentorship_request
+       WHERE institution_id = $1 AND student_id = $2 AND approved_at IS NULL AND withdrawn_at IS NULL`,
+      [institutionId, people.ana],
+    );
+    expect(open.rows[0].open).toBe(0);
+  });
+
   it("leaves one open request when a student sends the same request twice at once", async () => {
     await resetCase();
     const results = await Promise.all([

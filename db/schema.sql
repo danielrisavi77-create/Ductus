@@ -4329,6 +4329,12 @@ BEGIN
      OR institution.lock_teacher_role(p_teacher_id) IS NULL THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
+  -- An approval of the open request of this kind holds its row until it
+  -- commits; waiting for it here lets the check below see its mentorship.
+  PERFORM 1 FROM institution.mentorship_request r
+  WHERE r.institution_id = actor.institution_id AND r.student_id = actor.user_id
+    AND r.work_type = p_work_type AND r.withdrawn_at IS NULL AND r.approved_at IS NULL
+  FOR SHARE;
   IF EXISTS (
     SELECT 1 FROM institution.mentorship m
     WHERE m.institution_id = actor.institution_id AND m.student_id = actor.user_id

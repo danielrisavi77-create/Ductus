@@ -64,6 +64,12 @@ SELECT is_empty(
   $$ SELECT a.grantee::regrole::text FROM pg_class c, aclexplode(c.relacl) a
       WHERE c.oid = 'audit.mentorship_event'::regclass AND a.grantee <> c.relowner $$,
   'no role but the owner has any privilege on mentorship_event');
+SELECT is_empty(
+  $$ SELECT r || ' ' || p FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p
+     CROSS JOIN unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_evidence',
+                             'ductus_migrator']) AS r
+     WHERE has_table_privilege(r, 'audit.mentorship_event', p) $$,
+  'the access matrix of mentorship_event: no application role and not the migrator reads, writes or empties it');
 
 -- 2. request_mentorship, one class per row, in this order.
 CREATE TEMP TABLE request_case (n int PRIMARY KEY, actor text, teacher text, work_type text, expected text, note text);
@@ -240,6 +246,29 @@ SELECT is(pg_temp.sees('vesna'), '-', 'an approved request is no longer open for
 SELECT throws_ok($$ UPDATE audit.mentorship_event SET kind = 'withdrawn' $$, NULL, NULL, 'an event is not updated');
 SELECT throws_ok($$ DELETE FROM audit.mentorship_event $$, NULL, NULL, 'an event is not deleted');
 SELECT throws_ok($$ TRUNCATE audit.mentorship_event CASCADE $$, NULL, NULL, 'the events are not truncated');
+
+-- 9. Forced RLS is the protection, not only the missing grants: with a
+-- mistaken grant the student, the teacher and the administrator still read,
+-- write, change and delete no event.
+GRANT USAGE ON SCHEMA audit TO ductus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON audit.mentorship_event TO ductus_app;
+SELECT is(pg_temp.ask(v.actor, 'SELECT count(*)::text FROM audit.mentorship_event'), '0',
+          'with a mistaken grant ' || v.actor || ' reads no event')
+FROM (VALUES ('boris'), ('vesna'), ('iva')) AS v (actor);
+SELECT is(left(pg_temp.ask(v.actor, $$ INSERT INTO audit.mentorship_event
+            (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
+            VALUES ({fak_a}, {rb}, {boris}, {vesna}, 'withdrawn', {boris}, now()) RETURNING 'written' $$), 6),
+          '42501:', 'with a mistaken grant ' || v.actor || ' writes no event')
+FROM (VALUES ('boris'), ('vesna'), ('iva')) AS v (actor);
+SELECT is(pg_temp.ask(v.actor, $$ UPDATE audit.mentorship_event SET actor_id = {iva} RETURNING 'changed' $$), NULL,
+          'with a mistaken grant ' || v.actor || ' changes no event')
+FROM (VALUES ('boris'), ('vesna'), ('iva')) AS v (actor);
+SELECT is(pg_temp.ask(v.actor, $$ DELETE FROM audit.mentorship_event RETURNING 'deleted' $$), NULL,
+          'with a mistaken grant ' || v.actor || ' deletes no event')
+FROM (VALUES ('boris'), ('vesna'), ('iva')) AS v (actor);
+REVOKE SELECT, INSERT, UPDATE, DELETE ON audit.mentorship_event FROM ductus_app;
+REVOKE USAGE ON SCHEMA audit FROM ductus_app;
+SELECT is(pg_temp.events(), 8::bigint, 'the trail is unchanged');
 
 SELECT * FROM finish();
 ROLLBACK;
