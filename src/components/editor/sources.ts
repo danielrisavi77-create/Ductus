@@ -367,6 +367,82 @@ function sharesWrittenForm(text: string, work: Source): boolean {
   });
 }
 
+// Every place `part` stands in `text`.
+function places(text: string, part: string): number[] {
+  const out: number[] = [];
+  for (let at = text.indexOf(part); at !== -1; at = text.indexOf(part, at + 1)) out.push(at);
+  return out;
+}
+
+// Whether text[from, to) is a value as the domain's `required` keeps it: not empty, no space at either end.
+function keptAt(text: string, from: number, to: number): boolean {
+  return from < to && !/\s/.test(text[from]!) && !/\s/.test(text[to - 1]!);
+}
+
+// Whether text[from, to) is how the domain lists one author it cites as
+// `cited`: "Horvat, Ana" (a person, any given name), "Zavod" or
+// "Horvat (Zavod (2020))" (an organisation, without or with its acronym).
+function listsAs(text: string, from: number, to: number, cited: string): boolean {
+  const end = from + cited.length;
+  if (!keptAt(cited, 0, cited.length) || end > to || !text.startsWith(cited, from)) return false;
+  if (end === to) return true;
+  if (text.startsWith(", ", end)) return keptAt(text, end + 2, to);
+  return text.startsWith(" (", end) && text[to - 1] === ")" && keptAt(text, end + 2, to - 1);
+}
+
+// Whether `names`, all that stands before the year, is how the domain lists
+// some authors that `formatInText` cites as `cited`: one author, two joined at
+// any joiner of both, or three or more (the FPZG style names up to two) whose
+// first is cited and which go on to a last author after a joiner.
+function listsCited(names: string, cited: string): boolean {
+  const { authorJoiner } = fpzgCitationStyle.bibliography;
+  const { twoAuthorsJoiner, manyAuthorsSuffix } = fpzgCitationStyle.inText;
+  if (listsAs(names, 0, names.length, cited)) return true;
+  const joins = places(names, authorJoiner);
+  for (const c of places(cited, twoAuthorsJoiner)) {
+    const [left, right] = [cited.slice(0, c), cited.slice(c + twoAuthorsJoiner.length)];
+    if (joins.some((j) => listsAs(names, 0, j, left) && listsAs(names, j + authorJoiner.length, names.length, right))) return true;
+  }
+  if (!cited.endsWith(manyAuthorsSuffix)) return false;
+  const first = cited.slice(0, -manyAuthorsSuffix.length);
+  return places(names, ", ").some((n) => listsAs(names, 0, n, first)
+    && joins.some((j) => keptAt(names, n + 2, j) && keptAt(names, j + authorJoiner.length, names.length)));
+}
+
+// Whether `body` can follow the year in an entry: every kind opens with its
+// title as a sentence, then a space and the rest, which ends a sentence or,
+// for a web page, the bracket of the date it was read.
+function entryBody(body: string): boolean {
+  if (!/[.?!)]$/.test(body)) return false;
+  return places(body, " ").some((at) => /[.?!]/.test(body[at - 1] ?? "") && keptAt(body, 0, at) && keptAt(body, at + 1, body.length));
+}
+
+/**
+ * Whether some list of authors and some place of the year give exactly the
+ * text of an entry through the domain, cited in the text as `work` is. The
+ * form takes any text in a name, so the year is any " (2021) " or
+ * " (2021a) " that a body follows, not the first bracket ("Horvat, Marko
+ * (2020) (2021)", review on #1407, c.6591695313, QA c.6591747653), and a
+ * given name may hold commas and the joiner ("Babić, Ana, ml. i Kovač, Luka i
+ * Ivo, ml."). Every split is tried and each is checked in linear time, so the
+ * reading is exact and bounded. Read with `sharesCitation` and
+ * `sharesWrittenForm`, which keep entries written out of style by hand: an
+ * entry any of them reads as ours keeps the citations as written, so this can
+ * never letter more.
+ */
+function sharesForm(text: string, work: Source): boolean {
+  const cited = citationText(work, "");
+  const { open, close, authorYearSeparator } = fpzgCitationStyle.inText;
+  const yearPart = `${authorYearSeparator}${work.year}${close}`;
+  if (!cited.startsWith(open) || !cited.endsWith(yearPart)) return false;
+  const ours = cited.slice(open.length, -yearPart.length);
+  const opening = ` (${work.year}`;
+  return places(text, opening).some((at) => {
+    const after = /^[a-z]?\) /.exec(text.slice(at + opening.length));
+    return after !== null && entryBody(text.slice(at + opening.length + after[0].length)) && listsCited(text.slice(0, at), ours);
+  });
+}
+
 /**
  * DAN-484: the letter a work takes in the year of its citation and entry
  * (FPZG rule "same-year": 2021a, 2021b). The entries of the same authors and
@@ -421,7 +497,7 @@ export function suffixPlan(blocks: readonly Block[], work: Source): SuffixPlan {
     const group = new Set(members.map((m) => m.index));
     const sameForm = blocks.slice(range.start + 1, range.end)
       .some((b, i) => !group.has(range.start + 1 + i)
-        && (sharesCitation(b.text.trim(), base) || sharesWrittenForm(b.text.trim(), base)));
+        && (sharesCitation(b.text.trim(), base) || sharesWrittenForm(b.text.trim(), base) || sharesForm(b.text.trim(), base)));
     if (!sameForm) {
       blocks.forEach((block, index) => {
         if (index > range.start && index < range.end) return;
