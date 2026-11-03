@@ -61,6 +61,7 @@ Snimljeno Playwrightovim Chromiumom, cijela stranica, `deviceScaleFactor` 1. Svi
 - Oznake u velikim slovima („Stanje 3 · potvrda · dijalog i ishod”) opisuju referencu i nisu tekst sučelja.
 - Administrator ne vidi radove ni njihov sadržaj (`docs/PRODUCT.md` §6); A-03 prikazuje samo brojeve upisanih studenata po kolegiju i grupi.
 - Administrator u A-03 ne mijenja nositelja kolegija: na `main` to radi samo nastavnik tog kolegija (`institution.set_course_holder`, #1302), a opoziv uloge ne zatvara zapis o nositelju. Zato dijalog opoziva u A-02 ne upućuje na A-03 za promjenu nositelja.
+- Dodjela nastavnika grupi u A-03 ne uvodi ga u nastavni tim kolegija: na `main` `institution.assign_group_teacher` upisuje samo dodjelu grupi, bez članstva i uloge na kolegiju (#1302, „A group teacher is not a course member”). Što dodjela grupi otvara još nije odlučeno (M2.7-P02), pa dijalog to ne obećava.
 - Nije odlučeno uređuje li nastavni tim i grupe administrator ili nositelj kolegija. Referenca crta radnje u A-03 kao administratorove; ako odluka padne drukčije, A-03 postaje samo čitanje, a radnje prelaze na zaslon nositelja.
 - Upis promjena tima i grupa u revizijski trag još nije na `main`, pa A-03 namjerno ne tvrdi da se dodjela upisuje u revizijski trag. A-02 to tvrdi za potvrdu i opoziv uloge (`audit.teacher_role_event`).
 - Tekst sučelja i atributi (`aria-label`, naslov stranice) provjereni su funkcijom `findForbiddenTermsInMarkup` iz `scripts/forbidden-terms/terms.ts` i nemaju nalaza.
