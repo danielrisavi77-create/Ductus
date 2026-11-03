@@ -53,13 +53,13 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 31. 10. 2026. prema popisu otvorenih PR-ova (34); (n) označava nacrt. Nositelj statusa je Linear, review i QA stanje je na PR-u. Presjek se osvježava skupno.
+Stanje 2. 11. 2026. (oko 23:00 UTC) prema popisu otvorenih PR-ova (32, bez probnih PR-ova Mergify reda); (n) označava nacrt. Nositelj statusa je Linear, review i QA stanje je na PR-u. Presjek se osvježava skupno.
 
-- Platforma, CI i orkestrator: #1083 pravila pisaca u definicijama agenata (D8); #1082 kritični pod za toolchain, lint i skenere (DAN-166); #1081 ci-once; #1079 kritični PR bez D-97 putanja (D-196); #1078 (n) pravilo testova prijenosa (D-195); #1076 agentske datoteke kritične (DAN-171); #1073 usporedba sheme s `db/schema.sql` (DAN-71); #1059 (n) `scripts/local` (DAN-434); #1057 i #641 Mergify; #1041 WebKit na macOS-u (DAN-114); #1038 brži hookovi (DAN-432); #994 D-161 (g) (DAN-361); #684 (n) `orch:shadow`; #643 (n) Mergify nositelj; #628 (n) Playwright ponavljanja (DAN-262).
-- Baza: #1077 migrator i grupne uloge (DAN-71); #1051 (n) advisory lock za dbmate (DAN-71); #947 (n) put evidencije mentorstva (DAN-349).
-- Sučelje i editor: #1075 (n) tema na cijelom dokumentu (Z-13a); #1024 `/prijava` u paleti papir i grafit (DAN-344); #980 (n) i #976 (n) editor prema V3 (DAN-214, DAN-211); #866 (n) citati i literatura (DAN-343); #831 (n) korak na poslužitelju (DAN-331); #1048 (n) napomena S3 (D-63); #553 (n) obavijest o radnim zapisima mentora.
-- Testovi: #1084 (n) auth tok i OIDC klijent (DAN-307); #970 (n) postavljanje labela (DAN-83); #550 (n) parovi falsifikacije (DAN-233).
-- Dokumenti: #1030 D-63 i pravilo 4; #959 (n) papir i grafit u uputama (DAN-357); #551 (n) UX evaluacija (DAN-234); #344 (n) elementi prototipa u M5.
+- Platforma, CI i orkestrator: #1458 skener oznaka skip, todo i only u CI testovima (F-035c, DAN-168); #1456 (n) login E2E preko https i projekt WebKit (DAN-232); #1453 pravila projekta samo iz ovog repoa (F-035a, DAN-168); #1446 postupak dijeljenog pisca u karticama uloga; #1443 (n) F-046 (M0.6d, DAN-178); #1396 nečitljiv negativan verdikt i dalje blokira (F-027, DAN-163); #1051 (n) advisory lock za dbmate (DAN-71); #641 Mergify konfiguracija; Dependabot #1441, #1416, #1415, #1414, #1413 i #1411.
+- Baza i backend: #1455 (n) ruta `/api/ready` (DAN-299); #1447 lanac ključa ustanove (DAN-442); #1439 `signPendingReceipt` za potvrdu v2 (DAN-512); #1372 opseg seminarske grupe (DAN-351, M2.5-P01).
+- Sučelje i editor: #1444 odjava bez mreže i skriven tekst završene sesije (DAN-511); #1437 traži i zamijeni kao jedna pripisana promjena (DAN-507); #1407 Literatura: slovo uz istu godinu i preduga polja (DAN-484).
+- Testovi: #550 (n) parovi falsifikacije (DAN-233).
+- Dokumenti: #1461 sažetak paketa istraživanja (D-251); #1454 M6.2 referentne slike reprodukcije; #1452 spike M3.11-S (DAN-99); #1451 dozvola za paket Lekte (DAN-513); #1450 M2.11 referentne slike (DAN-313); #1449 M0.5c potvrda ljuske (DAN-344); #1445 specifikacija loga potvrda (DAN-55, M3.9-P01); #1440 spike pravopisa M5.11-S (DAN-508); #1435 i #1434 M5 referentne slike (DAN-510).
 
 ## Ne smije se izgubiti
 
