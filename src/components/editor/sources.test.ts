@@ -973,6 +973,8 @@ describe("the exact written form, class by class", () => {
     { klass: "E14 K7 three authors, a year in the first given name", base: TRIO, other: line(work([["Horvat", "Marko (2020)"], P, J], "Treća")), promoted: false },
     { klass: "E15 K8 the pair in reverse order, a year in a given name", base: PAIR, other: line(work([["Kovač", "Luka (2020)"], ["Horvat", "Marko"]], "Treća")), promoted: true },
     { klass: "E16 K9 a hand entry out of style, kept by the earlier readings", base: ONE, other: "Horvat, Marko (2021).", promoted: false },
+    { klass: "E17 K1 K4 our pair split at its last joiner, the other at its first", base: base([["Horvat i Kovač", "Marko"], ["Babić", "Luka"]]),
+      other: line(work([["Horvat", "Ana (2020)"], ["Kovač i Babić", "Iva"]], "Treća")), promoted: false },
   ];
 
   it.each(rows)("class $klass", ({ base: b, other, promoted }) => {
