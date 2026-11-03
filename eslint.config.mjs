@@ -1,10 +1,6 @@
-import { dirname, posix } from "node:path";
-import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const compat = new FlatCompat({
-  baseDirectory: dirname(fileURLToPath(import.meta.url)),
-});
+import { posix } from "node:path";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
 
 // The pg family by package name (pg, pg/lib/..., pg-cursor, pg-boss), or a
 // static path into an installed copy of it (../../node_modules/pg, the pnpm
@@ -94,7 +90,20 @@ const eslintConfig = [
       "test-results-login/**",
     ],
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...nextCoreWebVitals,
+  ...nextTypescript,
+  // PRIJEDLOG (#1415): eslint-plugin-react-hooks 7, which ships with
+  // eslint-config-next 16, adds React Compiler rules that flag 17 existing
+  // places (editor, LocalDocument, submission). They stay visible as warnings
+  // so this upgrade does not touch production code; fixing them and raising
+  // the rules to error is a separate task.
+  {
+    rules: {
+      "react-hooks/purity": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+    },
+  },
   // Keep direct driver imports behind src/server/db (withActor, BACKEND 4.3).
   // This development guard covers static and dynamic literal module imports;
   // it does not enforce every possible JavaScript module-loading operation.
