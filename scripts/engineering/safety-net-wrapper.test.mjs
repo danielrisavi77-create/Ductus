@@ -1423,3 +1423,91 @@ test("F-035 a (QA c.6591641283): a copy whose rulebook spells out a missing file
       fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(base, "copy", ".cc-safety-net"), { recursive: true });
       assert.equal((await run(tree, "Bash", "ls", path.join(base, "copy"))).code, 0, "a byte-identical copy is still accepted");
     })));
+
+// F-035 a (review c.6592372807, QA c.6592414127): an entry of the project config
+// whose content cannot be established never counts as part of a byte-identical
+// copy. The same entry in the root and in the foreign copy blocks, through the
+// real caller and for both tools, while the root and cd to the root stay open.
+test("F-035 a (QA c.6592414127): an entry that cannot be read never makes a foreign copy identical", { timeout: 120000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      const config = path.join(tree.root, ".cc-safety-net");
+      const asRoot = process.getuid?.() === 0;
+      const locked = (target) => {
+        try {
+          fs.readdirSync(target);
+          return false;
+        } catch {
+          try {
+            fs.readFileSync(target);
+            return false;
+          } catch {
+            return true;
+          }
+        }
+      };
+      const rows = [];
+      // [class, build(config dir, side), clean(config dir)]
+      if (process.platform === "linux") {
+        rows.push(["U1 a file that cannot be read, also by root (EIO)", (d) => fs.symlinkSync("/proc/self/mem", path.join(d, "extra.bin"))]);
+        rows.push(["U4 a FIFO of the same name", (d) => assert.equal(spawnSync("mkfifo", [path.join(d, "pipe")]).status, 0, "mkfifo")]);
+      } else assert.ok(!IN_CI, "CI runs on Linux, where /proc and mkfifo exist");
+      if (process.platform !== "win32") {
+        rows.push(["U5 a dangling link with the same target", (d) => fs.symlinkSync("missing-target", path.join(d, "gone"))]);
+        if (!asRoot) {
+          rows.push([
+            "U2 files of the same name and size, different content, no read permission",
+            (d, side) => {
+              const file = path.join(d, "extra.bin");
+              fs.writeFileSync(file, side === "root" ? "AAAA" : "BBBB");
+              fs.chmodSync(file, 0o000);
+              assert.ok(locked(file), "the file is unreadable");
+            },
+            (d) => fs.chmodSync(path.join(d, "extra.bin"), 0o600),
+          ]);
+          rows.push([
+            "U3 a directory of the same name without read permission",
+            (d, side) => {
+              const dir = path.join(d, "locked");
+              fs.mkdirSync(dir);
+              fs.writeFileSync(path.join(dir, "x"), side);
+              fs.chmodSync(dir, 0o000);
+              assert.ok(locked(dir), "the directory is unreadable");
+            },
+            (d) => fs.chmodSync(path.join(d, "locked"), 0o700),
+          ]);
+        } else assert.ok(!IN_CI, "CI runs the tests without root, where a mode of 000 takes effect");
+      } else assert.ok(!IN_CI, "CI runs on Linux, where links and modes work");
+      const before = fs.readdirSync(config);
+      const failures = [];
+      for (const [i, [label, build, clean]] of rows.entries()) {
+        const copy = path.join(base, `u${i}`);
+        fs.cpSync(config, path.join(copy, ".cc-safety-net"), { recursive: true });
+        build(config, "root");
+        build(path.join(copy, ".cc-safety-net"), "copy");
+        try {
+          try {
+            treeDigest(path.join(copy, ".cc-safety-net"), [], undefined, { strict: true });
+            failures.push(`${label}: the strict digest gives a value`);
+          } catch {
+            // refused, as it must be
+          }
+          for (const tool of TOOLS) {
+            const result = await run(tree, tool, "ls", copy);
+            if (result.code !== 2 || !/could not be compared/.test(result.stderr)) failures.push(`${label} (${tool}): ${result.code} ${result.stderr}`);
+            const back = await run(tree, tool, `cd "${tree.root}"`, copy);
+            if (back.code !== 0) failures.push(`${label} (${tool}): cd to the root ${back.code} ${back.stderr}`);
+          }
+          const own = await run(tree, "Bash", "ls", tree.root);
+          if (own.code !== 0) failures.push(`${label}: the root itself ${own.code} ${own.stderr}`);
+        } finally {
+          clean?.(config);
+          clean?.(path.join(copy, ".cc-safety-net"));
+          for (const name of fs.readdirSync(config)) if (!before.includes(name)) fs.rmSync(path.join(config, name), { recursive: true, force: true });
+        }
+      }
+      assert.deepEqual(failures, []);
+      // Control: with every extra entry gone, a byte-identical copy is accepted again.
+      fs.cpSync(config, path.join(base, "same", ".cc-safety-net"), { recursive: true });
+      for (const tool of TOOLS) assert.equal((await run(tree, tool, "ls", path.join(base, "same"))).code, 0, `${tool}: a byte-identical copy`);
+    })));

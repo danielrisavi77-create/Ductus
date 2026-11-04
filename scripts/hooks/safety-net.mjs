@@ -116,10 +116,17 @@ export function readRegular(file, { max = 4096, follow = false } = {}) {
   }
 }
 
-export function treeDigest(dir, skip = [], budget = newBudget()) {
+// strict: an entry whose content cannot be established throws instead of
+// leaving a placeholder, so a comparison of two trees can never take two
+// unknown contents as equal (F-035 a, review c.6592372807, QA c.6592414127).
+export function treeDigest(dir, skip = [], budget = newBudget(), { strict = false } = {}) {
+  const unknown = (what, name) => {
+    if (strict) throw new Error(`${what} ${name || "."} cannot be compared`);
+  };
   try {
     fs.lstatSync(dir);
-  } catch {
+  } catch (error) {
+    if (strict && error.code !== "ENOENT") throw error;
     return "absent";
   }
   const check = () => {
@@ -149,6 +156,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
       }
     } catch (error) {
       if (error instanceof LimitError) throw error;
+      unknown("unreadable directory", rel);
       put("unreadable-dir", rel);
       return;
     }
@@ -166,6 +174,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         try {
           target = fs.readlinkSync(full);
         } catch {
+          unknown("unreadable link", name);
           // keep the placeholder
         }
         put("l", name, target);
@@ -179,6 +188,7 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
             seen.add(real);
           }
         } catch {
+          unknown("dangling link", name);
           put("dangling", name);
           continue;
         }
@@ -198,8 +208,12 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         if (budget.bytes > budget.maxBytes) throw new LimitError(`more than ${budget.maxBytes} bytes`);
         const content = readRegular(full, { max: budget.maxBytes, follow: true });
         if (content) put("f", name, content);
-        else put("unreadable-file", name);
+        else {
+          unknown("unreadable file", name);
+          put("unreadable-file", name);
+        }
       } else {
+        unknown("special file", name);
         put("other", name);
       }
     }
@@ -291,7 +305,8 @@ export function foreignRules(rulebookDir, root, limits) {
   if (project && samePath(own, project)) return null;
   try {
     const budget = newBudget(limits);
-    if (treeDigest(path.join(rulebookDir, PROJECT_CONFIG), [], budget) === treeDigest(path.join(root, PROJECT_CONFIG), [], budget)) return null;
+    const digest = (dir) => treeDigest(path.join(dir, PROJECT_CONFIG), [], budget, { strict: true });
+    if (digest(rulebookDir) === digest(root)) return null;
     return `${rulebookDir} is not a checkout of this repository and its ${PROJECT_CONFIG} differs from the project root's`;
   } catch (error) {
     return `the ${PROJECT_CONFIG} of ${rulebookDir} could not be compared with the project root's (${error.message})`;
