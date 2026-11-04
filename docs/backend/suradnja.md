@@ -224,3 +224,198 @@ Ugovor prije koda. **Odluka vlasnika (issue #87, komentari 6254642740 i 62547210
 - Na `main` još nema produkcijskog puta koji stvara `evidence.document` (B-8); testovi ga postavljaju sami.
 - Poslužiteljsko ograničenje broja zahtjeva još ne postoji; učestalost iz točke 7 drži klijent.
 - Na `main` još nema puta brisanja dokumenta po roku ni povlačenja studenta (D-12); korak 2 uvodi `delete_live_state` i pgTAP redak, a poziva ga onaj PR koji uvodi taj put.
+
+### 4.14 Zahtjev za doradu (D-45, DAN-314)
+
+Ugovor prije koda za M6.5-P01 (plan napada #1506; odgovori orkestratora po delegaciji vlasnika, #1506 komentar 6626381901; potvrda ugovora s četiri odluke, #1091 komentar 6626606552; uzorak §4.11 i #177). Zahtjev za doradu je **zaseban zapis sa sidrom** u shemi `collaboration`, kao komentar iz §4.11, ali nije vrsta niti komentara i ne gradi se na D-133 (PRIJEDLOG). Nikad ne mijenja dokument, reviziju, segment, potvrdu ni hash. Komentari se ne broje kao zahtjevi (D-170 O2). Ništa se ne prihvaća, ne zatvara i ne otvara automatski: svaki prijelaz je izričita radnja jedne osobe (D-243). Napadi A do H iz #1506 su kriterij prihvata. I je korak sučelja, a F pripada DAN-266.
+
+**Shema i vlasništvo.** Kao §4.11: tablice i RPC-ovi su u vlasništvu `ductus_identity`, opseg dokumenta daje `collaboration.document_scope`, a ulogu `collaboration.actor_role`. Nema stranog ključa prema `evidence.document` i nema nikakve ovlasti na shemi `evidence`. Tablice imaju `ENABLE` i `FORCE ROW LEVEL SECURITY` sa samo vlasnikovom politikom. `ductus_app`, `ductus_worker` i `ductus_retention` nemaju nikakvu ovlast ni na jednoj od njih, ni `SELECT`. Retci su u pgTAP matrici.
+
+**Tablica `collaboration.revision_request`** (jedan zahtjev, jedno sidro, trenutačno stanje).
+
+| Stupac | Tip i ograničenje |
+| --- | --- |
+| `id` | `uuid`, PK, generira baza |
+| `institution_id`, `assignment_id`, `owner_id` | `uuid NOT NULL`, iz `document_scope` pri stvaranju, nikad iz parametra |
+| `document_id` | `text NOT NULL` |
+| `anchor` | `jsonb NOT NULL`, `CHECK (collaboration.is_text_anchor(anchor))`; nepromjenjiv, a drugi raspon je novi zahtjev |
+| `state` | `text NOT NULL CHECK IN ('open','responded','accepted','reopened','withdrawn')` |
+| `version` | `integer NOT NULL`, 1 do 1000; trenutačna verzija zahtjeva (D-243) |
+| `row_seq` | `bigint NOT NULL UNIQUE`, 1 do 2^53 − 1; brojač upisa, uvijek `nextval('collaboration.revision_request_seq')` pri stvaranju i pri svakom uspješnom prijelazu ili odgovoru |
+| `created_by` | `uuid NOT NULL`, iz `app.current_actor()` |
+| `created_at` | `timestamptz NOT NULL DEFAULT now()` |
+
+**Tablica `collaboration.revision_request_version`** (jedan redak po verziji; povijest se ne prepisuje).
+
+| Stupac | Tip i ograničenje |
+| --- | --- |
+| `request_id`, `institution_id` | `uuid NOT NULL`, strani ključ na zahtjev iste ustanove, `ON DELETE CASCADE` |
+| `version` | `integer NOT NULL`, 1 do 1000; PK (`request_id`, `version`) |
+| `instruction` | `text NOT NULL`, `CHECK (collaboration.is_revision_text(instruction))` |
+| `requested_revision` | `bigint NOT NULL`, 0 do 2^53 − 1; revizija dokumenta koju je nastavnik vidio kad je otvorio verziju |
+| `opened_by`, `opened_at` | `uuid NOT NULL` iz `app.current_actor()`; `timestamptz NOT NULL DEFAULT now()` |
+| `closed_as` | `text NULL CHECK IN ('accepted','reopened','withdrawn')`; postavlja se jednom i nikad ne mijenja |
+| `closed_by`, `closed_at` | `NULL` dok je `closed_as` `NULL`, inače obavezni (`CHECK`) |
+| `accepted_revision` | `bigint NULL`, 0 do 2^53 − 1; obavezan točno kad je `closed_as = 'accepted'` |
+| `accepted_range_hash` | `text NULL`, `^[0-9a-f]{64}$`; smije biti `NULL` samo uz `accepted` (sidro nije razriješeno), inače je `NULL` |
+
+**Tablica `collaboration.revision_response`** (odgovor studenta; najviše jedan po verziji).
+
+| Stupac | Tip i ograničenje |
+| --- | --- |
+| `id` | `uuid`, PK, generira baza |
+| `request_id`, `institution_id`, `version` | strani ključ na (`request_id`, `version`) verzije, `ON DELETE CASCADE`; `UNIQUE (request_id, version)` |
+| `kind` | `text NOT NULL CHECK IN ('done','declined')`: proveden ili obrazloženo ne pristaje (D-45) |
+| `explanation` | `text NOT NULL`, `CHECK (collaboration.is_revision_text(explanation))`; obavezno za obje vrste |
+| `response_revision` | `bigint NOT NULL`, 0 do 2^53 − 1 i nije manji od `requested_revision` te verzije (provjerava RPC) |
+| `author_id` | `uuid NOT NULL`, iz `app.current_actor()`; nema parametra autora |
+| `created_at` | `timestamptz NOT NULL DEFAULT now()` |
+
+Ugovor nema stanja `SHARED_FOR_REVIEW`, `NEEDS_CLARIFICATION`, `REREVIEW_REQUIRED` ni `RESOLVED` iz `docs/FUNCTIONAL_ARCHITECTURE_V1.md` §13.4. „Traži pojašnjenje” i „ponovni pregled” su `reopened` s novom verzijom. FA polje `resolved_in_version_id` je verzija koja nosi `closed_as = 'accepted'`. Kasnije proširenje skupa je jeftina migracija `CHECK`-a.
+
+**Stanja i prijelazi.** `v` je trenutačna verzija. Ovo su jedini prijelazi; svaki drugi par (stanje, radnja) je `ZD409`, a stanje i povijest ostaju nepromijenjeni.
+
+| Iz | Radnja | Tko | U | Verzija | Upis |
+| --- | --- | --- | --- | --- | --- |
+| (nema) | `create_revision_request` | nastavnik | `open` | 1 | zahtjev i verzija 1 |
+| `open`, `reopened` | `respond_revision_request` (`done` ili `declined`) | student vlasnik | `responded` | `v` | odgovor na verziju `v` |
+| `responded` | `accept_revision_request` | nastavnik | `accepted` | `v` | verzija `v`: `closed_as = 'accepted'`, `accepted_revision`, `accepted_range_hash` |
+| `open`, `reopened`, `responded`, `accepted` | `reopen_revision_request` (nova uputa) | nastavnik | `reopened` | `v + 1` | verzija `v` dobiva `closed_as = 'reopened'` ako još nije zatvorena (prihvaćena ostaje `accepted`), nastaje verzija `v + 1` |
+| `open`, `reopened`, `responded` | `withdraw_revision_request` | nastavnik | `withdrawn` | `v` | verzija `v`: `closed_as = 'withdrawn'` |
+
+- `withdrawn` je završno stanje: zahtjev se ne briše, objema stranama ostaje vidljiv kao povučen i ne može se ponovno otvoriti. Povlačenje iz `accepted` nije dopušteno.
+- Ponovno otvaranje iz `version = 1000` je `ZD409`.
+- Prihvatiti se smije i odgovor `declined`: nastavnik time prihvaća obrazloženje. Vrsta odgovora ostaje u povijesti.
+- Na mjestu nema uređivanja upute ni odgovora. Izmijenjena uputa je nova verzija (D-243). Student koji je odbio, a zatim ipak proveo doradu, čeka novu verziju (napad E4).
+- **Nijedan drugi put ne mijenja stanje.** Promjena teksta ili raspona, nova revizija, objava uživo (§4.12), predaja, oznaka „promijenjeno nakon prihvaćanja” (DAN-266) i S-UV1 (`conditional-validity.ts`, zastavica) ne stvaraju verziju ni prijelaz. Poslužitelj S-UV1 ne poziva.
+- **Verzija nije brojač upisa.** Verziju mijenja samo `reopen`, kao nastavnikova radnja (D-243). Za usporedbu i upis služi zaseban `row_seq`, pa ishod ne ovisi o tome ponavlja li se stanje.
+
+**Očekivani brojač upisa i ishodi** (odluka orkestratora 1, #1091 komentar 6626606552). Svaki RPC pisanja osim stvaranja prima `p_expected_seq bigint`, to jest `row_seq` koji je klijent zadnje pročitao. Brojač se odnosi na zahtjev, nikad na reviziju dokumenta. Revizija je zasebno polje, pa tipkanje studenta između učitavanja i slanja ne poništava valjan odgovor (napad C5). Redak zahtjeva zaključava se s `FOR UPDATE`, pa su usporedba i upis jedan korak. Ishodi `RETURNS TABLE (outcome text, row_seq bigint, version integer, state text)`:
+
+- `applied`: brojač je jednak spremljenom i prijelaz je dopušten. Upisuje se, `row_seq` dobiva sljedeću vrijednost sekvence i vraća se novo stanje.
+- `conflict`: brojač se razlikuje od spremljenog. Ne piše se ništa i vraćaju se trenutačni `row_seq`, `version` i `state`. Ponovljen identičan poziv (dvostruki klik, ponavljanje mreže) nosi stari brojač i uvijek dobiva `conflict`, a iz vraćenog stanja klijent vidi da je radnja već provedena. Ponavljanje nije idempotentan uspjeh, pa nikad ne nastanu dva odgovora ni dva prijelaza.
+- `ZD409`: brojač je jednak, ali radnja iz tog stanja nije dopuštena. Ne piše se ništa i `row_seq` ne raste. Klijent tako razlikuje „ponovno učitaj” (`conflict`) od „nije dopušteno” (`ZD409`).
+- `p_expected_seq` koji nedostaje, je `NULL` ili nije cijeli broj 1 do 2^53 − 1 daje `ZD422`. Nedostajući brojač nikad ne znači „preskoči provjeru”.
+- **Brojač je vezan uz zahtjev (napad C4).** Sve vrijednosti `row_seq` dolaze iz jedne sekvence `collaboration.revision_request_seq` (vlasnik `ductus_identity`, `NO CYCLE`, `MAXVALUE` 2^53 − 1, bez ovlasti za druge uloge). Zato se nijedna vrijednost ne dodjeljuje dvaput, ni istom ni drugom zahtjevu, a `UNIQUE` to čini provjerljivim. Brojač pročitan s drugog zahtjeva nikad nije jednak spremljenom i uvijek daje `conflict`. Brojač raste, ali ne nužno za 1, pa klijent ne smije računati sljedeću vrijednost.
+
+**RPC potpisi** (`SECURITY DEFINER`, `SET search_path = ''`, identitet i ustanova iz `current_actor()`, `EXECUTE` samo `ductus_app`):
+
+- `collaboration.create_revision_request(p_document_id text, p_anchor jsonb, p_instruction text, p_requested_revision bigint) RETURNS TABLE (request_id uuid, row_seq bigint, version integer, state text)`; novi zahtjev dobiva `row_seq` iz sekvence
+- `collaboration.respond_revision_request(p_request_id uuid, p_expected_seq bigint, p_kind text, p_explanation text, p_response_revision bigint)`
+- `collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text)`
+- `collaboration.reopen_revision_request(p_request_id uuid, p_expected_seq bigint, p_instruction text, p_requested_revision bigint)`
+- `collaboration.withdraw_revision_request(p_request_id uuid, p_expected_seq bigint)`
+- `collaboration.list_revision_requests(p_document_id text)`: čitanje, opisano niže.
+- `collaboration.delete_revision_requests(p_document_id text, p_institution_id uuid) RETURNS void`: u vlasništvu `ductus_identity`, `EXECUTE` samo `ductus_retention` (ne `ductus_app`). Briše sve zahtjeve dokumenta, a verzije i odgovori odlaze kaskadom. Bez redaka ne radi ništa. Ne prima ni ne vraća tekst.
+
+Četiri RPC-a prijelaza vraćaju `(outcome, row_seq, version, state)` kao gore. Opseg zahtjeva uvijek dolazi iz spremljenog retka, nikad iz parametra, pa se ID zahtjeva ne može spojiti s drugim dokumentom ili radom (napad A12).
+
+**Revizije.** Sve su sigurni cijeli brojevi 0 do 2^53 − 1. Provjerava se samo oblik i poredak, ne postojanje u evidenciji:
+
+- `response_revision ≥ requested_revision` te verzije (pravilo iz `revision-request.ts` i FA §13.4);
+- `accepted_revision ≥ response_revision` odgovora te verzije;
+- `requested_revision` nove verzije nije manji ni od jedne revizije već zapisane na zahtjevu.
+
+Kršenje je `ZD422` bez odjeka.
+
+**Prihvaćanje: revizija i hash raspona** (`ARCHITECTURE.md` §5a). Pri prihvaćanju se sprema `accepted_revision`, odnosno revizija dokumenta koju je nastavnik pregledao, i `accepted_range_hash`. Poslužitelj ne razrješuje sidro (§4.11, napad 8), pa hash računa **nastavnikov klijent**. Uzima tekst revizije `accepted_revision` koji je već vidio, razriješi sidro zahtjeva s `resolveTextAnchor` i računa SHA-256 (hex, mala slova) UTF-8 bajtova teksta razriješenog raspona, bez dodatne normalizacije. To radi jedna domenska funkcija u `src/domain/collaboration/` koju koristi i projekcija DAN-266. Uz `exact` i `moved` hash je obavezan. Uz `ambiguous` i `missing` klijent šalje `NULL`, što znači „raspon pri prihvaćanju nije pouzdano pronađen”. Kako projekcija čita `NULL`, odlučuje DAN-266. Poslužitelj provjerava samo oblik hasha.
+
+**Tko što smije.** Odnos se računa pri svakom pozivu iz spremljenog opsega (`document_scope` pri stvaranju i čitanju) i `collaboration.actor_role`, bez predmemorije. Uklonjeni nastavnik gubi i čitanje i pisanje odmah (§4.4).
+
+| Akter | Čita | Stvara, prihvaća, ponovno otvara, povlači | Odgovara |
+| --- | --- | --- | --- |
+| Student vlasnik dokumenta (`actor_role` = `student`) | da | `ZD403` | da |
+| Svaki nastavnik zadatka s otvorenim članstvom (`actor_role` = `teacher`), i za zahtjev koji je otvorio drugi nastavnik (D-154) | da | da | `ZD403` |
+| Mentor rada | kao nastavnik zadatka: djeluje u ulozi `teacher`, a redak `mentorship` u `actor_role` i matrici dodaje se s DAN-349 (kao §4.12 t. 4) | | |
+| Student B istog kolegija, nastavnik drugog kolegija, nastavnik sa zatvorenim članstvom, persona druge ustanove, administrator ustanove | `ZD403` | `ZD403` | `ZD403` |
+| Bez sesije | `ZD401` | `ZD401` | `ZD401` |
+
+Nastavnik ne odgovara u ime studenta, a student ne stvara, ne prihvaća i ne povlači zahtjev (napadi A6 i A7).
+
+**Redoslijed provjera i kodovi.** Ovlast se uvijek provjerava prije ulaza, pa neovlašten poziv s neispravnim ulazom dobiva `ZD403`, ne `ZD422`. Svaki odbijen slučaj, uključujući nepostojeći dokument ili zahtjev, daje `ZD403` s istom porukom i istim oblikom odgovora.
+
+1. Sesija bez aktera: `ZD401`.
+2. Stvaranje i čitanje: opseg iz `document_scope` i uloga. RPC-ovi stanja: zaključavanje retka zahtjeva (`FOR UPDATE`, kao `thread_for_actor`) i uloga iz spremljenog opsega. Nepostojeće, tuđe ili pogrešna uloga za radnju: `ZD403`.
+3. Pisanje: zaključavanje retka dokumenta (`FOR SHARE`, „Zaključavanje s predajom” niže), zatim predan rad (`app.document_submitted`): `ZD403`. Čitanje ne zaključava i dopušteno je i nakon predaje.
+4. Ulaz: oblik teksta, sidra, revizija, hasha, vrste i očekivanog brojača: `ZD422`.
+5. Očekivani brojač: `conflict`.
+6. Prijelaz iz tablice i gornja granica verzije: `ZD409`.
+7. Poredak revizija prema spremljenim: `ZD422`.
+8. Upis i ishod `applied`.
+
+**Granice ulaza.** Strogi validator bez nove ovisnosti u `src/domain/collaboration/`, s istim pravilima kao `CHECK` u bazi:
+
+- `instruction` i `explanation`: nova funkcija `collaboration.is_revision_text` po uzoru na `is_comment_body`. Nakon NFC normalizacije 1 do 2000 kodnih točaka; odbijaju se kontrolni znakovi osim `\n` i `\t` te dvosmjerni znakovi U+202A do U+202E i U+2066 do U+2069. Strože od §4.11: mora sadržavati barem jedan znak koji nije Unicode bjelina (`White_Space`, uključujući NBSP) ni znak nulte širine (U+200B do U+200D, U+2060, U+FEFF). Klijentski validator odbija nesparen surogat (`isWellFormed`), a baza ga ionako ne može spremiti. §4.11 se ovime ne mijenja.
+- `anchor`: točno kao §4.11 (`is_text_anchor`).
+- `kind`: točno `done` ili `declined`.
+- Revizije: siguran cijeli broj. String, decimalni broj, negativan broj, `2^53`, `NaN`, `Infinity` i `null` su `ZD422`.
+- Hash: 64 znaka `[0-9a-f]`, ili `NULL` samo uz prihvaćanje.
+- Tijelo HTTP zahtjeva do 16 KiB. Dopuštena su samo propisana polja, a nepoznato polje (npr. `state`, `accepted_by`, `__proto__`), dvostruki ključ i krivi JSON tip su odbijeni, ne ignorirani. Neispravan ID dokumenta ili zahtjeva ruta odbija prije baze istim odgovorom kao `ZD403` (kao §4.12 t. 6), jer bi neispravan `uuid` u bazi dao `22P02` umjesto propisanog koda.
+- Prikaz je uvijek tekst, nikad HTML ni Markdown.
+
+**Žica** (korak rute). `conflict` i `ZD409` moraju ostati razlučivi. Ruta vraća `409 {outcome: "conflict", row_seq, version, state}` za `conflict` i zasebno tijelo za `ZD409` (npr. `{error: "not_allowed"}`). Oblik `{error: "conflict"}` koji ruta komentara koristi za `ZD409` ovdje se ne smije ponoviti. Točne statuse navodi PR koraka 3.
+
+**Nakon predaje i pri brisanju.** Nakon upisane predaje zahtjevi su zamrznuti. Obje strane ih čitaju, a svaki RPC pisanja daje `ZD403` prije provjere ulaza (točka 3 redoslijeda). Predaja ne mijenja stanje i nema tihog prijelaza (napad B8). Zahtjevi, verzije i odgovori brišu se zajedno s radom: `delete_revision_requests` se poziva u istoj transakciji kao brisanje dokumenta po roku i brisanje pri povlačenju studenta (D-12), kao `delete_live_state` (§4.12 t. 2 i 3). Tako ne ostaju siroti retci (napad B9). Do predaje vrijedi rok kao za komentare, a nakon predaje rok klase „Predaja” (`ARCHITECTURE.md` §3). Sami rokovi su PRIJEDLOG (D-30) i ne upisuju se u kod.
+
+**Zaključavanje s predajom** (odluka orkestratora 4, #1091 komentar 6626606552). Predaja usred upisa nije poznata granica nego zahtjev koraka 2 (korak 1 plana #1506):
+
+- Svaki RPC pisanja, uključujući stvaranje, u istoj transakciji uzima `FOR SHARE` na retku `evidence.document` tog dokumenta i tek zatim, u sljedećoj naredbi, poziva `app.document_submitted`. Pod `READ COMMITTED` ta naredba ima novu snimku, pa vidi predaju koja je potvrđena dok je upis čekao.
+- Zaključavanje ide kroz novu funkciju `collaboration.lock_document_for_write(p_document_id text)`. Funkcija je u vlasništvu `ductus_evidence`, `SECURITY DEFINER` je, a `EXECUTE` ima samo `ductus_identity` (kao `document_scope`). Shema `collaboration` tako i dalje nema ovlast na `evidence`. Funkcija ne vraća sadržaj, a dokument izvan opsega daje isti `ZD403`.
+- `app.request_submission` već drži taj redak `FOR UPDATE`. `app.record_submission` upisuje redak koji čita `document_submitted`, a danas taj redak ne zaključava. Korak 2 mu nakon `lock_student_assignment`, a prije `INSERT`-a u `evidence.submission`, dodaje dva zaključavanja: prvo sve retke `evidence.package` tog dokumenta `FOR UPDATE` (`ORDER BY id`), zatim redak dokumenta `FOR UPDATE`.
+- Paket ide prije dokumenta jer `commit_evidence_segment` zaključava paket, pa zadatak i članstvo, pa dokument (`20261028000000_evidence_segment_v3.sql`). Da `record_submission` uzme samo dokument, okidač `close_submitted_packages` bi tek pri `INSERT`-u čekao paket koji drži commit, a commit bi čekao dokument: deadlock. S paketima unaprijed okidač ne čeka ništa novo, jer su njegovi retci već zaključani. Zaključavanje prije `INSERT`-a znači i da je `recorded_at` uvijek nakon upisa koji je prvi držao dokument.
+- Ishod je uvijek jedan od dva: upis koji prvi drži zaključavanje završava prije predaje, ili predaja prva, pa upis dobiva `ZD403`. Upis nakon predaje ne nastaje.
+- Redoslijed upisa je redak zahtjeva, pa dokument. Upis ne zaključava paket. Putevi predaje i `commit_evidence_segment` ne zaključavaju retke zahtjeva, a oba uzimaju paket prije dokumenta, pa ciklusa nema. Upis kratko čeka segment koji drži `FOR UPDATE` na dokumentu, što je prihvatljivo.
+
+**Čitanje: isti izlaz za obje strane.** `collaboration.list_revision_requests(p_document_id text) RETURNS TABLE (request_id, request_state, request_version, request_row_seq, anchor, version, instruction, requested_revision, opened_is_own, opened_window, response_kind, response_explanation, response_revision, response_is_own, response_window, closed_as, closed_is_own, closed_window, accepted_revision, accepted_range_hash)`.
+
+- Vraća jedan redak po verziji, za sve verzije, uključujući povučene zahtjeve. `anchor` je popunjen samo u retku verzije 1.
+- Ista funkcija i isti oblik vrijede za studenta i nastavnika (`PRODUCT.md` §5 pravilo 5). Nema stupca vidljivog samo jednoj strani.
+- Ne vraća se `author_id`, `created_by`, `opened_by` ni `closed_by` ni jedne osobe, `institution_id` ni točno vrijeme. Vremena se vraćaju zaokružena na prozor P-03 od 5 minuta, kao `created_window` u §4.11. Redoslijed nose `version` i redoslijed zahtjeva.
+- Ne vraća se sadržaj dokumenta ni isječak. Sidro se vraća kako ga je nastavnik spremio, a klijent ga razrješuje lokalno (§4.11, napad 8).
+
+**Evidencija netaknuta.** Nijedan RPC ne čita ni ne piše `evidence.document_revision`, `segment`, `package` ni `receipt`. pgTAP potvrđuje da su `current_revision`, `current_content_hash` i lanac segmenata jednaki prije i poslije svakog RPC-a (napad H1). Komentari iz §4.11 i njihovi testovi ostaju nepromijenjeni (napad H6).
+
+**Logovi.** Samo ID-ovi i ishodi: `document_id`, `request_id`, `version`, `outcome` i kod greške. Nikad `instruction`, `explanation`, `anchor` ni hash (§4.9, canary).
+
+**Istodobnost.**
+
+- Dvije kartice ili obje strane šalju radnju s istim očekivanim brojačem. Zbog `FOR UPDATE` točno jedna dobiva `applied`, ostale `conflict` (npr. prihvaćanje i povlačenje iz `responded`, ili odgovor studenta i nova verzija iz `open`).
+- Zatvaranje članstva usred poziva daje jedan čist ishod prema snimci transakcije, bez djelomičnog upisa.
+- Predaja istodobno s upisom: vidi „Zaključavanje s predajom”.
+- Test u koraku 2 koristi dvije stvarne veze na bazu, ne samo sekvencijalne pozive.
+
+**Napadi iz #1506 na testove** (korak u kojem nastaje dokaz).
+
+| Napadi | Dokaz |
+| --- | --- |
+| A1, A3–A5, A8, A12 | pgTAP (2): bez sesije `ZD401`; N2, Student B, druga ustanova i administrator dobivaju `ZD403` na šest RPC-ova koje izvršava `ductus_app`, i s neispravnim ulazom; nepostojeći dokument ili zahtjev daje isti `ZD403`; `delete_revision_requests` pod `ductus_app` daje `42501` uz bilo koju sesiju, a pod `ductus_retention` se izvršava |
+| A2, A6, A7 | pgTAP (2): nastavnik stvara; student na stvaranju, prihvaćanju, ponovnom otvaranju i povlačenju dobiva `ZD403`; nastavnik na odgovoru `ZD403`; drugi nastavnik istog zadatka prihvaća tuđi zahtjev |
+| A9 | pgTAP (2): nastavnik sa zatvorenim članstvom odmah `ZD403` na čitanju i pisanju |
+| A10, A11 | pgTAP (2): izravni `SELECT`/`INSERT`/`UPDATE`/`DELETE` pod `ductus_app`, `ductus_worker` i `ductus_retention` daju `42501`, a uz pogrešno dodijeljen grant 0 redaka; katalog (`bag_eq`): `ductus_app` izvršava točno šest RPC-ova, `ductus_retention` samo `delete_revision_requests`, a `lock_document_for_write` samo `ductus_identity`; svaka nova tablica ima RLS i retke u matrici |
+| B1, B2, B7 | pgTAP (2), tablično: svaki redak tablice prijelaza daje `applied` i točno propisano stanje; svaki par (stanje, radnja) izvan nje daje `ZD409` uz nepromijenjeno stanje i povijest; potpuno, ne uzorak |
+| B3, B4 | pgTAP (2): `response_revision` manja od tražene i `accepted_revision` manja od odgovora daju `ZD422`; prihvaćanje bez odgovora je `ZD409` |
+| B5, D4, D6 | pgTAP (2): nakon `commit_evidence_segment`, `publish_live_state` i predaje stanje i verzija su nepromijenjeni; katalog: nema okidača na tablicama; unit (3): poslužiteljski modul ne uvozi `conditional-validity.ts` |
+| B6, D1, D2, D5 | pgTAP (2): `reopen` iz svakog dopuštenog stanja stvara `v + 1`; stari odgovor i `closed_as = 'accepted'` ostaju u `list_revision_requests`; novi odgovor vezan je uz `v + 1` |
+| B8, B9 | pgTAP (2): na predan rad svaki RPC pisanja daje `ZD403` (i s neispravnim ulazom), čitanje radi; `delete_revision_requests` ostavlja 0 redaka u sve tri tablice |
+| B8 i istodobna predaja | integracijski test (2) s dvije veze, negativan: `record_submission` i svaki RPC pisanja istodobno, u oba redoslijeda dobivanja zaključavanja; ishod je ili upis prije predaje ili `ZD403`, nikad redak zahtjeva, verzije ili odgovora s vremenom nakon predaje; pgTAP: `record_submission` drži `FOR UPDATE` na retku dokumenta i na retcima paketa (druga veza s `NOWAIT` dobiva `55P03`) |
+| Predaja i commit segmenta | integracijski test (2) s dvije veze: `record_submission` i `commit_evidence_segment` istog dokumenta istodobno, u oba redoslijeda; nijedna veza ne dobiva `40P01`; ishod je ili prihvaćen segment prije predaje ili `not_accepting` |
+| C1–C4, C6, D3 | pgTAP (2): zastarjeli brojač, brojač iz budućnosti i trenutačni brojač drugog zahtjeva istog dokumenta (Q1 i Q2 stvoreni jedan za drugim, oba bez prijelaza) daju `conflict` s trenutačnim `row_seq`, verzijom i stanjem i bez upisa; katalog: `row_seq` je `UNIQUE`, a `revision_request_seq` je `NO CYCLE` i bez `USAGE` za `ductus_app`, `ductus_worker` i `ductus_retention`; ponovljen identičan poziv daje `conflict`; `NULL` i nedostajući brojač daju `ZD422`; odgovor na staru verziju nakon `reopen` daje `conflict`; `ZD409` ne povećava `row_seq` |
+| C2 i istodobnost | integracijski test (2) s dvije veze: točno jedan `applied` |
+| C5 | pgTAP (2): odgovor s revizijom većom od tražene uz isti brojač prolazi |
+| E1, E2, E4 | pgTAP (2): `declined` s obrazloženjem daje `responded`; drugi odgovor u istoj verziji daje `conflict`; unit (3) i `CHECK` (2): obrazloženje prazno, samo bjelina, samo NBSP ili nulta širina daje `ZD422` |
+| E3 | korak sučelja (I3): skener zabranjenih izraza |
+| G1–G9 | unit (3), tablično i fast-check: klijentski validator i `CHECK` daju isti ishod za klase ulaza 8 do 10 iz #1506; G7: neispravan ID na ruti daje isti odgovor kao `ZD403` |
+| H2, H5 | pgTAP (2): svaki prijelaz ostavlja tko (`*_by`) i kada u tablici; izlaz ima samo prozore od 5 minuta |
+| H3 | unit (3): canary u uputi i odgovoru ne pojavljuje se u logu ni u poruci greške |
+| H4 | pgTAP (2) i unit (3): izlaz `list_revision_requests` za studenta i nastavnika jednak je osim `*_is_own`; katalog: nema stupca s ID-om osobe ni sa sadržajem dokumenta |
+| H1, H6 | pgTAP (2): evidencija jednaka prije i poslije; testovi komentara bez promjene |
+| F1–F5 | DAN-266; ovdje samo spremljeni `accepted_revision` i `accepted_range_hash` |
+
+**Koraci.** (1) ovaj ugovor; (2) migracija, RLS, RPC-ovi i pgTAP matrica (korak 1 plana #1506); (3) validator, poslužiteljski omotač i ruta s unit i integracijskim testovima, uz usklađivanje `revision-request.ts` s ovim skupom stanja (korak 2 plana); (4) projekcija „promijenjeno nakon prihvaćanja” (DAN-266); (5) sučelje nakon odobrene referentne slike N-08 (D-245). Svaki korak je zaseban PR vezan uz DAN-314, osim koraka 4.
+
+**Poznate granice.**
+
+- **Revizije i hash su tvrdnje strana.** Poslužitelj ne provjerava da revizija postoji ni da hash odgovara tekstu, jer bi za to morao čitati evidenciju. Krivi hash nastavnika može dati samo krivu oznaku „promijenjeno” na njegovu vlastitom prihvaćanju i ne dira evidenciju. Vezanje uz reviziju pogleda dolazi s B-11 i DAN-266.
+- **Dvostruko stvaranje.** Stvaranje nema očekivani brojač, pa dvostruki klik može stvoriti dva jednaka zahtjeva, kao kod komentara u §4.11. Suvišni se povlači.
+- **Vidljivost prema D-37 i P-03** veže B-11, kao u §4.11.
+- Mentorski redak čeka DAN-349. Put brisanja po roku i povlačenja studenta (D-12) još ne postoji na `main`: korak 2 uvodi `delete_revision_requests` i pgTAP redak, a poziva ga PR koji uvodi taj put.
