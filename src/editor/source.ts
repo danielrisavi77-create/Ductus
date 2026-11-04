@@ -23,6 +23,8 @@
  * - `recordWithSource` closes the recorder's open event before and after a
  *   paste, cut or drop, so each is an event of its own and two pastes are
  *   never one (I4); the recorder's API stays as it is.
+ * - A find and replace (`FIND_REPLACE_META`, DAN-507) is `unattributed` and an
+ *   event of its own in the same way.
  */
 
 import { Extension } from "@tiptap/core";
@@ -40,6 +42,16 @@ import { changeOf, type EvidenceRecorder } from "./capture";
  * its own. Only `writeSource` sets it, after a trusted click.
  */
 export const CITATION_FORM_META = new PluginKey<boolean>("citationForm");
+
+/**
+ * Marks the one transaction of a find and replace (DAN-507, contract on #1091
+ * c.6587093852): an event of its own, `unattributed` by the Q1 table like a
+ * toolbar click. Only `src/editor/find-replace.ts` sets it.
+ */
+export const FIND_REPLACE_META = new PluginKey<boolean>("findReplace");
+
+const isFindReplace = (transactions: readonly Transaction[]) =>
+  transactions.some((tr) => tr.getMeta(FIND_REPLACE_META) === true);
 
 /** Sources that are always an event of their own (contract §1 c). */
 export const STANDALONE_SOURCES = ["paste", "cut", "drop"] as const;
@@ -289,6 +301,8 @@ export function sourceOfChange(
 ): EvidenceSource {
   // 1. Undo and Redo, by key, toolbar or command (P3).
   if (transactions.some((tr) => isHistoryTransaction(tr))) return "unattributed";
+  // 1b. Find and replace: a program change, even with a key in the same task.
+  if (isFindReplace(transactions)) return "unattributed";
   const uiEvent = transactions.map((tr) => tr.getMeta("uiEvent") as unknown).find(isStandalone);
   // 1a. The Literatura form, unless a clipboard event claims the same change.
   if (uiEvent === undefined && transactions.some((tr) => tr.getMeta(CITATION_FORM_META) === true)) return "citation-form";
@@ -317,8 +331,8 @@ export function recordWithSource(
 ): EvidenceSource | null {
   if (!transactions.some((tr) => tr.docChanged)) return null;
   const source = sourceOfChange(transactions, observation);
-  // The form's text is never one event with typing before or after it.
-  const standalone = isStandalone(source) || source === "citation-form";
+  // The form's text and a find and replace are never one event with typing before or after them.
+  const standalone = isStandalone(source) || source === "citation-form" || isFindReplace(transactions);
   if (standalone) recorder.close();
   recorder.record(changeOf(transactions, source, at));
   if (standalone) recorder.close();
