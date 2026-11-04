@@ -1759,6 +1759,14 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.mentorship t ON t.id = s.mentorship_id AND t.institution_id = s.institution_id
    WHERE t.ended_at IS NULL
      AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+  UNION ALL
+  SELECT g.user_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
+   WHERE g.valid_to IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+     AND institution.actor_group_work(p_assignment_id, g.user_id)
 $$;
 
 
@@ -1772,15 +1780,14 @@ CREATE FUNCTION app.teacher_course_students(p_course_id uuid) RETURNS TABLE(stud
     AS $$
 DECLARE
   v_actor record;
+  v_role text;
 BEGIN
   SELECT * INTO v_actor FROM app.current_actor();
   IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
     RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
   END IF;
   -- Decided once per call, in the session's institution (actor_course_role).
-  IF institution.actor_course_role(p_course_id) IS DISTINCT FROM 'teacher' THEN
-    RETURN;
-  END IF;
+  v_role := institution.actor_course_role(p_course_id);
   -- One open membership per student and course, so one row per student.
   RETURN QUERY
   SELECT m.user_id, n.given_name, n.family_name
@@ -1788,6 +1795,7 @@ BEGIN
     LEFT JOIN identity.person_name n ON n.user_id = m.user_id AND n.institution_id = m.institution_id
    WHERE m.course_id = p_course_id AND m.institution_id = v_actor.institution_id
      AND m.role = 'student' AND m.member_to IS NULL
+     AND (v_role = 'teacher' OR institution.actor_group_student(p_course_id, m.user_id))
    ORDER BY m.user_id;
 END
 $$;
@@ -2007,6 +2015,7 @@ CREATE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id 
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
     WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
     WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
+    WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'teacher'
   END
   FROM app.current_actor() a
 $$;
@@ -2375,6 +2384,33 @@ BEGIN
   thread_id := t.id;
   state := t.state;
 END
+$$;
+
+
+--
+-- Name: work_started_at(uuid, uuid, uuid); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.work_started_at(p_institution_id uuid, p_assignment_id uuid, p_student_id uuid) RETURNS timestamp with time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT p.created_at FROM evidence.project p
+   WHERE p.assignment_id = p_assignment_id AND p.institution_id = p_institution_id AND p.principal_id = p_student_id
+$$;
+
+
+--
+-- Name: works_started_last(uuid, uuid[], uuid[]); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.works_started_last(p_institution_id uuid, p_assignment_ids uuid[], p_student_ids uuid[]) RETURNS timestamp with time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT max(p.created_at) FROM evidence.project p
+   WHERE p.institution_id = p_institution_id AND p.assignment_id = ANY (p_assignment_ids)
+     AND p.principal_id = ANY (p_student_ids)
 $$;
 
 
@@ -3158,6 +3194,53 @@ $$;
 
 
 --
+-- Name: actor_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_group_student(p_course_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.institution_role r ON r.user_id = a.user_id AND r.institution_id = a.institution_id
+       AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = p_course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+      JOIN institution.course_member m ON m.course_id = p_course_id AND m.institution_id = a.institution_id
+       AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+     WHERE p_student_id IS DISTINCT FROM a.user_id
+  )
+$$;
+
+
+--
+-- Name: actor_group_work(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_group_work(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = s.course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+     WHERE institution.actor_group_student(s.course_id, p_student_id)
+       AND NOT coalesce(collaboration.work_started_at(s.institution_id, s.id, p_student_id)
+                          < greatest(g.valid_from, t.valid_from), false)
+  )
+$$;
+
+
+--
 -- Name: actor_has_role(text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3297,17 +3380,27 @@ CREATE FUNCTION institution.assign_group_student(p_group_id uuid, p_student_id u
 DECLARE
   actor record;
   v_course uuid;
+  v_last timestamptz;
+  v_from timestamptz;
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   SELECT * INTO actor FROM institution.require_course_teacher(v_course);
-  IF NOT EXISTS (
-       SELECT 1 FROM institution.course_member m
-       WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
-     ) THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  PERFORM 1 FROM institution.course_member m
+   WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+   FOR UPDATE;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by)
-  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id)
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT s.id FROM institution.assignment s
+                     WHERE s.course_id = v_course AND s.institution_id = actor.institution_id),
+              ARRAY[p_student_id]);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id, v_from)
   ON CONFLICT (course_id, user_id) WHERE valid_to IS NULL DO NOTHING;
   IF NOT FOUND AND NOT EXISTS (
        SELECT 1 FROM institution.seminar_group_member s
@@ -3330,14 +3423,38 @@ CREATE FUNCTION institution.assign_group_teacher(p_group_id uuid, p_teacher_id u
 DECLARE
   actor record;
   v_course uuid;
+  v_students uuid[];
+  v_last timestamptz;
+  v_from timestamptz;
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   SELECT * INTO actor FROM institution.require_course_teacher(v_course);
   IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by)
-  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id)
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  PERFORM 1
+     FROM (SELECT m.id
+             FROM institution.course_member m
+             JOIN institution.seminar_group_member s ON s.course_id = m.course_id AND s.user_id = m.user_id
+            WHERE s.group_id = p_group_id AND s.valid_to IS NULL
+              AND m.course_id = v_course AND m.role = 'student' AND m.member_to IS NULL
+            ORDER BY m.id
+              FOR UPDATE OF m) l;
+  -- The boundary covers every open place of the group, also of a student
+  -- removed from the course after this transaction began: a work started
+  -- before that removal stays theirs when they return (Codex, #1372).
+  v_students := ARRAY(SELECT s.user_id FROM institution.seminar_group_member s
+                       WHERE s.group_id = p_group_id AND s.valid_to IS NULL);
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT a.id FROM institution.assignment a
+                     WHERE a.course_id = v_course AND a.institution_id = actor.institution_id),
+              v_students);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id, v_from)
   ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
 END
 $$;
@@ -3400,11 +3517,21 @@ BEGIN
 
   -- The actor's relation to the assignment of the work: through the course,
   -- or through the mentorship. An assignment has exactly one of the two.
+  -- Unless a teacher of the course, through a seminar group of it whose
+  -- teacher the actor is and whose member the owner is, also when the actor
+  -- is a student of the course; never for the actor's own work (as
+  -- actor_role).
   SELECT CASE
            WHEN a.course_id IS NOT NULL THEN (
-             SELECT m.role FROM institution.course_member m
-             WHERE m.course_id = a.course_id AND m.institution_id = v_institution
-               AND m.user_id = v_user AND m.member_to IS NULL)
+             SELECT CASE
+                      WHEN m.role = 'teacher' THEN 'teacher'
+                      WHEN institution.actor_group_work(a.id, v_scope.principal_id) THEN 'teacher'
+                      ELSE m.role
+                    END
+             FROM (SELECT) one
+             LEFT JOIN institution.course_member m
+               ON m.course_id = a.course_id AND m.institution_id = v_institution
+              AND m.user_id = v_user AND m.member_to IS NULL)
            ELSE (
              SELECT CASE WHEN ms.mentor_id = v_user THEN 'teacher'
                          WHEN ms.student_id = v_user THEN 'student' END
@@ -3774,6 +3901,7 @@ DECLARE
 BEGIN
   SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
   PERFORM institution.require_course_teacher(v_course);
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
   UPDATE institution.seminar_group_teacher t SET valid_to = greatest(now(), t.valid_from)
    WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
   UPDATE institution.seminar_group_member s SET valid_to = greatest(now(), s.valid_from)
@@ -3854,6 +3982,19 @@ BEGIN
        );
   END IF;
   IF enrolled_course_id IS NOT NULL THEN
+    -- A student who comes back to the course may still hold an open place in
+    -- one of its seminar groups (#1372, repair round 4). Those group rows are
+    -- held FOR SHARE before the new course membership is written, so a
+    -- return waits for assign_group_teacher, which holds the group row FOR NO
+    -- KEY UPDATE until it commits, and no work of the returning student can
+    -- start, and commit, while a new teacher of that group is being assigned.
+    -- A student without an open place waits for nothing new.
+    PERFORM 1 FROM institution.seminar_group g
+      JOIN institution.seminar_group_member s ON s.group_id = g.id AND s.institution_id = g.institution_id
+     WHERE s.course_id = enrolled_course_id AND s.institution_id = actor.institution_id
+       AND s.user_id = actor.user_id AND s.valid_to IS NULL
+     ORDER BY g.id
+       FOR SHARE OF g;
     INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
     VALUES (enrolled_course_id, actor.institution_id, actor.user_id, 'student')
     ON CONFLICT (course_id, user_id) WHERE member_to IS NULL DO NOTHING;
@@ -9037,4 +9178,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261103010000'),
     ('20261103030000'),
     ('20261103100000'),
-    ('20261104090000');
+    ('20261104090000'),
+    ('20261104100000');
