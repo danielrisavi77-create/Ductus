@@ -200,5 +200,6 @@ Jedan crveni uvjet znači da val ne kreće.
 | Operativni | Registracija u AAI@EduHr Registru resursa odobrena | Potvrda Srca |
 | Podatkovni | Popis podizvršitelja (hosting, baza, objekti, KMS, e-pošta, praćenje grešaka, AI pružatelji koje ustanova odobri, GitHub ako objavljuje korijene) s DPA-ima priložen ugovoru s FPZG-om (čl. 28(2) GDPR-a) | Dokument |
 | Tehnički | Proba povrata baze **i** bucketa uspješna; sintetički prolaz evidencije na stagingu koji koristi iste vrste resursa kao produkcija | Zapis probe |
+| Sigurnosni | Kritični nalazi vanjskog pentesta zatvoreni i potvrđeni ponovnim testom; trošak pentesta unutar stropa koji odredi vlasnik (D-266, Q-7 A) | Izvještaj ponovnog testa; vlasnikova potvrda da je trošak unutar stropa |
 
 Pilot se zaustavlja ako se dogodi kritičan neovlašten pristup, gubitak rada ili lažan status (npr. "spremljeno" a nije).
