@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { answer, decide, isCdToRoot, isInstallCommand, main, readRegular, runCli, treeDigest } from "../hooks/safety-net.mjs";
+import { answer, decide, foreignRules, isCdToRoot, isInstallCommand, main, readRegular, runCli, samePath, treeDigest } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -1576,4 +1576,130 @@ shellTest("F-035 a (QA c.6625690084): U1-U5 and P1-P3 through the configured Pre
       // Every class row asks 3 times per tool, P3 once per tool: nothing was skipped.
       assert.equal(calls.length, (rows * 3 + 1) * TOOLS.length);
       assert.ok(calls.some((call) => call.cwd !== tree.root && call.code === 2), "a foreign cwd was blocked through the hook");
+    })));
+
+// F-035 a (Codex c.6627100367): two paths are the same directory only when the
+// file system says so (device and inode, the link itself, never followed), not
+// when their spelling matches in lower case. Cases this file system cannot
+// produce (it may not tell upper from lower case, or never give inode 0) are
+// simulated by swapping fs.lstatSync, fs.realpathSync and process.platform for
+// the one call, never skipped.
+const swapped = async ({ lstat, realpath, platform }, fn) => {
+  const saved = { lstatSync: fs.lstatSync, realpathSync: fs.realpathSync };
+  const own = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    if (lstat) fs.lstatSync = lstat(saved.lstatSync);
+    if (realpath) fs.realpathSync = realpath(saved.realpathSync);
+    if (platform) Object.defineProperty(process, "platform", { ...own, value: platform });
+    return await fn();
+  } finally {
+    Object.assign(fs, saved);
+    Object.defineProperty(process, "platform", own);
+  }
+};
+// lstat with the identity of `to` for the path `from`, or a changed result.
+const lstatAs = (from, to) => (lstat) => (file, options) => lstat(file === from ? to : file, options);
+const lstatEdit = (file, edit) => (lstat) => (name, options) => (name === file ? edit(lstat(name, options)) : lstat(name, options));
+// Two directories whose names differ only in case: real ones where this file
+// system keeps them apart, else `twin` is a real third directory that answers
+// to the lower-case name through the swapped lstat and realpath. The simulation
+// also runs where real twins exist, so it is checked on Linux CI as well.
+const caseTwins = (base, upper, { simulate = false } = {}) => {
+  const lower = path.join(path.dirname(upper), path.basename(upper).toLowerCase());
+  assert.notEqual(lower, upper);
+  if (!simulate && !fs.existsSync(lower)) {
+    fs.mkdirSync(lower);
+    return { lower, cwd: lower, swaps: {} };
+  }
+  const twin = fs.mkdtempSync(path.join(base, "twin-"));
+  const realTwin = fs.realpathSync(twin);
+  const realLower = path.join(fs.realpathSync(path.dirname(upper)), path.basename(lower));
+  return {
+    lower: realLower,
+    cwd: twin,
+    swaps: { lstat: lstatAs(realLower, realTwin), realpath: (realpath) => (file, options) => (realpath(file, options) === realTwin ? realLower : realpath(file, options)) },
+  };
+};
+
+test("F-035 a (Codex c.6627100367): samePath compares file system identity over every input class", () =>
+  scratch(async (base) => {
+    const upper = path.join(base, "Same");
+    fs.mkdirSync(path.join(upper, "sub"), { recursive: true });
+    const twins = caseTwins(base, upper);
+    const simulated = caseTwins(base, upper, { simulate: true });
+    const missing = path.join(base, "missing");
+    const rows = [
+      ["1 the same path", upper, upper, {}, true],
+      ["2 another spelling of the same entry (..)", path.join(upper, "sub") + `${path.sep}..`, upper, {}, true],
+      ["2 a case variant on a file system without case (simulated)", path.join(base, "SAME"), upper, { lstat: lstatAs(path.join(base, "SAME"), upper) }, true],
+      ["3 names differing in case only, two directories", twins.lower, upper, twins.swaps, false],
+      ["3 the same, with win32 as platform", twins.lower, upper, { ...twins.swaps, platform: "win32" }, false],
+      ["3 simulated twins, with win32 as platform", simulated.lower, upper, { ...simulated.swaps, platform: "win32" }, false],
+      ["4 one side missing", missing, upper, {}, false],
+      ["4 both sides missing", missing, missing, {}, false],
+      ["5 lstat fails otherwise (EACCES)", upper, upper, { lstat: lstatEdit(upper, () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); }) }, false],
+      ["6 inode 0: no identity", upper, upper, { lstat: lstatEdit(upper, (stat) => Object.assign(stat, { ino: 0n })) }, false],
+      ["7 the same inode on another device", path.join(upper, "sub"), upper, { lstat: (lstat) => (file, options) => {
+        const stat = lstat(file, options);
+        return file === upper ? Object.assign(stat, { ino: lstat(path.join(upper, "sub"), options).ino, dev: stat.dev + 1n }) : stat;
+      } }, false],
+    ];
+    const link = path.join(base, "link");
+    try {
+      fs.symlinkSync(upper, link, "dir");
+      rows.push(["8 a link to the directory is not the directory", link, upper, {}, false]);
+      rows.push(["2 the same link once the caller resolved it", fs.realpathSync(link), upper, {}, true]);
+    } catch (error) {
+      assert.ok(!IN_CI, `symlinks are available on CI: ${error.message}`);
+      rows.push(["8 a link to the directory (simulated)", link, upper, { lstat: lstatAs(link, path.join(upper, "sub")) }, false]);
+    }
+    for (const [label, a, b, swaps, expected] of rows) {
+      for (const [x, y] of [[a, b], [b, a]]) assert.equal(await swapped(swaps, () => samePath(x, y)), expected, `${label}: ${x} vs ${y}`);
+    }
+  }));
+
+test("F-035 a (Codex c.6627100367): a foreign directory whose name differs in case only is blocked, also on win32", { timeout: 60000 }, () =>
+  withTree({ dir: "Ductus", bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      for (const twins of [caseTwins(base, tree.root), caseTwins(base, tree.root, { simulate: true })]) {
+        plantRules(twins.cwd);
+        for (const platform of [process.platform, "win32"]) {
+          const swaps = { ...twins.swaps, platform };
+          // N1: the reason comes from comparing the config, never from the name.
+          assert.match(await swapped(swaps, () => foreignRules(twins.cwd, tree.root)) ?? "", /not a checkout of this repository/, platform);
+          const result = await swapped(swaps, () => run(tree, "Bash", "ls", twins.cwd));
+          foreign(result, `ls in ${twins.lower} via ${twins.cwd} (${platform})`);
+        }
+      }
+    })));
+
+test("F-035 a (Codex c.6627100367): the root reached by another path keeps its rules; an unknown identity blocks", { timeout: 60000 }, () =>
+  withTree({ dir: "Ductus", bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      // N2: through a link (the realpath leads back to the root), and through a
+      // case variant on a file system that does not tell case apart (simulated).
+      const link = path.join(base, "root-link");
+      let viaLink = true;
+      try {
+        fs.symlinkSync(tree.root, link, "dir");
+      } catch (error) {
+        assert.ok(!IN_CI, `symlinks are available on CI: ${error.message}`);
+        viaLink = false;
+      }
+      if (viaLink) assert.equal(foreignRules(link, tree.root), null, "the root through a link");
+      const realRoot = fs.realpathSync(tree.root);
+      const variant = path.join(path.dirname(realRoot), "DUCTUS");
+      const insensitive = { lstat: lstatAs(variant, realRoot), realpath: (realpath) => (file, options) => (file === variant ? variant : realpath(file, options)) };
+      for (const platform of [process.platform, "win32"]) {
+        assert.equal(await swapped({ ...insensitive, platform }, () => foreignRules(variant, tree.root)), null, `case variant (${platform})`);
+      }
+      // N3 / K2: when lstat of the root fails, the rules are compared as config;
+      // a different rulebook is then refused.
+      const other = path.join(base, "other");
+      plantRules(other);
+      const failing = { lstat: lstatEdit(realRoot, () => { throw Object.assign(new Error("gone"), { code: "EIO" }); }) };
+      assert.match(await swapped(failing, () => foreignRules(other, tree.root)) ?? "", /not a checkout of this repository/);
+      // Even the root itself is then only accepted as an identical config, not by name.
+      assert.equal(await swapped(failing, () => foreignRules(tree.root, tree.root)), null, "the root compared as config with itself");
+      foreign(await swapped(failing, () => run(tree, "Bash", "ls", other)), "unknown identity, different rules");
     })));

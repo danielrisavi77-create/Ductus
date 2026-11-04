@@ -260,12 +260,32 @@ export function findRulebookDir(cwd) {
   return (bounded ? chain : [cwd]).find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
 }
 
+// Two paths name the same entry only when the file system says so: the same
+// device and inode of the entry itself (lstat, so a link is never its target),
+// as bigints so no digit is lost. The spelling never counts, in any case: a
+// file system may keep `Ductus` and `ductus` apart. An identity that cannot be
+// read (an error, inode 0) is not the same, and the caller then compares the
+// configuration instead (F-035a, Codex c.6627100367).
+// A link therefore equals its target only once the caller has resolved it:
+// foreignRules and the `.git` file branch of commonGitDir pass realpathSync
+// results (or a fixed name below one) on both sides; the `.git` directory
+// branch of commonGitDir compares the resolved `.git` with the unresolved
+// `<dir>/.git` on purpose, so a `.git` swapped for a link stays different.
+export function samePath(a, b) {
+  try {
+    const x = fs.lstatSync(a, { bigint: true });
+    const y = fs.lstatSync(b, { bigint: true });
+    return x.ino !== 0n && x.dev === y.dev && x.ino === y.ino;
+  } catch {
+    return false;
+  }
+}
+
 // The common git directory of the checkout at `dir`, or null when `dir` is not
 // verifiably one. A `.git` directory is its own common directory. A `.git` file
 // counts only as a genuine linked worktree: its admin directory sits directly
 // in `<common>/worktrees/` and links back to this very `.git` file. Every file
 // is read with readRegular, so a link or a FIFO in the chain is not followed.
-const samePath = (a, b) => (process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
 const lineOf = (buffer) => buffer?.toString("utf8").split(/\r?\n/)[0].trim() || null;
 function commonGitDir(dir) {
   try {
