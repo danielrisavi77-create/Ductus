@@ -9,7 +9,9 @@
 // Escaped identifiers (`t.sk\u0069p`) and method keys (`{ skip() {} }`) count too.
 // Dynamically built names (`t["sk" + "ip"]`, `t[name]`) are out of reach.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -105,7 +107,11 @@ function decode(raw) {
 export function tokenize(src) {
   const tokens = [];
   const stack = [];
+  // Stack depths at which a class body `{` is expected; an entry ends at that
+  // brace, or when `class` turns out not to start a class (see `dropStale`).
   const classHeads = [];
+  // Index of the latest `class` token; a `(` right after it names a method.
+  let classAt = -1;
   let broken = false;
   let i = 0;
   let line = 1;
@@ -113,6 +119,17 @@ export function tokenize(src) {
     tokens.push({ type, value, line: at, ...extra });
   const last = () => tokens[tokens.length - 1];
   const back = (n) => tokens[tokens.length - n];
+  // `class` was a key or a name, not a class head: its container closed, or
+  // `:`, `,`, `;` or `=` came at its depth before any body `{`.
+  const dropStale = (c) => {
+    while (
+      classHeads.length &&
+      (classHeads[classHeads.length - 1] > stack.length ||
+        (":,;=".includes(c) &&
+          classHeads[classHeads.length - 1] === stack.length))
+    )
+      classHeads.pop();
+  };
   const regexAllowed = () => {
     const t = last();
     if (!t) return true;
@@ -254,8 +271,10 @@ export function tokenize(src) {
         name === "class" &&
         !member(last()) &&
         !/^\s*[:(]/.test(src.slice(j))
-      )
+      ) {
         classHeads.push(stack.length);
+        classAt = tokens.length;
+      }
       push(
         "id",
         name,
@@ -286,6 +305,8 @@ export function tokenize(src) {
       i += 2;
     } else {
       let extra;
+      if (":,;=".includes(c)) dropStale(c);
+      else if (c === "(" && classAt === tokens.length - 1) classHeads.pop();
       if (c === "(") {
         // A paren after `if`, `while`, `for`, `for await` or `with` (not a member) is a head.
         const kw = (t, before) => t?.type === "id" && !member(before);
@@ -334,14 +355,17 @@ export function tokenize(src) {
         stack[stack.length - 1].semi = true;
       else if (c === "}" && stack[stack.length - 1] === "${") {
         stack.pop();
+        dropStale(c);
         i++;
         template(false);
         continue;
       } else if (c === "}" || c === ")" || c === "]") {
         const top = stack.pop();
+        dropStale(c);
         const open = typeof top === "object" ? top.open : top;
         if (open !== { "}": "{", ")": "(", "]": "[" }[c]) broken = true;
-        else if (c === ")") extra = { head: top.head, catchHead: top.catchHead };
+        else if (c === ")")
+          extra = { head: top.head, catchHead: top.catchHead };
         else if (c === "}") extra = { statement: top.statement };
       }
       push("punct", c, line, extra);
@@ -364,6 +388,15 @@ function bodyAfter(tokens, open) {
       return tokens[k + 1]?.type === "punct" && tokens[k + 1].value === "{";
   }
   return false;
+}
+
+// True when an expression can end with token p (before is the token ahead of it).
+function valueEnd(p, before) {
+  if (p.type === "tmpl") return p.opens !== true;
+  if (p.type === "id")
+    return member(before) || !KEYWORDS_BEFORE_EXPRESSION.has(p.value);
+  if (p.type === "punct") return [")", "]", "}", "++", "--"].includes(p.value);
+  return true;
 }
 
 // Lines (1-based) holding a marker.
@@ -403,10 +436,12 @@ export function markers(src) {
       bodyAfter(tokens, k + 1)
     )
       found.add(t.line);
+    // A class field (`skip = true;`) follows `{`, `;` or `}`, or a value
+    // ending on an earlier line, where ASI closed the previous field.
     else if (
       braces[braces.length - 1]?.classBody &&
-      prev?.type === "punct" &&
-      ["{", ";", "}"].includes(prev.value) &&
+      ((prev?.type === "punct" && ["{", ";", "}"].includes(prev.value)) ||
+        (prev?.line < t.line && valueEnd(prev, tokens[k - 2]))) &&
       next?.type === "punct" &&
       ["=", ";", "}"].includes(next.value)
     )
@@ -653,7 +688,10 @@ test("F-035 c: public class fields remain keys after a preceding field", () => {
   for (const name of NAMES) {
     for (const prefix of ["", "timeout = 1000;\n"]) {
       const src = `class Options {\n${prefix}${name} = true;\n}`;
-      assert.equal(new Function(`${src}; return new Options().${name};`)(), true);
+      assert.equal(
+        new Function(`${src}; return new Options().${name};`)(),
+        true,
+      );
       assert.deepEqual(markers(src), [prefix ? 3 : 2], src);
       assert.equal(tokenize(src).balanced, true, src);
       const other = `class Options {\n${prefix}${name}Count = true;\n}`;
@@ -663,6 +701,112 @@ test("F-035 c: public class fields remain keys after a preceding field", () => {
     const local = `let ${name}; class Options { method() { const x = 1; ${name} = true; } }`;
     new Function(local)();
     assert.deepEqual(check([["a.test.mjs", local]], []), []);
+  }
+});
+
+test("F-035 c: a class field after an ASI-ended field is still a key", () => {
+  const ends = [
+    "timeout = 1000",
+    'label = "x"',
+    "id = x",
+    "call = f()",
+    "list = [1]",
+    "pattern = /a/",
+    "text = `t`",
+    "count = n++",
+  ];
+  const head = "const x = 1, f = () => 1; let n = 0;\n";
+  for (const name of NAMES) {
+    for (const end of ends) {
+      const src = `${head}class Options {\n${end}\n${name} = true\n}`;
+      assert.equal(
+        new Function(`${src}; return new Options().${name};`)(),
+        true,
+      );
+      assert.deepEqual(markers(src), [4], src);
+      assert.equal(tokenize(src).balanced, true, src);
+      const other = `${head}class Options {\n${end}\n${name}Count = true\n}`;
+      new Function(other)();
+      assert.deepEqual(check([["a.test.mjs", other]], []), []);
+    }
+    // The same lines in a method body assign a local.
+    const local = `class Options { method() {\nlet ${name}\nconst y = 1\n${name} = true\n} }`;
+    new Function(local)();
+    assert.deepEqual(check([["a.test.mjs", local]], []), []);
+  }
+});
+
+test("F-035 c: a `class` key or name does not make a later brace a class body", () => {
+  const scripts = (name) => [
+    `const o = { class /* c */ : 1, m() { let ${name}; ${name} = true; } };`,
+    `const o = { class /* c */ () {}, m() { let ${name}; ${name} = true; } };`,
+    `class A { class = 1\nm() { let ${name}; ${name} = true; } }`,
+    `class A { class; m() { let ${name}; ${name} = true; } }`,
+  ];
+  const modules = (name) => [
+    `import { class as c } from "node:test";\nfunction g() { if (c) { let ${name}; ${name} = true; } }`,
+    `const x = 1;\nexport { x as class };\nfunction g() { if (x) { let ${name}; ${name} = true; } }`,
+  ];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skip-scan-"));
+  try {
+    for (const name of NAMES) {
+      for (const [i, src] of [...scripts(name), ...modules(name)].entries()) {
+        if (i < scripts(name).length) new Function(src)();
+        else {
+          const file = path.join(dir, "m.mjs");
+          fs.writeFileSync(file, src);
+          const run = spawnSync(process.execPath, ["--check", file]);
+          assert.equal(run.status, 0, `${src}\n${run.stderr}`);
+        }
+        assert.deepEqual(markers(src), [], src);
+        assert.equal(tokenize(src).balanced, true, src);
+        // A real class after it is still read as one, and a later block still
+        // allows a regex, so the marker after it stays visible.
+        const lines = src.split("\n").length;
+        const after = `${src}\nclass Options {\n${name} = true;\n}`;
+        assert.deepEqual(markers(after), [lines + 2], after);
+        const hidden = `${src}\nf(() => { x(); {} /'/.test(s); t.${name}(); });`;
+        assert.deepEqual(markers(hidden), [lines + 1], hidden);
+        assert.equal(tokenize(hidden).balanced, true, hidden);
+      }
+      const extended = `const f = (a) => a;\nclass Options extends f(Object, 1) {\n${name} = true;\n}`;
+      assert.equal(
+        new Function(`${extended}; return new Options().${name};`)(),
+        true,
+      );
+      assert.deepEqual(markers(extended), [3], extended);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("F-035 c: node:test skips a test whose options field follows an ASI-ended field", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skip-scan-"));
+  // The first name is the skip option; the runner here must not see itself as a parent.
+  const [skipName] = NAMES;
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  try {
+    for (const [field, skipped] of [
+      [skipName, 1],
+      [`${skipName}Count`, 0],
+    ]) {
+      const src = `import test from "node:test";\nclass Options {\ntimeout = 1000\n${field} = true\n}\ntest("synthetic", new Options(), () => {});\n`;
+      const file = path.join(dir, "options.test.mjs");
+      fs.writeFileSync(file, src);
+      const run = spawnSync(
+        process.execPath,
+        ["--test", "--test-reporter=tap", file],
+        { encoding: "utf8", env },
+      );
+      assert.equal(run.status, 0, run.stderr);
+      assert.match(run.stdout, new RegExp(`^# skipped ${skipped}$`, "m"));
+      assert.match(run.stdout, new RegExp(`^# pass ${1 - skipped}$`, "m"));
+      assert.deepEqual(markers(src), skipped ? [4] : [], src);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
