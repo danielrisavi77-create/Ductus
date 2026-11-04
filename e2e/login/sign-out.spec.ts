@@ -115,6 +115,20 @@ function refuseStorage(calls: readonly string[]): void {
   }
 }
 
+/**
+ * Every request to the logout route, as "method type" (#1444, class 6): the
+ * page's own fetch, and on success the native form POST that follows it to
+ * the provider, as on main. Nothing else may call the route.
+ */
+function logoutRequests(context: BrowserContext): string[] {
+  const seen: string[] = [];
+  context.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/logout") seen.push(`${request.method()} ${request.resourceType()}`);
+  });
+  return seen;
+}
+const ONE_FETCH = "POST fetch";
+
 // #1444 (K1-K4, N2-N4): a 503, no network or no answer in 8 s ends the
 // sign-out on this device for every tab of the session, and nothing sends it
 // again. A reload under the kept cookie shows no text, also where localStorage
@@ -135,10 +149,7 @@ for (const [answer, broken, when] of [
       for (const tab of [page, other]) await tab.evaluate(refuseStorage, broken);
       await context.addInitScript(refuseStorage, broken);
     }
-    const logouts: string[] = [];
-    context.on("request", (request) => {
-      if (new URL(request.url()).pathname === "/api/auth/logout") logouts.push(request.method());
-    });
+    const logouts = logoutRequests(context);
     await page.route("**/api/auth/logout", async (route) => {
       if (answer === "503") await route.fulfill({ status: 503, body: "" });
       if (answer === "network") await route.abort("internetdisconnected");
@@ -178,7 +189,7 @@ for (const [answer, broken, when] of [
     expect((await appCookie(context, SESSION_COOKIE))!.value).not.toBe(token);
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page)).toContainText("Nacrt C: smeđa mapa");
-    expect(logouts).toEqual(["POST"]);
+    expect(logouts).toEqual([ONE_FETCH]);
   });
 }
 
@@ -186,13 +197,10 @@ for (const [answer, broken, when] of [
 // waits; when it runs out, only the session the sign-out belongs to ends.
 test("Istodobnost: a sign-in in another tab while the sign-out waits keeps the newer session signed in", async ({ page, context }) => {
   await signIn(page, "/rad");
-  const logouts: string[] = [];
-  context.on("request", (request) => {
-    if (new URL(request.url()).pathname === "/api/auth/logout") logouts.push(request.method());
-  });
+  const logouts = logoutRequests(context);
   await page.route("**/api/auth/logout", () => {});
   await logoutOf(page).click();
-  await expect.poll(() => logouts).toEqual(["POST"]);
+  await expect.poll(() => logouts).toEqual([ONE_FETCH]);
 
   await forgetProviderLogin(context);
   const second = await context.newPage();
@@ -204,20 +212,22 @@ test("Istodobnost: a sign-in in another tab while the sign-out waits keeps the n
   await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
   await expect(editorOf(second)).toContainText("Nacrt D: crveni papir");
   await expectStillSignedIn(second, tokenB);
-  expect(logouts).toEqual(["POST"]);
+  expect(logouts).toEqual([ONE_FETCH]);
 });
 
-// N2: the server answers; the fence is in the cookie as well.
+// N2, K2: the server answers; the fence is in the cookie as well.
 test("a sign-out the server answered also leaves the ended mark in the cookie", async ({ page, context }) => {
   await signIn(page, "/rad");
   await writeAndWait(page, " Nacrt E: bijela kreda");
   await context.addInitScript(refuseStorage, ["setItem"]);
   await page.evaluate(refuseStorage, ["setItem"]);
+  const logouts = logoutRequests(context);
   await clickSignOut(page);
   await page.waitForURL(`${APP_ORIGIN}/`);
   expect((await appCookie(context, "ductus-ended"))?.value).toMatch(/^[0-9A-Za-z_-]+$/);
   await page.goto("/rad");
   await expect(page.getByText("Nacrt E")).toHaveCount(0);
+  expect(logouts).toEqual([ONE_FETCH, "POST document"]);
 });
 
 // D-183 (#1330, #1336): the dialog of a sign-out that ended on this device and
