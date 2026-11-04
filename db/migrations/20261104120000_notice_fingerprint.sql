@@ -21,10 +21,10 @@ SET LOCAL ROLE ductus_identity;
 
 -- Nullable columns rewrite no row. Both null (a row written before this
 -- migration) or both set; num_nulls, so that a null never lets one through.
--- squawk-ignore constraint-missing-not-valid
 ALTER TABLE institution.notice_acknowledgment
   ADD COLUMN notice_template_version integer,
   ADD COLUMN notice_fingerprint text,
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT notice_acknowledgment_fingerprint_check CHECK (
     num_nulls(notice_template_version, notice_fingerprint) = 2
     OR (num_nulls(notice_template_version, notice_fingerprint) = 0
