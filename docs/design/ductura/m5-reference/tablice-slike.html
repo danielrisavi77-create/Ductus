@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablice i slike (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca M5.UX-R · DAN-510 · prijedlog slike · #1388</div>
+  <h1>Tablice i slike</h1>
+  <p>Sedam stanja. Okvir slike zadržava omjer da raspored ne skače. Podržane su sve vrste slika; razlog odbijanja je iz fiksnog popisa (D-231). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="t1">
+    <div class="ref-tag">Stanje 1 · slika se obrađuje</div>
+    <div class="imgbox" id="t1" role="status" aria-busy="true">Slika se obrađuje</div>
+  </section>
+
+  <section class="variant" aria-labelledby="t2">
+    <div class="ref-tag">Stanje 2 · slika odbijena</div>
+    <div class="panel"><div class="panel-body" id="t2">
+      <p class="note" role="alert">Slika nije dodana: datoteka je prevelika. Dopušteno je najviše 10 MB. Tekst rada nije zahvaćen.</p>
+      <button class="btn secondary" type="button">Odaberi drugu sliku</button>
+    </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="t3">
+    <div class="ref-tag">Stanje 3 · bez opisa</div>
+    <figure style="margin:0;display:grid;gap:6px" id="t3">
+      <div class="imgbox ok" role="img" aria-label="Primjer slike">Slika 1</div>
+      <figcaption><span class="tag open">Opis nije upisan</span> <button class="btn small ghost" type="button">Upiši opis</button></figcaption>
+    </figure>
+  </section>
+
+  <section class="variant" aria-labelledby="t4">
+    <div class="ref-tag">Stanje 4 · bez mreže</div>
+    <div class="imgbox" id="t4" role="status">Slika će se dodati kad se veza vrati; do tada je na ovom uređaju.</div>
+  </section>
+
+  <section class="variant" aria-labelledby="t5">
+    <div class="ref-tag">Stanje 5 · popisi i prazni popisi</div>
+    <div class="panel"><div class="panel-top"><h2 id="t5">Popis tablica</h2></div>
+      <div class="panel-body"><p class="meta">2 tablice</p><ul class="list"><li class="item"><span>Tablica 1 · Primjer raspodjele</span></li><li class="item"><span>Tablica 2 · Primjer usporedbe</span></li></ul></div></div>
+    <div class="panel"><div class="panel-top"><h2>Popis slika</h2></div>
+      <div class="panel-body"><p class="meta">2 slike</p><ul class="list"><li class="item"><span>Slika 1 · Primjer sheme postupka</span></li><li class="item"><span>Slika 2 · Primjer dijagrama</span></li></ul></div></div>
+    <div class="panel"><div class="panel-top"><h2>Popis tablica (prazan)</h2></div>
+      <div class="panel-body"><p class="note">Još nema tablica.</p></div></div>
+    <div class="panel"><div class="panel-top"><h2>Popis slika (prazan)</h2></div>
+      <div class="panel-body"><p class="note">Još nema slika.</p></div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="t6">
+    <div class="ref-tag">Stanje 6 · poziv na prikaz koji ne postoji</div>
+    <div class="sheet" id="t6"><p>Rezultati su u <span class="tag open">Prikaz ne postoji</span></p></div>
+    <button class="btn secondary" type="button">Odaberi prikaz</button>
+  </section>
+
+  <section class="variant" style="grid-column:1/-1" aria-labelledby="t7">
+    <div class="ref-tag">Stanje 7 · tablica šira od lista</div>
+    <div class="scroll" tabindex="0" role="region" aria-labelledby="t7">
+      <table><caption id="t7" style="text-align:left;padding:8px 12px;color:var(--ink-2)">Tablica 3 · Primjer široke tablice (pomaknite vodoravno)</caption>
+        <thead><tr><th>Skupina</th><th>Prvi mjerni trenutak</th><th>Drugi mjerni trenutak</th><th>Treći mjerni trenutak</th><th>Napomena</th></tr></thead>
+        <tbody><tr><td>A</td><td>12</td><td>15</td><td>18</td><td>Primjer</td></tr><tr><td>B</td><td>10</td><td>11</td><td>14</td><td>Primjer</td></tr></tbody></table>
+    </div>
+  </section>
+
+</div></main>
+</body>
+</html>

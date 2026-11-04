@@ -3316,6 +3316,60 @@ $$;
 
 
 --
+-- Name: approve_mentorship_request(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.approve_mentorship_request(p_request_id uuid) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  req institution.mentorship_request;
+  v_mentorship uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The lock of request_mentorship comes before any row lock, in the same
+  -- order there; student and kind of a request never change.
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.teacher_id = actor.user_id;
+  IF FOUND THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended(
+      'institution.mentorship_request:' || req.institution_id || ':' || req.student_id || ':' || req.work_type, 0));
+  END IF;
+  -- Two approvals of one request wait for each other here.
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.teacher_id = actor.user_id
+  FOR UPDATE;
+  IF NOT FOUND OR institution.lock_teacher_role(actor.user_id) IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  ELSIF req.approved_at IS NOT NULL THEN
+    RETURN req.mentorship_id;
+  ELSIF req.withdrawn_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  BEGIN
+    INSERT INTO institution.mentorship (institution_id, mentor_id, student_id, work_type, confirmed_by)
+    VALUES (req.institution_id, actor.user_id, req.student_id, req.work_type, actor.user_id)
+    RETURNING id INTO v_mentorship;
+  EXCEPTION WHEN unique_violation THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END;
+  WITH approved AS (
+    UPDATE institution.mentorship_request r SET approved_at = now(), mentorship_id = v_mentorship
+    WHERE r.id = req.id
+    RETURNING r.id, r.institution_id, r.student_id, r.teacher_id, r.mentorship_id
+  )
+  INSERT INTO audit.mentorship_event (
+    institution_id, request_id, student_id, teacher_id, kind, actor_id, mentorship_id, occurred_at
+  )
+  SELECT institution_id, id, student_id, teacher_id, 'approved', actor.user_id, mentorship_id, now() FROM approved;
+  RETURN v_mentorship;
+END
+$$;
+
+
+--
 -- Name: assign_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3402,6 +3456,23 @@ BEGIN
   INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
   VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id, v_from)
   ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+END
+$$;
+
+
+--
+-- Name: assignment_version_institution_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assignment_version_institution_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.institution_id IS NULL THEN
+    SELECT a.institution_id INTO NEW.institution_id FROM institution.assignment a WHERE a.id = NEW.assignment_id;
+  END IF;
+  RETURN NEW;
 END
 $$;
 
@@ -3557,6 +3628,23 @@ BEGIN
   INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
   SELECT confirmed.institution_id, confirmed.id, confirmed.user_id, confirmed.role, 'confirmed', actor.user_id, now()
   FROM confirmed;
+END
+$$;
+
+
+--
+-- Name: course_enrollment_code_institution_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.course_enrollment_code_institution_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.institution_id IS NULL THEN
+    SELECT c.institution_id INTO NEW.institution_id FROM institution.course c WHERE c.id = NEW.course_id;
+  END IF;
+  RETURN NEW;
 END
 $$;
 
@@ -4270,6 +4358,22 @@ $$;
 
 
 --
+-- Name: lock_teacher_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.lock_teacher_role(p_user_id uuid) RETURNS uuid
+    LANGUAGE sql
+    SET search_path TO ''
+    AS $$
+  SELECT r.id FROM app.current_actor() a
+  JOIN institution.institution_role r ON r.institution_id = a.institution_id
+  WHERE r.user_id = p_user_id AND r.role = 'teacher'
+    AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  FOR SHARE OF r
+$$;
+
+
+--
 -- Name: notify_assignment_version(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4383,6 +4487,57 @@ BEGIN
   SELECT actor.institution_id, ended.course_id, ended.id, ended.user_id, 'removed', actor.user_id, now() FROM ended;
   GET DIAGNOSTICS v_written = ROW_COUNT;
   RETURN v_written > 0;
+END
+$$;
+
+
+--
+-- Name: request_mentorship(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.request_mentorship(p_teacher_id uuid, p_work_type text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_id uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF p_work_type IS NULL
+     OR p_work_type NOT IN ('bachelor_thesis', 'master_thesis', 'specialist_thesis', 'doctoral_thesis') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- Requests and approvals of one student's kind of work take turns, so a
+  -- request made and approved while this one runs cannot slip between the
+  -- check below and the insert. The approval takes the same lock first.
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    'institution.mentorship_request:' || actor.institution_id || ':' || actor.user_id || ':' || p_work_type, 0));
+  IF p_teacher_id IS NOT DISTINCT FROM actor.user_id
+     OR institution.lock_teacher_role(p_teacher_id) IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM institution.mentorship m
+    WHERE m.institution_id = actor.institution_id AND m.student_id = actor.user_id
+      AND m.work_type = p_work_type AND m.ended_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  BEGIN
+    WITH requested AS (
+      INSERT INTO institution.mentorship_request (institution_id, student_id, teacher_id, work_type)
+      VALUES (actor.institution_id, actor.user_id, p_teacher_id, p_work_type)
+      RETURNING id, institution_id, student_id, teacher_id
+    ), logged AS (
+      INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
+      SELECT institution_id, id, student_id, teacher_id, 'requested', actor.user_id, now() FROM requested
+    )
+    SELECT id INTO v_id FROM requested;
+  EXCEPTION WHEN unique_violation THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END;
+  RETURN v_id;
 END
 $$;
 
@@ -4698,6 +4853,40 @@ $$;
 
 
 --
+-- Name: withdraw_mentorship_request(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.withdraw_mentorship_request(p_request_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  req institution.mentorship_request;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.student_id = actor.user_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  ELSIF req.approved_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  ELSIF req.withdrawn_at IS NOT NULL THEN
+    RETURN false;
+  END IF;
+  WITH withdrawn AS (
+    UPDATE institution.mentorship_request r SET withdrawn_at = now() WHERE r.id = req.id
+    RETURNING r.id, r.institution_id, r.student_id, r.teacher_id
+  )
+  INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
+  SELECT institution_id, id, student_id, teacher_id, 'withdrawn', actor.user_id, now() FROM withdrawn;
+  RETURN true;
+END
+$$;
+
+
+--
 -- Name: work_relation(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4797,6 +4986,27 @@ CREATE TABLE audit.enrollment_code_event (
 );
 
 ALTER TABLE ONLY audit.enrollment_code_event FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: mentorship_event; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.mentorship_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    kind text NOT NULL,
+    actor_id uuid NOT NULL,
+    mentorship_id uuid,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT mentorship_event_check CHECK (((kind = 'approved'::text) = (mentorship_id IS NOT NULL))),
+    CONSTRAINT mentorship_event_kind_check CHECK ((kind = ANY (ARRAY['requested'::text, 'withdrawn'::text, 'approved'::text])))
+);
+
+ALTER TABLE ONLY audit.mentorship_event FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5345,6 +5555,7 @@ CREATE TABLE institution.assignment_version (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     word_min integer,
     word_max integer,
+    institution_id uuid NOT NULL,
     CONSTRAINT assignment_version_check CHECK (institution.is_assignment_content(title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes, evidence_profile, import_allowed)),
     CONSTRAINT assignment_version_version_no_check CHECK ((version_no >= 1)),
     CONSTRAINT assignment_version_word_range_check CHECK (institution.is_word_range(word_min, word_max))
@@ -5403,6 +5614,7 @@ CREATE TABLE institution.course_enrollment_code (
     active boolean DEFAULT true NOT NULL,
     created_by uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    institution_id uuid NOT NULL,
     CONSTRAINT course_enrollment_code_code_hash_check CHECK ((octet_length(code_hash) = 32))
 );
 
@@ -5541,6 +5753,29 @@ CREATE TABLE institution.mentorship (
 );
 
 ALTER TABLE ONLY institution.mentorship FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: mentorship_request; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.mentorship_request (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    work_type text NOT NULL,
+    requested_at timestamp with time zone DEFAULT now() NOT NULL,
+    withdrawn_at timestamp with time zone,
+    approved_at timestamp with time zone,
+    mentorship_id uuid,
+    CONSTRAINT mentorship_request_check CHECK ((student_id <> teacher_id)),
+    CONSTRAINT mentorship_request_check1 CHECK ((num_nonnulls(withdrawn_at, approved_at) <= 1)),
+    CONSTRAINT mentorship_request_check2 CHECK (((approved_at IS NULL) = (mentorship_id IS NULL))),
+    CONSTRAINT mentorship_request_work_type_check CHECK ((work_type = ANY (ARRAY['bachelor_thesis'::text, 'master_thesis'::text, 'specialist_thesis'::text, 'doctoral_thesis'::text])))
+);
+
+ALTER TABLE ONLY institution.mentorship_request FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5731,6 +5966,22 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mentorship_event mentorship_event_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mentorship_event mentorship_event_request_id_kind_key; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_request_id_kind_key UNIQUE (request_id, kind);
 
 
 --
@@ -6022,6 +6273,14 @@ ALTER TABLE ONLY evidence.signing_key
 
 
 --
+-- Name: signing_key signing_key_key_id_institution_key; Type: CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.signing_key
+    ADD CONSTRAINT signing_key_key_id_institution_key UNIQUE (key_id, institution_id);
+
+
+--
 -- Name: signing_key signing_key_pkey; Type: CONSTRAINT; Schema: evidence; Owner: -
 --
 
@@ -6230,11 +6489,27 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
+-- Name: assignment_version assignment_version_due_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.assignment_version
+    ADD CONSTRAINT assignment_version_due_institution_key UNIQUE (assignment_id, version_no, due_at, institution_id);
+
+
+--
 -- Name: assignment_version assignment_version_due_key; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
     ADD CONSTRAINT assignment_version_due_key UNIQUE (assignment_id, version_no, due_at);
+
+
+--
+-- Name: assignment_version assignment_version_id_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.assignment_version
+    ADD CONSTRAINT assignment_version_id_institution_key UNIQUE (assignment_id, version_no, institution_id);
 
 
 --
@@ -6259,6 +6534,14 @@ ALTER TABLE ONLY institution.course_editor
 
 ALTER TABLE ONLY institution.course_enrollment_code
     ADD CONSTRAINT course_enrollment_code_code_hash_key UNIQUE (code_hash);
+
+
+--
+-- Name: course_enrollment_code course_enrollment_code_id_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_enrollment_code
+    ADD CONSTRAINT course_enrollment_code_id_institution_key UNIQUE (id, institution_id);
 
 
 --
@@ -6371,6 +6654,30 @@ ALTER TABLE ONLY institution.mentorship
 
 ALTER TABLE ONLY institution.mentorship
     ADD CONSTRAINT mentorship_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mentorship_request mentorship_request_id_institution_id_student_id_teacher_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_id_institution_id_student_id_teacher_id_key UNIQUE (id, institution_id, student_id, teacher_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_mentorship_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_mentorship_id_key UNIQUE (mentorship_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_pkey PRIMARY KEY (id);
 
 
 --
@@ -6495,6 +6802,13 @@ CREATE INDEX course_member_event_course_idx ON audit.course_member_event USING b
 --
 
 CREATE INDEX enrollment_code_event_course_idx ON audit.enrollment_code_event USING btree (course_id, occurred_at);
+
+
+--
+-- Name: mentorship_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX mentorship_event_institution_idx ON audit.mentorship_event USING btree (institution_id, occurred_at);
 
 
 --
@@ -6701,6 +7015,27 @@ CREATE UNIQUE INDEX mentorship_open_idx ON institution.mentorship USING btree (i
 
 
 --
+-- Name: mentorship_request_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX mentorship_request_open_idx ON institution.mentorship_request USING btree (institution_id, student_id, work_type) WHERE ((withdrawn_at IS NULL) AND (approved_at IS NULL));
+
+
+--
+-- Name: mentorship_request_student_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX mentorship_request_student_idx ON institution.mentorship_request USING btree (student_id);
+
+
+--
+-- Name: mentorship_request_teacher_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX mentorship_request_teacher_open_idx ON institution.mentorship_request USING btree (teacher_id) WHERE ((withdrawn_at IS NULL) AND (approved_at IS NULL));
+
+
+--
 -- Name: mentorship_student_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
@@ -6796,6 +7131,20 @@ CREATE TRIGGER enrollment_code_event_append_only BEFORE DELETE OR UPDATE ON audi
 --
 
 CREATE TRIGGER enrollment_code_event_no_truncate BEFORE TRUNCATE ON audit.enrollment_code_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: mentorship_event mentorship_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER mentorship_event_append_only BEFORE DELETE OR UPDATE ON audit.mentorship_event FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: mentorship_event mentorship_event_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER mentorship_event_no_truncate BEFORE TRUNCATE ON audit.mentorship_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
 
 
 --
@@ -6988,6 +7337,13 @@ CREATE TRIGGER assignment_version_immutable BEFORE DELETE OR UPDATE ON instituti
 
 
 --
+-- Name: assignment_version assignment_version_institution_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER assignment_version_institution_fill BEFORE INSERT ON institution.assignment_version FOR EACH ROW EXECUTE FUNCTION institution.assignment_version_institution_fill();
+
+
+--
 -- Name: assignment_version assignment_version_mentorship_rule; Type: TRIGGER; Schema: institution; Owner: -
 --
 
@@ -7006,6 +7362,13 @@ CREATE TRIGGER assignment_version_no_truncate BEFORE TRUNCATE ON institution.ass
 --
 
 CREATE TRIGGER assignment_version_notify AFTER INSERT ON institution.assignment_version FOR EACH ROW WHEN ((new.version_no > 1)) EXECUTE FUNCTION institution.notify_assignment_version();
+
+
+--
+-- Name: course_enrollment_code course_enrollment_code_institution_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER course_enrollment_code_institution_fill BEFORE INSERT ON institution.course_enrollment_code FOR EACH ROW EXECUTE FUNCTION institution.course_enrollment_code_institution_fill();
 
 
 --
@@ -7073,11 +7436,11 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 
 --
--- Name: enrollment_code_event enrollment_code_event_code_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+-- Name: enrollment_code_event enrollment_code_event_code_institution_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
 --
 
 ALTER TABLE ONLY audit.enrollment_code_event
-    ADD CONSTRAINT enrollment_code_event_code_id_fkey FOREIGN KEY (code_id) REFERENCES institution.course_enrollment_code(id);
+    ADD CONSTRAINT enrollment_code_event_code_institution_fkey FOREIGN KEY (code_id, institution_id) REFERENCES institution.course_enrollment_code(id, institution_id);
 
 
 --
@@ -7086,6 +7449,30 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_actor_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_actor_id_institution_id_fkey FOREIGN KEY (actor_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_mentorship_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_mentorship_id_institution_id_fkey FOREIGN KEY (mentorship_id, institution_id) REFERENCES institution.mentorship(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_request_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_request_fkey FOREIGN KEY (request_id, institution_id, student_id, teacher_id) REFERENCES institution.mentorship_request(id, institution_id, student_id, teacher_id);
 
 
 --
@@ -7337,14 +7724,6 @@ ALTER TABLE ONLY evidence.signing_key
 
 
 --
--- Name: submission submission_assignment_id_assignment_version_due_at_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
---
-
-ALTER TABLE ONLY evidence.submission
-    ADD CONSTRAINT submission_assignment_id_assignment_version_due_at_fkey FOREIGN KEY (assignment_id, assignment_version, due_at) REFERENCES institution.assignment_version(assignment_id, version_no, due_at);
-
-
---
 -- Name: submission submission_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
@@ -7369,11 +7748,11 @@ ALTER TABLE ONLY evidence.submission_receipt
 
 
 --
--- Name: submission_receipt_issuance submission_receipt_issuance_key_id_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+-- Name: submission_receipt_issuance submission_receipt_issuance_key_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
 ALTER TABLE ONLY evidence.submission_receipt_issuance
-    ADD CONSTRAINT submission_receipt_issuance_key_id_fkey FOREIGN KEY (key_id) REFERENCES evidence.signing_key(key_id);
+    ADD CONSTRAINT submission_receipt_issuance_key_institution_fkey FOREIGN KEY (key_id, institution_id) REFERENCES evidence.signing_key(key_id, institution_id);
 
 
 --
@@ -7382,14 +7761,6 @@ ALTER TABLE ONLY evidence.submission_receipt_issuance
 
 ALTER TABLE ONLY evidence.submission_receipt_issuance
     ADD CONSTRAINT submission_receipt_issuance_submission_id_institution_id_p_fkey FOREIGN KEY (submission_id, institution_id, principal_id) REFERENCES evidence.submission(id, institution_id, principal_id);
-
-
---
--- Name: submission_request submission_request_assignment_id_assignment_version_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
---
-
-ALTER TABLE ONLY evidence.submission_request
-    ADD CONSTRAINT submission_request_assignment_id_assignment_version_fkey FOREIGN KEY (assignment_id, assignment_version) REFERENCES institution.assignment_version(assignment_id, version_no);
 
 
 --
@@ -7433,11 +7804,27 @@ ALTER TABLE ONLY evidence.submission_request
 
 
 --
+-- Name: submission_request submission_request_version_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.submission_request
+    ADD CONSTRAINT submission_request_version_institution_fkey FOREIGN KEY (assignment_id, assignment_version, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id);
+
+
+--
 -- Name: submission submission_submission_request_id_institution_id_principal__fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
 ALTER TABLE ONLY evidence.submission
     ADD CONSTRAINT submission_submission_request_id_institution_id_principal__fkey FOREIGN KEY (submission_request_id, institution_id, principal_id, assignment_id, assignment_version, revision, artifact_hash, requested_at) REFERENCES evidence.submission_request(id, institution_id, principal_id, assignment_id, assignment_version, revision, content_hash, requested_at);
+
+
+--
+-- Name: submission submission_version_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.submission
+    ADD CONSTRAINT submission_version_institution_fkey FOREIGN KEY (assignment_id, assignment_version, due_at, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, due_at, institution_id);
 
 
 --
@@ -7497,11 +7884,11 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
--- Name: assignment assignment_current_version_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment assignment_current_version_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment
-    ADD CONSTRAINT assignment_current_version_fkey FOREIGN KEY (id, current_version) REFERENCES institution.assignment_version(assignment_id, version_no) DEFERRABLE INITIALLY DEFERRED;
+    ADD CONSTRAINT assignment_current_version_institution_fkey FOREIGN KEY (id, current_version, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id) DEFERRABLE INITIALLY DEFERRED;
 
 
 --
@@ -7513,19 +7900,19 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
--- Name: assignment_version assignment_version_assignment_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment_version assignment_version_assignment_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
-    ADD CONSTRAINT assignment_version_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES institution.assignment(id);
+    ADD CONSTRAINT assignment_version_assignment_institution_fkey FOREIGN KEY (assignment_id, institution_id) REFERENCES institution.assignment(id, institution_id);
 
 
 --
--- Name: assignment_version assignment_version_created_by_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment_version assignment_version_created_by_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
-    ADD CONSTRAINT assignment_version_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity.user_account(id);
+    ADD CONSTRAINT assignment_version_created_by_institution_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -7561,19 +7948,19 @@ ALTER TABLE ONLY institution.course_editor
 
 
 --
--- Name: course_enrollment_code course_enrollment_code_course_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: course_enrollment_code course_enrollment_code_course_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.course_enrollment_code
-    ADD CONSTRAINT course_enrollment_code_course_id_fkey FOREIGN KEY (course_id) REFERENCES institution.course(id);
+    ADD CONSTRAINT course_enrollment_code_course_institution_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
 
 
 --
--- Name: course_enrollment_code course_enrollment_code_created_by_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: course_enrollment_code course_enrollment_code_created_by_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.course_enrollment_code
-    ADD CONSTRAINT course_enrollment_code_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity.user_account(id);
+    ADD CONSTRAINT course_enrollment_code_created_by_institution_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -7689,19 +8076,35 @@ ALTER TABLE ONLY institution.mentorship
 
 
 --
+-- Name: mentorship_request mentorship_request_mentorship_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_mentorship_id_institution_id_fkey FOREIGN KEY (mentorship_id, institution_id) REFERENCES institution.mentorship(id, institution_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_teacher_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_teacher_id_institution_id_fkey FOREIGN KEY (teacher_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: mentorship mentorship_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.mentorship
     ADD CONSTRAINT mentorship_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
-
-
---
--- Name: notice_acknowledgment notice_acknowledgment_assignment_id_version_no_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
---
-
-ALTER TABLE ONLY institution.notice_acknowledgment
-    ADD CONSTRAINT notice_acknowledgment_assignment_id_version_no_fkey FOREIGN KEY (assignment_id, version_no) REFERENCES institution.assignment_version(assignment_id, version_no);
 
 
 --
@@ -7718,6 +8121,14 @@ ALTER TABLE ONLY institution.notice_acknowledgment
 
 ALTER TABLE ONLY institution.notice_acknowledgment
     ADD CONSTRAINT notice_acknowledgment_student_institution_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_version_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.notice_acknowledgment
+    ADD CONSTRAINT notice_acknowledgment_version_institution_fkey FOREIGN KEY (assignment_id, version_no, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id);
 
 
 --
@@ -7901,6 +8312,19 @@ ALTER TABLE audit.enrollment_code_event ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY enrollment_code_event_owner ON audit.enrollment_code_event TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: mentorship_event; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.mentorship_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mentorship_event mentorship_event_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY mentorship_event_owner ON audit.mentorship_event TO ductus_identity USING (true) WITH CHECK (true);
 
 
 --
@@ -8519,6 +8943,26 @@ CREATE POLICY mentorship_read ON institution.mentorship FOR SELECT TO ductus_app
 
 
 --
+-- Name: mentorship_request; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.mentorship_request ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mentorship_request mentorship_request_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY mentorship_request_owner ON institution.mentorship_request TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: mentorship_request mentorship_request_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY mentorship_request_read ON institution.mentorship_request FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR ((teacher_id = ( SELECT app.current_user_id() AS current_user_id)) AND (withdrawn_at IS NULL) AND (approved_at IS NULL) AND ( SELECT institution.actor_has_role('teacher'::text) AS actor_has_role)))));
+
+
+--
 -- Name: notice_acknowledgment; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -8733,4 +9177,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261102220000'),
     ('20261103010000'),
     ('20261103030000'),
-    ('20261103040000');
+    ('20261103100000'),
+    ('20261104090000'),
+    ('20261104100000');

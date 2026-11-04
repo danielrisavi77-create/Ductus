@@ -1,0 +1,117 @@
+/* Referenca M5 (DAN-510): tokeni „papir i grafit” iz docs/design/DESIGN-SYSTEM.md §3. Nije produktni kod. */
+@font-face { font-family: "Instrument Sans"; src: url("../../../../app/fonts/InstrumentSans-latin-ext.woff2") format("woff2"); font-weight: 400 700; }
+@font-face { font-family: "Instrument Sans"; src: url("../../../../app/fonts/InstrumentSans-latin.woff2") format("woff2"); font-weight: 400 700; }
+@font-face { font-family: "Newsreader"; src: url("../../../../app/fonts/Newsreader-latin-ext.woff2") format("woff2"); font-weight: 400 600; }
+@font-face { font-family: "Newsreader"; src: url("../../../../app/fonts/Newsreader-latin.woff2") format("woff2"); font-weight: 400 600; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../../app/fonts/JetBrainsMono-latin-ext.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../../app/fonts/JetBrainsMono-latin.woff2") format("woff2"); }
+
+:root {
+  --ground: #242422; --chrome: #292a28; --raised: #2e2e2b; --card: #33332f; --well: #3a3a36;
+  --ink: #faf9f5; --ink-2: #dedbd3; --ink-3: #c9c5bb; --rule: #8c887f; --rule-2: #5a5853;
+  --accent: #c8aa6e; --accent-hover: #dcc28a; --accent-ink: #242422; --link-rule: #b3aea3;
+  --synced: #a2c6e5; --field: #2a2a27; --field-rule: #a6a196;
+  --ff-ui: "Instrument Sans", Arial, sans-serif; --ff-display: "Newsreader", "Times New Roman", serif;
+  --ff-mono: "JetBrains Mono", monospace;
+}
+:root[data-theme="light"] {
+  --ground: #f3f2ee; --chrome: #faf9f6; --raised: #faf9f6; --card: #fcfbf8; --well: #ecebe5;
+  --ink: #242422; --ink-2: #55534d; --ink-3: #5c5a54; --rule: #cfccc4; --rule-2: #e2e0d9;
+  --accent: #806529; --accent-hover: #6b5420; --accent-ink: #fcfbf8; --link-rule: #8a7550;
+  --synced: #355b81; --field: #fcfbf8; --field-rule: #85827a;
+}
+* { box-sizing: border-box; }
+input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0 8px 0 0; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 13.5px/1.5 var(--ff-ui); }
+h1, h2, h3 { font-family: var(--ff-display); font-weight: 500; letter-spacing: -0.015em; margin: 0; }
+p { margin: 0; }
+a { color: var(--accent); text-decoration: underline; text-decoration-color: var(--link-rule); text-underline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+
+/* Okvir reference: oznake varijanti nisu dio sučelja. */
+.ref-head { max-width: 1200px; margin: 0 auto; padding: 32px 24px 8px; }
+.ref-head h1 { font-size: 29px; }
+.ref-head p { color: var(--ink-2); margin-top: 6px; max-width: 70ch; }
+.ref-tag { font: 12px/1.4 var(--ff-mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+.grid { max-width: 1200px; margin: 0 auto; padding: 16px 24px 48px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+
+/* Panel Upute i provjera oblika */
+.panel { background: var(--chrome); border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; }
+.panel-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--rule-2); }
+.panel-top h2 { font-size: 19px; }
+.panel-body { padding: 14px 16px 16px; display: grid; gap: 12px; }
+.meta { color: var(--ink-3); font-size: 12.5px; }
+.note { color: var(--ink-2); }
+.foot { color: var(--ink-3); font-size: 12.5px; border-top: 1px solid var(--rule-2); padding-top: 10px; }
+.row { background: var(--card); border: 1px solid var(--rule-2); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; }
+.row h3 { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; }
+.row .obs { color: var(--ink); }
+.row .src { color: var(--ink-3); font-size: 12.5px; }
+.row.stale { background: transparent; border-style: dashed; border-color: var(--rule); }
+.row.stale .obs { color: var(--ink-2); }
+.stale-mark { font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
+.facts { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 2px; }
+.btn { font: 600 13.5px/1 var(--ff-ui); min-height: 44px; padding: 0 14px; border-radius: 5px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); justify-self: start; cursor: pointer; }
+.btn.secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
+.skel { height: 12px; border-radius: 4px; background: var(--well); }
+.skel.w60 { width: 60%; } .skel.w80 { width: 80%; } .skel.w40 { width: 40%; }
+.range { font-family: var(--ff-display); font-size: 17px; }
+.count { font: 500 13.5px/1.4 var(--ff-mono); }
+
+/* M5: zajednički dijelovi stranica */
+.page { max-width: 1200px; margin: 0 auto; padding: 0 24px 48px; display: grid; gap: 28px; }
+.variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+.variant { display: grid; gap: 8px; min-width: 0; }
+.btn.small { padding: 0 10px; }
+/* DESIGN-SYSTEM §5: 32 px samo u gustim trakama; drugdje i na mobitelu 44 px. */
+.panel-top .btn.small, .item .acts .btn.small, .statusbar .btn.small { min-height: 32px; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: transparent; text-decoration: underline; text-decoration-color: var(--link-rule); text-underline-offset: 3px; }
+.btn[aria-disabled="true"] { opacity: 1; background: var(--well); color: var(--ink-3); border-color: var(--rule-2); cursor: not-allowed; }
+/* DESIGN-SYSTEM §5: samostalne poveznice u panelu i railu imaju cilj najmanje 44 × 44 px na svim širinama, ne samo na mobitelu. */
+.panel a, .rail a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+.tag { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.tag.open { border-style: dashed; }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.item { background: var(--card); border: 1px solid var(--rule-2); border-radius: 6px; padding: 10px 12px; display: grid; gap: 6px; min-width: 0; }
+.item .title { font-weight: 600; }
+.item .acts { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.dialog { background: var(--raised); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.dialog .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 12.5px; color: var(--ink-3); }
+.input { min-height: 32px; padding: 6px 10px; border: 1px solid var(--field-rule); border-radius: 5px; background: var(--field); color: var(--ink); font: inherit; }
+/* List je papir u obje ljuske (D-188): tokeni bijelog lista iz DESIGN-SYSTEM §3, ne nasljeđuje ljusku. */
+.sheet { --sheet: #fcfbf8; --ink: #242422; --ink-2: #55534d; --ink-3: #5c5a54; --rule: #cfccc4; --well: #efede7; --accent: #806529;
+  background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 20px 24px; font: 16px/1.7 var(--ff-display); display: grid; gap: 10px; }
+.sheet p { margin: 0; }
+/* Oznaka fusnote: cilj dodira 44 × 44 px (#1386 t. 6). Odlomak s oznakom ima prored 46 px, a cilj je visok 44 px bez vertikalnih margina: ciljevi susjednih
+   redaka imaju razmak 2 px (zaokruživanje na piksele ne smije ih spojiti), pa se ne preklapaju ni uz kakav prijelom teksta. Vodoravne negativne margine čuvaju razmak teksta. */
+.sheet p:has(> .fn) { line-height: 46px; }
+.sheet .fn { position: relative; z-index: 1; display: inline-flex; justify-content: center; align-items: center; vertical-align: top; width: 44px; height: 44px; margin: 0 -18px; color: inherit; text-decoration: none; }
+.sheet .fn sup { position: relative; top: -0.45em; font-size: 0.75em; line-height: 1; }
+.mark { background: var(--well); border-bottom: 2px solid var(--accent); padding: 0 2px; }
+.toast { background: var(--raised); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.workspace { display: grid; grid-template-columns: 220px 1fr; border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; background: var(--ground); }
+.workspace .rail { background: var(--chrome); border-right: 1px solid var(--rule-2); padding: 12px; display: grid; gap: 10px; align-content: start; }
+.workspace .doc { padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.statusbar { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--ink-2); border-top: 1px solid var(--rule-2); background: var(--chrome); padding: 8px 12px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--synced); display: inline-block; margin-right: 6px; }
+.dot.local { background: transparent; border: 2px solid var(--ink-2); width: 8px; height: 8px; box-sizing: border-box; }
+.track { height: 6px; border-radius: 3px; background: var(--well); position: relative; }
+.track .band { position: absolute; top: 0; bottom: 0; background: var(--rule); border-radius: 3px; }
+.track .pt { position: absolute; top: -3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--ink); border: 2px solid var(--ground); }
+.scroll { overflow-x: auto; border: 1px solid var(--rule-2); border-radius: 6px; box-shadow: inset -12px 0 8px -10px var(--rule); }
+.scroll table { min-width: 560px; }
+.imgbox { aspect-ratio: 16 / 9; border: 1px dashed var(--rule); border-radius: 6px; display: grid; place-items: center; background: var(--well); color: var(--ink-2); padding: 8px; text-align: center; }
+.imgbox.ok { border-style: solid; background: repeating-linear-gradient(135deg, var(--well) 0 12px, var(--card) 12px 24px); }
+@media (max-width: 1050px) { .variants { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) {
+  .page { padding: 0 16px 32px; }
+  .variants { grid-template-columns: 1fr; }
+  .workspace { grid-template-columns: 1fr; }
+  .workspace .rail { border-right: 0; border-bottom: 1px solid var(--rule-2); }
+  .btn, .btn.small, .panel-top .btn.small, .item .acts .btn.small, .statusbar .btn.small, .input { min-height: 44px; }
+  label:has(> input[type="checkbox"]) { display: flex; align-items: center; min-height: 44px; }
+  .statusbar a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  .tag, .field label, .statusbar, .src { font-size: 13px; }
+}
