@@ -15,10 +15,20 @@
 // compose makes. Only loopback hosts are accepted, and no PG*, PSQL* or DBMATE_*
 // variable of the caller reaches a child, so nothing here can aim at another
 // server.
+//
+// F-215: the bootstrap makes its login a SUPERUSER, so it refuses the cluster's
+// own roles (postgres, pg_*), the roles the migrations make (ductus_*) and any
+// existing role it did not create itself (ROLE_MARKER). No password is public
+// and none goes through argv: the login password comes from
+// DUCTUS_NATIVE_PGPASSWORD or is generated once and kept in a 0600 file
+// (passwordFile), and psql reads the secrets with \getenv from its own
+// environment, dbmate its URL from DATABASE_URL.
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -29,9 +39,13 @@ export const DEFAULTS = Object.freeze({
   DUCTUS_NATIVE_PGSOCKET: "/var/run/postgresql",
   DUCTUS_NATIVE_PGUSER: "ductus",
   DUCTUS_NATIVE_PGDATABASE: "ductus",
-  // The compose superuser's local-only password (compose.yaml).
-  DUCTUS_NATIVE_PGPASSWORD: "ductus-local-only",
 });
+export const ROLE_MARKER = "ductus native-db";
+const RESERVED_ROLE = /^(?:postgres$|pg_|ductus_)/;
+const RESERVED_DATABASE = new Set(["postgres", "template0", "template1"]);
+// The psql variables holding secrets are read from these child variables.
+export const BOOTSTRAP_PASSWORD_VAR = "DUCTUS_NATIVE_BOOTSTRAP_PASSWORD";
+export const AUTH_PASSWORD_VAR = "DUCTUS_NATIVE_AUTH_PASSWORD";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
 const PORT = /^[1-9][0-9]{0,4}$/;
 const SOCKET_DIR = /^\/[A-Za-z0-9._/-]*$/;
@@ -39,17 +53,29 @@ const NAME = /^[a-z_][a-z0-9_]{0,62}$/;
 const STEERING = /^(?:PG|PSQL|DBMATE_)/i;
 export const READY_ATTEMPTS = 30;
 
-// Idempotent: CREATE only when missing, then the role is stated again, so a
-// role left with another password or without SUPERUSER is reset. psql
-// variables are not read inside DO bodies, hence format() and \gexec.
+// Idempotent: a missing role is created and marked; an existing one must carry
+// the mark, else the run stops. Then the role is stated again, so a role left
+// with another password or without SUPERUSER is reset. psql variables are not
+// read inside DO bodies, hence format() and \gexec.
 export const BOOTSTRAP_SQL = [
-  "SELECT pg_catalog.format('CREATE ROLE %I', :'ductus_user') WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = :'ductus_user') \\gexec",
+  `\\getenv ductus_password ${BOOTSTRAP_PASSWORD_VAR}`,
+  "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = :'ductus_user') AS role_exists,",
+  `  COALESCE((SELECT pg_catalog.shobj_description(oid, 'pg_authid') FROM pg_catalog.pg_roles WHERE rolname = :'ductus_user'), '') = '${ROLE_MARKER}' AS role_ours \\gset`,
+  "\\if :role_exists",
+  "\\if :role_ours",
+  "\\else",
+  "DO $$ BEGIN RAISE EXCEPTION 'the role exists and was not created by db:up:native; drop it or set DUCTUS_NATIVE_PGUSER'; END $$;",
+  "\\endif",
+  "\\else",
+  "SELECT pg_catalog.format('CREATE ROLE %I', :'ductus_user') \\gexec",
+  `SELECT pg_catalog.format('COMMENT ON ROLE %I IS %L', :'ductus_user', '${ROLE_MARKER}') \\gexec`,
+  "\\endif",
   "SELECT pg_catalog.format('ALTER ROLE %I LOGIN SUPERUSER PASSWORD %L', :'ductus_user', :'ductus_password') \\gexec",
   "SELECT pg_catalog.format('CREATE DATABASE %I OWNER %I', :'ductus_db', :'ductus_user') WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_database WHERE datname = :'ductus_db') \\gexec",
   "",
 ].join("\n");
 
-/** The validated connection settings, from DUCTUS_NATIVE_* with the defaults above. */
+/** The validated connection settings (without the password), from DUCTUS_NATIVE_* with the defaults above. */
 export function nativeConfig(env) {
   if (env.NODE_ENV === "production") throw new Error("the native database steps are refused in production");
   const value = (name) => env[name] ?? DEFAULTS[name];
@@ -58,29 +84,72 @@ export function nativeConfig(env) {
   const socket = value("DUCTUS_NATIVE_PGSOCKET");
   const user = value("DUCTUS_NATIVE_PGUSER");
   const database = value("DUCTUS_NATIVE_PGDATABASE");
-  const password = value("DUCTUS_NATIVE_PGPASSWORD");
   if (!LOOPBACK.has(host)) throw new Error("DUCTUS_NATIVE_PGHOST must be 127.0.0.1, localhost or ::1");
   if (!PORT.test(port) || Number(port) > 65535) throw new Error("DUCTUS_NATIVE_PGPORT must be a port number");
   if (!SOCKET_DIR.test(socket) || socket.split("/").includes("..")) throw new Error("DUCTUS_NATIVE_PGSOCKET must be an absolute socket directory");
-  if (!NAME.test(user)) throw new Error("DUCTUS_NATIVE_PGUSER must be a plain role name");
-  if (!NAME.test(database)) throw new Error("DUCTUS_NATIVE_PGDATABASE must be a plain database name");
-  if (typeof password !== "string" || password.length === 0 || /[\0\r\n]/.test(password)) {
-    throw new Error("DUCTUS_NATIVE_PGPASSWORD must be one non-empty line");
+  if (!NAME.test(user) || RESERVED_ROLE.test(user)) {
+    throw new Error("DUCTUS_NATIVE_PGUSER must be a plain role name other than postgres, pg_* and ductus_*");
   }
-  return { host, port, socket, user, database, password };
+  if (!NAME.test(database) || RESERVED_DATABASE.has(database)) {
+    throw new Error("DUCTUS_NATIVE_PGDATABASE must be a plain database name other than postgres and the templates");
+  }
+  return { host, port, socket, user, database };
+}
+
+/** Where a generated login password is kept between db:up:native and test:db:native. */
+export const passwordFile = (env) => join(env.HOME || homedir(), ".config", "ductus", "native-db-password");
+
+const validPassword = (value) => typeof value === "string" && value.length >= 16 && !/[\0\r\n]/.test(value);
+
+/** The default password store: one line in a 0600 file under a 0700 directory. */
+export const fileStore = (file) => ({
+  read() {
+    try {
+      return readFileSync(file, "utf8").trim();
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+  },
+  write(value) {
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+    writeFileSync(file, `${value}\n`, { mode: 0o600 });
+    chmodSync(file, 0o600);
+  },
+});
+
+/**
+ * The login password: DUCTUS_NATIVE_PGPASSWORD, else the stored one, else (only
+ * when `create`) a new random one that is stored. Never a fixed default.
+ */
+export function loginPassword(env, store, { create }) {
+  const given = env.DUCTUS_NATIVE_PGPASSWORD;
+  if (given !== undefined) {
+    if (!validPassword(given)) throw new Error("DUCTUS_NATIVE_PGPASSWORD must be one line of at least 16 characters");
+    return given;
+  }
+  const stored = store.read();
+  if (stored !== null && stored !== "") {
+    if (!validPassword(stored)) throw new Error("the stored native database password is not valid; delete it and run pnpm db:up:native");
+    return stored;
+  }
+  if (!create) throw new Error("no native database password; run pnpm db:up:native first or set DUCTUS_NATIVE_PGPASSWORD");
+  const made = randomBytes(24).toString("hex");
+  store.write(made);
+  return made;
 }
 
 /** The caller's environment without the libpq, psql and dbmate variables, plus the password for the TCP login. */
-export function childEnv(env, config) {
-  const clean = Object.fromEntries(Object.entries(env).filter(([name]) => !STEERING.test(name)));
-  return { ...clean, PGPASSWORD: config.password };
+export function childEnv(env, password) {
+  const clean = Object.fromEntries(Object.entries(env).filter(([name]) => !STEERING.test(name) && !name.startsWith("DUCTUS_NATIVE_")));
+  return { ...clean, PGPASSWORD: password };
 }
 
 const tcp = (config) => ["-h", config.host, "-p", config.port, "-U", config.user, "-d", config.database];
 
-export function dbmateUrl(config) {
+export function dbmateUrl(config, password) {
   const host = config.host.includes(":") ? `[${config.host}]` : config.host;
-  const credentials = `${encodeURIComponent(config.user)}:${encodeURIComponent(config.password)}`;
+  const credentials = `${encodeURIComponent(config.user)}:${encodeURIComponent(password)}`;
   return `postgres://${credentials}@${host}:${config.port}/${config.database}?sslmode=disable&role=ductus_migrator`;
 }
 
@@ -103,12 +172,14 @@ function authPassword(env) {
 
 /**
  * db:up:native. `run(command, args, { env, input, stdinFile })` resolves to an
- * exit code; injectable so a test needs no PostgreSQL.
+ * exit code; injectable so a test needs no PostgreSQL. `input` is written to
+ * stdin before the `stdinFile` contents.
  */
-export async function up({ env, run, isRoot, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), log = console.log }) {
+export async function up({ env, run, isRoot, store = fileStore(passwordFile(env)), wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), log = console.log }) {
   const config = nativeConfig(env);
   const auth = authPassword(env);
-  const cenv = childEnv(env, config);
+  const password = loginPassword(env, store, { create: true });
+  const cenv = childEnv(env, password);
   const ready = () => run("pg_isready", ["-q", "-h", config.host, "-p", config.port], { env: cenv });
   if ((await ready()) !== 0) {
     if (!isRoot) throw new Error(`PostgreSQL does not answer on ${config.host}:${config.port}; start it (for example: sudo service postgresql start)`);
@@ -129,20 +200,26 @@ export async function up({ env, run, isRoot, wait = (ms) => new Promise((resolve
     return [command, [...args, ...vars]];
   };
   await step("creating the ductus login and database", ...admin("postgres", [
-    "-v", `ductus_user=${config.user}`, "-v", `ductus_db=${config.database}`, "-v", `ductus_password=${config.password}`,
-  ]), { input: BOOTSTRAP_SQL });
+    "-v", `ductus_user=${config.user}`, "-v", `ductus_db=${config.database}`,
+  ]), { input: BOOTSTRAP_SQL, env: { ...cenv, [BOOTSTRAP_PASSWORD_VAR]: password } });
   await step("db/local/migrator.sql", ...admin(config.database), { stdinFile: join(ROOT, "db/local/migrator.sql") });
   const dbmate = join(ROOT, "node_modules", "dbmate", "dist", "cli.js");
-  await step("dbmate up", process.execPath, [dbmate, "--url", dbmateUrl(config), "--no-dump-schema", "--wait", "up", "--strict"]);
+  await step("dbmate up", process.execPath, [dbmate, "--no-dump-schema", "--wait", "up", "--strict"], {
+    env: { ...cenv, DATABASE_URL: dbmateUrl(config, password) },
+  });
   await step("db/local/app-login.sql", ...admin(config.database), { stdinFile: join(ROOT, "db/local/app-login.sql") });
-  await step("db/local/auth-login.sql", ...admin(config.database, ["-v", `auth_password=${auth}`]), { stdinFile: join(ROOT, "db/local/auth-login.sql") });
+  await step("db/local/auth-login.sql", ...admin(config.database), {
+    input: `\\getenv auth_password ${AUTH_PASSWORD_VAR}\n`,
+    stdinFile: join(ROOT, "db/local/auth-login.sql"),
+    env: { ...cenv, [AUTH_PASSWORD_VAR]: auth },
+  });
   log(`Native database ready on ${config.host}:${config.port}/${config.database}; run pnpm test:db:native.`);
 }
 
 /** test:db:native: the pg_prove of test:db, over loopback instead of docker compose exec. */
-export async function testDb({ env, run }) {
+export async function testDb({ env, run, store = fileStore(passwordFile(env)) }) {
   const config = nativeConfig(env);
-  return run("pg_prove", pgProveArgs(config), { env: childEnv(env, config) });
+  return run("pg_prove", pgProveArgs(config), { env: childEnv(env, loginPassword(env, store, { create: false })) });
 }
 
 function spawnRun(command, args, { env, input, stdinFile } = {}) {
@@ -154,8 +231,9 @@ function spawnRun(command, args, { env, input, stdinFile } = {}) {
       resolve(-1);
     });
     child.once("exit", (code) => resolve(code ?? 1));
-    if (input !== undefined) child.stdin.end(input);
-    else if (stdinFile !== undefined) readFile(stdinFile).then((sql) => child.stdin.end(sql), () => child.stdin.destroy());
+    if (stdinFile !== undefined) {
+      readFile(stdinFile).then((sql) => child.stdin.end(Buffer.concat([Buffer.from(input ?? ""), sql])), () => child.stdin.destroy());
+    } else if (input !== undefined) child.stdin.end(input);
   });
 }
 
