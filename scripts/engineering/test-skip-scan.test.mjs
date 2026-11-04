@@ -1,13 +1,24 @@
 // F-035 c (DAN-168): no node test that CI runs is skipped, left as todo or
 // focused, except at the listed places. CI runs `node --test` over these
 // directories (.github/workflows/ci.yml, "Engineering system unit tests"), and
-// a marked test there passes silently. The scan reads the source with a small
-// tokenizer, so a marker in a comment, a string or a regular expression is not
-// one, while every syntactic form of it is: a member (`t.skip()`, `ctx?.todo`),
-// a computed member or a string equal to the name (`t["skip"]`), and the name in
-// key position (`{ skip: true }`, `{ only }`, `import { skip } from "node:test"`).
-// Escaped identifiers (`t.sk\u0069p`) and method keys (`{ skip() {} }`) count too.
-// Dynamically built names (`t["sk" + "ip"]`, `t[name]`) are out of reach.
+// a marked test there passes silently. Each file is parsed with the TypeScript
+// parser (already a devDependency) and its syntax tree is walked, so comments,
+// strings, regular expressions, local variables and class fields are never
+// markers. A marker is each form of t.2 of the orchestrator contract (#1458
+// c.6626687486) and each form the earlier version already caught:
+// - a member `skip`, `todo`, `only` or `runOnly` in callee position
+//   (`t.skip()`, `test.skip.each([])()`, `ctx?.todo()`, `t.skip.call(t)`), or
+//   `skip`, `todo` or `only` read from `describe`, `it`, `test` or `suite`;
+// - a `skip`, `todo` or `only` key in an object literal (node:test options);
+// - `skip`, `todo` or `only` imported from node:test, or destructured from
+//   `describe`, `it`, `test` or `suite`.
+// Names are compared after escapes are cooked (`t.sk\u0069p`, `t["sk\ip"]`).
+// A file that does not parse is an error, never clean. Out of reach: names
+// built at run time (`t[name]`), a method passed on uncalled (`run(t.skip)`),
+// options taken from a class instance or JSON, and destructuring from the test
+// function under another name (`const { skip } = await import("node:test")`).
+// TypeScript also parses syntax that Node rejects in a .mjs file (types, JSX,
+// `with`); such a file fails loudly when CI runs it, so it is never silent.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -15,6 +26,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -22,8 +34,9 @@ const ROOT = path.resolve(
   "..",
 );
 const DIRS = ["scripts/engineering", "scripts/orchestrator", "scripts/hooks"];
-// Built from one string so that the scanner's own source holds no marker.
-const NAMES = new Set("skip todo only runOnly".split(" "));
+const MEMBERS = new Set(["skip", "todo", "only", "runOnly"]);
+const OPTIONS = new Set(["skip", "todo", "only"]);
+const ROOTS = new Set(["describe", "it", "test", "suite"]);
 
 // A place is a file and the exact trimmed text of its line; each must exist
 // exactly once (ENGINEERING_SYSTEM §14 t.8), so a stale entry fails.
@@ -42,442 +55,110 @@ const ALLOWED = [
   ],
 ];
 
-// `of` is not here: it is a keyword only in a for-of head (see `ofKeyword`).
-const KEYWORDS_BEFORE_EXPRESSION = new Set(
-  "return typeof case do else in new delete void throw instanceof yield await".split(
-    " ",
-  ),
-);
-// A statement follows the `)` of these heads, so `/` there starts a regex.
-const HEADS = new Set("if while for with".split(" "));
-// JavaScript line terminators; a line comment or a regular expression ends on any.
-const LINE_END = "\n\r\u2028\u2029";
-// The JavaScript identifier classes; a Unicode space or line end is in neither.
-const ID_START = /^[\p{ID_Start}$_]$/u;
-const ID_PART = /^[\p{ID_Continue}$\u200C\u200D]$/u;
-// Code units taken by the identifier character at src[i] (2 when astral), or 0.
-function idChar(src, i, re) {
-  const cp = src.codePointAt(i);
-  if (cp === undefined) return 0;
-  const ch = String.fromCodePoint(cp);
-  return re.test(ch) ? ch.length : 0;
-}
-const member = (t) =>
-  t?.type === "punct" && (t.value === "." || t.value === "?.");
+const isWrap = (n) =>
+  ts.isParenthesizedExpression(n) ||
+  ts.isNonNullExpression(n) ||
+  ts.isAsExpression(n);
+const isAccess = (n) =>
+  ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n);
 
-// The cooked text of a string or template, or null when an escape is invalid
-// (allowed in a tagged template such as String.raw`\u{110000}`).
-const HEX = /^[0-9A-Fa-f]+$/;
-function decode(raw) {
-  let out = "";
-  for (let i = 0; i < raw.length; i++) {
-    const c = raw[i];
-    if (c !== "\\") {
-      out += c;
-      continue;
-    }
-    const n = raw[++i];
-    if (n === undefined) break;
-    if (LINE_END.includes(n)) {
-      if (n === "\r" && raw[i + 1] === "\n") i++;
-      continue;
-    }
-    if (n === "x" || (n === "u" && raw[i + 1] !== "{")) {
-      const hex = raw.slice(i + 1, i + (n === "x" ? 3 : 5));
-      if (hex.length !== (n === "x" ? 2 : 4) || !HEX.test(hex)) return null;
-      out += String.fromCharCode(parseInt(hex, 16));
-      i += hex.length;
-    } else if (n === "u") {
-      const end = raw.indexOf("}", i);
-      const hex = end === -1 ? "" : raw.slice(i + 2, end);
-      if (!HEX.test(hex) || parseInt(hex, 16) > 0x10ffff) return null;
-      out += String.fromCodePoint(parseInt(hex, 16));
-      i = end;
-    } else
-      out +=
-        { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", v: "\v", 0: "\0" }[n] ??
-        n;
+// The cooked static name of a key or member, or null (`#skip`, `t[name]`).
+function staticName(n) {
+  if (!n) return null;
+  if (ts.isComputedPropertyName(n) || ts.isParenthesizedExpression(n))
+    return staticName(n.expression);
+  if (ts.isIdentifier(n) || ts.isStringLiteralLike(n)) return n.text;
+  return null;
+}
+const keyOf = (n) =>
+  ts.isPropertyAccessExpression(n) ? n.name : n.argumentExpression;
+
+// The identifier an access or call chain starts from (`test` in `test.skip.each([])`).
+function rootName(n) {
+  while (isWrap(n) || isAccess(n) || ts.isCallExpression(n)) n = n.expression;
+  return ts.isIdentifier(n) ? n.text : null;
+}
+
+// True when the access, possibly through further members, is what is called.
+function called(n) {
+  let p = n.parent;
+  while (isWrap(p) || (isAccess(p) && p.expression === n))
+    [n, p] = [p, p.parent];
+  return (
+    (ts.isCallExpression(p) && p.expression === n) ||
+    (ts.isTaggedTemplateExpression(p) && p.tag === n)
+  );
+}
+
+// The value an object literal or binding pattern destructures, if it is one.
+function destructured(n) {
+  let p = n.parent;
+  while (
+    ts.isPropertyAssignment(p) ||
+    ts.isShorthandPropertyAssignment(p) ||
+    ts.isArrayLiteralExpression(p) ||
+    ts.isSpreadElement(p) ||
+    ts.isSpreadAssignment(p) ||
+    ts.isObjectLiteralExpression(p) ||
+    isWrap(p)
+  )
+    [n, p] = [p, p.parent];
+  if (ts.isBinaryExpression(p) && p.left === n)
+    return p.operatorToken.kind === ts.SyntaxKind.EqualsToken ? p.right : null;
+  if (ts.isVariableDeclaration(p) && p.name === n) {
+    const loop = p.parent.parent;
+    if (ts.isForOfStatement(loop) || ts.isForInStatement(loop))
+      return loop.expression;
+    return p.initializer ?? null;
   }
-  return out;
+  if ((ts.isForOfStatement(p) || ts.isForInStatement(p)) && p.initializer === n)
+    return p.expression;
+  return undefined;
 }
+const fromRoot = (value) => !!value && ROOTS.has(rootName(value) ?? "");
 
-// Tokens: { type: "id" | "str" | "punct" | "num" | "regex", value, line }.
-// A template's `${...}` is tokenized as code; a template with substitutions
-// is not a string value.
-export function tokenize(src) {
-  const tokens = [];
-  const stack = [];
-  // Stack depths at which a class body `{` is expected; an entry ends at that
-  // brace, or when `class` turns out not to start a class (see `dropStale`).
-  const classHeads = [];
-  // Index of the latest `class` token; a `(` right after it names a method.
-  let classAt = -1;
-  let broken = false;
-  let i = 0;
-  let line = 1;
-  // A line terminator (any of LINE_END) since the previous token; ASI needs it.
-  let gapEnd = false;
-  const push = (type, value, at, extra) => {
-    tokens.push({ type, value, line: at, nl: gapEnd, ...extra });
-    gapEnd = false;
-  };
-  const last = () => tokens[tokens.length - 1];
-  const back = (n) => tokens[tokens.length - n];
-  // `class` was a key or a name, not a class head: its container closed, or
-  // `:`, `,`, `;` or `=` came at its depth before any body `{`.
-  const dropStale = (c) => {
-    while (
-      classHeads.length &&
-      (classHeads[classHeads.length - 1] > stack.length ||
-        (":,;=".includes(c) &&
-          classHeads[classHeads.length - 1] === stack.length))
-    )
-      classHeads.pop();
-  };
-  const regexAllowed = () => {
-    const t = last();
-    if (!t) return true;
-    // An expression starts after `${`; a finished template is a value.
-    if (t.type === "tmpl") return t.opens === true;
-    // A keyword is one only outside member position: `o.in / 2` divides.
-    if (t.type === "id")
-      return t.value === "of"
-        ? t.keyword === true
-        : KEYWORDS_BEFORE_EXPRESSION.has(t.value) && !member(back(2));
-    // After the `)` of an if, while, for or with head a statement starts;
-    // A statement block also allows a regex; an object remains a value.
-    if (t.type === "punct")
-      return t.value === ")"
-        ? t.head === true
-        : t.value === "}"
-          ? t.statement === true
-          : !["]", "++", "--"].includes(t.value);
-    return false;
-  };
-  // `of` is the for-of keyword when it follows the binding (a name, `]` or `}`;
-  // not `const`, `let`, `var` or an operator keyword such as `in`, unless a
-  // member) in a for head, before any `;`, once per head.
-  const ofKeyword = () => {
-    const top = stack[stack.length - 1];
-    const p = last();
-    if (!top?.forHead || top.semi || top.of) return false;
-    const binding =
-      (p?.type === "id" &&
-        (member(back(2)) ||
-          !(
-            ["const", "let", "var"].includes(p.value) ||
-            KEYWORDS_BEFORE_EXPRESSION.has(p.value)
-          ))) ||
-      (p?.type === "punct" && (p.value === "]" || p.value === "}"));
-    return binding && (top.of = true);
-  };
-  const template = (fresh) => {
-    // i is just past a backtick (fresh) or the closing `}` of a substitution.
-    const at = line;
-    let raw = "";
-    for (;;) {
-      const c = src[i];
-      if (c === undefined) {
-        stack.push("`");
-        return push("tmpl", null, at);
-      }
-      if (c === "\\") {
-        raw += c + (src[i + 1] ?? "");
-        if (src[i + 1] === "\n") line++;
-        i += 2;
-        continue;
-      }
-      if (c === "`") {
-        i++;
-        return push("tmpl", fresh ? decode(raw) : null, at);
-      }
-      if (c === "$" && src[i + 1] === "{") {
-        i += 2;
-        stack.push("${");
-        return push("tmpl", null, at, { opens: true });
-      }
-      if (c === "\n") line++;
-      raw += c;
-      i++;
-    }
-  };
-  if (src.startsWith("#!"))
-    while (i < src.length && !LINE_END.includes(src[i])) i++;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "\n") {
-      line++;
-      i++;
-      gapEnd = true;
-    } else if (/\s/.test(c)) {
-      if (LINE_END.includes(c)) gapEnd = true;
-      i++;
-    } else if (c === "/" && src[i + 1] === "/")
-      while (i < src.length && !LINE_END.includes(src[i])) i++;
-    else if (c === "/" && src[i + 1] === "*") {
-      const end = src.indexOf("*/", i + 2);
-      const stop = end === -1 ? src.length : end + 2;
-      for (; i < stop; i++) {
-        if (src[i] === "\n") line++;
-        if (LINE_END.includes(src[i])) gapEnd = true;
-      }
-    } else if (c === '"' || c === "'") {
-      const at = line;
-      let j = i + 1;
-      let raw = "";
-      while (j < src.length && src[j] !== c && src[j] !== "\n") {
-        if (src[j] === "\\") {
-          raw += src[j] + (src[j + 1] ?? "");
-          if (src[j + 1] === "\n") line++;
-          else if (src[j + 1] === "\r" && src[j + 2] === "\n") {
-            raw += "\n";
-            line++;
-            j++;
-          }
-          j += 2;
-        } else raw += src[j++];
-      }
-      i = j + 1;
-      push("str", decode(raw), at);
-    } else if (c === "`") {
-      i++;
-      template(true);
-    } else if (c === "/" && regexAllowed()) {
-      // A regular expression ends on its own line; otherwise it was division.
-      let j = i + 1;
-      let inClass = false;
-      let ok = false;
-      for (; j < src.length && !LINE_END.includes(src[j]); j++) {
-        if (src[j] === "\\") j++;
-        else if (src[j] === "[") inClass = true;
-        else if (src[j] === "]") inClass = false;
-        else if (src[j] === "/" && !inClass) {
-          ok = true;
-          break;
-        }
-      }
-      if (ok) {
-        j++;
-        for (let n; (n = idChar(src, j, ID_PART)); ) j += n;
-        push("regex", src.slice(i, j), line);
-        i = j;
-      } else {
-        push("punct", "/", line);
-        i++;
-      }
-    } else if (idChar(src, i, ID_START) || (c === "\\" && src[i + 1] === "u")) {
-      // An identifier may spell a letter as \uXXXX or \u{X}; its name is the decoded text.
-      let j = i;
-      for (;;) {
-        const n = idChar(src, j, ID_PART);
-        if (n) j += n;
-        else if (src[j] !== "\\" || src[j + 1] !== "u") break;
-        else if (src[j + 2] === "{")
-          j = src.indexOf("}", j) === -1 ? src.length : src.indexOf("}", j) + 1;
-        else j += 6;
-      }
-      const name = decode(src.slice(i, j));
-      // `#class` is a private name; directly in a class body, `class` at an
-      // element start (after `{`, `;`, `}`, `static` or an ASI-ended field)
-      // is a field name. Neither is a class head.
-      const p = last();
-      const elementName =
-        (p?.type === "punct" && p.value === "#") ||
-        (stack[stack.length - 1]?.classBody === true &&
-          ((p?.type === "punct" && ["{", ";", "}"].includes(p.value)) ||
-            (p?.type === "id" && p.value === "static" && !member(back(2))) ||
-            (gapEnd && p !== undefined && valueEnd(p, back(2)))));
-      if (
-        name === "class" &&
-        !elementName &&
-        !member(last()) &&
-        !/^\s*[:(]/.test(src.slice(j))
-      ) {
-        classHeads.push(stack.length);
-        classAt = tokens.length;
-      }
-      push(
-        "id",
-        name,
-        line,
-        name === "of" && ofKeyword() ? { keyword: true } : undefined,
-      );
-      i = j;
-    } else if (
-      /[0-9]/.test(c) ||
-      (c === "." && /[0-9]/.test(src[i + 1] ?? ""))
-    ) {
-      let j = i + 1;
-      while (j < src.length && /[0-9A-Za-z_.]/.test(src[j])) j++;
-      push("num", src.slice(i, j), line);
-      i = j;
-    } else if (
-      c === "?" &&
-      src[i + 1] === "." &&
-      !/[0-9]/.test(src[i + 2] ?? "")
-    ) {
-      push("punct", "?.", line);
-      i += 2;
-    } else if (c === "." && src.startsWith("...", i)) {
-      push("punct", "...", line);
-      i += 3;
-    } else if ((c === "+" || c === "-") && src[i + 1] === c) {
-      push("punct", c + c, line);
-      i += 2;
-    } else {
-      let extra;
-      if (":,;=".includes(c)) dropStale(c);
-      else if (c === "(" && classAt === tokens.length - 1) classHeads.pop();
-      if (c === "(") {
-        // A paren after `if`, `while`, `for`, `for await` or `with` (not a member) is a head.
-        const kw = (t, before) => t?.type === "id" && !member(before);
-        const forHead =
-          (kw(back(1), back(2)) && back(1).value === "for") ||
-          (back(1)?.value === "await" &&
-            kw(back(2), back(3)) &&
-            back(2).value === "for");
-        const head =
-          forHead || (kw(back(1), back(2)) && HEADS.has(back(1).value));
-        stack.push({
-          open: "(",
-          head,
-          forHead,
-          semi: false,
-          of: false,
-          catchHead: kw(back(1), back(2)) && back(1).value === "catch",
-        });
-      } else if (c === "{") {
-        const prev = last();
-        const top = stack[stack.length - 1];
-        const classBody = classHeads[classHeads.length - 1] === stack.length;
-        if (classBody) classHeads.pop();
-        const statement =
-          !classBody &&
-          (!prev ||
-            (prev.type === "id" &&
-              !member(back(2)) &&
-              ["else", "do", "try", "catch", "finally"].includes(prev.value)) ||
-            (prev.type === "punct" &&
-              ((prev.value === ")" && (prev.head || prev.catchHead)) ||
-                (prev.value === "}" && prev.statement) ||
-                ((prev.value === "{" || prev.value === ";") &&
-                  (!top || top.block)))));
-        // Function/method bodies contain statements too, but their closing
-        // brace is not sufficient evidence that the enclosing value ended.
-        const block =
-          statement ||
-          (!classBody &&
-            (prev?.value === ")" ||
-              (prev?.value === ">" && back(2)?.value === "=")));
-        stack.push({ open: "{", block, statement, classBody });
-        extra = { classBody };
-      } else if (c === "[") stack.push(c);
-      else if (c === ";" && stack[stack.length - 1]?.forHead)
-        stack[stack.length - 1].semi = true;
-      else if (c === "}" && stack[stack.length - 1] === "${") {
-        stack.pop();
-        dropStale(c);
-        i++;
-        template(false);
-        continue;
-      } else if (c === "}" || c === ")" || c === "]") {
-        const top = stack.pop();
-        dropStale(c);
-        const open = typeof top === "object" ? top.open : top;
-        if (open !== { "}": "{", ")": "(", "]": "[" }[c]) broken = true;
-        else if (c === ")")
-          extra = { head: top.head, catchHead: top.catchHead };
-        else if (c === "}") extra = { statement: top.statement };
-      }
-      push("punct", c, line, extra);
-      i++;
-    }
-  }
-  // An unbalanced end means the tokenizer lost track (a misread string,
-  // template or regular expression) and could have hidden a marker.
-  tokens.balanced = !broken && stack.length === 0;
-  return tokens;
-}
-
-// True when the parenthesis at tokens[open] closes and a `{` follows it.
-function bodyAfter(tokens, open) {
-  let depth = 0;
-  for (let k = open; k < tokens.length; k++) {
-    const v = tokens[k].type === "punct" ? tokens[k].value : null;
-    if (v === "(") depth++;
-    else if (v === ")" && --depth === 0)
-      return tokens[k + 1]?.type === "punct" && tokens[k + 1].value === "{";
-  }
-  return false;
-}
-
-// True when an expression can end with token p (before is the token ahead of it).
-function valueEnd(p, before) {
-  if (p.type === "tmpl") return p.opens !== true;
-  if (p.type === "id")
-    return member(before) || !KEYWORDS_BEFORE_EXPRESSION.has(p.value);
-  if (p.type === "punct") return [")", "]", "}", "++", "--"].includes(p.value);
-  return true;
-}
-
-// Lines (1-based) holding a marker.
-export function markers(src) {
-  const tokens = tokenize(src);
+// The parse errors and the marker lines (1-based, counted by LF) of a source.
+export function scan(src, file = "a.test.mjs") {
+  const kind = /\.[cm]?ts$/.test(file) ? ts.ScriptKind.TS : ts.ScriptKind.JS;
+  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, kind);
+  const lineOf = (n) => src.slice(0, n.getStart(sf)).split("\n").length;
+  const errors = sf.parseDiagnostics.map(
+    (d) =>
+      `${file}:${src.slice(0, d.start).split("\n").length}: cannot be parsed, so it is not clean: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`,
+  );
   const found = new Set();
-  const braces = [];
-  for (let k = 0; k < tokens.length; k++) {
-    const t = tokens[k];
-    const prev = tokens[k - 1];
-    const next = tokens[k + 1];
-    if (t.type === "punct" && "{([".includes(t.value)) braces.push(t);
-    else if (t.type === "punct" && "})]".includes(t.value)) braces.pop();
-    const named =
-      (t.type === "id" && NAMES.has(t.value)) ||
-      ((t.type === "str" || t.type === "tmpl") && NAMES.has(t.value));
-    if (!named) continue;
-    if (t.type !== "id") {
-      found.add(t.line);
-      continue;
+  const visit = (n) => {
+    if (isAccess(n) && MEMBERS.has(staticName(keyOf(n)) ?? "")) {
+      const name = staticName(keyOf(n));
+      if (
+        called(n) ||
+        (OPTIONS.has(name) && ROOTS.has(rootName(n.expression) ?? ""))
+      )
+        found.add(lineOf(keyOf(n)));
     }
-    const keyAt = (p) =>
-      p?.type === "punct" && (p.value === "{" || p.value === ",");
-    if (prev?.type === "punct" && (prev.value === "." || prev.value === "?."))
-      found.add(t.line);
-    // A method, getter or setter key (`{ skip() {} }`, `{ get only() {} }`): the
-    // parameter list is followed by a body, which a call in a block never is.
-    else if (
-      braces[braces.length - 1]?.value === "{" &&
-      next?.value === "(" &&
-      (keyAt(prev) ||
-        (["get", "set", "async"].includes(prev?.value) &&
-          keyAt(tokens[k - 2])) ||
-        (prev?.value === "*" &&
-          (keyAt(tokens[k - 2]) ||
-            (tokens[k - 2]?.value === "async" && keyAt(tokens[k - 3]))))) &&
-      bodyAfter(tokens, k + 1)
+    if (ts.isObjectLiteralExpression(n)) {
+      const value = destructured(n);
+      for (const p of n.properties)
+        if (p.name && OPTIONS.has(staticName(p.name) ?? ""))
+          if (value === undefined || fromRoot(value)) found.add(lineOf(p.name));
+    }
+    if (ts.isObjectBindingPattern(n) && fromRoot(destructured(n)))
+      for (const e of n.elements)
+        if (OPTIONS.has(staticName(e.propertyName ?? e.name) ?? ""))
+          found.add(lineOf(e));
+    if (
+      ts.isImportDeclaration(n) &&
+      staticName(n.moduleSpecifier) === "node:test" &&
+      n.importClause?.namedBindings &&
+      ts.isNamedImports(n.importClause.namedBindings)
     )
-      found.add(t.line);
-    // A class field (`skip = true;`) follows `{`, `;` or `}`, or a value
-    // ending before a line terminator, where ASI closed the previous field.
-    else if (
-      braces[braces.length - 1]?.classBody &&
-      ((prev?.type === "punct" && ["{", ";", "}"].includes(prev.value)) ||
-        (t.nl && valueEnd(prev, tokens[k - 2]))) &&
-      next?.type === "punct" &&
-      ["=", ";", "}"].includes(next.value)
-    )
-      found.add(t.line);
-    else if (
-      braces[braces.length - 1]?.value === "{" &&
-      prev?.type === "punct" &&
-      (prev.value === "{" || prev.value === ",") &&
-      (next?.type === "punct"
-        ? [":", ",", "}", "="].includes(next.value)
-        : next?.value === "as")
-    )
-      found.add(t.line);
-  }
-  return [...found].sort((a, b) => a - b);
+      for (const s of n.importClause.namedBindings.elements)
+        if (OPTIONS.has(staticName(s.propertyName ?? s.name) ?? ""))
+          found.add(lineOf(s));
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return { errors, lines: [...found].sort((a, b) => a - b) };
 }
 
 function scanFiles() {
@@ -495,11 +176,11 @@ export function check(sources, allowed) {
   const problems = [];
   const places = new Map();
   for (const [file, src] of sources) {
-    if (!tokenize(src).balanced)
-      problems.push(`${file}: the scanner cannot read this file to the end`);
-    const lines = src.split(/\r?\n/);
-    for (const n of markers(src)) {
-      const key = `${file}\n${lines[n - 1].trim()}`;
+    const { errors, lines } = scan(src, file);
+    problems.push(...errors);
+    const text = src.split(/\r?\n/);
+    for (const n of lines) {
+      const key = `${file}\n${text[n - 1].trim()}`;
       places.set(key, [...(places.get(key) ?? []), n]);
     }
   }
@@ -537,365 +218,172 @@ test("F-035 c: no node test that CI runs is skipped, todo or focused outside the
   assert.deepEqual(problems, []);
 });
 
-const POSITIVE = [
-  ['t.skip("x");', [1]],
-  ["ctx.skip?.();", [1]],
-  ["ctx?.todo();", [1]],
-  ['test.only("x", () => {});', [1]],
-  ['describe.skip("x", () => {});', [1]],
-  ['it.todo("x");', [1]],
-  ["t.runOnly(true);", [1]],
-  ["t\n  .skip();", [2]],
-  ["t./* c */skip();", [1]],
-  ['test("x", {\n  timeout: 1,\n  skip: true,\n}, () => {});', [3]],
-  ['test("x", { "skip": 1 }, () => {});', [1]],
-  ["test('x', { 'todo': 1 }, () => {});", [1]],
-  ['test("x", { ["only"]: 1 }, () => {});', [1]],
-  ['const skip = 1; test("x", { skip }, () => {});', [1]],
-  ["const { skip } = t;", [1]],
-  ['import { only } from "node:test";', [1]],
-  ['import { skip as s } from "node:test";', [1]],
-  ['t["skip"]();', [1]],
-  ["t[`todo`]();", [1]],
-  ['t["\\x73kip"]();', [1]],
-  ['const name = "skip";', [1]],
-  ["const f = `${t.skip()}`;", [1]],
-  ["const f = `a ${`${t.todo()}`} b`;", [1]],
-  ["x = a / b; t.skip();", [1]],
-  ["t.sk\\u0069p();", [1]],
-  ['test("x", { sk\\u{69}p: true }, () => {});', [1]],
-  ['test("x", { skip() { return true; } }, () => {});', [1]],
-  ['test("x", { get only() { return true; } }, () => {});', [1]],
-  ['test("x", { a: 1, async todo() {} }, () => {});', [1]],
-  ['test("x", { *skip() {} }, () => {});', [1]],
-  ['n++ / 2; t.skip("r"); /x/.test("x");', [1]],
-  ["n-- / 2; t.todo(); /x/;", [1]],
-  ['o.of / 2; t.skip("r"); /x/.test("x");', [1]],
-  ["o?.in / 2; t.todo(); /x/;", [1]],
-  ['test("x", { async *skip() {} }, () => {});', [1]],
-  ['// c\rt.skip("r");', [1]],
-  ["// c\u2028t.todo();", [1]],
-  ["// c\u2029t.only();", [1]],
-  // A space or line end right after the name ends it (Unicode ones too).
-  ['test.skip\u00A0("x", () => {});', [1]],
-  ["test('x', t => t.skip\u2028('reason'));", [1]],
-  ["t.skip\u2029();", [1]],
-  ["t.skip\uFEFF();", [1]],
-  ["t.todo\u3000();", [1]],
-  ["t.only\u2003();", [1]],
-  ["const a\u{1D465} = 1; t.skip();", [1]],
-  // A template that ends, or has no substitution, is a value: `/` divides.
-  ["const s = `${x}` / 2; t.skip(); /x/;", [1]],
-  ["const s = `a` / 2; t.todo(); /x/;", [1]],
-  // `of` is a keyword only in a for-of head, after the binding.
-  ['const of = 2; of / 2; t.skip("r"); /x/.test("x");', [1]],
-  ["for (a; of / 2; t.skip()) /x/;", [1]],
-  ["for (x = of / 2;;) t.skip(); /x/;", [1]],
-  ["for (x of of / 2) t.skip(); /x/;", [1]],
-  ["for (x in of / 2) t.skip(); /x/;", [1]],
-  ["for (typeof of / 2;;) t.todo(); /x/;", [1]],
-  ["for (o.of / 2; t.skip(); ) /x/;", [1]],
-  // Only the `)` of an if, while, for or with head starts a statement.
-  ["f(x) / 2; t.skip(); /x/;", [1]],
-  ["if ((a) / 2) t.skip(); /x/;", [1]],
-  ["if (a) (b) / 2; t.skip(); /x/;", [1]],
-  ["o.if(x) / 2; t.skip(); /x/;", [1]],
-  ["o.for(x) / 2; t.todo(); /x/;", [1]],
+// [marked, clean, line]: every earlier FAIL and Codex finding in both
+// directions (#1458), plus the classes K1 to K5 of the contract.
+const LS = "\u2028";
+const CASES = [
+  // K1: a member in callee position, or read from a test root.
+  ["t.skip();", "t.skipped();"],
+  ["test.skip.each([])();", "test.each([])();"],
+  ["ctx?.todo();", "ctx?.done();"],
+  ["t.skip.call(t);", "t.call(t);"],
+  ["(t.skip)();", "(t.skip) + 1;"],
+  ["t.skip!();", "t.skip!;", 1, "a.test.ts"],
+  ["const v = <T>t; t.skip();", "const v = <T>t.skip;", 1, "a.test.ts"],
+  ["t.runOnly(true);", "t.run(true);"],
+  ["t.skip`r`;", "t.skips`r`;"],
+  ["const f = describe.only;", "const f = cfg.only;"],
+  ["it.todo('a');", "it.done('a');"],
+  // K2: a key in an object literal (node:test options).
+  ["test('a', { skip: true });", "test('a', { timeout: 1 });"],
+  ["test({ 'only': true });", "test({ 'onlyIf': true });"],
+  ["test({ ['todo']: 'r' });", "test({ ['to' + 'do']: 'r' });"],
+  ["({ get skip() {} });", "({ get skips() {} });"],
+  ["({ async *skip() {} });", "({ async *skips() {} });"],
+  ["const skip = 1; test({ skip });", "const skip = 1; test(skip);"],
+  ["({ class: 1, skip: 2 });", "class skip {}"],
+  [
+    "({ a: 1, skip: 2 });",
+    "class A {\n  a = 1\n  skip = 2\n  static only = 3\n}",
+  ],
+  ["({ a: 1, todo: 2 });", `class A { a = 1\rskip = 2${LS}todo = 3 }`],
+  ["x = [{ only: 1 }];", "({ only: x } = opts);"],
+  // K3: imported from node:test, or destructured from a test function.
+  ['import { skip } from "node:test";', 'import { mock } from "node:test";'],
+  ['import { only as o } from "node:test";', 'import { only } from "./x.mjs";'],
+  ["const { todo } = test;", "const { todo } = cfg;"],
+  ["({ skip: s } = it);", "function f({ skip }) { return skip; }"],
+  ["for (const { only } of describe);", "for (const { only } of list);"],
+  // K4: names are compared cooked.
+  ["t.sk\\u0069p();", "t.sk\\u0069pped();"],
+  ["t.\\u{73}kip();", "t.\\u{73}kips();"],
+  ['t["sk\\ip"]();', 't["sk\\ipped"]();'],
+  [`t['sk\\${LS}ip']();`, `t['sk\\${LS}ipped']();`],
+  ["t.skip\u00a0();", "t.skip\u00a0+ 1;"],
+  // K5: comments, strings, regular expressions, locals and classes.
+  [`// c${LS}t.skip();`, "// c t.skip();"],
+  ["/* */ t.skip();", "/* t.skip(); */"],
+  ["t.skip('t.skip()');", "const s = 't.skip()';"],
+  ["const r = /\\.skip/; t.todo();", "const r = /\\.skip\\(/;"],
+  ["const s = `${t.skip()}`;", "const s = `${/\\.skip/.source}`;"],
+  ["let n = 1; n++ / 2; t.skip(); /x/;", "let n = 1; n++ / 2; t.skips(); /x/;"],
+  [
+    "const o = { of: 4 };\no.of / 2; t.skip('/');",
+    "const o = { of: 4 };\no.of; /t.skip/;",
+    2,
+  ],
+  ["const of = 2; of / 2; t.skip('/');", "const of = 2; of / 2; /t.skip/;"],
+  ["if (true) /x/.test(t.skip());", "if (true) /\\.skip\\b/.test('');"],
+  ["if (true) {} /x/; t.skip();", "if (true) {} /\\.skip\\b/.test('');"],
+  ["String.raw`\\u{110000}`; t.skip();", "String.raw`\\u{110000} t.skip()`;"],
+  ["let skip; t.skip();", "let skip = true; skip = false;"],
+  ["class A { m(t) { t.skip(); } }", "class A { skip = 1; static todo = 2; }"],
+  ["class A { m() { this.skip(); } }", "class A { only() {} #skip() {} }"],
+  ["class A { m() { t.skip(); } }", "class A { class\nm() { let skip; } }"],
+  [
+    "new\nclass { m(t) { t.skip(); } }",
+    "class A {\n  new\n  class\n  m() {}\n}",
+    2,
+  ],
 ];
-const NEGATIVE = [
-  "// t.skip() in a comment",
-  "/* test.only */",
-  'const s = "skip the step";',
-  "const only = (row) => row; only(1);",
-  "if (x) { only(1); }",
-  "const re = /\\.skip\\b|[{,]\\s*only:/;",
-  'run(["--test-skip-pattern", "x"]);',
-  "const t = `skip ${x} only`;",
-  "const t = `${x}skip`;",
-  'test("only the root counts", () => {});',
-  "const skipped = state.skipped;",
-  "const o = { onlyIf: 1, skipCount: 2 };",
-  "function f() { only(1); }",
-  "if (x) { only(1) }",
-  "const \\u0073kipped = 1;",
-  "a = b + +/skip/.source;",
-  "const m = String.raw`\\u{110000}`;",
-  "const m = String.raw`\\xZZ \\u12`;",
-  "t.skip\u200C();",
-  "t.skip\u00E9();",
-  "t.skip\u{1D465}();",
-  "const \u{1D465}skip = 1;",
-  "const s = `${/\\.skip/.source}`;",
-  "const s = `a${x}b${/\\.only/.source}`;",
-  "for (const x of /\\.skip/g.exec(s));",
-  "for (const [a] of /\\.only/.exec(s));",
-  "for (const { a } of /\\.todo/.exec(s));",
-  "for await (const x of /\\.skip/.exec(s));",
-  "for (let of of /\\.skip/.exec(s));",
-  "for (x.of of /\\.todo/.exec(s));",
-  "for (x.in of /\\.only/.exec(s));",
-  'if (true) /\\.skip\\b/.test("x");',
-  "while (x) /\\.only/.test(s);",
-  "for (;;) /\\.todo/.exec(s);",
-  "for await (const x of xs) /\\.skip/.exec(x);",
-  "with (o) /\\.skip/.exec(s);",
-];
+for (const lt of ["\n", "\r", "\r\n", LS, "\u2029"]) {
+  CASES.push([`t["sk\\${lt}ip"]();`, `t["sk\\${lt}ipped"]();`]);
+  CASES.push([`//${lt}t.skip();`, `// t.skip();${lt}`, /\n/.test(lt) ? 2 : 1]);
+}
 
-test("F-035 c: the scanner finds every marker form and nothing else", () => {
-  for (const [src, lines] of POSITIVE)
-    assert.deepEqual(markers(src), lines, src);
-  for (const src of NEGATIVE) assert.deepEqual(markers(src), [], src);
-});
-
-test("F-035 c: statement blocks allow regex without hiding later markers or division", () => {
-  for (const block of [
-    "if (true) {}",
-    "if (true) { {} }",
-    "while (false) {}",
-    "for (;false;) {}",
-    "{}",
-    "try {} catch (e) {}",
-    "try {} catch {}",
-    "try {} finally {}",
-  ]) {
-    const src = `${block} /\\.skip\\b/.test('x');`;
-    new Function(src)();
-    assert.deepEqual(check([["a.test.mjs", src]], []), [], src);
-    const marked = `${src}\nt.skip('reason');`;
-    new Function("t", marked);
-    assert.deepEqual(markers(marked), [2], marked);
+// A fixture is only evidence if the JavaScript engine accepts it as written.
+function assertValidJs(src, label) {
+  if (!/\bimport\b/.test(src)) {
+    assert.doesNotThrow(() => new Function(`"use strict";${src}`), label);
+    return;
   }
-  for (const value of ["{}", "{ a: {} }", "function () {}", "() => {}"]) {
-    const src = `const x = (${value}) / 2;\nt.skip('reason'); /x/;`;
-    new Function("t", src);
-    assert.deepEqual(markers(src), [2], src);
-  }
-  const direct = "const x = {} / 2;\nt.skip('reason'); /x/;";
-  new Function("t", direct);
-  assert.deepEqual(markers(direct), [2]);
-});
-
-test("F-035 c: all line continuations cook static names and preserve non-names", () => {
-  for (const end of ["\n", "\r", "\r\n", "\u2028", "\u2029"]) {
-    for (const quote of ["'", '"', "`"]) {
-      for (const name of NAMES) {
-        const raw = `${name.slice(0, 2)}\\${end}${name.slice(2)}`;
-        const key = `${quote}${raw}${quote}`;
-        assert.equal(new Function(`return ${key}`)(), name);
-        const src = `const key = ${key};\nconst after = 1;`;
-        assert.deepEqual(markers(src), [1], src);
-        assert.equal(tokenize(src).balanced, true, src);
-        for (const suffix of ["Count", " x"]) {
-          const other = `${quote}${raw}${suffix}${quote}`;
-          assert.equal(new Function(`return ${other}`)(), name + suffix);
-          assert.deepEqual(
-            check([["a.test.mjs", `const key = ${other};`]], []),
-            [],
-          );
-        }
-        const comment = `/* ${key} */`;
-        new Function(comment)();
-        assert.deepEqual(check([["a.test.mjs", comment]], []), []);
-      }
-    }
-  }
-  // Regex uses escaped code points: a literal line terminator is invalid there.
-  const regex = String.raw`/sk\\u2028ip|sk\\u2029ip/.test('x');`;
-  new Function(regex)();
-  assert.deepEqual(check([["a.test.mjs", regex]], []), []);
-});
-
-test("F-035 c: public class fields remain keys after a preceding field", () => {
-  for (const name of NAMES) {
-    for (const prefix of ["", "timeout = 1000;\n"]) {
-      const src = `class Options {\n${prefix}${name} = true;\n}`;
-      assert.equal(
-        new Function(`${src}; return new Options().${name};`)(),
-        true,
-      );
-      assert.deepEqual(markers(src), [prefix ? 3 : 2], src);
-      assert.equal(tokenize(src).balanced, true, src);
-      const other = `class Options {\n${prefix}${name}Count = true;\n}`;
-      new Function(other)();
-      assert.deepEqual(check([["a.test.mjs", other]], []), []);
-    }
-    const local = `let ${name}; class Options { method() { const x = 1; ${name} = true; } }`;
-    new Function(local)();
-    assert.deepEqual(check([["a.test.mjs", local]], []), []);
-  }
-});
-
-test("F-035 c: a class field after an ASI-ended field is still a key", () => {
-  const ends = [
-    "timeout = 1000",
-    'label = "x"',
-    "id = x",
-    "call = f()",
-    "list = [1]",
-    "pattern = /a/",
-    "text = `t`",
-    "count = n++",
-  ];
-  const head = "const x = 1, f = () => 1; let n = 0;\n";
-  for (const name of NAMES) {
-    for (const end of ends) {
-      const src = `${head}class Options {\n${end}\n${name} = true\n}`;
-      assert.equal(
-        new Function(`${src}; return new Options().${name};`)(),
-        true,
-      );
-      assert.deepEqual(markers(src), [4], src);
-      assert.equal(tokenize(src).balanced, true, src);
-      const other = `${head}class Options {\n${end}\n${name}Count = true\n}`;
-      new Function(other)();
-      assert.deepEqual(check([["a.test.mjs", other]], []), []);
-    }
-    // The same lines in a method body assign a local.
-    const local = `class Options { method() {\nlet ${name}\nconst y = 1\n${name} = true\n} }`;
-    new Function(local)();
-    assert.deepEqual(check([["a.test.mjs", local]], []), []);
-  }
-});
-
-test("F-035 c: every JavaScript line terminator ends a class field for ASI", () => {
-  // Diagnostics keep LF numbering; CR, U+2028 and U+2029 still end the field.
-  const seps = ["\n", "\r\n", "\r", "\u2028", "\u2029"];
-  for (const sep of [...seps, "/*\r*/", "/*\u2028*/", "// c\u2029"]) {
-    for (const name of NAMES) {
-      const src = `class Options {\ntimeout = 1000${sep}${name} = true\n}`;
-      assert.equal(
-        new Function(`${src}; return new Options().${name};`)(),
-        true,
-      );
-      assert.deepEqual(markers(src), [2 + sep.split("\n").length - 1], src);
-      const other = `class Options {\ntimeout = 1000${sep}${name}Count = true\n}`;
-      new Function(other)();
-      assert.deepEqual(check([["a.test.mjs", other]], []), [], other);
-    }
-  }
-});
-
-test("F-035 c: a `class` key or name does not make a later brace a class body", () => {
-  const scripts = (name) => [
-    `const o = { class /* c */ : 1, m() { let ${name}; ${name} = true; } };`,
-    `const o = { class /* c */ () {}, m() { let ${name}; ${name} = true; } };`,
-    `class A { class = 1\nm() { let ${name}; ${name} = true; } }`,
-    `class A { class; m() { let ${name}; ${name} = true; } }`,
-    // A field named `class` ended by ASI (any line terminator) is no head.
-    `class A { class\nm() { let ${name}; ${name} = true; } }`,
-    `class A { class\u2028m() { let ${name}; ${name} = true; } }`,
-    `class A { class\r\nm() { let ${name}; ${name} = true; } }`,
-    `class A { timeout = 1\nclass\nm() { let ${name}; ${name} = true; } }`,
-    `class A { static class\nm() { let ${name}; ${name} = true; } }`,
-    `class A { #class\nm() { let ${name}; ${name} = true; } }`,
-  ];
-  const modules = (name) => [
-    `import { class as c } from "node:test";\nfunction g() { if (c) { let ${name}; ${name} = true; } }`,
-    `const x = 1;\nexport { x as class };\nfunction g() { if (x) { let ${name}; ${name} = true; } }`,
-  ];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skip-scan-"));
   try {
-    for (const name of NAMES) {
-      for (const [i, src] of [...scripts(name), ...modules(name)].entries()) {
-        if (i < scripts(name).length) new Function(src)();
-        else {
-          const file = path.join(dir, "m.mjs");
-          fs.writeFileSync(file, src);
-          const run = spawnSync(process.execPath, ["--check", file]);
-          assert.equal(run.status, 0, `${src}\n${run.stderr}`);
-        }
-        assert.deepEqual(markers(src), [], src);
-        assert.equal(tokenize(src).balanced, true, src);
-        // A real class after it is still read as one, and a later block still
-        // allows a regex, so the marker after it stays visible.
-        const lines = src.split("\n").length;
-        const after = `${src}\nclass Options {\n${name} = true;\n}`;
-        assert.deepEqual(markers(after), [lines + 2], after);
-        const hidden = `${src}\nf(() => { x(); {} /'/.test(s); t.${name}(); });`;
-        assert.deepEqual(markers(hidden), [lines + 1], hidden);
-        assert.equal(tokenize(hidden).balanced, true, hidden);
-      }
-      const extended = `const f = (a) => a;\nclass Options extends f(Object, 1) {\n${name} = true;\n}`;
-      assert.equal(
-        new Function(`${extended}; return new Options().${name};`)(),
-        true,
-      );
-      assert.deepEqual(markers(extended), [3], extended);
-    }
+    fs.writeFileSync(path.join(dir, "a.mjs"), src);
+    const r = spawnSync(process.execPath, ["--check", path.join(dir, "a.mjs")]);
+    assert.equal(r.status, 0, `${label}: ${r.stderr}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("F-035 c: an ASI-ended `class` field hides no later marker", () => {
-  for (const name of NAMES) {
-    for (const sep of ["\n", "\r", "\u2028", "\u2029"]) {
-      // The method body is a block, so `/'/` is a regex and the marker shows.
-      for (const field of ["class", "#class", "static class"]) {
-        const src = `class A { ${field}${sep}m(t, s) { {} /'/.test(s); t.${name}(); } }`;
-        new Function(src)();
-        assert.deepEqual(markers(src), [sep === "\n" ? 2 : 1], src);
-        assert.equal(tokenize(src).balanced, true, src);
-      }
-    }
-    // A class expression in a field initializer is still a class.
-    for (const init of ["= class {", "=\nclass {", "= a ||\nclass {"]) {
-      const src = `const a = 0;\nclass A { x ${init}\n${name} = true\n} }`;
-      new Function(src)();
-      const at = src.split("\n").findIndex((l) => l.startsWith(name)) + 1;
-      assert.deepEqual(markers(src), [at], src);
-    }
-  }
-});
-
-test("F-035 c: node:test skips a test whose options field follows an ASI-ended field", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skip-scan-"));
-  // The first name is the skip option; the runner here must not see itself as a parent.
-  const [skipName] = NAMES;
-  const env = { ...process.env };
-  delete env.NODE_TEST_CONTEXT;
-  try {
-    for (const [field, skipped, sep] of [
-      [skipName, 1, "\n"],
-      [skipName, 1, "\u2028"],
-      [`${skipName}Count`, 0, "\n"],
-    ]) {
-      const src = `import test from "node:test";\nclass Options {\ntimeout = 1000${sep}${field} = true\n}\ntest("synthetic", new Options(), () => {});\n`;
-      const file = path.join(dir, "options.test.mjs");
-      fs.writeFileSync(file, src);
-      const run = spawnSync(
-        process.execPath,
-        ["--test", "--test-reporter=tap", file],
-        { encoding: "utf8", env },
-      );
-      assert.equal(run.status, 0, run.stderr);
-      assert.match(run.stdout, new RegExp(`^# skipped ${skipped}$`, "m"));
-      assert.match(run.stdout, new RegExp(`^# pass ${1 - skipped}$`, "m"));
-      const at = sep === "\n" ? 4 : 3;
-      assert.deepEqual(markers(src), skipped ? [at] : [], src);
-    }
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// JavaScript itself decides whether `a<c>b` is one identifier.
-function joinsName(c) {
-  try {
-    return new Function(`a${c}b`, "").length === 1;
-  } catch {
-    return false;
   }
 }
 
-test("F-035 c: a character right after the name ends it exactly when JavaScript says so", () => {
+test("F-035 c: each fixture is marked in one direction and clean in the other", () => {
+  for (const [marked, clean, line = 1, file] of CASES) {
+    for (const src of file ? [] : [marked, clean])
+      assertValidJs(src, JSON.stringify(src));
+    assert.deepEqual(
+      scan(marked, file),
+      { errors: [], lines: [line] },
+      JSON.stringify(marked),
+    );
+    assert.deepEqual(
+      scan(clean, file),
+      { errors: [], lines: [] },
+      JSON.stringify(clean),
+    );
+  }
+});
+
+test("F-035 c: the markers it reports are the ones node:test skips or marks todo", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skip-scan-"));
+  const files = {
+    "marked.test.mjs": [
+      'import test, { skip, todo } from "node:test";',
+      'test.skip("a", () => {});',
+      'test("b", { skip: true }, () => {});',
+      'test("c", { todo: "r" }, () => {});',
+      'test("d", (t) => { t.skip("r"); });',
+      'skip("e", () => {});',
+    ],
+    "clean.test.mjs": [
+      'import test from "node:test";',
+      "class Opts { skip = true; static todo = 'r'; }",
+      'test("a", () => { let skip = new Opts().skip; const s = "t.skip()"; return /\\.only/.test(s) && skip; });',
+    ],
+  };
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  try {
+    const counts = {};
+    for (const [name, lines] of Object.entries(files)) {
+      const src = lines.join("\n");
+      fs.writeFileSync(path.join(dir, name), src);
+      const r = spawnSync(
+        process.execPath,
+        ["--test", "--test-reporter=tap", path.join(dir, name)],
+        { env, encoding: "utf8" },
+      );
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      counts[name] = [
+        /# skipped (\d+)/.exec(r.stdout)?.[1],
+        /# todo (\d+)/.exec(r.stdout)?.[1],
+        scan(src).lines,
+      ];
+    }
+    assert.deepEqual(counts["marked.test.mjs"], ["4", "1", [1, 2, 3, 4, 5]]);
+    assert.deepEqual(counts["clean.test.mjs"], ["0", "0", []]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// For every BMP character after `t.skip`: when JavaScript joins it into the
+// name there is no marker, otherwise there is a marker or a parse error.
+test("F-035 c: a character after a name is read as JavaScript reads it, or fails closed", () => {
   const wrong = [];
   for (let cp = 0; cp <= 0xffff; cp++) {
     if (cp >= 0xd800 && cp <= 0xdfff) continue;
-    const c = String.fromCharCode(cp);
-    const want = joinsName(c) ? [] : [1];
-    const got = markers(`t.skip${c}();`);
-    if (got.join() !== want.join()) wrong.push(cp.toString(16));
+    const ch = String.fromCodePoint(cp);
+    let joins = false;
+    try {
+      joins =
+        Object.keys(new Function(`return { skip${ch}: 1 }`)())[0] !== "skip";
+    } catch {}
+    const { errors, lines } = scan(`t.skip${ch}();`);
+    const ok = joins
+      ? lines.length === 0
+      : lines.length === 1 || errors.length > 0;
+    if (!ok) wrong.push(cp.toString(16));
   }
   assert.deepEqual(wrong, []);
 });
@@ -931,10 +419,19 @@ test("F-035 c: a listed place passes once; the same line elsewhere, twice or a s
     "}",
     "const s = `open ${x",
     "x = (1;",
+    "x;\n}",
   ])
     assert.match(
-      check([["a.test.mjs", src]], []).join("\n"),
-      /cannot read this file to the end/,
+      check([["d/a.test.mjs", src]], []).join("\n"),
+      /^d\/a\.test\.mjs:\d+: cannot be parsed, so it is not clean/,
       src,
     );
+  assert.match(
+    check([["d/a.test.mjs", "x;\n}"]], [])[0],
+    /^d\/a\.test\.mjs:2: /,
+  );
+  assert.deepEqual(scan("const a: number = 1;", "a.test.ts"), {
+    errors: [],
+    lines: [],
+  });
 });
