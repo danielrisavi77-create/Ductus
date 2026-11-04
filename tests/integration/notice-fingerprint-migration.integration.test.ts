@@ -85,23 +85,33 @@ describe("the notice fingerprint migration over acknowledgments from before it",
     )).rows[0]!.n);
     const signature = async (regprocedure: string) =>
       (await db.query<{ ok: boolean }>("SELECT to_regprocedure($1) IS NOT NULL AS ok", [regprocedure])).rows[0]!.ok;
+    // The supported years (review c.6632344287): an instant that opens in UTC
+    // year 0 is content before the migration and after down, not after up.
+    const yearZeroIsContent = async () => (await db.query<{ ok: boolean }>(
+      `SELECT institution.is_assignment_content('Zadatak', 'Upute.', 'essay', '0001-01-01T00:00:00+14:00',
+                '2026-12-01T00:00:00Z', 'prohibited', '{}', 'basic', false) AS ok`,
+    )).rows[0]!.ok;
     const before = await rows();
     expect(before).toHaveLength(3);
+    expect(await yearZeroIsContent()).toBe(true);
 
     await migrate(db, TARGET, "up");
     expect(await rows()).toEqual(before);
     expect(await fingerprinted()).toBe(0);
     expect(await signature("institution.acknowledge_notice(uuid, integer)")).toBe(false);
     expect(await signature("institution.acknowledge_notice(uuid, integer, integer)")).toBe(true);
+    expect(await yearZeroIsContent()).toBe(false);
 
     await migrate(db, TARGET, "down");
     expect(await rows()).toEqual(before);
     expect(await signature("institution.acknowledge_notice(uuid, integer)")).toBe(true);
     expect(await signature("institution.acknowledge_notice(uuid, integer, integer)")).toBe(false);
+    expect(await yearZeroIsContent()).toBe(true);
 
     await migrate(db, TARGET, "up");
     expect(await rows()).toEqual(before);
     expect(await fingerprinted()).toBe(0);
     expect(await signature("institution.acknowledge_notice(uuid, integer, integer)")).toBe(true);
+    expect(await yearZeroIsContent()).toBe(false);
   });
 });

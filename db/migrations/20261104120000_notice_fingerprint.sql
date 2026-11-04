@@ -131,6 +131,39 @@ $$;
 REVOKE ALL ON FUNCTION institution.acknowledge_notice(uuid, integer, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION institution.acknowledge_notice(uuid, integer, integer) TO ductus_app;
 
+-- The supported years of an assignment instant are 1000 to 9999 in UTC
+-- (review c.6632344287, QA c.6632559838). Below them to_char's YYYY and
+-- Date.prototype.toISOString write different years for the same instant
+-- (1 BC is 0001 here and 0000 in JavaScript), so the fingerprint would not be
+-- the bytes of src/domain/notice/fingerprint.ts. The range is checked after
+-- conversion to UTC, as validInstant in src/server/institution/create-assignment.ts.
+-- The same signature and body otherwise; the table's CHECK and every function
+-- that creates or publishes a version call this one rule. A row stored before
+-- this migration is not revalidated (known limit in PR #1510).
+CREATE OR REPLACE FUNCTION institution.is_assignment_content(
+  p_title text, p_instructions text, p_work_type text, p_opens_at timestamptz, p_due_at timestamptz,
+  p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean
+) RETURNS boolean
+LANGUAGE sql IMMUTABLE SET search_path = ''
+AS $$
+  SELECT coalesce(
+    institution.is_plain_label(p_title)
+    AND length(p_instructions) <= 20000
+    AND p_instructions !~ '[\x0001-\x0008\x000B\x000C\x000E-\x001F\x007F-\x009F\x202A-\x202E\x2066-\x2069]'
+    AND p_work_type IN ('short_paper', 'essay', 'seminar_paper', 'bachelor_thesis', 'master_thesis',
+                        'specialist_thesis', 'doctoral_thesis')
+    AND isfinite(p_opens_at) AND isfinite(p_due_at) AND p_opens_at < p_due_at
+    AND extract(year FROM p_opens_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
+    AND extract(year FROM p_due_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
+    AND institution.ai_policy_rank(p_ai_policy) IS NOT NULL
+    AND p_ai_purposes <@ ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
+    AND cardinality(p_ai_purposes) <= 5 AND coalesce(array_ndims(p_ai_purposes), 1) = 1
+    AND (p_ai_policy <> 'prohibited' OR cardinality(p_ai_purposes) = 0)
+    AND p_evidence_profile IN ('basic', 'extended')
+    AND p_import_allowed IS NOT NULL,
+    false)
+$$;
+
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA institution FROM ductus_identity;
 
@@ -138,6 +171,27 @@ REVOKE CREATE ON SCHEMA institution FROM ductus_identity;
 -- Local only: staging and production migrate forward (docs/BACKEND.md 6).
 GRANT CREATE ON SCHEMA institution TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
+CREATE OR REPLACE FUNCTION institution.is_assignment_content(
+  p_title text, p_instructions text, p_work_type text, p_opens_at timestamptz, p_due_at timestamptz,
+  p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean
+) RETURNS boolean
+LANGUAGE sql IMMUTABLE SET search_path = ''
+AS $$
+  SELECT coalesce(
+    institution.is_plain_label(p_title)
+    AND length(p_instructions) <= 20000
+    AND p_instructions !~ '[\x0001-\x0008\x000B\x000C\x000E-\x001F\x007F-\x009F\x202A-\x202E\x2066-\x2069]'
+    AND p_work_type IN ('short_paper', 'essay', 'seminar_paper', 'bachelor_thesis', 'master_thesis',
+                        'specialist_thesis', 'doctoral_thesis')
+    AND isfinite(p_opens_at) AND isfinite(p_due_at) AND p_opens_at < p_due_at
+    AND institution.ai_policy_rank(p_ai_policy) IS NOT NULL
+    AND p_ai_purposes <@ ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
+    AND cardinality(p_ai_purposes) <= 5 AND coalesce(array_ndims(p_ai_purposes), 1) = 1
+    AND (p_ai_policy <> 'prohibited' OR cardinality(p_ai_purposes) = 0)
+    AND p_evidence_profile IN ('basic', 'extended')
+    AND p_import_allowed IS NOT NULL,
+    false)
+$$;
 DROP FUNCTION institution.acknowledge_notice(uuid, integer, integer);
 DROP TRIGGER notice_acknowledgment_fingerprint_immutable ON institution.notice_acknowledgment;
 DROP FUNCTION institution.refuse_acknowledgment_change();

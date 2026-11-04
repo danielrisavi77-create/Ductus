@@ -4222,6 +4222,8 @@ CREATE FUNCTION institution.is_assignment_content(p_title text, p_instructions t
     AND p_work_type IN ('short_paper', 'essay', 'seminar_paper', 'bachelor_thesis', 'master_thesis',
                         'specialist_thesis', 'doctoral_thesis')
     AND isfinite(p_opens_at) AND isfinite(p_due_at) AND p_opens_at < p_due_at
+    AND extract(year FROM p_opens_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
+    AND extract(year FROM p_due_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
     AND institution.ai_policy_rank(p_ai_policy) IS NOT NULL
     AND p_ai_purposes <@ ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
     AND cardinality(p_ai_purposes) <= 5 AND coalesce(array_ndims(p_ai_purposes), 1) = 1

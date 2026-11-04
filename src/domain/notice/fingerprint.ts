@@ -56,7 +56,11 @@ export function noticeFingerprintPayload(input: NoticeFingerprintInput): Record<
     throw new Error("notice fingerprint: invalid template version");
   }
   for (const instant of [input.opensAt, input.dueAt]) {
-    if (!ISO_INSTANT.test(instant)) throw new Error("notice fingerprint: instant is not an ISO UTC instant");
+    // Years 1000 to 9999 only, as institution.is_assignment_content: below
+    // them to_char writes 1 BC as 0001 and toISOString as 0000 (DAN-306).
+    if (!ISO_INSTANT.test(instant) || Number(instant.slice(0, 4)) < 1000) {
+      throw new Error("notice fingerprint: instant is not an ISO UTC instant");
+    }
   }
   const purposes = input.aiPolicy === "prohibited" ? [] : [...new Set(input.aiPurposes)].sort(codeUnitOrder);
   return {

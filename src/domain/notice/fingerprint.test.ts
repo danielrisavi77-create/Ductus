@@ -55,6 +55,12 @@ const EDGE: NoticeFingerprintInput = {
 };
 const GOLDEN_EDGE = "ed1f97681a3e115bced99beb26d683f5ed57b59bb3c420602671894db0582c1d";
 
+// DAN-306, review c.6632344287: the lower edge of the supported years, the
+// UTC instant of 1000-01-01T00:00:00-01:00. SQL writes the same year from
+// the same timestamptz (db/tests/105-notice-fingerprint.sql, section 12).
+const RANGE_EDGE = { ...BASE, opensAt: "1000-01-01T01:00:00.000Z" };
+const GOLDEN_RANGE_EDGE = "e29ba1fd26110106c3b259ad8116a1a61ea1a1ef2703638a2e332b39fd5cc42c";
+
 const fingerprint = (change: Partial<NoticeFingerprintInput>) => noticeFingerprint({ ...BASE, ...change });
 
 describe("notice fingerprint (DAN-306)", () => {
@@ -65,6 +71,23 @@ describe("notice fingerprint (DAN-306)", () => {
     const sql = readFileSync("db/tests/105-notice-fingerprint.sql", "utf8");
     expect(sql).toContain(GOLDEN_BASE);
     expect(sql).toContain(GOLDEN_EDGE);
+  });
+
+  it("A2: the lower edge of the supported years has the same fingerprint as in SQL", async () => {
+    expect(await noticeFingerprint(RANGE_EDGE)).toBe(GOLDEN_RANGE_EDGE);
+    const sql = readFileSync("db/tests/105-notice-fingerprint.sql", "utf8");
+    expect(sql).toContain(GOLDEN_RANGE_EDGE);
+  });
+
+  it("refuses an instant whose year is outside 1000 to 9999, where SQL and JavaScript write years apart", async () => {
+    // 0001-01-01T00:00:00+14:00 and +01:00 in UTC: JavaScript writes year
+    // 0000, PostgreSQL's YYYY writes 0001 for 1 BC. Neither may be canonical.
+    for (const opensAt of ["0000-12-31T10:00:00.000Z", "0000-12-31T23:00:00.000Z", "0999-12-31T23:59:59.999Z"]) {
+      await expect(fingerprint({ opensAt })).rejects.toThrow("not an ISO UTC instant");
+      await expect(fingerprint({ dueAt: opensAt })).rejects.toThrow("not an ISO UTC instant");
+    }
+    await expect(fingerprint({ opensAt: "1000-01-01T00:00:00.000Z" })).resolves.toMatch(/^[0-9a-f]{64}$/);
+    await expect(fingerprint({ dueAt: "9999-12-31T23:59:59.999Z" })).resolves.toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("A3: the scheme prefix separates the notice from any other object over the same bytes", async () => {
