@@ -373,6 +373,16 @@ test.afterEach(async () => {
   k4Document = null;
 });
 
+test.beforeAll(async ({ request }) => {
+  // Compile the first F-6 route before a browser connects to Next's dev HMR.
+  // On a cold WebKit runner, compiling it during page.goto can make Fast
+  // Refresh reload the previous /rad page and interrupt that navigation.
+  // This anonymous GET changes no role/session; the real browser below still
+  // proves refusal, provisioning and the full teacher flow in that order.
+  const response = await request.get("/nastavnik/zadatak/novi");
+  expect(response.status()).toBe(200);
+});
+
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
   // The whole text of the K-4 work as the steps leave it: EXPECTED_TEXT until
