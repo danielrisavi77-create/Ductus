@@ -237,6 +237,12 @@ const CASES = [
   // K2: a key in an object literal (node:test options).
   ["test('a', { skip: true });", "test('a', { timeout: 1 });"],
   ["test({ 'only': true });", "test({ 'onlyIf': true });"],
+  // On purpose (#1091 c.6626837919): node:test runs `skip: false` and
+  // `only: false`, but any such key is reported, so a value cannot hide one.
+  [
+    "test('a', { skip: false, only: false });",
+    "test('a', { skipped: false });",
+  ],
   ["test({ ['todo']: 'r' });", "test({ ['to' + 'do']: 'r' });"],
   ["({ get skip() {} });", "({ get skips() {} });"],
   ["({ async *skip() {} });", "({ async *skips() {} });"],
