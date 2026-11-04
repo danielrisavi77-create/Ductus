@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-import { loginDevEntries } from "./scripts/demo/login-e2e-https.mjs";
-
 import { API_CONTENT_SECURITY_POLICY, STATIC_CONTENT_SECURITY_POLICY } from "./src/server/http/content-security-policy";
 import { SECURITY_HEADERS } from "./src/server/http/security-headers";
 
@@ -16,9 +14,6 @@ const nextConfig: NextConfig = {
   // dev tools button sat over the account name in the sidebar on every demo
   // screenshot. Build and runtime errors still open the overlay.
   devIndicators: false,
-  // The HTTPS login test launcher precompiles all pages before browser HMR.
-  // Keep them through the full bounded demo; normal dev and production are unchanged.
-  onDemandEntries: loginDevEntries(process.env),
   async headers() {
     return [
       { source: "/:path*", headers: [...SECURITY_HEADERS] },

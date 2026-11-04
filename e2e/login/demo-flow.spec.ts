@@ -375,10 +375,10 @@ test.afterEach(async () => {
 });
 
 test.beforeAll(async ({ request }) => {
-  // Compile every page template before browser HMR connects, including later
-  // F-7/F-10 and dynamic pages. Warming only F-6 moved the same interruption
-  // to /upis. These anonymous GETs never grant a role or start a session;
-  // every original browser action and assertion below still runs unchanged.
+  // Validate and prepare every anonymous page template within the setup budget.
+  // This is not a barrier against later development updates: real API handlers
+  // still compile during the flow. No role, session or workflow state is made;
+  // every original browser action and assertion below runs unchanged.
   const paths = loginPagePaths(readdirSync("app", { recursive: true }) as string[]);
   await warmLoginPages(request, APP_ORIGIN, paths);
 });

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { LOGIN_PORT, createLoginCertificate, loginOrigin, nextDevArgs, opensslArgs, loginPagePaths, warmLoginPages, loginDevEntries } from "./login-e2e-https.mjs";
+import { LOGIN_PORT, createLoginCertificate, loginOrigin, nextDevArgs, opensslArgs, loginPagePaths, warmLoginPages } from "./login-e2e-https.mjs";
 
 test("warmup covers all page templates, including dynamic pages, but never API handlers", () => {
   assert.deepEqual(loginPagePaths(["page.tsx", "upis/page.tsx", "rad/[assignmentId]/predaja/page.tsx", "api/auth/login/route.ts", "layout.tsx"]),
@@ -33,29 +33,17 @@ test("warmup awaits every anonymous HTML page and fails visibly on setup errors"
   await assert.rejects(warmLoginPages({ get: async () => { throw new Error("connection refused"); } }, "https://127.0.0.1:3000", ["/upis"]), /connection refused/);
 });
 
-test("entry retention is confined to the explicitly launched development login stack", () => {
-  assert.equal(loginDevEntries({ NODE_ENV: "production", DUCTUS_LOGIN_E2E_PRECOMPILE: "1" }), undefined);
-  assert.equal(loginDevEntries({ NODE_ENV: "development" }), undefined);
-  assert.equal(loginDevEntries({ NODE_ENV: "development", DUCTUS_LOGIN_E2E_PRECOMPILE: "true" }), undefined);
-  const entries = loginDevEntries({ NODE_ENV: "development", DUCTUS_LOGIN_E2E_PRECOMPILE: "1" });
-  assert.ok(entries.maxInactiveAge >= 15 * 60_000);
-  assert.ok(entries.pagesBufferLength >= 32);
-});
-
-test("real Next config retains security settings and ignores the login flag in production", () => {
+test("real Next config and security settings are independent of stale or malformed login flags", () => {
   const load = (nodeEnv, flag) => JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", `
     import config from "next/dist/server/config.js";
     const loaded = await config.default(process.env.NODE_ENV === "production" ? "phase-production-build" : "phase-development-server", process.cwd());
     console.log(JSON.stringify({entries:loaded.onDemandEntries,headers:await loaded.headers(),poweredByHeader:loaded.poweredByHeader}));
   `], { encoding: "utf8", env: { ...process.env, NODE_ENV: nodeEnv, DUCTUS_LOGIN_E2E_PRECOMPILE: flag } }));
   const normal = load("development", undefined);
-  const login = load("development", "1");
-  const production = load("production", "1");
-  assert.deepEqual(login.entries, { maxInactiveAge: 900_000, pagesBufferLength: 64 });
-  assert.deepEqual(production.entries, normal.entries);
-  assert.deepEqual(login.headers, normal.headers);
-  assert.deepEqual(production.headers, normal.headers);
-  assert.equal(login.poweredByHeader, false);
+  for (const [nodeEnv, flag] of [["development", "1"], ["development", "true"], ["production", "1"]]) {
+    assert.deepEqual(load(nodeEnv, flag), normal);
+  }
+  assert.equal(normal.poweredByHeader, false);
 });
 
 const scratch = () => mkdtempSync(join(tmpdir(), "ductus-https-test-"));
@@ -84,9 +72,24 @@ test("openssl is asked for a short lived certificate for localhost and 127.0.0.1
   assert.equal(args[args.indexOf("-addext") + 1], "subjectAltName=DNS:localhost,IP:127.0.0.1");
 });
 
-test("next dev gets the https flags with our own key and certificate and the fixed port", () => {
+test("only the HTTPS login launcher selects supported Turbopack development with its fixed TLS origin", () => {
   const args = nextDevArgs({ key: "/d/key.pem", cert: "/d/cert.pem" });
-  assert.deepEqual(args, ["dev", "--port", "3000", "--experimental-https", "--experimental-https-key", "/d/key.pem", "--experimental-https-cert", "/d/cert.pem"]);
+  assert.deepEqual(args, ["dev", "--turbopack", "--port", "3000", "--experimental-https", "--experimental-https-key", "/d/key.pem", "--experimental-https-cert", "/d/cert.pem"]);
+  const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.scripts.dev, "next dev");
+  assert.equal(pkg.scripts.build, "next build");
+  assert.equal(pkg.scripts.start, "next start");
+});
+
+test("the login launcher refuses production, test and malformed NODE_ENV rather than rewriting it", () => {
+  const files = { key: "/d/key.pem", cert: "/d/cert.pem" };
+  for (const value of ["production", "test", "", "Development", " development "]) {
+    assert.throws(() => nextDevArgs(files, { NODE_ENV: value }), /development NODE_ENV/, JSON.stringify(value));
+  }
+  for (const env of [{}, { NODE_ENV: "development" }]) {
+    assert.equal(nextDevArgs(files, env)[0], "dev");
+    assert.ok(nextDevArgs(files, env).includes("--turbopack"));
+  }
 });
 
 test("a real certificate is made: localhost only, short lived, key private and matching", () => {

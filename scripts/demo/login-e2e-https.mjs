@@ -11,13 +11,6 @@ import { fileURLToPath } from "node:url";
 
 export const LOGIN_PORT = 3000;
 
-/** Retain compiled pages only in the login launcher's development process. */
-export function loginDevEntries(env = process.env) {
-  return env.NODE_ENV === "development" && env.DUCTUS_LOGIN_E2E_PRECOMPILE === "1"
-    ? { maxInactiveAge: 15 * 60_000, pagesBufferLength: 64 }
-    : undefined;
-}
-
 /** Anonymous representative URLs for every app page; API handlers are excluded. */
 export function loginPagePaths(files) {
   const paths = files.filter((file) => /(^|\/)page\.tsx$/.test(file.replaceAll("\\", "/"))).map((file) => {
@@ -32,7 +25,7 @@ export function loginPagePaths(files) {
   return [...new Set(paths)].sort();
 }
 
-/** Complete compilation before a browser connects to dev HMR. No authenticated requests. */
+/** Validate and prepare anonymous pages; API compilation and real workflow state stay cold. */
 export async function warmLoginPages(request, origin, paths) {
   for (const path of paths) {
     const response = await request.get(path);
@@ -82,8 +75,15 @@ export function createLoginCertificate(dir, run = spawnSync) {
   return { key, cert };
 }
 
-export function nextDevArgs({ key, cert }) {
-  return ["dev", "--port", String(LOGIN_PORT), "--experimental-https", "--experimental-https-key", key, "--experimental-https-cert", cert];
+export function nextDevArgs({ key, cert }, env = process.env) {
+  if (env.NODE_ENV !== undefined && env.NODE_ENV !== "development") {
+    throw new Error("HTTPS login launcher requires development NODE_ENV (or unset)");
+  }
+  // Next 15.5 supports Turbopack development. Its endpoint/asset update protocol
+  // does not fetch webpack's global hot-update manifests: a failed manifest
+  // fetch interrupted navigation in this flow. HMR and runtime errors stay real.
+  // Keep this compiler selection here: ordinary dev/build/start are unchanged.
+  return ["dev", "--turbopack", "--port", String(LOGIN_PORT), "--experimental-https", "--experimental-https-key", key, "--experimental-https-cert", cert];
 }
 
 /** `next dev` over https with a certificate that lives only as long as the server. */
@@ -96,7 +96,7 @@ function main() {
     const files = createLoginCertificate(dir);
     const next = createRequire(import.meta.url).resolve("next/dist/bin/next");
     // The server trusts its own certificate for any call it makes to itself.
-    child = spawn(process.execPath, [next, ...nextDevArgs(files)], { stdio: "inherit", env: { ...process.env, NODE_EXTRA_CA_CERTS: files.cert, DUCTUS_LOGIN_E2E_PRECOMPILE: "1" } });
+    child = spawn(process.execPath, [next, ...nextDevArgs(files)], { stdio: "inherit", env: { ...process.env, NODE_EXTRA_CA_CERTS: files.cert } });
   } catch (error) {
     cleanup();
     console.error(error instanceof Error ? error.message : error);

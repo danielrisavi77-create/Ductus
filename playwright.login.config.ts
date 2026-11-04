@@ -55,7 +55,9 @@ export default defineConfig({
   },
   projects: [
     { name: "login-chromium", use: { ...devices["Desktop Chrome"] } },
-    ...(SECURE ? [{ name: "login-webkit", testMatch: webkitSpecs.map((spec) => `**/${spec}`), use: { ...devices["Desktop Safari"] } }] : []),
+    // Retain the full lifecycle on success too, so the Linux artifact can
+    // establish that late updates did not interrupt the original demo steps.
+    ...(SECURE ? [{ name: "login-webkit", testMatch: webkitSpecs.map((spec) => `**/${spec}`), use: { ...devices["Desktop Safari"], trace: "on" as const } }] : []),
   ],
   webServer: {
     // `next dev` over https with a certificate made for this run. With
