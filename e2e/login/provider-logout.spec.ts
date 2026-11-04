@@ -4,6 +4,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
   appCookie, clickSignOut, ROLE_HOME, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-212 (plan #1245): a sign-out also ends the session at the provider
 // (RP-initiated logout), so on a shared computer the next sign-in asks for the
@@ -11,7 +12,7 @@ import {
 // sign-out may end the provider's session. Every test runs in a fresh browser
 // context; all accounts and text are invented.
 
-const APP = "http://localhost:3000";
+const APP = APP_ORIGIN;
 const PROVIDER = "http://localhost:8090";
 const END_SESSION = `${PROVIDER}/session/end`;
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });

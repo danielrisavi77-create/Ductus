@@ -4,6 +4,7 @@ import pg from "pg";
 import { EVIDENCE_PROFILE_ID } from "../../src/domain/forensics/evidence-profile";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { localAdminUrl } from "./local-db-url";
+import { APP_ORIGIN } from "./origin";
 
 type Owner = { institution: string; student: string };
 
@@ -66,7 +67,7 @@ export async function ensureDemoPackage(client: pg.Client): Promise<void> {
 // Revisions and assignment versions are immutable, so the document and its
 // course stay; cleanUp() removes the comments and closes the memberships and the
 // teacher role seed() opened, so no other spec can read it.
-export const ORIGIN = "http://localhost:3000";
+export const ORIGIN = APP_ORIGIN;
 export const TEACHER = "demo-teacher@demo.ductus.test";
 export const STUDENT = "demo-student@demo.ductus.test";
 

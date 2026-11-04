@@ -3,13 +3,14 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-292 (#747): the revocation route exists in the running app and refuses
 // every caller who is not a teacher of the course. The teacher's success and
 // the course of another institution are proved on the real database in
 // tests/integration/enrollment-code-revocation-route.integration.test.ts; the
 // demo stack has one institution, and the teacher role belongs to demo-flow.
-const ORIGIN = "http://localhost:3000";
+const ORIGIN = APP_ORIGIN;
 const path = (course: string) => `/api/institution/courses/${course}/enrollment-code/revocation`;
 
 test("refuses an anonymous caller and a wrong Origin, uncached", async ({ request }) => {
