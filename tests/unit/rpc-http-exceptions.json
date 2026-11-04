@@ -95,6 +95,12 @@
     "ticket": "DAN-379"
   },
   {
+    "function": "institution.publish_faculty_rule_version",
+    "status": "ruta dolazi",
+    "reason": "Potvrđeni administrator ustanove objavljuje novu nepromjenjivu verziju pravila fakulteta uz očekivanu verziju (M2.12-P01a, D-175); RPC postoji za ductus_app, ruta nije u opsegu P01a.",
+    "ticket": "DAN-315"
+  },
+  {
     "function": "institution.request_mentorship",
     "status": "ruta dolazi",
     "reason": "Student traži od potvrđenog nastavnika svoje ustanove mentorstvo za jedan rad (M2.6-P03, D-204); RPC postoji za ductus_app, ruta još nije spojena.",
