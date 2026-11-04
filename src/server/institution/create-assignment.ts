@@ -58,6 +58,14 @@ function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * A calendar instant whose UTC year is 1000 to 9999, as
+ * institution.is_assignment_content holds it (DAN-306). The range is checked
+ * after the offset is applied: below year 1000 UTC, PostgreSQL's to_char and
+ * Date.prototype.toISOString can write different years for the same instant
+ * (1 BC is 0001 and 0000), and the notice fingerprint would not be the same
+ * bytes in both languages.
+ */
 function validInstant(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const match = ISO_INSTANT.exec(value);
@@ -68,11 +76,15 @@ function validInstant(value: unknown): value is string {
   const calendarDate = new Date(0);
   calendarDate.setUTCFullYear(year, month - 1, day);
   calendarDate.setUTCHours(0, 0, 0, 0);
+  const instant = Date.parse(value);
+  if (!Number.isFinite(instant)) return false;
+  const utcYear = new Date(instant).getUTCFullYear();
   return (
     calendarDate.getUTCFullYear() === year &&
     calendarDate.getUTCMonth() === month - 1 &&
     calendarDate.getUTCDate() === day &&
-    Number.isFinite(Date.parse(value))
+    utcYear >= 1000 &&
+    utcYear <= 9999
   );
 }
 
