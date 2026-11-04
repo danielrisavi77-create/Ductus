@@ -277,8 +277,19 @@ export function tokenize(src) {
         else j += 6;
       }
       const name = decode(src.slice(i, j));
+      // `#class` is a private name; directly in a class body, `class` at an
+      // element start (after `{`, `;`, `}`, `static` or an ASI-ended field)
+      // is a field name. Neither is a class head.
+      const p = last();
+      const elementName =
+        (p?.type === "punct" && p.value === "#") ||
+        (stack[stack.length - 1]?.classBody === true &&
+          ((p?.type === "punct" && ["{", ";", "}"].includes(p.value)) ||
+            (p?.type === "id" && p.value === "static" && !member(back(2))) ||
+            (gapEnd && p !== undefined && valueEnd(p, back(2)))));
       if (
         name === "class" &&
+        !elementName &&
         !member(last()) &&
         !/^\s*[:(]/.test(src.slice(j))
       ) {
@@ -770,6 +781,13 @@ test("F-035 c: a `class` key or name does not make a later brace a class body", 
     `const o = { class /* c */ () {}, m() { let ${name}; ${name} = true; } };`,
     `class A { class = 1\nm() { let ${name}; ${name} = true; } }`,
     `class A { class; m() { let ${name}; ${name} = true; } }`,
+    // A field named `class` ended by ASI (any line terminator) is no head.
+    `class A { class\nm() { let ${name}; ${name} = true; } }`,
+    `class A { class\u2028m() { let ${name}; ${name} = true; } }`,
+    `class A { class\r\nm() { let ${name}; ${name} = true; } }`,
+    `class A { timeout = 1\nclass\nm() { let ${name}; ${name} = true; } }`,
+    `class A { static class\nm() { let ${name}; ${name} = true; } }`,
+    `class A { #class\nm() { let ${name}; ${name} = true; } }`,
   ];
   const modules = (name) => [
     `import { class as c } from "node:test";\nfunction g() { if (c) { let ${name}; ${name} = true; } }`,
@@ -806,6 +824,27 @@ test("F-035 c: a `class` key or name does not make a later brace a class body", 
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("F-035 c: an ASI-ended `class` field hides no later marker", () => {
+  for (const name of NAMES) {
+    for (const sep of ["\n", "\r", "\u2028", "\u2029"]) {
+      // The method body is a block, so `/'/` is a regex and the marker shows.
+      for (const field of ["class", "#class", "static class"]) {
+        const src = `class A { ${field}${sep}m(t, s) { {} /'/.test(s); t.${name}(); } }`;
+        new Function(src)();
+        assert.deepEqual(markers(src), [sep === "\n" ? 2 : 1], src);
+        assert.equal(tokenize(src).balanced, true, src);
+      }
+    }
+    // A class expression in a field initializer is still a class.
+    for (const init of ["= class {", "=\nclass {", "= a ||\nclass {"]) {
+      const src = `const a = 0;\nclass A { x ${init}\n${name} = true\n} }`;
+      new Function(src)();
+      const at = src.split("\n").findIndex((l) => l.startsWith(name)) + 1;
+      assert.deepEqual(markers(src), [at], src);
+    }
   }
 });
 
