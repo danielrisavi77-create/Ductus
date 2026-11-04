@@ -122,8 +122,9 @@ SELECT bag_eq(
   ARRAY['assignment_version: assignment_version_immutable 27 O', 'assignment_version: assignment_version_no_truncate 34 O',
         'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O',
         'assignment_version: assignment_version_institution_fill 7 O',
-        'course_enrollment_code: course_enrollment_code_institution_fill 7 O'],
-  'triggers: immutable versions, mentorship validation, transactional notification and the institution of the parent, all enabled'
+        'course_enrollment_code: course_enrollment_code_institution_fill 7 O',
+        'notice_acknowledgment: notice_acknowledgment_fingerprint_immutable 19 O'],
+  'triggers: immutable versions and fingerprints, mentorship validation, transactional notification and the institution of the parent, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -161,7 +162,9 @@ SELECT bag_eq(
     'create_assignment(p_course_id uuid, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer) definer app',
     'create_assignment(p_course_id uuid, p_request_id uuid, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer) definer app',
     'publish_assignment_version(p_assignment_id uuid, p_expected_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer) definer app',
-    'acknowledge_notice(p_assignment_id uuid, p_version_no integer) definer app',
+    'acknowledge_notice(p_assignment_id uuid, p_version_no integer, p_template_version integer) definer app',
+    'notice_fingerprint(p_template_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_word_min integer, p_word_max integer)',
+    'refuse_acknowledgment_change()',
     'has_acknowledged_current(p_assignment_id uuid) definer app',
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',

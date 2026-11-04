@@ -3132,30 +3132,47 @@ $_$;
 
 
 --
--- Name: acknowledge_notice(uuid, integer); Type: FUNCTION; Schema: institution; Owner: -
+-- Name: acknowledge_notice(uuid, integer, integer); Type: FUNCTION; Schema: institution; Owner: -
 --
 
-CREATE FUNCTION institution.acknowledge_notice(p_assignment_id uuid, p_version_no integer) RETURNS timestamp with time zone
+CREATE FUNCTION institution.acknowledge_notice(p_assignment_id uuid, p_version_no integer, p_template_version integer) RETURNS timestamp with time zone
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 DECLARE
   actor record;
   v_current integer;
+  v_fingerprint text;
+  stored record;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
   IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'student' THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
+  IF p_template_version IS NULL OR p_template_version < 1 THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
   SELECT a.current_version INTO v_current FROM institution.assignment a WHERE a.id = p_assignment_id FOR SHARE;
   IF v_current IS DISTINCT FROM p_version_no THEN
     RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
   END IF;
-  INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
-  VALUES (p_assignment_id, v_current, actor.user_id, actor.institution_id)
+  SELECT institution.notice_fingerprint(p_template_version, v.title, v.instructions, v.work_type, v.opens_at,
+           v.due_at, v.ai_policy, v.ai_purposes, v.evidence_profile, v.word_min, v.word_max)
+    INTO v_fingerprint
+    FROM institution.assignment_version v
+   WHERE v.assignment_id = p_assignment_id AND v.version_no = v_current;
+  INSERT INTO institution.notice_acknowledgment
+    (assignment_id, version_no, student_id, institution_id, notice_template_version, notice_fingerprint)
+  VALUES (p_assignment_id, v_current, actor.user_id, actor.institution_id, p_template_version, v_fingerprint)
   ON CONFLICT (assignment_id, version_no, student_id) DO NOTHING;
-  RETURN (SELECT n.acknowledged_at FROM institution.notice_acknowledgment n
-           WHERE n.assignment_id = p_assignment_id AND n.version_no = v_current AND n.student_id = actor.user_id);
+  SELECT n.acknowledged_at, n.notice_template_version, n.notice_fingerprint INTO stored
+    FROM institution.notice_acknowledgment n
+   WHERE n.assignment_id = p_assignment_id AND n.version_no = v_current AND n.student_id = actor.user_id;
+  IF stored.notice_template_version IS DISTINCT FROM p_template_version
+     OR stored.notice_fingerprint IS DISTINCT FROM v_fingerprint THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN stored.acknowledged_at;
 END
 $$;
 
@@ -4374,6 +4391,35 @@ $$;
 
 
 --
+-- Name: notice_fingerprint(integer, text, text, text, timestamp with time zone, timestamp with time zone, text, text[], text, integer, integer); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.notice_fingerprint(p_template_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_word_min integer, p_word_max integer) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT encode(pg_catalog.sha256(pg_catalog.convert_to(
+    'ductus-notice-fingerprint-v1' || E'\n'
+    || '{"aiPolicy":' || to_json(p_ai_policy)::text
+    || ',"aiPurposes":' || CASE WHEN p_ai_policy = 'prohibited' THEN '[]' ELSE coalesce(
+         (SELECT '[' || string_agg(to_json(s.p)::text, ',' ORDER BY s.p COLLATE "C") || ']'
+            FROM (SELECT DISTINCT u.p FROM unnest(p_ai_purposes) AS u(p)) s),
+         '[]') END
+    || ',"dueAt":' || to_json(to_char(p_due_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text
+    || ',"evidenceProfile":' || to_json(p_evidence_profile)::text
+    || ',"instructions":' || to_json(p_instructions)::text
+    || ',"opensAt":' || to_json(to_char(p_opens_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text
+    || ',"templateVersion":' || p_template_version::text
+    || ',"title":' || to_json(p_title)::text
+    || ',"wordMax":' || coalesce(p_word_max::text, 'null')
+    || ',"wordMin":' || coalesce(p_word_min::text, 'null')
+    || ',"workType":' || to_json(p_work_type)::text
+    || '}',
+    'UTF8')), 'hex')
+$$;
+
+
+--
 -- Name: notify_assignment_version(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4442,6 +4488,20 @@ BEGIN
           p_ai_purposes, p_evidence_profile, p_import_allowed, p_word_min, p_word_max, actor.user_id);
   UPDATE institution.assignment a SET current_version = v_current + 1 WHERE a.id = p_assignment_id;
   RETURN v_current + 1;
+END
+$$;
+
+
+--
+-- Name: refuse_acknowledgment_change(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.refuse_acknowledgment_change() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'notice acknowledgment is immutable' USING ERRCODE = 'ZD403';
 END
 $$;
 
@@ -5787,7 +5847,10 @@ CREATE TABLE institution.notice_acknowledgment (
     version_no integer NOT NULL,
     student_id uuid NOT NULL,
     acknowledged_at timestamp with time zone DEFAULT now() NOT NULL,
-    institution_id uuid NOT NULL
+    institution_id uuid NOT NULL,
+    notice_template_version integer,
+    notice_fingerprint text,
+    CONSTRAINT notice_acknowledgment_fingerprint_check CHECK (((num_nulls(notice_template_version, notice_fingerprint) = 2) OR ((num_nulls(notice_template_version, notice_fingerprint) = 0) AND (notice_template_version >= 1) AND (notice_fingerprint ~ '^[0-9a-f]{64}$'::text))))
 );
 
 ALTER TABLE ONLY institution.notice_acknowledgment FORCE ROW LEVEL SECURITY;
@@ -7369,6 +7432,13 @@ CREATE TRIGGER assignment_version_notify AFTER INSERT ON institution.assignment_
 --
 
 CREATE TRIGGER course_enrollment_code_institution_fill BEFORE INSERT ON institution.course_enrollment_code FOR EACH ROW EXECUTE FUNCTION institution.course_enrollment_code_institution_fill();
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_fingerprint_immutable; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER notice_acknowledgment_fingerprint_immutable BEFORE UPDATE OF notice_template_version, notice_fingerprint ON institution.notice_acknowledgment FOR EACH ROW EXECUTE FUNCTION institution.refuse_acknowledgment_change();
 
 
 --
@@ -9179,4 +9249,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261103030000'),
     ('20261103100000'),
     ('20261104090000'),
-    ('20261104100000');
+    ('20261104100000'),
+    ('20261104120000');

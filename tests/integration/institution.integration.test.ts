@@ -4,6 +4,7 @@ import pg from "pg";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { NOTICE_TEMPLATE_VERSION, noticeFingerprint } from "@/domain/notice/fingerprint";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { createAcknowledgmentPostHandler } from "@/server/institution/acknowledgment-route";
@@ -72,7 +73,9 @@ const refusal = (error: Refusal): Refusal => ({ code: error.code, message: error
 const CONTENT =
   "'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days', 'partially_allowed', '{proofreading}'::text[], 'basic', false, NULL, NULL";
 const PUBLISH = `SELECT institution.publish_assignment_version($1, $2, 'Esej', ${CONTENT}) AS version`;
-const ACKNOWLEDGE = "SELECT institution.acknowledge_notice($1, $2)";
+const ACKNOWLEDGE = `SELECT institution.acknowledge_notice($1, $2, ${NOTICE_TEMPLATE_VERSION}) AS at`;
+// With the template version as a parameter (DAN-306, E2).
+const ACKNOWLEDGE_TEMPLATE = "SELECT institution.acknowledge_notice($1, $2, $3) AS at";
 
 // A transaction of one user that the test commits when it chooses.
 async function openTransaction(token: string) {
@@ -444,6 +447,39 @@ describe("assignments and removal over withActor", () => {
       const result = await tx.query<{ yes: boolean }>("SELECT institution.has_acknowledged_current($1) AS yes", [assignment]);
       return result.rows[0].yes;
     });
+  // What the student stored for a version, and what the TS mirror computes
+  // from the stored version (DAN-306, E1 and A13); instants to milliseconds.
+  const storedNotice = async (versionNo: number) =>
+    (
+      await admin.query(
+        `SELECT notice_template_version, notice_fingerprint FROM institution.notice_acknowledgment
+         WHERE assignment_id = $1 AND version_no = $2 AND student_id = $3`,
+        [assignment, versionNo, people.student.id],
+      )
+    ).rows[0];
+  const versionFingerprint = async (versionNo: number) => {
+    const v = (
+      await admin.query(
+        `SELECT title, instructions, work_type, date_trunc('milliseconds', opens_at) AS opens_at,
+                date_trunc('milliseconds', due_at) AS due_at, ai_policy, ai_purposes, evidence_profile, word_min, word_max
+         FROM institution.assignment_version WHERE assignment_id = $1 AND version_no = $2`,
+        [assignment, versionNo],
+      )
+    ).rows[0];
+    return noticeFingerprint({
+      templateVersion: NOTICE_TEMPLATE_VERSION,
+      title: v.title,
+      instructions: v.instructions,
+      workType: v.work_type,
+      opensAt: v.opens_at.toISOString(),
+      dueAt: v.due_at.toISOString(),
+      aiPolicy: v.ai_policy,
+      aiPurposes: v.ai_purposes,
+      evidenceProfile: v.evidence_profile,
+      wordMin: v.word_min,
+      wordMax: v.word_max,
+    });
+  };
   const versions = async () =>
     (
       await admin.query<{ current_version: number; versions: number[] }>(
@@ -549,10 +585,38 @@ describe("assignments and removal over withActor", () => {
       ]);
     expect((await confirmed()).rows).toEqual([{ version_no: 2 }]);
     expect(await acknowledgedCurrent(people.student.token)).toBe(false);
+    // E1 (DAN-306): the row carries the fingerprint of version 2, the version
+    // current under the lock, not that of version 3.
+    expect(await storedNotice(2)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(2) });
+    expect(await versionFingerprint(2)).not.toBe(await versionFingerprint(3));
 
-    // Ten parallel confirmations of version 4 leave one row.
-    await Promise.all(Array.from({ length: 10 }, () => withActor(people.student.token, (tx) => tx.query(ACKNOWLEDGE, [assignment, 4]))));
+    // E2: the same student, the same version, two template versions. The
+    // second waits on the unique index and, after the first commits, is told
+    // of the conflict; one row with the first fingerprint stays.
+    const firstTab = await openTransaction(people.student.token);
+    let firstAt: Date;
+    try {
+      firstAt = (await firstTab.query<{ at: Date }>(ACKNOWLEDGE_TEMPLATE, [assignment, 4, 1])).rows[0].at;
+      const otherTemplate = withActor(people.student.token, (tx) =>
+        tx.query(ACKNOWLEDGE_TEMPLATE, [assignment, 4, 2]),
+      ).catch(refusal);
+      expect(await answeredSoon(otherTemplate)).toBe(false);
+      await firstTab.query("COMMIT");
+      expect(await otherTemplate).toEqual({ code: "ZD409", message: "conflict" });
+    } finally {
+      await firstTab.end();
+    }
+    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4) });
+
+    // E4: ten parallel confirmations of version 4 leave one row and return the first time.
+    const repeats = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        withActor(people.student.token, async (tx) => (await tx.query<{ at: Date }>(ACKNOWLEDGE, [assignment, 4])).rows[0].at),
+      ),
+    );
+    expect(repeats.map((at) => at.toISOString())).toEqual(Array.from({ length: 10 }, () => firstAt.toISOString()));
     expect((await confirmed()).rows).toEqual([{ version_no: 2 }, { version_no: 4 }]);
+    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4) });
     expect(await acknowledgedCurrent(people.student.token)).toBe(true);
     // Nobody else has confirmed it, the teacher included.
     expect(await acknowledgedCurrent(people.guesser.token)).toBe(false);
