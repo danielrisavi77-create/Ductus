@@ -14,14 +14,13 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-# D-192: Terra high for light, Sol high for standard, Sol ultra for critical;
-# -Escalate (any level) reruns once with Astra high after a first review that
-# got stuck (docs/SESSIONS.md 5). "ultra" is a reasoning level the Codex CLI
-# lists for gpt-6.1-sol (models cache, codex-cli 0.166.0).
+# D-192 and its Dopuna: Terra high for light, Sol high for standard, Sol high
+# for critical; -Escalate (any level) reruns once with Astra high after a first
+# review that got stuck (docs/SESSIONS.md 5).
 $tiers = @{
     light    = @{ Model = 'gpt-6.1-terra'; Effort = 'high' }
     standard = @{ Model = 'gpt-6.1-sol';   Effort = 'high' }
-    critical = @{ Model = 'gpt-6.1-sol';   Effort = 'ultra' }
+    critical = @{ Model = 'gpt-6.1-sol';   Effort = 'high' }
 }
 $tier = if ($Escalate) { @{ Model = 'gpt-6-astra'; Effort = 'high' } } else { $tiers[$Level] }
 

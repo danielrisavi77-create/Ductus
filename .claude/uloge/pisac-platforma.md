@@ -3,6 +3,7 @@
 Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:platforma` (`docs/ENGINEERING_SYSTEM.md` §4).
 
 ## Pročitaj na početku
+- Pisac u oblaku: zajednički postupak (ugovor, CI, Codex, SPREMAN/BLOK/GOTOVO na #1091) je u `pisac-oblak.md`.
 - Zadatak i samo odjeljke koje navodi; za alate `docs/SESSIONS.md` §4a, za gate `docs/ENGINEERING_SYSTEM.md` §5 i §6.
 - Vlasništvo mapa: `docs/SESSIONS.md` §1, red Platforma. `package.json` i lockfile mijenjaš samo ti, u zasebnom malom PR-u.
 - Skill `ductus-worker`; prije predaje `ductus-ci-change` (CI, workflowi, ovisnosti) ili `ductus-rules-change` (pravila, hookovi, gate).

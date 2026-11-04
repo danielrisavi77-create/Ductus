@@ -8,6 +8,7 @@ import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { flipSignatureByte, stackCheckpoint } from "./evidence-receipt";
 import { clickSignOut, editorMounted, signIn } from "./support";
 import { admin, closeWork, seedSubmission, seedWork, workDocument } from "./work-seed";
+import { APP_ORIGIN } from "./origin";
 
 // F-8 3d-2c2 (contract #476 c.6391714810 §6 e2e 1-12, G2 and G3
 // c.6393716541, 3d-2c2a §4): the sheet of `/rad?zadatak=` records, chains and
@@ -298,7 +299,7 @@ test("3d-2c2: sign-out within 400 ms keeps every typed character", async ({ page
   const TEXT = "Svaki znak prije odjave.";
   await type(page, TEXT);
   await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await page.context().clearCookies({ name: /^_session/ });
   await signIn(page, `/rad?zadatak=${assignment}`);
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
@@ -436,7 +437,7 @@ test("F-154: once the session ends in another tab the open dialog offers no dele
 test("F-154: without the second click sign-out keeps the rows after the submission (D-118)", async ({ page }) => {
   const { documentId, held } = await submittedWithRows(page);
   await page.getByRole("dialog").getByRole("button", { name: t.auth.logoutConfirm }).click();
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   expect((await localOf(page, documentId)).pending).toHaveLength(held);
 });
 

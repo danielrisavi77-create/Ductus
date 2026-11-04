@@ -6,6 +6,7 @@ import { THEME_KEY } from "../../src/components/shell/theme";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { SESSION_COOKIE, signIn } from "./support";
 import { localAdminUrl } from "./local-db-url";
+import { APP_HOST, APP_ORIGIN } from "./origin";
 
 // DAN-378 (M1.8): Z-03 for a closed session, "not signed in" without one and
 // Z-05 for a signed-in person without the teacher role, after the UX pass of
@@ -45,7 +46,7 @@ async function expectNoAxeViolations(page: Page): Promise<void> {
 /** A cookie of the right shape that no open session has (as in home-shell.spec.ts). */
 async function closedSessionCookie(page: Page): Promise<void> {
   await page.context().addCookies([{
-    name: SESSION_COOKIE, value: "Z".repeat(43), domain: "localhost", path: "/",
+    name: SESSION_COOKIE, value: "Z".repeat(43), domain: APP_HOST, path: "/",
     secure: true, httpOnly: true, sameSite: "Lax",
   }]);
 }
@@ -62,7 +63,7 @@ async function expectDenied(page: Page): Promise<void> {
 test("Z-03: a closed session on a teacher page, and /prijava leads there instead of round in a circle (#1231)", async ({ page }) => {
   await closedSessionCookie(page);
   await page.goto(`/prijava?returnTo=${encodeURIComponent("/nastavnik")}`);
-  await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+  await expect(page).toHaveURL(`${APP_ORIGIN}/nastavnik`);
   await expect(page.getByRole("heading", { level: 1, name: t.access.expiredTitle })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: t.access.expiredBody })).toBeVisible();
   await expect(page.getByRole("button", { name: t.shell.signOut })).toHaveCount(0);
@@ -73,7 +74,7 @@ test("Z-03: a closed session on a teacher page, and /prijava leads there instead
 
   // /prijava never forwards back to itself.
   await page.goto(`/prijava?returnTo=${encodeURIComponent("/prijava")}`);
-  await expect(page).toHaveURL("http://localhost:3000/");
+  await expect(page).toHaveURL(`${APP_ORIGIN}/`);
   await expect(page.getByRole("heading", { level: 1, name: t.access.expiredTitle })).toBeVisible();
 });
 
