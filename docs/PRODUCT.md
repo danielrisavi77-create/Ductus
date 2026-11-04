@@ -286,7 +286,7 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 
 **Nikad (Ustav):** postotak AI-ja ili ljudskosti, ocjena rizika ili sumnje, tvrdnja o autorstvu, nadzor računala, kamere i zaslona, biometrija tipkanja, automatske sankcije, rangiranje studenata, treniranje modela na radovima. Prikaz uživo dokumenta u Ducturi nije nadzor zaslona: Ductura ne vidi ništa izvan svog editora (Ustav v1.4, D-142, D-144).
 
-**Kasnije:** drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT".
+**Kasnije:** drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT", provjera podudarnosti s izvorima u valu 2 (D-260). Iznimka D-260 od pravila 2 vrijedi tek kad vlasnik upiše tekst Ustava v1.6; dotad pravila iz §5 vrijede bez izmjene.
 
 **Odlučeno, Ustav v1.4 dopunjen 18. 10. 2026. (C-3, C-14, C-19, popis „Nikad”; uz izmjene od 17. 10. niže):** prikaz uživo i reprodukcija znak po znak (D-142, D-143). Pilot sa stvarnim studentima čeka pravno mišljenje (D-55) i DPIA.
 
