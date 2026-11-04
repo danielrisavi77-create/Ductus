@@ -37,3 +37,13 @@ for (const [config, serialised] of [["playwright.login.config.ts", true], ["play
     }
   });
 }
+
+// DAN-232: Playwright ends the web server's process group with SIGKILL unless the
+// config asks for SIGTERM, and then the https launcher cannot delete the private
+// key it made for the run.
+test("playwright.login.config.ts: the https server is stopped with SIGTERM so the launcher removes its key", { timeout: 150_000 }, () => {
+  const report = JSON.parse(listedConfig("playwright.login.config.ts"));
+  const server = report.config.webServer;
+  assert.equal(server.gracefulShutdown?.signal, "SIGTERM");
+  assert.ok(server.gracefulShutdown.timeout > 0);
+});
