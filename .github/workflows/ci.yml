@@ -191,7 +191,9 @@ jobs:
         shard: [1, 2, 3]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
-    runs-on: ubuntu-latest
+    # DAN-556: pinned, because the Playwright cache key has no OS version and a
+    # browser built for one Ubuntu release does not start on the next one.
+    runs-on: ubuntu-24.04
     # Official images pinned by their OCI index SHA-256. Local compose defaults
     # remain unchanged. CI never pulls anonymously from Docker Hub itself; the
     # Docker Hub library images come through Google's mirror (mirror.gcr.io,
@@ -381,7 +383,8 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
-    runs-on: ubuntu-latest
+    # DAN-556: same pin as stack-e2e.
+    runs-on: ubuntu-24.04
     env:
       DUCTUS_POSTGRES_IMAGE: mirror.gcr.io/library/postgres:17.11-trixie@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
       DUCTUS_OBJECTS_IMAGE: ghcr.io/rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
