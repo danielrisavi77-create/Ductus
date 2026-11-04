@@ -6,21 +6,24 @@ import { createServer } from "node:http";
 
 import Provider from "oidc-provider";
 import { ACCOUNTS, demoAccountClaims, isDemoAccountId } from "./accounts.mjs";
+import { DEFAULT_POST_LOGOUT_REDIRECT_URIS, DEFAULT_REDIRECT_URIS, redirectUriList } from "./redirect-uris.mjs";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const ISSUER = process.env.ISSUER ?? `http://localhost:${PORT}`;
-const REDIRECT_URI = process.env.REDIRECT_URI ?? "http://localhost:3000/api/auth/callback";
+// Comma separated; http and https for the app on port 3000 by default (the login
+// E2E runs the app over https).
+const REDIRECT_URIS = redirectUriList(process.env.REDIRECT_URI, DEFAULT_REDIRECT_URIS);
 // The one address the provider sends the browser back to after its logout
 // (DAN-212), as AAI@EduHr accepts only the registered one.
-const POST_LOGOUT_REDIRECT_URI = process.env.POST_LOGOUT_REDIRECT_URI ?? "http://localhost:3000/";
+const POST_LOGOUT_REDIRECT_URIS = redirectUriList(process.env.POST_LOGOUT_REDIRECT_URI, DEFAULT_POST_LOGOUT_REDIRECT_URIS);
 
 const provider = new Provider(ISSUER, {
   clients: [
     {
       client_id: "ductus-local",
       client_secret: "ductus-local-only",
-      redirect_uris: [REDIRECT_URI],
-      post_logout_redirect_uris: [POST_LOGOUT_REDIRECT_URI],
+      redirect_uris: REDIRECT_URIS,
+      post_logout_redirect_uris: POST_LOGOUT_REDIRECT_URIS,
       token_endpoint_auth_method: "client_secret_basic",
     },
   ],

@@ -10,7 +10,7 @@ import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import {
-  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
+  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
   type SourceField, type SourceFields,
 } from "./sources";
 
@@ -258,6 +258,140 @@ describe("writeSource", () => {
     expect(editor.state.doc.toJSON()).toEqual(before);
     expect(writeSource(null, "(X, 2020)", null)).toBe(false);
     editor.destroy();
+  });
+});
+
+describe("the form's errors, field by field", () => {
+  const BOOK_FIELDS: SourceField[] = ["family", "given", "family2", "given2", "title", "place", "publisher"];
+  const ARTICLE_FIELDS: SourceField[] = ["family", "given", "family2", "given2", "title", "journal", "volume", "issue", "pages"];
+  const ASTRAL = "\u{1D49C}"; // one code point, two UTF-16 units
+  const cases = [
+    ...BOOK_FIELDS.map((field) => ({ kind: "book", base: { ...BOOK, family2: "Kovač", given2: "Luka" }, field })),
+    ...ARTICLE_FIELDS.map((field) => ({ kind: "article", base: ARTICLE, field })),
+  ] as const;
+
+  it.each(cases)("$kind $field", ({ base, field }) => {
+    const max = FIELD_MAX[field];
+    const at = (fill: string) => ({ ...base, [field]: fill });
+    const errs = (fields: SourceFields, tried: boolean) => formErrors(sourceFromFields(fields), "", tried);
+    // Empty or only spaces: named only after a click, and only when the field is needed.
+    for (const blank of ["", "   "]) {
+      const needed = sourceFromFields(at(blank)).ok === false;
+      expect(errs(at(blank), false)).toEqual([]);
+      expect(errs(at(blank), true)).toEqual(needed ? [{ kind: "missing", field }] : []);
+    }
+    // At the limit, in code points, with spaces around and with an astral character.
+    for (const fill of ["č".repeat(max), `  ${"č".repeat(max)}  `, `${ASTRAL}${"č".repeat(max - 1)}`]) {
+      expect(errs(at(fill), false)).toEqual([]);
+      expect(errs(at(fill), true)).toEqual([]);
+    }
+    // One more: named at once, with and without a click, and the value is not cut.
+    const over = at(`${ASTRAL}${"č".repeat(max)}`);
+    expect(errs(over, false)).toEqual([{ kind: "tooLong", field }]);
+    expect(errs(over, true)).toEqual([{ kind: "tooLong", field }]);
+    expect(over[field]).toHaveLength(max + 2);
+    // A character the sheet would change: named at once too.
+    expect(errs(at(`a${NUL}`), false)).toEqual([{ kind: "unstorable", field }]);
+    expect(errs(at(`a${LONE}`), true)).toEqual([{ kind: "unstorable", field }]);
+  });
+
+  it("never names a hidden field of the other kind", () => {
+    const over = (field: SourceField) => "1".repeat(FIELD_MAX[field] + 1);
+    expect(formErrors(sourceFromFields({ ...BOOK, journal: over("journal"), pages: over("pages") }), "", true)).toEqual([]);
+    expect(formErrors(sourceFromFields({ ...ARTICLE, place: over("place"), publisher: `x${NUL}` }), "", true)).toEqual([]);
+  });
+
+  it("names a malformed year with its own message, and only after a click", () => {
+    expect(formErrors(sourceFromFields({ ...BOOK, year: "20215" }), "", false)).toEqual([]);
+    expect(formErrors(sourceFromFields({ ...BOOK, year: "20215" }), "", true)).toEqual([{ kind: "yearInvalid" }]);
+  });
+
+  it("names the page of a citation at once, at the limit and one over", () => {
+    const ok = sourceFromFields(BOOK);
+    for (const tried of [false, true]) {
+      expect(formErrors(ok, "", tried)).toEqual([]);
+      expect(formErrors(ok, "1".repeat(PAGE_MAX), tried)).toEqual([]);
+      expect(formErrors(ok, ` ${ASTRAL}${"1".repeat(PAGE_MAX - 1)} `, tried)).toEqual([]);
+      expect(formErrors(ok, "1".repeat(PAGE_MAX + 1), tried)).toEqual([{ kind: "pageTooLong" }]);
+      expect(formErrors(ok, `1${NUL}`, tried)).toEqual([{ kind: "pageUnstorable" }]);
+    }
+    // An empty form says nothing until a click; the page still speaks at once.
+    expect(formErrors(sourceFromFields(EMPTY_FIELDS), "1".repeat(PAGE_MAX + 1), false)).toEqual([{ kind: "pageTooLong" }]);
+  });
+});
+
+// DAN-484 narrowed contract (#1407 c.6626765838): the form never reads or
+// changes text already in the sheet; it only inserts a new citation and entry.
+describe("the form leaves the sheet's text as it is", () => {
+  // As the panel writes on "Dodaj i citiraj": its text comes from the fields only.
+  const addAndCite = (editor: Editor, fields: SourceFields, page = "") => {
+    const source = sourceOf(fields);
+    return writeSource(editor, citationText(source, page), entryText(source));
+  };
+  const blocks = (editor: Editor) => {
+    const out: unknown[] = [];
+    editor.state.doc.forEach((node) => out.push(node.toJSON()));
+    return out;
+  };
+
+  it("N1 a second work of the author and year is (Horvat, 2021), and the first stays byte-equal", () => {
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+    expect(addAndCite(editor, BOOK)).toBe(true);
+    const before = blocks(editor);
+    const firstCited = texts(editor)[0]!;
+    const second = { ...BOOK, title: "Druga izmišljena knjiga" };
+    expect(citationText(sourceOf(second), "")).toBe("(Horvat, 2021)");
+    expect(addAndCite(editor, second)).toBe(true);
+    expect(texts(editor)).toEqual([
+      `${firstCited}(Horvat, 2021)`,
+      "heading:Literatura",
+      `paragraph:${entryText(sourceOf(second))}`,
+      `paragraph:${entryText(sourceOf(BOOK))}`,
+    ]);
+    // Every block but the cited paragraph and the new entry is the same node as before.
+    expect(blocks(editor).filter((_, i) => i !== 0 && i !== 2)).toEqual(before.slice(1));
+    editor.destroy();
+  });
+
+  it("N2 a given name with a year in it stays as written when the author's other year is added", () => {
+    // Scenarios of review c.6624200228 and QA c.6624252521.
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+    const first = { ...BOOK, given: "Ana (2021)", year: "2020" };
+    expect(addAndCite(editor, first)).toBe(true);
+    const before = blocks(editor);
+    const firstCited = texts(editor)[0]!;
+    expect(addAndCite(editor, BOOK)).toBe(true);
+    const after = texts(editor);
+    expect(after[0]).toBe(`${firstCited}${citationText(sourceOf(BOOK), "")}`);
+    expect(after).toContain(`paragraph:${entryText(sourceOf(first))}`);
+    expect(entryText(sourceOf(first))).toContain("Horvat, Ana (2021)");
+    expect(blocks(editor).filter((node) => JSON.stringify(node).includes("Ana (2021) (2020)"))).toEqual(
+      before.filter((node) => JSON.stringify(node).includes("Ana (2021) (2020)")),
+    );
+    editor.destroy();
+  });
+
+  it("N3 a pasted run of names in Literatura changes neither the preview nor any block", () => {
+    const pasted = `${"Babić, A, i ".repeat(160)}(2021) Naslov. Zagreb: Primjer.`;
+    const empty = editorWith([{ text: "Prvi odlomak." }]);
+    const withRun = editorWith([{ text: "Prvi odlomak." }, { type: "heading", text: "Literatura" }, { text: pasted }]);
+    const fields = { ...BOOK, family: "Babić", given: "A" };
+    // The preview the panel shows is a function of the fields alone.
+    const preview = [citationText(sourceOf(fields), ""), entryText(sourceOf(fields))];
+    for (const editor of [empty, withRun]) {
+      editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+      const before = blocks(editor);
+      expect(addAndCite(editor, fields)).toBe(true);
+      expect([citationText(sourceOf(fields), ""), entryText(sourceOf(fields))]).toEqual(preview);
+      expect(texts(editor)[0]).toBe(`paragraph:Prvi odlomak.${preview[0]}`);
+      expect(texts(editor)).toContain(`paragraph:${preview[1]}`);
+      // Every block already there, the pasted run included, is unchanged.
+      for (const node of before.slice(1)) expect(blocks(editor)).toContainEqual(node);
+      editor.destroy();
+    }
+    expect(pasted).toHaveLength(12 * 160 + 31);
   });
 });
 
