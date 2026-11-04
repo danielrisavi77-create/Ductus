@@ -5,6 +5,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
   appCookie, clickSignOut, editorMounted, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
+import { APP_HOST, APP_ORIGIN } from "./origin";
 
 // F-5 (DAN-34, plan #376): the writing page of a signed-in person and the
 // sign-out that always ends the session (D-118). Every test runs in a
@@ -45,7 +46,7 @@ test("row 1: without a session /rad shows no one as signed in", async ({ page, c
   // A cookie of the right shape that no open session has: nothing is shown
   // as signed in, no journal opens, and signing in again is offered.
   await context.addCookies([{
-    name: SESSION_COOKIE, value: "Z".repeat(43), domain: "localhost", path: "/",
+    name: SESSION_COOKIE, value: "Z".repeat(43), domain: APP_HOST, path: "/",
     secure: true, httpOnly: true, sameSite: "Lax",
   }]);
   await page.goto("/rad");
@@ -61,7 +62,7 @@ test("row 1: sign-in leads to an editable sheet; sign-out of an unchanged docume
   // the login route its AAI@EduHr button links to.
   await page.goto(`/api/auth/login?returnTo=${encodeURIComponent("/rad")}`);
   await page.getByRole("button", { name: "Demo studentica" }).click();
-  await page.waitForURL("http://localhost:3000/rad");
+  await page.waitForURL(`${APP_ORIGIN}/rad`);
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
   const token = (await appCookie(context, SESSION_COOKIE))!.value;
 
@@ -83,7 +84,7 @@ test("rows 2, 3 and 5: a local change does not hold the session open; the text w
   await writeAndWait(page, "Nacrt A: plava bilježnica");
 
   await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   expect(await journalNames(page)).toHaveLength(1);
@@ -142,7 +143,7 @@ test("row 3: a sign-out the server never got ends the session on this device, an
   // The connection is back: the page completes the sign-out by itself.
   await page.unroute("**/api/auth/logout");
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await expect.poll(async () => (await sessionRow(token))?.close_reason).toBe("logout");
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
   expect(await page.evaluate(() => localStorage.getItem("ductus-logout-pending"))).toBeNull();
@@ -173,7 +174,7 @@ test("row 3: with nothing held, the sign-out without the server opens the dialog
   // The next page load reaches the route and completes the sign-out.
   await page.unroute("**/api/auth/logout");
   await page.goto("/rad");
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await expect.poll(async () => (await sessionRow(token))?.close_reason).toBe("logout");
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
 });
@@ -305,9 +306,9 @@ test("after a sign-out the server refused, Prijavi se signs in anew and comes ba
   });
   await noticeOf(page).getByRole("link", { name: t.auth.signInAgain }).click();
   await expect(page).toHaveURL(/^http:\/\/localhost:8090\/interaction\//);
-  expect(logins).toEqual(["http://localhost:3000/api/auth/login?returnTo=%2Frad"]);
+  expect(logins).toEqual([`${APP_ORIGIN}/api/auth/login?returnTo=%2Frad`]);
   await page.getByRole("button", { name: "Demo studentica" }).click();
-  await page.waitForURL("http://localhost:3000/rad");
+  await page.waitForURL(`${APP_ORIGIN}/rad`);
 
   // A new session; the one whose sign-out the server refused is closed by it.
   const renewed = (await appCookie(context, SESSION_COOKIE))!.value;
@@ -351,7 +352,7 @@ test("D-183: the sign-out that ended on this device and the sheet after it, both
     await shoot(`prijava-ne-vrijedi-${theme}`, 1440);
     await page.unroute("**/api/auth/logout");
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL(`${APP_ORIGIN}/`);
   }
 });
 
@@ -364,7 +365,7 @@ test("sign-out from a second tab ends the session and empties the writing tab", 
   await second.goto("/rad");
   await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
   await clickSignOut(second);
-  await second.waitForURL("http://localhost:3000/");
+  await second.waitForURL(`${APP_ORIGIN}/`);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
 
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
@@ -409,7 +410,7 @@ test("sign-out from a second tab empties the Literatura tab of the writing tab",
   await second.goto("/rad");
   await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
   await clickSignOut(second);
-  await second.waitForURL("http://localhost:3000/");
+  await second.waitForURL(`${APP_ORIGIN}/`);
 
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
   await expect(tab.getByText(s.readOnly)).toBeVisible();
@@ -446,7 +447,7 @@ test("row 9: the dialog says text the device could not store would be lost; sign
   await expectStillSignedIn(page, token);
 
   await dialog.getByRole("button", { name: t.auth.logoutConfirmUnsaved }).click();
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
 });
 
@@ -510,7 +511,7 @@ test("FE-D7: the dialog names what stays on this device; Ostani and Escape keep 
   expect(await pendingRows(page)).toBe(owed);
 
   await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
   await forgetProviderLogin(context);
   await signIn(page, "/rad");
@@ -558,7 +559,7 @@ test("FE-D7: Escape, the backdrop or a browser close during a sign-out leave the
   // The sign-out button still works: it leaves, and the next page completes the sign-out.
   await page.unroute("**/api/auth/logout");
   await logoutOf(page).click();
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await expect.poll(async () => (await sessionRow(token))?.close_reason).toBe("logout");
 });
 
@@ -619,7 +620,7 @@ test("a tab opened before a sign-out works again after the next sign-in", async 
   // The first tab never reloaded; its link to "/" renders under the new
   // cookie and goes on to /rad (DAN-325).
   await page.getByRole("link", { name: t.teacher.backHome, exact: true }).click();
-  await page.waitForURL("http://localhost:3000/rad");
+  await page.waitForURL(`${APP_ORIGIN}/rad`);
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
 });
@@ -669,10 +670,10 @@ test("a tab that missed the sign-out news still never reopens the journal", asyn
 // second sign-in; both send the student on to the workspace.
 test("with a session the home page and the sign-in page lead to the student's own page", async ({ page }) => {
   await signIn(page, "/");
-  await expect(page).toHaveURL("http://localhost:3000/rad");
+  await expect(page).toHaveURL(`${APP_ORIGIN}/rad`);
   for (const path of ["/", "/prijava", "/prijava?returnTo=%2Frad"]) {
     await page.goto(path);
-    await expect(page).toHaveURL("http://localhost:3000/rad");
+    await expect(page).toHaveURL(`${APP_ORIGIN}/rad`);
     await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
   }
 });

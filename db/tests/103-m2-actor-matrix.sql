@@ -3,8 +3,9 @@
 -- committee member, administrator and a user of another institution - with
 -- no session and a closed one as controls. Every cell is an actor, an action
 -- and a target that is the actor's own, someone else's at the same
--- institution, or another institution's. The group scope of M2.5 (#1372) is
--- not merged and not covered here; it adds rows to this matrix once it is.
+-- institution, or another institution's. The group scope of M2.5 (#1372)
+-- adds Goran's decisions on the work Ana started in his group (section 3);
+-- the rows he sees are unchanged, because course_read is.
 -- Personas of institution.inc and mentorship.inc; Ema, Goran and Hana are
 -- invented teachers of fak-a, as in 102.
 BEGIN;
@@ -181,6 +182,8 @@ SELECT bag_eq(
     -- teacher of K1: the works of K1, never writes (D-34)
     ('vesna can read doc-ana-z1'), ('vesna can comment doc-ana-z1'), ('vesna can propose doc-ana-z1'), ('vesna can open_fast_path doc-ana-z1'),
     ('vesna can read doc-dora-z1'), ('vesna can comment doc-dora-z1'), ('vesna can propose doc-dora-z1'), ('vesna can open_fast_path doc-dora-z1'),
+    -- group teacher of ga (M2.5, #1372): Ana's work in his group, as a teacher, never writes; not Dora's (no place)
+    ('goran can read doc-ana-z1'), ('goran can comment doc-ana-z1'), ('goran can propose doc-ana-z1'), ('goran can open_fast_path doc-ana-z1'),
     -- mentor: the thesis he mentors, nothing of K1
     ('marko can read doc-ana-zm1'), ('marko can comment doc-ana-zm1'), ('marko can propose doc-ana-zm1'), ('marko can open_fast_path doc-ana-zm1'),
     -- co-mentor and committee member: only the granted actions of grant_can(), no can() (D-205 t. 3)
@@ -193,8 +196,8 @@ SELECT bag_eq(
 SELECT is(
   (SELECT string_agg(a.name, ' ' ORDER BY a.name) FROM actor a
    WHERE NOT EXISTS (SELECT 1 FROM cell c WHERE c.actor = a.name AND c.says = 'true')),
-  'anon closed goran iva lea',
-  'no session, a closed one, a group teacher (T053) and both administrators decide nothing on any work'
+  'anon closed iva lea',
+  'no session, a closed one and both administrators decide nothing on any work'
 );
 
 -- 4. The role readers over every actor and every assignment and mentorship:

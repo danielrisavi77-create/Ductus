@@ -3,6 +3,7 @@ import pg from "pg";
 
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { localAdminUrl } from "./local-db-url";
+import { APP_ORIGIN } from "./origin";
 
 // #711 F1: `/rad?zadatak=` writes into the student's own work of the
 // assignment, made by the real open route (`open_student_work`), never into a
@@ -10,7 +11,7 @@ import { localAdminUrl } from "./local-db-url";
 // through the admin login of the compose database (as assignment-notice.spec.ts
 // does), open the work as the student, and read its document id back.
 
-export const ORIGIN = "http://localhost:3000";
+export const ORIGIN = APP_ORIGIN;
 export const STUDENT = "demo-student@demo.ductus.test";
 export const TEACHER = "demo-teacher@demo.ductus.test";
 

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Način fokusa (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca M5.UX-R · DAN-510 · prijedlog slike · #1392</div>
+  <h1>Način fokusa</h1>
+  <p>Fokus sakriva rail, desni panel i alatnu traku; stanje spremanja ostaje vidljivo u svakom stanju. Podaci su izmišljeni.</p>
+</header>
+<main class="page">
+<div class="variants">
+  <section class="variant" aria-labelledby="k1">
+    <div class="ref-tag">Stanje 1 · fokus uključen</div>
+    <div class="workspace" style="grid-template-columns:1fr"><div class="doc"><div class="sheet"><p id="k1">Tekst rada ostaje jedini sadržaj na listu. Student piše bez alatne trake i bočnih panela.</p></div>
+      <div class="statusbar" role="status"><span><span class="dot"></span>Spremljeno na poslužitelju</span><button class="btn small ghost" type="button">Izlaz iz fokusa</button></div></div></div>
+    <p class="meta">Fokus sakriva alate. Stanje spremanja ostaje vidljivo.</p>
+  </section>
+  <section class="variant" aria-labelledby="k2">
+    <div class="ref-tag">Stanje 2 · promjena stanja</div>
+    <div class="workspace" style="grid-template-columns:1fr"><div class="doc"><div class="toast" role="status" id="k2"><span>Bez mreže. Tekst se sprema na ovom uređaju.</span></div><div class="sheet"><p>Tekst rada; fokus se ne uzima iz teksta.</p></div>
+      <div class="statusbar"><span><span class="dot local"></span>Spremljeno na uređaju</span></div></div></div>
+  </section>
+  <section class="variant" aria-labelledby="k3">
+    <div class="ref-tag">Stanje 3 · Esc otvara izlaz i odjavu</div>
+    <div class="workspace" style="grid-template-columns:1fr"><div class="doc"><div class="toast" id="k3"><span>Izlaz iz fokusa · Odjava</span><span><button class="btn small secondary" type="button">Izlaz iz fokusa</button> <button class="btn small ghost" type="button">Odjava</button></span></div><div class="sheet"><p>Tekst rada.</p></div>
+      <div class="statusbar"><span><span class="dot"></span>Spremljeno na poslužitelju</span><a href="#k3">Obavijest o praćenju</a></div></div></div>
+  </section>
+  <section class="variant" aria-labelledby="k4">
+    <div class="ref-tag">Stanje 4 · mobitel, zadano uključen</div>
+    <div class="workspace" style="grid-template-columns:1fr;max-width:380px"><div class="doc"><div class="sheet"><p id="k4">Tekst rada na mobitelu.</p></div>
+      <div class="statusbar"><span><span class="dot local"></span>Spremljeno na uređaju</span><button class="btn small secondary" type="button" style="min-width:44px">Izlaz</button></div></div></div>
+  </section>
+  <section class="variant" aria-labelledby="k5">
+    <div class="ref-tag">Stanje 5 · prva uporaba</div>
+    <div class="toast" role="status" id="k5"><span>Fokus sakriva alate. Stanje spremanja ostaje vidljivo.</span><button class="btn small secondary" type="button">U redu</button></div>
+  </section>
+</div>
+</main>
+</body>
+</html>

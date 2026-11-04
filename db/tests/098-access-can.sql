@@ -134,8 +134,9 @@ SELECT is(pg_temp.says('base', 'vesna', 'read', 'doc-nobody'), 'false', 'a work 
 
 -- 3. Changes of state. Vesna becomes the holder of K1 (a holder is always a
 -- teacher of the course, so nothing changes) and Marko a teacher of one of
--- its groups (M2.7-P01: that gives no right, T053); Dora leaves K1 but stays
--- in the group; then Iva revokes Vesna's teacher role.
+-- its groups (M2.5-P01: a right over the students of that group only); Dora
+-- joins the group and leaves K1 while her place in it stays open; Ana joins
+-- the group; then Iva revokes Vesna's teacher role.
 INSERT INTO ref VALUES ('ga', pg_temp.ask('vesna', $$ SELECT institution.create_seminar_group({k1}, 'Grupa A') $$));
 SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.set_course_holder({k1}, {vesna}) $$), 'ok',
   'Vesna becomes the holder of K1');
@@ -147,9 +148,19 @@ SELECT is(pg_temp.ask('vesna', $$ SELECT institution.remove_student({k1}, {dora}
   'Vesna removes Dora from K1');
 SELECT pg_temp.round('team');
 SELECT * FROM pg_temp.check_round('team');
-SELECT is(pg_temp.says('team', 'marko', 'read', 'doc-ana-z1'), 'false', 'T053: a group teacher of K1 does not read Ana''s work');
-SELECT is(pg_temp.says('team', 'marko', 'propose', 'doc-ana-z1'), 'false', 'T053: nor proposes a change to it');
+SELECT is(pg_temp.says('team', 'marko', 'read', 'doc-ana-z1'), 'false', 'a group teacher of K1 does not read Ana''s work: she is not in his group');
+SELECT is(pg_temp.says('team', 'marko', 'propose', 'doc-ana-z1'), 'false', 'nor proposes a change to it');
+SELECT is(pg_temp.says('team', 'marko', 'read', 'doc-dora-z1'), 'false', 'nor reads Dora''s, in his group but removed from K1');
 SELECT is(pg_temp.says('team', 'dora', 'write', 'doc-dora-z1'), 'false', 'Dora, removed from K1, no longer writes her work there');
+
+SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.assign_group_student({ga}, {ana}) $$), 'ok',
+  'Vesna puts Ana into group A');
+SELECT pg_temp.round('group');
+SELECT * FROM pg_temp.check_round('group');
+SELECT is(pg_temp.says('group', 'marko', 'read', 'doc-ana-z1'), 'true', 'M2.5-P01: Marko, teacher of Ana''s group, reads her work');
+SELECT is(pg_temp.says('group', 'marko', 'propose', 'doc-ana-z1'), 'true', 'D-34: and proposes a change to it');
+SELECT is(pg_temp.says('group', 'marko', 'write', 'doc-ana-z1'), 'false', 'but never writes it: one writer');
+SELECT is(pg_temp.says('group', 'iva', 'read', 'doc-ana-z1'), 'false', 'Iva, administrator, still reads no work');
 
 SELECT is(pg_temp.ask('iva', $$ SELECT 'ok' FROM institution.revoke_teacher_role({vesna}) $$), 'ok',
   'Iva revokes Vesna''s teacher role');
