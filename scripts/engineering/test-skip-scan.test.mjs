@@ -76,7 +76,7 @@ function decode(raw) {
     }
     const n = raw[++i];
     if (n === undefined) break;
-    if (n === "\n" || n === "\r") {
+    if (LINE_END.includes(n)) {
       if (n === "\r" && raw[i + 1] === "\n") i++;
       continue;
     }
@@ -105,6 +105,7 @@ function decode(raw) {
 export function tokenize(src) {
   const tokens = [];
   const stack = [];
+  const classHeads = [];
   let broken = false;
   let i = 0;
   let line = 1;
@@ -123,11 +124,13 @@ export function tokenize(src) {
         ? t.keyword === true
         : KEYWORDS_BEFORE_EXPRESSION.has(t.value) && !member(back(2));
     // After the `)` of an if, while, for or with head a statement starts;
-    // after any other `)`, `]`, `}`, `++` or `--` the `/` divides.
+    // A statement block also allows a regex; an object remains a value.
     if (t.type === "punct")
       return t.value === ")"
         ? t.head === true
-        : !["]", "}", "++", "--"].includes(t.value);
+        : t.value === "}"
+          ? t.statement === true
+          : !["]", "++", "--"].includes(t.value);
     return false;
   };
   // `of` is the for-of keyword when it follows the binding (a name, `]` or `}`;
@@ -199,6 +202,11 @@ export function tokenize(src) {
         if (src[j] === "\\") {
           raw += src[j] + (src[j + 1] ?? "");
           if (src[j + 1] === "\n") line++;
+          else if (src[j + 1] === "\r" && src[j + 2] === "\n") {
+            raw += "\n";
+            line++;
+            j++;
+          }
           j += 2;
         } else raw += src[j++];
       }
@@ -242,6 +250,12 @@ export function tokenize(src) {
         else j += 6;
       }
       const name = decode(src.slice(i, j));
+      if (
+        name === "class" &&
+        !member(last()) &&
+        !/^\s*[:(]/.test(src.slice(j))
+      )
+        classHeads.push(stack.length);
       push(
         "id",
         name,
@@ -282,8 +296,40 @@ export function tokenize(src) {
             back(2).value === "for");
         const head =
           forHead || (kw(back(1), back(2)) && HEADS.has(back(1).value));
-        stack.push({ head, forHead, semi: false, of: false });
-      } else if (c === "{" || c === "[") stack.push(c);
+        stack.push({
+          open: "(",
+          head,
+          forHead,
+          semi: false,
+          of: false,
+          catchHead: kw(back(1), back(2)) && back(1).value === "catch",
+        });
+      } else if (c === "{") {
+        const prev = last();
+        const top = stack[stack.length - 1];
+        const classBody = classHeads[classHeads.length - 1] === stack.length;
+        if (classBody) classHeads.pop();
+        const statement =
+          !classBody &&
+          (!prev ||
+            (prev.type === "id" &&
+              !member(back(2)) &&
+              ["else", "do", "try", "catch", "finally"].includes(prev.value)) ||
+            (prev.type === "punct" &&
+              ((prev.value === ")" && (prev.head || prev.catchHead)) ||
+                (prev.value === "}" && prev.statement) ||
+                ((prev.value === "{" || prev.value === ";") &&
+                  (!top || top.block)))));
+        // Function/method bodies contain statements too, but their closing
+        // brace is not sufficient evidence that the enclosing value ended.
+        const block =
+          statement ||
+          (!classBody &&
+            (prev?.value === ")" ||
+              (prev?.value === ">" && back(2)?.value === "=")));
+        stack.push({ open: "{", block, statement, classBody });
+        extra = { classBody };
+      } else if (c === "[") stack.push(c);
       else if (c === ";" && stack[stack.length - 1]?.forHead)
         stack[stack.length - 1].semi = true;
       else if (c === "}" && stack[stack.length - 1] === "${") {
@@ -293,9 +339,10 @@ export function tokenize(src) {
         continue;
       } else if (c === "}" || c === ")" || c === "]") {
         const top = stack.pop();
-        const open = typeof top === "object" ? "(" : top;
+        const open = typeof top === "object" ? top.open : top;
         if (open !== { "}": "{", ")": "(", "]": "[" }[c]) broken = true;
-        else if (c === ")") extra = { head: top.head };
+        else if (c === ")") extra = { head: top.head, catchHead: top.catchHead };
+        else if (c === "}") extra = { statement: top.statement };
       }
       push("punct", c, line, extra);
       i++;
@@ -328,7 +375,7 @@ export function markers(src) {
     const t = tokens[k];
     const prev = tokens[k - 1];
     const next = tokens[k + 1];
-    if (t.type === "punct" && "{([".includes(t.value)) braces.push(t.value);
+    if (t.type === "punct" && "{([".includes(t.value)) braces.push(t);
     else if (t.type === "punct" && "})]".includes(t.value)) braces.pop();
     const named =
       (t.type === "id" && NAMES.has(t.value)) ||
@@ -345,7 +392,7 @@ export function markers(src) {
     // A method, getter or setter key (`{ skip() {} }`, `{ get only() {} }`): the
     // parameter list is followed by a body, which a call in a block never is.
     else if (
-      braces[braces.length - 1] === "{" &&
+      braces[braces.length - 1]?.value === "{" &&
       next?.value === "(" &&
       (keyAt(prev) ||
         (["get", "set", "async"].includes(prev?.value) &&
@@ -357,7 +404,15 @@ export function markers(src) {
     )
       found.add(t.line);
     else if (
-      braces[braces.length - 1] === "{" &&
+      braces[braces.length - 1]?.classBody &&
+      prev?.type === "punct" &&
+      ["{", ";", "}"].includes(prev.value) &&
+      next?.type === "punct" &&
+      ["=", ";", "}"].includes(next.value)
+    )
+      found.add(t.line);
+    else if (
+      braces[braces.length - 1]?.value === "{" &&
       prev?.type === "punct" &&
       (prev.value === "{" || prev.value === ",") &&
       (next?.type === "punct"
@@ -534,6 +589,81 @@ test("F-035 c: the scanner finds every marker form and nothing else", () => {
   for (const [src, lines] of POSITIVE)
     assert.deepEqual(markers(src), lines, src);
   for (const src of NEGATIVE) assert.deepEqual(markers(src), [], src);
+});
+
+test("F-035 c: statement blocks allow regex without hiding later markers or division", () => {
+  for (const block of [
+    "if (true) {}",
+    "if (true) { {} }",
+    "while (false) {}",
+    "for (;false;) {}",
+    "{}",
+    "try {} catch (e) {}",
+    "try {} catch {}",
+    "try {} finally {}",
+  ]) {
+    const src = `${block} /\\.skip\\b/.test('x');`;
+    new Function(src)();
+    assert.deepEqual(check([["a.test.mjs", src]], []), [], src);
+    const marked = `${src}\nt.skip('reason');`;
+    new Function("t", marked);
+    assert.deepEqual(markers(marked), [2], marked);
+  }
+  for (const value of ["{}", "{ a: {} }", "function () {}", "() => {}"]) {
+    const src = `const x = (${value}) / 2;\nt.skip('reason'); /x/;`;
+    new Function("t", src);
+    assert.deepEqual(markers(src), [2], src);
+  }
+  const direct = "const x = {} / 2;\nt.skip('reason'); /x/;";
+  new Function("t", direct);
+  assert.deepEqual(markers(direct), [2]);
+});
+
+test("F-035 c: all line continuations cook static names and preserve non-names", () => {
+  for (const end of ["\n", "\r", "\r\n", "\u2028", "\u2029"]) {
+    for (const quote of ["'", '"', "`"]) {
+      for (const name of NAMES) {
+        const raw = `${name.slice(0, 2)}\\${end}${name.slice(2)}`;
+        const key = `${quote}${raw}${quote}`;
+        assert.equal(new Function(`return ${key}`)(), name);
+        const src = `const key = ${key};\nconst after = 1;`;
+        assert.deepEqual(markers(src), [1], src);
+        assert.equal(tokenize(src).balanced, true, src);
+        for (const suffix of ["Count", " x"]) {
+          const other = `${quote}${raw}${suffix}${quote}`;
+          assert.equal(new Function(`return ${other}`)(), name + suffix);
+          assert.deepEqual(
+            check([["a.test.mjs", `const key = ${other};`]], []),
+            [],
+          );
+        }
+        const comment = `/* ${key} */`;
+        new Function(comment)();
+        assert.deepEqual(check([["a.test.mjs", comment]], []), []);
+      }
+    }
+  }
+  // Regex uses escaped code points: a literal line terminator is invalid there.
+  const regex = String.raw`/sk\\u2028ip|sk\\u2029ip/.test('x');`;
+  new Function(regex)();
+  assert.deepEqual(check([["a.test.mjs", regex]], []), []);
+});
+
+test("F-035 c: public class fields remain keys after a preceding field", () => {
+  for (const name of NAMES) {
+    for (const prefix of ["", "timeout = 1000;\n"]) {
+      const src = `class Options {\n${prefix}${name} = true;\n}`;
+      assert.equal(new Function(`${src}; return new Options().${name};`)(), true);
+      assert.deepEqual(markers(src), [prefix ? 3 : 2], src);
+      assert.equal(tokenize(src).balanced, true, src);
+      const other = `class Options {\n${prefix}${name}Count = true;\n}`;
+      new Function(other)();
+      assert.deepEqual(check([["a.test.mjs", other]], []), []);
+    }
+    const local = `let ${name}; class Options { method() { const x = 1; ${name} = true; } }`;
+    new Function(local)();
+    assert.deepEqual(check([["a.test.mjs", local]], []), []);
+  }
 });
 
 // JavaScript itself decides whether `a<c>b` is one identifier.
