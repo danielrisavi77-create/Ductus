@@ -148,12 +148,12 @@ SELECT is(pg_temp.next('request-unacknowledged'), 'not_accepting',
 SELECT is(pg_temp.call(), 'duplicate_pending',
   'an already accepted request is still recovered after a new version');
 SELECT pg_temp.publish(4, now() + interval '1 day');
-SELECT is(pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 4) IS NOT NULL'), 'true',
+SELECT is(pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 4, 1) IS NOT NULL'), 'true',
   'Ana acknowledges the version that opens tomorrow');
 SELECT is(pg_temp.next('request-not-open'), 'not_accepting',
   'no new evidence while the current version has not opened');
 SELECT pg_temp.publish(5, now() - interval '1 day');
-SELECT is(pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 5) IS NOT NULL'), 'true',
+SELECT is(pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 5, 1) IS NOT NULL'), 'true',
   'Ana acknowledges the open current version');
 SELECT is(pg_temp.next('request-open'), 'reserved',
   'an acknowledged, open current version accepts the next segment');
