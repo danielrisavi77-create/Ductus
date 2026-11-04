@@ -114,8 +114,11 @@ test.describe("sources panel (DAN-343)", () => {
     const before = await blocksOf(page);
     await tab.getByRole("button", { name: t.add }).click();
     await fill(tab, { [t.year]: "21" });
-    await tab.getByRole("button", { name: t.addAndCite }).click();
     const alert = tab.getByRole("alert");
+    // DAN-484 K3: an empty field and a malformed year are named only after a click.
+    await expect(alert).toHaveCount(0);
+    await expect(tab.getByLabel(t.family, { exact: true })).not.toHaveAttribute("aria-invalid", "true");
+    await tab.getByRole("button", { name: t.addAndCite }).click();
     await expect(alert).toContainText(t.required.replace("{field}", t.family));
     await expect(alert).toContainText(t.yearInvalid);
     await expect(tab.getByLabel(t.family, { exact: true })).toHaveAttribute("aria-invalid", "true");
@@ -124,9 +127,9 @@ test.describe("sources panel (DAN-343)", () => {
     await expect(tab.getByRole("button", { name: t.add })).toBeFocused();
   });
 
-  // F-154 point 2, QA on #866 (c.6567210898), DAN-484: a field longer than its
-  // limit is named as it is typed or pasted, before any click, and nothing is
-  // written; it is never cut to fit.
+  // F-154 point 2, QA on #866 (c.6567210898), DAN-484 K1, K2, N4: a field
+  // longer than its limit is named as it is typed or pasted, before any click,
+  // and nothing is written; it is never cut to fit.
   test("a field longer than its limit is named while typing or pasting, never cut", async ({ page }) => {
     const tab = await openSources(page, 1440);
     const before = await blocksOf(page);
@@ -139,7 +142,7 @@ test.describe("sources panel (DAN-343)", () => {
     // Empty fields are named only after a click.
     await expect(alert).not.toContainText(t.required.replace("{field}", t.title));
 
-    // A real paste (cut and paste with the keyboard) into the title.
+    // N4: a real paste (cut and paste with the keyboard) into the title.
     const title = tab.getByLabel(t.title, { exact: true });
     await title.fill("n".repeat(301));
     await title.press("ControlOrMeta+a");
@@ -159,39 +162,13 @@ test.describe("sources panel (DAN-343)", () => {
     await expect(title).toHaveValue("n".repeat(301));
     expect(await blocksOf(page)).toEqual(before);
 
-    // Back within the limit, the message goes away as it is typed.
+    // K2: back within the limit, each message goes away as it is typed, without a click.
     await title.fill("n".repeat(300));
     await expect(alert).not.toContainText(t.tooLong.replace("{field}", t.title).replace("{n}", "300"));
     await expect(title).not.toHaveAttribute("aria-invalid", "true");
-  });
-
-  // DAN-484: a second work of the same author and year is 2021b, and the first becomes 2021a.
-  test("two works of one author and year are 2021a and 2021b", async ({ page }) => {
-    const tab = await openSources(page, 1440);
-    await editorOf(page).click();
-    await page.keyboard.type("Prvi odlomak ");
-    const book = {
-      [t.family]: "Horvat", [t.given]: "Ana", [t.year]: "2021", [t.title]: "Izmišljena knjiga",
-      [t.place]: "Zagreb", [t.publisher]: "Primjer",
-    };
-    await tab.getByRole("button", { name: t.add }).click();
-    await fill(tab, book);
-    await tab.getByRole("button", { name: t.addAndCite }).click();
-    await tab.getByRole("button", { name: t.add }).click();
-    // The list below has a page field of its own; this one is the form's.
-    await fill(tab.locator("form"), { ...book, [t.title]: "Druga knjiga", [t.citePage]: "4" });
-    const second: BookSource = { ...BOOK, title: "Druga knjiga", yearSuffix: "b" };
-    await expect(tab.locator('[data-preview="citation"]')).toHaveText(formatInText(second, fpzgCitationStyle, "4"));
-    await expect(tab.locator('[data-preview="entry"]')).toHaveText(formatBibliographyEntry(second, fpzgCitationStyle));
-    await tab.getByRole("button", { name: t.addAndCite }).click();
-    const first: BookSource = { ...BOOK, yearSuffix: "a" };
-    await expect.poll(() => blocksOf(page)).toEqual([
-      ["p", `Prvi odlomak ${formatInText(first, fpzgCitationStyle)}${formatInText(second, fpzgCitationStyle, "4")}`],
-      ["h1", "Literatura"],
-      ["p", formatBibliographyEntry(first, fpzgCitationStyle)],
-      ["p", formatBibliographyEntry(second, fpzgCitationStyle)],
-    ]);
-    await expect(tab.getByRole("listitem")).toHaveText([first, second].map((s) => formatBibliographyEntry(s, fpzgCitationStyle) + t.cite));
+    await fill(tab, { [t.family]: "Horvat", [t.citePage]: "15" });
+    await expect(alert).toHaveCount(0);
+    expect(await blocksOf(page)).toEqual(before);
   });
 
   // QA on #866 (c.6561280081): a pasted U+0000 the sheet would drop is refused,
@@ -272,17 +249,8 @@ test.describe("sources panel (DAN-343)", () => {
         await expect(tab.locator('[data-preview="citation"]')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         await testInfo.attach(`sources-form-${theme}-${width}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
-        // DAN-484: the second work of the year in the preview (2021b) and a
-        // title over its limit, named while it is typed.
-        await tab.getByRole("button", { name: t.addAndCite }).click();
-        await tab.getByRole("button", { name: t.add }).click();
-        await fill(tab.locator("form"), {
-          [t.family]: "Horvat", [t.given]: "Ana", [t.year]: "2021", [t.title]: "Druga izmišljena knjiga",
-          [t.place]: "Zagreb", [t.publisher]: "Primjer",
-        });
-        await expect(tab.locator('[data-preview="entry"]')).toContainText("(2021b)");
-        await testInfo.attach(`sources-letter-${theme}-${width}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
-        await fill(tab.locator("form"), { [t.title]: "n".repeat(301) });
+        // DAN-484: a title over its limit, named while it is typed.
+        await fill(tab, { [t.title]: "n".repeat(301) });
         await expect(tab.getByRole("alert")).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         await noAxeFindings(page);

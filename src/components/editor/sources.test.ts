@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { Editor } from "@tiptap/core";
-import { closeHistory } from "@tiptap/pm/history";
 import { describe, expect, it } from "vitest";
 
 import { formatBibliographyEntry, formatInText, fpzgCitationStyle } from "@/domain/citation";
@@ -11,8 +10,8 @@ import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import {
-  bibliographyPlan, blocksOf, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
-  type Source, type SourceField, type SourceFields,
+  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
+  type SourceField, type SourceFields,
 } from "./sources";
 
 // DAN-343: invented authors and titles only.
@@ -49,9 +48,6 @@ function editorWith(paragraphs: { type?: string; text: string }[]) {
   });
   return editor;
 }
-
-// The cursor at the end of the first block, where "Dodaj i citiraj" writes.
-const atFirstEnd = (editor: Editor) => editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
 
 const texts = (editor: Editor) => {
   const out: string[] = [];
@@ -160,9 +156,9 @@ describe("writeSource", () => {
     editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, book, "15", true)).not.toBeNull();
-    expect(writeSource(editor, article, null, true)).not.toBeNull();
-    expect(writeSource(editor, book, null, true)).not.toBeNull();
+    expect(writeSource(editor, citationText(book, "15"), entryText(book))).toBe(true);
+    expect(writeSource(editor, null, entryText(article))).toBe(true);
+    expect(writeSource(editor, null, entryText(book))).toBe(true);
     expect(texts(editor)).toEqual([
       `paragraph:Prvi odlomak.${formatInText(book, fpzgCitationStyle, "15")}`,
       "heading:Literatura",
@@ -178,8 +174,8 @@ describe("writeSource", () => {
     editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, book, "", true)).not.toBeNull();
-    expect(writeSource(editor, article, "", true)).not.toBeNull();
+    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(true);
+    expect(writeSource(editor, citationText(article, ""), entryText(article))).toBe(true);
     const cited = `Prvi odlomak.${citationText(book, "")}${citationText(article, "")}`;
     expect(texts(editor)[0]).toBe(`paragraph:${cited}`);
     expect(editor.state.selection.empty).toBe(true);
@@ -193,8 +189,8 @@ describe("writeSource", () => {
     editor.commands.selectAll();
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, book, "", true)).not.toBeNull();
-    expect(writeSource(editor, article, "", false)).not.toBeNull();
+    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(true);
+    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
     const cited = `Prvi odlomak.${citationText(book, "")}${citationText(article, "")}`;
     expect(texts(editor)).toEqual(["paragraph:" + cited, "heading:Literatura", `paragraph:${entryText(book)}`]);
     expect(editor.state.selection.empty).toBe(true);
@@ -206,8 +202,8 @@ describe("writeSource", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }]);
     editor.commands.selectAll();
     const book = sourceOf(BOOK);
-    expect(writeSource(editor, book, null, true)).not.toBeNull();
-    expect(writeSource(editor, book, "15", false)).not.toBeNull();
+    expect(writeSource(editor, null, entryText(book))).toBe(true);
+    expect(writeSource(editor, citationText(book, "15"), null)).toBe(true);
     expect(texts(editor)).toEqual([
       `paragraph:Prvi odlomak.${citationText(book, "15")}`,
       "heading:Literatura",
@@ -221,9 +217,9 @@ describe("writeSource", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }, { text: "Drugi odlomak." }]);
     const book = sourceOf(BOOK);
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, book, null, true)).not.toBeNull();
+    expect(writeSource(editor, null, entryText(book))).toBe(true);
     editor.commands.selectAll();
-    expect(writeSource(editor, article, "", false)).not.toBeNull();
+    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
     const cited = `Drugi odlomak.${citationText(article, "")}`;
     expect(texts(editor)).toEqual([
       "paragraph:Prvi odlomak.",
@@ -240,7 +236,7 @@ describe("writeSource", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }, { text: "Drugi odlomak." }]);
     editor.commands.selectAll();
     const article = sourceOf(ARTICLE);
-    expect(writeSource(editor, article, "", false)).not.toBeNull();
+    expect(writeSource(editor, citationText(article, ""), null)).toBe(true);
     expect(texts(editor)).toEqual(["paragraph:Prvi odlomak.", `paragraph:Drugi odlomak.${citationText(article, "")}`]);
     editor.destroy();
   });
@@ -248,9 +244,8 @@ describe("writeSource", () => {
   it("never writes over selected text", () => {
     const editor = editorWith([{ text: "Ostaje." }]);
     editor.commands.setTextSelection({ from: 1, to: 8 });
-    const book = sourceOf(BOOK);
-    writeSource(editor, book, "", false);
-    expect(texts(editor)).toEqual([`paragraph:Ostaje.${citationText(book, "")}`]);
+    writeSource(editor, "(X, 2020)", null);
+    expect(texts(editor)).toEqual(["paragraph:Ostaje.(X, 2020)"]);
     editor.destroy();
   });
 
@@ -259,823 +254,45 @@ describe("writeSource", () => {
     editor.setEditable(false, false);
     const before = editor.state.doc.toJSON();
     const book = sourceOf(BOOK);
-    expect(writeSource(editor, book, "", true)).toBeNull();
+    expect(writeSource(editor, citationText(book, ""), entryText(book))).toBe(false);
     expect(editor.state.doc.toJSON()).toEqual(before);
-    expect(writeSource(null, book, "", false)).toBeNull();
+    expect(writeSource(null, "(X, 2020)", null)).toBe(false);
     editor.destroy();
   });
 });
 
-// DAN-484: two works of the same authors in one year are 2021a and 2021b (FPZG "same-year").
-describe("the letter of the year", () => {
-  const SECOND: SourceFields = { ...BOOK, title: "Druga izmišljena knjiga" };
-  const THIRD: SourceFields = { ...BOOK, title: "Treća izmišljena knjiga" };
-  const lettered = (fields: SourceFields, letter: string) => ({ ...sourceOf(fields), yearSuffix: letter });
-  const atEnd = (editor: Editor) => editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
-
-  it("gives no letter to a work alone in its author and year", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atEnd(editor);
-    const book = sourceOf(BOOK);
-    expect(writeSource(editor, book, "", true)).toEqual(book);
-    expect(writeSource(editor, { ...book, year: 2020, title: "Ranija" }, "", true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...BOOK, family2: "Kovač", given2: "Luka" }), "", true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...BOOK, given: "Marko", title: "Treća" }), "", true)?.yearSuffix).toBeUndefined();
-    editor.destroy();
-  });
-
-  it("letters the first work a, in its entry and in-text citations, and the second b", () => {
-    const editor = editorWith([{ text: "Tekst." }, { text: "Drugi (Horvat, 2021: 9) i (Horvat, 20215)." }]);
-    atEnd(editor);
-    const first = sourceOf(BOOK);
-    writeSource(editor, first, "", true);
-    expect(writeSource(editor, sourceOf(SECOND), "4", true)).toEqual(lettered(SECOND, "b"));
-    expect(texts(editor)).toEqual([
-      `paragraph:Tekst.${citationText(lettered(BOOK, "a"), "")}${citationText(lettered(SECOND, "b"), "4")}`,
-      "paragraph:Drugi (Horvat, 2021a: 9) i (Horvat, 20215).",
-      "heading:Literatura",
-      `paragraph:${entryText(lettered(BOOK, "a"))}`,
-      `paragraph:${entryText(lettered(SECOND, "b"))}`,
-    ]);
-    // The third takes c; nothing written before changes again.
-    expect(writeSource(editor, sourceOf(THIRD), null, true)?.yearSuffix).toBe("c");
-    expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(lettered(BOOK, "a"), "")}${citationText(lettered(SECOND, "b"), "4")}`);
-    expect(texts(editor).slice(3)).toEqual([BOOK, SECOND, THIRD].map((f, i) => `paragraph:${entryText(lettered(f, "abc"[i]!))}`));
-    editor.destroy();
-  });
-
-  it("keeps the letter of a work already there, as a duplicate and in Citiraj", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atEnd(editor);
-    writeSource(editor, sourceOf(BOOK), null, true);
-    writeSource(editor, sourceOf(SECOND), null, true);
-    const before = texts(editor);
-    expect(writeSource(editor, sourceOf(SECOND), null, true)).toEqual(lettered(SECOND, "b"));
-    expect(writeSource(editor, sourceOf(BOOK), null, true)).toEqual(lettered(BOOK, "a"));
-    expect(texts(editor)).toEqual(before);
-    expect(writeSource(editor, sourceOf(SECOND), "3", false)).toEqual(lettered(SECOND, "b"));
-    expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(lettered(SECOND, "b"), "3")}`);
-    editor.destroy();
-  });
-
-  it("letters works of two authors and leaves in-text citations alone when another given name shares them", () => {
-    const editor = editorWith([{ text: "Vidi (Horvat, 2021)." }]);
-    atEnd(editor);
-    writeSource(editor, sourceOf(ARTICLE), null, true);
-    expect(writeSource(editor, sourceOf({ ...ARTICLE, title: "Drugi članak" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...sourceOf(ARTICLE), yearSuffix: "a" })}`);
-    writeSource(editor, sourceOf(BOOK), null, true);
-    writeSource(editor, sourceOf({ ...BOOK, given: "Marko", title: "Treća" }), null, true);
-    expect(writeSource(editor, sourceOf(SECOND), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Vidi (Horvat, 2021).");
-    expect(texts(editor)).toContain(`paragraph:${entryText(lettered(BOOK, "a"))}`);
-    editor.destroy();
-  });
-
-  it("letters in-text citations when another year of the author only names that year in its title", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atEnd(editor);
-    writeSource(editor, sourceOf(BOOK), "", true);
-    writeSource(editor, sourceOf({ ...BOOK, year: "2020", title: "Analiza (2021)" }), null, true);
-    expect(writeSource(editor, sourceOf(SECOND), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(lettered(BOOK, "a"), "")}`);
-    editor.destroy();
-  });
-
-  it("letters a citation split by marks and an entry with leading spaces", () => {
-    const editor = new Editor({
-      element: null, extensions: createEditorExtensions(),
-      content: { type: "doc", content: [
-        { type: "paragraph", content: [{ type: "text", text: "Vidi (Hor" }, { type: "text", text: "vat, 2021)", marks: [{ type: "bold" }] }] },
-        { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Literatura" }] },
-        { type: "paragraph", content: [{ type: "text", text: `  ${entryText(sourceOf(BOOK))}` }] },
-      ] },
-    });
-    atEnd(editor);
-    expect(writeSource(editor, sourceOf(SECOND), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Vidi (Horvat, 2021a)");
-    expect(texts(editor)[2]).toBe(`paragraph:  ${entryText(lettered(BOOK, "a"))}`);
-    editor.destroy();
-  });
-
-  it("writes nothing when every letter a to z is taken", () => {
-    const taken = [..."abcdefghijklmnopqrstuvwxyz"].map((l) => ({ text: entryText(lettered({ ...BOOK, title: `Knjiga ${l}` }, l)) }));
-    const editor = editorWith([{ text: "Tekst." }, { type: "heading", text: "Literatura" }, ...taken]);
-    atEnd(editor);
-    const before = editor.state.doc.toJSON();
-    expect(suffixPlan(blocksOf(editor.state.doc), sourceOf(SECOND))).toEqual({ kind: "full" });
-    expect(writeSource(editor, sourceOf(SECOND), "", true)).toBeNull();
-    expect(editor.state.doc.toJSON()).toEqual(before);
-    editor.destroy();
-  });
-
-  it("takes the letter from the sheet at the write, not from an earlier preview", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atEnd(editor);
-    writeSource(editor, sourceOf(BOOK), null, true);
-    const preview = suffixPlan(blocksOf(editor.state.doc), sourceOf(THIRD));
-    expect(preview.kind === "write" && preview.source.yearSuffix).toBe("b");
-    // Another write lands between the preview and the click.
-    writeSource(editor, sourceOf(SECOND), null, true);
-    expect(writeSource(editor, sourceOf(THIRD), null, true)?.yearSuffix).toBe("c");
-    expect(texts(editor).filter((t) => t.includes("(2021b)"))).toHaveLength(1);
-    editor.destroy();
-  });
-});
-
-// DAN-484, contract #1091 c.6584858242 (confirmed c.6584911859): the classes
-// of input of point 1, one row each. A block "# X" is a heading X; `entry(f, l)`
-// and `cite(f, l, page)` are the domain's text with letter l (none when "").
-describe("the letter of the year, class by class", () => {
-  const SECOND: SourceFields = { ...BOOK, title: "Druga izmišljena knjiga" };
-  const TWO: SourceFields = { ...BOOK, family2: "Kovač", given2: "Luka", title: "Zajednička knjiga" };
-  const entry = (f: SourceFields, l = "") => entryText(l === "" ? sourceOf(f) : { ...sourceOf(f), yearSuffix: l });
-  const cite = (f: SourceFields, l = "", page = "") => citationText(l === "" ? sourceOf(f) : { ...sourceOf(f), yearSuffix: l }, page);
-  const letters = (n: number) => [..."abcdefghijklmnopqrstuvwxyz"].slice(0, n);
-
-  type Row = { klass: string; before: string[]; work: SourceFields; letter: string | null; after: string[] };
-  const rows: Row[] = [
-    { klass: "1 no other work", before: ["T.", "# Literatura"], work: BOOK, letter: "", after: ["T.", "# Literatura", entry(BOOK)] },
-    { klass: "2 same authors, another year", before: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK)],
-      work: { ...SECOND, year: "2020" }, letter: "",
-      after: ["T. (Horvat, 2021)", "# Literatura", entry({ ...SECOND, year: "2020" }), entry(BOOK)] },
-    { klass: "3 same year, another author", before: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK)],
-      work: { ...SECOND, family: "Kovač" }, letter: "",
-      after: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK), entry({ ...SECOND, family: "Kovač" })] },
-    { klass: "4a same first author with a second, against the first alone", before: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK)],
-      work: TWO, letter: "", after: ["T. (Horvat, 2021)", "# Literatura", entry(BOOK), entry(TWO)] },
-    { klass: "4b the first alone, against the first with a second", before: ["T.", "# Literatura", entry(TWO)],
-      work: SECOND, letter: "", after: ["T.", "# Literatura", entry(SECOND), entry(TWO)] },
-    { klass: "5 the same authors in reverse order", before: ["T.", "# Literatura", entry(TWO)],
-      work: { ...TWO, family: "Kovač", given: "Luka", family2: "Horvat", given2: "Ana", title: "Obrnuta" }, letter: "",
-      after: ["T.", "# Literatura", entry(TWO), entry({ ...TWO, family: "Kovač", given: "Luka", family2: "Horvat", given2: "Ana", title: "Obrnuta" })] },
-    { klass: "6 a family name that starts another (Horvat / Horvatić)", before: ["T. (Horvatić, 2021)", "# Literatura", entry({ ...BOOK, family: "Horvatić" })],
-      work: SECOND, letter: "", after: ["T. (Horvatić, 2021)", "# Literatura", entry(SECOND), entry({ ...BOOK, family: "Horvatić" })] },
-    { klass: "7 the second work: the first becomes a in entry and citations, with and without a page",
-      before: ["T. (Horvat, 2021) i (Horvat, 2021: 9).", "# Literatura", entry(BOOK)], work: SECOND, letter: "b",
-      after: ["T. (Horvat, 2021a) i (Horvat, 2021a: 9).", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")] },
-    { klass: "8 the same work again after its letter: a duplicate that keeps it",
-      before: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")], work: SECOND, letter: "b",
-      after: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")] },
-    { klass: "9 a and b taken: c", before: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")],
-      work: { ...BOOK, title: "Treća" }, letter: "c",
-      after: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b"), entry({ ...BOOK, title: "Treća" }, "c")] },
-    { klass: "10 a gap (a, c): b", before: ["T.", "# Literatura", entry(BOOK, "a"), entry({ ...BOOK, title: "Treća" }, "c")],
-      work: SECOND, letter: "b",
-      after: ["T.", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b"), entry({ ...BOOK, title: "Treća" }, "c")] },
-    { klass: "11 all 26 letters taken: nothing is written",
-      before: ["T.", "# Literatura", ...letters(26).map((l) => entry({ ...BOOK, title: `Knjiga ${l}` }, l))], work: SECOND, letter: null,
-      after: ["T.", "# Literatura", ...letters(26).map((l) => entry({ ...BOOK, title: `Knjiga ${l}` }, l))] },
-    { klass: "12 the same text outside the Literatura section neither counts nor changes",
-      before: [entry(BOOK), "# Literatura", "# Prilozi", entry(BOOK)], work: SECOND, letter: "",
-      after: [entry(BOOK), "# Literatura", entry(SECOND), "# Prilozi", entry(BOOK)] },
-    { klass: "12b an entry written by hand with more after the year is not of the group",
-      before: ["T. (Horvat, 2021)", "# Literatura", "Horvat, Ana (2021-2022) Ručno upisan rad."], work: SECOND, letter: "",
-      after: ["T. (Horvat, 2021)", "# Literatura", "Horvat, Ana (2021-2022) Ručno upisan rad.", entry(SECOND)] },
-    { klass: "13 a lettered citation and another author's citation stay as they are",
-      before: ["T. (Horvat, 2021b) i (Kovač i Horvat, 2021) i (Horvat, 20215).", "# Literatura", entry(BOOK)], work: SECOND, letter: "b",
-      after: ["T. (Horvat, 2021b) i (Kovač i Horvat, 2021) i (Horvat, 20215).", "# Literatura", entry(BOOK, "a"), entry(SECOND, "b")] },
-    { klass: "14 two authors", before: ["T. (Babić i Kovač, 2019: 45).", "# Literatura", entry(ARTICLE)],
-      work: { ...ARTICLE, title: "Drugi članak" }, letter: "b",
-      after: ["T. (Babić i Kovač, 2019a: 45).", "# Literatura", entry(ARTICLE, "a"), entry({ ...ARTICLE, title: "Drugi članak" }, "b")] },
-  ];
-  const blocks = (lines: string[]) => lines.map((line) => (line.startsWith("# ") ? { type: "heading", text: line.slice(2) } : { text: line }));
-  const shown = (editor: Editor) => texts(editor).map((line) => line.replace(/^heading:/, "# ").replace(/^paragraph:/, ""));
-
-  it.each(rows)("class $klass", ({ before, work, letter, after }) => {
-    const editor = editorWith(blocks(before));
-    atFirstEnd(editor);
-    const doc = editor.state.doc.toJSON();
-    const plan = suffixPlan(blocksOf(editor.state.doc), sourceOf(work));
-    const written = writeSource(editor, sourceOf(work), null, true);
-    if (letter === null) {
-      expect(plan).toEqual({ kind: "full" });
-      expect(written).toBeNull();
-      expect(editor.state.doc.toJSON()).toEqual(doc);
-    } else {
-      expect(written?.yearSuffix ?? "").toBe(letter);
-      expect(plan.kind === "write" && (plan.source.yearSuffix ?? "")).toBe(letter);
-    }
-    expect(shown(editor)).toEqual(after);
-    editor.destroy();
-  });
-
-  it("class 7 also letters the citation it writes, with and without a page", () => {
-    for (const page of ["", "4"]) {
-      const editor = editorWith(blocks(["T.", "# Literatura", entry(BOOK)]));
-      atFirstEnd(editor);
-      expect(writeSource(editor, sourceOf(SECOND), page, true)?.yearSuffix).toBe("b");
-      expect(shown(editor)[0]).toBe(`T.${cite(SECOND, "b", page)}`);
-      editor.destroy();
-    }
-  });
-});
-
-// DAN-484, QA on #1407 (c.6586313749), contract #1091 c.6586570245: whether
-// another entry X shares the in-text form of the entry that becomes "a". Only
-// then do the in-text citations stay as written. A year counts only at its
-// place after the authors, never in a title, place, publisher or journal.
-describe("sameForm, class by class", () => {
-  const SECOND: SourceFields = { ...BOOK, title: "Druga izmišljena knjiga" };
-  const TWO: SourceFields = { ...BOOK, family2: "Kovač", given2: "Luka", title: "Zajednička knjiga" };
-  const TWO_SECOND: SourceFields = { ...TWO, title: "Druga zajednička knjiga" };
-  const entry = (f: SourceFields, l = "") => entryText(l === "" ? sourceOf(f) : { ...sourceOf(f), yearSuffix: l });
-  const MARKO: SourceFields = { ...BOOK, given: "Marko", title: "Markova knjiga" };
-  const ONE = { first: BOOK, work: SECOND, cited: "T. (Horvat, 2021) i (Horvat, 2021: 9)." };
-  const PAIR = { first: TWO, work: TWO_SECOND, cited: "T. (Horvat i Kovač, 2021) i (Horvat i Kovač, 2021: 9)." };
-
-  type Row = { klass: string; base: typeof ONE; others: string[]; promoted: boolean; letter?: string };
-  const rows: Row[] = [
-    { klass: "G1 the year in a title", base: ONE, others: [entry({ ...BOOK, year: "2020", title: "Analiza (2021)" })], promoted: true },
-    { klass: "G2 the year in a subtitle", base: ONE, others: [entry({ ...BOOK, year: "2020", title: "Analiza: pregled (2021)" })], promoted: true },
-    { klass: "G3 the year in the place and the publisher", base: ONE,
-      others: [entry({ ...BOOK, year: "2020", title: "Treća", place: "Zagreb (2021)", publisher: "Naklada (2021)" })], promoted: true },
-    { klass: "G4 the year in a journal", base: ONE,
-      others: [entry({ ...ARTICLE, family: "Horvat", given: "Ana", family2: "", given2: "", year: "2020", journal: "Godišnjak (2021)" })], promoted: true },
-    { klass: "G5 the same year at its place, another given name", base: ONE, others: [entry(MARKO)], promoted: false },
-    { klass: "G6 the same year at its place with a letter", base: ONE, others: [entry(MARKO, "a")], promoted: false },
-    { klass: "G7 a range written by hand at the place of the year", base: ONE, others: ["Horvat, Marko (2021-2022) Ručni unos."], promoted: true },
-    { klass: "G8 a bracket in the name before the year", base: ONE, others: ["Horvat, Marko (ur.) (2021) Zbornik. Zagreb: Primjer."], promoted: false },
-    // A2: also one author whose given name is "Marko i Kovač, Luka" (contract c.6592102435), kept.
-    { klass: "A1 another first author of the same year", base: ONE,
-      others: [entry({ ...BOOK, family: "Kovač", title: "Treća" }), entry({ ...BOOK, family: "Horvatić", title: "Četvrta" })], promoted: true },
-    { klass: "A2 the same first author with a second, against one author", base: ONE,
-      others: [entry({ ...MARKO, family2: "Kovač", given2: "Luka" })], promoted: false },
-    { klass: "A3 the first author alone, against two authors", base: PAIR, others: [entry(MARKO)], promoted: true },
-    { klass: "A4 the same two authors with other given names", base: PAIR,
-      others: [entry({ ...MARKO, family2: "Kovač", given2: "Ivo" })], promoted: false },
-    { klass: "A5 the same two authors in reverse order", base: PAIR,
-      others: [entry({ ...MARKO, family: "Kovač", given: "Luka", family2: "Horvat", given2: "Marko" })], promoted: true },
-    { klass: "A6 the same first author with another second", base: PAIR,
-      others: [entry({ ...MARKO, family2: "Babić", given2: "Iva" })], promoted: true },
-    { klass: "S1 a letter already taken in the group", base: ONE,
-      others: [entry({ ...BOOK, title: "Lettered by hand" }, "b")], promoted: true, letter: "c" },
-    { klass: "S2 no other entry", base: ONE, others: [], promoted: true },
-  ];
-
-  it.each(rows)("class $klass", ({ base, others, promoted, letter = "b" }) => {
-    const editor = editorWith([{ text: base.cited }, { type: "heading", text: "Literatura" }, { text: entry(base.first) }, ...others.map((text) => ({ text }))]);
-    atFirstEnd(editor);
-    expect(writeSource(editor, sourceOf(base.work), null, true)?.yearSuffix).toBe(letter);
-    const lines = texts(editor).map((line) => line.replace(/^\w+:/, ""));
-    expect(lines[0]).toBe(promoted ? base.cited.replaceAll(", 2021", ", 2021a") : base.cited);
-    expect(lines).toContain(entry(base.first, "a"));
-    expect(lines).toContain(entry(base.work, letter));
-    for (const other of others) expect(lines).toContain(other);
-    editor.destroy();
-  });
-});
-
-// DAN-484, QA on #1407 (c.6587528637), contract #1091 c.6587618492: the same
-// in-text form by the number of authors. Up to two authors the form names
-// every family name in order; with three or more it is "(Horvat i sur., 2021)".
-// The card gives at most two authors, so a work of three is built as a Source;
-// another entry of three or more is one written by hand in Literatura.
-describe("sameForm by the number of authors, class by class", () => {
-  type Name = readonly [family: string, given: string];
-  const work = (names: readonly Name[], title: string, year = 2021, letter = ""): Source => ({
-    ...sourceOf(BOOK), title, year,
-    authors: names.map(([family, given]) => ({ kind: "person" as const, family, given })),
-    ...(letter === "" ? {} : { yearSuffix: letter }),
-  });
-  const line = (source: Source) => entryText(source);
-  const H: Name = ["Horvat", "Ana"];
-  const HM: Name = ["Horvat", "Marko"];
-  const K: Name = ["Kovač", "Luka"];
-  const B: Name = ["Babić", "Iva"];
-  const P: Name = ["Perić", "Ivo"];
-  const J: Name = ["Jurić", "Ema"];
-  const base = (names: readonly Name[]) => {
-    const first = work(names, "Prva knjiga");
-    return { first, work: work(names, "Druga knjiga"), cited: `T. ${citationText(first, "")} i ${citationText(first, "9")}.` };
-  };
-  const ONE = base([H]);
-  const PAIR = base([H, K]);
-  const TRIO = base([H, B, K]);
-
-  type Row = { klass: string; base: ReturnType<typeof base>; others: string[]; promoted: boolean; letter?: string };
-  const rows: Row[] = [
-    // N1, N2, N4, N6, N9 and N13 are also written exactly by a list cited as
-    // ours, a given name holding the authors between (contract c.6592102435):
-    // their citations stay. The proofs are in "the exact written form".
-    { klass: "N1 one author, against three with the same first", base: ONE, others: [line(work([HM, B, K], "Treća"))], promoted: false },
-    { klass: "N2 two authors, against three with the same first and last (the finding)", base: PAIR,
-      others: [line(work([HM, B, K], "Treća knjiga"))], promoted: false },
-    { klass: "N3 two authors, against three with the same first two in order", base: PAIR, others: [line(work([HM, K, B], "Treća"))], promoted: true },
-    { klass: "N4 two authors, against four with the same first and last", base: PAIR, others: [line(work([HM, B, P, K], "Treća"))], promoted: false },
-    { klass: "N5 two authors, against three where the pair is not first", base: PAIR, others: [line(work([B, HM, K], "Treća"))], promoted: true },
-    { klass: "N6 the finding with a letter on the entry of three", base: PAIR, others: [line(work([HM, B, K], "Treća", 2021, "a"))], promoted: false },
-    { klass: "N7 three authors, against three other co-authors of the same first", base: TRIO, others: [line(work([HM, P, J], "Treća"))], promoted: false },
-    { klass: "N8 three authors, against four of the same first", base: TRIO, others: [line(work([HM, P, J, K], "Treća"))], promoted: false },
-    { klass: "N9 three authors, against two with the same first and second", base: TRIO, others: [line(work([HM, B], "Treća"))], promoted: false },
-    { klass: "N10 three authors, against the first alone", base: TRIO, others: [line(work([HM], "Treća"))], promoted: true },
-    { klass: "N11 three authors, against the same three in another order", base: TRIO, others: [line(work([B, H, K], "Treća"))], promoted: true },
-    { klass: "N12a three authors, against the same members in another year", base: TRIO, others: [line(work([HM, B, K], "Treća", 2020))], promoted: true },
-    { klass: "N12b three authors, against the same members of the year with a letter", base: TRIO,
-      others: [line(work([HM, P, J], "Treća", 2021, "a"))], promoted: false },
-    { klass: "N13 a group with b taken and the entry of the finding", base: PAIR,
-      others: [line(work([H, K], "Ručno slovo", 2021, "b")), line(work([HM, B, K], "Treća"))], promoted: false, letter: "c" },
-    { klass: "N14 one author whose given name holds the joiner, no second author", base: ONE, others: ["Horvat, Ana i Marija (2021) Ručni unos."], promoted: false },
-    { klass: "N15 an organisation among the authors: not read, stays as written", base: PAIR,
-      others: ["Horvat, Marko, Zavod za primjer i Kovač, Luka (2021) Ručni unos."], promoted: false },
-  ];
-
-  it.each(rows)("class $klass", ({ base: b, others, promoted, letter = "b" }) => {
-    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, ...others.map((text) => ({ text }))]);
-    atFirstEnd(editor);
-    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe(letter);
-    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
-    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
-    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
-    expect(lines).toContain(line({ ...b.work, yearSuffix: letter }));
-    for (const other of others) expect(lines).toContain(other);
-    editor.destroy();
-  });
-
-  it("N0 the in-text forms the rows rest on", () => {
-    expect(citationText(ONE.first, "")).toBe("(Horvat, 2021)");
-    expect(citationText(PAIR.first, "")).toBe("(Horvat i Kovač, 2021)");
-    expect(citationText(TRIO.first, "")).toBe("(Horvat i sur., 2021)");
-    expect(line(work([HM, B, K], "Treća knjiga"))).toBe("Horvat, Marko, Babić, Iva i Kovač, Luka (2021) Treća knjiga. Zagreb: Primjer.");
-  });
-});
-
-// DAN-484, review FAIL on #1407 (c.6588340462): "Citiraj" for a work no longer
-// in Literatura after Poništi never writes the year form (a letter, or none)
-// another work of its group now holds there. Sequences through the editor's undo.
-describe("Citiraj after Poništi, class by class", () => {
-  const W = ["Prva", "Druga", "Treća", "Četvrta"].map((title) => sourceOf({ ...BOOK, title: `${title} knjiga` }));
-  const as = (n: number, letter?: string): Source => (letter === undefined ? W[n]! : { ...W[n]!, yearSuffix: letter });
-  // A step adds work n to Literatura (the letter it is expected to take) or takes the last step back.
-  type Step = readonly [n: number, letter?: string] | "undo";
-  // A headless editor keeps its history only with the plugins installed in its view (as history.test.ts).
-  const sheet = () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
-    return editor;
-  };
-  const undo = (editor: Editor) => expect(editor.commands.undo()).toBe(true);
-  type Row = { klass: string; steps: readonly Step[]; cite: Source; written: string | null | undefined };
-  // written: the letter the citation carries (undefined: none), or null when nothing is written.
-  const rows: Row[] = [
-    { klass: "U1 one work: add, undo, cite", steps: [[0], "undo"], cite: as(0), written: undefined },
-    { klass: "U2 one work: add W1, undo, add W2, cite W1 without a letter (W2's form)", steps: [[0], "undo", [1]], cite: as(0), written: null },
-    { klass: "U3 two works: add both, undo the second, cite it with its free b", steps: [[0], [1, "b"], "undo"], cite: as(1, "b"), written: "b" },
-    { klass: "U4 two works, the finding: add both, undo B, add C (b), cite B with b", steps: [[0], [1, "b"], "undo", [2, "b"]], cite: as(1, "b"), written: null },
-    { klass: "U5 the state of U4, cite A (a in Literatura)", steps: [[0], [1, "b"], "undo", [2, "b"]], cite: as(0), written: "a" },
-    { klass: "U6 three works: undo the third, add a fourth (c), cite the third with c",
-      steps: [[0], [1, "b"], [2, "c"], "undo", [3, "c"]], cite: as(2, "c"), written: null },
-    { klass: "U7a three works: undo twice, add a fourth (b), cite the second with b",
-      steps: [[0], [1, "b"], [2, "c"], "undo", "undo", [3, "b"]], cite: as(1, "b"), written: null },
-    { klass: "U7b the state of U7a, cite the third with its free c",
-      steps: [[0], [1, "b"], [2, "c"], "undo", "undo", [3, "b"]], cite: as(2, "c"), written: "c" },
-    { klass: "U8 the state of U4, add B again (c), cite it with c", steps: [[0], [1, "b"], "undo", [2, "b"], [1, "c"]], cite: as(1, "c"), written: "c" },
-  ];
-
-  it.each(rows)("class $klass", ({ steps, cite, written }) => {
-    const editor = sheet();
-    for (const step of steps) {
-      if (step === "undo") undo(editor);
-      else expect(writeSource(editor, W[step[0]]!, null, true)?.yearSuffix).toBe(step[1]);
-      // Each click is its own step of Poništi, as in the sheet.
-      editor.view.dispatch(closeHistory(editor.state.tr));
-    }
-    const before = texts(editor);
-    atFirstEnd(editor);
-    const got = writeSource(editor, cite, "", false);
-    if (written === null) {
-      expect(got).toBeNull();
-      expect(texts(editor)).toEqual(before);
-    } else {
-      expect(got?.yearSuffix).toBe(written);
-      expect(texts(editor)[0]).toBe(`paragraph:Tekst.${citationText(got!, "")}`);
-      expect(texts(editor).slice(1)).toEqual(before.slice(1));
-    }
-    editor.destroy();
-  });
-
-  it("regression c.6588340462: A and B, Poništi B, C takes b, Citiraj B writes no (Horvat, 2021b)", () => {
-    const editor = sheet();
-    const [a, b, c] = W as [Source, Source, Source];
-    writeSource(editor, a, null, true);
-    editor.view.dispatch(closeHistory(editor.state.tr));
-    expect(writeSource(editor, b, null, true)?.yearSuffix).toBe("b");
-    editor.view.dispatch(closeHistory(editor.state.tr));
-    undo(editor);
-    expect(writeSource(editor, c, null, true)?.yearSuffix).toBe("b");
-    const before = texts(editor);
-    atFirstEnd(editor);
-    expect(writeSource(editor, { ...b, yearSuffix: "b" }, "", false)).toBeNull();
-    expect(texts(editor)).toEqual(before);
-    expect(texts(editor).join("\n")).not.toContain("(Horvat, 2021b)");
-    editor.destroy();
-  });
-});
-
-// DAN-484, QA FAIL on #1407 (c.6588415588): the joiner between authors is the
-// " i " before the last author's family name; " i " anywhere else is part of a name.
-describe("the joiner inside a name, class by class", () => {
-  type Name = readonly [family: string, given: string];
-  const work = (names: readonly Name[], title: string): Source => ({
-    ...sourceOf(BOOK), title,
-    authors: names.map(([family, given]) => ({ kind: "person" as const, family, given })),
-  });
-  const line = (source: Source) => entryText(source);
-  const H: Name = ["Horvat", "Ana"];
-  const HM: Name = ["Horvat", "Marko"];
-  const HMI: Name = ["Horvat", "Marko i Ivo"];
-  const K: Name = ["Kovač", "Luka"];
-  const B: Name = ["Babić", "Iva"];
-  const BIE: Name = ["Babić", "Iva i Ema"];
-  const BK: Name = ["Babić i Kovač", "Luka"];
-  const base = (names: readonly Name[]) => {
-    const first = work(names, "Prva knjiga");
-    return { first, work: work(names, "Druga knjiga"), cited: `T. ${citationText(first, "")} i ${citationText(first, "9")}.` };
-  };
-  const ONE = base([H]);
-  const PAIR = base([H, K]);
-  const TRIO = base([H, B, K]);
-  const PAIR_BK = base([H, BK]);
-
-  type Row = { klass: string; base: ReturnType<typeof base>; other: string; promoted: boolean };
-  const rows: Row[] = [
-    { klass: "I1 no joiner in a name, another second author", base: PAIR, other: line(work([HM, B], "Treća")), promoted: true },
-    { klass: "I2 the joiner in the second author's given name (the finding)", base: PAIR, other: line(work([HM, BIE], "Treća")), promoted: true },
-    { klass: "I3 the joiner in the first author's given name, another second author", base: PAIR, other: line(work([HMI, B], "Treća")), promoted: true },
-    { klass: "I4 the joiner in the first author's given name, the same second author", base: PAIR, other: line(work([HMI, ["Kovač", "Ema"]], "Treća")), promoted: false },
-    { klass: "I5 a second family name one reading of which is ours: left as written", base: PAIR,
-      other: line(work([HM, ["Babić i Kovač", "Iva"]], "Treća")), promoted: false },
-    { klass: "I6a our second family name holds the joiner, the same in the other entry", base: PAIR_BK,
-      other: line(work([HM, ["Babić i Kovač", "Iva"]], "Treća")), promoted: false },
-    { klass: "I6b our second family name holds the joiner, another in the other entry", base: PAIR_BK, other: line(work([HM, K], "Treća")), promoted: true },
-    { klass: "I7 both at once: the joiner between authors and in both given names", base: PAIR, other: line(work([HMI, BIE], "Treća")), promoted: true },
-    { klass: "I8 one author with the joiner in the given name, against our pair", base: PAIR, other: line(work([["Horvat", "Marko i Ema"]], "Treća")), promoted: true },
-    // I9a, I10a, I11a and I11b: also written exactly by a list cited as ours (contract c.6592102435), kept.
-    { klass: "I9a three authors, the joiner in the last given name, against our pair", base: PAIR,
-      other: line(work([HM, B, ["Kovač", "Luka i Ivo"]], "Treća")), promoted: false },
-    { klass: "I9b the same, against our three", base: TRIO, other: line(work([HM, B, ["Kovač", "Luka i Ivo"]], "Treća")), promoted: false },
-    { klass: "I10a three authors, the joiner in a middle given name, against our pair", base: PAIR, other: line(work([HM, BIE, K], "Treća")), promoted: false },
-    { klass: "I10b the same, against our three", base: TRIO, other: line(work([HM, BIE, K], "Treća")), promoted: false },
-    { klass: "I11a our one author, against a pair with the joiner in a name", base: ONE, other: line(work([HM, BIE], "Treća")), promoted: false },
-    { klass: "I11b our three, against a pair with the joiner in a name", base: TRIO, other: line(work([HM, BIE], "Treća")), promoted: false },
-    { klass: "I12 an organisation inside the list, one reading of which is another pair: not read, stays as written", base: PAIR,
-      other: "Horvat, Marko, Zavod za primjer i Babić, Iva (2021) Ručni unos.", promoted: false },
-  ];
-
-  it.each(rows)("class $klass", ({ base: b, other, promoted }) => {
-    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, { text: other }]);
-    atFirstEnd(editor);
-    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe("b");
-    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
-    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
-    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
-    expect(lines).toContain(other);
-    editor.destroy();
-  });
-
-  it("the entries the rows rest on", () => {
-    expect(line(work([HM, BIE], "Treća"))).toBe("Horvat, Marko i Babić, Iva i Ema (2021) Treća. Zagreb: Primjer.");
-    expect(line(work([HM, BIE, K], "Treća"))).toBe("Horvat, Marko, Babić, Iva i Ema i Kovač, Luka (2021) Treća. Zagreb: Primjer.");
-    expect(citationText(PAIR_BK.first, "")).toBe("(Horvat i Babić i Kovač, 2021)");
-  });
-
-  it("regression c.6588415588: A of Horvat and Kovač, X of Horvat and Babić (Iva i Ema), a second work of A", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atFirstEnd(editor);
-    const a = sourceOf({ ...BOOK, family2: "Kovač", given2: "Luka" });
-    writeSource(editor, a, "", true);
-    writeSource(editor, sourceOf({ ...BOOK, given: "Marko", family2: "Babić", given2: "Iva i Ema", title: "Treća" }), null, true);
-    expect(writeSource(editor, sourceOf({ ...BOOK, family2: "Kovač", given2: "Luka", title: "Druga" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Horvat i Kovač, 2021a)");
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...a, yearSuffix: "a" })}`);
-    editor.destroy();
-  });
-});
-
-// DAN-484, review FAIL on #1407 (c.6589873844), contract #1091 c.6590021171:
-// another entry is read from its own text, not from our first family name, and
-// every reading is written as the domain writes an in-text citation. The same
-// written form, "(Babić i Kovač, 2021)" of one author and of two, leaves the
-// in-text citations as written. Organisations are entries written by hand.
-describe("the formatted in-text form, class by class", () => {
-  type Name = readonly [family: string, given: string];
-  const work = (names: readonly Name[], title: string, year = 2021, letter = ""): Source => ({
-    ...sourceOf(BOOK), title, year,
-    authors: names.map(([family, given]) => ({ kind: "person" as const, family, given })),
-    ...(letter === "" ? {} : { yearSuffix: letter }),
-  });
-  const line = (source: Source) => entryText(source);
-  const B: Name = ["Babić", "Ana"];
-  const K: Name = ["Kovač", "Luka"];
-  const H: Name = ["Horvat", "Ivo"];
-  const BIK: Name = ["Babić i Kovač", "Iva"];
-  const base = (names: readonly Name[]) => {
-    const first = work(names, "Prva knjiga");
-    return { first, work: work(names, "Druga knjiga"), cited: `T. ${citationText(first, "")} i ${citationText(first, "9")}.` };
-  };
-  const ONE_BIK = base([BIK]);
-  const PAIR = base([B, K]);
-  const TRIO = base([B, K, H]);
-  const ONE_SUR = base([["Babić i sur.", "Iva"]]);
-  const ONE_ETAL = base([["Babić et al.", "Iva"]]);
-  const ONE_COMMA = base([["Babić, Kovač", "Iva"]]);
-  const ONE_B = base([["Babić", "Iva"]]);
-  const ONE_K = base([["Kovač", "Iva"]]);
-  const ONE_BK = base([["BK", "Iva"]]);
-
-  type Row = { klass: string; base: ReturnType<typeof base>; other: string; promoted: boolean };
-  const rows: Row[] = [
-    { klass: "C1 one author with the joiner in the family name, against a pair (the finding)", base: ONE_BIK, other: line(work([B, K], "Treća")), promoted: false },
-    { klass: "C2 a pair, against one author with the joiner in the family name", base: PAIR, other: line(work([BIK], "Treća")), promoted: false },
-    { klass: "C3 one author whose family name ends in i sur., against three", base: ONE_SUR, other: line(work([B, K, H], "Treća")), promoted: false },
-    { klass: "C4 three authors, against one whose family name ends in i sur.", base: TRIO, other: line(work([["Babić i sur.", "Ema"]], "Treća")), promoted: false },
-    { klass: "C5 one author with et al., against three: the style writes i sur.", base: ONE_ETAL, other: line(work([B, K, H], "Treća")), promoted: true },
-    { klass: "C6 one author with et al., against the same family name", base: ONE_ETAL, other: line(work([["Babić et al.", "Ema"]], "Treća")), promoted: false },
-    { klass: "C7 a comma in our family name, against an organisation of that name", base: ONE_COMMA, other: "Babić, Kovač (2021) Ručni unos.", promoted: false },
-    { klass: "C8 a comma in our family name, against a pair", base: ONE_COMMA, other: line(work([B, K], "Treća")), promoted: true },
-    { klass: "C9 a pair, against a comma in a family name: not read, stays as written", base: PAIR, other: line(work([["Babić, Kovač", "Ema"]], "Treća")), promoted: false },
-    { klass: "C10 one author with the joiner, against another pair", base: ONE_BIK, other: line(work([B, H], "Treća")), promoted: true },
-    { klass: "C11 a pair, against one author with the joiner in another year", base: PAIR, other: line(work([BIK], "Treća", 2020)), promoted: true },
-    { klass: "C12 one author with the joiner, against the pair with a letter", base: ONE_BIK, other: line(work([B, K], "Treća", 2021, "a")), promoted: false },
-    { klass: "C13 a pair, against an organisation named as the pair is cited", base: PAIR, other: "Babić i Kovač (2021) Ručni unos.", promoted: false },
-    { klass: "C14 one author, against a pair whose second is ours", base: ONE_K, other: line(work([B, K], "Treća")), promoted: true },
-    { klass: "C15 one author, against an organisation of that acronym", base: ONE_BK, other: "BK (Babić i Kovač) (2021) Ručni unos.", promoted: false },
-    { klass: "C16 one author, against one whose family name starts with ours and the joiner", base: ONE_B, other: line(work([BIK], "Treća")), promoted: true },
-  ];
-
-  it.each(rows)("class $klass", ({ base: b, other, promoted }) => {
-    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, { text: other }]);
-    atFirstEnd(editor);
-    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe("b");
-    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
-    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
-    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
-    expect(lines).toContain(other);
-    editor.destroy();
-  });
-
-  it("the forms the rows rest on", () => {
-    expect(citationText(ONE_BIK.first, "")).toBe("(Babić i Kovač, 2021)");
-    expect(citationText(PAIR.first, "")).toBe("(Babić i Kovač, 2021)");
-    expect(citationText(ONE_SUR.first, "")).toBe("(Babić i sur., 2021)");
-    expect(citationText(TRIO.first, "")).toBe("(Babić i sur., 2021)");
-    expect(citationText(ONE_COMMA.first, "")).toBe("(Babić, Kovač, 2021)");
-    expect(line(work([BIK], "Treća"))).toBe("Babić i Kovač, Iva (2021) Treća. Zagreb: Primjer.");
-  });
-
-  it("regression c.6589873844: X of Babić and Kovač cited, then two works of Babić i Kovač only in Literatura", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atFirstEnd(editor);
-    const x = sourceOf({ ...BOOK, family: "Babić", given: "Ana", family2: "Kovač", given2: "Luka" });
-    writeSource(editor, x, "", true);
-    const y = { ...BOOK, family: "Babić i Kovač", given: "Iva" };
-    const y1 = sourceOf({ ...y, title: "Prva" });
-    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Babić i Kovač, 2021)");
-    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
-    editor.destroy();
-  });
-
-  it("regression c.6589945737: X of Horvat i Kovač cited, then two works of Horvat and Kovač only in Literatura", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atFirstEnd(editor);
-    const x = sourceOf({ ...BOOK, family: "Horvat i Kovač", given: "Marko" });
-    writeSource(editor, x, "", true);
-    const y = { ...BOOK, family: "Horvat", given: "Ana", family2: "Kovač", given2: "Luka" };
-    const y1 = sourceOf({ ...y, title: "Prva" });
-    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Horvat i Kovač, 2021)");
-    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
-    editor.destroy();
-  });
-
-  // Review on #1407, c.6590682130: the form takes a comma in a given name
-  // ("Luka, ml."), so a family name may end at any comma, not only the last.
-  // QA on #1407, c.6590744530: an organisation's name may hold brackets, so
-  // its acronym may end at any " (". Every reading is kept.
-  const ONE_ZAVOD = base([["Zavod", "Iva"]]);
-  const AML: Name = ["Babić", "Ana, ml."];
-  const LML: Name = ["Kovač", "Luka, ml."];
-  const reads: Row[] = [
-    { klass: "Z1 no comma in a given name", base: ONE_BIK, other: line(work([B, K], "Treća")), promoted: false },
-    { klass: "Z2 a comma in the first author's given name", base: ONE_BIK, other: line(work([AML, K], "Treća")), promoted: false },
-    { klass: "Z3 a comma in the second author's given name (the finding)", base: ONE_BIK, other: line(work([B, LML], "Treća")), promoted: false },
-    { klass: "Z4 a comma in both given names", base: ONE_BIK, other: line(work([AML, ["Kovač", "Luka, st."]], "Treća")), promoted: false },
-    { klass: "Z5 a pair, against one author with a comma in the given name", base: PAIR, other: line(work([["Babić i Kovač", "Iva, ml."]], "Treća")), promoted: false },
-    { klass: "Z6 ours one author with a comma in the given name, against a pair with one", base: base([["Babić i Kovač", "Iva, ml."]]), other: line(work([B, LML], "Treća")), promoted: false },
-    { klass: "Z7 a comma in the family name and in the given name", base: ONE_COMMA, other: line(work([["Babić, Kovač", "Ema, ml."]], "Treća")), promoted: false },
-    { klass: "Z8 a comma in both given names, another pair", base: ONE_BIK, other: line(work([AML, ["Horvat", "Ivo, st."]], "Treća")), promoted: true },
-    { klass: "Z9 one author, against a pair whose second is ours, a comma in the first's given name", base: ONE_K, other: line(work([AML, K], "Treća")), promoted: true },
-    // Z10: also one author whose given name is "Ana i Kovač, Luka" (contract c.6592102435), kept.
-    { klass: "Z10 one author, against a pair that opens with ours: commas that make a list are read as one (A2)", base: ONE_B, other: line(work([B, K], "Treća")), promoted: false },
-    { klass: "Z11 one author, against a pair that opens with ours and a comma in the second's given name", base: ONE_B, other: line(work([B, LML], "Treća")), promoted: false },
-    { klass: "A1 an acronym, no bracket in the name", base: ONE_BK, other: "BK (Babić i Kovač) (2021) Ručni unos.", promoted: false },
-    { klass: "A2 an acronym, a bracket in the name (the finding)", base: ONE_BK, other: "BK (Izmišljeni zavod (Zagreb)) (2021) Ručni unos.", promoted: false },
-    { klass: "A3 an acronym, two brackets in the name", base: ONE_BK, other: "BK (Zavod (Zagreb) (Split)) (2021) Ručni unos.", promoted: false },
-    { klass: "A4 a name with nested brackets and no acronym", base: ONE_ZAVOD, other: "Zavod (Grad (Zagreb)) (2021) Ručni unos.", promoted: false },
-    { klass: "A5 another acronym, a bracket in the name", base: ONE_BK, other: "KB (Izmišljeni zavod (Zagreb)) (2021) Ručni unos.", promoted: true },
-  ];
-
-  it.each(reads)("class $klass", ({ base: b, other, promoted }) => {
-    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, { text: other }]);
-    atFirstEnd(editor);
-    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe("b");
-    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
-    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
-    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
-    expect(lines).toContain(other);
-    editor.destroy();
-  });
-
-  it("regression c.6590682130: X of Babić and Kovač, Luka, ml. cited, then two works of Babić i Kovač only in Literatura", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atFirstEnd(editor);
-    const x = sourceOf({ ...BOOK, family: "Babić", given: "Ana", family2: "Kovač", given2: "Luka, ml." });
-    writeSource(editor, x, "", true);
-    const y = { ...BOOK, family: "Babić i Kovač", given: "Iva" };
-    const y1 = sourceOf({ ...y, title: "Prva" });
-    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Babić i Kovač, 2021)");
-    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
-    editor.destroy();
-  });
-
-  it("regression c.6590744530: (BK, 2021) of an organisation with a bracket in its name, then two works of BK, Ana only in Literatura", () => {
-    const org = "BK (Izmišljeni zavod (Zagreb)) (2021) Ručni unos. Zagreb: Primjer.";
-    const editor = editorWith([{ text: "Tekst (BK, 2021)" }, { type: "heading", text: "Literatura" }, { text: org }]);
-    atFirstEnd(editor);
-    const y = { ...BOOK, family: "BK", given: "Ana" };
-    const y1 = sourceOf({ ...y, title: "Prva" });
-    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Tekst (BK, 2021)");
-    expect(texts(editor)).toContain(`paragraph:${org}`);
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
-    editor.destroy();
-  });
-});
-
-// DAN-484, review FAIL c.6591695313 and QA FAIL c.6591747653 on #1407,
-// contract #1091 c.6592102435: another entry shares the in-text form of the
-// work when any list of authors and any place of the year give exactly its
-// text through the domain, and then the in-text citations stay as written.
-// The form takes brackets, commas and the joiner in every name, so the year is
-// not the first bracket and a given name may hold what looks like more authors.
-describe("the exact written form, class by class", () => {
-  type Name = readonly [family: string, given: string];
-  const work = (names: readonly Name[], title: string, year = 2021, letter = ""): Source => ({
-    ...sourceOf(BOOK), title, year,
-    authors: names.map(([family, given]) => ({ kind: "person" as const, family, given })),
-    ...(letter === "" ? {} : { yearSuffix: letter }),
-  });
-  const line = (source: Source) => entryText(source);
-  const base = (names: readonly Name[]) => {
-    const first = work(names, "Prva knjiga");
-    return { first, work: work(names, "Druga knjiga"), cited: `T. ${citationText(first, "")} i ${citationText(first, "9")}.` };
-  };
-  const H: Name = ["Horvat", "Ana"];
-  const K: Name = ["Kovač", "Luka"];
-  const B: Name = ["Babić", "Iva"];
-  const ONE = base([H]);
-  const PAIR = base([H, K]);
-  const TRIO = base([H, B, K]);
-  const ONE_BIK = base([["Babić i Kovač", "Iva"]]);
-  const P: Name = ["Perić", "Ivo"];
-  const J: Name = ["Jurić", "Ema"];
-
-  type Row = { klass: string; base: ReturnType<typeof base>; other: string; promoted: boolean };
-  const rows: Row[] = [
-    { klass: "E1 K1 a year in the given name (the finding)", base: ONE, other: line(work([["Horvat", "Marko (2020)"]], "Markova knjiga")), promoted: false },
-    { klass: "E2 K1 a year in the second author's given name", base: PAIR, other: line(work([["Horvat", "Marko"], ["Kovač", "Ivo (2020)"]], "Treća")), promoted: false },
-    { klass: "E3 K1 our year in the given name, another at its place: also a title", base: ONE,
-      other: line(work([["Horvat", "Marko (2021)"]], "Treća", 2020)), promoted: false },
-    { klass: "E4 K2 years in the given name and the title, another at its place", base: ONE,
-      other: line(work([["Horvat", "Marko (2019)"]], "Analiza (2021)", 2020)), promoted: true },
-    { klass: "E5 K8 a year only in the family name", base: ONE, other: line(work([["Horvat (2020)", "Marko"]], "Treća")), promoted: true },
-    { klass: "E6 K8 a year in the name of another first author", base: ONE, other: line(work([["Kovač", "Ana (2021)"]], "Treća")), promoted: true },
-    { klass: "E7 K4 a comma and the joiner in the given names (the finding)", base: ONE_BIK,
-      other: line(work([["Babić", "Ana, ml."], ["Kovač", "Luka i Ivo, ml."]], "Treća")), promoted: false },
-    { klass: "E8 K4 the joiner in the first given name, a comma in the second", base: ONE_BIK,
-      other: line(work([["Babić", "Ana i Ema"], ["Kovač", "Luka, ml."]], "Treća")), promoted: false },
-    { klass: "E9 K4 the finding's names with another second author", base: ONE_BIK,
-      other: line(work([["Babić", "Ana, ml."], ["Perić", "Luka i Ivo, ml."]], "Treća")), promoted: true },
-    { klass: "E10 K3 a comma in the first given name of three", base: TRIO, other: line(work([["Horvat", "Marko, ml."], P, J], "Treća")), promoted: false },
-    { klass: "E11 K3 a comma in every given name of two", base: PAIR, other: line(work([["Horvat", "Marko, ml."], ["Kovač", "Ivo, st."]], "Treća")), promoted: false },
-    { klass: "E12 K5 an acronym, a year in the brackets of the name", base: ONE, other: "Horvat (Zavod (2020)) (2021) Ručni unos. Zagreb: Primjer.", promoted: false },
-    { klass: "E13 K6 a year in the given name and a letter at its place", base: ONE,
-      other: line(work([["Horvat", "Marko (2020)"]], "Markova knjiga", 2021, "a")), promoted: false },
-    { klass: "E14 K7 three authors, a year in the first given name", base: TRIO, other: line(work([["Horvat", "Marko (2020)"], P, J], "Treća")), promoted: false },
-    { klass: "E15 K8 the pair in reverse order, a year in a given name", base: PAIR, other: line(work([["Kovač", "Luka (2020)"], ["Horvat", "Marko"]], "Treća")), promoted: true },
-    { klass: "E16 K9 a hand entry out of style, kept by the earlier readings", base: ONE, other: "Horvat, Marko (2021).", promoted: false },
-    { klass: "E17 K1 K4 our pair split at its last joiner, the other at its first", base: base([["Horvat i Kovač", "Marko"], ["Babić", "Luka"]]),
-      other: line(work([["Horvat", "Ana (2020)"], ["Kovač i Babić", "Iva"]], "Treća")), promoted: false },
-  ];
-
-  it.each(rows)("class $klass", ({ base: b, other, promoted }) => {
-    const editor = editorWith([{ text: b.cited }, { type: "heading", text: "Literatura" }, { text: line(b.first) }, { text: other }]);
-    atFirstEnd(editor);
-    expect(writeSource(editor, b.work, null, true)?.yearSuffix).toBe("b");
-    const lines = texts(editor).map((l) => l.replace(/^\w+:/, ""));
-    expect(lines[0]).toBe(promoted ? b.cited.replaceAll(", 2021", ", 2021a") : b.cited);
-    expect(lines).toContain(line({ ...b.first, yearSuffix: "a" }));
-    expect(lines).toContain(other);
-    editor.destroy();
-  });
-
-  // Each kept row is a text some list of authors writes exactly, cited as ours.
-  type Proof = { klass: string; text: string; source: Source; cited: string };
-  const org = (name: string, acronym?: string) => ({ kind: "organization" as const, name, ...(acronym === undefined ? {} : { acronym }) });
-  const proofs: Proof[] = [
-    { klass: "E3", text: rows[2]!.other, source: work([["Horvat", "Marko"]], "(2020) Treća"), cited: "(Horvat, 2021)" },
-    { klass: "E12", text: rows[11]!.other, source: { ...work([], "Ručni unos"), authors: [org("Zavod (2020)", "Horvat")] }, cited: "(Horvat, 2021)" },
-    // The rows of the earlier tables now kept, rebuilt as they build them.
-    { klass: "A2", text: line(work([["Horvat", "Marko"], K], "Markova knjiga")), source: work([["Horvat", "Marko i Kovač, Luka"]], "Markova knjiga"), cited: "(Horvat, 2021)" },
-    { klass: "N1", text: line(work([["Horvat", "Marko"], B, K], "Treća")), source: work([["Horvat", "Marko, Babić, Iva i Kovač, Luka"]], "Treća"), cited: "(Horvat, 2021)" },
-    { klass: "N2", text: line(work([["Horvat", "Marko"], B, K], "Treća knjiga")), source: work([["Horvat", "Marko, Babić, Iva"], K], "Treća knjiga"), cited: "(Horvat i Kovač, 2021)" },
-    { klass: "N4", text: line(work([["Horvat", "Marko"], B, P, K], "Treća")), source: work([["Horvat", "Marko, Babić, Iva, Perić, Ivo"], K], "Treća"), cited: "(Horvat i Kovač, 2021)" },
-    { klass: "N6", text: line(work([["Horvat", "Marko"], B, K], "Treća", 2021, "a")), source: work([["Horvat", "Marko, Babić, Iva"], K], "Treća", 2021, "a"), cited: "(Horvat i Kovač, 2021a)" },
-    { klass: "N9", text: line(work([["Horvat", "Marko"], B], "Treća")), source: { ...work([B], "Treća"), authors: [org("Horvat"), org("Marko"), { kind: "person", family: "Babić", given: "Iva" }] }, cited: "(Horvat i sur., 2021)" },
-    { klass: "N13", text: line(work([["Horvat", "Marko"], B, K], "Treća")), source: work([["Horvat", "Marko, Babić, Iva"], K], "Treća"), cited: "(Horvat i Kovač, 2021)" },
-    { klass: "I9a", text: line(work([["Horvat", "Marko"], B, ["Kovač", "Luka i Ivo"]], "Treća")), source: work([["Horvat", "Marko, Babić, Iva"], ["Kovač", "Luka i Ivo"]], "Treća"), cited: "(Horvat i Kovač, 2021)" },
-    { klass: "I10a", text: line(work([["Horvat", "Marko"], ["Babić", "Iva i Ema"], K], "Treća")), source: work([["Horvat", "Marko, Babić, Iva i Ema"], K], "Treća"), cited: "(Horvat i Kovač, 2021)" },
-    { klass: "I11a", text: line(work([["Horvat", "Marko"], ["Babić", "Iva i Ema"]], "Treća")), source: work([["Horvat", "Marko i Babić, Iva i Ema"]], "Treća"), cited: "(Horvat, 2021)" },
-    { klass: "I11b", text: line(work([["Horvat", "Marko"], ["Babić", "Iva i Ema"]], "Treća")), source: { ...work([B], "Treća"), authors: [org("Horvat"), org("Marko"), { kind: "person", family: "Babić", given: "Iva i Ema" }] }, cited: "(Horvat i sur., 2021)" },
-    { klass: "Z10", text: line(work([["Babić", "Ana"], K], "Treća")), source: work([["Babić", "Ana i Kovač, Luka"]], "Treća"), cited: "(Babić, 2021)" },
-  ];
-
-  it.each(proofs)("proof $klass: the text and the in-text form of one source", ({ text, source, cited }) => {
-    expect(entryText(source)).toBe(text);
-    expect(citationText(source, "")).toBe(cited);
-  });
-
-  it("regression c.6591747653 and c.6591695313: X of Horvat, Marko (2020) cited, then two works of Horvat, Ana only in Literatura", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atFirstEnd(editor);
-    const x = sourceOf({ ...BOOK, given: "Marko (2020)", title: "Markova knjiga" });
-    writeSource(editor, x, "", true);
-    const y1 = sourceOf({ ...BOOK, title: "Prva" });
-    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...BOOK, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Horvat, 2021)");
-    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
-    editor.destroy();
-  });
-
-  it("regression c.6591695313 and c.6591747653: X of Babić, Ana, ml. and Kovač, Luka i Ivo, ml. cited, then two works of Babić i Kovač only in Literatura", () => {
-    const editor = editorWith([{ text: "Tekst." }]);
-    atFirstEnd(editor);
-    const x = sourceOf({ ...BOOK, family: "Babić", given: "Ana, ml.", family2: "Kovač", given2: "Luka i Ivo, ml." });
-    writeSource(editor, x, "", true);
-    const y = { ...BOOK, family: "Babić i Kovač", given: "Iva" };
-    const y1 = sourceOf({ ...y, title: "Prva" });
-    expect(writeSource(editor, y1, null, true)?.yearSuffix).toBeUndefined();
-    expect(writeSource(editor, sourceOf({ ...y, title: "Druga" }), null, true)?.yearSuffix).toBe("b");
-    expect(texts(editor)[0]).toBe("paragraph:Tekst.(Babić i Kovač, 2021)");
-    expect(texts(editor)).toContain(`paragraph:${entryText(x)}`);
-    expect(texts(editor)).toContain(`paragraph:${entryText({ ...y1, yearSuffix: "a" })}`);
-    editor.destroy();
-  });
-});
-
-// DAN-484 point 2: what the form names live (tried = false) and after a click,
-// over every field of both kinds. A limit counts code points; nothing is cut.
 describe("the form's errors, field by field", () => {
   const BOOK_FIELDS: SourceField[] = ["family", "given", "family2", "given2", "title", "place", "publisher"];
   const ARTICLE_FIELDS: SourceField[] = ["family", "given", "family2", "given2", "title", "journal", "volume", "issue", "pages"];
   const ASTRAL = "\u{1D49C}"; // one code point, two UTF-16 units
-  const full = { ...BOOK, family2: "Kovač", given2: "Luka" };
-  const fullArticle = { ...ARTICLE };
   const cases = [
-    ...BOOK_FIELDS.map((field) => ({ kind: "book", base: full, field })),
-    ...ARTICLE_FIELDS.map((field) => ({ kind: "article", base: fullArticle, field })),
+    ...BOOK_FIELDS.map((field) => ({ kind: "book", base: { ...BOOK, family2: "Kovač", given2: "Luka" }, field })),
+    ...ARTICLE_FIELDS.map((field) => ({ kind: "article", base: ARTICLE, field })),
   ] as const;
 
   it.each(cases)("$kind $field", ({ base, field }) => {
     const max = FIELD_MAX[field];
     const at = (fill: string) => ({ ...base, [field]: fill });
     const errs = (fields: SourceFields, tried: boolean) => formErrors(sourceFromFields(fields), "", tried);
-    // Empty: named only after a click, and only when the field is needed.
-    const empty = at("");
-    const needed = sourceFromFields(empty).ok === false;
-    expect(errs(empty, false)).toEqual([]);
-    expect(errs(empty, true).some((e) => e.kind === "missing")).toBe(needed);
+    // Empty or only spaces: named only after a click, and only when the field is needed.
+    for (const blank of ["", "   "]) {
+      const needed = sourceFromFields(at(blank)).ok === false;
+      expect(errs(at(blank), false)).toEqual([]);
+      expect(errs(at(blank), true)).toEqual(needed ? [{ kind: "missing", field }] : []);
+    }
     // At the limit, in code points, with spaces around and with an astral character.
-    expect(errs(at("č".repeat(max)), false)).toEqual([]);
-    expect(errs(at(`  ${"č".repeat(max)}  `), false)).toEqual([]);
-    expect(errs(at(`${ASTRAL}${"č".repeat(max - 1)}`), false)).toEqual([]);
-    // One more: named at once, without a click, and the value is not cut.
+    for (const fill of ["č".repeat(max), `  ${"č".repeat(max)}  `, `${ASTRAL}${"č".repeat(max - 1)}`]) {
+      expect(errs(at(fill), false)).toEqual([]);
+      expect(errs(at(fill), true)).toEqual([]);
+    }
+    // One more: named at once, with and without a click, and the value is not cut.
     const over = at(`${ASTRAL}${"č".repeat(max)}`);
     expect(errs(over, false)).toEqual([{ kind: "tooLong", field }]);
+    expect(errs(over, true)).toEqual([{ kind: "tooLong", field }]);
     expect(over[field]).toHaveLength(max + 2);
     // A character the sheet would change: named at once too.
     expect(errs(at(`a${NUL}`), false)).toEqual([{ kind: "unstorable", field }]);
+    expect(errs(at(`a${LONE}`), true)).toEqual([{ kind: "unstorable", field }]);
   });
 
   it("never names a hidden field of the other kind", () => {
@@ -1091,12 +308,90 @@ describe("the form's errors, field by field", () => {
 
   it("names the page of a citation at once, at the limit and one over", () => {
     const ok = sourceFromFields(BOOK);
-    expect(formErrors(ok, "1".repeat(PAGE_MAX), false)).toEqual([]);
-    expect(formErrors(ok, ` ${ASTRAL}${"1".repeat(PAGE_MAX - 1)} `, false)).toEqual([]);
-    expect(formErrors(ok, "1".repeat(PAGE_MAX + 1), false)).toEqual([{ kind: "pageTooLong" }]);
-    expect(formErrors(ok, `1${NUL}`, false)).toEqual([{ kind: "pageUnstorable" }]);
+    for (const tried of [false, true]) {
+      expect(formErrors(ok, "", tried)).toEqual([]);
+      expect(formErrors(ok, "1".repeat(PAGE_MAX), tried)).toEqual([]);
+      expect(formErrors(ok, ` ${ASTRAL}${"1".repeat(PAGE_MAX - 1)} `, tried)).toEqual([]);
+      expect(formErrors(ok, "1".repeat(PAGE_MAX + 1), tried)).toEqual([{ kind: "pageTooLong" }]);
+      expect(formErrors(ok, `1${NUL}`, tried)).toEqual([{ kind: "pageUnstorable" }]);
+    }
     // An empty form says nothing until a click; the page still speaks at once.
     expect(formErrors(sourceFromFields(EMPTY_FIELDS), "1".repeat(PAGE_MAX + 1), false)).toEqual([{ kind: "pageTooLong" }]);
+  });
+});
+
+// DAN-484 narrowed contract (#1407 c.6626765838): the form never reads or
+// changes text already in the sheet; it only inserts a new citation and entry.
+describe("the form leaves the sheet's text as it is", () => {
+  // As the panel writes on "Dodaj i citiraj": its text comes from the fields only.
+  const addAndCite = (editor: Editor, fields: SourceFields, page = "") => {
+    const source = sourceOf(fields);
+    return writeSource(editor, citationText(source, page), entryText(source));
+  };
+  const blocks = (editor: Editor) => {
+    const out: unknown[] = [];
+    editor.state.doc.forEach((node) => out.push(node.toJSON()));
+    return out;
+  };
+
+  it("N1 a second work of the author and year is (Horvat, 2021), and the first stays byte-equal", () => {
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+    expect(addAndCite(editor, BOOK)).toBe(true);
+    const before = blocks(editor);
+    const firstCited = texts(editor)[0]!;
+    const second = { ...BOOK, title: "Druga izmišljena knjiga" };
+    expect(citationText(sourceOf(second), "")).toBe("(Horvat, 2021)");
+    expect(addAndCite(editor, second)).toBe(true);
+    expect(texts(editor)).toEqual([
+      `${firstCited}(Horvat, 2021)`,
+      "heading:Literatura",
+      `paragraph:${entryText(sourceOf(second))}`,
+      `paragraph:${entryText(sourceOf(BOOK))}`,
+    ]);
+    // Every block but the cited paragraph and the new entry is the same node as before.
+    expect(blocks(editor).filter((_, i) => i !== 0 && i !== 2)).toEqual(before.slice(1));
+    editor.destroy();
+  });
+
+  it("N2 a given name with a year in it stays as written when the author's other year is added", () => {
+    // Scenarios of review c.6624200228 and QA c.6624252521.
+    const editor = editorWith([{ text: "Prvi odlomak." }]);
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+    const first = { ...BOOK, given: "Ana (2021)", year: "2020" };
+    expect(addAndCite(editor, first)).toBe(true);
+    const before = blocks(editor);
+    const firstCited = texts(editor)[0]!;
+    expect(addAndCite(editor, BOOK)).toBe(true);
+    const after = texts(editor);
+    expect(after[0]).toBe(`${firstCited}${citationText(sourceOf(BOOK), "")}`);
+    expect(after).toContain(`paragraph:${entryText(sourceOf(first))}`);
+    expect(entryText(sourceOf(first))).toContain("Horvat, Ana (2021)");
+    expect(blocks(editor).filter((node) => JSON.stringify(node).includes("Ana (2021) (2020)"))).toEqual(
+      before.filter((node) => JSON.stringify(node).includes("Ana (2021) (2020)")),
+    );
+    editor.destroy();
+  });
+
+  it("N3 a pasted run of names in Literatura changes neither the preview nor any block", () => {
+    const pasted = `${"Babić, A, i ".repeat(160)}(2021) Naslov. Zagreb: Primjer.`;
+    const empty = editorWith([{ text: "Prvi odlomak." }]);
+    const withRun = editorWith([{ text: "Prvi odlomak." }, { type: "heading", text: "Literatura" }, { text: pasted }]);
+    const fields = { ...BOOK, family: "Babić", given: "A" };
+    // The preview the panel shows is a function of the fields alone.
+    const preview = [citationText(sourceOf(fields), ""), entryText(sourceOf(fields))];
+    for (const editor of [empty, withRun]) {
+      editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
+      const before = blocks(editor);
+      expect(addAndCite(editor, fields)).toBe(true);
+      expect([citationText(sourceOf(fields), ""), entryText(sourceOf(fields))]).toEqual(preview);
+      expect(texts(editor)[0]).toBe(`paragraph:Prvi odlomak.${preview[0]}`);
+      expect(texts(editor)).toContain(`paragraph:${preview[1]}`);
+      // Every block already there, the pasted run included, is unchanged.
+      for (const node of before.slice(1)) expect(blocks(editor)).toContainEqual(node);
+      editor.destroy();
+    }
+    expect(pasted).toHaveLength(12 * 160 + 31);
   });
 });
 
@@ -1106,12 +401,12 @@ describe("writeSource and unstorable text", () => {
     const editor = editorWith([{ text: "Prvi odlomak." }]);
     editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize - 1);
     const book = sourceOf(BOOK);
-    expect(writeSource(editor, book, null, true)).not.toBeNull();
+    expect(writeSource(editor, null, entryText(book))).toBe(true);
     const before = editor.state.doc.toJSON();
     const withNul = { ...book, title: `Izmišljena${NUL} knjiga` };
-    expect(writeSource(editor, withNul, null, true)).toBeNull();
-    expect(writeSource(editor, book, `1${NUL}5`, false)).toBeNull();
-    expect(writeSource(editor, book, `1${LONE}`, true)).toBeNull();
+    expect(writeSource(editor, null, entryText(withNul))).toBe(false);
+    expect(writeSource(editor, citationText(book, `1${NUL}5`), null)).toBe(false);
+    expect(writeSource(editor, citationText(book, `1${LONE}`), entryText(book))).toBe(false);
     expect(editor.state.doc.toJSON()).toEqual(before);
     editor.destroy();
   });

@@ -18,7 +18,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
 import {
-  blocksOf, citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, suffixPlan, writeSource,
+  citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
   type SourceField, type SourceFields, type SourceKind,
 } from "./sources";
 import styles from "./SourcesPanel.module.css";
@@ -60,13 +60,6 @@ function SourcesForm() {
   // it is typed or pasted, never cut; an empty field only after a click.
   const problems = formErrors(check, page, tried);
   const invalid = new Set<SourceField>(problems.flatMap((p) => ("field" in p ? [p.field] : p.kind === "yearInvalid" ? ["year" as const] : [])));
-  // The work as it would be written now, with the letter of its year (DAN-484);
-  // the write plans again from the sheet at the click.
-  const plan = useEditorState({
-    editor, selector: ({ editor: e }) => (e === null || !check.ok ? null : suffixPlan(blocksOf(e.state.doc), check.source)),
-  }) ?? null;
-  // With every letter of the year taken nothing would be written, so no preview is shown.
-  const shown = check.ok && plan?.kind !== "full" ? (plan?.kind === "write" ? plan.source : check.source) : null;
 
   // Checked again at the click: a sign-out stops writing without a render.
   const canWrite = () => editable && editor !== null && !editor.isDestroyed && editor.isEditable;
@@ -82,29 +75,15 @@ function SourcesForm() {
   const commit = (cite: boolean) => {
     setTried(true);
     if (!check.ok || !pageValid(page) || !canWrite()) return;
-    if (writeSource(editor, check.source, cite ? page : null, true) === null) return;
-    relist(check.source);
+    const entry = entryText(check.source);
+    if (!writeSource(editor, cite ? citationText(check.source, page) : null, entry)) return;
+    const source = check.source;
+    setAdded((list) => (list.some((item) => item.entry === entry) ? list : [...list, { entry, source }].sort((a, b) => compareEntries(a.entry, b.entry))));
     close();
   };
 
-  // The list follows the letters the sheet now holds: an earlier work may have become "a".
-  const relist = (extra?: Added["source"]) => {
-    if (editor === null) return;
-    const blocks = blocksOf(editor.state.doc);
-    setAdded((list) => {
-      const next: Added[] = [];
-      for (const work of [...list.map((item) => item.source), ...(extra ? [extra] : [])]) {
-        const found = suffixPlan(blocks, work);
-        const source = found.kind === "write" && found.duplicate ? found.source : work;
-        const entry = entryText(source);
-        if (!next.some((item) => item.entry === entry)) next.push({ entry, source });
-      }
-      return next.sort((a, b) => compareEntries(a.entry, b.entry));
-    });
-  };
-
   const cite = (item: Added) => {
-    if (pageValid(listPage) && canWrite() && writeSource(editor, item.source, listPage, false) !== null) relist();
+    if (pageValid(listPage) && canWrite()) writeSource(editor, citationText(item.source, listPage), null);
   };
 
   const set = (field: keyof SourceFields) => (value: string) => setFields((f) => ({ ...f, [field]: value }));
@@ -181,11 +160,11 @@ function SourcesForm() {
             // The role sits around the list: on the list itself it takes away its items (axe, DAN-484).
             <div role="alert"><ul className={styles.errors}>{errors.map((text) => <li key={text}>{text}</li>)}</ul></div>
           ) : null}
-          {shown !== null ? (
+          {check.ok ? (
             <section className={styles.preview} aria-labelledby={`${id}-preview`}>
               <h3 id={`${id}-preview`} className={styles.label}>{t.preview}</h3>
-              <p data-preview="citation">{citationText(shown, page)}</p>
-              <p data-preview="entry">{entryText(shown)}</p>
+              <p data-preview="citation">{citationText(check.source, page)}</p>
+              <p data-preview="entry">{entryText(check.source)}</p>
             </section>
           ) : null}
           <div className={styles.actions}>
