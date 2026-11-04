@@ -5,6 +5,7 @@ import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { closeWork, documentsOf, seedWork, STUDENT, TEACHER, workDocument } from "./work-seed";
 import { editorMounted, SAVED_HERE, signIn, signOutWithoutDialog, type DemoAccount } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // #711 F1 (contract 6391402093 §8 tests 1-10 and 13, amendment 6391779486):
 // `/rad?zadatak=` writes into the student's own document of the assignment,
@@ -414,7 +415,7 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
   await signIn(page, "/rad", "Demo student 2");
   // An empty journal holds nothing: no dialog (O1, #476 c.6396707923).
   await signOutWithoutDialog(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await page.context().clearCookies({ name: /^_session/ });
   await signedIn(page);
   const x = await seedWork();
@@ -433,7 +434,7 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
   expect(hers).toHaveLength(1);
   // Both confirmed, nothing of hers stays: no dialog (O1, #476 c.6396707923).
   await signOutWithoutDialog(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await page.context().clearCookies({ name: /^_session/ });
   await signIn(page, "/rad", "Demo student 2");
   await writable(page);
@@ -451,7 +452,7 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
   // The unavailable sheet opens no journal, so the account place is the
   // shell's plain sign-out form, not LocalLogout and its dialog (page.tsx).
   await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await page.context().clearCookies({ name: /^_session/ });
   await signIn(page, `/rad?zadatak=${x}`);
   await writable(page);

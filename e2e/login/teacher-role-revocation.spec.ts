@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-292 (#747): the teacher role revocation route exists in the running app
 // and refuses every caller who is not an institution administrator. The
@@ -10,7 +11,7 @@ import { signIn } from "./support";
 // revoked teacher's next refused request are proved on the real database in
 // tests/integration/teacher-role-revocation-route.integration.test.ts; the
 // demo stack has no administrator account.
-const ORIGIN = "http://localhost:3000";
+const ORIGIN = APP_ORIGIN;
 const path = (teacher: string) => `/api/institution/teachers/${teacher}/role-revocation`;
 
 test("refuses an anonymous caller and a wrong Origin, uncached", async ({ request }) => {
