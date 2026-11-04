@@ -35,19 +35,19 @@ Vanjske tvrdnje paketa (cijene, kvote i uvjeti pružatelja, rokovi Akta o UI) da
 | --- | --- | --- | --- |
 | Redoslijed | P0 do demoa 2. 11., zatim P1 do P3 | Demo odgođen (D-191); redoslijed M0 do M11, ciljevi D-199 t. 6 i D-203 | Zastarjelo |
 | AI pomoćnik | Izvan pilota (D-77) | U pilotu, val 1 (D-194, D-199); zabrana AI analize procesa ostaje (pravilo 13) | Zastarjelo |
-| Izvoz DOCX, PDF, PDF/A | Kasniji val | Val 1, PDF/A-2u uz veraPDF (D-203 A3, D-206); renderer D-254 | Zastarjelo |
+| Izvoz DOCX, PDF, PDF/A | Kasniji val | Val 1, PDF/A-2u uz veraPDF (D-203 A3, D-206); renderer D-254 (na #87, čeka upis) | Zastarjelo |
 | Verzije iz oblaka | Nije obrađeno | U pilotu (D-198 t. 1, M8.11) | Paket ne pokriva |
 | Shema prije uvoza | Proširiti kanonski model | Shema v2, DAN-453, plan #1258; D-225 do D-231 | Usvojeno |
 | Navod i bibliografija | Čvorovi dokumenta | D-226 | Usvojeno |
 | Uvoz DOCX-a | Jedan `import_event` i manifest gubitaka | D-198 t. 5 i t. 7 (strože) | Usvojeno |
-| DOI i ISBN | Crossref, uvjetno Open Library | D-232; uvjeti D-252 | Usvojeno, uz uvjet |
+| DOI i ISBN | Crossref, uvjetno Open Library | D-232; uvjeti D-252 (na #87, čeka upis) | Usvojeno, uz uvjet |
 | Zotero | Najprije datoteke | D-232, D-227 | Usvojeno |
 | LTI | Kasnije | Nije u pilotu (D-198 t. 4) | Usvojeno |
-| ISVU | Samo odobreni snimak | Zaseban tiket (D-205 O3); probni sustav je stvarni podatak (D-258) | Usvojeno |
+| ISVU | Samo odobreni snimak | Zaseban tiket (D-205 O3); probni sustav je stvarni podatak (D-258, na #87, čeka upis) | Usvojeno |
 | Merkle i vremenski žig | Val 2, neovisni svjedok | D-72 odlučen (D-209) | Usvojeno, izvedba u M3.9 |
-| Komentori i povjerenstvo | Kasniji val | Grantovi po radu (DAN-379) | Provedeno |
+| Komentori i povjerenstvo | Kasniji val | Planirano u M2.8 (DAN-379); na `main` nema komentora ni povjerenstva | Planirano |
 | Rubrika i ocjena | Uvjetno | Ne grade se u M6 (D-249) | Usvojeno |
-| Citatni pogon | Oprez s citeproc i CSL | Vlastiti formatter (D-255) | Usvojeno |
+| Citatni pogon | Oprez s citeproc i CSL | Vlastiti formatter (D-255 je na #87, još nije u `docs/DECISIONS.md`) | Čeka upis |
 | Zajednička zaštita odlaznih poziva | Taksonomija ishoda, SSRF, kvote | Nema zajedničkog modula na `main` | Otvoreno |
 | Restore baze, pohrane i ključeva | Jedna vježba s negativnim slučajevima | M11.2 (DAN-298) | Otvoreno |
 | DPIA za AI i oblak | Nije obrađeno | Opseg D-257 | Otvoreno |
