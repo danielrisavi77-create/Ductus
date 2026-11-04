@@ -120,8 +120,10 @@ SELECT bag_eq(
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
      WHERE c.relnamespace = 'institution'::regnamespace AND NOT t.tgisinternal $$,
   ARRAY['assignment_version: assignment_version_immutable 27 O', 'assignment_version: assignment_version_no_truncate 34 O',
-        'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O'],
-  'triggers: immutable versions, mentorship validation and transactional notification, all enabled'
+        'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O',
+        'assignment_version: assignment_version_institution_fill 7 O',
+        'course_enrollment_code: course_enrollment_code_institution_fill 7 O'],
+  'triggers: immutable versions, mentorship validation, transactional notification and the institution of the parent, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -164,6 +166,8 @@ SELECT bag_eq(
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',
     'check_mentorship_version() definer',
+    'assignment_version_institution_fill()',
+    'course_enrollment_code_institution_fill()',
     'notify_assignment_version() definer',
     'require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid)',
     'is_confirmed_teacher(p_user_id uuid, p_course_id uuid)',
