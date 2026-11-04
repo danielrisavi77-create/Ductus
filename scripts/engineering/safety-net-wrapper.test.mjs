@@ -119,7 +119,7 @@ const shellTest = (name, fn) =>
       return t.skip("bash not found; run on Linux CI or install Git Bash");
     }
     // Returned, so an async body is awaited and its failures count.
-    return fn();
+    return fn(t);
   });
 
 test("settings.json routes Bash and PowerShell through the wrapper, not the bare package", () => {
@@ -1530,11 +1530,19 @@ test("F-035 a (QA c.6592414127): an entry that cannot be read never makes a fore
 // and main -> runCli -> decide read the event from stdin. The event names the
 // foreign cwd explicitly and the hook process starts there too. Exit code,
 // stdout, stderr and the duration within the hook timeout are checked per call.
-shellTest("F-035 a (QA c.6625690084): U1-U5 and P1-P3 through the configured PreToolUse hook with an explicit foreign cwd", () =>
+// A wrapper that cannot start the hook also exits 2, so its messages never count.
+shellTest("F-035 a (QA c.6625690084): U1-U5 and P1-P3 through the configured PreToolUse hook with an explicit foreign cwd", (t) =>
   withTree({ bin: "allow" }, (tree) =>
     scratch(async (base) => {
+      // The entry is read from .claude/settings.json; a changed configuration fails here.
+      assert.ok(hookEntry, "PreToolUse hook for safety-net.mjs in .claude/settings.json");
+      const group = settings.hooks.PreToolUse.find((entry) => entry.hooks?.includes(hookEntry));
+      for (const tool of TOOLS) assert.ok(new RegExp(`^(?:${group.matcher})$`).test(tool), `the matcher covers ${tool}`);
+      assert.equal(hookEntry.shell, "bash");
+      assert.ok(Number.isFinite(hookEntry.timeout) && hookEntry.timeout > 0, "the hook timeout comes from the entry");
       const limitMs = hookEntry.timeout * 1000;
       const calls = [];
+      const timings = [];
       const viaHook = (tool, command, cwd) => {
         const started = Date.now();
         const done = spawnSync("bash", ["-c", hookEntry.command], {
@@ -1552,13 +1560,19 @@ shellTest("F-035 a (QA c.6625690084): U1-U5 and P1-P3 through the configured Pre
         const problems = [];
         if (result.error) problems.push(`${label}: ${result.error.message}`);
         if (!(result.ms < limitMs)) problems.push(`${label}: ${result.ms} ms is not below the hook timeout of ${limitMs} ms`);
-        // A block answers on stderr only; the package's own stdout passes through untouched on an allow.
+        // A block answers on stderr only, an allow prints nothing.
         if (result.code === 2 && result.stdout !== "") problems.push(`${label}: a block printed to stdout: ${result.stdout}`);
         if (result.code === 2 && !/^Safety hook blocked this command: /.test(result.stderr)) problems.push(`${label}: unexpected block message: ${result.stderr}`);
         if (result.code === 0 && result.stderr !== "") problems.push(`${label}: an allow printed to stderr: ${result.stderr}`);
+        if (result.code === 0 && result.stdout !== "") problems.push(`${label}: an allow printed to stdout: ${result.stdout}`);
+        for (const wrapper of ["Safety hook cannot run", "failed unexpectedly"]) {
+          if (result.stderr.includes(wrapper)) problems.push(`${label}: the wrapper did not run the hook: ${result.stderr}`);
+        }
+        timings.push(`${label}: exit ${result.code}, ${result.ms} ms`);
         return problems;
       };
       const rows = await unreadableMatrix(tree, base, viaHook, check)();
+      for (const line of timings) t.diagnostic(line);
       // Every class row asks 3 times per tool, P3 once per tool: nothing was skipped.
       assert.equal(calls.length, (rows * 3 + 1) * TOOLS.length);
       assert.ok(calls.some((call) => call.cwd !== tree.root && call.code === 2), "a foreign cwd was blocked through the hook");
