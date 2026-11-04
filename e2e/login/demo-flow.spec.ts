@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -31,6 +31,7 @@ import { localAdminUrl } from "./local-db-url";
 import { caretAtEnd as caretAtEndOf } from "../support/caret";
 import { demoLaunchOptions } from "./launch-options";
 import { APP_ORIGIN } from "./origin";
+import { loginPagePaths, warmLoginPages } from "../../scripts/demo/login-e2e-https.mjs";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -374,13 +375,12 @@ test.afterEach(async () => {
 });
 
 test.beforeAll(async ({ request }) => {
-  // Compile the first F-6 route before a browser connects to Next's dev HMR.
-  // On a cold WebKit runner, compiling it during page.goto can make Fast
-  // Refresh reload the previous /rad page and interrupt that navigation.
-  // This anonymous GET changes no role/session; the real browser below still
-  // proves refusal, provisioning and the full teacher flow in that order.
-  const response = await request.get("/nastavnik/zadatak/novi");
-  expect(response.status()).toBe(200);
+  // Compile every page template before browser HMR connects, including later
+  // F-7/F-10 and dynamic pages. Warming only F-6 moved the same interruption
+  // to /upis. These anonymous GETs never grant a role or start a session;
+  // every original browser action and assertion below still runs unchanged.
+  const paths = loginPagePaths(readdirSync("app", { recursive: true }) as string[]);
+  await warmLoginPages(request, APP_ORIGIN, paths);
 });
 
 test("demo walk-through", async ({ browser, page, context }) => {

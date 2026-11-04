@@ -11,6 +11,40 @@ import { fileURLToPath } from "node:url";
 
 export const LOGIN_PORT = 3000;
 
+/** Retain compiled pages only in the login launcher's development process. */
+export function loginDevEntries(env = process.env) {
+  return env.NODE_ENV === "development" && env.DUCTUS_LOGIN_E2E_PRECOMPILE === "1"
+    ? { maxInactiveAge: 15 * 60_000, pagesBufferLength: 64 }
+    : undefined;
+}
+
+/** Anonymous representative URLs for every app page; API handlers are excluded. */
+export function loginPagePaths(files) {
+  const paths = files.filter((file) => /(^|\/)page\.tsx$/.test(file.replaceAll("\\", "/"))).map((file) => {
+    const parts = file.replaceAll("\\", "/").split("/").slice(0, -1);
+    return "/" + parts.map((part) => {
+      if (/^\[[a-zA-Z][a-zA-Z0-9]*\]$/.test(part)) return "00000000-0000-4000-8000-000000000000";
+      if (!/^[a-zA-Z0-9-]+$/.test(part)) throw new Error(`login warmup: unsupported page segment ${part}`);
+      return part;
+    }).join("/");
+  });
+  if (paths.length === 0) throw new Error("login warmup: empty page inventory");
+  return [...new Set(paths)].sort();
+}
+
+/** Complete compilation before a browser connects to dev HMR. No authenticated requests. */
+export async function warmLoginPages(request, origin, paths) {
+  for (const path of paths) {
+    const response = await request.get(path);
+    const headers = response.headers();
+    if (response.status() !== 200 || new URL(response.url()).origin !== origin ||
+        !headers["content-type"]?.includes("text/html") || headers["set-cookie"] ||
+        !(await response.text()).includes("/_next/static/chunks/")) {
+      throw new Error(`login warmup: invalid anonymous app response for ${path} (HTTP ${response.status()})`);
+    }
+  }
+}
+
 /**
  * The one origin of the login stack. Our own server runs over https, at the
  * address 127.0.0.1: the app sends Strict-Transport-Security, WebKit keeps it
@@ -62,7 +96,7 @@ function main() {
     const files = createLoginCertificate(dir);
     const next = createRequire(import.meta.url).resolve("next/dist/bin/next");
     // The server trusts its own certificate for any call it makes to itself.
-    child = spawn(process.execPath, [next, ...nextDevArgs(files)], { stdio: "inherit", env: { ...process.env, NODE_EXTRA_CA_CERTS: files.cert } });
+    child = spawn(process.execPath, [next, ...nextDevArgs(files)], { stdio: "inherit", env: { ...process.env, NODE_EXTRA_CA_CERTS: files.cert, DUCTUS_LOGIN_E2E_PRECOMPILE: "1" } });
   } catch (error) {
     cleanup();
     console.error(error instanceof Error ? error.message : error);

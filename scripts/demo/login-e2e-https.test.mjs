@@ -1,11 +1,62 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createPrivateKey, X509Certificate } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { LOGIN_PORT, createLoginCertificate, loginOrigin, nextDevArgs, opensslArgs } from "./login-e2e-https.mjs";
+import { LOGIN_PORT, createLoginCertificate, loginOrigin, nextDevArgs, opensslArgs, loginPagePaths, warmLoginPages, loginDevEntries } from "./login-e2e-https.mjs";
+
+test("warmup covers all page templates, including dynamic pages, but never API handlers", () => {
+  assert.deepEqual(loginPagePaths(["page.tsx", "upis/page.tsx", "rad/[assignmentId]/predaja/page.tsx", "api/auth/login/route.ts", "layout.tsx"]),
+    ["/", "/rad/00000000-0000-4000-8000-000000000000/predaja", "/upis"]);
+  assert.throws(() => loginPagePaths([]), /empty/);
+  assert.throws(() => loginPagePaths(["[...slug]/page.tsx"]), /unsupported/);
+});
+
+test("warmup awaits every anonymous HTML page and fails visibly on setup errors", async () => {
+  const seen = [];
+  const response = (overrides = {}) => ({ status: () => 200, url: () => "https://127.0.0.1:3000/rad", headers: () => ({ "content-type": "text/html" }), text: async () => '<html><script src="/_next/static/chunks/app/page.js"></script></html>', ...overrides });
+  const request = { get: async (path) => { seen.push(path); return response(); } };
+  await warmLoginPages(request, "https://127.0.0.1:3000", ["/upis", "/rad"]);
+  assert.deepEqual(seen, ["/upis", "/rad"]);
+  for (const bad of [
+    { status: () => 500 }, { status: () => 404 },
+    { url: () => "https://example.test/rad" },
+    { headers: () => ({ "content-type": "application/json" }) },
+    { headers: () => ({ "content-type": "text/html", "set-cookie": "unexpected=value" }) },
+    { text: async () => "wrong server" },
+  ]) {
+    await assert.rejects(warmLoginPages({ get: async () => response(bad) }, "https://127.0.0.1:3000", ["/upis"]), /warmup/);
+  }
+  await assert.rejects(warmLoginPages({ get: async () => { throw new Error("connection refused"); } }, "https://127.0.0.1:3000", ["/upis"]), /connection refused/);
+});
+
+test("entry retention is confined to the explicitly launched development login stack", () => {
+  assert.equal(loginDevEntries({ NODE_ENV: "production", DUCTUS_LOGIN_E2E_PRECOMPILE: "1" }), undefined);
+  assert.equal(loginDevEntries({ NODE_ENV: "development" }), undefined);
+  assert.equal(loginDevEntries({ NODE_ENV: "development", DUCTUS_LOGIN_E2E_PRECOMPILE: "true" }), undefined);
+  const entries = loginDevEntries({ NODE_ENV: "development", DUCTUS_LOGIN_E2E_PRECOMPILE: "1" });
+  assert.ok(entries.maxInactiveAge >= 15 * 60_000);
+  assert.ok(entries.pagesBufferLength >= 32);
+});
+
+test("real Next config retains security settings and ignores the login flag in production", () => {
+  const load = (nodeEnv, flag) => JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", `
+    import config from "next/dist/server/config.js";
+    const loaded = await config.default(process.env.NODE_ENV === "production" ? "phase-production-build" : "phase-development-server", process.cwd());
+    console.log(JSON.stringify({entries:loaded.onDemandEntries,headers:await loaded.headers(),poweredByHeader:loaded.poweredByHeader}));
+  `], { encoding: "utf8", env: { ...process.env, NODE_ENV: nodeEnv, DUCTUS_LOGIN_E2E_PRECOMPILE: flag } }));
+  const normal = load("development", undefined);
+  const login = load("development", "1");
+  const production = load("production", "1");
+  assert.deepEqual(login.entries, { maxInactiveAge: 900_000, pagesBufferLength: 64 });
+  assert.deepEqual(production.entries, normal.entries);
+  assert.deepEqual(login.headers, normal.headers);
+  assert.deepEqual(production.headers, normal.headers);
+  assert.equal(login.poweredByHeader, false);
+});
 
 const scratch = () => mkdtempSync(join(tmpdir(), "ductus-https-test-"));
 
