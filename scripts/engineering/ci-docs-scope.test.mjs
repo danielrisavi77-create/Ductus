@@ -225,7 +225,8 @@ test("both runtime suites are independent, full-only and keep their own setup an
   for (const name of ["stack-e2e", "stack-login"]) {
     const stack = job(name);
     assert.match(stack, /^ {4}needs: scope$/m);
-    assert.match(stack, /^ {4}runs-on: ubuntu-latest$/m);
+    // DAN-556: the browser cache holds builds for this Ubuntu release only.
+    assert.match(stack, /^ {4}runs-on: ubuntu-24\.04$/m);
     assert.ok(stack.includes(`    if: \${{ !cancelled() && needs.scope.result == 'success' && ${full} }}\n`));
     assert.doesNotMatch(stack, /continue-on-error/);
     for (const command of ["pnpm install --frozen-lockfile", "pnpm stack:up", "pnpm db:migrate", "pnpm demo:prepare", "pnpm stack:down"]) {
