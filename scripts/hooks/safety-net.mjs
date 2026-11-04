@@ -271,10 +271,14 @@ export function findRulebookDir(cwd) {
 // results (or a fixed name below one) on both sides; the `.git` directory
 // branch of commonGitDir compares the resolved `.git` with the unresolved
 // `<dir>/.git` on purpose, so a `.git` swapped for a link stays different.
+// A file with a second hard link shares its inode with another name, so a file
+// counts only while it has one name: a hard-linked copy of a genuine `.git`
+// file is not that file.
 export function samePath(a, b) {
   try {
     const x = fs.lstatSync(a, { bigint: true });
     const y = fs.lstatSync(b, { bigint: true });
+    if (!x.isDirectory() && x.nlink !== 1n) return false;
     return x.ino !== 0n && x.dev === y.dev && x.ino === y.ino;
   } catch {
     return false;

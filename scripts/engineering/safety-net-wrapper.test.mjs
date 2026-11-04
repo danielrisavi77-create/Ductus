@@ -1220,6 +1220,8 @@ test("F-035 a: a forged or copied worktree link is refused", { timeout: 60000 },
       const cases = {
         "admin directory links back to another checkout": (dir) => linkWorktree(common, dir, "forged", { back: path.join(genuine, ".git") }),
         "the .git file of a genuine worktree, copied": (dir) => fs.copyFileSync(path.join(genuine, ".git"), path.join(dir, ".git")),
+        // Codex c.6627100367: a hard link shares the inode of the genuine file.
+        "the .git file of a genuine worktree, hard-linked": (dir) => fs.linkSync(path.join(genuine, ".git"), path.join(dir, ".git")),
         "admin directory outside worktrees/": (dir) => {
           const admin = path.join(base, "admin", "x");
           fs.mkdirSync(admin, { recursive: true });
@@ -1644,6 +1646,14 @@ test("F-035 a (Codex c.6627100367): samePath compares file system identity over 
         return file === upper ? Object.assign(stat, { ino: lstat(path.join(upper, "sub"), options).ino, dev: stat.dev + 1n }) : stat;
       } }, false],
     ];
+    // 9: a file is itself only while it has one name; a hard link is another entry.
+    const single = path.join(upper, "single");
+    fs.writeFileSync(single, "x");
+    rows.push(["9 a file with one name", single, single, {}, true]);
+    const file = path.join(upper, "file");
+    fs.writeFileSync(file, "x");
+    fs.linkSync(file, path.join(upper, "hard"));
+    rows.push(["9 a hard link to a file", path.join(upper, "hard"), file, {}, false], ["9 a file with a second name, itself", file, file, {}, false]);
     const link = path.join(base, "link");
     try {
       fs.symlinkSync(upper, link, "dir");
