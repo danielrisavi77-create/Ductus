@@ -32,7 +32,7 @@ const hex = async (bytes: Uint8Array) =>
 const h = (n: number) => n.toString(16).padStart(64, "0");
 
 // K11: characters that break naive comparison; NUL is mapped away, not filtered.
-const awkward = fc.constantFrom("\u{1F600}", "​", "‮", "﻿", "č", "č", "/", " ");
+const awkward = fc.constantFrom("\u{1F600}", "\u200b", "\u202e", "\ufeff", "c\u030c", "\u010d", "/", "\u2028");
 const text = fc
   .array(fc.oneof(fc.string({ unit: "binary", minLength: 1, maxLength: 4 }), awkward), { minLength: 1, maxLength: 4 })
   .map((parts) => parts.join("").replaceAll("\0", "x"));
@@ -135,7 +135,7 @@ describe("verifyCanonicalEvidencePayloadV2 under fuzz (P1)", () => {
         "1.0": () => jcs.replace('"sequenceFrom":1,', '"sequenceFrom":1.0,'),
         "1e0": () => jcs.replace('"sequenceFrom":1,', '"sequenceFrom":1e0,'),
         escape: () => jcs.replace('"canonicalization"', '"c\\u0061nonicalization"'),
-        duplicate: () => jcs.replace("{", '{"documentId":"doc-a",'),
+        duplicate: () => `{"documentId":"doc-a",${jcs.slice(1)}`,
         solidus: () => jcs.replace("a/b", "a\\/b"),
       }[kind]();
       expect(variant).not.toBe(jcs);
@@ -199,7 +199,7 @@ describe("verifyCanonicalEvidencePayloadV2 under fuzz (P1)", () => {
 
   it("refuses __proto__ as an own key, a reserved source and a time finer than a minute (K7, N-12, N-13)", async () => {
     const jcs = canonicalizeJcs(segment(["izmisljeno"]));
-    expect(await verified(enc(jcs.replace("{", '{"__proto__":{},')))).toEqual(invalid);
+    expect(await verified(enc(`{"__proto__":{},${jcs.slice(1)}`))).toEqual(invalid);
     expect(await verified(enc(jcs.replace('"source":"', '"source":"applied-suggestion","x":"')))).toEqual(invalid);
     const reserved = segment(["izmisljeno"]);
     (reserved.events[0] as { source: string }).source = "applied-suggestion";

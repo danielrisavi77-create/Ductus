@@ -18,7 +18,7 @@ const hex = async (bytes: Uint8Array) =>
     .join("");
 
 const MARKS = [[], ["bold"], ["italic"], ["bold", "italic"]] as const;
-const awkward = fc.constantFrom("\u{1F600}", "​", "‮", "﻿", "č", "č", " ");
+const awkward = fc.constantFrom("\u{1F600}", "\u200b", "\u202e", "\ufeff", "c\u030c", "\u010d", " ");
 const text = fc
   .array(fc.oneof(fc.string({ unit: "binary", minLength: 1, maxLength: 4 }), awkward), { minLength: 1, maxLength: 3 })
   .map((parts) => parts.join(""));
@@ -103,7 +103,8 @@ describe("P3 verifyDocumentSnapshot fuzz", () => {
     async (bytes, pick, byte, kind) => {
       const at = pick % bytes.length;
       const mutant = {
-        replace: () => splice(bytes, at, 1, [byte]),
+        // A byte equal to the one it replaces is mapped to another, so the mutant always differs.
+        replace: () => splice(bytes, at, 1, [byte === bytes[at] ? byte ^ 1 : byte]),
         delete: () => splice(bytes, at, 1),
         insert: () => splice(bytes, at, 0, [byte]),
         truncate: () => bytes.slice(0, at),
@@ -155,7 +156,7 @@ describe("P3 verifyDocumentSnapshot fuzz", () => {
         duplicateId: () => doc.nodes.push({ ...first }),
         duplicateIdCase: () => doc.nodes.push({ ...first, id: first.id.toUpperCase() }),
         mark: () => first.children.push({ type: "text", text: "x", marks: ["underline"] } as never),
-        field: () => Object.assign(first, { style: "x" }),
+        field: () => ((first as Record<string, unknown>).style = "x"),
       })[kind]();
       expect(await verifyDocumentSnapshot(enc(canonicalizeJcs(doc)))).toEqual({ ok: false, reason: "invalid" });
     },
