@@ -53,10 +53,8 @@ export function currentSession(store: MarkStore | null): SessionMark | null {
 }
 
 /**
- * Where localStorage refuses the record (full, or not there at all), the
- * ended sessions go to a cookie instead, so a reload under the cookie that
- * stays still finds them (#1444). Only this page's script reads it; it holds
- * tags, outlives the longest session and is never sent cross-site.
+ * The ended sessions also go to a cookie, read only by this page's script, for
+ * where localStorage refuses the record (#1444). It outlives a session.
  */
 export const ENDED_COOKIE = "ductus-ended";
 const ENDED_COOKIE_LIMIT = 8;
@@ -108,35 +106,6 @@ export function endSessionsInCookie(jar: CookieJar | null, tags: readonly string
   }
 }
 
-/** Latest server-rendered session, also available when localStorage fails. */
-export const CURRENT_COOKIE = "ductus-current";
-
-export function currentSessionInCookie(jar: CookieJar | null): { tag: string | null; at: number } | null {
-  if (!jar) return null;
-  try {
-    const value = jar.read().split(";").map((part) => part.trim()).find((part) => part.startsWith(`${CURRENT_COOKIE}=`));
-    if (!value) return null;
-    const [tag, timestamp, extra] = value.slice(CURRENT_COOKIE.length + 1).split(".");
-    const at = Number(timestamp);
-    return tag !== undefined && (tag === "" || COOKIE_TAG.test(tag)) && timestamp !== undefined
-      && timestamp !== "" && extra === undefined && Number.isFinite(at)
-      ? { tag: tag === "" ? null : tag, at } : null;
-  } catch {
-    return null;
-  }
-}
-
-function observeSessionInCookie(jar: CookieJar | null, tag: string | null, at: number): void {
-  if (!jar || !Number.isFinite(at) || (tag !== null && !COOKIE_TAG.test(tag))) return;
-  try {
-    const current = currentSessionInCookie(jar);
-    if (current && current.at > at) return;
-    jar.write(`${CURRENT_COOKIE}=${tag ?? ""}.${at}; Path=/; Max-Age=${ENDED_COOKIE_MAX_AGE_S}; SameSite=Strict${jar.secure ? "; Secure" : ""}`);
-  } catch {
-    // The server-rendered page and localStorage remain independent guards.
-  }
-}
-
 /** Whether a page rendered under `mark` belongs to a session that has ended. */
 export function hasEnded(store: MarkStore | null, mark: SessionMark, jar: CookieJar | null = browserCookieJar()): boolean {
   if (readEndedCookie(jar).includes(mark.tag)) return true;
@@ -165,19 +134,16 @@ export function endSessions(store: MarkStore | null, tags: readonly string[]): b
 }
 
 /**
- * After the logout route answered: the page's own session and the one the
- * browser recorded last both ended, since the route cleared whatever cookie
- * the browser held. Where localStorage refuses the record, the cookie fences
- * a tab of them that loads later (#1444). Returns the tags for the other tabs.
+ * Sign-out, answered or not (#1444): ends only the session `tag` taken at the
+ * click, in localStorage and in the cookie, each whatever the other did.
  */
 export function endAfterLogout(
   store: MarkStore | null, tag: string | null, jar: CookieJar | null = browserCookieJar(),
 ): string[] {
-  const tags = new Set<string>(tag === null ? [] : [tag]);
-  const current = store ? readCurrent(store) : null;
-  if (current) tags.add(current.tag);
-  if (!endSessions(store, [...tags])) endSessionsInCookie(jar, [...tags]);
-  return [...tags];
+  if (tag === null) return [];
+  endSessions(store, [tag]);
+  endSessionsInCookie(jar, [tag]);
+  return [tag];
 }
 
 /**
@@ -186,10 +152,7 @@ export function endAfterLogout(
  * session ended and becomes current; an older page changes nothing.
  * Returns the tag that ended here, for the other tabs.
  */
-export function observeSession(
-  store: MarkStore | null, tag: string | null, at: number, jar: CookieJar | null = browserCookieJar(),
-): string | null {
-  observeSessionInCookie(jar, tag, at);
+export function observeSession(store: MarkStore | null, tag: string | null, at: number): string | null {
   if (!store) return null;
   try {
     const current = readCurrent(store);

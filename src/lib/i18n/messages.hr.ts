@@ -1239,12 +1239,10 @@ export const hr = {
     copyDiscardConfirm: "Da, odbaci kopiju",
     copyKeep: "Zadrži kopiju",
     copyDiscardFailed: "Kopija nije odbačena i ostaje na ovom uređaju. Pokušajte ponovno.",
-    // #1330 (D-118): without the server's answer the sign-out still ends on
-    // this device; the server's part follows once the connection is back.
+    // #1330, #1444: ended here; nothing calls the server again.
     logoutDevice:
-      "Odjava je na ovom uređaju gotova. Poslužitelj trenutačno ne odgovara, pa se ondje odjava dovršava čim se veza vrati.",
+      "Odjava je na ovom uređaju gotova. Poslužitelj trenutačno ne odgovara, pa ondje prijava prestaje pri sljedećoj prijavi ili kad istekne.",
     logoutClose: "Zatvori",
-    // #1336: a tab whose session has ended, whatever ended it, shows no text.
     signedOutElsewhere:
       "Prijava više ne vrijedi, pa ova kartica više ne prikazuje rad. Rad nastavljate kad se ponovno prijavite.",
     signInAgain: "Prijavi se",

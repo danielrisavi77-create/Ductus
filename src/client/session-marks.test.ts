@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  browserCookieJar, CURRENT_COOKIE, currentSessionInCookie, type CookieJar, CURRENT_KEY, ENDED_COOKIE, ENDED_KEY, endAfterLogout, endSessions,
+  browserCookieJar, type CookieJar, CURRENT_KEY, currentSession, ENDED_COOKIE, ENDED_KEY, endAfterLogout, endSessions,
   endSessionsInCookie, hasEnded, observeSession, type MarkStore,
 } from "./session-marks";
 
@@ -66,13 +66,15 @@ describe("session marks", () => {
     expect(hasEnded(store, { tag: B, at: 200 })).toBe(true);
   });
 
-  it("sign-out from a stale tab also ends the session the browser holds now", () => {
+  it("sign-out from a stale tab ends only its own session, never the one current now", () => {
     const store = memoryStore();
     observeSession(store, A, 100);
     observeSession(store, B, 200);
-    expect(endAfterLogout(store, A).sort()).toEqual([A, B]);
-    expect(hasEnded(store, { tag: B, at: 200 })).toBe(true);
-    expect(store.getItem(CURRENT_KEY)).toBeNull();
+    expect(endAfterLogout(store, A, null)).toEqual([A]);
+    expect(hasEnded(store, { tag: A, at: 100 }, null)).toBe(true);
+    expect(hasEnded(store, { tag: B, at: 200 }, null)).toBe(false);
+    expect(JSON.parse(store.getItem(CURRENT_KEY)!)).toEqual({ tag: B, at: 200 });
+    expect(endAfterLogout(store, null, null)).toEqual([]);
   });
 
   it("keeps the ended list short and survives damaged or refused storage", () => {
@@ -98,95 +100,88 @@ describe("session marks", () => {
   });
 });
 
-// c.6590579384: where localStorage refuses the record, the ended sessions go
-// to a cookie that only this page's script reads. Tags are made-up digests.
+/** Holds what was last written, as `document.cookie` would list it. */
+function jar(listed = "", secure = false): CookieJar & { writes: string[] } {
+  let cookies = listed;
+  const writes: string[] = [];
+  return {
+    writes, secure, read: () => cookies,
+    write: (cookie) => {
+      writes.push(cookie);
+      cookies = [...cookies.split("; ").filter((one) => one && !one.startsWith(`${ENDED_COOKIE}=`)), cookie.split(";")[0]!].join("; ");
+    },
+  };
+}
+
+// #1444: the ended sessions also go to a cookie only this page's script reads.
 describe("the ended-session cookie", () => {
-  /** Holds what was last written, as `document.cookie` would list it. */
-  function jar(listed = "", secure = false): CookieJar & { writes: string[] } {
-    let cookies = listed;
-    const writes: string[] = [];
-    return {
-      writes, secure,
-      read: () => cookies,
-      write: (cookie) => {
-        writes.push(cookie);
-        const pair = cookie.split(";")[0]!;
-        cookies = [...cookies.split("; ").filter((one) => one && !one.startsWith(`${ENDED_COOKIE}=`)), pair].join("; ");
-      },
-    };
-  }
-
-  it("is written for the whole site, outlives a session, and is never sent cross-site", () => {
-    const plain = jar();
-    expect(endSessionsInCookie(plain, [A])).toBe(true);
-    expect(plain.writes).toEqual([`${ENDED_COOKIE}=${A}; Path=/; Max-Age=86400; SameSite=Strict`]);
-    const secure = jar("", true);
-    expect(endSessionsInCookie(secure, [A])).toBe(true);
-    expect(secure.writes[0]).toMatch(/; Secure$/);
-  });
-
-  it("joins the sessions already there, keeps other cookies, and stays short", () => {
-    const one = jar(`other=1; ${ENDED_COOKIE}=${B}`);
+  it("is written for the whole site, never sent cross-site, joins the others and stays short", () => {
+    const one = jar(`other=1; ${ENDED_COOKIE}=${B}`, true);
     expect(endSessionsInCookie(one, [A])).toBe(true);
+    expect(one.writes).toEqual([`${ENDED_COOKIE}=${B}.${A}; Path=/; Max-Age=86400; SameSite=Strict; Secure`]);
     expect(one.read()).toBe(`other=1; ${ENDED_COOKIE}=${B}.${A}`);
-    expect(hasEnded(null, { tag: B, at: 0 }, one)).toBe(true);
     const many = jar();
     const tags = Array.from({ length: 12 }, (_, i) => i.toString(16).repeat(64));
     for (const tag of tags) endSessionsInCookie(many, [tag]);
     expect(many.read().split("=")[1]!.split(".")).toEqual(tags.slice(-8));
   });
 
-  it("is false when the browser does not keep it, and a damaged value ends nobody", () => {
-    const refusing: CookieJar = { read: () => "", write: () => {}, secure: false };
-    expect(endSessionsInCookie(refusing, [A])).toBe(false);
-    expect(endSessionsInCookie(null, [A])).toBe(false);
-    const throwing: CookieJar = { read: () => { throw new Error("denied"); }, write: () => {}, secure: false };
-    expect(endSessionsInCookie(throwing, [A])).toBe(false);
-    expect(hasEnded(null, { tag: A, at: 0 }, throwing)).toBe(false);
+  it("a damaged value ends nobody, and there is none outside a browser", () => {
     for (const listed of [`${ENDED_COOKIE}=`, `${ENDED_COOKIE}=%3Cx%3E.${"a".repeat(200)}`, `x${ENDED_COOKIE}=${A}`]) {
       expect(hasEnded(null, { tag: A, at: 0 }, jar(listed))).toBe(false);
     }
-  });
-
-  it("is not reachable outside a browser", () => {
     expect(browserCookieJar()).toBeNull();
   });
 });
 
-// The cookie is an independent observation when localStorage is unavailable.
-describe("the current-session cookie", () => {
-  function jar(secure = false): CookieJar & { writes: string[] } {
-    let value = "other=1";
-    const writes: string[] = [];
-    return {
-      secure, writes, read: () => value,
-      write: (cookie) => {
-        writes.push(cookie);
-        value = `other=1; ${cookie.split(";")[0]}`;
-      },
-    };
+// #1444 t.2, t.3: the sign-out mark goes to localStorage and to the cookie,
+// each whatever the other did; the session current at that time is untouched.
+describe("the sign-out fence", () => {
+  const fail = () => { throw new DOMException("full", "QuotaExceededError"); };
+  const stores: [string, () => MarkStore | null, boolean][] = [
+    ["works", () => memoryStore(), true],
+    ["setItem throws", () => ({ ...memoryStore(), setItem: fail }), false],
+    ["everything throws", () => ({ getItem: fail, setItem: fail, removeItem: fail }), false],
+    ["absent", () => null, false],
+  ];
+  const jars: [string, () => CookieJar | null, boolean][] = [
+    ["works", () => jar(), true],
+    ["not kept", () => ({ secure: false, read: () => "", write: () => {} }), false],
+    ["read throws", () => ({ secure: false, read: fail, write: () => {} }), false],
+    ["absent", () => null, false],
+  ];
+  for (const [storeName, makeStore, storeKeeps] of stores) {
+    for (const [jarName, makeJar, jarKeeps] of jars) {
+      it(`storage ${storeName}, cookie ${jarName}`, () => {
+        const store = makeStore();
+        const cookies = makeJar();
+        expect(endAfterLogout(store, A, cookies)).toEqual([A]);
+        expect(endSessionsInCookie(cookies, [A])).toBe(jarKeeps);
+        if (storeKeeps) expect(JSON.parse(store!.getItem(ENDED_KEY)!)).toEqual([A]);
+        expect(hasEnded(null, { tag: A, at: 0 }, cookies)).toBe(jarKeeps);
+        // A reload under the cookie that stays, rendered later by any clock.
+        expect(hasEnded(store, { tag: A, at: 9_000 }, cookies)).toBe(storeKeeps || jarKeeps);
+        expect(hasEnded(store, { tag: B, at: 0 }, cookies)).toBe(false);
+      });
+    }
   }
 
-  it("records a newer page without storage and an older page cannot overwrite it", () => {
-    const cookies = jar(true);
-    observeSession(null, B, 200, cookies);
-    observeSession(null, A, 100, cookies);
-    expect(currentSessionInCookie(cookies)).toEqual({ tag: B, at: 200 });
-    expect(cookies.writes).toEqual([`${CURRENT_COOKIE}=${B}.200; Path=/; Max-Age=86400; SameSite=Strict; Secure`]);
-    observeSession(null, null, 300, cookies);
-    expect(currentSessionInCookie(cookies)).toEqual({ tag: null, at: 300 });
-    expect(cookies.read()).toContain("other=1");
-  });
-
-  it("does not throw for refused cookies or accept malformed values", () => {
-    const denied: CookieJar = {
-      secure: false, read: () => { throw new Error("denied"); }, write: () => { throw new Error("denied"); },
-    };
-    expect(observeSession(null, B, 200, denied)).toBeNull();
-    expect(currentSessionInCookie(denied)).toBeNull();
-    expect(currentSessionInCookie(null)).toBeNull();
-    for (const value of ["", "b", "b.NaN", "b.", "b.200.extra", `${"a".repeat(129)}.200`]) {
-      expect(currentSessionInCookie({ secure: false, read: () => `${CURRENT_COOKIE}=${value}`, write: () => {} })).toBeNull();
-    }
+  it("B signing in while A's sign-out waits stays current; refused storage after it keeps B open (N1, N3)", () => {
+    const store = memoryStore();
+    const cookies = jar();
+    observeSession(store, A, 100);
+    const own = currentSession(store)!.tag; // taken at the click
+    expect(observeSession(store, B, 200)).toBe(A); // the other tab's sign-in
+    expect(endAfterLogout(store, own, cookies)).toEqual([A]); // the timeout
+    expect(currentSession(store)).toEqual({ tag: B, at: 200 });
+    expect(hasEnded(store, { tag: B, at: 200 }, cookies)).toBe(false);
+    expect(hasEnded(store, { tag: A, at: 300 }, cookies)).toBe(true);
+    // N3: storage works at A's sign-out and refuses at the next sign-in.
+    const later = memoryStore();
+    observeSession(later, A, 100);
+    endAfterLogout(later, A, jar());
+    const refusing = { ...later, setItem: fail };
+    expect(observeSession(refusing, B, 200)).toBeNull();
+    expect(hasEnded(refusing, { tag: B, at: 200 }, jar())).toBe(false);
   });
 });

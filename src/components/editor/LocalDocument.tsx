@@ -45,7 +45,7 @@ import {
 
 import type { CanonicalDocument } from "@/domain/document";
 import {
-  browserMarkStore, currentSession, hasEnded, SESSION_END_CHANNEL, type SessionMark,
+  browserMarkStore, currentSession, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
 } from "@/client/session-marks";
 import { localChip, type LocalChip } from "@/domain/sync/labels";
 import type { SyncState } from "@/domain/sync/states";
@@ -58,7 +58,6 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
-import { endSignOut, followLogoutNatively, postLogout, resumePendingLogout } from "@/client/pending-logout";
 import { signInHref, signInTarget, SIGN_IN_DEFAULT_TARGET } from "@/components/auth/sign-in-link";
 import {
   editorSignOutPlan, planAfterDiscard, readLogoutHold, untilLoaded, withinHoldLimit, type HoldRead,
@@ -118,12 +117,8 @@ type LocalDocumentValue = {
   prepareSignOut: () => Promise<LogoutPlan | "leave">;
   /** Writing goes on after the dialog was left with "Ostani". */
   staySignedIn: () => void;
-  /**
-   * Ends the session on this device whatever the server answers (D-118,
-   * #1330): "server" once the logout route answered, "device" when it did not
-   * and its part waits for the connection (pending-logout).
-   */
-  signOut: () => Promise<"server" | "device">;
+  /** Ends the session; resolves true once the logout route has answered. */
+  signOut: () => Promise<boolean>;
   /**
    * F-154 (owner decision 1.3): deletes what this device holds of the work
    * after its submission. Rejects unless this tab holds the lock and the
@@ -213,7 +208,7 @@ export function LocalDocumentProvider({
   const channelRef = useRef<BroadcastChannel | null>(null);
   // Whose journal the sheet shows (`scope` and document), or null while it is empty.
   const sheetOwnerRef = useRef<string | null>(null);
-  // How this tab stops once its session has ended (set while the journal effect runs).
+  // How this tab stops once its session has ended.
   const stopRef = useRef<(() => void) | null>(null);
   const markTag = session?.tag ?? null;
   const markAt = session?.at ?? 0;
@@ -599,39 +594,70 @@ export function LocalDocumentProvider({
 
   const staySignedIn = () => logoutRef.current?.resume();
 
-  const signOut = async (): Promise<"server" | "device"> => {
+  const signOut = async (): Promise<boolean> => {
     const locked = logoutRef.current;
     const store = browserMarkStore();
-    const before = currentSession(store)?.tag ?? null;
+    // Taken now: a session that becomes current meanwhile stays (#1444).
+    const own = markTag ?? currentSession(store)?.tag ?? null;
     const reached = await postLogout();
-    // The session has ended here either way: every tab of it stops, and so
-    // does the session the browser held last if it was another one. Without
-    // an answer the cookie may still be valid on the server, so the route is
-    // called again later (SessionObserver); nothing unconfirmed is deleted,
-    // and a sign-in made meanwhile in another tab is kept (endSignOut).
-    const ended = endSignOut(store, markTag, before, reached);
+    // Ended here either way; without an answer nothing calls the route again.
+    const ended = endAfterLogout(store, own);
     for (const tag of ended) channelRef.current?.postMessage(tag);
     if (editor && !editor.isDestroyed) {
       editor.setEditable(false, false);
       startFreshHistory(editor.view, "empty");
     }
     sheetOwnerRef.current = null;
-    // A deletion that fails leaves the record here, bound to this person, as
-    // a sign-out may (D-118); the session has ended all the same.
+    // Unconfirmed work stays for this person's next sign-in (D-118).
     await (locked ? locked.clear() : clearWithoutEditor(scope, documentId)).catch(() => undefined);
-    if (reached) return "server";
-    // This tab stays: it stops for good, as a tab of an ended session does.
+    if (reached) return true;
     if (stopRef.current) stopRef.current();
     else setPhase("signed-out");
-    // The connection may have come back while the route was not answering.
-    if (typeof navigator !== "undefined" && navigator.onLine) resumePendingLogout();
-    return "device";
+    return false;
   };
 
   const value: LocalDocumentValue = {
     editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut, discardAfterSubmission,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
+}
+
+/** How long a sign-out waits for the logout route before it ends on the device. */
+const LOGOUT_TIMEOUT_MS = 8_000;
+
+/**
+ * POST to the logout route; true only for its redirect, which comes after
+ * the session was closed and the cookie cleared. A lost request, an error
+ * status and no answer within the time limit are false.
+ */
+async function postLogout(): Promise<boolean> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), LOGOUT_TIMEOUT_MS);
+  try {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST", redirect: "manual", cache: "no-store", signal: abort.signal,
+    });
+    return response.type === "opaqueredirect";
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * After a successful `postLogout`: the same POST once more, natively, so the
+ * browser follows the route's redirect on to the provider's logout (DAN-212);
+ * the fetch cannot follow it. It arrives without the cookie, so it closes
+ * nothing twice. A form of its own, so it holds while the page re-renders.
+ */
+function followLogoutNatively(): void {
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = "/api/auth/logout";
+  form.hidden = true;
+  document.body.append(form);
+  form.submit();
 }
 
 /**
@@ -729,12 +755,8 @@ export function LocalEditor() {
 }
 
 /**
- * The way back for a tab whose session has ended (#1336): a new sign-in
- * through the login route (AAI@EduHr, D-09), back to this page. Not through
- * /prijava: after a sign-out the server never got, the cookie is still there
- * and /prijava would forward straight back here (#1444). The new sign-in
- * closes the session of that cookie on the server. The address is read on
- * click, so the server renders the same.
+ * A new sign-in through the login route (D-09), back to this page; /prijava
+ * would forward a kept cookie straight back here (#1444).
  */
 function SignInAgain() {
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -825,9 +847,7 @@ export function LocalLogout() {
   const [preparing, setPreparing] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
   const [working, setWorking] = useState(false);
-  // The sign-out ended on this device without the server's answer (#1330).
   const [signedOutHere, setSignedOutHere] = useState(false);
-  // What the dialog would show, for one opened only to say the sign-out ended here.
   const preparedRef = useRef<LogoutPlan>({ unsaved: false, pending: null });
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -854,21 +874,19 @@ export function LocalLogout() {
   const confirm = () => {
     if (working) return;
     setWorking(true);
-    // Ended here either way (D-118): without the server's answer the dialog
-    // says so, opening if it was not open; it offers no second try.
-    const endedHere = () => {
+    // Without the server's answer the dialog says it ended here (D-118).
+    const failure = () => {
       setPlan((open) => open ?? preparedRef.current);
       setSignedOutHere(true);
       setWorking(false);
     };
     void signOut().then((done) => {
-      if (done === "server") followLogoutNatively();
-      else endedHere();
-    }, endedHere);
+      if (done) followLogoutNatively();
+      else failure();
+    }, failure);
   };
   const stay = () => {
     setPlan(null);
-    // The session has ended: nothing resumes.
     if (!signedOutHere) staySignedIn();
   };
   // Focus goes back to "Odjava" once the dialog has closed: while the modal

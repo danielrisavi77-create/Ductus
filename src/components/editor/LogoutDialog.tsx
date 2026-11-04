@@ -16,10 +16,8 @@
  * After a submission the server confirmed, what this device holds of the
  * work is offered for deletion the same way, with two clicks (F-154, owner
  * decision 1.3). "Odjavi se" still leaves it on this device (D-118).
- *
- * A sign-out the server did not answer has still ended here (#1330): the
- * dialog then only says so, and what stays for the next sign-in, and offers
- * "Zatvori". It offers no second try: the server's part follows by itself.
+ * Without the server's answer the sign-out has still ended here (#1330): the
+ * dialog only says so and offers "Zatvori", no second try (#1444).
  */
 
 import { useEffect, useId, useRef, useState, type MouseEvent, type RefObject, type SyntheticEvent } from "react";
@@ -47,10 +45,7 @@ export type LogoutDialogProps = {
   plan: LogoutPlan;
   /** A sign-out is running; the dialog cannot be left meanwhile. */
   working: boolean;
-  /**
-   * The sign-out ended on this device without the server's answer (#1330):
-   * nothing else is offered, and "Ostani" becomes "Zatvori".
-   */
+  /** The sign-out ended on this device without the server's answer (#1330). */
   signedOutHere: boolean;
   onConfirm: () => void;
   onStay: () => void;
@@ -144,7 +139,7 @@ export default function LogoutDialog({
     }
   }, [afterDiscard]);
 
-  // The sign-out ended here (#1330): its buttons are gone, "Zatvori" takes the focus.
+  // Its buttons are gone, so "Zatvori" takes the focus.
   useEffect(() => {
     if (signedOutHere) stayRef.current?.focus();
   }, [signedOutHere]);
@@ -304,12 +299,7 @@ function Intro({ textId, text, note }: { textId: string; text: string; note: str
   );
 }
 
-/**
- * The dialog's live region. A sign-out without the server's answer says
- * there that it has ended on this device and, when something stays here,
- * that it goes on at the next sign-in (#1330). The region exists before its
- * text, so the text is announced. Its own element for the term scan.
- */
+/** The live region, there before its text so it is announced. Its own element for the term scan. */
 function Alert({ signedOutHere, kept, textId, discardFailed }: {
   signedOutHere: boolean; kept: boolean; textId: string; discardFailed: boolean;
 }) {
@@ -322,7 +312,6 @@ function Alert({ signedOutHere, kept, textId, discardFailed }: {
   );
 }
 
-/** The one action once the sign-out ended here: close the dialog (#1330). */
 function CloseAction({ stayRef, onClose }: { stayRef: RefObject<HTMLButtonElement | null>; onClose: () => void }) {
   return (
     <div className={styles.actions}>

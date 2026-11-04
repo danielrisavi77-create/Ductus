@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
@@ -104,220 +104,120 @@ test("rows 2, 3 and 5: a local change does not hold the session open; the text w
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
 });
 
-// #1330 (D-118): a sign-out without the server's answer still ends the
-// session here; the server's part follows once a page reaches the route.
-test("row 3: a sign-out the server never got ends the session on this device, and the server's part follows", async ({ page, context }) => {
-  await signIn(page, "/rad");
-  const token = (await appCookie(context, SESSION_COOKIE))!.value;
-  await writeAndWait(page, "Nacrt A: plava bilježnica");
-  await page.route("**/api/auth/logout", (route) => route.abort("internetdisconnected"));
+/** localStorage refuses these calls for the app's own keys (#1444, K3). */
+function refuseStorage(calls: readonly string[]): void {
+  for (const call of calls) {
+    const original = Reflect.get(Storage.prototype, call) as (this: Storage, ...args: string[]) => unknown;
+    Reflect.set(Storage.prototype, call, function (this: Storage, ...args: string[]) {
+      if (!args[0]?.startsWith("ductus-")) return original.apply(this, args);
+      throw new DOMException("Storage refused.", call === "setItem" ? "QuotaExceededError" : "SecurityError");
+    });
+  }
+}
 
-  const dialog = logoutDialogOf(page);
-  await clickSignOut(page);
-  await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice);
-  await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutKept);
-  // No second try and no export: the one button closes the dialog.
-  await expect(dialog.getByRole("button")).toHaveText([t.auth.logoutClose]);
-  await expect(dialog.getByRole("button", { name: t.auth.logoutClose })).toBeFocused();
-  // Ended on this device: no text, no writing.
-  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
-  await expect(editorOf(page)).toHaveText("");
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
-  // The server has not heard of it yet; what was written stays for this person.
-  await expectStillSignedIn(page, token);
-  expect(await journalNames(page)).toHaveLength(1);
+// #1444 (K1-K4, N2-N4): a 503, no network or no answer in 8 s ends the
+// sign-out on this device for every tab of the session, and nothing sends it
+// again. A reload under the kept cookie shows no text, also where localStorage
+// refuses the record; "Prijavi se" signs in anew and the text is back.
+for (const [answer, broken, when] of [
+  ["503", [], "before"], ["network", ["setItem"], "before"],
+  ["timeout", ["getItem", "setItem", "removeItem"], "before"], ["503", ["setItem"], "after"],
+] as const) {
+  test(`row 3: ${answer}, storage refusing [${broken.join(", ")}] ${when}: the sign-out ends here, once`, async ({ page, context }) => {
+    test.setTimeout(120_000);
+    await signIn(page, "/rad");
+    const token = (await appCookie(context, SESSION_COOKIE))!.value;
+    await writeAndWait(page, " Nacrt C: smeđa mapa");
+    const other = await context.newPage();
+    await other.goto("/rad");
+    await editorMounted(other);
+    if (when === "before") {
+      for (const tab of [page, other]) await tab.evaluate(refuseStorage, broken);
+      await context.addInitScript(refuseStorage, broken);
+    }
+    const logouts: string[] = [];
+    context.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/auth/logout") logouts.push(request.method());
+    });
+    await page.route("**/api/auth/logout", async (route) => {
+      if (answer === "503") await route.fulfill({ status: 503, body: "" });
+      if (answer === "network") await route.abort("internetdisconnected");
+    });
 
-  await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(noticeOf(page)).toContainText(t.auth.signedOutElsewhere);
-  await expect(noticeOf(page).getByRole("link", { name: t.auth.signInAgain })).toBeVisible();
-  await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
+    const dialog = logoutDialogOf(page);
+    await clickSignOut(page);
+    await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice, { timeout: 15_000 });
+    await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutKept);
+    await expect(dialog.getByRole("button")).toHaveText([t.auth.logoutClose]);
+    await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+    expect((await appCookie(context, "ductus-ended"))?.value).toMatch(/^[0-9A-Za-z_-]+$/);
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await other.reload();
+    for (const tab of [page, other]) {
+      await expect(phaseOf(tab)).toHaveAttribute("data-phase", "signed-out");
+      await expect(editorOf(tab)).toHaveText("");
+      await expect(tab.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
+    }
+    await other.close();
+    await page.reload();
+    await expect(editorOf(page)).toHaveText("");
+    await expectStillSignedIn(page, token);
+    expect(await journalNames(page)).toHaveLength(1);
 
-  // A page loaded under the old cookie, still without the server: nothing shows.
-  await page.reload();
-  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
-  await expect(editorOf(page)).toHaveText("");
-  await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
-  await expectStillSignedIn(page, token);
+    // "Prijavi se" with the kept cookie: the login route, back to /rad.
+    if (when === "after") await context.addInitScript(refuseStorage, broken);
+    await forgetProviderLogin(context);
+    const logins: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/auth/login") logins.push(request.url());
+    });
+    await noticeOf(page).getByRole("link", { name: t.auth.signInAgain }).click();
+    await page.getByRole("button", { name: "Demo studentica" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/rad`);
+    expect(logins).toEqual([`${APP_ORIGIN}/api/auth/login?returnTo=%2Frad`]);
+    expect((await appCookie(context, SESSION_COOKIE))!.value).not.toBe(token);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page)).toContainText("Nacrt C: smeđa mapa");
+    expect(logouts).toEqual(["POST"]);
+  });
+}
 
-  // The connection is back: the page completes the sign-out by itself.
-  await page.unroute("**/api/auth/logout");
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await page.waitForURL(`${APP_ORIGIN}/`);
-  await expect.poll(async () => (await sessionRow(token))?.close_reason).toBe("logout");
-  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
-  expect(await page.evaluate(() => localStorage.getItem("ductus-logout-pending"))).toBeNull();
-
-  // The same person signs in again and goes on with the record.
-  await forgetProviderLogin(context);
-  await signIn(page, "/rad");
-  await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-});
-
-test("row 3: with nothing held, the sign-out without the server opens the dialog only to say it ended here; the next page completes it", async ({ page, context }) => {
-  await signIn(page, "/rad");
-  const token = (await appCookie(context, SESSION_COOKIE))!.value;
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-  await page.route("**/api/auth/logout", (route) => route.abort("internetdisconnected"));
-
-  // Nothing is held, so "Odjava" posts at once (O1); the dialog opens only now.
-  const dialog = logoutDialogOf(page);
-  await logoutOf(page).click();
-  await expect(dialog.getByRole("alert")).toHaveText(t.auth.logoutDevice);
-  await expect(dialog.getByRole("button")).toHaveText([t.auth.logoutClose]);
-  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
-  await expectStillSignedIn(page, token);
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-
-  // The next page load reaches the route and completes the sign-out.
-  await page.unroute("**/api/auth/logout");
-  await page.goto("/rad");
-  await page.waitForURL(`${APP_ORIGIN}/`);
-  await expect.poll(async () => (await sessionRow(token))?.close_reason).toBe("logout");
-  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
-});
-
-// #1444 (review c.6588776166, QA c.6588844375): another person signs in in a
-// second tab while the sign-out still waits for the route, before anything
-// is recorded. Only the session the request carried ends; the newer one stays.
+// #1444 (N1): another person signs in in a second tab while the sign-out
+// waits; when it runs out, only the session the sign-out belongs to ends.
 test("Istodobnost: a sign-in in another tab while the sign-out waits keeps the newer session signed in", async ({ page, context }) => {
   await signIn(page, "/rad");
-  const tokenA = (await appCookie(context, SESSION_COOKIE))!.value;
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-  let held: Route | undefined;
-  await page.route("**/api/auth/logout", (route) => { held = route; });
-
-  // Nothing is held, so "Odjava" posts at once (O1); the request now waits.
+  const logouts: string[] = [];
+  context.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/logout") logouts.push(request.method());
+  });
+  await page.route("**/api/auth/logout", () => {});
   await logoutOf(page).click();
-  await expect.poll(() => held !== undefined).toBe(true);
+  await expect.poll(() => logouts).toEqual(["POST"]);
 
   await forgetProviderLogin(context);
   const second = await context.newPage();
   await signIn(second, "/rad", "Demo student 2");
   const tokenB = (await appCookie(context, SESSION_COOKIE))!.value;
-  expect(tokenB).not.toBe(tokenA);
-  await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
-
-  const logouts: string[] = [];
-  context.on("request", (request) => {
-    if (new URL(request.url()).pathname === "/api/auth/logout") logouts.push(request.url());
-  });
-  // A's request never gets its answer.
-  await held!.abort("timedout");
-  await expect(logoutDialogOf(page).getByRole("alert")).toHaveText(t.auth.logoutDevice);
-  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
-
-  // The route is reachable again, and a page of the first tab loads: a record
-  // of A's sign-out would be completed here, under B's cookie.
-  // The second tab still holds the document, so this one opens it under B as
-  // "blocked", never "signed-out".
-  await page.unroute("**/api/auth/logout");
-  await page.goto("/rad");
-  await editorMounted(page);
-  await expect(phaseOf(page)).toHaveAttribute("data-phase", "blocked");
-  // With the first tab gone, B's own page loads again and writes.
-  await page.close();
+  await writeAndWait(second, "Nacrt D: crveni papir");
+  await expect(logoutDialogOf(page).getByRole("alert")).toHaveText(t.auth.logoutDevice, { timeout: 15_000 });
   await second.reload();
   await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
-  expect(logouts).toEqual([]);
+  await expect(editorOf(second)).toContainText("Nacrt D: crveni papir");
   await expectStillSignedIn(second, tokenB);
-  expect(await second.evaluate(() => localStorage.getItem("ductus-logout-pending"))).toBeNull();
+  expect(logouts).toEqual(["POST"]);
 });
 
-// #1444 (review c.6590579384, QA c.6590647037): localStorage refuses the
-// record of the ended session (full, or not readable either) and the server
-// refuses the sign-out. A reload under the cookie that stays still shows
-// nothing; the text waits in the journal for the same person's next sign-in.
-// Class 1 (the write succeeds) is row 3 above.
-for (const [name, broken] of [
-  ["class 2: the write throws QuotaExceededError, reads work", ["setItem"]],
-  ["class 3: neither reads nor writes work", ["getItem", "setItem", "removeItem"]],
-] as const) {
-  test(`${name}: a reload after a sign-out the server refused does not reopen the text`, async ({ page, context }) => {
-    await signIn(page, "/rad");
-    const token = (await appCookie(context, SESSION_COOKIE))!.value;
-    await writeAndWait(page, " Nacrt C: smeđa mapa");
-    const breakStorage = (calls: readonly string[]) => {
-      for (const call of calls) {
-        const original = Reflect.get(Storage.prototype, call) as (this: Storage, ...args: string[]) => unknown;
-        Reflect.set(Storage.prototype, call, function (this: Storage, ...args: string[]) {
-          if (args[0]?.startsWith("ductus-")) {
-            throw new DOMException("Storage refused.", call === "setItem" ? "QuotaExceededError" : "SecurityError");
-          }
-          return original.apply(this, args);
-        });
-      }
-    };
-    await page.evaluate(breakStorage, broken);
-    await page.addInitScript(breakStorage, broken);
-    await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503, body: "" }));
-
-    const dialog = logoutDialogOf(page);
-    await clickSignOut(page);
-    await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice);
-    await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
-    await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
-    await expectStillSignedIn(page, token);
-
-    for (const path of ["/rad", null]) {
-      if (path === null) await page.reload();
-      else await page.goto(path);
-      await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
-      await expect(editorOf(page)).toHaveText("");
-      await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
-      await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
-      await expectStillSignedIn(page, token);
-      expect(await journalNames(page)).toHaveLength(1);
-    }
-
-    // The same person signs in anew: a new session opens and the text is back.
-    await forgetProviderLogin(context);
-    await signIn(page, "/rad");
-    const renewed = (await appCookie(context, SESSION_COOKIE))!.value;
-    expect(renewed).not.toBe(token);
-    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-    await expect(editorOf(page)).toContainText("Nacrt C: smeđa mapa");
-  });
-}
-
-// #1444 (review c.6588776166): the sign-out ended on this device, the server
-// refused it and the cookie stays. "Prijavi se" is a new sign-in through the
-// login route, back to the same page, never a loop through /prijava.
-test("after a sign-out the server refused, Prijavi se signs in anew and comes back to the page", async ({ page, context }) => {
+// N2: the server answers; the fence is in the cookie as well.
+test("a sign-out the server answered also leaves the ended mark in the cookie", async ({ page, context }) => {
   await signIn(page, "/rad");
-  const token = (await appCookie(context, SESSION_COOKIE))!.value;
-  await writeAndWait(page, " Nacrt B: zelena olovka");
-  await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503, body: "" }));
-
-  const dialog = logoutDialogOf(page);
+  await writeAndWait(page, " Nacrt E: bijela kreda");
+  await context.addInitScript(refuseStorage, ["setItem"]);
+  await page.evaluate(refuseStorage, ["setItem"]);
   await clickSignOut(page);
-  await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice);
-  await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
-  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
-  await expectStillSignedIn(page, token);
-
-  // Still 503, still the old cookie: the click leads to the provider.
-  await forgetProviderLogin(context);
-  const logins: string[] = [];
-  page.on("request", (request) => {
-    if (new URL(request.url()).pathname === "/api/auth/login") logins.push(request.url());
-  });
-  await noticeOf(page).getByRole("link", { name: t.auth.signInAgain }).click();
-  await expect(page).toHaveURL(/^http:\/\/localhost:8090\/interaction\//);
-  expect(logins).toEqual([`${APP_ORIGIN}/api/auth/login?returnTo=%2Frad`]);
-  await page.getByRole("button", { name: "Demo studentica" }).click();
-  await page.waitForURL(`${APP_ORIGIN}/rad`);
-
-  // A new session; the one whose sign-out the server refused is closed by it.
-  const renewed = (await appCookie(context, SESSION_COOKIE))!.value;
-  expect(renewed).not.toBe(token);
-  expect(await sessionRow(renewed)).toMatchObject({ closed_at: null });
-  expect((await sessionRow(token))?.closed_at).not.toBeNull();
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-  await expect(editorOf(page)).toContainText("Nacrt B: zelena olovka");
-  await expect(noticeOf(page).getByRole("link", { name: t.auth.signInAgain })).toHaveCount(0);
+  await page.waitForURL(`${APP_ORIGIN}/`);
+  expect((await appCookie(context, "ductus-ended"))?.value).toMatch(/^[0-9A-Za-z_-]+$/);
+  await page.goto("/rad");
+  await expect(page.getByText("Nacrt E")).toHaveCount(0);
 });
 
 // D-183 (#1330, #1336): the dialog of a sign-out that ended on this device and
@@ -350,9 +250,8 @@ test("D-183: the sign-out that ended on this device and the sheet after it, both
     await expect(noticeOf(page).getByRole("link", { name: t.auth.signInAgain })).toBeVisible();
     await shoot(`prijava-ne-vrijedi-${theme}`, 400);
     await shoot(`prijava-ne-vrijedi-${theme}`, 1440);
+    // Nothing calls the route again; the next pass signs in anew (K4).
     await page.unroute("**/api/auth/logout");
-    await page.evaluate(() => window.dispatchEvent(new Event("online")));
-    await page.waitForURL(`${APP_ORIGIN}/`);
   }
 });
 
@@ -556,7 +455,7 @@ test("FE-D7: Escape, the backdrop or a browser close during a sign-out leave the
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
   await expect(editorOf(page)).toHaveText("");
 
-  // The sign-out button still works: it leaves, and the next page completes the sign-out.
+  // Pressed again, "Odjava" reaches the route this time and leaves.
   await page.unroute("**/api/auth/logout");
   await logoutOf(page).click();
   await page.waitForURL(`${APP_ORIGIN}/`);
