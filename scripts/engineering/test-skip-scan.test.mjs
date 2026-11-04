@@ -100,7 +100,9 @@ function destructured(n) {
     [n, p] = [p.parent, p.parent.parent];
   while (
     ts.isPropertyAssignment(p) ||
-    ts.isShorthandPropertyAssignment(p) ||
+    // A default (`{ opts = { skip: true } } = {}`) is options, not the pattern.
+    (ts.isShorthandPropertyAssignment(p) &&
+      p.objectAssignmentInitializer !== n) ||
     ts.isArrayLiteralExpression(p) ||
     ts.isSpreadElement(p) ||
     ts.isSpreadAssignment(p) ||
@@ -118,6 +120,7 @@ function destructured(n) {
   }
   if ((ts.isForOfStatement(p) || ts.isForInStatement(p)) && p.initializer === n)
     return p.expression;
+  if (ts.isParameter(p) && p.name === n) return p.initializer ?? null;
   return undefined;
 }
 const fromRoot = (value) => !!value && ROOTS.has(rootName(value) ?? "");
@@ -267,6 +270,20 @@ const CASES = [
   ["for (const { only } of describe);", "for (const { only } of list);"],
   // Codex 4467382377: a nested pattern keeps the source it destructures.
   ["const { test: { skip } } = test;", "const { test: { skip } } = cfg;"],
+  // Codex 4467635949: a parameter default is the source of its pattern.
+  [
+    "function f({ skip } = test) { return skip; }",
+    "function f({ skip } = cfg) { return skip; }",
+  ],
+  [
+    "const f = ({ only } = describe) => only;",
+    "const f = ({ only } = opts) => only;",
+  ],
+  // Codex 4467635962: a default inside an assignment pattern is an options object.
+  [
+    "let opts; ({ opts = { skip: true } } = {});",
+    "let opts; ({ opts = { timeout: 1 } } = {});",
+  ],
   // K4: names are compared cooked.
   ["t.sk\\u0069p();", "t.sk\\u0069pped();"],
   ["t.\\u{73}kip();", "t.\\u{73}kips();"],
