@@ -5,6 +5,7 @@ import pg from "pg";
 
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { localAdminUrl } from "./local-db-url";
+import { APP_ORIGIN, APP_ORIGIN_PATTERN } from "./origin";
 
 // Shared by the specs that log in through the fake provider against
 // `next dev` (playwright.login.config.ts). The demo accounts are invented
@@ -58,11 +59,11 @@ export async function sessionRow(token: string): Promise<SessionRow | undefined>
 }
 
 export async function appCookie(context: BrowserContext, name: string) {
-  return (await context.cookies("http://localhost:3000")).find((c) => c.name === name);
+  return (await context.cookies(APP_ORIGIN)).find((c) => c.name === name);
 }
 
 /** Where "/" sends a signed-in person: the teacher's page or the workspace (DAN-325). */
-export const ROLE_HOME = /^http:\/\/localhost:3000\/(rad|nastavnik)$/;
+export const ROLE_HOME = new RegExp(`^${APP_ORIGIN_PATTERN}\\/(rad|nastavnik)$`);
 
 /** A button on the provider's "Demo prijava" page (infra/fake-oidc). */
 export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik" | "Demo nastavnica";
@@ -75,13 +76,13 @@ export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik
 export async function signIn(page: Page, returnTo: string, account: DemoAccount = "Demo studentica"): Promise<string> {
   const callbacks: string[] = [];
   page.on("request", (request) => {
-    if (request.url().startsWith("http://localhost:3000/api/auth/callback")) callbacks.push(request.url());
+    if (request.url().startsWith(`${APP_ORIGIN}/api/auth/callback`)) callbacks.push(request.url());
   });
   await page.goto(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`);
   await expect(page).toHaveURL(/^http:\/\/localhost:8090\/interaction\//);
   await expect(page.getByRole("heading", { level: 1, name: "Demo prijava" })).toBeVisible();
   await page.getByRole("button", { name: account }).click();
-  await page.waitForURL(returnTo === "/" ? ROLE_HOME : `http://localhost:3000${returnTo}`);
+  await page.waitForURL(returnTo === "/" ? ROLE_HOME : `${APP_ORIGIN}${returnTo}`);
   expect(callbacks).toHaveLength(1);
   return callbacks[0]!;
 }
@@ -118,7 +119,7 @@ export async function clickSignOut(page: Page): Promise<void> {
  */
 export async function signOutWithoutDialog(page: Page): Promise<void> {
   await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
 }
 
 /**
@@ -130,7 +131,7 @@ export async function signOutWithoutDialog(page: Page): Promise<void> {
 export async function signOutHoweverHeld(page: Page): Promise<void> {
   await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
   const confirm = logoutDialogOf(page).getByRole("button", { name: messagesHr.auth.logoutConfirm });
-  const home = page.waitForURL("http://localhost:3000/");
+  const home = page.waitForURL(`${APP_ORIGIN}/`);
   const first = await Promise.race([
     home.then(() => "home" as const),
     confirm.waitFor({ state: "visible" }).then(() => "dialog" as const, () => "home" as const),

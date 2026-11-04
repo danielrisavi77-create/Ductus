@@ -8,6 +8,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { signIn, type DemoAccount } from "./support";
 import { admin, openWorkOf, STUDENT, TEACHER } from "./work-seed";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-492 (M2.6-P02, N-16; contract on #1091, c.6578099855): the works a
 // teacher mentors, on /nastavnik/mentorstva, from GET-side read DAN-477 alone.
@@ -145,7 +146,7 @@ test("the mentor sees each work by surname, in words, and opens the live view of
   const live = rows.nth(0).getByRole("link", { name: t.open });
   await expect(live).toHaveAttribute("href", `/nastavnik/rad/${encodeURIComponent(document)}`);
   await live.click();
-  await expect(page).toHaveURL(`http://localhost:3000/nastavnik/rad/${encodeURIComponent(document)}`);
+  await expect(page).toHaveURL(`${APP_ORIGIN}/nastavnik/rad/${encodeURIComponent(document)}`);
   await expect(page.getByRole("heading", { level: 1, name: messagesHr.liveView.context })).toBeAttached({ timeout: OPEN });
   await expect(page.getByText(messagesHr.liveView.invalid)).toHaveCount(0);
   await page.context().close();
