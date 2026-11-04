@@ -502,10 +502,16 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await page.goto("/upis");
     page.on("request", observe);
     try {
-      await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
+      // A fill before hydration sets only the DOM value: the controlled input keeps "" and the
+      // button stays disabled (WebKit, run 41782517938). Fill again until the form has the code.
+      const submitButton = page.getByRole("button", { name: t.student.enroll.submit });
+      await expect(async () => {
+        await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
+        await expect(submitButton).toBeEnabled({ timeout: 1_000 });
+      }).toPass({ timeout: 30_000 });
       const response = page.waitForResponse((r) =>
         new URL(r.url()).pathname === "/api/institution/enrollments" && r.request().method() === "POST");
-      await page.getByRole("button", { name: t.student.enroll.submit }).click();
+      await submitButton.click();
       const enrolled = await response;
       enrolledCourse = course;
       expect(enrolled.status()).toBe(200);

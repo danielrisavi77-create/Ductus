@@ -304,6 +304,7 @@ jobs:
         with:
           name: e2e-shard-${{ matrix.shard }}
           path: .ci-reports/
+          overwrite: true
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -314,6 +315,7 @@ jobs:
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
+          overwrite: true
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs
@@ -464,12 +466,16 @@ jobs:
         env:
           LOGIN_E2E_JSON: .ci-reports/results.json
         run: pnpm test:e2e:login --project="$(cat .ci-reports/project.txt)" --test-list .ci-reports/test-list.txt
+      # A re-run of a failed shard keeps the earlier attempt's artifact under the
+      # same name, and the inventory download can pick that stale one (run
+      # 41782517938). overwrite replaces it, so the inventories read this attempt.
       - name: Upload login shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: login-shard-${{ matrix.shard }}
           path: .ci-reports/
+          overwrite: true
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -479,6 +485,7 @@ jobs:
         with:
           name: playwright-report-login-${{ matrix.shard }}
           path: playwright-report-login/
+          overwrite: true
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs
