@@ -114,8 +114,11 @@ test.describe("sources panel (DAN-343)", () => {
     const before = await blocksOf(page);
     await tab.getByRole("button", { name: t.add }).click();
     await fill(tab, { [t.year]: "21" });
-    await tab.getByRole("button", { name: t.addAndCite }).click();
     const alert = tab.getByRole("alert");
+    // DAN-484 K3: an empty field and a malformed year are named only after a click.
+    await expect(alert).toHaveCount(0);
+    await expect(tab.getByLabel(t.family, { exact: true })).not.toHaveAttribute("aria-invalid", "true");
+    await tab.getByRole("button", { name: t.addAndCite }).click();
     await expect(alert).toContainText(t.required.replace("{field}", t.family));
     await expect(alert).toContainText(t.yearInvalid);
     await expect(tab.getByLabel(t.family, { exact: true })).toHaveAttribute("aria-invalid", "true");
@@ -124,26 +127,47 @@ test.describe("sources panel (DAN-343)", () => {
     await expect(tab.getByRole("button", { name: t.add })).toBeFocused();
   });
 
-  // F-154 point 2, QA on #866 (c.6567210898): a field longer than its limit is
-  // refused with a message and nothing is written; it is never cut to fit.
-  test("a field longer than its limit is refused, never cut", async ({ page }) => {
+  // F-154 point 2, QA on #866 (c.6567210898), DAN-484 K1, K2, N4: a field
+  // longer than its limit is named as it is typed or pasted, before any click,
+  // and nothing is written; it is never cut to fit.
+  test("a field longer than its limit is named while typing or pasting, never cut", async ({ page }) => {
     const tab = await openSources(page, 1440);
     const before = await blocksOf(page);
     await tab.getByRole("button", { name: t.add }).click();
-    await fill(tab, {
-      [t.family]: "p".repeat(81), [t.given]: "Ana", [t.year]: "2021", [t.title]: "n".repeat(301),
-      [t.place]: "Zagreb", [t.publisher]: "Primjer", [t.citePage]: "1".repeat(21),
-    });
-    await expect(tab.getByLabel(t.title, { exact: true })).toHaveValue("n".repeat(301));
-    await tab.getByRole("button", { name: t.addOnly }).click();
-    await tab.getByRole("button", { name: t.addAndCite }).click();
     const alert = tab.getByRole("alert");
-    await expect(alert).toContainText(t.tooLong.replace("{field}", t.title).replace("{n}", "300"));
+    await expect(alert).toHaveCount(0);
+    await fill(tab, { [t.family]: "p".repeat(81), [t.citePage]: "1".repeat(21) });
     await expect(alert).toContainText(t.tooLong.replace("{field}", t.family).replace("{n}", "80"));
     await expect(alert).toContainText(t.pageTooLong.replace("{n}", "20"));
+    // Empty fields are named only after a click.
+    await expect(alert).not.toContainText(t.required.replace("{field}", t.title));
+
+    // N4: a real paste (cut and paste with the keyboard) into the title.
+    const title = tab.getByLabel(t.title, { exact: true });
+    await title.fill("n".repeat(301));
+    await title.press("ControlOrMeta+a");
+    await title.press("ControlOrMeta+x");
+    await expect(title).toHaveValue("");
+    await expect(alert).not.toContainText(t.tooLong.replace("{field}", t.title).replace("{n}", "300"));
+    await title.press("ControlOrMeta+v");
+    await expect(title).toHaveValue("n".repeat(301));
+    await expect(alert).toContainText(t.tooLong.replace("{field}", t.title).replace("{n}", "300"));
     for (const label of [t.title, t.family, t.citePage]) {
       await expect(tab.getByLabel(label, { exact: true })).toHaveAttribute("aria-invalid", "true");
     }
+
+    await fill(tab, { [t.given]: "Ana", [t.year]: "2021", [t.place]: "Zagreb", [t.publisher]: "Primjer" });
+    await tab.getByRole("button", { name: t.addOnly }).click();
+    await tab.getByRole("button", { name: t.addAndCite }).click();
+    await expect(title).toHaveValue("n".repeat(301));
+    expect(await blocksOf(page)).toEqual(before);
+
+    // K2: back within the limit, each message goes away as it is typed, without a click.
+    await title.fill("n".repeat(300));
+    await expect(alert).not.toContainText(t.tooLong.replace("{field}", t.title).replace("{n}", "300"));
+    await expect(title).not.toHaveAttribute("aria-invalid", "true");
+    await fill(tab, { [t.family]: "Horvat", [t.citePage]: "15" });
+    await expect(alert).toHaveCount(0);
     expect(await blocksOf(page)).toEqual(before);
   });
 
@@ -225,6 +249,12 @@ test.describe("sources panel (DAN-343)", () => {
         await expect(tab.locator('[data-preview="citation"]')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         await testInfo.attach(`sources-form-${theme}-${width}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+        // DAN-484: a title over its limit, named while it is typed.
+        await fill(tab, { [t.title]: "n".repeat(301) });
+        await expect(tab.getByRole("alert")).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        await noAxeFindings(page);
+        await testInfo.attach(`sources-too-long-${theme}-${width}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
       }
     });
   }
