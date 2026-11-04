@@ -28,6 +28,8 @@ Opseg M6.UX-R po odluci orkestratora (#1091): PR 1 M6.2 (S-34, N-09); PR 2 M6.3/
 | veliki rad | prikaz po odlomcima, reprodukcija se ne blokira; tekst odabranog odlomka prikazan je tijekom reprodukcije |
 | smanjeno kretanje | korak po koraku bez animacije; tipkovnica: razmaknica, strelice |
 | mentorovo gledanje (S-34) | u glavnom prikazu blok „Kad je Vaš mentor gledao reprodukciju”: datum i vrijeme svakog otvaranja i opseg (cijeli rad ili odlomak), bez trajanja; popis je dio dnevnika pristupa (`docs/PRODUCT.md` §6, D-56 uvjet 4, pravilo 17, D-150); stanje 3f „Vaš mentor još nije gledao reprodukciju.” |
+| napomena uz promjenu (S-34) | u glavnom prikazu unos „Napomena uz promjenu 1.284” s gumbom „Spremi napomenu”; stanje 1b prikazuje spremljenu napomenu s „Uredi” i „Obriši” (D-56 uvjet 4); napomena je vezana uz broj promjene, bez trajanja |
+| povijest odlomka (N-09, S-34) | u glavnom prikazu tablica „Povijest odlomka 2”: prethodne verzije odlomka, čime su zamijenjene i podrijetlo (oznaka izvora); ista za obje uloge (D-56 uvjet 6) |
 | stalni tekst | „Ritam pisanja ne govori ništa o autorstvu ni o trudu.” (`docs/PRODUCT.md` §6) u svakom stanju s reprodukcijom, uključujući prazninu u zapisu i veliki rad |
 
 Primjer je dosljedan kroz sva stanja: početci sesija su promjene 1, 640, 1.201, 2.071 i 3.012 (od 3.906); u svakoj su slici označene samo dionice trenutačne promjene (umetnuto s okvirom, obrisano prekriženo), a ranije promjene su običan tekst. Promjene 1.284 (utipkano) i 1.285 (zalijepljeno) su u sesiji 3, a 2.640 (primijenjeni prijedlog) u sesiji 4; skok na sesiju 3 prikazuje promjenu 1.201.
