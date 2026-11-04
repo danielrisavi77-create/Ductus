@@ -3594,6 +3594,25 @@ $$;
 
 
 --
+-- Name: check_rule_version_event(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.check_rule_version_event() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM audit.faculty_rule_event e
+                 WHERE e.institution_id = NEW.institution_id AND e.work_type = NEW.work_type
+                   AND e.version_no = NEW.version_no) THEN
+    RAISE EXCEPTION 'rule version without audit row' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+
+--
 -- Name: confirm_teacher_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4447,6 +4466,91 @@ $$;
 
 
 --
+-- Name: publish_faculty_rule_version(text, integer, text, text[], text, boolean); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.publish_faculty_rule_version(p_work_type text, p_expected_version integer, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_latest institution.faculty_rule_version;
+  v_current integer;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The role row FOR SHARE: a revocation waits for this transaction, and one
+  -- that committed first leaves no row to find.
+  PERFORM 1 FROM institution.institution_role r
+   WHERE r.institution_id = actor.institution_id AND r.user_id = actor.user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+   FOR SHARE OF r;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+
+  IF p_work_type IS NULL OR p_work_type NOT IN ('short_paper', 'essay', 'seminar_paper', 'bachelor_thesis',
+                                                'master_thesis', 'specialist_thesis', 'doctoral_thesis')
+     OR institution.ai_policy_rank(p_ai_policy) IS NULL
+     OR p_evidence_profile IS NULL OR p_evidence_profile NOT IN ('basic', 'extended')
+     OR p_import_allowed IS NULL
+     OR p_expected_version IS NULL OR p_expected_version < 0
+     OR p_ai_purposes IS NULL OR coalesce(pg_catalog.array_ndims(p_ai_purposes), 1) <> 1 THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- One dimension from here on, so array_position and unnest are safe.
+  IF coalesce(pg_catalog.array_lower(p_ai_purposes, 1), 1) <> 1
+     OR pg_catalog.cardinality(p_ai_purposes) > 5
+     OR pg_catalog.array_position(p_ai_purposes, NULL) IS NOT NULL
+     OR NOT p_ai_purposes <@ ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
+     OR (SELECT count(DISTINCT u) FROM pg_catalog.unnest(p_ai_purposes) AS u) <> pg_catalog.cardinality(p_ai_purposes)
+     OR (p_ai_policy = 'prohibited' AND pg_catalog.cardinality(p_ai_purposes) > 0) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+
+  -- Publications of one rule run one at a time; the next statement reads
+  -- what the one before committed.
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'faculty_rule_version:' || actor.institution_id::text || ':' || p_work_type, 0));
+  SELECT * INTO v_latest FROM institution.faculty_rule_version v
+   WHERE v.institution_id = actor.institution_id AND v.work_type = p_work_type
+   ORDER BY v.version_no DESC LIMIT 1;
+  v_current := coalesce(v_latest.version_no, 0);
+
+  IF p_expected_version <> v_current THEN
+    IF p_expected_version = v_current - 1
+       AND v_latest.published_by = actor.user_id
+       AND v_latest.ai_policy = p_ai_policy AND v_latest.ai_purposes = p_ai_purposes
+       AND v_latest.evidence_profile = p_evidence_profile AND v_latest.import_allowed = p_import_allowed THEN
+      RETURN v_current;
+    END IF;
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+
+  WITH published AS (
+    INSERT INTO institution.faculty_rule_version
+      (institution_id, work_type, version_no, ai_policy, ai_purposes, evidence_profile, import_allowed,
+       origin, published_by)
+    VALUES (actor.institution_id, p_work_type, v_current + 1, p_ai_policy, p_ai_purposes, p_evidence_profile,
+            p_import_allowed, 'administrator', actor.user_id)
+    RETURNING institution_id, work_type, version_no, published_by, published_at
+  )
+  INSERT INTO audit.faculty_rule_event (institution_id, work_type, version_no, kind, actor_id, occurred_at)
+  SELECT institution_id, work_type, version_no, 'published', published_by, published_at FROM published;
+
+  INSERT INTO institution.faculty_work_rule
+    (institution_id, work_type, ai_policy, ai_purposes, evidence_profile, import_allowed, updated_at)
+  VALUES (actor.institution_id, p_work_type, p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed, now())
+  ON CONFLICT (institution_id, work_type) DO UPDATE
+    SET ai_policy = EXCLUDED.ai_policy, ai_purposes = EXCLUDED.ai_purposes,
+        evidence_profile = EXCLUDED.evidence_profile, import_allowed = EXCLUDED.import_allowed,
+        updated_at = EXCLUDED.updated_at;
+  RETURN v_current + 1;
+END
+$$;
+
+
+--
 -- Name: refuse_change(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4456,6 +4560,20 @@ CREATE FUNCTION institution.refuse_change() RETURNS trigger
     AS $$
 BEGIN
   RAISE EXCEPTION 'assignment version is immutable' USING ERRCODE = 'ZD403';
+END
+$$;
+
+
+--
+-- Name: refuse_rule_version_change(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.refuse_rule_version_change() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'published rule version is immutable' USING ERRCODE = 'ZD403';
 END
 $$;
 
@@ -4986,6 +5104,24 @@ CREATE TABLE audit.enrollment_code_event (
 );
 
 ALTER TABLE ONLY audit.enrollment_code_event FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: faculty_rule_event; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.faculty_rule_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    work_type text NOT NULL,
+    version_no integer NOT NULL,
+    kind text NOT NULL,
+    actor_id uuid NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT faculty_rule_event_kind_check CHECK ((kind = 'published'::text))
+);
+
+ALTER TABLE ONLY audit.faculty_rule_event FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5675,6 +5811,34 @@ ALTER TABLE ONLY institution.enrollment_attempt FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: faculty_rule_version; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.faculty_rule_version (
+    institution_id uuid NOT NULL,
+    work_type text NOT NULL,
+    version_no integer NOT NULL,
+    ai_policy text NOT NULL,
+    ai_purposes text[] NOT NULL,
+    evidence_profile text NOT NULL,
+    import_allowed boolean NOT NULL,
+    origin text NOT NULL,
+    published_by uuid,
+    published_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT faculty_rule_version_ai_policy_check CHECK ((institution.ai_policy_rank(ai_policy) IS NOT NULL)),
+    CONSTRAINT faculty_rule_version_ai_purposes_check CHECK (((ai_purposes <@ ARRAY['formatting'::text, 'proofreading'::text, 'literature_search'::text, 'transcription'::text, 'translation'::text]) AND (cardinality(ai_purposes) <= 5) AND (COALESCE(array_ndims(ai_purposes), 1) = 1))),
+    CONSTRAINT faculty_rule_version_check CHECK (((origin = 'administrator'::text) = (published_by IS NOT NULL))),
+    CONSTRAINT faculty_rule_version_check1 CHECK (((ai_policy <> 'prohibited'::text) OR (cardinality(ai_purposes) = 0))),
+    CONSTRAINT faculty_rule_version_evidence_profile_check CHECK ((evidence_profile = ANY (ARRAY['basic'::text, 'extended'::text]))),
+    CONSTRAINT faculty_rule_version_origin_check CHECK ((origin = ANY (ARRAY['operator'::text, 'administrator'::text]))),
+    CONSTRAINT faculty_rule_version_version_no_check CHECK ((version_no >= 1)),
+    CONSTRAINT faculty_rule_version_work_type_check CHECK ((work_type = ANY (ARRAY['short_paper'::text, 'essay'::text, 'seminar_paper'::text, 'bachelor_thesis'::text, 'master_thesis'::text, 'specialist_thesis'::text, 'doctoral_thesis'::text])))
+);
+
+ALTER TABLE ONLY institution.faculty_rule_version FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: faculty_work_rule; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -5966,6 +6130,22 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_institution_id_work_type_version_no_kind_key; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.faculty_rule_event
+    ADD CONSTRAINT faculty_rule_event_institution_id_work_type_version_no_kind_key UNIQUE (institution_id, work_type, version_no, kind);
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.faculty_rule_event
+    ADD CONSTRAINT faculty_rule_event_pkey PRIMARY KEY (id);
 
 
 --
@@ -6609,6 +6789,22 @@ ALTER TABLE ONLY institution.enrollment_attempt
 
 
 --
+-- Name: faculty_rule_version faculty_rule_version_institution_id_work_type_version_no_pu_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_institution_id_work_type_version_no_pu_key UNIQUE (institution_id, work_type, version_no, published_by);
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_pkey PRIMARY KEY (institution_id, work_type, version_no);
+
+
+--
 -- Name: faculty_work_rule faculty_work_rule_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -6805,6 +7001,13 @@ CREATE INDEX enrollment_code_event_course_idx ON audit.enrollment_code_event USI
 
 
 --
+-- Name: faculty_rule_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX faculty_rule_event_institution_idx ON audit.faculty_rule_event USING btree (institution_id, occurred_at);
+
+
+--
 -- Name: mentorship_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
 --
 
@@ -6994,6 +7197,13 @@ CREATE INDEX enrollment_attempt_user_idx ON institution.enrollment_attempt USING
 
 
 --
+-- Name: faculty_rule_version_published_by_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX faculty_rule_version_published_by_idx ON institution.faculty_rule_version USING btree (published_by);
+
+
+--
 -- Name: institution_role_open_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
@@ -7131,6 +7341,20 @@ CREATE TRIGGER enrollment_code_event_append_only BEFORE DELETE OR UPDATE ON audi
 --
 
 CREATE TRIGGER enrollment_code_event_no_truncate BEFORE TRUNCATE ON audit.enrollment_code_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_event_append_only BEFORE DELETE OR UPDATE ON audit.faculty_rule_event FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_event_no_truncate BEFORE TRUNCATE ON audit.faculty_rule_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
 
 
 --
@@ -7372,6 +7596,27 @@ CREATE TRIGGER course_enrollment_code_institution_fill BEFORE INSERT ON institut
 
 
 --
+-- Name: faculty_rule_version faculty_rule_version_has_event; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER faculty_rule_version_has_event AFTER INSERT ON institution.faculty_rule_version DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN ((new.origin = 'administrator'::text)) EXECUTE FUNCTION institution.check_rule_version_event();
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_immutable; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_version_immutable BEFORE DELETE OR UPDATE ON institution.faculty_rule_version FOR EACH ROW EXECUTE FUNCTION institution.refuse_rule_version_change();
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_no_truncate; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_version_no_truncate BEFORE TRUNCATE ON institution.faculty_rule_version FOR EACH STATEMENT EXECUTE FUNCTION institution.refuse_rule_version_change();
+
+
+--
 -- Name: access_log access_log_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
 --
 
@@ -7449,6 +7694,14 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_version_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.faculty_rule_event
+    ADD CONSTRAINT faculty_rule_event_version_fkey FOREIGN KEY (institution_id, work_type, version_no, actor_id) REFERENCES institution.faculty_rule_version(institution_id, work_type, version_no, published_by);
 
 
 --
@@ -8028,6 +8281,22 @@ ALTER TABLE ONLY institution.enrollment_attempt
 
 
 --
+-- Name: faculty_rule_version faculty_rule_version_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES identity.institution(id);
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_published_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_published_by_institution_id_fkey FOREIGN KEY (published_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: faculty_work_rule faculty_work_rule_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -8312,6 +8581,19 @@ ALTER TABLE audit.enrollment_code_event ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY enrollment_code_event_owner ON audit.enrollment_code_event TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: faculty_rule_event; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.faculty_rule_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: faculty_rule_event faculty_rule_event_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY faculty_rule_event_owner ON audit.faculty_rule_event TO ductus_identity USING (true) WITH CHECK (true);
 
 
 --
@@ -8870,6 +9152,26 @@ CREATE POLICY enrollment_attempt_owner ON institution.enrollment_attempt TO duct
 
 
 --
+-- Name: faculty_rule_version; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.faculty_rule_version ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: faculty_rule_version faculty_rule_version_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY faculty_rule_version_owner ON institution.faculty_rule_version TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY faculty_rule_version_read ON institution.faculty_rule_version FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ( SELECT institution.actor_has_role('admin'::text) AS actor_has_role)));
+
+
+--
 -- Name: faculty_work_rule; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -9179,4 +9481,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261103030000'),
     ('20261103100000'),
     ('20261104090000'),
-    ('20261104100000');
+    ('20261104100000'),
+    ('20261104110000');
