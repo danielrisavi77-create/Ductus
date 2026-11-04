@@ -241,7 +241,7 @@ Ugovor prije koda za M6.5-P01 (plan napada #1506; odgovori orkestratora po deleg
 | `anchor` | `jsonb NOT NULL`, `CHECK (collaboration.is_text_anchor(anchor))`; nepromjenjiv, a drugi raspon je novi zahtjev |
 | `state` | `text NOT NULL CHECK IN ('open','responded','accepted','reopened','withdrawn')` |
 | `version` | `integer NOT NULL`, 1 do 1000; trenutačna verzija zahtjeva (D-243) |
-| `row_seq` | `bigint NOT NULL DEFAULT 1`, 1 do 2^53 − 1; brojač upisa, raste za 1 pri svakom uspješnom prijelazu ili odgovoru |
+| `row_seq` | `bigint NOT NULL UNIQUE`, 1 do 2^53 − 1; brojač upisa, uvijek `nextval('collaboration.revision_request_seq')` pri stvaranju i pri svakom uspješnom prijelazu ili odgovoru |
 | `created_by` | `uuid NOT NULL`, iz `app.current_actor()` |
 | `created_at` | `timestamptz NOT NULL DEFAULT now()` |
 
@@ -292,14 +292,15 @@ Ugovor nema stanja `SHARED_FOR_REVIEW`, `NEEDS_CLARIFICATION`, `REREVIEW_REQUIRE
 
 **Očekivani brojač upisa i ishodi** (odluka orkestratora 1, #1091 komentar 6626606552). Svaki RPC pisanja osim stvaranja prima `p_expected_seq bigint`, to jest `row_seq` koji je klijent zadnje pročitao. Brojač se odnosi na zahtjev, nikad na reviziju dokumenta. Revizija je zasebno polje, pa tipkanje studenta između učitavanja i slanja ne poništava valjan odgovor (napad C5). Redak zahtjeva zaključava se s `FOR UPDATE`, pa su usporedba i upis jedan korak. Ishodi `RETURNS TABLE (outcome text, row_seq bigint, version integer, state text)`:
 
-- `applied`: brojač je jednak spremljenom i prijelaz je dopušten. Upisuje se, `row_seq` raste za 1 i vraća se novo stanje.
+- `applied`: brojač je jednak spremljenom i prijelaz je dopušten. Upisuje se, `row_seq` dobiva sljedeću vrijednost sekvence i vraća se novo stanje.
 - `conflict`: brojač se razlikuje od spremljenog. Ne piše se ništa i vraćaju se trenutačni `row_seq`, `version` i `state`. Ponovljen identičan poziv (dvostruki klik, ponavljanje mreže) nosi stari brojač i uvijek dobiva `conflict`, a iz vraćenog stanja klijent vidi da je radnja već provedena. Ponavljanje nije idempotentan uspjeh, pa nikad ne nastanu dva odgovora ni dva prijelaza.
 - `ZD409`: brojač je jednak, ali radnja iz tog stanja nije dopuštena. Ne piše se ništa i `row_seq` ne raste. Klijent tako razlikuje „ponovno učitaj” (`conflict`) od „nije dopušteno” (`ZD409`).
 - `p_expected_seq` koji nedostaje, je `NULL` ili nije cijeli broj 1 do 2^53 − 1 daje `ZD422`. Nedostajući brojač nikad ne znači „preskoči provjeru”.
+- **Brojač je vezan uz zahtjev (napad C4).** Sve vrijednosti `row_seq` dolaze iz jedne sekvence `collaboration.revision_request_seq` (vlasnik `ductus_identity`, `NO CYCLE`, `MAXVALUE` 2^53 − 1, bez ovlasti za druge uloge). Zato se nijedna vrijednost ne dodjeljuje dvaput, ni istom ni drugom zahtjevu, a `UNIQUE` to čini provjerljivim. Brojač pročitan s drugog zahtjeva nikad nije jednak spremljenom i uvijek daje `conflict`. Brojač raste, ali ne nužno za 1, pa klijent ne smije računati sljedeću vrijednost.
 
 **RPC potpisi** (`SECURITY DEFINER`, `SET search_path = ''`, identitet i ustanova iz `current_actor()`, `EXECUTE` samo `ductus_app`):
 
-- `collaboration.create_revision_request(p_document_id text, p_anchor jsonb, p_instruction text, p_requested_revision bigint) RETURNS TABLE (request_id uuid, row_seq bigint, version integer, state text)`; novi zahtjev ima `row_seq = 1`
+- `collaboration.create_revision_request(p_document_id text, p_anchor jsonb, p_instruction text, p_requested_revision bigint) RETURNS TABLE (request_id uuid, row_seq bigint, version integer, state text)`; novi zahtjev dobiva `row_seq` iz sekvence
 - `collaboration.respond_revision_request(p_request_id uuid, p_expected_seq bigint, p_kind text, p_explanation text, p_response_revision bigint)`
 - `collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text)`
 - `collaboration.reopen_revision_request(p_request_id uuid, p_expected_seq bigint, p_instruction text, p_requested_revision bigint)`
@@ -398,7 +399,7 @@ Nastavnik ne odgovara u ime studenta, a student ne stvara, ne prihvaća i ne pov
 | B8, B9 | pgTAP (2): na predan rad svaki RPC pisanja daje `ZD403` (i s neispravnim ulazom), čitanje radi; `delete_revision_requests` ostavlja 0 redaka u sve tri tablice |
 | B8 i istodobna predaja | integracijski test (2) s dvije veze, negativan: `record_submission` i svaki RPC pisanja istodobno, u oba redoslijeda dobivanja zaključavanja; ishod je ili upis prije predaje ili `ZD403`, nikad redak zahtjeva, verzije ili odgovora s vremenom nakon predaje; pgTAP: `record_submission` drži `FOR UPDATE` na retku dokumenta i na retcima paketa (druga veza s `NOWAIT` dobiva `55P03`) |
 | Predaja i commit segmenta | integracijski test (2) s dvije veze: `record_submission` i `commit_evidence_segment` istog dokumenta istodobno, u oba redoslijeda; nijedna veza ne dobiva `40P01`; ishod je ili prihvaćen segment prije predaje ili `not_accepting` |
-| C1–C4, C6, D3 | pgTAP (2): zastarjeli brojač, brojač iz budućnosti i brojač drugog zahtjeva daju `conflict` s trenutačnim `row_seq`, verzijom i stanjem i bez upisa; ponovljen identičan poziv daje `conflict`; `NULL` i nedostajući brojač daju `ZD422`; odgovor na staru verziju nakon `reopen` daje `conflict`; `ZD409` ne povećava `row_seq` |
+| C1–C4, C6, D3 | pgTAP (2): zastarjeli brojač, brojač iz budućnosti i trenutačni brojač drugog zahtjeva istog dokumenta (Q1 i Q2 stvoreni jedan za drugim, oba bez prijelaza) daju `conflict` s trenutačnim `row_seq`, verzijom i stanjem i bez upisa; katalog: `row_seq` je `UNIQUE`, a `revision_request_seq` je `NO CYCLE` i bez `USAGE` za `ductus_app`, `ductus_worker` i `ductus_retention`; ponovljen identičan poziv daje `conflict`; `NULL` i nedostajući brojač daju `ZD422`; odgovor na staru verziju nakon `reopen` daje `conflict`; `ZD409` ne povećava `row_seq` |
 | C2 i istodobnost | integracijski test (2) s dvije veze: točno jedan `applied` |
 | C5 | pgTAP (2): odgovor s revizijom većom od tražene uz isti brojač prolazi |
 | E1, E2, E4 | pgTAP (2): `declined` s obrazloženjem daje `responded`; drugi odgovor u istoj verziji daje `conflict`; unit (3) i `CHECK` (2): obrazloženje prazno, samo bjelina, samo NBSP ili nulta širina daje `ZD422` |
