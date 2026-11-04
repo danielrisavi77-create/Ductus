@@ -167,9 +167,10 @@ describe("P3 verifyDocumentSnapshot fuzz", () => {
     const pending = verifyDocumentSnapshot(buffer);
     buffer.fill(0x20);
     expect(await pending).toMatchObject({ ok: true, sha256: await hex(bytes) });
-    const broken = splice(bytes, 0, 1);
+    // Same length, so the repair restores exactly the valid bytes.
+    const broken = splice(bytes, 0, 1, [0x20]);
     const repaired = verifyDocumentSnapshot(broken);
-    broken.set(bytes.subarray(0, broken.length));
+    broken.set(bytes);
     expect(await repaired).toEqual({ ok: false, reason: "invalid" });
   });
 

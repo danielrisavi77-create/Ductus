@@ -228,10 +228,11 @@ describe("verifyCanonicalEvidencePayloadV2 under fuzz (P1)", () => {
       const pending = verifyCanonicalEvidencePayloadV2(buffer);
       buffer.set(noise.subarray(0, buffer.length));
       expect(await pending).toEqual(expected);
-      // Negative: invalid bytes repaired after the call stay invalid.
-      const broken = splice(bytes, 0, 1);
+      // Negative: invalid bytes repaired after the call stay invalid. Same
+      // length, so the repair restores exactly the valid bytes.
+      const broken = splice(bytes, 0, 1, [0x20]);
       const late = verifyCanonicalEvidencePayloadV2(broken);
-      broken.set(bytes.subarray(0, broken.length));
+      broken.set(bytes);
       expect(await late).toEqual(invalid);
     },
   );
