@@ -115,8 +115,12 @@ export function tokenize(src) {
   let broken = false;
   let i = 0;
   let line = 1;
-  const push = (type, value, at, extra) =>
-    tokens.push({ type, value, line: at, ...extra });
+  // A line terminator (any of LINE_END) since the previous token; ASI needs it.
+  let gapEnd = false;
+  const push = (type, value, at, extra) => {
+    tokens.push({ type, value, line: at, nl: gapEnd, ...extra });
+    gapEnd = false;
+  };
   const last = () => tokens[tokens.length - 1];
   const back = (n) => tokens[tokens.length - n];
   // `class` was a key or a name, not a class head: its container closed, or
@@ -204,13 +208,19 @@ export function tokenize(src) {
     if (c === "\n") {
       line++;
       i++;
-    } else if (/\s/.test(c)) i++;
-    else if (c === "/" && src[i + 1] === "/")
+      gapEnd = true;
+    } else if (/\s/.test(c)) {
+      if (LINE_END.includes(c)) gapEnd = true;
+      i++;
+    } else if (c === "/" && src[i + 1] === "/")
       while (i < src.length && !LINE_END.includes(src[i])) i++;
     else if (c === "/" && src[i + 1] === "*") {
       const end = src.indexOf("*/", i + 2);
       const stop = end === -1 ? src.length : end + 2;
-      for (; i < stop; i++) if (src[i] === "\n") line++;
+      for (; i < stop; i++) {
+        if (src[i] === "\n") line++;
+        if (LINE_END.includes(src[i])) gapEnd = true;
+      }
     } else if (c === '"' || c === "'") {
       const at = line;
       let j = i + 1;
@@ -437,11 +447,11 @@ export function markers(src) {
     )
       found.add(t.line);
     // A class field (`skip = true;`) follows `{`, `;` or `}`, or a value
-    // ending on an earlier line, where ASI closed the previous field.
+    // ending before a line terminator, where ASI closed the previous field.
     else if (
       braces[braces.length - 1]?.classBody &&
       ((prev?.type === "punct" && ["{", ";", "}"].includes(prev.value)) ||
-        (prev?.line < t.line && valueEnd(prev, tokens[k - 2]))) &&
+        (t.nl && valueEnd(prev, tokens[k - 2]))) &&
       next?.type === "punct" &&
       ["=", ";", "}"].includes(next.value)
     )
@@ -736,6 +746,24 @@ test("F-035 c: a class field after an ASI-ended field is still a key", () => {
   }
 });
 
+test("F-035 c: every JavaScript line terminator ends a class field for ASI", () => {
+  // Diagnostics keep LF numbering; CR, U+2028 and U+2029 still end the field.
+  const seps = ["\n", "\r\n", "\r", "\u2028", "\u2029"];
+  for (const sep of [...seps, "/*\r*/", "/*\u2028*/", "// c\u2029"]) {
+    for (const name of NAMES) {
+      const src = `class Options {\ntimeout = 1000${sep}${name} = true\n}`;
+      assert.equal(
+        new Function(`${src}; return new Options().${name};`)(),
+        true,
+      );
+      assert.deepEqual(markers(src), [2 + sep.split("\n").length - 1], src);
+      const other = `class Options {\ntimeout = 1000${sep}${name}Count = true\n}`;
+      new Function(other)();
+      assert.deepEqual(check([["a.test.mjs", other]], []), [], other);
+    }
+  }
+});
+
 test("F-035 c: a `class` key or name does not make a later brace a class body", () => {
   const scripts = (name) => [
     `const o = { class /* c */ : 1, m() { let ${name}; ${name} = true; } };`,
@@ -788,11 +816,12 @@ test("F-035 c: node:test skips a test whose options field follows an ASI-ended f
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
   try {
-    for (const [field, skipped] of [
-      [skipName, 1],
-      [`${skipName}Count`, 0],
+    for (const [field, skipped, sep] of [
+      [skipName, 1, "\n"],
+      [skipName, 1, "\u2028"],
+      [`${skipName}Count`, 0, "\n"],
     ]) {
-      const src = `import test from "node:test";\nclass Options {\ntimeout = 1000\n${field} = true\n}\ntest("synthetic", new Options(), () => {});\n`;
+      const src = `import test from "node:test";\nclass Options {\ntimeout = 1000${sep}${field} = true\n}\ntest("synthetic", new Options(), () => {});\n`;
       const file = path.join(dir, "options.test.mjs");
       fs.writeFileSync(file, src);
       const run = spawnSync(
@@ -803,7 +832,8 @@ test("F-035 c: node:test skips a test whose options field follows an ASI-ended f
       assert.equal(run.status, 0, run.stderr);
       assert.match(run.stdout, new RegExp(`^# skipped ${skipped}$`, "m"));
       assert.match(run.stdout, new RegExp(`^# pass ${1 - skipped}$`, "m"));
-      assert.deepEqual(markers(src), skipped ? [4] : [], src);
+      const at = sep === "\n" ? 4 : 3;
+      assert.deepEqual(markers(src), skipped ? [at] : [], src);
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
