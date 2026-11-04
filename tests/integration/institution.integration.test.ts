@@ -645,8 +645,9 @@ describe("assignments and removal over withActor", () => {
       });
       return post(request, { params: Promise.resolve({ assignmentId: id }) });
     };
-    const rows = () => admin.query<{ acknowledged_at: Date }>(
-      "SELECT acknowledged_at FROM institution.notice_acknowledgment WHERE assignment_id = $1 AND version_no = 4 AND student_id = $2",
+    const rows = () => admin.query<{ acknowledged_at: Date; notice_template_version: number; notice_fingerprint: string }>(
+      `SELECT acknowledged_at, notice_template_version, notice_fingerprint FROM institution.notice_acknowledgment
+        WHERE assignment_id = $1 AND version_no = 4 AND student_id = $2`,
       [assignment, people.guesser.id],
     );
 
@@ -656,6 +657,12 @@ describe("assignments and removal over withActor", () => {
     expect(first.headers.get("cache-control")).toBe("no-store");
     const answer = await first.json();
     expect(answer).toEqual({ acknowledgedAt: (await rows()).rows[0].acknowledged_at.toISOString() });
+    // The route passes the server's template version, never one from the
+    // client, and the row holds the fingerprint of that version (DAN-306).
+    expect((await rows()).rows[0]).toMatchObject({
+      notice_template_version: NOTICE_TEMPLATE_VERSION,
+      notice_fingerprint: await versionFingerprint(4),
+    });
     const retry = await call(people.guesser.token);
     expect([retry.status, await retry.json()]).toEqual([200, answer]);
     expect((await rows()).rows).toHaveLength(1);

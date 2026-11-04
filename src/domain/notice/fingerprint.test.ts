@@ -123,6 +123,21 @@ describe("notice fingerprint (DAN-306)", () => {
     expect(NOTICE_TEMPLATE_VERSION).toBe(1);
   });
 
+  it("A11, A12: the privacy notice, the course name and the course AI rule do not enter the fingerprint", async () => {
+    // Orchestrator answers 2 and 6 on #1502: only the S3 notice as shown.
+    // Whatever else a caller passes along is not carried into the payload.
+    const extra = {
+      privacyNotice: "Izmišljena obavijest o privatnosti, druga inačica.",
+      courseName: "Izmišljeni kolegij",
+      courseAiPolicy: "prohibited",
+    };
+    const widened = { ...BASE, ...extra } as NoticeFingerprintInput;
+    expect(Object.keys(noticeFingerprintPayload(widened))).toEqual([...NOTICE_FINGERPRINT_FIELDS]);
+    expect(await noticeFingerprint(widened)).toBe(GOLDEN_BASE);
+    const changed = { ...widened, privacyNotice: "Promijenjena izmišljena obavijest." } as NoticeFingerprintInput;
+    expect(await noticeFingerprint(changed)).toBe(GOLDEN_BASE);
+  });
+
   it("A14: boundary inputs are deterministic and null differs from empty or zero", async () => {
     const long = "u".repeat(20_000);
     expect(await fingerprint({ instructions: "" })).toBe(await fingerprint({ instructions: "" }));
