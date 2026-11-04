@@ -53,11 +53,13 @@ export function currentSession(store: MarkStore | null): SessionMark | null {
 }
 
 /**
- * The ended sessions also go to a cookie, read only by this page's script, for
- * where localStorage refuses the record (#1444). It outlives a session.
+ * The ended sessions also go to cookies, read only by this page's script, for
+ * where localStorage refuses the record (#1444). Each ended session has its own
+ * cookie, `ductus-ended-<tag>`, so a write never reads or replaces another
+ * tab's mark. It outlives a session.
  */
 export const ENDED_COOKIE = "ductus-ended";
-const ENDED_COOKIE_LIMIT = 8;
+const ENDED_COOKIE_PREFIX = `${ENDED_COOKIE}-`;
 const ENDED_COOKIE_MAX_AGE_S = 86_400;
 const COOKIE_TAG = /^[0-9A-Za-z_-]{1,128}$/;
 
@@ -78,27 +80,40 @@ export function browserCookieJar(): CookieJar | null {
   }
 }
 
+/**
+ * Every ended tag the cookies hold: one `ductus-ended-<tag>` per session, and
+ * the older shared `ductus-ended=<tag>.<tag>` list, read only for the change-over.
+ */
 function readEndedCookie(jar: CookieJar | null): string[] {
   if (!jar) return [];
+  const tags: string[] = [];
   try {
     for (const part of jar.read().split(";")) {
       const pair = part.trim();
-      if (!pair.startsWith(`${ENDED_COOKIE}=`)) continue;
-      return pair.slice(ENDED_COOKIE.length + 1).split(".").filter((tag) => COOKIE_TAG.test(tag));
+      const at = pair.indexOf("=");
+      if (at < 0) continue;
+      const name = pair.slice(0, at);
+      if (name === ENDED_COOKIE) {
+        tags.push(...pair.slice(at + 1).split(".").filter((tag) => COOKIE_TAG.test(tag)));
+      } else if (name.startsWith(ENDED_COOKIE_PREFIX)) {
+        const tag = name.slice(ENDED_COOKIE_PREFIX.length);
+        if (COOKIE_TAG.test(tag)) tags.push(tag);
+      }
     }
   } catch {
     // An unreadable cookie ends nobody.
   }
-  return [];
+  return tags;
 }
 
-/** Records the ended sessions in the cookie; true once a read finds them there. */
+/** Records the ended sessions, one cookie each; true once a read finds them all. */
 export function endSessionsInCookie(jar: CookieJar | null, tags: readonly string[]): boolean {
   if (!jar) return false;
   try {
-    const kept = readEndedCookie(jar).filter((tag) => !tags.includes(tag));
-    const value = [...kept, ...tags.filter((tag) => COOKIE_TAG.test(tag))].slice(-ENDED_COOKIE_LIMIT).join(".");
-    jar.write(`${ENDED_COOKIE}=${value}; Path=/; Max-Age=${ENDED_COOKIE_MAX_AGE_S}; SameSite=Strict${jar.secure ? "; Secure" : ""}`);
+    for (const tag of tags) {
+      if (!COOKIE_TAG.test(tag)) continue;
+      jar.write(`${ENDED_COOKIE_PREFIX}${tag}=1; Path=/; Max-Age=${ENDED_COOKIE_MAX_AGE_S}; SameSite=Strict${jar.secure ? "; Secure" : ""}`);
+    }
     const written = readEndedCookie(jar);
     return tags.every((tag) => written.includes(tag));
   } catch {

@@ -161,7 +161,7 @@ for (const [answer, broken, when] of [
     await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutKept);
     await expect(dialog.getByRole("button")).toHaveText([t.auth.logoutClose]);
     await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
-    expect((await appCookie(context, "ductus-ended"))?.value).toMatch(/^[0-9A-Za-z_-]+$/);
+    expect((await context.cookies(APP_ORIGIN)).map((c) => c.name)).toContainEqual(expect.stringMatching(/^ductus-ended-[0-9A-Za-z_-]+$/));
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await other.reload();
     for (const tab of [page, other]) {
@@ -224,7 +224,7 @@ test("a sign-out the server answered also leaves the ended mark in the cookie", 
   const logouts = logoutRequests(context);
   await clickSignOut(page);
   await page.waitForURL(`${APP_ORIGIN}/`);
-  expect((await appCookie(context, "ductus-ended"))?.value).toMatch(/^[0-9A-Za-z_-]+$/);
+  expect((await context.cookies(APP_ORIGIN)).map((c) => c.name)).toContainEqual(expect.stringMatching(/^ductus-ended-[0-9A-Za-z_-]+$/));
   await page.goto("/rad");
   await expect(page.getByText("Nacrt E")).toHaveCount(0);
   expect(logouts).toEqual([ONE_FETCH, "POST document"]);
