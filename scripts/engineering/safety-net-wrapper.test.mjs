@@ -1431,11 +1431,158 @@ test("F-035 a (QA c.6591641283): a copy whose rulebook spells out a missing file
 // whose content cannot be established never counts as part of a byte-identical
 // copy. The same entry in the root and in the foreign copy blocks, for both
 // tools, while the root, cd to the root and an identical copy stay open (P1-P3).
-// `ask(tool, command, cwd)` is the caller under test and resolves to
-// { code, stdout, stderr }; `check(result, label)` adds its own assertions.
+// `ask(tool, command, cwd, env)` is the caller under test and resolves to
+// { code, stdout, stderr }; `env` is what a spawned hook process needs on top of
+// its own. `check(result, label)` adds its own assertions.
+//
+// DAN-557: root (uid 0, a cloud container) reads past a mode of 000, so where
+// the kernel ignores the mode the refusal it gives everyone else (EACCES) is
+// injected on the same calls: reading the locked entry, and any access beneath
+// a locked directory. Nothing else is touched. The function is self-contained,
+// because its source is also the preload of a spawned hook process. It returns
+// the function that puts the originals back.
+function denyReads(fs, path, locked) {
+  const under = (target) => locked.some((entry) => target === entry || target.startsWith(entry + path.sep));
+  const beneath = (target) => locked.some((entry) => target.startsWith(entry + path.sep));
+  const saved = {};
+  const wrap = (name, denied, refuse) => {
+    const original = (saved[name] = fs[name]);
+    fs[name] = Object.assign(function (target, ...rest) {
+      if (typeof target === "string" && denied(path.resolve(target))) {
+        if (refuse !== undefined) return refuse;
+        throw Object.assign(new Error(`EACCES: permission denied, ${name} '${target}'`), { code: "EACCES", errno: -13, syscall: name, path: target });
+      }
+      return original.call(this, target, ...rest);
+    }, original);
+  };
+  for (const name of ["openSync", "readFileSync", "opendirSync", "readdirSync"]) wrap(name, under);
+  for (const name of ["lstatSync", "statSync", "realpathSync", "readlinkSync"]) wrap(name, beneath);
+  wrap("existsSync", beneath, false);
+  return () => Object.assign(fs, saved);
+}
+// True when a mode of 000 stops this process from reading (not so for root).
+const modesBind = (base) => {
+  const probe = path.join(base, "mode-probe");
+  fs.writeFileSync(probe, "probe");
+  fs.chmodSync(probe, 0o000);
+  try {
+    fs.readFileSync(probe);
+    return false;
+  } catch {
+    return true;
+  } finally {
+    fs.chmodSync(probe, 0o600);
+    fs.rmSync(probe);
+  }
+};
+// GitHub CI must keep the kernel's own refusal; there the mode has to bind.
+const kernelOnlyInGitHubCi = (bind) =>
+  assert.ok(bind || process.env.GITHUB_ACTIONS !== "true", "GitHub CI runs the tests without root, where a mode of 000 takes effect");
+
+// DAN-557, contract #1091 c.6639688992: classes S1-S6 of the injected refusal.
+// Without root the expected table is also what the kernel itself does, so the
+// simulation is checked against the real mechanism; with root the kernel alone
+// lets S1-S3 through and the strict digest gives a value, which is why the
+// injection is needed (the negative case).
+test("DAN-557: the injected EACCES matches what a mode of 000 does without root", () =>
+  scratch((base) => {
+    const file = path.join(base, "extra.bin");
+    const dir = path.join(base, "locked");
+    fs.writeFileSync(file, "AAAA");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, "x"), "x");
+    fs.writeFileSync(path.join(base, "extra.bin2"), "B");
+    fs.mkdirSync(path.join(base, "locked2"));
+    fs.writeFileSync(path.join(base, "plain"), "C");
+    const bind = modesBind(base);
+    kernelOnlyInGitHubCi(bind);
+    const rows = [
+      // [class, call, refused]
+      ["S1 open a locked file", () => fs.closeSync(fs.openSync(file, "r")), true],
+      ["S1 read a locked file", () => fs.readFileSync(file), true],
+      ["S2 opendir a locked directory", () => fs.opendirSync(dir).closeSync(), true],
+      ["S2 readdir a locked directory", () => fs.readdirSync(dir), true],
+      ["S3 read beneath a locked directory", () => fs.readFileSync(path.join(dir, "x")), true],
+      ["S3 lstat beneath a locked directory", () => fs.lstatSync(path.join(dir, "x")), true],
+      ["S3 realpath beneath a locked directory", () => fs.realpathSync(path.join(dir, "x")), true],
+      ["S3 exists beneath a locked directory (false, not thrown)", () => fs.existsSync(path.join(dir, "x")) || absent(), true],
+      ["S4 lstat the locked file itself", () => fs.lstatSync(file), false],
+      ["S4 stat the locked directory itself", () => fs.statSync(dir), false],
+      ["S5 a file whose name extends the locked file's", () => fs.readFileSync(path.join(base, "extra.bin2")), false],
+      ["S5 a directory whose name extends the locked one's", () => fs.readdirSync(path.join(base, "locked2")), false],
+      ["S6 a file that is not locked", () => fs.readFileSync(path.join(base, "plain")), false],
+    ];
+    // existsSync never throws; a false answer is reported as the refusal it hides.
+    const absent = () => {
+      throw Object.assign(new Error("exists: false"), { code: "EACCES" });
+    };
+    const outcome = (call) => {
+      try {
+        call();
+        return "ok";
+      } catch (error) {
+        return error.code ?? "refused";
+      }
+    };
+    const table = (refusal) => rows.map(([label, call, refused]) => `${label}: ${refusal ? (refused ? "EACCES" : "ok") : outcome(call)}`);
+    const strict = () => outcome(() => treeDigest(base, [], undefined, { strict: true }));
+    const original = { ...fs };
+    fs.chmodSync(file, 0o000);
+    fs.chmodSync(dir, 0o000);
+    try {
+      const kernel = table();
+      const kernelStrict = strict();
+      const restore = denyReads(fs, path, [file, dir]);
+      let injected;
+      let injectedStrict;
+      try {
+        injected = table();
+        injectedStrict = strict();
+      } finally {
+        restore();
+      }
+      for (const name of Object.keys(original)) assert.equal(fs[name], original[name], `fs.${name} is put back`);
+      assert.deepEqual(injected, table(true), "the injection gives the expected table");
+      assert.equal(injectedStrict, "refused", "with the injection the strict digest refuses");
+      if (bind) {
+        assert.deepEqual(kernel, table(true), "without root the kernel gives the same table");
+        assert.equal(kernelStrict, "refused");
+      } else {
+        assert.deepEqual(kernel, rows.map(([label]) => `${label}: ok`), "root reads past a mode of 000");
+        assert.equal(kernelStrict, "ok", "without the injection root gets a digest");
+      }
+    } finally {
+      fs.chmodSync(file, 0o600);
+      fs.chmodSync(dir, 0o700);
+    }
+  }));
+
 const unreadableMatrix = (tree, base, ask, check = () => []) => async () => {
+  const bind = modesBind(base);
+  kernelOnlyInGitHubCi(bind);
+  // Paths the injection refuses; empty where the kernel does it itself.
+  const lockedPaths = [];
+  let childEnv = {};
+  let restore = () => {};
+  if (!bind) {
+    restore = denyReads(fs, path, lockedPaths);
+    const preload = path.join(base, "deny-reads.mjs");
+    fs.writeFileSync(preload, `import fs from "node:fs";\nimport path from "node:path";\n(${denyReads})(fs, path, JSON.parse(process.env.DUCTUS_TEST_LOCKED));\n`);
+    childEnv = { NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${pathToFileURL(preload).href}`.trim() };
+  }
+  const lock = (target) => {
+    fs.chmodSync(target, 0o000);
+    if (!bind) lockedPaths.push(path.resolve(target));
+  };
+  const envFor = () => (bind ? {} : { ...childEnv, DUCTUS_TEST_LOCKED: JSON.stringify(lockedPaths) });
+  try {
+    return await unreadableRows(tree, base, ask, check, { lock, envFor, lockedPaths });
+  } finally {
+    restore();
+  }
+};
+const unreadableRows = async (tree, base, ask, check, { lock, envFor, lockedPaths }) => {
   const config = path.join(tree.root, ".cc-safety-net");
-  const asRoot = process.getuid?.() === 0;
   const locked = (target) => {
     try {
       fs.readdirSync(target);
@@ -1457,29 +1604,27 @@ const unreadableMatrix = (tree, base, ask, check = () => []) => async () => {
   } else assert.ok(!IN_CI, "CI runs on Linux, where /proc and mkfifo exist");
   if (process.platform !== "win32") {
     rows.push(["U5 a dangling link with the same target", (d) => fs.symlinkSync("missing-target", path.join(d, "gone"))]);
-    if (!asRoot) {
-      rows.push([
-        "U2 files of the same name and size, different content, no read permission",
-        (d, side) => {
-          const file = path.join(d, "extra.bin");
-          fs.writeFileSync(file, side === "root" ? "AAAA" : "BBBB");
-          fs.chmodSync(file, 0o000);
-          assert.ok(locked(file), "the file is unreadable");
-        },
-        (d) => fs.chmodSync(path.join(d, "extra.bin"), 0o600),
-      ]);
-      rows.push([
-        "U3 a directory of the same name without read permission",
-        (d, side) => {
-          const dir = path.join(d, "locked");
-          fs.mkdirSync(dir);
-          fs.writeFileSync(path.join(dir, "x"), side);
-          fs.chmodSync(dir, 0o000);
-          assert.ok(locked(dir), "the directory is unreadable");
-        },
-        (d) => fs.chmodSync(path.join(d, "locked"), 0o700),
-      ]);
-    } else assert.ok(!IN_CI, "CI runs the tests without root, where a mode of 000 takes effect");
+    rows.push([
+      "U2 files of the same name and size, different content, no read permission",
+      (d, side) => {
+        const file = path.join(d, "extra.bin");
+        fs.writeFileSync(file, side === "root" ? "AAAA" : "BBBB");
+        lock(file);
+        assert.ok(locked(file), "the file is unreadable");
+      },
+      (d) => fs.chmodSync(path.join(d, "extra.bin"), 0o600),
+    ]);
+    rows.push([
+      "U3 a directory of the same name without read permission",
+      (d, side) => {
+        const dir = path.join(d, "locked");
+        fs.mkdirSync(dir);
+        fs.writeFileSync(path.join(dir, "x"), side);
+        lock(dir);
+        assert.ok(locked(dir), "the directory is unreadable");
+      },
+      (d) => fs.chmodSync(path.join(d, "locked"), 0o700),
+    ]);
   } else assert.ok(!IN_CI, "CI runs on Linux, where links and modes work");
   const before = fs.readdirSync(config);
   const failures = [];
@@ -1500,14 +1645,15 @@ const unreadableMatrix = (tree, base, ask, check = () => []) => async () => {
         // refused, as it must be
       }
       for (const tool of TOOLS) {
-        const result = await ask(tool, "ls", copy);
+        const result = await ask(tool, "ls", copy, envFor());
         expect(result, `${label} (${tool})`, result.code === 2 && /could not be compared/.test(result.stderr));
-        const back = await ask(tool, `cd "${tree.root}"`, copy);
+        const back = await ask(tool, `cd "${tree.root}"`, copy, envFor());
         expect(back, `P1 ${label} (${tool}): cd to the root`, back.code === 0);
-        const own = await ask(tool, "ls", tree.root);
+        const own = await ask(tool, "ls", tree.root, envFor());
         expect(own, `P2 ${label} (${tool}): the root itself`, own.code === 0);
       }
     } finally {
+      lockedPaths.length = 0;
       clean?.(config);
       clean?.(path.join(copy, ".cc-safety-net"));
       for (const name of fs.readdirSync(config)) if (!before.includes(name)) fs.rmSync(path.join(config, name), { recursive: true, force: true });
@@ -1516,7 +1662,7 @@ const unreadableMatrix = (tree, base, ask, check = () => []) => async () => {
   // P3: with every extra entry gone, a byte-identical copy is accepted again.
   fs.cpSync(config, path.join(base, "same", ".cc-safety-net"), { recursive: true });
   for (const tool of TOOLS) {
-    const same = await ask(tool, "ls", path.join(base, "same"));
+    const same = await ask(tool, "ls", path.join(base, "same"), envFor());
     expect(same, `P3 (${tool}): a byte-identical copy`, same.code === 0);
   }
   assert.deepEqual(failures, []);
@@ -1545,13 +1691,13 @@ shellTest("F-035 a (QA c.6625690084): U1-U5 and P1-P3 through the configured Pre
       const limitMs = hookEntry.timeout * 1000;
       const calls = [];
       const timings = [];
-      const viaHook = (tool, command, cwd) => {
+      const viaHook = (tool, command, cwd, extra = {}) => {
         const started = Date.now();
         const done = spawnSync("bash", ["-c", hookEntry.command], {
           cwd,
           input: event(tool, command, cwd),
           encoding: "utf8",
-          env: { ...process.env, CLAUDE_PROJECT_DIR: tree.root },
+          env: { ...process.env, ...extra, CLAUDE_PROJECT_DIR: tree.root },
           timeout: limitMs,
         });
         const result = { code: done.status, stdout: done.stdout, stderr: done.stderr, ms: Date.now() - started, error: done.error };
