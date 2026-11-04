@@ -435,6 +435,7 @@ test("FE-D7: Escape, the backdrop or a browser close during a sign-out leave the
   const token = (await appCookie(context, SESSION_COOKIE))!.value;
   await writeAndWait(page, "Nacrt A: plava bilježnica");
   const dialog = logoutDialogOf(page);
+  const logouts = logoutRequests(context);
 
   let release: () => void = () => {};
   const held = new Promise<void>((resolve) => { release = resolve; });
@@ -465,11 +466,21 @@ test("FE-D7: Escape, the backdrop or a browser close during a sign-out leave the
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
   await expect(editorOf(page)).toHaveText("");
 
-  // Pressed again, "Odjava" reaches the route this time and leaves.
+  // Pressed again, "Odjava" leaves without calling the route (#1444 t.5):
+  // under the kept cookie the page renders ended again, and the server
+  // session waits for the next sign-in or its expiry (DAN-511b).
   await page.unroute("**/api/auth/logout");
+  const left = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/" && response.request().resourceType() === "document");
   await logoutOf(page).click();
-  await page.waitForURL(`${APP_ORIGIN}/`);
-  await expect.poll(async () => (await sessionRow(token))?.close_reason).toBe("logout");
+  await left;
+  await page.waitForURL(`${APP_ORIGIN}/rad`);
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expect(editorOf(page)).toHaveText("");
+  await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
+  await expect(noticeOf(page).getByRole("link", { name: t.auth.signInAgain })).toBeVisible();
+  await expectStillSignedIn(page, token);
+  expect(logouts).toEqual([ONE_FETCH]);
 });
 
 test("a sign-in through the login route stops the tab of the session it replaced", async ({ page, context }) => {
