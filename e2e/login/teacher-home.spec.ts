@@ -9,6 +9,7 @@ import pg from "pg";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { fillCodeDeadline, signIn } from "./support";
 import { localAdminUrl } from "./local-db-url";
+import { APP_ORIGIN } from "./origin";
 
 // Z3 (A), "Moji kolegiji" at /nastavnik (#476 6289158306). The list comes from
 // the same read as GET /api/teacher/courses; the teacher role comes from the
@@ -75,7 +76,7 @@ test("a signed-in teacher's home page and sign-in page lead to the course list",
   await asTeacher(page);
   for (const path of ["/", "/prijava"]) {
     await page.goto(path);
-    await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+    await expect(page).toHaveURL(`${APP_ORIGIN}/nastavnik`);
     await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
   }
 });
@@ -103,7 +104,7 @@ test("a teacher sees their course with its assignment, in the route's order, and
 
   // The way back from the form is the list, not the public home page.
   await page.getByRole("main").getByRole("link", { name: messagesHr.teacher.backCourses }).click();
-  await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+  await expect(page).toHaveURL(`${APP_ORIGIN}/nastavnik`);
   const course = page.getByRole("region", { name: courseName });
   await expect(course).toBeVisible();
   await expect(course.getByText(t.noAssignments)).toBeVisible();

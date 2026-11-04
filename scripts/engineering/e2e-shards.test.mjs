@@ -154,6 +154,9 @@ test("workflow requires three shards and reconciliation without changing Mergify
   assert.doesNotMatch(job("stack-e2e"), /continue-on-error|UI test selection pilot|--grep|--only-changed/);
   assert.match(job("stack-e2e"), /name: e2e-shard-\$\{\{ matrix.shard \}\}/);
   assert.match(job("stack-e2e"), /include-hidden-files: true\n {10}if-no-files-found: error/);
+  // A re-run must replace the earlier attempt's artifact, or the inventory can read it (run 41782517938).
+  assert.match(job("stack-e2e"), /name: e2e-shard-\$\{\{ matrix.shard \}\}\n {10}path: .ci-reports\/\n {10}overwrite: true\n/);
+  assert.match(job("stack-login"), /name: login-shard-\$\{\{ matrix.shard \}\}\n {10}path: .ci-reports\/\n {10}overwrite: true\n/);
   const results = job("stack-e2e-results");
   assert.match(results, /needs: \[scope, stack-e2e\]/);
   assert.match(results, /if: \$\{\{ always\(\) && !cancelled\(\) && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' \}\}/);

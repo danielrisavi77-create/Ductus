@@ -101,6 +101,13 @@ jobs:
           else
             node scripts/engineering/migrations-ledger.mjs
           fi
+      # P6, DAN-499: no two migrations share a dbmate version, in the checkout
+      # (the merge commit on a PR) and, on a PR, against main and every other
+      # open PR (read through the API, so a PR opened later fails too).
+      - name: Migration version collisions (P6, DAN-499)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/engineering/migration-versions.mjs
       # DAN-319: Squawk lints the up part of every migration the base lacks.
       # The release has no signature; the pin equals the GitHub API digest
       # (SQUAWK in squawk-migrations.mjs, which checks it again before each run).
@@ -297,6 +304,7 @@ jobs:
         with:
           name: e2e-shard-${{ matrix.shard }}
           path: .ci-reports/
+          overwrite: true
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -307,6 +315,7 @@ jobs:
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
+          overwrite: true
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs
@@ -361,8 +370,9 @@ jobs:
 
   # Each shard is its own runner with its own stack and database, so the
   # shared demo account stays one worker per database (playwright.login.config.ts).
-  # The shards split the spec files by measured duration (DAN-375,
-  # scripts/engineering/login-shard-plan.mjs); the matrix size is LOGIN_SHARDS.
+  # Five shards split Chromium files by measured duration (DAN-375); the sixth
+  # runs WebKit alone so demo-flow never inherits another engine's database.
+  # scripts/engineering/login-shard-plan.mjs keeps the six-runner budget.
   stack-login:
     name: Login E2E (${{ matrix.shard }}/6)
     strategy:
@@ -404,7 +414,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium
+          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-webkit
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Local auth login password
@@ -423,13 +433,20 @@ jobs:
         env:
           PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: bash scripts/engineering/playwright-install.sh chromium
+      # DAN-232: the login E2E runs over https and the sign-in and demo walk-through
+      # specs also run in WebKit (playwright.login.config.ts, #1223). WebKit needs
+      # its system packages, so this step has no no-deps shortcut.
+      - name: Install login WebKit
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: bash scripts/engineering/playwright-install.sh webkit
       # F-152: the demo account bootstrap's guards drive a real Chromium, which
       # only this job installs; each shard runs them (a few seconds).
       - name: Demo account bootstrap tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: pnpm test:demo:browser
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
-      # the fake provider in production); Chromium only (owner decision).
+      # the fake provider in production); Chromium for every spec and WebKit for the
+      # sign-in and full demo-flow specs, over https (#87 c.6588895809).
       # The full suite as this runner sees it, before sharding; the inventory
       # job checks that the shards together ran exactly this.
       - name: Login E2E inventory
@@ -437,7 +454,7 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/inventory.json
         run: pnpm exec playwright test --config playwright.login.config.ts --list --reporter=json
-      # This shard's spec files from the inventory above and the committed
+      # This shard's engine and spec files from the inventory and the committed
       # weights; plan.json goes up with the evidence and is recomputed there.
       - name: Plan login shard
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -448,13 +465,17 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           LOGIN_E2E_JSON: .ci-reports/results.json
-        run: pnpm test:e2e:login --test-list .ci-reports/test-list.txt
+        run: pnpm test:e2e:login --project="$(cat .ci-reports/project.txt)" --test-list .ci-reports/test-list.txt
+      # A re-run of a failed shard keeps the earlier attempt's artifact under the
+      # same name, and the inventory download can pick that stale one (run
+      # 41782517938). overwrite replaces it, so the inventories read this attempt.
       - name: Upload login shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: login-shard-${{ matrix.shard }}
           path: .ci-reports/
+          overwrite: true
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -464,6 +485,7 @@ jobs:
         with:
           name: playwright-report-login-${{ matrix.shard }}
           path: playwright-report-login/
+          overwrite: true
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs

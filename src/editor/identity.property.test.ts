@@ -7,14 +7,18 @@ import { describe, expect, it } from "vitest";
 
 import { newNodeId, type NodeId } from "../domain/document";
 
+import { startFreshHistory } from "./history";
+import { replaceWithStoredDocument } from "./identity";
 import { tiptapToCanonical } from "./interop";
 import { createEditorExtensions, NodeIdentity, NODE_ID_ATTRIBUTE } from "./schema";
 
 /**
  * Model-based property: an arbitrary sequence of inserts (with every kind of
  * carried id), blocks put into the text of a block, removals, moves, splits,
- * joins, typed text, rewritten id attributes, undo and redo is run against the
- * editor and against a plain
+ * joins, typed text, rewritten id attributes, undo, redo, pastes from outside
+ * (through the clipboard boundary, with every kind of carried id) and reloads
+ * of the stored form (fresh history, then `replaceWithStoredDocument`) is run
+ * against the editor and against a plain
  * list model that knows which block should hold which id. After every step
  * the editor must agree with the model, every id must have been minted by the
  * editor or stored at the start, and the document must have a canonical form.
@@ -36,6 +40,8 @@ type Op =
   | { kind: "pasteInto"; at: number; offset: number; carried: Carried; pick: number }
   | { kind: "join"; at: number }
   | { kind: "type"; at: number }
+  | { kind: "pasteOutside"; at: number; carried: Carried; pick: number; blocks: 1 | 2; sameText: boolean }
+  | { kind: "reload" }
   | { kind: "undo" }
   | { kind: "redo" };
 
@@ -51,6 +57,8 @@ const op: fc.Arbitrary<Op> = fc.oneof(
   fc.record({ kind: fc.constant("pasteInto" as const), at: index, offset: index, carried, pick: index }),
   fc.record({ kind: fc.constant("join" as const), at: index }),
   fc.record({ kind: fc.constant("type" as const), at: index }),
+  fc.record({ kind: fc.constant("pasteOutside" as const), at: index, carried, pick: index, blocks: fc.constantFrom<1 | 2>(1, 2), sameText: fc.boolean() }),
+  fc.constant({ kind: "reload" as const }),
   fc.constant({ kind: "undo" as const }),
   fc.constant({ kind: "redo" as const }),
 );
@@ -83,6 +91,8 @@ function run(ops: Op[]): void {
   const past: Entry[][] = [];
   let future: Entry[][] = [];
   const removedIds: string[] = [];
+  /** Text of a block removed whole, by its id: a paste can bring it back identical. */
+  const removedTexts = new Map<string, string>();
   let counter = 0;
 
   const { schema } = editor;
@@ -146,6 +156,7 @@ function run(ops: Op[]): void {
         if (count < 2) return;
         const at = step.at % count;
         removedIds.push(model[at].id as string);
+        removedTexts.set(model[at].id as string, model[at].text);
         act(tr.delete(posOf(at), posOf(at + 1)), model.filter((_, i) => i !== at));
         break;
       }
@@ -211,6 +222,39 @@ function run(ops: Op[]): void {
       case "type": {
         const at = step.at % count;
         act(tr.insertText("x", posOf(at + 1) - 1), model.map((entry, i) => (i === at ? { ...entry, text: `${entry.text}x` } : entry)));
+        break;
+      }
+      case "pasteOutside": {
+        // Whole blocks from another document or an earlier draft, through what
+        // the editor does to a pasted or dropped slice. Even a block identical
+        // to one removed earlier, with its id, is a new block here.
+        const at = step.at % (count + 1);
+        const id = idFor(step.carried, step.pick);
+        const texts = Array.from({ length: step.blocks }, () => `o${(counter += 1)}`);
+        const removedText = typeof id === "string" ? removedTexts.get(id) : undefined;
+        if (step.sameText && removedText !== undefined) texts[0] = removedText;
+        const nodes = texts.map((value) => schema.nodes.paragraph.create({ [NODE_ID_ATTRIBUTE]: id }, schema.text(value)));
+        let slice = new Slice(Fragment.from(nodes), 0, 0);
+        for (const plugin of editor.state.plugins) {
+          const transform = plugin.props.transformPasted;
+          if (transform) slice = transform.call(plugin, slice, editor.view as never, false);
+        }
+        act(tr.replace(posOf(at), posOf(at), slice), [
+          ...model.slice(0, at),
+          ...texts.map((text): Entry => ({ id: NEW, text })),
+          ...model.slice(at),
+        ]);
+        break;
+      }
+      case "reload": {
+        // What LocalDocument does with a stored document: the same ids come
+        // back, and nothing before the load can be undone or restored.
+        const result = tiptapToCanonical(editor.getJSON());
+        if (!result.ok) throw new Error(`step ${n}: no canonical form`);
+        startFreshHistory(editor.view, "keep");
+        expect(replaceWithStoredDocument(editor.view, result.doc), `step ${n}`).toEqual({ ok: true });
+        past.length = 0;
+        future = [];
         break;
       }
       case "undo": {

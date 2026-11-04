@@ -6,6 +6,7 @@ import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE } from "./support";
 import { localAdminUrl, localAppUrl } from "./local-db-url";
+import { APP_ORIGIN } from "./origin";
 
 // #711 step E (decision B): the specs that reach a work through the API use
 // the student's own document of an assignment, the one the open route makes
@@ -14,7 +15,7 @@ import { localAdminUrl, localAppUrl } from "./local-db-url";
 // through the admin login of the compose database; the student confirms the
 // notice under her own session and the real route opens the work.
 
-const ORIGIN = "http://localhost:3000";
+const ORIGIN = APP_ORIGIN;
 const TEACHER = "demo-teacher@demo.ductus.test";
 const STUDENT = "demo-student@demo.ductus.test";
 
