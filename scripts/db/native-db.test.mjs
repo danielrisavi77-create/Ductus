@@ -70,7 +70,13 @@ test("children never see the caller's libpq, psql or dbmate variables", () => {
 
 test("the dbmate URL is the db:migrate URL on the native port, with an encoded password", () => {
   assert.equal(dbmateUrl(DEFAULT), "postgres://ductus:ductus-local-only@127.0.0.1:5432/ductus?sslmode=disable&role=ductus_migrator");
-  assert.equal(dbmateUrl({ ...DEFAULT, host: "::1", password: "a@b/c?d#e" }), "postgres://ductus:a%40b%2Fc%3Fd%23e@[::1]:5432/ductus?sslmode=disable&role=ductus_migrator");
+  const url = new URL(dbmateUrl({ ...DEFAULT, host: "::1", password: "a@b/c?d#e" }));
+  assert.equal(url.password, "a%40b%2Fc%3Fd%23e", "reserved characters are percent-encoded");
+  assert.equal(decodeURIComponent(url.password), "a@b/c?d#e");
+  assert.equal(url.hostname, "[::1]");
+  assert.equal(url.port, "5432");
+  assert.equal(url.pathname, "/ductus");
+  assert.equal(url.search, "?sslmode=disable&role=ductus_migrator");
 });
 
 test("test:db:native is the pg_prove of test:db over loopback", async () => {
@@ -111,8 +117,9 @@ test("without DUCTUS_AUTH_LOCAL_PASSWORD a random one is made per run; a short o
     const { calls, run } = recorder();
     await up({ env: {}, run, isRoot: true, log: quiet });
     const arg = calls.at(-1).args.find((a) => a.startsWith("auth_password="));
-    assert.match(arg, /^auth_password=[0-9a-f]{48}$/);
-    seen.push(arg);
+    const value = arg.slice(arg.indexOf("=") + 1);
+    assert.match(value, /^[0-9a-f]{48}$/, "24 random bytes in hex");
+    seen.push(value);
   }
   assert.notEqual(seen[0], seen[1]);
   const { calls, run } = recorder();
