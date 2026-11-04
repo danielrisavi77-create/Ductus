@@ -77,7 +77,9 @@ const fingerprint = (file) => {
 };
 
 // Content hash of a whole directory tree (names, kinds, file contents, link
-// targets). `skip` lists relative paths left out. The walk is bounded by entry
+// targets). Every record is a tag with a fixed number of length-prefixed
+// fields, so the hashed stream decodes to exactly one tree (F-035a). `skip`
+// lists relative paths left out. The walk is bounded by entry
 // count, bytes read and time, shared through `budget`: the first overrun throws
 // a LimitError, so a link to a huge directory or file is refused quickly instead
 // of being read to the end. A caller that gets the error must block.
@@ -85,10 +87,46 @@ export const DEFAULT_LIMITS = { maxEntries: 5000, maxBytes: 8 * 1024 * 1024, max
 export class LimitError extends Error {}
 export const newBudget = (limits = DEFAULT_LIMITS) => ({ ...DEFAULT_LIMITS, ...limits, entries: 0, bytes: 0, deadline: Date.now() + (limits.maxMs ?? DEFAULT_LIMITS.maxMs) });
 
-export function treeDigest(dir, skip = [], budget = newBudget()) {
+// Reads a regular file of at most `max` bytes, or returns null. The open never
+// waits (a FIFO or device opens at once and is then refused by fstat), never
+// follows a final link unless `follow` is set, and the size is checked on the
+// open descriptor, so a file swapped after a name check is not read either.
+const READ_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0);
+const NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+export function readRegular(file, { max = 4096, follow = false } = {}) {
+  let fd;
+  try {
+    if (!follow && !NOFOLLOW && fs.lstatSync(file).isSymbolicLink()) return null;
+    fd = fs.openSync(file, READ_FLAGS | (follow ? 0 : NOFOLLOW));
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.size > max) return null;
+    const chunks = [];
+    let total = 0;
+    const chunk = Buffer.alloc(Math.min(Math.max(stat.size, 1), 64 * 1024) + 1);
+    for (let read = fs.readSync(fd, chunk); read > 0; read = fs.readSync(fd, chunk)) {
+      total += read;
+      if (total > max) return null;
+      chunks.push(Buffer.from(chunk.subarray(0, read)));
+    }
+    return Buffer.concat(chunks, total);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+// strict: an entry whose content cannot be established throws instead of
+// leaving a placeholder, so a comparison of two trees can never take two
+// unknown contents as equal (F-035 a, review c.6592372807, QA c.6592414127).
+export function treeDigest(dir, skip = [], budget = newBudget(), { strict = false } = {}) {
+  const unknown = (what, name) => {
+    if (strict) throw new Error(`${what} ${name || "."} cannot be compared`);
+  };
   try {
     fs.lstatSync(dir);
-  } catch {
+  } catch (error) {
+    if (strict && error.code !== "ENOENT") throw error;
     return "absent";
   }
   const check = () => {
@@ -96,6 +134,13 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
     if (Date.now() > budget.deadline) throw new LimitError(`more than ${budget.maxMs} ms`);
   };
   const hash = createHash("sha256");
+  const put = (...fields) => {
+    for (const field of fields) {
+      const bytes = Buffer.isBuffer(field) ? field : Buffer.from(field, "utf8");
+      hash.update(`${bytes.length}:`);
+      hash.update(bytes);
+    }
+  };
   const seen = new Set();
   const walk = (current, rel) => {
     const entries = [];
@@ -111,7 +156,8 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
       }
     } catch (error) {
       if (error instanceof LimitError) throw error;
-      hash.update(`unreadable:${rel}\n`);
+      unknown("unreadable directory", rel);
+      put("unreadable-dir", rel);
       return;
     }
     entries.sort((a, b) => (a.name < b.name ? -1 : 1));
@@ -128,9 +174,10 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         try {
           target = fs.readlinkSync(full);
         } catch {
+          unknown("unreadable link", name);
           // keep the placeholder
         }
-        hash.update(`l:${name}:${target}\n`);
+        put("l", name, target);
         try {
           const stat = fs.statSync(full);
           kind = stat.isDirectory() ? "d" : stat.isFile() ? "f" : "o";
@@ -141,12 +188,13 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
             seen.add(real);
           }
         } catch {
-          hash.update(`dangling:${name}\n`);
+          unknown("dangling link", name);
+          put("dangling", name);
           continue;
         }
       }
       if (kind === "d") {
-        hash.update(`d:${name}\n`);
+        put("d", name);
         walk(full, name);
       } else if (kind === "f") {
         if (!size) {
@@ -158,15 +206,15 @@ export function treeDigest(dir, skip = [], budget = newBudget()) {
         }
         budget.bytes += size;
         if (budget.bytes > budget.maxBytes) throw new LimitError(`more than ${budget.maxBytes} bytes`);
-        hash.update(`f:${name}:`);
-        try {
-          hash.update(fs.readFileSync(full));
-        } catch {
-          hash.update("unreadable");
+        const content = readRegular(full, { max: budget.maxBytes, follow: true });
+        if (content) put("f", name, content);
+        else {
+          unknown("unreadable file", name);
+          put("unreadable-file", name);
         }
-        hash.update("\n");
       } else {
-        hash.update(`other:${name}\n`);
+        unknown("special file", name);
+        put("other", name);
       }
     }
   };
@@ -210,6 +258,83 @@ export function findRulebookDir(cwd) {
     dir = parent;
   }
   return (bounded ? chain : [cwd]).find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
+}
+
+// Two paths name the same entry only when the file system says so: the same
+// device and inode of the entry itself (lstat, so a link is never its target),
+// as bigints so no digit is lost. The spelling never counts, in any case: a
+// file system may keep `Ductus` and `ductus` apart. An identity that cannot be
+// read (an error, inode 0) is not the same, and the caller then compares the
+// configuration instead (F-035a, Codex c.6627100367).
+// A link therefore equals its target only once the caller has resolved it:
+// foreignRules and the `.git` file branch of commonGitDir pass realpathSync
+// results (or a fixed name below one) on both sides; the `.git` directory
+// branch of commonGitDir compares the resolved `.git` with the unresolved
+// `<dir>/.git` on purpose, so a `.git` swapped for a link stays different.
+// A file with a second hard link shares its inode with another name, so a file
+// counts only while it has one name: a hard-linked copy of a genuine `.git`
+// file is not that file.
+export function samePath(a, b) {
+  try {
+    const x = fs.lstatSync(a, { bigint: true });
+    const y = fs.lstatSync(b, { bigint: true });
+    if (!x.isDirectory() && x.nlink !== 1n) return false;
+    return x.ino !== 0n && x.dev === y.dev && x.ino === y.ino;
+  } catch {
+    return false;
+  }
+}
+
+// The common git directory of the checkout at `dir`, or null when `dir` is not
+// verifiably one. A `.git` directory is its own common directory. A `.git` file
+// counts only as a genuine linked worktree: its admin directory sits directly
+// in `<common>/worktrees/` and links back to this very `.git` file. Every file
+// is read with readRegular, so a link or a FIFO in the chain is not followed.
+const lineOf = (buffer) => buffer?.toString("utf8").split(/\r?\n/)[0].trim() || null;
+function commonGitDir(dir) {
+  try {
+    const dotGit = path.join(dir, ".git");
+    if (fs.lstatSync(dotGit).isDirectory()) {
+      // Resolved again, so a `.git` replaced by a link after the lstat is not taken.
+      const real = fs.realpathSync(dotGit);
+      return samePath(real, path.join(fs.realpathSync(dir), ".git")) ? real : null;
+    }
+    const named = /^gitdir: (.+)$/m.exec(readRegular(dotGit)?.toString("utf8") ?? "")?.[1]?.trim();
+    if (!named) return null;
+    const adminDir = fs.realpathSync(path.resolve(dir, named));
+    const back = lineOf(readRegular(path.join(adminDir, "gitdir")));
+    const common = lineOf(readRegular(path.join(adminDir, "commondir")));
+    if (!back || !common) return null;
+    const commonDir = fs.realpathSync(path.resolve(adminDir, common));
+    if (!samePath(path.dirname(adminDir), path.join(commonDir, "worktrees"))) return null;
+    if (!samePath(fs.realpathSync(path.resolve(adminDir, back)), fs.realpathSync(dotGit))) return null;
+    return commonDir;
+  } catch {
+    return null;
+  }
+}
+
+// F-035: the project rules may come from a directory other than the project
+// root only when it is a checkout of the same repository (the root itself, or a
+// worktree sharing its git directory) or holds a byte-identical configuration.
+// Returns null when the rules are acceptable, else the reason to block.
+export function foreignRules(rulebookDir, root, limits) {
+  try {
+    if (samePath(fs.realpathSync(rulebookDir), fs.realpathSync(root))) return null;
+  } catch {
+    // compared below
+  }
+  const own = commonGitDir(rulebookDir);
+  const project = own && commonGitDir(root);
+  if (project && samePath(own, project)) return null;
+  try {
+    const budget = newBudget(limits);
+    const digest = (dir) => treeDigest(path.join(dir, PROJECT_CONFIG), [], budget, { strict: true });
+    if (digest(rulebookDir) === digest(root)) return null;
+    return `${rulebookDir} is not a checkout of this repository and its ${PROJECT_CONFIG} differs from the project root's`;
+  } catch (error) {
+    return `the ${PROJECT_CONFIG} of ${rulebookDir} could not be compared with the project root's (${error.message})`;
+  }
 }
 
 // Every input of the package 2.6.1 that can change what it denies, for the key
@@ -477,9 +602,11 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
   const ownConfig = below && fs.existsSync(path.join(cwd, PROJECT_CONFIG));
   // Run 1: the event as sent (built-in rules, relative paths keep their meaning).
   const firstRun = runPackage(root, input, timeoutMs, env);
+  // Whose rules they are is settled first, also with a config of its own here.
+  const foreign = rulebookDir ? foreignRules(rulebookDir, root, limits) : null;
   // Run 2: in a subdirectory the project rules live in a parent the package does not search.
   let secondRun = null;
-  if (below && !ownConfig) {
+  if (below && !ownConfig && !foreign) {
     let moved;
     try {
       moved = JSON.stringify({ ...JSON.parse(input), cwd: rulebookDir });
@@ -490,22 +617,22 @@ export async function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS
   }
   // Any clean answer is checked once per state, not only a silent one: a stub
   // that prints "{}" or an allow decision is as useless as one that prints nothing.
-  const probeRun = rulebookDir && !ownConfig ? probe(root, rulebookDir, deadline, env, limits) : null;
+  const probeRun = rulebookDir && !ownConfig && !foreign ? probe(root, rulebookDir, deadline, env, limits) : null;
   const [firstResult, secondResult, refused] = await Promise.all([firstRun, secondRun, probeRun]);
 
   const first = answer(firstResult, timeoutMs);
   if (first.block) return first.block;
-  // Without usable project rules here, only the way back to the project root stays open.
-  const noRules = (problem) => {
+  // Without usable project rules here, only the way back to the project root
+  // stays open; the install exception only where no foreign rules are found.
+  const noRules = (problem, { install = true } = {}) => {
     if (isCdToRoot(command, root)) return { code: 0, stdout: first.stdout, stderr: first.stderr };
-    return unusable(
-      problem,
-      `${isCdToRoot(`cd "${root}"`, root) ? `Run exactly: cd "${root}" (nothing else in the command) to return to the project root, or ` : ""}leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`,
-    );
+    const hint = `${isCdToRoot(`cd "${root}"`, root) ? `Run exactly: cd "${root}" (nothing else in the command) to return to the project root, or ` : ""}leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`;
+    return install ? unusable(problem, hint) : blockedFor(problem, hint);
   };
   if (!rulebookDir) {
     return noRules(`no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`);
   }
+  if (foreign) return noRules(foreign, { install: false });
   if (ownConfig) return noRules(`${cwd} has its own ${PROJECT_CONFIG} directory below the project's, which the safety check does not accept`);
   if (refused) return unusable(refused.problem, refused.hint);
   if (secondResult && !denies(first.stdout)) {
