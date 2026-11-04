@@ -62,16 +62,18 @@ const isWrap = (n) =>
 const isAccess = (n) =>
   ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n);
 
-// The cooked static name of a key or member, or null (`#skip`, `t[name]`).
-function staticName(n) {
+// The cooked static name of a key or member, or null (`#skip`, `t[name]`,
+// `{ [name]: 1 }`): computed, only a string literal is a static name.
+function staticName(n, computed = false) {
   if (!n) return null;
   if (ts.isComputedPropertyName(n) || ts.isParenthesizedExpression(n))
-    return staticName(n.expression);
-  if (ts.isIdentifier(n) || ts.isStringLiteralLike(n)) return n.text;
-  return null;
+    return staticName(n.expression, true);
+  if (ts.isStringLiteralLike(n)) return n.text;
+  return ts.isIdentifier(n) && !computed ? n.text : null;
 }
 const keyOf = (n) =>
   ts.isPropertyAccessExpression(n) ? n.name : n.argumentExpression;
+const memberName = (n) => staticName(keyOf(n), ts.isElementAccessExpression(n));
 
 // The identifier an access or call chain starts from (`test` in `test.skip.each([])`).
 function rootName(n) {
@@ -93,6 +95,9 @@ function called(n) {
 // The value an object literal or binding pattern destructures, if it is one.
 function destructured(n) {
   let p = n.parent;
+  // A nested pattern destructures the same source (`{ test: { skip } } = test`).
+  while (ts.isBindingElement(p) && p.name === n)
+    [n, p] = [p.parent, p.parent.parent];
   while (
     ts.isPropertyAssignment(p) ||
     ts.isShorthandPropertyAssignment(p) ||
@@ -128,8 +133,8 @@ export function scan(src, file = "a.test.mjs") {
   );
   const found = new Set();
   const visit = (n) => {
-    if (isAccess(n) && MEMBERS.has(staticName(keyOf(n)) ?? "")) {
-      const name = staticName(keyOf(n));
+    if (isAccess(n) && MEMBERS.has(memberName(n) ?? "")) {
+      const name = memberName(n);
       if (
         called(n) ||
         (OPTIONS.has(name) && ROOTS.has(rootName(n.expression) ?? ""))
@@ -260,6 +265,8 @@ const CASES = [
   ["const { todo } = test;", "const { todo } = cfg;"],
   ["({ skip: s } = it);", "function f({ skip }) { return skip; }"],
   ["for (const { only } of describe);", "for (const { only } of list);"],
+  // Codex 4467382377: a nested pattern keeps the source it destructures.
+  ["const { test: { skip } } = test;", "const { test: { skip } } = cfg;"],
   // K4: names are compared cooked.
   ["t.sk\\u0069p();", "t.sk\\u0069pped();"],
   ["t.\\u{73}kip();", "t.\\u{73}kips();"],
@@ -283,6 +290,12 @@ const CASES = [
   ["if (true) {} /x/; t.skip();", "if (true) {} /\\.skip\\b/.test('');"],
   ["String.raw`\\u{110000}`; t.skip();", "String.raw`\\u{110000} t.skip()`;"],
   ["let skip; t.skip();", "let skip = true; skip = false;"],
+  // Codex 4467382351: a computed key or index that is a variable is a run-time name.
+  [
+    "test('a', { ['skip']: 1 });",
+    "const skip = 'timeout'; test('a', { [skip]: 1 });",
+  ],
+  ["t[('skip')]();", "const skip = 'm'; t[skip](); t[(skip)]();"],
   ["class A { m(t) { t.skip(); } }", "class A { skip = 1; static todo = 2; }"],
   ["class A { m() { this.skip(); } }", "class A { only() {} #skip() {} }"],
   ["class A { m() { t.skip(); } }", "class A { class\nm() { let skip; } }"],
