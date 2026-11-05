@@ -1,18 +1,27 @@
 import { defineConfig, devices, type ReporterDescription } from "@playwright/test";
 
 import { evidenceServerEnvironment } from "./scripts/demo/login-e2e-evidence.mjs";
+import { LOGIN_PORT, loginOrigin } from "./scripts/demo/login-e2e-https.mjs";
+import webkitSpecs from "./scripts/engineering/login-webkit-specs.json" with { type: "json" };
 import { playwrightConsoleReporter } from "./test-output";
 
-// The fake provider redirects to http://localhost:3000/api/auth/callback
-// alone (infra/fake-oidc), so the port and the host name are fixed.
-const PORT = 3000;
-const BASE_URL = `http://localhost:${PORT}`;
+// The fake provider redirects to port 3000 alone (infra/fake-oidc), so the port
+// is fixed. Our own dev server runs over https at 127.0.0.1, not localhost: an
+// IP address is never kept as an HSTS host, so WebKit does not upgrade the
+// redirect to the http-only fake provider on localhost:8090 (see
+// scripts/demo/login-e2e-https.mjs); against a server reused with
+// E2E_REUSE_SERVER=1 the origin stays http, as `pnpm demo:up` starts it.
+const BASE_URL = loginOrigin(process.env);
+const SECURE = BASE_URL.startsWith("https:");
 
 /**
  * The full login through "Demo prijava" (B-6). It needs `next dev`: a
  * production build refuses the fake provider (D-09, e2e/auth.spec.ts), and
- * no switch may lift that. Chromium only, by owner decision; the main suite
- * (playwright.config.ts) keeps the browser policy of docs/TESTING.md 2.
+ * no switch may lift that. Chromium runs every spec. WebKit runs the specs in
+ * scripts/engineering/login-webkit-specs.json, and only over https: the session
+ * cookie is `Secure` and WebKit does not store it on http://localhost (DAN-232,
+ * owner decision on #87). The main suite (playwright.config.ts) keeps the browser
+ * policy of docs/TESTING.md 2.
  *
  * Needs the compose stack (database and fake provider on 8090), the migrated
  * and seeded database, and AUTH_DATABASE_URL, which has no default because
@@ -22,7 +31,9 @@ export default defineConfig({
   testDir: "e2e/login",
   retries: 0,
   // The tests share the demo account and the dev server compiles on first
-  // request; one worker keeps the sessions of one test out of another.
+  // request; one worker keeps the sessions of one test out of another. CI
+  // also selects exactly one engine per database via login-shard-plan.mjs.
+  // Locally use --project with a fresh synthetic database for each engine.
   workers: 1,
   timeout: 90_000,
   reporter: [
@@ -34,16 +45,30 @@ export default defineConfig({
   outputDir: "test-results-login",
   use: {
     baseURL: BASE_URL,
+    // The certificate of our own https server is made per run and not trusted by the browser.
+    ignoreHTTPSErrors: SECURE,
     locale: "hr-HR",
     timezoneId: "Europe/Zagreb",
     screenshot: "only-on-failure",
     video: process.env.CI ? "on" : "retain-on-failure",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "login-chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "login-chromium", use: { ...devices["Desktop Chrome"] } },
+    // Retain the full lifecycle on success too, so the Linux artifact can
+    // establish that late updates did not interrupt the original demo steps.
+    ...(SECURE ? [{ name: "login-webkit", testMatch: webkitSpecs.map((spec) => `**/${spec}`), use: { ...devices["Desktop Safari"], trace: "on" as const } }] : []),
+  ],
   webServer: {
-    command: `pnpm dev --port ${PORT}`,
+    // `next dev` over https with a certificate made for this run. With
+    // E2E_REUSE_SERVER=1 the origin is http and, when no server answers, the
+    // plain dev server starts as it did before.
+    command: SECURE ? "node scripts/demo/login-e2e-https.mjs" : `pnpm dev --port ${LOGIN_PORT}`,
     url: BASE_URL,
+    ignoreHTTPSErrors: SECURE,
+    // Playwright stops the server group with SIGKILL unless told otherwise, and
+    // then the launcher could not delete the private key of this run.
+    gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     // F-152: only fixed local values here. A database URL set in the
     // environment reaches the server through the environment it inherits.
     env: {

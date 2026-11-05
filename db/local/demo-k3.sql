@@ -125,7 +125,11 @@ BEGIN
   FOR i IN 2..3 LOOP
     PERFORM set_config('app.session_token', v_tokens[i], true);
     SELECT a.current_version INTO STRICT v_version FROM institution.assignment a WHERE a.id = v_assignment;
-    PERFORM institution.acknowledge_notice(v_assignment, v_version);
+    -- Template version 1 (src/domain/notice/fingerprint.ts); a rerun over a
+    -- row written before DAN-306 would be a conflict, so it is skipped.
+    IF NOT institution.has_acknowledged_current(v_assignment) THEN
+      PERFORM institution.acknowledge_notice(v_assignment, v_version, 1);
+    END IF;
   END LOOP;
 
   -- 6. Sign-out of all three sessions.

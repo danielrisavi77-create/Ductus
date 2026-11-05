@@ -2,13 +2,14 @@
 
 Kratka uputa za sesiju kojoj je dodijeljena uloga, osobito novu sesiju u oblaku. Kartica ne uvodi pravila i ne ponavlja produktna ni sigurnosna pravila: upućuje na kanonske dokumente (`CLAUDE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/SESSIONS.md`, `docs/ORKESTRATOR.md`). U sukobu vrijedi kanonski dokument, a kartica se ispravlja.
 
-Redoslijed: `STATE.md`, zatim `zajednicko.md`, zatim kartica uloge, zatim samo odjeljci iz zadatka.
+Redoslijed: `STATE.md`, zatim `zajednicko.md`, zatim kartica uloge (pisac u oblaku i `pisac-oblak.md`), zatim samo odjeljci iz zadatka.
 
 | Uloga | Kartica |
 | --- | --- |
 | pisac Backend | `pisac-backend.md` |
 | pisac Frontend | `pisac-frontend.md` |
 | pisac Platforma | `pisac-platforma.md` |
+| pisac u oblaku (zajednički postupak) | `pisac-oblak.md` |
 | neovisni reviewer | `reviewer.md` |
 | QA | `qa.md` |
 

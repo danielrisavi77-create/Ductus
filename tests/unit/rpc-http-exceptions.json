@@ -47,6 +47,17 @@
     "ticket": "DAN-296"
   },
   {
+    "function": "institution.appoint_institution_admin",
+    "status": "bez rute",
+    "reason": "Operatersko imenovanje administratora ustanove na pisani zahtjev fakulteta (D-262 Q04, DAN-525); nijedna aplikacijska uloga ni PUBLIC je ne smije pozvati."
+  },
+  {
+    "function": "institution.approve_mentorship_request",
+    "status": "ruta dolazi",
+    "reason": "Potvrđeni nastavnik odobrava studentov zahtjev za mentorstvo i time nastaje mentorstvo (M2.6-P03, D-204); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-515"
+  },
+  {
     "function": "institution.assign_group_student",
     "status": "ruta dolazi",
     "reason": "Nastavnik kolegija dodaje studenta kolegija u seminarsku grupu (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
@@ -65,9 +76,21 @@
     "ticket": "DAN-351"
   },
   {
+    "function": "institution.end_course_editor",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija zatvara otvorenog urednika bez brisanja povijesti (M2.7-P03); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
     "function": "institution.end_group_assignment",
     "status": "ruta dolazi",
     "reason": "Nastavnik kolegija završava mjesto nastavnika ili studenta u grupi bez brisanja povijesti (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
+    "function": "institution.end_team_substitution",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija prekida zamjenu prije roka (M2.7-P03); RPC postoji za ductus_app, ruta još nije spojena.",
     "ticket": "DAN-351"
   },
   {
@@ -77,15 +100,50 @@
     "ticket": "DAN-379"
   },
   {
+    "function": "institution.publish_faculty_rule_version",
+    "status": "ruta dolazi",
+    "reason": "Potvrđeni administrator ustanove objavljuje novu nepromjenjivu verziju pravila fakulteta uz očekivanu verziju (M2.12-P01a, D-175); RPC postoji za ductus_app, ruta nije u opsegu P01a.",
+    "ticket": "DAN-315"
+  },
+  {
+    "function": "institution.request_mentorship",
+    "status": "ruta dolazi",
+    "reason": "Student traži od potvrđenog nastavnika svoje ustanove mentorstvo za jedan rad (M2.6-P03, D-204); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-515"
+  },
+  {
+    "function": "institution.revoke_institution_admin",
+    "status": "bez rute",
+    "reason": "Operaterski opoziv administratora ustanove na pisani zahtjev fakulteta (D-262 Q04, DAN-525); nijedna aplikacijska uloga ni PUBLIC je ne smije pozvati."
+  },
+  {
     "function": "institution.revoke_work_access",
     "status": "ruta dolazi",
     "reason": "Davatelj ili nastavnik rada opoziva pravo prije isteka (M2.8-P01, D-205); RPC postoji za ductus_app, ruta i sučelje čekaju odluku U-1.",
     "ticket": "DAN-379"
   },
   {
+    "function": "institution.set_course_editor",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija imenuje urednika kolegija i zatvara prethodnog (M2.7-P03); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
     "function": "institution.set_course_holder",
     "status": "ruta dolazi",
     "reason": "Nastavnik kolegija imenuje nositelja kolegija i završava prethodnog (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
     "ticket": "DAN-351"
+  },
+  {
+    "function": "institution.set_team_substitution",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik kolegija upisuje zamjenu člana tima do zadanog roka (M2.7-P03); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
+    "function": "institution.withdraw_mentorship_request",
+    "status": "ruta dolazi",
+    "reason": "Student povlači vlastiti otvoreni zahtjev za mentorstvo (M2.6-P03); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-515"
   }
 ]
