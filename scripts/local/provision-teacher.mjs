@@ -1,7 +1,7 @@
 // K-3 / DAN-88: explicit local operator command, never a server import.
 // Uses only a local PostgreSQL socket and a fixed SQL file: by default the one
 // of Docker Compose's container; with `--native` (DAN-346) the one of the
-// native demo runner (`pnpm demo:up:native`), through its pinned psql.
+// native runner (`pnpm local:up:native`), through its pinned psql.
 // No account argument grants "Demo nastavnik"; `demo-teacher-2` grants "Demo
 // nastavnica" (K-4d, #655). Any other argument fails before anything runs.
 import { spawnSync } from "node:child_process";
@@ -13,7 +13,7 @@ import { nativePsqlTarget } from "../../db/local/psql-target.mjs";
 import { layout, psqlTarget } from "./native/up.mjs";
 import { TOOLS, ductusHome, toolDir, treeHash } from "./native/tools.mjs";
 
-export const DEMO_TEACHERS = Object.freeze(["demo-teacher", "demo-teacher-2"]);
+export const TEACHER_ACCOUNTS = Object.freeze(["demo-teacher", "demo-teacher-2"]);
 export const NATIVE_FLAG = "--native";
 
 const PSQL_OPTIONS = ["-X", "-q", "-v", "ON_ERROR_STOP=1"];
@@ -24,7 +24,7 @@ const PSQL_STEERING = /^PSQL/i;
 export function psqlArgs(argv) {
   if (argv.length > 1) return null;
   const account = argv[0] ?? "demo-teacher";
-  if (!DEMO_TEACHERS.includes(account)) return null;
+  if (!TEACHER_ACCOUNTS.includes(account)) return null;
   return ["compose", "exec", "-T", "postgres", "psql", ...PSQL_OPTIONS,
     "-v", `account=${account}`, "-U", "ductus", "-d", "ductus"];
 }
@@ -43,11 +43,11 @@ export function parseProvisionArgs(argv) {
  * downloaded. Throws when it cannot be used.
  */
 export async function nativeCommand(account, env, { platform = process.platform, exists = existsSync, hash = treeHash } = {}) {
-  if (platform !== "win32") throw new Error("--native runs only on Windows, as the native demo runner does");
+  if (platform !== "win32") throw new Error("--native runs only on Windows, as the native runner does");
   const home = ductusHome(env);
   const dir = toolDir(home, "postgres");
   if (!exists(dir) || (await hash(dir)) !== TOOLS.postgres.tree) {
-    throw new Error("the native PostgreSQL folder is missing or changed; start pnpm demo:up:native first");
+    throw new Error("the native PostgreSQL folder is missing or changed; start pnpm local:up:native first");
   }
   const paths = layout(home);
   const target = nativePsqlTarget(psqlTarget(join(dir, "bin"), paths.socket), env);
@@ -66,7 +66,7 @@ export async function provision(argv, {
 } = {}) {
   const parsed = parseProvisionArgs(argv);
   if (!parsed) {
-    error(`Demo teacher provision accepts no argument or one of: ${DEMO_TEACHERS.slice(1).join(", ")}; ${NATIVE_FLAG} may come first.`);
+    error(`Teacher provision accepts no argument or one of: ${TEACHER_ACCOUNTS.slice(1).join(", ")}; ${NATIVE_FLAG} may come first.`);
     return 1;
   }
   let command = "docker";
@@ -77,7 +77,7 @@ export async function provision(argv, {
     try {
       ({ command, args, env: childEnv } = await nativeCommand(parsed.account, env, { platform, exists, hash }));
     } catch (failure) {
-      error(`Demo teacher provision refused: ${failure.message}.`);
+      error(`Teacher provision refused: ${failure.message}.`);
       return 1;
     }
   }
@@ -96,8 +96,8 @@ export async function provision(argv, {
     // No credentials or SQL text are echoed. Manual follow-up: confirm the
     // local stack is running and the synthetic teacher has signed in once.
     error(parsed.native
-      ? "Demo teacher provision failed: native demo database or identity prerequisite unavailable."
-      : "Demo teacher provision failed: local compose/identity prerequisite unavailable.");
+      ? "Teacher provision failed: native database or identity prerequisite unavailable."
+      : "Teacher provision failed: local compose/identity prerequisite unavailable.");
     return 1;
   }
   log("Local synthetic teacher role confirmed (or already confirmed).");

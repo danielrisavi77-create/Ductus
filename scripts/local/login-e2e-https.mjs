@@ -44,7 +44,7 @@ export async function warmLoginPages(request, origin, paths) {
  * per host name and then upgrades the redirect to the fake provider
  * (http://localhost:8090, http only) to https, which fails the handshake. An IP
  * address is never noted as an HSTS host (RFC 6797 §8.1). With E2E_REUSE_SERVER=1
- * the server is one started elsewhere (`pnpm demo:up`, the native runner),
+ * the server is one started elsewhere (`pnpm local:up`, the native runner),
  * which stays on http://localhost as it always was.
  */
 export function loginOrigin(env = process.env) {

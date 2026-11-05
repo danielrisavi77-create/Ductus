@@ -1,4 +1,4 @@
-import { loginOrigin } from "../../scripts/demo/login-e2e-https.mjs";
+import { loginOrigin } from "../../scripts/local/login-e2e-https.mjs";
 
 /**
  * The origin of the app under test: https on our own dev server, http against a

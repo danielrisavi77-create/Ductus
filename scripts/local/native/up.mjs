@@ -1,9 +1,9 @@
-// DAN-324 (#799): the demo without Docker, for Windows 10 1803+ and 11.
+// DAN-324 (#799): the local runner without Docker, for Windows 10 1803+ and 11.
 //
-//   pnpm demo:up:native [--prepare-only] [--no-demo-data]
-//   pnpm demo:up:native --stop
+//   pnpm local:up:native [--prepare-only] [--no-sample-data]
+//   pnpm local:up:native --stop
 //
-// The same sequence as `pnpm demo:up` (runDemoLifecycle of ../up.mjs), with
+// The same sequence as `pnpm local:up` (runLocalLifecycle of ../up.mjs), with
 // the Compose services replaced by native processes on loopback: PostgreSQL 17
 // and rustfs (the pinned, hash-checked binaries of tools.mjs) and the fake
 // OIDC provider under the Node of this run. Data lives in
@@ -18,15 +18,15 @@ import { connect } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { createDemoEnvironment, runDemoLifecycle } from "../up.mjs";
+import { createLocalEnvironment, runLocalLifecycle } from "../up.mjs";
 import { ductusHome, ensureTool, toolDir, windowsTar } from "./tools.mjs";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const LOOPBACK_PRELOAD = new URL("./loopback.mjs", import.meta.url).href;
 const PORTS = Object.freeze({ postgres: 54329, rustfs: 9100, oidc: 8090, app: 3000 });
 const SUPERUSER_PASSWORD = "ductus-local-only"; // the Compose superuser's, compose.yaml
-const DEMO_DATA_SCRIPT = "db/local/demo-k3.mjs";
-const FLAGS = new Set(["--prepare-only", "--no-demo-data", "--stop"]);
+const SAMPLE_DATA_SCRIPT = "db/local/demo-k3.mjs";
+const FLAGS = new Set(["--prepare-only", "--no-sample-data", "--stop"]);
 // libpq, psql and dbmate read these; none may aim the run at another server or file.
 const STEERING = /^(?:PG|PSQL|DBMATE_)/i;
 const INTERRUPTED = 130;
@@ -35,7 +35,7 @@ export function parseArgs(argv) {
   for (const arg of argv) if (!FLAGS.has(arg)) throw new Error(`unknown argument ${arg}`);
   const stop = argv.includes("--stop");
   if (stop && argv.length !== 1) throw new Error("--stop takes no other argument");
-  return { stop, prepareOnly: argv.includes("--prepare-only"), demoData: !argv.includes("--no-demo-data") };
+  return { stop, prepareOnly: argv.includes("--prepare-only"), sampleData: !argv.includes("--no-sample-data") };
 }
 
 export function layout(home) {
@@ -77,8 +77,8 @@ export function nativeConf(socketDir) {
 }
 
 export function refusal(platform, env) {
-  if (platform !== "win32") return "the native runner is for Windows; elsewhere use pnpm demo:up";
-  if (env.NODE_ENV === "production") return "the demo is refused in production";
+  if (platform !== "win32") return "the native runner is for Windows; elsewhere use pnpm local:up";
+  if (env.NODE_ENV === "production") return "the native runner is refused in production";
   return undefined;
 }
 
@@ -153,7 +153,7 @@ function processStarts(env, pids) {
 /** Before tools() is asked: the ports are free and the provider has its dependencies. */
 async function startChecks() {
   for (const [name, port] of Object.entries(PORTS)) {
-    if (await portInUse(port)) throw new Error(`port ${port} (${name}) is already in use; stop the other stack first (pnpm demo:up:native --stop or pnpm stack:down)`);
+    if (await portInUse(port)) throw new Error(`port ${port} (${name}) is already in use; stop the other stack first (pnpm local:up:native --stop or pnpm stack:down)`);
   }
   if (!existsSync(join(ROOT, "infra", "fake-oidc", "node_modules"))) {
     throw new Error("the fake OIDC provider has no dependencies; run pnpm --dir infra/fake-oidc install --frozen-lockfile");
@@ -166,7 +166,7 @@ async function startChecks() {
  * other binaries; the command line refuses anything but Windows.
  */
 export function createNativeRun({
-  env, home, platform = process.platform, tools, localeArgs = ["--locale=C", "--locale-provider=builtin", "--builtin-locale=C.UTF-8"], demoData = true,
+  env, home, platform = process.platform, tools, localeArgs = ["--locale=C", "--locale-provider=builtin", "--builtin-locale=C.UTF-8"], sampleData = true,
   checks = startChecks, probe = platform === "win32" ? processStarts : async () => new Map(),
 }) {
   const paths = layout(home);
@@ -299,7 +299,7 @@ export function createNativeRun({
 
   async function runNode(script, nodeEnv) {
     if (interrupted) return { code: INTERRUPTED, stdout: "" };
-    if (script === DEMO_DATA_SCRIPT && !demoData) return { code: 0, stdout: "" };
+    if (script === SAMPLE_DATA_SCRIPT && !sampleData) return { code: 0, stdout: "" };
     try {
       const { main } = await import(pathToFileURL(join(ROOT, script)).href);
       const result = await main(nodeEnv, [], target());
@@ -359,13 +359,13 @@ export async function stopRecorded(env, home, { probe = processStarts, kill = (p
     const now = running.get(pid);
     if (now === undefined) continue;
     if (now.image !== image || typeof start !== "string" || now.start !== start) {
-      console.error(`pid ${pid} (${name}) is not the process this demo started; it is left alone`);
+      console.error(`pid ${pid} (${name}) is not the process this run started; it is left alone`);
       continue;
     }
     await kill(pid);
   }
   await rm(paths.run, { force: true });
-  console.log("The native demo services are stopped.");
+  console.log("The native services are stopped.");
 }
 
 async function main() {
@@ -375,7 +375,7 @@ async function main() {
     const refused = refusal(process.platform, process.env);
     if (refused) throw new Error(refused);
   } catch (error) {
-    console.error(`Native demo refused: ${error.message}`);
+    console.error(`Native run refused: ${error.message}`);
     process.exitCode = 1;
     return;
   }
@@ -385,9 +385,9 @@ async function main() {
   stripSteering(process.env);
   let env;
   try {
-    env = createDemoEnvironment(process.env);
+    env = createLocalEnvironment(process.env);
   } catch (error) {
-    console.error(`Native demo refused: ${error.message}`);
+    console.error(`Native run refused: ${error.message}`);
     process.exitCode = 1;
     return;
   }
@@ -400,7 +400,7 @@ async function main() {
     const rustfs = await ensureTool("rustfs", { home, tar });
     return { pgBin: join(postgres, "bin"), rustfs: join(rustfs, "rustfs.exe") };
   };
-  const nativeRun = createNativeRun({ env, home, tools, demoData: options.demoData });
+  const nativeRun = createNativeRun({ env, home, tools, sampleData: options.sampleData });
   for (const signal of ["SIGINT", "SIGTERM", "SIGBREAK", "SIGHUP"]) {
     process.on(signal, () => {
       process.exitCode = INTERRUPTED;
@@ -409,11 +409,11 @@ async function main() {
   }
 
   console.log(options.prepareOnly
-    ? "Preparing the native Ductus demo: PostgreSQL, rustfs, fake OIDC, migrations, synthetic institutions, evidence key and storage."
-    : "Starting the native Ductus demo: PostgreSQL, rustfs, fake OIDC, migrations, synthetic data and the app.");
+    ? "Preparing native Ductus: PostgreSQL, rustfs, fake OIDC, migrations, synthetic institutions, evidence key and storage."
+    : "Starting native Ductus: PostgreSQL, rustfs, fake OIDC, migrations, synthetic data and the app.");
   console.log("A local auth password is generated for this run and is not written to disk or printed.");
   try {
-    const code = await runDemoLifecycle(env, nativeRun.runScript, !options.prepareOnly, nativeRun.runNode);
+    const code = await runLocalLifecycle(env, nativeRun.runScript, !options.prepareOnly, nativeRun.runNode);
     if (code !== 0 && process.exitCode === undefined) process.exitCode = code;
   } finally {
     await nativeRun.stop();
@@ -422,7 +422,7 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
-    console.error(`Native demo failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    console.error(`Native run failed: ${error instanceof Error ? error.message : "unknown error"}`);
     process.exitCode = 1;
   });
 }
