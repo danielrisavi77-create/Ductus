@@ -172,6 +172,41 @@ test("K9h a branch tip without a readable SHA carries nothing", async () => {
   for (const bad of [undefined, "", "e".repeat(39)]) assert.deepEqual(await carry(world({ tips: [bad] })), [], String(bad));
 });
 
+// K9i (QA c.6657595775): a tree entry needs `path`, `mode` and `type` as
+// non-empty strings before any key is built; otherwise nothing carries. Each
+// class is first served the same way on all four trees, where the old key
+// ("undefined undefined" or "absent" on every side) matched and carried.
+const BAD_ENTRIES = [
+  ["only a path", { path: "a.mjs" }],
+  ["no mode", { path: "a.mjs", type: "blob" }],
+  ["no type", { path: "a.mjs", mode: "100644" }],
+  ["no path", { mode: "100644", type: "blob" }],
+  ["a numeric mode", { path: "a.mjs", mode: 100644, type: "blob" }],
+  ["a null type", { path: "a.mjs", mode: "100644", type: null }],
+  ["an empty path", { path: "", mode: "100644", type: "blob" }],
+  ["an empty mode", { path: "a.mjs", mode: "", type: "blob" }],
+  ["a null entry", null],
+  ["a string entry", "a.mjs"],
+];
+const allTrees = (items) => Object.fromEntries([head, earlier, tip, oldBase].map((s) => [s, items]));
+
+test("K9i the QA case {truncated:false, tree:[{path:\"a.mjs\"}]} with the same patches carries nothing", async () => {
+  const lines = [];
+  assert.deepEqual(await carry(world({ trees: allTrees([{ path: "a.mjs" }]) }), undefined, lines), []);
+  assert.ok(lines.some((line) => /failed closed/.test(line)), lines.join("\n"));
+});
+
+for (const [id, bad] of BAD_ENTRIES) {
+  test(`K9i a tree entry with ${id} carries nothing, on all trees or on any one`, async () => {
+    assert.deepEqual(await carry(world({ trees: allTrees([bad]) })), [], "all trees");
+    for (const s of [head, earlier, tip, oldBase]) {
+      const lines = [];
+      assert.deepEqual(await carry(world({ trees: { [s]: [entry(), bad] } }), undefined, lines), [], s);
+      assert.ok(lines.some((line) => line.includes(`tree of ${s}`)), lines.join("\n"));
+    }
+  });
+}
+
 test("K10 an Owner-Override carries over a clean base merge, and not over a changed tree entry", async () => {
   assert.deepEqual(await carry(world(), [override(earlier)]), [earlier]);
   assert.deepEqual(await carry(world({ trees: treeOf(head, { mode: "100755" }) }), [override(earlier)]), []);
@@ -196,6 +231,7 @@ const K12_FAILURES = [
   ["K9f truncated tree of the earlier head", { truncated: [earlier] }],
   ["K9g compare without a merge base", { mergeBase: (base, s) => (s === head ? undefined : oldBase) }],
   ["K9h unreadable tip", { tips: ["e".repeat(39)] }],
+  ["K9i tree entry with only a path", { trees: allTrees([{ path: "a.mjs" }]) }],
 ];
 for (const [id, knobs] of K12_FAILURES) {
   test(`K12 ${id}: the negative of a reached head stays, and nothing positive carries`, async () => {

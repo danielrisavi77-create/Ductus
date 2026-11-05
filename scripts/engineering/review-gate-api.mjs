@@ -115,6 +115,8 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
 // PASS, an override or a command: only `negativeHead` reads them.
 const holdNegatives = (carried, heads) => Object.defineProperty(carried, "heldNegatives", { value: new Set(heads) });
 
+const wholeEntry = (item) => ["path", "mode", "type"].every((key) => typeof item?.[key] === "string" && item[key] !== "");
+
 // D-101: earlier heads whose verdicts still hold because only base merges
 // followed and the PR diff is unchanged. Any API error, a timed-out call or an
 // exhausted budget carries nothing, except that a negative on a head already
@@ -131,7 +133,11 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
     if (!trees.has(sha)) {
       trees.set(sha, api(`/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`, { signal }).then((tree) => {
         if (tree?.truncated !== false || !Array.isArray(tree?.tree)) throw new Error(`the tree of ${sha} could not be read whole`);
-        return new Map(tree.tree.map((item) => [item?.path, `${item?.mode} ${item?.type}`]));
+        // QA c.6657595775: an entry without `path`, `mode` and `type` as
+        // non-empty strings would build a key like "undefined undefined" that
+        // matches on both sides, so it throws and nothing carries.
+        if (!tree.tree.every(wholeEntry)) throw new Error(`the tree of ${sha} has an entry without path, mode and type`);
+        return new Map(tree.tree.map((item) => [item.path, `${item.mode} ${item.type}`]));
       }));
     }
     return trees.get(sha);
