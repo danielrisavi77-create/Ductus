@@ -33,39 +33,95 @@ function untilAborted(work, signal) {
   });
 }
 
+// DAN-664 (#1551): at most three attempts for a transient failure, a 5xx or a
+// network error (fetch rejects with TypeError, per the Fetch spec), with a short
+// backoff. Every attempt and every wait stays inside the same per-call limit and
+// outer signal. A 4xx, an abort, a timeout or a broken 2xx body is final.
+export const MAX_ATTEMPTS = 3;
+export const RETRY_DELAY_MS = 250;
+const MAX_ERROR_BODY = 500;
+
+// Only reads, and a commit status write: GitHub keeps the latest status per
+// context, so the same body posted again leaves the same outcome. Any other
+// write could duplicate (a comment, a review) and is never retried.
+const retryable = (method, path) =>
+  method === "GET" || method === "HEAD" || (method === "POST" && /^\/repos\/[^/]+\/[^/]+\/statuses\/[^/?]+$/.test(path));
+
+class TransientError extends Error {}
+
+// Resolves after `ms`, or rejects as soon as `signal` aborts. The timer stays
+// referenced (an unref'd wait let the runner exit mid-backoff) and is cleared
+// on abort, so it never holds the process past the limit.
+const pause = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
 /**
  * Returns `api(path, options)`. Each call aborts after `timeoutMs`, or earlier
  * when `options.signal` aborts (used for the carry-over budget). The limit also
- * covers reading the body.
+ * covers reading the body and every retry with its backoff. Errors name the
+ * method and path, never the token or headers.
  */
 export function createApi({
   fetchImpl = globalThis.fetch,
   baseUrl = "https://api.github.com",
   token,
   timeoutMs = API_CALL_TIMEOUT_MS,
+  retryDelayMs = RETRY_DELAY_MS,
 } = {}) {
   return async function api(path, options = {}) {
     const { signal: outer, ...rest } = options;
     const limit = AbortSignal.timeout(timeoutMs);
     const signal = outer ? AbortSignal.any([limit, outer]) : limit;
-    return untilAborted(call(path, rest, signal), signal);
+    return untilAborted(attempts(path, rest, signal), signal);
   };
 
-  async function call(path, rest, signal) {
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      ...rest,
-      signal,
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        ...(rest.headers ?? {}),
-      },
-    });
+  async function attempts(path, rest, signal) {
+    const method = String(rest.method ?? "GET").toUpperCase();
+    const tries = retryable(method, path) ? MAX_ATTEMPTS : 1;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await call(path, rest, signal, method);
+      } catch (error) {
+        if (!(error instanceof TransientError) || attempt >= tries || signal.aborted) throw error;
+        await pause(retryDelayMs * 2 ** (attempt - 1), signal);
+      }
+    }
+  }
+
+  async function call(path, rest, signal, method) {
+    const name = `GitHub API ${method} ${path}`;
+    let response;
+    try {
+      response = await fetchImpl(`${baseUrl}${path}`, {
+        ...rest,
+        signal,
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...(rest.headers ?? {}),
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof TypeError) || signal.aborted) throw error;
+      throw new TransientError(`${name} failed: ${error.message}`);
+    }
 
     if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`GitHub API ${response.status}: ${body}`);
+      const body = String(await response.text()).slice(0, MAX_ERROR_BODY);
+      const message = `${name} ${response.status}: ${body}`;
+      throw response.status >= 500 && response.status <= 599 ? new TransientError(message) : new Error(message);
     }
     if (response.status === 204) return null;
     return response.json();
