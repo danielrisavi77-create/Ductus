@@ -217,7 +217,9 @@ function quotaEvidence(items, reviews = [], activityItems = items) {
     .map((review) => {
       const slug = [...QUOTA_EXHAUSTED_PATTERNS.keys()].find((name) => review?.user?.login === `${name}[bot]`);
       if (!slug || review?.user?.type !== "Bot") return null;
-      return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
+      // A time that is no string is unreadable and counts as latest: fail closed.
+      const at = typeof review?.submitted_at === "string" ? Date.parse(review.submitted_at) : NaN;
+      return { appSlug: slug, createdAt: at || Infinity, exhausted: false };
     })
     .filter(Boolean);
   const activity = [...appActivity, ...appReviews];
@@ -538,6 +540,10 @@ function evaluateGateCore({
   // D-139 rule that a QA session never reviewed this PR. Defaults to comments.
   historyComments = null,
   prReviews = [],
+  // DAN-452: every PR review, also from before the last base change, for the
+  // activity that voids quota evidence. `prReviews` holds only reviews after
+  // that change (Codex evidence). Defaults to prReviews.
+  quotaReviews = null,
   reviewComments = null,
   authorLogin = null,
   carriedHeads = new Set(),
@@ -690,7 +696,7 @@ function evaluateGateCore({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments, prReviews, historyComments ?? comments);
+    const evidence = quotaEvidence(comments, quotaReviews ?? prReviews, historyComments ?? comments);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
@@ -1033,8 +1039,10 @@ export function lastBaseChange(events) {
 export function sinceBaseChange(items, cutoff, stamp = "created_at", { codexEdits = false } = {}) {
   const list = Array.isArray(items) ? items : [];
   if (cutoff === -Infinity) return list;
+  // GitHub sends times as ISO strings; Date.parse reads a number such as 2027
+  // as a year, so any other type is unreadable (DAN-452, plan #1500 A6).
   const after = (value) => {
-    const at = Date.parse(value ?? "");
+    const at = typeof value === "string" ? Date.parse(value) : NaN;
     return Number.isFinite(at) && at > cutoff;
   };
   return list.filter(
@@ -1133,7 +1141,7 @@ export function evaluateMergeAuthorization({
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
 
-export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, quotaReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -1160,6 +1168,7 @@ export function evaluatePullRequest({ pr, files, comments, historyComments, prRe
     comments,
     historyComments,
     prReviews,
+    quotaReviews,
     reviewComments,
     authorLogin: pr.user?.login ?? null,
     carriedHeads,

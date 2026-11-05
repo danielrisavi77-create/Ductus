@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -255,5 +255,65 @@ describe("pr-auto-merge hook", { timeout: 30_000 }, () => {
     expect(decide('gh pr create --title "x" --body "Risk: low\nTask: DAN-1"', url)).toBe("");
     expect(decide('gh pr create --title "x" --body "Agent: claude:a:nobody\nRisk: low\nTask: DAN-1"', url)).toBe("");
     expect(decide('gh pr create --title "x" --body-file missing.md', url)).toBe("");
+  });
+});
+
+describe("PR hooks registration and start-up", { timeout: 30_000 }, () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const settings = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
+  type Hook = { command?: string; args?: string[]; shell?: string; timeout?: number };
+  const entries = (event: string): Hook[] =>
+    settings.hooks[event].flatMap((group: { matcher?: string; hooks: Hook[] }) =>
+      group.matcher === "Bash|PowerShell" ? group.hooks : [],
+    );
+
+  // Started by node directly: no bash process per tool call, and no shell
+  // that could be missing or quote the path differently (DAN-432).
+  it.each([
+    ["PreToolUse", "pr-metadata-precheck.mjs", 20],
+    ["PostToolUse", "pr-auto-merge.mjs", 30],
+  ])("%s registers %s once, started by node without a shell", (event, file, timeout) => {
+    const found = entries(event).filter((hook) =>
+      [hook.command, ...(hook.args ?? [])].some((part) => part?.includes(file)),
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      command: "node",
+      args: [`\${CLAUDE_PROJECT_DIR}/scripts/hooks/${file}`],
+      timeout,
+    });
+    expect(found[0].shell).toBeUndefined();
+  });
+
+  // A copy of scripts/hooks without scripts/engineering: the metadata rules
+  // cannot load there.
+  const bare = mkdtempSync(join(tmpdir(), "pr-hooks-bare-"));
+  mkdirSync(join(bare, "scripts/hooks"), { recursive: true });
+  for (const file of ["pr-command.mjs", "pr-metadata-precheck.mjs", "pr-auto-merge.mjs"]) {
+    copyFileSync(join(root, "scripts/hooks", file), join(bare, "scripts/hooks", file));
+  }
+  const runBare = (file: string, command: string, stdout = "") =>
+    spawnSync(process.execPath, [join(bare, "scripts/hooks", file), "--dry-run"], {
+      input: JSON.stringify({ tool_input: { command }, tool_response: { stdout }, cwd: docsOnly }),
+      encoding: "utf8",
+      env,
+    });
+
+  it("passes an ordinary command without loading the metadata rules", () => {
+    expect(runBare("pr-metadata-precheck.mjs", "git status").status).toBe(0);
+    expect(runBare("pr-auto-merge.mjs", "git status").status).toBe(0);
+  });
+
+  it("still blocks a PR command when the metadata rules cannot load", () => {
+    const result = runBare("pr-metadata-precheck.mjs", heredoc("claude:desktop:platforma"));
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("could not run");
+  });
+
+  it("never selects a PR for auto-merge when the rules cannot load", () => {
+    const created = 'gh pr create --title "x" --body "Agent: claude:a:platforma\nRisk: low\nTask: DAN-1"';
+    const result = runBare("pr-auto-merge.mjs", created, "https://github.com/example/repo/pull/7\n");
+    expect(result.stdout.trim()).toBe("");
+    expect(result.status).not.toBe(0);
   });
 });

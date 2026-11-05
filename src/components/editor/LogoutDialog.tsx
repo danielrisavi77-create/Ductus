@@ -101,14 +101,9 @@ export default function LogoutDialog({
   const askingCopy = copy !== null && discard === "confirm";
   const askingAfter = after !== null && afterDiscard === "confirm";
   const asking = askingCopy || askingAfter;
-  const copyShown = copy !== null;
-  useEffect(() => {
-    if (!copyShown && discard === "confirm") step("keep");
-  }, [copyShown, discard]);
-  const afterShown = after !== null;
-  useEffect(() => {
-    if (!afterShown && afterDiscard === "confirm") afterStep("keep");
-  }, [afterShown, afterDiscard]);
+  // Taken back in the render that sees the part gone, as "Zadrži" would.
+  if (copy === null && discard === "confirm") setDiscard(nextDiscardStep(discard, "keep"));
+  if (after === null && afterDiscard === "confirm") setAfterDiscard(nextDiscardStep(afterDiscard, "keep"));
   // Set when Escape took the question back, so the close the browser may
   // send after it opens the dialog again instead of counting as "Ostani".
   const withdrawn = useRef(false);

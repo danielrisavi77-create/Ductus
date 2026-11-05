@@ -169,12 +169,17 @@ function SessionCommentPanel({ documentId, session }: {
   useEffect(() => { void load(); }, [load]);
 
   // The session ended (D-118): forget the threads; the cards, and with them
-  // any typed reply, are no longer rendered.
+  // any typed reply, are no longer rendered. The state is dropped in the
+  // render that first sees the end, the refs right after its commit.
+  const [wasStopped, setWasStopped] = useState(stopped);
+  if (stopped !== wasStopped) {
+    setWasStopped(stopped);
+    if (stopped) setOutcome(null);
+  }
   useEffect(() => {
     if (!stopped) return;
     stoppedRef.current = true;
     generation.current += 1;
-    setOutcome(null);
   }, [stopped]);
 
   // The highlight lives as long as this panel; it never enters the document.

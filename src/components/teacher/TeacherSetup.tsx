@@ -24,6 +24,11 @@ import styles from "./TeacherSetup.module.css";
 const YEARS = Object.keys(t.teacher.course.years) as (keyof typeof t.teacher.course.years)[];
 const POLICIES = Object.keys(t.teacher.course.policies) as CoursePolicy[];
 
+/** Whether `validUntil` is already past on this device; read at submit time, never during render. */
+function alreadyPast(validUntil: string): boolean {
+  return Date.parse(validUntil) <= Date.now();
+}
+
 function PreviewRange({ text }: { text: string | null }) {
   return text ? <span> · {text}</span> : null;
 }
@@ -120,7 +125,7 @@ export default function TeacherSetup({ existingCourse = null }: { existingCourse
     if (inFlight.current) return;
     if (!savedCourse.current && !name.trim()) return setCourseResult("nameMissing");
     // A deadline already past on this device is refused before any request; the server still decides the rest.
-    if (!expiry || Date.parse(expiry.validUntil) <= Date.now()) {
+    if (!expiry || alreadyPast(expiry.validUntil)) {
       setCodeResult(validUntilLocal ? { kind: "invalid" } : "missing");
       expiryInput.current?.focus();
       return;
