@@ -42,8 +42,88 @@ function readEnded(store: MarkStore): string[] {
   }
 }
 
+/** The session the browser recorded last, or null when none is current. */
+export function currentSession(store: MarkStore | null): SessionMark | null {
+  if (!store) return null;
+  try {
+    return readCurrent(store);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ended sessions also go to cookies, read only by this page's script, for
+ * where localStorage refuses the record (#1444). Each ended session has its own
+ * cookie, `ductus-ended-<tag>`, so a write never reads or replaces another
+ * tab's mark. It outlives a session.
+ */
+export const ENDED_COOKIE = "ductus-ended";
+const ENDED_COOKIE_PREFIX = `${ENDED_COOKIE}-`;
+const ENDED_COOKIE_MAX_AGE_S = 86_400;
+const COOKIE_TAG = /^[0-9A-Za-z_-]{1,128}$/;
+
+/** `document.cookie`: a read lists the cookies, a write sets one. */
+export type CookieJar = { read(): string; write(cookie: string): void; secure: boolean };
+
+/** `document.cookie`, or null outside a browser. */
+export function browserCookieJar(): CookieJar | null {
+  try {
+    if (typeof document === "undefined") return null;
+    return {
+      read: () => document.cookie,
+      write: (cookie) => { document.cookie = cookie; },
+      secure: location.protocol === "https:",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every ended tag the cookies hold: one `ductus-ended-<tag>` per session, and
+ * the older shared `ductus-ended=<tag>.<tag>` list, read only for the change-over.
+ */
+function readEndedCookie(jar: CookieJar | null): string[] {
+  if (!jar) return [];
+  const tags: string[] = [];
+  try {
+    for (const part of jar.read().split(";")) {
+      const pair = part.trim();
+      const at = pair.indexOf("=");
+      if (at < 0) continue;
+      const name = pair.slice(0, at);
+      if (name === ENDED_COOKIE) {
+        tags.push(...pair.slice(at + 1).split(".").filter((tag) => COOKIE_TAG.test(tag)));
+      } else if (name.startsWith(ENDED_COOKIE_PREFIX)) {
+        const tag = name.slice(ENDED_COOKIE_PREFIX.length);
+        if (COOKIE_TAG.test(tag)) tags.push(tag);
+      }
+    }
+  } catch {
+    // An unreadable cookie ends nobody.
+  }
+  return tags;
+}
+
+/** Records the ended sessions, one cookie each; true once a read finds them all. */
+export function endSessionsInCookie(jar: CookieJar | null, tags: readonly string[]): boolean {
+  if (!jar) return false;
+  try {
+    for (const tag of tags) {
+      if (!COOKIE_TAG.test(tag)) continue;
+      jar.write(`${ENDED_COOKIE_PREFIX}${tag}=1; Path=/; Max-Age=${ENDED_COOKIE_MAX_AGE_S}; SameSite=Strict${jar.secure ? "; Secure" : ""}`);
+    }
+    const written = readEndedCookie(jar);
+    return tags.every((tag) => written.includes(tag));
+  } catch {
+    return false;
+  }
+}
+
 /** Whether a page rendered under `mark` belongs to a session that has ended. */
-export function hasEnded(store: MarkStore | null, mark: SessionMark): boolean {
+export function hasEnded(store: MarkStore | null, mark: SessionMark, jar: CookieJar | null = browserCookieJar()): boolean {
+  if (readEndedCookie(jar).includes(mark.tag)) return true;
   if (!store) return false;
   try {
     if (readEnded(store).includes(mark.tag)) return true;
@@ -69,16 +149,16 @@ export function endSessions(store: MarkStore | null, tags: readonly string[]): b
 }
 
 /**
- * After the logout route answered: the page's own session and the one the
- * browser recorded last both ended, since the route cleared whatever cookie
- * the browser held. Returns the tags for the other tabs.
+ * Sign-out, answered or not (#1444): ends only the session `tag` taken at the
+ * click, in localStorage and in the cookie, each whatever the other did.
  */
-export function endAfterLogout(store: MarkStore | null, tag: string | null): string[] {
-  const tags = new Set<string>(tag === null ? [] : [tag]);
-  const current = store ? readCurrent(store) : null;
-  if (current) tags.add(current.tag);
-  endSessions(store, [...tags]);
-  return [...tags];
+export function endAfterLogout(
+  store: MarkStore | null, tag: string | null, jar: CookieJar | null = browserCookieJar(),
+): string[] {
+  if (tag === null) return [];
+  endSessions(store, [tag]);
+  endSessionsInCookie(jar, [tag]);
+  return [tag];
 }
 
 /**
