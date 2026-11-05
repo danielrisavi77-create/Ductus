@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N-02 i N-03 Novi kolegij, zadatak i čarobnjak (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <a class="brand" href="#" aria-label="Ductura, početna stranica nastavnika"><span class="mark" aria-hidden="true">D</span><span class="word">Ductura</span></a>
+    <button class="btn secondary menu" type="button" aria-expanded="false">Izbornik</button>
+    <nav aria-label="Nastavnik">
+      <a href="#" aria-current="page">Kolegiji</a>
+      <a href="#">Mentorstva</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header>
+      <div class="ref-tag">Referenca paketa 4 · DAN-567 · N-02, N-03 · prijedlog slike · raspored iz demo-tok-v2.dc.html (zaslon 2), prebojan u papir i grafit · podaci su izmišljeni</div>
+      <h1>Novi kolegij i zadatak</h1>
+      <p>Dva koraka: kolegij, zatim zadatak u čarobnjaku u četiri koraka. Uporaba alata slijedi Pravilnik (čl. 8); nastavnik popis može samo suziti. Redoslijed tipkovnice: 1 naslov, 2 polja obrasca redom, 3 „Dalje”, 4 „Natrag”.</p>
+    </header>
+
+    <section class="state" aria-labelledby="h2-pra">
+      <div class="ref-tag">N-02 · stanje 1 · prazno</div>
+      <h2 id="h2-pra">Novi kolegij</h2>
+      <form class="card" novalidate>
+        <div class="formrow"><label for="n2-naziv">Naziv kolegija</label><input class="field" id="n2-naziv" type="text" autocomplete="off"><span class="hint">Do 120 znakova.</span></div>
+        <div class="formrow"><label for="n2-god">Akademska godina</label><select class="field" id="n2-god"><option>2026./2027.</option><option>2025./2026.</option></select></div>
+        <div class="row"><button class="btn" type="button">Stvori kolegij</button><a class="btn secondary" href="#">Odustani</a></div>
+        <p class="meta">Nakon stvaranja dobivate kod za upis koji dajete studentima.</p>
+      </form>
+    </section>
+
+    <section class="state" aria-labelledby="h2-val">
+      <div class="ref-tag">N-02 · stanje 2 · valjanost obrasca</div>
+      <h2 id="h2-val">Zadatak: ispravite označena polja</h2>
+      <p class="alert" role="alert" tabindex="-1"><strong>Obrazac ima 2 pogreške.</strong> <a href="#n2v-naslov">Naslov je obavezan</a>, <a href="#n2v-rok">rok mora biti nakon otvaranja</a>.</p>
+      <form class="card" novalidate>
+        <div class="formrow"><label for="n2v-naslov">Naslov zadatka</label><input class="field" id="n2v-naslov" type="text" aria-invalid="true" aria-describedby="n2v-e1"><span class="err" id="n2v-e1">Upišite naslov zadatka.</span></div>
+        <div class="formrow"><label for="n2v-otv">Otvaranje</label><input class="field" id="n2v-otv" type="text" value="14. 12. 2026."></div>
+        <div class="formrow"><label for="n2v-rok">Rok</label><input class="field" id="n2v-rok" type="text" value="7. 12. 2026." aria-invalid="true" aria-describedby="n2v-e2"><span class="err" id="n2v-e2">Rok mora biti nakon otvaranja.</span></div>
+        <div class="row"><button class="btn" type="button">Dalje</button></div>
+      </form>
+    </section>
+
+    <section class="state" aria-labelledby="h3-k1">
+      <div class="ref-tag">N-03 · koraci čarobnjaka</div>
+      <h2 id="h3-k1">Čarobnjak zadatka</h2>
+      <ol class="steps" aria-label="Koraci čarobnjaka">
+        <li>1 Osnovno</li><li>2 Rokovi i opseg</li><li aria-current="step">3 Uporaba alata</li><li>4 Pregled</li>
+      </ol>
+      <p class="meta">Korak 3 od 4. Koraci 1 i 2 su ispunjeni; „Natrag” ne gubi unos.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h3-alati">
+      <div class="ref-tag">N-03 · dopuštena uporaba alata (korak 3)</div>
+      <h2 id="h3-alati">Dopuštena uporaba alata</h2>
+      <div class="cols">
+        <div>
+          <p class="lead">Popis dopuštenog zadan je Pravilnikom (čl. 8). Možete ga samo suziti: isključena stavka prelazi u „Nije dopušteno”. Tekst stavki u aplikaciji ide doslovno iz Pravilnika; ovdje je sažetak.</p>
+          <div class="list" role="group" aria-label="Dopušteno">
+            <div class="tool"><span>Pretraživanje literature i izvora</span><label><input type="checkbox" checked> Dopušteno</label></div>
+            <div class="tool"><span>Provjera pravopisa i gramatike</span><label><input type="checkbox" checked> Dopušteno</label></div>
+            <div class="tool"><span>Prijevod izvora na hrvatski</span><label><input type="checkbox"> Dopušteno</label></div>
+            <div class="tool"><span>Objašnjenje pojma (razina 2)</span><label><input type="checkbox" checked> Dopušteno</label></div>
+          </div>
+          <div class="card" style="margin-top:12px"><strong>Nije dopušteno (fiksno)</strong><p class="meta">Pisanje teksta rada umjesto studenta i drugo što zabranjuje Pravilnik. Ovaj popis ne mijenjate.</p></div>
+        </div>
+        <aside class="card" aria-label="Kako vidi student">
+          <strong>Kako vidi student</strong>
+          <p>Dopušteno: pretraživanje literature i izvora, provjera pravopisa i gramatike, objašnjenje pojma.</p>
+          <p>Nije dopušteno: prijevod izvora na hrvatski i fiksno zabranjeno.</p>
+        </aside>
+      </div>
+      <div class="row"><a class="btn secondary" href="#">Natrag</a><button class="btn" type="button">Dalje</button></div>
+    </section>
+
+    <section class="state" aria-labelledby="h3-pre">
+      <div class="ref-tag">N-03 · korak 4 · pregled i objava</div>
+      <h2 id="h3-pre">Pregled prije objave</h2>
+      <div class="card">
+        <dl class="kv">
+          <dt>Naslov</dt><dd>Kritički osvrt na izvor</dd>
+          <dt>Otvaranje i rok</dt><dd>14. 12. 2026. do 12. 1. 2027.</dd>
+          <dt>Opseg</dt><dd>1500 do 2000 riječi</dd>
+          <dt>Uporaba alata</dt><dd>3 dopuštena, 1 isključen</dd>
+        </dl>
+        <p class="status" role="status">Izmjena objavljenog zadatka stvara novu verziju; studenti je ponovno potvrđuju.</p>
+        <div class="row"><a class="btn secondary" href="#">Natrag</a><button class="btn" type="button">Objavi zadatak</button></div>
+      </div>
+    </section>
+
+    <section class="state" aria-labelledby="h3-gre">
+      <div class="ref-tag">N-02, N-03 · učitavanje i greška</div>
+      <h2 id="h3-gre">Spremanje zadatka</h2>
+      <div class="grid">
+        <div class="frame" aria-busy="true"><div class="sk" role="status"><span class="sr">Spremanje zadatka…</span><i class="w1"></i><i class="w2"></i><i class="w3"></i></div></div>
+        <div class="frame"><p class="alert" role="alert"><strong>Zadatak nije objavljen.</strong> Veza se prekinula, pa ne znamo je li objava prošla. Provjerite stanje prije ponovnog pokušaja. <a class="btn secondary" href="#">Provjeri stanje</a></p></div>
+      </div>
+    </section>
+
+    <section class="state" aria-labelledby="h3-mob">
+      <div class="ref-tag">N-02, N-03 · mobitel (400 px)</div>
+      <h2 id="h3-mob">Isti obrazac na uskom zaslonu</h2>
+      <p class="lead">Polja idu jedno ispod drugog, koraci čarobnjaka prelaze u više redaka, „Kako vidi student” ide ispod popisa alata, a gumbi su u punoj širini i najmanje 44 px.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>
