@@ -83,7 +83,6 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@eslint/eslintrc": "^3.3.1",
     "@fast-check/vitest": "^0.5.0",
     "@playwright/test": "^1.63.0",
     "@smithy/signature-v4": "5.7.4",
@@ -94,7 +93,7 @@
     "cc-safety-net": "2.6.1",
     "dbmate": "^2.36.0",
     "eslint": "^9.39.5",
-    "eslint-config-next": "15.5.28",
+    "eslint-config-next": "16.3.8",
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.2",
     "lefthook": "^2.1.16",

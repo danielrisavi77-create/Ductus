@@ -1,7 +1,7 @@
 "use client";
 
 import { EditorContent, useEditor } from "@tiptap/react";
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { useSheetTheme } from "@/components/shell/useSheetTheme";
 import { createEditorExtensions } from "@/editor/schema";
@@ -38,7 +38,8 @@ export default function TwoSides() {
     injectCSS: false, // app/prosemirror.css (DAN-489)
     editorProps: { attributes: () => attributes(l.mentorLabel, true) },
   });
-  mentorRef.current = mentor;
+  // Kept after each commit, before the student's next edit can reach it.
+  useLayoutEffect(() => { mentorRef.current = mentor; });
 
   const student = useEditor({
     extensions: createEditorExtensions(l.placeholder),
