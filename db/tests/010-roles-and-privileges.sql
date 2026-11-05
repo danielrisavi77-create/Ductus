@@ -9,12 +9,12 @@ SELECT plan(44);
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND NOT rolcanlogin $$,
-  ARRAY['ductus_migrator', 'ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth'],
-  'the six group roles and the migrator exist, none with a login'
+  ARRAY['ductus_migrator', 'ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth', 'ductus_queue'],
+  'the seven group roles and the migrator exist, none with a login'
 );
 SELECT is_empty(
   $$ SELECT rolname FROM pg_roles
-     WHERE rolname IN ('ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth')
+     WHERE rolname IN ('ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth', 'ductus_queue')
        AND (rolcanlogin OR rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication) $$,
   'group roles are NOLOGIN, not superuser, without BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
 );
@@ -68,7 +68,7 @@ SELECT is_empty(
 -- would let a role become an owner role unnoticed. Every membership that
 -- involves a ductus_* role, as group or as member, is therefore listed with
 -- its options: the migrator administers the roles it created and may SET ROLE
--- to the two owner roles; the web process login inherits ductus_app and the
+-- to the three owner roles (ductus_queue owns the pg-boss queue, DAN-517); the web process login inherits ductus_app and the
 -- login-callback login ductus_auth, each nothing else. Any other row fails
 -- the comparison.
 CREATE TEMP VIEW ductus_membership AS
@@ -86,8 +86,10 @@ CREATE TEMP VIEW allowed_membership AS
     'ductus_migrator in ductus_auth: admin',
     'ductus_migrator in ductus_evidence: admin',
     'ductus_migrator in ductus_identity: admin',
+    'ductus_migrator in ductus_queue: admin',
     'ductus_migrator in ductus_evidence: set',
     'ductus_migrator in ductus_identity: set',
+    'ductus_migrator in ductus_queue: set',
     'ductus_app_local in ductus_app: inherit',
     'ductus_auth_local in ductus_auth: inherit'
   ]) AS membership;
@@ -314,7 +316,7 @@ SELECT is_empty(
   $$ SELECT n.nspname || '.' || c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
      WHERE c.relkind IN ('r', 'p')
        AND n.nspname NOT LIKE 'pg\_%' AND n.nspname NOT IN ('information_schema', 'public')
-       AND c.relowner NOT IN ('ductus_identity'::regrole, 'ductus_evidence'::regrole) $$,
+       AND c.relowner NOT IN ('ductus_identity'::regrole, 'ductus_evidence'::regrole, 'ductus_queue'::regrole) $$,
   'application tables belong to a NOLOGIN owner role'
 );
 
@@ -422,7 +424,7 @@ SELECT is_empty(
 );
 SELECT is_empty(
   $$ SELECT name FROM app_function
-     WHERE proowner NOT IN ('ductus_migrator'::regrole, 'ductus_identity'::regrole, 'ductus_evidence'::regrole) $$,
+     WHERE proowner NOT IN ('ductus_migrator'::regrole, 'ductus_identity'::regrole, 'ductus_evidence'::regrole, 'ductus_queue'::regrole) $$,
   'application functions belong to the migrator or an owner role'
 );
 SELECT is_empty(

@@ -1,0 +1,84 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import {
+  MIGRATIONS, PIN, POSTAMBLE, PREAMBLE,
+  checkPin, checkRepository, expectedUp, installedPackage, planBody, strayMentions, upText,
+} from "./pgboss-contract.mjs";
+
+// DAN-517 (D-91, baza-i-pogon 4.8 t. 7): the pg-boss schema migration is the
+// package's construction plan verbatim, and the pin cannot drift from it.
+const root = fileURLToPath(new URL("../../", import.meta.url));
+const schemaFile = `${root}db/migrations/${MIGRATIONS.schema}`;
+
+const manifest = { dependencies: { "pg-boss": PIN.version } };
+const lockfile = `importers:\n  .:\n    dependencies:\n      pg-boss:\n        specifier: ${PIN.version}\n        version: ${PIN.version}\n`;
+const installed = { version: PIN.version, pgboss: { schema: PIN.schema } };
+
+test("the repository holds the contract", async () => {
+  assert.deepEqual(await checkRepository(root), []);
+});
+
+test("one changed byte in the up section breaks the contract", async () => {
+  const text = readFileSync(schemaFile, "utf8");
+  const { plan } = await installedPackage(root);
+  assert.equal(upText(text), expectedUp(plan));
+  const edited = text.replace("CREATE TABLE", "CREATE  TABLE");
+  assert.notEqual(edited, text);
+  assert.notEqual(upText(edited), expectedUp(plan));
+  const noPostamble = text.replace("REVOKE CREATE ON SCHEMA pgboss FROM ductus_queue;\n", "");
+  assert.notEqual(upText(noPostamble), expectedUp(plan));
+});
+
+test("the postamble takes back every right the preamble grants and ends as the migrator", () => {
+  const grants = PREAMBLE.match(/GRANT CREATE ON (DATABASE|SCHEMA)/g);
+  const revokes = POSTAMBLE.match(/REVOKE CREATE ON (DATABASE|SCHEMA)/g);
+  assert.deepEqual(grants.map((g) => g.replace("GRANT", "")), revokes.map((r) => r.replace("REVOKE", "")));
+  assert.match(PREAMBLE, /SET LOCAL ROLE ductus_queue;\n$/);
+  assert.match(POSTAMBLE, /^\nSET LOCAL ROLE ductus_migrator;\n/);
+  assert.doesNotMatch(POSTAMBLE, /SET LOCAL ROLE ductus_queue/);
+});
+
+test("planBody strips one BEGIN ... COMMIT and refuses anything else", () => {
+  assert.equal(planBody("BEGIN;\nSELECT 1;\nCOMMIT;\n"), "SELECT 1;");
+  assert.throws(() => planBody("SELECT 1;\n"), /not one BEGIN/);
+  assert.throws(() => planBody("BEGIN;\nSELECT 1;\n"), /not one BEGIN/);
+});
+
+test("upText needs exactly one up marker followed by one down marker", () => {
+  assert.equal(upText("-- head\n-- migrate:up\nA;\nB;\n-- migrate:down\nC;\n"), "A;\nB;\n");
+  assert.throws(() => upText("-- migrate:up\nA;\n"), /needs one/);
+  assert.throws(() => upText("-- migrate:down\n-- migrate:up\nA;\n"), /needs one/);
+  assert.throws(() => upText("-- migrate:up\nA;\n-- migrate:up\n-- migrate:down\n"), /needs one/);
+});
+
+test("checkPin accepts the exact pin in all three places", () => {
+  assert.deepEqual(checkPin({ manifest, lockfile, installed }), []);
+  const peers = lockfile.replace(`version: ${PIN.version}`, `version: ${PIN.version}(pg@8.16.3)`);
+  assert.deepEqual(checkPin({ manifest, lockfile: peers, installed }), []);
+});
+
+test("checkPin refuses a range, a drifted lockfile, another install or another schema", () => {
+  const caret = { dependencies: { "pg-boss": `^${PIN.version}` } };
+  assert.match(checkPin({ manifest: caret, lockfile, installed }).join("\n"), /package\.json pins pg-boss/);
+  assert.match(checkPin({ manifest: {}, lockfile, installed }).join("\n"), /package\.json pins pg-boss undefined/);
+  const drift = lockfile.replace(`version: ${PIN.version}`, "version: 12.39.0");
+  assert.match(checkPin({ manifest, lockfile: drift, installed }).join("\n"), /pnpm-lock\.yaml resolves/);
+  const prefix = lockfile.replace(`version: ${PIN.version}`, `version: ${PIN.version}0`);
+  assert.match(checkPin({ manifest, lockfile: prefix, installed }).join("\n"), /pnpm-lock\.yaml resolves/);
+  assert.match(checkPin({ manifest, lockfile: "importers: {}\n", installed }).join("\n"), /no pg-boss importer/);
+  assert.match(checkPin({ manifest, lockfile, installed: { ...installed, version: "12.39.0" } }).join("\n"), /node_modules has/);
+  assert.match(checkPin({ manifest, lockfile, installed: { ...installed, pgboss: { schema: 47 } } }).join("\n"), /builds schema 47/);
+});
+
+test("strayMentions finds the pgboss schema outside the three migrations, as a whole word", () => {
+  const migrations = new Map([
+    [MIGRATIONS.owner, "CREATE SCHEMA pgboss;"],
+    [MIGRATIONS.schema, "CREATE TABLE pgboss.job ();"],
+    ["20261201000000_later.sql", "ALTER TABLE PgBoss.job ADD COLUMN x int;"],
+    ["20261201000100_other.sql", "CREATE TABLE app.pgbossy ();"],
+  ]);
+  assert.deepEqual(strayMentions(migrations), ["20261201000000_later.sql"]);
+});

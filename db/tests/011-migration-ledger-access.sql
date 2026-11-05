@@ -38,8 +38,8 @@ CREATE TEMP VIEW ledger_access AS
 
 SELECT ok(
   ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth',
-        'ductus_app_local', 'ductus_auth_local'] <@ ARRAY(SELECT rolname FROM ledger_role),
-  'the check covers the six group roles and both local logins'
+        'ductus_queue', 'ductus_app_local', 'ductus_auth_local'] <@ ARRAY(SELECT rolname FROM ledger_role),
+  'the check covers the seven group roles and both local logins'
 );
 SELECT is_empty(
   'SELECT found FROM ledger_access',
