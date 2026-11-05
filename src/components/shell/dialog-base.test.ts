@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import LogoutDialog from "@/components/editor/LogoutDialog";
+import type { LogoutPlan } from "@/components/editor/logout-plan";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 // Z-08 (#923): one dialog base on the design tokens, and the sign-out
@@ -31,9 +32,9 @@ function rule(css: string, selector: string): string {
 
 const noop = () => {};
 const plan = { pending: 3, unsaved: false, submitted: false };
-const render = (failed: boolean) =>
+const render = (signedOutHere: boolean, shown: LogoutPlan = plan) =>
   renderToStaticMarkup(
-    createElement(LogoutDialog, { plan, working: false, failed, onConfirm: noop, onStay: noop, onExport: noop }),
+    createElement(LogoutDialog, { plan: shown, working: false, signedOutHere, onConfirm: noop, onStay: noop, onExport: noop }),
   );
 
 describe("the shared dialog base (DESIGN-SYSTEM.md §3 and §5)", () => {
@@ -110,10 +111,23 @@ describe("the sign-out dialog on the base (Z-08)", () => {
       .toEqual(["dialog", "body", "title", "text", "note", "actions", "confirm", "stay"]);
   });
 
-  it("shows a failed sign-out with its full text inside the live region", () => {
+  // #1330: a sign-out the server did not answer has ended on this device.
+  it("says a sign-out ended on this device inside the live region, and offers only Zatvori", () => {
     const html = render(true);
     const alert = html.slice(html.indexOf('<div role="alert">'));
-    expect(alert).toMatch(/^<div role="alert"><p class="_error_[^"]*">/);
-    expect(alert).toContain(`">${t.logoutFailed}</p></div>`);
+    expect(alert).toMatch(/^<div role="alert"><p id="[^"]+" class="_text_[^"]*">/);
+    expect(alert).toContain(`">${t.logoutDevice}</p>`);
+    // What stays here is named: the work goes on at the next sign-in.
+    expect(alert).toMatch(new RegExp(`<p class="_note_[^"]*">${t.logoutKept}</p></div>`));
+    // No second try, no export, no "Ostani": the one button closes the dialog.
+    expect([...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([t.logoutClose]);
+    expect(html).not.toContain(t.logoutConfirm);
+    expect(html).not.toContain(messagesHr.editor.exportText);
+  });
+
+  it("names nothing kept when nothing stays on this device", () => {
+    const html = render(true, { unsaved: false, pending: 0, copies: 0, kept: false });
+    expect(html).toContain(`">${t.logoutDevice}</p></div>`);
+    expect(html).not.toContain(t.logoutKept);
   });
 });

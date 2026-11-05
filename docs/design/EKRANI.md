@@ -53,7 +53,7 @@ Jedan paket je jedan docs PR u docs/design/ductura/<mapa>/ (HTML, PNG snimke, RE
 | 8 | Predaja, ostalo (m7-reference, C) | S-43, J-03, S-47 | potvrda se ne podudara; osporavanje poslano; S-47 samo student | M7 | ne ovisi |
 | 9 | M6 pregled i komentari (m6-reference-c, nakon #1454) | N-06, N-07, N-17, S-12, S-17, S-40, N-08 | istodobno pisanje, diff verzija, otvoreni i riješeni komentari, zastarjela baza | M6 | ovisi |
 | 10 | M6 obavijesti (m6-reference-c) | S-41, Z-07 | nepročitano, bez obavijesti, postavke po vrsti | M6 | djelomično |
-| 11 | Administrator, M2 (m2-admin-reference) | A-02, A-03 (učitavanje i greška preko paketa 1) | učitavanje, greška | M2 | ne ovisi |
+| 11 | Administrator, M2 (m2-admin-reference) | A-02, A-03, A-04 (učitavanje i greška preko paketa 1) | učitavanje, greška | M2 | ne ovisi |
 | 12 | Uvoz i izvoz (m8-reference) | S-19, S-20, N-18, S-09 | djelomičan uvoz, nepodržan format, A4 pregled, paket za Merlin, citat nije pronađen | M8 | ovisi |
 | 13 | Asistent (m9-reference-a) | S-16 | 12 stanja, bez mreže, proračun | M9 | ne ovisi |
 | 14 | AI u predaji (m9-reference-b) | S31-AI, N-AI-ATT | nema uporabe, izjavljeno, priloženi razgovori | M9 | ne ovisi |
@@ -93,7 +93,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | A-01 | Pregled ustanove / operaterski status pilota | M2 | NEMA | 19 | popunjeno, prazno, učitavanje, greška, mobitel, STOP stanje |
 | A-02 | Korisnici i uloge | M2 | DJELOMIČNO | 11 | učitavanje |
 | A-03 | Kolegiji i akademske godine | M2 | DJELOMIČNO | 11 | učitavanje |
-| A-04 | Pravila fakulteta (samo čitanje) | M4 | DJELOMIČNO | — | učitavanje, greška |
+| A-04 | Pravila fakulteta (samo čitanje) | M2 | DJELOMIČNO | 11 | učitavanje, greška |
 | S-10 | Editor (cijeli ekran) | M3 | DJELOMIČNO | 2 | popunjeno, prazno, učitavanje, greška, bez mreže, sukob, spremanje, predano (samo čitanje), fokus tipkovnica |
 | S-10.1 | Editor: stanja spremanja | M3 | ODOBRENO | — | — |
 | Z-11 | Druga kartica, bez mreže i oporavak | M3 | DJELOMIČNO | 2 | oporavak (zaseban tok) |
@@ -121,7 +121,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | S-41 | Obavijesti (student) | M6 | DJELOMIČNO | 10 | popunjeno, prazno, učitavanje, greška, mobitel, postavke po vrsti, bez obavijesti |
 | Z-07 | Obavijesti (zajednički popis) | M6 | NEMA | 10 | popunjeno, prazno, učitavanje, greška, mobitel, nepročitano, postavke |
 | N-06 | Rad uživo (pregled studentova rada) | M6 | NEMA | 9 | popunjeno, prazno, učitavanje, greška, mobitel, bez mreže studenta, istodobno pisanje |
-| N-07 | Pregled rada | M6 | DJELOMIČNO | 9 | prazno, učitavanje, greška, mobitel, diff verzija, mobitel |
+| N-07 | Pregled rada | M6 | DJELOMIČNO | 9 | prazno, učitavanje, greška, mobitel, diff verzija |
 | N-17 | Zbirni pregled | M6 | NEMA | 9 | popunjeno, prazno, učitavanje, greška, mobitel |
 | P-01 | Povjerenstvo (zaključan rad, rubrika) | M6 | DJELOMIČNO | U | prazno, učitavanje, greška, mobitel, bez pristupa, ocjene ostalih skrivene |
 | N-15 | Etape, rubrika, izvješće, ocjena | M6 | DJELOMIČNO | U | prazno, učitavanje, greška, mobitel |
@@ -131,7 +131,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | S-32 | Potvrda predaje | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel, potvrda čeka potpis |
 | S-33 | Sažetak procesa | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel |
 | S-43 | Napomene i osporavanje | M7 | NEMA | 8 | popunjeno, prazno, učitavanje, greška, mobitel |
-| N-05 | Brz put | M7 | DJELOMIČNO | 7 | prazno, učitavanje, greška, mobitel, mobitel |
+| N-05 | Brz put | M7 | DJELOMIČNO | 7 | prazno, učitavanje, greška, mobitel |
 | N-10 | Sažetak i karta podrijetla | M7 | DJELOMIČNO | 7 | prazno, učitavanje, greška, mobitel |
 | N-11 | Usporedba verzija | M7 | DJELOMIČNO | 7 | prazno, učitavanje, greška, mobitel |
 | N-13 | Produljenje roka | M7 | NEMA | 7 | popunjeno, prazno, učitavanje, greška, mobitel, sukob s rokom |

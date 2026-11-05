@@ -73,11 +73,8 @@ async function insertFixture() {
         [tokens[name as Person], id, institutionId],
       );
     }
-    await client.query(
-      `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at)
-       VALUES ($1, $2, 'admin', now())`,
-      [institutionId, people.iva],
-    );
+    // DAN-525: the administrator only through the operator procedure, on an invented request.
+    await client.query("SELECT institution.appoint_institution_admin($1, 'Zahtjev 1/2026')", [people.iva]);
     await client.query("COMMIT");
     fixtureReady = true;
   } catch (error) {
