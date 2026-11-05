@@ -1,0 +1,45 @@
+// DAN-666: a strict reader for the one shape .gitguardian.yaml may have, and the single list of files it may exclude.
+// Anything else (a glob, a directory, another key, another version) is refused, so the exclusion cannot widen by accident.
+
+/** The only paths `secret.ignored_paths` may name: exact test files whose credentials are invented. */
+export const ALLOWED_IGNORED_PATHS = ["scripts/db/native-db.test.mjs"];
+
+const fail = (message) => { throw new Error(`.gitguardian.yaml: ${message}`); };
+
+/** Parses `version: 2` + `secret.ignored_paths` (a list of plain paths) and nothing else. */
+export function parseGitGuardianConfig(text) {
+  const lines = String(text).split(/\r?\n/)
+    .map((raw) => ({ raw, body: raw.replace(/\s+#.*$/, "").replace(/^\s*#.*$/, "") }))
+    .filter(({ body }) => body.trim() !== "");
+  let version = null;
+  let section = null;
+  let key = null;
+  const ignoredPaths = [];
+  for (const { raw, body } of lines) {
+    if (/\t/.test(raw)) fail(`unsupported tab indentation in "${raw.trim()}"`);
+    const top = /^([A-Za-z_-]+):\s*(.*)$/.exec(body);
+    const nested = /^ {2}([A-Za-z_-]+):\s*(.*)$/.exec(body);
+    const item = /^ {4}- (.+)$/.exec(body);
+    if (top) {
+      section = null; key = null;
+      if (top[1] === "version") { version = top[2].trim(); continue; }
+      if (top[1] !== "secret" || top[2].trim() !== "") fail(`unknown key "${top[1]}"`);
+      section = "secret";
+    } else if (nested && section === "secret") {
+      key = nested[1];
+      if (key !== "ignored_paths") fail(`unknown key "secret.${key}"`);
+      const inline = nested[2].trim();
+      if (inline !== "" && inline !== "[]") fail("ignored_paths must be a block list");
+    } else if (item && key === "ignored_paths") {
+      const value = item[1].trim().replace(/^(['"])(.*)\1$/, "$2");
+      if (ignoredPaths.includes(value)) fail(`duplicate entry "${value}"`);
+      if (!ALLOWED_IGNORED_PATHS.includes(value)) fail(`path "${value}" is not allowed (allowed: ${ALLOWED_IGNORED_PATHS.join(", ")})`);
+      ignoredPaths.push(value);
+    } else {
+      fail(`unsupported line "${raw.trim()}"`);
+    }
+  }
+  if (version !== "2") fail("version must be 2");
+  if (ignoredPaths.length === 0) fail("no ignored paths listed (an empty exclusion has no purpose)");
+  return { version: 2, ignoredPaths };
+}
