@@ -358,3 +358,60 @@ describe("createOidcClient", () => {
     await refused(oidc.verify(url, checks));
   });
 });
+
+// DAN-212: the provider's logout address, plan #1245 C4 and C6.
+describe("endSessionUrl", () => {
+  const ENDPOINT = `${ISSUER}/session/end`;
+
+  it("is null when discovery names no end_session_endpoint", async () => {
+    expect(await oidc.endSessionUrl()).toBeNull();
+  });
+
+  it("is the discovered endpoint with client_id and the configured return address alone (C6)", async () => {
+    idp.state.next = { endSessionEndpoint: ENDPOINT };
+    const url = (await oidc.endSessionUrl())!;
+    expect(`${url.origin}${url.pathname}`).toBe(ENDPOINT);
+    expect([...url.searchParams]).toEqual([
+      ["post_logout_redirect_uri", `${APP}/`],
+      ["client_id", CLIENT_ID],
+    ]);
+    expect(url.href).not.toContain(CLIENT_SECRET);
+  });
+
+  it("reuses the discovery of login", async () => {
+    idp.state.next = { endSessionEndpoint: ENDPOINT };
+    await oidc.authorizationUrl(newLoginChecks());
+    await oidc.endSessionUrl();
+    expect(idp.requests.filter((path) => path === "/.well-known/openid-configuration")).toHaveLength(1);
+  });
+
+  it.each(["http://127.0.0.1:9443/session/end", "not a url", "javascript:alert(1)"])(
+    "is null for %j where TLS is required (C4)",
+    async (endpoint) => {
+      idp.state.next = { endSessionEndpoint: endpoint };
+      expect(await oidc.endSessionUrl()).toBeNull();
+    },
+  );
+
+  it("allows http only for the fake provider on a loopback host", async () => {
+    const local = loadAuthConfig({
+      NODE_ENV: "development",
+      DUCTUS_AUTH_PROVIDER: "fake-oidc",
+      OIDC_ISSUER: "http://localhost:8090",
+      OIDC_CLIENT_ID: CLIENT_ID,
+      OIDC_CLIENT_SECRET: CLIENT_SECRET,
+      OIDC_REDIRECT_URI: "http://localhost:3000/api/auth/callback",
+    });
+    const fake = createTestIdp(undefined, "http://localhost:8090");
+    fake.state.next = { endSessionEndpoint: "http://localhost:8090/session/end" };
+    const url = (await createOidcClient(local, fake.fetch).endSessionUrl())!;
+    expect(url.href).toBe(
+      `http://localhost:8090/session/end?post_logout_redirect_uri=${encodeURIComponent("http://localhost:3000/")}&client_id=${CLIENT_ID}`,
+    );
+  });
+
+  it("rejects when the provider is down, as login does", async () => {
+    idp.state.next = { down: true };
+    await refused(oidc.endSessionUrl(), true);
+  });
+});

@@ -40,6 +40,26 @@ export function toggleTheme(root: Pick<HTMLElement, "getAttribute" | "setAttribu
 }
 
 /**
+ * Puts the kept theme on `<html>` when React drew the page in the browser and
+ * the inline script never ran: a `notFound()` from a page (/ustanova, DAN-313)
+ * arrives as an error shell that the client fills. `storage` is a getter,
+ * because even reaching `localStorage` can throw.
+ */
+export function applyKeptTheme(
+  root: Pick<HTMLElement, "setAttribute">, storage: () => Pick<Storage, "getItem"> | undefined,
+): ShellTheme {
+  let kept: Pick<Storage, "getItem"> | undefined;
+  try {
+    kept = storage();
+  } catch {
+    // Storage blocked: the page stays dark.
+  }
+  const theme = readTheme(kept);
+  root.setAttribute("data-theme", theme);
+  return theme;
+}
+
+/**
  * Runs inline in `<head>` (app/layout.tsx, app/global-error.tsx), before the
  * body is painted, so a stored light theme never flashes dark first.
  */

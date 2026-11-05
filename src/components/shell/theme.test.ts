@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
 import { describe, expect, it } from "vitest";
 
-import { readTheme, saveTheme, THEME_KEY, THEME_SCRIPT, themeOf, toggleTheme } from "./theme";
+import { applyKeptTheme, readTheme, saveTheme, THEME_KEY, THEME_SCRIPT, themeOf, toggleTheme } from "./theme";
 
 describe("shell theme (#476 6314969336, t. 5)", () => {
   it("is dark unless the browser kept exactly 'light'", () => {
@@ -59,5 +60,27 @@ describe("shell theme (#476 6314969336, t. 5)", () => {
     // Blocked storage: the page still changes.
     expect(toggleTheme(root, { setItem: () => { throw new Error("blocked"); } })).toBe("light");
     expect(toggleTheme(root, undefined)).toBe("dark");
+  });
+
+  // DAN-313: a page's notFound() is drawn in the browser, where the inline
+  // script never runs, so the 404 applies the kept theme itself.
+  it("a 404 drawn in the browser puts the kept theme on <html>, dark when storage refuses", () => {
+    const attrs = new Map<string, string>();
+    const root = { setAttribute: (k: string, v: string) => void attrs.set(k, v) };
+    expect(applyKeptTheme(root, () => ({ getItem: () => "light" }))).toBe("light");
+    expect(attrs.get("data-theme")).toBe("light");
+    expect(applyKeptTheme(root, () => ({ getItem: () => "dark" }))).toBe("dark");
+    expect(applyKeptTheme(root, () => { throw new Error("blocked"); })).toBe("dark");
+    expect(applyKeptTheme(root, () => ({ getItem: () => { throw new Error("blocked"); } }))).toBe("dark");
+    expect(applyKeptTheme(root, () => undefined)).toBe("dark");
+    expect(attrs.get("data-theme")).toBe("dark");
+  });
+
+  it("the shared 404 page applies the kept theme", () => {
+    const page = readFileSync(new URL("../../../app/not-found.tsx", import.meta.url), "utf8");
+    expect(page).toMatch(/<ThemeRestore \/>/);
+    const restore = readFileSync(new URL("./ThemeRestore.tsx", import.meta.url), "utf8");
+    expect(restore).toMatch(/^"use client";/);
+    expect(restore).toContain("applyKeptTheme(document.documentElement, () => window.localStorage)");
   });
 });

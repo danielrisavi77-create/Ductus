@@ -61,14 +61,17 @@ export async function readShellRole(token: string | undefined, withActor: WithAc
 /**
  * Where "/" sends a signed-in person (DAN-325): a confirmed teacher to the
  * teacher's page, any other open session to the workspace, and no one when
- * the session is closed or could not be read. One read gives both the way on
- * and the shell's scope (F-151): the role is the same B-7 check
+ * the session is closed or could not be read. `closed` tells those two
+ * apart (#1231): the database answered and there is no open session behind
+ * the cookie, so "/" can say so (Z-03) rather than guess. One read gives
+ * the way on and the shell's scope (F-151): the role is the same B-7 check
  * `list_teacher_courses` makes, so nothing is guessed from the cookie.
  */
 export async function readHome(
   token: string | undefined, withActor: WithActor,
-): Promise<{ path: "/rad" | "/nastavnik" | null; scope: string | null }> {
-  const { role, scope } = await readShellAccount(token, withActor);
+): Promise<{ path: "/rad" | "/nastavnik" | null; scope: string | null; closed: boolean }> {
+  const account = await readShellAccountOrFailure(token, withActor);
+  const { role, scope } = account ?? NO_ONE;
   const path = role === "teacher" ? "/nastavnik" : role === "student" ? "/rad" : null;
-  return { path, scope };
+  return { path, scope, closed: account !== null && role === null };
 }

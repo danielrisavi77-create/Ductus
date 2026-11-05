@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-292 (#747): the student return permission route exists in the running app and
 // refuses every caller who is not a teacher of the course. The teacher's
@@ -10,7 +11,7 @@ import { signIn } from "./support";
 // course are proved on the real database in
 // tests/integration/student-return-route.integration.test.ts; the demo stack
 // has one institution, and the teacher role belongs to demo-flow.
-const ORIGIN = "http://localhost:3000";
+const ORIGIN = APP_ORIGIN;
 const path = (course: string, student: string) => `/api/institution/courses/${course}/students/${student}/return-permission`;
 
 test("refuses an anonymous caller and a wrong Origin, uncached", async ({ request }) => {

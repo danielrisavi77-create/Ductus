@@ -5,12 +5,19 @@ import { describe, expect, it } from "vitest";
 
 import { homeHref, navFor } from "./nav";
 
-// #802 part B, QA (4): "Početna" leads to each role's own space.
+// #802 part B, QA (4), and D-202 t. 2: the brand and "Početna" lead to the
+// home of the signed-in person's role.
 describe("homeHref", () => {
-  it("leads a teacher to /nastavnik, a student to /rad and no role to /", () => {
+  it("leads a teacher to /nastavnik, a student to S01 on /zadaci (D-180) and no role to /", () => {
     expect(homeHref("teacher")).toBe("/nastavnik");
-    expect(homeHref("student")).toBe("/rad");
+    expect(homeHref("student")).toBe("/zadaci");
     expect(homeHref(null)).toBe("/");
+  });
+
+  it("never leads to the workspace, the package's homeHref (D-202 t. 2)", () => {
+    for (const role of ["teacher", "student", null] as const) {
+      expect(homeHref(role).startsWith("/rad"), String(role)).toBe(false);
+    }
   });
 
   it("leads only to routes that exist", () => {
@@ -34,6 +41,17 @@ describe("navFor", () => {
   it("gives a student her assignments and, from DAN-344 (S02), her courses", () => {
     const student = navFor("student").map((item) => item.href);
     expect(student.slice(0, 2)).toEqual(["/zadaci", "/zadaci/kolegiji"]);
+  });
+
+  it("gives a teacher, from DAN-492 (N-16), the works the teacher mentors", () => {
+    expect(navFor("teacher")).toContainEqual({ href: "/nastavnik/mentorstva", label: "Radovi uz mentora" });
+  });
+
+  it("gives a student, from DAN-309 (B2), her works right after her courses", () => {
+    const student = navFor("student").map((item) => item.href);
+    expect(student.slice(0, 3)).toEqual(["/zadaci", "/zadaci/kolegiji", "/zadaci/radovi"]);
+    expect(student).toContain("/rad");
+    expect(student).toContain("/upis");
   });
 
   it("gives no item without a role", () => {

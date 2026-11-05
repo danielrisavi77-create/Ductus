@@ -825,6 +825,26 @@ describe("verifier of receipt v2: a runtime that cannot verify", () => {
     });
   });
 
+  it("verifies under a key whose point starts with 0x00 where the runtime imports no such SPKI (#1247)", async () => {
+    // WebKit on Linux throws DataError for such an SPKI, about one key in 256,
+    // and imports the same 32 bytes as `raw`.
+    let key = testKey("kljuc-izmisljeni-nula");
+    while (Buffer.from(key.trusted.keyBase64Url, "base64url")[12] !== 0) key = testKey("kljuc-izmisljeni-nula");
+    // Bound before the spy replaces the method, so the stub does not call itself.
+    const runtimeImport = real.importKey.bind(real);
+    const likeWebKit = (...args: unknown[]) => {
+      const [format, data] = args as [string, Uint8Array];
+      return format === "spki" && data[12] === 0
+        ? Promise.reject(new DOMException("Data provided to an operation does not meet requirements", "DataError"))
+        : runtimeImport(...(args as Parameters<SubtleCrypto["importKey"]>));
+    };
+    const verified = () => verifySignedEvidenceReceiptV2(key.sign(contract.payload), EXPECTED, [key.trusted]);
+    expect(await withSubtle("importKey", likeWebKit, verified)).toEqual({
+      result: { ok: true, payload: contract.payload },
+      calls: 1,
+    });
+  });
+
   it.each(["structuredClone", "atob", "btoa"])("says the check was not made where there is no %s", async (name) => {
     expect(await withGlobal(name, undefined, honest)).toEqual(UNAVAILABLE);
   });

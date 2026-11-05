@@ -116,10 +116,12 @@ describe("local environment", () => {
     const userinfo = await fetch(new URL("/me", OIDC_ISSUER), {
       headers: { authorization: `Bearer ${tokens.access_token}` },
     });
+    // DAN-483: the AAI@EduHr shape, the hrEdu attributes as JSON arrays.
     expect(await userinfo.json()).toMatchObject({
       sub: "demo-student",
-      hrEduPersonUniqueID: "demo-student@demo.ductus.test",
-      hrEduPersonHomeOrg: "demo.ductus.test",
+      hrEduPersonUniqueID: ["demo-student@demo.ductus.test"],
+      hrEduPersonHomeOrg: ["demo.ductus.test"],
+      hrEduPersonAffiliation: ["student"],
     });
   });
 

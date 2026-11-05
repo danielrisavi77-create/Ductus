@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zajednička stanja (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<main class="page" id="glavno">
+<header>
+  <div class="ref-tag">Referenca paketa 1 · DAN-565 · prijedlog slike · Z-03, Z-04, Z-05, Z-06, Z-08</div>
+  <h1>Zajednička stanja</h1>
+  <p>Stranice bez ljuske i dijalozi koje dijele svi ekrani. Podaci su izmišljeni. Redoslijed tipkovnice na stranicama Z-03 do Z-06: 1 naslov, 2 glavna radnja, 3 sporedna radnja. Za dijaloge (Z-08) redoslijed i početni fokus navedeni su uz dijaloge.</p>
+</header>
+
+<section aria-labelledby="z03">
+  <div class="ref-tag">Z-03 · sesija istekla</div>
+  <h2 id="z03">Sesija istekla</h2>
+  <div class="grid">
+    <div class="frame" role="alert">
+      <h3>Sesija je istekla</h3>
+      <p>Sesija je istekla zbog 2 sata neaktivnosti ili nakon najviše 12 sati prijave (D-200). Istek nije odjava: prijavite se ponovno i nastavite gdje ste stali.</p>
+      <p class="status"><span class="chip">3 izmjene</span> čuvaju se samo na ovom uređaju. Šalju se na poslužitelj čim se prijavite.</p>
+      <div class="row"><a class="btn" href="#">Prijavite se ponovno</a></div>
+    </div>
+    <div class="frame" role="status">
+      <h3>Odjavljeni ste u drugoj kartici</h3>
+      <p>Ova kartica više nije prijavljena. Tekst koji niste poslali ostaje na ovom uređaju.</p>
+      <div class="row"><a class="btn" href="#">Prijavite se ponovno</a><a class="btn secondary" href="#">Zatvori</a></div>
+    </div>
+    <div class="frame" role="status">
+      <h3>Nema mreže</h3>
+      <p>Rad se nastavlja. Promjene se spremaju na ovom uređaju i šalju kad se veza vrati.</p>
+      <div class="row"><button class="btn secondary" type="button">Pokušaj ponovno</button></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="z04">
+  <div class="ref-tag">Z-04 · greška i 404</div>
+  <h2 id="z04">Greška i stranica ne postoji</h2>
+  <div class="grid">
+    <div class="frame">
+      <h3>Stranica ne postoji</h3>
+      <p>Na ovoj adresi nema stranice. Provjerite adresu ili se vratite na početnu.</p>
+      <div class="row"><a class="btn" href="#">Na početnu</a></div>
+    </div>
+    <div class="frame" role="alert">
+      <h3>Nešto je pošlo po zlu</h3>
+      <p>Poslužitelj trenutačno ne odgovara. Vaš tekst nije izgubljen.</p>
+      <p class="code">Oznaka za podršku: ERR-5xx · 5. 11. 2026., 09:12</p>
+      <div class="row"><button class="btn" type="button">Pokušaj ponovno</button><a class="btn secondary" href="#">Na početnu</a></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="z05">
+  <div class="ref-tag">Z-05 · nema ovlasti</div>
+  <h2 id="z05">Nema ovlasti</h2>
+  <div class="grid">
+    <div class="frame">
+      <h3>Nemate pristup ovoj stranici</h3>
+      <p>Stranica je dostupna samo drugoj ulozi. Ako mislite da je ovo pogreška, javite se administratoru fakulteta.</p>
+      <div class="row"><a class="btn" href="#">Na početnu</a></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="z06">
+  <div class="ref-tag">Z-06 · učitavanje</div>
+  <h2 id="z06">Učitavanje</h2>
+  <div class="grid">
+    <div class="frame" aria-busy="true">
+      <h3>Kostur popisa</h3>
+      <div class="sk" role="status"><span class="sr">Učitavanje…</span><i class="w1"></i><i class="w2"></i><i class="w3"></i><i class="w2"></i></div>
+    </div>
+    <div class="frame" aria-busy="true">
+      <h3>Dugo učitavanje</h3>
+      <div class="sk" role="status"><span class="sr">Učitavanje traje dulje nego obično.</span><i class="w2"></i><i class="w3"></i></div>
+      <p>Učitavanje traje dulje nego obično. Rad nije izgubljen.</p>
+      <div class="row"><button class="btn secondary" type="button">Pokušaj ponovno</button></div>
+    </div>
+    <div class="frame">
+      <h3>Smanjeno kretanje</h3>
+      <div class="sk"><i class="w1"></i><i class="w2"></i><i class="w3"></i></div>
+      <p>Uz postavku smanjenog kretanja kostur miruje, bez treperenja. Nakon 10 s ispod njega se pojavi tekst &bdquo;Učitavanje traje dulje nego obično.&rdquo;</p>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="z08">
+  <div class="ref-tag">Z-08 · dijalozi</div>
+  <h2 id="z08">Dijalozi</h2>
+  <div class="grid">
+    <div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d1">
+      <h3 id="d1">Poslati na pregled?</h3>
+      <p>Mentor dobiva trenutačnu verziju kao poslanu na pregled. Možete nastaviti pisati; mentor rad vidi uživo i dok pišete (D-142).</p>
+      <div class="buttons"><button class="btn secondary" type="button">Odustani</button><button class="btn" type="button">Pošalji na pregled</button></div>
+    </div></div>
+    <div class="scrim"><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="d0" aria-describedby="d0p">
+      <h3 id="d0">Predati rad?</h3>
+      <p id="d0p">Konačna predaja zaključava rad do odluke mentora. Za pregled bez zaključavanja koristite &bdquo;Pošalji na pregled&rdquo;.</p>
+      <div class="buttons"><button class="btn secondary" type="button">Odustani</button><button class="btn" type="button">Predaj rad</button></div>
+    </div></div>
+    <div class="scrim"><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="d2" aria-describedby="d2p">
+      <h3 id="d2">Ukloniti korisnika?</h3>
+      <p id="d2p">Korisnik gubi pristup odmah. Njegovi radovi ostaju kod fakulteta.</p>
+      <div class="buttons"><button class="btn secondary" type="button">Odustani</button><button class="btn danger" type="button">Ukloni korisnika</button></div>
+    </div></div>
+    <div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d3">
+      <h3 id="d3">Naziv kolegija</h3>
+      <label for="f1">Naziv</label>
+      <input class="field ring" id="f1" value="Uvod u metode istraživanja">
+      <div class="buttons"><button class="btn secondary" type="button">Odustani</button><button class="btn" type="button">Spremi</button></div>
+    </div></div>
+  </div>
+  <p class="meta">Početni fokus i redoslijed tipkovnice (Tab kruži unutar dijaloga, Esc zatvara, a fokus se vraća na gumb koji ga je otvorio):</p>
+  <ul class="meta">
+    <li>&bdquo;Poslati na pregled?&rdquo;: početni fokus na &bdquo;Pošalji na pregled&rdquo; (radnja se može ponoviti i ne zaključava rad). Redoslijed: 1 naslov, 2 &bdquo;Odustani&rdquo;, 3 &bdquo;Pošalji na pregled&rdquo;.</li>
+    <li>&bdquo;Predati rad?&rdquo; (konačna predaja, zaključava rad, opasna radnja): početni fokus na &bdquo;Odustani&rdquo;. Redoslijed: 1 naslov i opis, 2 &bdquo;Odustani&rdquo;, 3 &bdquo;Predaj rad&rdquo;.</li>
+    <li>&bdquo;Ukloniti korisnika?&rdquo; (opasna radnja): početni fokus na &bdquo;Odustani&rdquo;. Redoslijed: 1 naslov i opis, 2 &bdquo;Odustani&rdquo;, 3 &bdquo;Ukloni korisnika&rdquo;.</li>
+    <li>&bdquo;Naziv kolegija&rdquo;: početni fokus na polju &bdquo;Naziv&rdquo;. Redoslijed: 1 polje, 2 &bdquo;Odustani&rdquo;, 3 &bdquo;Spremi&rdquo;.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="zA">
+  <div class="ref-tag">A-02, A-03, A-04 · zajedničko učitavanje i greška</div>
+  <h2 id="zA">Učitavanje i greška administratorskih popisa</h2>
+  <p class="meta">Isti uzorak na svakom ekranu: kostur dok se učitava (Z-06), a pri grešci poruka s radnjom „Pokušaj ponovno”. Redak po ekranu.</p>
+  <div class="grid">
+    <div class="frame" aria-busy="true"><div class="ref-tag">A-02 · učitavanje</div><h3>Korisnici i uloge</h3><div class="sk" role="status"><span class="sr">Učitavanje popisa korisnika…</span><i class="w2"></i><i class="w3"></i><i class="w2"></i></div></div>
+    <div class="frame" aria-busy="true"><div class="ref-tag">A-03 · učitavanje</div><h3>Kolegiji i grupe</h3><div class="sk" role="status"><span class="sr">Učitavanje popisa kolegija…</span><i class="w2"></i><i class="w3"></i><i class="w2"></i></div></div>
+    <div class="frame" aria-busy="true"><div class="ref-tag">A-04 · učitavanje</div><h3>Pravila fakulteta</h3><div class="sk" role="status"><span class="sr">Učitavanje pravila fakulteta…</span><i class="w2"></i><i class="w3"></i><i class="w2"></i></div></div>
+    <div class="frame"><div class="ref-tag">A-02 · greška</div><h3>Korisnici i uloge</h3><p class="alert" role="alert"><strong>Popis korisnika trenutačno nije dostupan.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
+    <div class="frame"><div class="ref-tag">A-03 · greška</div><h3>Kolegiji i grupe</h3><p class="alert" role="alert"><strong>Popis kolegija trenutačno nije dostupan.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
+    <div class="frame"><div class="ref-tag">A-04 · greška</div><h3>Pravila fakulteta</h3><p class="alert" role="alert"><strong>Pravila fakulteta trenutačno nisu dostupna.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
+  </div>
+</section>
+</main>
+</body>
+</html>

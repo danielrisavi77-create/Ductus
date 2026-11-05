@@ -567,6 +567,7 @@ CREATE FUNCTION app.current_actor(OUT user_id uuid, OUT institution_id uuid) RET
   WHERE t.token ~ '^[A-Za-z0-9_-]{43}$'
     AND s.closed_at IS NULL
     AND s.expires_at > pg_catalog.now()
+    AND s.last_seen_at > pg_catalog.now() - interval '2 hours'
 $_$;
 
 
@@ -1637,6 +1638,50 @@ $$;
 
 
 --
+-- Name: student_workspace(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.student_workspace() RETURNS TABLE(assignment_id uuid, course_id uuid, course_name text, academic_year text, title text, opens_at timestamp with time zone, due_at timestamp with time zone, current_version integer, acknowledged boolean, document_id text, server_revision bigint, submitted_revision bigint, submitted_at timestamp with time zone, after_deadline boolean)
+    LANGUAGE plpgsql STABLE
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid := app.current_user_id();
+  v_institution uuid := app.current_institution_id();
+BEGIN
+  IF v_user IS NULL OR v_institution IS NULL THEN
+    RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+  -- A project holds the caller's work on one assignment (unique per
+  -- assignment, institution and person); a submission is one per the same.
+  RETURN QUERY
+  SELECT a.id, c.id, c.name, c.academic_year, v.title, v.opens_at, v.due_at, a.current_version,
+    EXISTS (
+      SELECT 1 FROM institution.notice_acknowledgment n
+       WHERE n.assignment_id = a.id AND n.version_no = a.current_version
+         AND n.student_id = v_user AND n.institution_id = v_institution),
+    d.id, d.current_revision, s.revision, s.requested_at, s.after_deadline
+    FROM institution.course_member m
+    JOIN institution.course c
+      ON c.id = m.course_id AND c.institution_id = v_institution
+    JOIN institution.assignment a
+      ON a.course_id = c.id AND a.institution_id = v_institution
+    JOIN institution.assignment_version v
+      ON v.assignment_id = a.id AND v.version_no = a.current_version
+    LEFT JOIN evidence.project p
+      ON p.assignment_id = a.id AND p.institution_id = v_institution AND p.principal_id = v_user
+    LEFT JOIN evidence.document d
+      ON d.project_id = p.id AND d.institution_id = v_institution AND d.principal_id = v_user
+    LEFT JOIN evidence.submission s
+      ON s.assignment_id = a.id AND s.institution_id = v_institution AND s.principal_id = v_user
+   WHERE m.user_id = v_user AND m.institution_id = v_institution
+     AND m.role = 'student' AND m.member_to IS NULL
+   ORDER BY a.id, d.id;
+END
+$$;
+
+
+--
 -- Name: submitted_document_text(text); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -1714,6 +1759,14 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.mentorship t ON t.id = s.mentorship_id AND t.institution_id = s.institution_id
    WHERE t.ended_at IS NULL
      AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+  UNION ALL
+  SELECT g.user_id
+    FROM app.current_actor() a
+    JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+    JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
+   WHERE g.valid_to IS NULL
+     AND institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+     AND institution.actor_group_work(p_assignment_id, g.user_id)
 $$;
 
 
@@ -1727,15 +1780,14 @@ CREATE FUNCTION app.teacher_course_students(p_course_id uuid) RETURNS TABLE(stud
     AS $$
 DECLARE
   v_actor record;
+  v_role text;
 BEGIN
   SELECT * INTO v_actor FROM app.current_actor();
   IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
     RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
   END IF;
   -- Decided once per call, in the session's institution (actor_course_role).
-  IF institution.actor_course_role(p_course_id) IS DISTINCT FROM 'teacher' THEN
-    RETURN;
-  END IF;
+  v_role := institution.actor_course_role(p_course_id);
   -- One open membership per student and course, so one row per student.
   RETURN QUERY
   SELECT m.user_id, n.given_name, n.family_name
@@ -1743,6 +1795,7 @@ BEGIN
     LEFT JOIN identity.person_name n ON n.user_id = m.user_id AND n.institution_id = m.institution_id
    WHERE m.course_id = p_course_id AND m.institution_id = v_actor.institution_id
      AND m.role = 'student' AND m.member_to IS NULL
+     AND (v_role = 'teacher' OR institution.actor_group_student(p_course_id, m.user_id))
    ORDER BY m.user_id;
 END
 $$;
@@ -1877,6 +1930,22 @@ $_$;
 
 
 --
+-- Name: worker_pending_backlog(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.worker_pending_backlog() RETURNS TABLE(evidence_domain_id uuid, pending_count bigint, oldest_created_at timestamp with time zone)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT r.evidence_domain_id, count(*), min(r.created_at)
+    FROM evidence.receipt r
+   WHERE r.status = 'pending_signature'
+   GROUP BY r.evidence_domain_id
+   ORDER BY r.evidence_domain_id
+$$;
+
+
+--
 -- Name: worker_pending_receipts(uuid, integer); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -1962,6 +2031,7 @@ CREATE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id 
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
     WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
     WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
+    WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'teacher'
   END
   FROM app.current_actor() a
 $$;
@@ -2334,6 +2404,33 @@ $$;
 
 
 --
+-- Name: work_started_at(uuid, uuid, uuid); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.work_started_at(p_institution_id uuid, p_assignment_id uuid, p_student_id uuid) RETURNS timestamp with time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT p.created_at FROM evidence.project p
+   WHERE p.assignment_id = p_assignment_id AND p.institution_id = p_institution_id AND p.principal_id = p_student_id
+$$;
+
+
+--
+-- Name: works_started_last(uuid, uuid[], uuid[]); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.works_started_last(p_institution_id uuid, p_assignment_ids uuid[], p_student_ids uuid[]) RETURNS timestamp with time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT max(p.created_at) FROM evidence.project p
+   WHERE p.institution_id = p_institution_id AND p.assignment_id = ANY (p_assignment_ids)
+     AND p.principal_id = ANY (p_student_ids)
+$$;
+
+
+--
 -- Name: acceptance_retry_matches(uuid, text, uuid, bigint, text, text, text); Type: FUNCTION; Schema: evidence; Owner: -
 --
 
@@ -2556,7 +2653,7 @@ CREATE FUNCTION evidence.seal_document_checkpoint() RETURNS trigger
     AS $$
 BEGIN
   NEW.content_hash := pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(NEW.body, 'UTF8')), 'hex');
-  NEW.created_at := pg_catalog.now();
+  NEW.created_at := pg_catalog.clock_timestamp();
   RETURN NEW;
 END
 $$;
@@ -2676,6 +2773,31 @@ $_$;
 
 
 --
+-- Name: close_all_sessions_for_identity(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_all_sessions_for_identity() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+BEGIN
+  SELECT a.user_id INTO v_user FROM app.current_actor() a;
+  IF v_user IS NULL THEN
+    RETURN;
+  END IF;
+  UPDATE identity.session
+  SET closed_at = pg_catalog.now(), close_reason = 'logout_all'
+  WHERE user_id = v_user
+    AND closed_at IS NULL
+    AND expires_at > pg_catalog.now()
+    AND last_seen_at > pg_catalog.now() - interval '2 hours';
+END
+$$;
+
+
+--
 -- Name: close_current_session(); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -2698,6 +2820,107 @@ BEGIN
   RETURN closed > 0;
 END
 $_$;
+
+
+--
+-- Name: close_sessions_on_home_org_change(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_home_org_change() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'institution_changed'
+   WHERE institution_id = OLD.id
+     AND closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_sessions_on_issuer_removal(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_issuer_removal() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND NEW.institution_id = OLD.institution_id
+     AND NEW.oidc_issuer = OLD.oidc_issuer COLLATE "C" THEN
+    RETURN NULL;
+  END IF;
+  UPDATE identity.session s
+     SET closed_at = pg_catalog.now(), close_reason = 'issuer_removed'
+    FROM identity.user_account u
+   WHERE u.id = s.user_id
+     AND s.institution_id = OLD.institution_id
+     AND u.oidc_issuer = OLD.oidc_issuer COLLATE "C"
+     AND s.closed_at IS NULL
+     AND s.expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_sessions_on_issuer_truncate(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_sessions_on_issuer_truncate() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'issuer_removed'
+   WHERE closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: close_user_sessions(uuid); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.close_user_sessions(p_user_id uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  closed integer;
+BEGIN
+  IF p_user_id IS NULL THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  UPDATE identity.session
+     SET closed_at = pg_catalog.now(), close_reason = 'operator'
+   WHERE user_id = p_user_id
+     AND closed_at IS NULL
+     AND expires_at > pg_catalog.now();
+  GET DIAGNOSTICS closed = ROW_COUNT;
+  RETURN closed;
+END
+$$;
 
 
 --
@@ -2753,12 +2976,19 @@ BEGIN
   -- queries, not equal duration. With no institution the issuer lookup
   -- still reads the table, under the nil id that gen_random_uuid never
   -- gives; a match there could not open a session anyway.
-  SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org;
-  v_issuer_ok := EXISTS (
-    SELECT 1 FROM identity.institution_issuer ii
-    WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)
-      AND ii.oidc_issuer = p_issuer COLLATE "C"
-  );
+  --
+  -- Both rows are read FOR SHARE and stay locked until the login commits
+  -- (F-036, DAN-169). A change to aai_home_org or to the issuer row then
+  -- waits for this login, and its trigger closes the session it opened; a
+  -- change committed first is seen here, under READ COMMITTED the row is
+  -- read again, and the login gets the same ZD503. The change itself must
+  -- run under READ COMMITTED; its triggers refuse any other level. Shared
+  -- locks do not block each other, so logins do not wait for one another.
+  SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org FOR SHARE;
+  SELECT true INTO v_issuer_ok FROM identity.institution_issuer ii
+  WHERE ii.institution_id = coalesce(v_institution, '00000000-0000-0000-0000-000000000000'::uuid)
+    AND ii.oidc_issuer = p_issuer COLLATE "C"
+  FOR SHARE;
   IF v_institution IS NULL OR v_shape_ok IS NOT TRUE OR v_issuer_ok IS NOT TRUE THEN
     RAISE EXCEPTION 'institution not set up' USING ERRCODE = 'ZD503';
   END IF;
@@ -2842,30 +3072,123 @@ $$;
 
 
 --
--- Name: acknowledge_notice(uuid, integer); Type: FUNCTION; Schema: institution; Owner: -
+-- Name: open_session(text, text, text, text, bytea, text, text, boolean); Type: FUNCTION; Schema: identity; Owner: -
 --
 
-CREATE FUNCTION institution.acknowledge_notice(p_assignment_id uuid, p_version_no integer) RETURNS timestamp with time zone
+CREATE FUNCTION identity.open_session(p_issuer text, p_subject text, p_unique_id text, p_home_org text, p_token_hash bytea, p_given_name text, p_family_name text, p_teacher_eligible boolean) RETURNS timestamp with time zone
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_expires timestamptz;
+  v_user uuid;
+  v_institution uuid;
+BEGIN
+  v_expires := identity.open_session(p_issuer, p_subject, p_unique_id, p_home_org, p_token_hash, p_given_name, p_family_name);
+
+  SELECT u.id, u.institution_id INTO STRICT v_user, v_institution
+  FROM identity.user_account u
+  WHERE u.oidc_issuer = p_issuer AND u.hr_edu_person_unique_id = p_unique_id;
+
+  -- Only true gives the right; false and NULL take it away.
+  IF p_teacher_eligible IS TRUE THEN
+    INSERT INTO identity.teacher_eligibility (user_id, institution_id)
+    VALUES (v_user, v_institution)
+    ON CONFLICT (user_id) DO UPDATE SET updated_at = pg_catalog.now();
+  ELSE
+    DELETE FROM identity.teacher_eligibility WHERE user_id = v_user;
+  END IF;
+  RETURN v_expires;
+END
+$$;
+
+
+--
+-- Name: purge_ended_sessions(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.purge_ended_sessions() RETURNS bigint
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  WITH gone AS (
+    DELETE FROM identity.session
+    WHERE LEAST(closed_at, expires_at, last_seen_at + interval '2 hours')
+          < pg_catalog.now() - interval '30 days'
+    RETURNING 1
+  )
+  SELECT pg_catalog.count(*) FROM gone
+$$;
+
+
+--
+-- Name: touch_current_session(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.touch_current_session() RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+DECLARE
+  v_token text := pg_catalog.current_setting('app.session_token', true);
+BEGIN
+  IF v_token IS NULL OR v_token !~ '^[A-Za-z0-9_-]{43}$' THEN
+    RETURN false;
+  END IF;
+  UPDATE identity.session s
+  SET last_seen_at = pg_catalog.now()
+  WHERE s.token_hash = pg_catalog.sha256(pg_catalog.convert_to(v_token, 'UTF8'))
+    AND s.closed_at IS NULL
+    AND s.expires_at > pg_catalog.now()
+    AND s.last_seen_at > pg_catalog.now() - interval '2 hours'
+    AND s.last_seen_at <= pg_catalog.now() - interval '60 seconds';
+  RETURN FOUND;
+END
+$_$;
+
+
+--
+-- Name: acknowledge_notice(uuid, integer, integer); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.acknowledge_notice(p_assignment_id uuid, p_version_no integer, p_template_version integer) RETURNS timestamp with time zone
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 DECLARE
   actor record;
   v_current integer;
+  v_fingerprint text;
+  stored record;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
   IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'student' THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
+  IF p_template_version IS NULL OR p_template_version < 1 THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
   SELECT a.current_version INTO v_current FROM institution.assignment a WHERE a.id = p_assignment_id FOR SHARE;
   IF v_current IS DISTINCT FROM p_version_no THEN
     RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
   END IF;
-  INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
-  VALUES (p_assignment_id, v_current, actor.user_id, actor.institution_id)
+  SELECT institution.notice_fingerprint(p_template_version, v.title, v.instructions, v.work_type, v.opens_at,
+           v.due_at, v.ai_policy, v.ai_purposes, v.evidence_profile, v.word_min, v.word_max)
+    INTO v_fingerprint
+    FROM institution.assignment_version v
+   WHERE v.assignment_id = p_assignment_id AND v.version_no = v_current;
+  INSERT INTO institution.notice_acknowledgment
+    (assignment_id, version_no, student_id, institution_id, notice_template_version, notice_fingerprint)
+  VALUES (p_assignment_id, v_current, actor.user_id, actor.institution_id, p_template_version, v_fingerprint)
   ON CONFLICT (assignment_id, version_no, student_id) DO NOTHING;
-  RETURN (SELECT n.acknowledged_at FROM institution.notice_acknowledgment n
-           WHERE n.assignment_id = p_assignment_id AND n.version_no = v_current AND n.student_id = actor.user_id);
+  SELECT n.acknowledged_at, n.notice_template_version, n.notice_fingerprint INTO stored
+    FROM institution.notice_acknowledgment n
+   WHERE n.assignment_id = p_assignment_id AND n.version_no = v_current AND n.student_id = actor.user_id;
+  IF stored.notice_template_version IS DISTINCT FROM p_template_version
+     OR stored.notice_fingerprint IS DISTINCT FROM v_fingerprint THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN stored.acknowledged_at;
 END
 $$;
 
@@ -2900,6 +3223,53 @@ CREATE FUNCTION institution.actor_course_role(p_course_id uuid) RETURNS text
   JOIN institution.course_member m ON m.user_id = a.user_id AND m.institution_id = a.institution_id
   WHERE m.course_id = p_course_id AND m.member_to IS NULL
     AND (m.role = 'student' OR institution.actor_has_role('teacher'))
+$$;
+
+
+--
+-- Name: actor_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_group_student(p_course_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.institution_role r ON r.user_id = a.user_id AND r.institution_id = a.institution_id
+       AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = p_course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+      JOIN institution.course_member m ON m.course_id = p_course_id AND m.institution_id = a.institution_id
+       AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+     WHERE p_student_id IS DISTINCT FROM a.user_id
+  )
+$$;
+
+
+--
+-- Name: actor_group_work(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_group_work(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+      JOIN institution.seminar_group_teacher t ON t.user_id = a.user_id AND t.institution_id = a.institution_id
+       AND t.course_id = s.course_id AND t.valid_to IS NULL
+      JOIN institution.seminar_group_member g ON g.group_id = t.group_id AND g.institution_id = t.institution_id
+       AND g.user_id = p_student_id AND g.valid_to IS NULL
+     WHERE institution.actor_group_student(s.course_id, p_student_id)
+       AND NOT coalesce(collaboration.work_started_at(s.institution_id, s.id, p_student_id)
+                          < greatest(g.valid_from, t.valid_from), false)
+  )
 $$;
 
 
@@ -2979,6 +3349,335 @@ $$;
 
 
 --
+-- Name: appoint_institution_admin(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.appoint_institution_admin(p_user_id uuid, p_request_ref text) RETURNS boolean
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
+  v_written integer;
+BEGIN
+  UPDATE institution.institution_role r SET revoked_at = now()
+   WHERE r.institution_id = v_institution_id AND r.user_id = p_user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NULL AND r.revoked_at IS NULL
+     AND EXISTS (SELECT 1 FROM audit.teacher_role_event e WHERE e.role_id = r.id AND e.kind = 'confirmed');
+  WITH appointed AS (
+    INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
+    VALUES (v_institution_id, p_user_id, 'admin', NULL, now())
+    ON CONFLICT (institution_id, user_id, role) WHERE revoked_at IS NULL
+    DO UPDATE SET confirmed_by = NULL, confirmed_at = EXCLUDED.confirmed_at
+    WHERE r.confirmed_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event
+    (institution_id, role_id, teacher_id, role, kind, actor_id, request_ref, occurred_at)
+  SELECT appointed.institution_id, appointed.id, appointed.user_id, appointed.role, 'confirmed', NULL,
+         p_request_ref, now()
+  FROM appointed;
+  GET DIAGNOSTICS v_written = ROW_COUNT;
+  RETURN v_written > 0;
+END
+$$;
+
+
+--
+-- Name: approve_mentorship_request(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.approve_mentorship_request(p_request_id uuid) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  req institution.mentorship_request;
+  v_mentorship uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The lock of request_mentorship comes before any row lock, in the same
+  -- order there; student and kind of a request never change.
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.teacher_id = actor.user_id;
+  IF FOUND THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended(
+      'institution.mentorship_request:' || req.institution_id || ':' || req.student_id || ':' || req.work_type, 0));
+  END IF;
+  -- Two approvals of one request wait for each other here.
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.teacher_id = actor.user_id
+  FOR UPDATE;
+  IF NOT FOUND OR institution.lock_teacher_role(actor.user_id) IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  ELSIF req.approved_at IS NOT NULL THEN
+    RETURN req.mentorship_id;
+  ELSIF req.withdrawn_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  BEGIN
+    INSERT INTO institution.mentorship (institution_id, mentor_id, student_id, work_type, confirmed_by)
+    VALUES (req.institution_id, actor.user_id, req.student_id, req.work_type, actor.user_id)
+    RETURNING id INTO v_mentorship;
+  EXCEPTION WHEN unique_violation THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END;
+  WITH approved AS (
+    UPDATE institution.mentorship_request r SET approved_at = now(), mentorship_id = v_mentorship
+    WHERE r.id = req.id
+    RETURNING r.id, r.institution_id, r.student_id, r.teacher_id, r.mentorship_id
+  )
+  INSERT INTO audit.mentorship_event (
+    institution_id, request_id, student_id, teacher_id, kind, actor_id, mentorship_id, occurred_at
+  )
+  SELECT institution_id, id, student_id, teacher_id, 'approved', actor.user_id, mentorship_id, now() FROM approved;
+  RETURN v_mentorship;
+END
+$$;
+
+
+--
+-- Name: assign_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assign_group_student(p_group_id uuid, p_student_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+  v_last timestamptz;
+  v_from timestamptz;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  PERFORM 1 FROM institution.course_member m
+   WHERE m.course_id = v_course AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT s.id FROM institution.assignment s
+                     WHERE s.course_id = v_course AND s.institution_id = actor.institution_id),
+              ARRAY[p_student_id]);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_member (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_student_id, actor.user_id, v_from)
+  ON CONFLICT (course_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+  IF NOT FOUND AND NOT EXISTS (
+       SELECT 1 FROM institution.seminar_group_member s
+       WHERE s.group_id = p_group_id AND s.user_id = p_student_id AND s.valid_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+END
+$$;
+
+
+--
+-- Name: assign_group_teacher(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assign_group_teacher(p_group_id uuid, p_teacher_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_course uuid;
+  v_students uuid[];
+  v_last timestamptz;
+  v_from timestamptz;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  SELECT * INTO actor FROM institution.require_course_teacher(v_course);
+  IF NOT institution.is_confirmed_teacher(p_teacher_id, v_course) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
+  PERFORM 1 FROM institution.seminar_group g WHERE g.id = p_group_id FOR NO KEY UPDATE;
+  PERFORM 1
+     FROM (SELECT m.id
+             FROM institution.course_member m
+             JOIN institution.seminar_group_member s ON s.course_id = m.course_id AND s.user_id = m.user_id
+            WHERE s.group_id = p_group_id AND s.valid_to IS NULL
+              AND m.course_id = v_course AND m.role = 'student' AND m.member_to IS NULL
+            ORDER BY m.id
+              FOR UPDATE OF m) l;
+  -- The boundary covers every open place of the group, also of a student
+  -- removed from the course after this transaction began: a work started
+  -- before that removal stays theirs when they return (Codex, #1372).
+  v_students := ARRAY(SELECT s.user_id FROM institution.seminar_group_member s
+                       WHERE s.group_id = p_group_id AND s.valid_to IS NULL);
+  v_last := collaboration.works_started_last(
+              actor.institution_id,
+              ARRAY(SELECT a.id FROM institution.assignment a
+                     WHERE a.course_id = v_course AND a.institution_id = actor.institution_id),
+              v_students);
+  v_from := CASE WHEN v_last > now() THEN v_last + interval '1 microsecond' ELSE now() END;
+  INSERT INTO institution.seminar_group_teacher (group_id, course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_group_id, v_course, actor.institution_id, p_teacher_id, actor.user_id, v_from)
+  ON CONFLICT (group_id, user_id) WHERE valid_to IS NULL DO NOTHING;
+END
+$$;
+
+
+--
+-- Name: assignment_version_institution_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assignment_version_institution_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.institution_id IS NULL THEN
+    SELECT a.institution_id INTO NEW.institution_id FROM institution.assignment a WHERE a.id = NEW.assignment_id;
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+--
+-- Name: can(text, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.can(p_action text, p_document_id text) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_scope record;
+  v_confirmed boolean;
+  v_relation text;
+  v_teacher boolean;
+  v_owner boolean;
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('read', 'comment', 'open_fast_path', 'write', 'propose') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  IF v_user IS NULL OR p_document_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT s.institution_id, s.assignment_id, s.principal_id INTO v_scope
+  FROM collaboration.document_scope(p_document_id) s;
+  IF v_scope.institution_id IS DISTINCT FROM v_institution THEN
+    RETURN false;
+  END IF;
+
+  v_confirmed := EXISTS (
+    SELECT 1 FROM institution.institution_role r
+    WHERE r.user_id = v_user AND r.institution_id = v_institution AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  );
+
+  -- The actor's relation to the assignment of the work: through the course,
+  -- or through the mentorship. An assignment has exactly one of the two.
+  -- Unless a teacher of the course, through a seminar group of it whose
+  -- teacher the actor is and whose member the owner is, also when the actor
+  -- is a student of the course; never for the actor's own work (as
+  -- actor_role).
+  SELECT CASE
+           WHEN a.course_id IS NOT NULL THEN (
+             SELECT CASE
+                      WHEN m.role = 'teacher' THEN 'teacher'
+                      WHEN institution.actor_group_work(a.id, v_scope.principal_id) THEN 'teacher'
+                      ELSE m.role
+                    END
+             FROM (SELECT) one
+             LEFT JOIN institution.course_member m
+               ON m.course_id = a.course_id AND m.institution_id = v_institution
+              AND m.user_id = v_user AND m.member_to IS NULL)
+           ELSE (
+             SELECT CASE WHEN ms.mentor_id = v_user THEN 'teacher'
+                         WHEN ms.student_id = v_user THEN 'student' END
+             FROM institution.mentorship ms
+             WHERE ms.id = a.mentorship_id AND ms.institution_id = v_institution AND ms.ended_at IS NULL)
+         END
+  INTO v_relation
+  FROM institution.assignment a
+  WHERE a.id = v_scope.assignment_id AND a.institution_id = v_institution;
+
+  v_teacher := v_relation IS NOT DISTINCT FROM 'teacher' AND v_confirmed;
+  v_owner := v_relation IS NOT DISTINCT FROM 'student' AND v_scope.principal_id = v_user;
+
+  RETURN CASE p_action
+           WHEN 'read' THEN v_teacher OR v_owner
+           WHEN 'write' THEN v_owner
+           ELSE v_teacher
+         END;
+END
+$$;
+
+
+--
+-- Name: check_admin_appointment(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.check_admin_appointment() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_restored boolean := false;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    v_restored := OLD.revoked_at IS NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM institution.institution_role r
+             WHERE r.id = NEW.id AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+               AND (v_restored
+                    OR NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                                   WHERE e.role_id = r.id AND e.role = 'admin' AND e.kind = 'confirmed'
+                                     AND e.xmin = r.xmin)
+                    OR EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                               WHERE e.role_id = r.id AND e.kind = 'revoked'))) THEN
+    RAISE EXCEPTION 'administrator not appointed by the operator' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: check_last_admin(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.check_last_admin() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'institution.institution_admin:' || OLD.institution_id::text, 0));
+  IF NOT EXISTS (SELECT 1 FROM institution.institution_role r
+                 WHERE r.institution_id = OLD.institution_id AND r.role = 'admin'
+                   AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL)
+     AND NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                     WHERE e.role_id = OLD.id AND e.role = 'admin' AND e.kind = 'revoked') THEN
+    RAISE EXCEPTION 'last administrator' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+
+--
 -- Name: check_mentorship_version(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3018,6 +3717,25 @@ $$;
 
 
 --
+-- Name: check_rule_version_event(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.check_rule_version_event() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM audit.faculty_rule_event e
+                 WHERE e.institution_id = NEW.institution_id AND e.work_type = NEW.work_type
+                   AND e.version_no = NEW.version_no) THEN
+    RAISE EXCEPTION 'rule version without audit row' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+
+--
 -- Name: confirm_teacher_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3034,14 +3752,41 @@ BEGIN
      OR NOT EXISTS (
        SELECT 1 FROM identity.user_account u
        WHERE u.id = p_candidate_id AND u.institution_id = actor.institution_id
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM identity.teacher_eligibility e
+       WHERE e.user_id = p_candidate_id AND e.institution_id = actor.institution_id
      ) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
-  INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
-  VALUES (actor.institution_id, p_candidate_id, 'teacher', actor.user_id, now())
-  ON CONFLICT (institution_id, user_id, role) WHERE revoked_at IS NULL
-  DO UPDATE SET confirmed_by = EXCLUDED.confirmed_by, confirmed_at = EXCLUDED.confirmed_at
-  WHERE r.confirmed_at IS NULL;
+  WITH confirmed AS (
+    INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
+    VALUES (actor.institution_id, p_candidate_id, 'teacher', actor.user_id, now())
+    ON CONFLICT (institution_id, user_id, role) WHERE revoked_at IS NULL
+    DO UPDATE SET confirmed_by = EXCLUDED.confirmed_by, confirmed_at = EXCLUDED.confirmed_at
+    WHERE r.confirmed_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
+  SELECT confirmed.institution_id, confirmed.id, confirmed.user_id, confirmed.role, 'confirmed', actor.user_id, now()
+  FROM confirmed;
+END
+$$;
+
+
+--
+-- Name: course_enrollment_code_institution_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.course_enrollment_code_institution_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.institution_id IS NULL THEN
+    SELECT c.institution_id INTO NEW.institution_id FROM institution.course c WHERE c.id = NEW.course_id;
+  END IF;
+  RETURN NEW;
 END
 $$;
 
@@ -3241,6 +3986,92 @@ $$;
 
 
 --
+-- Name: create_seminar_group(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.create_seminar_group(p_course_id uuid, p_name text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_group uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF NOT coalesce(institution.is_plain_label(p_name), false) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  INSERT INTO institution.seminar_group (course_id, institution_id, name, created_by)
+  VALUES (p_course_id, actor.institution_id, p_name, actor.user_id)
+  ON CONFLICT (course_id, name) DO NOTHING
+  RETURNING id INTO v_group;
+  IF v_group IS NULL THEN
+    SELECT g.id INTO STRICT v_group FROM institution.seminar_group g WHERE g.course_id = p_course_id AND g.name = p_name;
+  END IF;
+  RETURN v_group;
+END
+$$;
+
+
+--
+-- Name: end_course_editor(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.end_course_editor(p_course_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  PERFORM institution.require_course_teacher(p_course_id);
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  UPDATE institution.course_editor e SET valid_to = greatest(now(), e.valid_from)
+   WHERE e.course_id = p_course_id AND e.valid_to IS NULL;
+END
+$$;
+
+
+--
+-- Name: end_group_assignment(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.end_group_assignment(p_group_id uuid, p_user_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_course uuid;
+BEGIN
+  SELECT g.course_id INTO v_course FROM institution.seminar_group g WHERE g.id = p_group_id;
+  PERFORM institution.require_course_teacher(v_course);
+  PERFORM pg_advisory_xact_lock(hashtextextended('institution.seminar_group:' || v_course, 0));
+  UPDATE institution.seminar_group_teacher t SET valid_to = greatest(now(), t.valid_from)
+   WHERE t.group_id = p_group_id AND t.user_id = p_user_id AND t.valid_to IS NULL;
+  UPDATE institution.seminar_group_member s SET valid_to = greatest(now(), s.valid_from)
+   WHERE s.group_id = p_group_id AND s.user_id = p_user_id AND s.valid_to IS NULL;
+END
+$$;
+
+
+--
+-- Name: end_team_substitution(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.end_team_substitution(p_substitution_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_course uuid;
+BEGIN
+  SELECT s.course_id INTO v_course FROM institution.team_substitution s WHERE s.id = p_substitution_id;
+  PERFORM institution.require_course_teacher(v_course);
+  UPDATE institution.team_substitution s SET ended_at = greatest(now(), s.valid_from)
+   WHERE s.id = p_substitution_id AND s.ended_at IS NULL;
+END
+$$;
+
+
+--
 -- Name: enroll_with_code(text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3293,6 +4124,19 @@ BEGIN
        );
   END IF;
   IF enrolled_course_id IS NOT NULL THEN
+    -- A student who comes back to the course may still hold an open place in
+    -- one of its seminar groups (#1372, repair round 4). Those group rows are
+    -- held FOR SHARE before the new course membership is written, so a
+    -- return waits for assign_group_teacher, which holds the group row FOR NO
+    -- KEY UPDATE until it commits, and no work of the returning student can
+    -- start, and commit, while a new teacher of that group is being assigned.
+    -- A student without an open place waits for nothing new.
+    PERFORM 1 FROM institution.seminar_group g
+      JOIN institution.seminar_group_member s ON s.group_id = g.id AND s.institution_id = g.institution_id
+     WHERE s.course_id = enrolled_course_id AND s.institution_id = actor.institution_id
+       AND s.user_id = actor.user_id AND s.valid_to IS NULL
+     ORDER BY g.id
+       FOR SHARE OF g;
     INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
     VALUES (enrolled_course_id, actor.institution_id, actor.user_id, 'student')
     ON CONFLICT (course_id, user_id) WHERE member_to IS NULL DO NOTHING;
@@ -3306,6 +4150,108 @@ BEGIN
   outcome := 'refused';
 END
 $_$;
+
+
+--
+-- Name: grant_can(text, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.grant_can(p_action text, p_document_id text) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_scope record;
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('read_text', 'comment') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  IF v_user IS NULL OR p_document_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT s.institution_id, s.assignment_id, s.principal_id INTO v_scope
+  FROM collaboration.document_scope(p_document_id) s;
+  IF v_scope.institution_id IS DISTINCT FROM v_institution THEN
+    RETURN false;
+  END IF;
+
+  RETURN EXISTS (
+    SELECT 1 FROM institution.institution_role r
+    WHERE r.user_id = v_user AND r.institution_id = v_institution AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  ) AND EXISTS (
+    SELECT 1 FROM institution.work_grant g
+    WHERE g.institution_id = v_institution
+      AND g.grantee_id = v_user
+      AND g.assignment_id = v_scope.assignment_id
+      AND g.student_id = v_scope.principal_id
+      AND g.revoked_at IS NULL
+      AND statement_timestamp() >= g.valid_from
+      AND statement_timestamp() < g.valid_to
+      AND p_action = ANY (g.actions)
+      AND institution.work_relation(g.granted_by, g.assignment_id) = 'teacher'
+  );
+END
+$$;
+
+
+--
+-- Name: grant_work_access(uuid, uuid, uuid, text, text[], timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.grant_work_access(p_assignment_id uuid, p_student_id uuid, p_grantee_id uuid, p_kind text, p_actions text[], p_valid_from timestamp with time zone, p_valid_to timestamp with time zone) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_from timestamptz;
+  v_id uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+
+  IF institution.work_relation(actor.user_id, p_assignment_id)
+       IS DISTINCT FROM 'teacher' THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = 'ZD403';
+  END IF;
+
+  IF p_valid_from IS NOT NULL AND NOT isfinite(p_valid_from) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- A start in the past is the start of the call: a grant never reaches back.
+  v_from := greatest(coalesce(p_valid_from, statement_timestamp()), statement_timestamp());
+
+  IF p_kind IS NULL OR p_kind NOT IN ('co_mentor', 'committee')
+     OR NOT institution.is_grant_action_set(p_actions)
+     OR p_valid_to IS NULL OR NOT isfinite(p_valid_to)
+     OR p_valid_to <= v_from
+     OR p_valid_to - v_from > interval '366 days'
+     OR institution.work_relation(p_student_id, p_assignment_id)
+          IS DISTINCT FROM 'student'
+     OR p_grantee_id IS NULL
+     OR p_grantee_id = p_student_id
+     OR p_grantee_id = actor.user_id
+     OR NOT EXISTS (
+       SELECT 1 FROM institution.institution_role r
+       WHERE r.user_id = p_grantee_id AND r.institution_id = actor.institution_id
+         AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL)
+  THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+
+  INSERT INTO institution.work_grant
+    (institution_id, assignment_id, student_id, grantee_id, kind, actions, valid_from, valid_to, granted_by)
+  VALUES
+    (actor.institution_id, p_assignment_id, p_student_id, p_grantee_id, p_kind, p_actions, v_from, p_valid_to, actor.user_id)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END
+$$;
 
 
 --
@@ -3327,6 +4273,47 @@ $$;
 
 
 --
+-- Name: institution_overview(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.institution_overview() RETURNS TABLE(institution_name text, confirmed_teachers integer, teacher_candidates integer, teachers_without_affiliation integer, courses integer, students integer)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  RETURN QUERY
+  SELECT
+    (SELECT s.display_name FROM institution.institution_settings s WHERE s.institution_id = actor.institution_id),
+    (SELECT count(*)::integer FROM institution.institution_role r
+     WHERE r.institution_id = actor.institution_id AND r.role = 'teacher'
+       AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL),
+    -- A candidate is whom confirm_teacher_role would confirm and has not yet:
+    -- an account of this institution, not the caller, with the teacher right
+    -- of its last login recorded under this institution.
+    (SELECT count(*)::integer FROM identity.user_account u
+     WHERE u.institution_id = actor.institution_id AND u.id <> actor.user_id
+       AND EXISTS (SELECT 1 FROM identity.teacher_eligibility e
+                   WHERE e.user_id = u.id AND e.institution_id = actor.institution_id)
+       AND NOT EXISTS (SELECT 1 FROM institution.institution_role r
+                       WHERE r.institution_id = actor.institution_id AND r.user_id = u.id AND r.role = 'teacher'
+                         AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL)),
+    -- The same rows the administrator gets from the mark itself (DAN-478).
+    (SELECT count(*)::integer FROM institution.teachers_without_affiliation()),
+    (SELECT count(*)::integer FROM institution.course c WHERE c.institution_id = actor.institution_id),
+    -- A person is counted once however many courses they are enrolled in.
+    (SELECT count(DISTINCT m.user_id)::integer FROM institution.course_member m
+     WHERE m.institution_id = actor.institution_id AND m.role = 'student' AND m.member_to IS NULL);
+END
+$$;
+
+
+--
 -- Name: is_assignment_content(text, text, text, timestamp with time zone, timestamp with time zone, text, text[], text, boolean); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3341,12 +4328,84 @@ CREATE FUNCTION institution.is_assignment_content(p_title text, p_instructions t
     AND p_work_type IN ('short_paper', 'essay', 'seminar_paper', 'bachelor_thesis', 'master_thesis',
                         'specialist_thesis', 'doctoral_thesis')
     AND isfinite(p_opens_at) AND isfinite(p_due_at) AND p_opens_at < p_due_at
+    AND extract(year FROM p_opens_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
+    AND extract(year FROM p_due_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
     AND institution.ai_policy_rank(p_ai_policy) IS NOT NULL
     AND p_ai_purposes <@ ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
     AND cardinality(p_ai_purposes) <= 5 AND coalesce(array_ndims(p_ai_purposes), 1) = 1
     AND (p_ai_policy <> 'prohibited' OR cardinality(p_ai_purposes) = 0)
     AND p_evidence_profile IN ('basic', 'extended')
     AND p_import_allowed IS NOT NULL,
+    false)
+$$;
+
+
+--
+-- Name: is_confirmed_teacher(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_confirmed_teacher(p_user_id uuid, p_course_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM institution.institution_role r JOIN institution.course c ON c.institution_id = r.institution_id
+    WHERE c.id = p_course_id AND r.user_id = p_user_id AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  )
+$$;
+
+
+--
+-- Name: is_course_team_member(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_course_team_member(p_user_id uuid, p_course_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT institution.is_confirmed_teacher(p_user_id, p_course_id)
+     AND (EXISTS (SELECT 1 FROM institution.course_member m
+                  WHERE m.course_id = p_course_id AND m.user_id = p_user_id AND m.role = 'teacher'
+                    AND m.member_to IS NULL)
+          OR EXISTS (SELECT 1 FROM institution.seminar_group_teacher t
+                     WHERE t.course_id = p_course_id AND t.user_id = p_user_id AND t.valid_to IS NULL))
+     AND NOT EXISTS (SELECT 1 FROM institution.course_member m
+                     WHERE m.course_id = p_course_id AND m.user_id = p_user_id AND m.role = 'student'
+                       AND m.member_to IS NULL)
+$$;
+
+
+--
+-- Name: is_course_team_teacher(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_course_team_teacher(p_user_id uuid, p_course_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT institution.is_course_team_member(p_user_id, p_course_id)
+     AND EXISTS (SELECT 1 FROM institution.course_member m
+                 WHERE m.course_id = p_course_id AND m.user_id = p_user_id AND m.role = 'teacher'
+                   AND m.member_to IS NULL)
+$$;
+
+
+--
+-- Name: is_grant_action_set(text[]); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_grant_action_set(p_actions text[]) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  SELECT coalesce(
+    pg_catalog.array_ndims(p_actions) = 1
+    AND pg_catalog.array_lower(p_actions, 1) = 1
+    AND pg_catalog.cardinality(p_actions) BETWEEN 1 AND 2
+    AND pg_catalog.array_position(p_actions, NULL) IS NULL
+    AND p_actions OPERATOR(pg_catalog.<@) ARRAY['read_text', 'comment']::text[]
+    AND pg_catalog.cardinality(p_actions) = (SELECT count(DISTINCT x) FROM pg_catalog.unnest(p_actions) x),
     false)
 $$;
 
@@ -3380,6 +4439,39 @@ $$;
 
 
 --
+-- Name: list_teacher_candidates(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.list_teacher_candidates() RETURNS TABLE(user_id uuid)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- The same three conditions as confirm_teacher_role: the account belongs to
+  -- this institution, its right is recorded under it, and it is not the actor.
+  RETURN QUERY
+  SELECT e.user_id
+  FROM identity.teacher_eligibility e
+  JOIN identity.user_account u ON u.id = e.user_id AND u.institution_id = actor.institution_id
+  WHERE e.institution_id = actor.institution_id
+    AND e.user_id <> actor.user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM institution.institution_role r
+      WHERE r.institution_id = actor.institution_id AND r.user_id = e.user_id
+        AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    )
+  ORDER BY e.user_id;
+END
+$$;
+
+
+--
 -- Name: list_teacher_courses(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3406,6 +4498,51 @@ BEGIN
    WHERE c.institution_id = app.current_institution_id()
      AND institution.actor_course_role(c.id) = 'teacher';
 END
+$$;
+
+
+--
+-- Name: lock_teacher_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.lock_teacher_role(p_user_id uuid) RETURNS uuid
+    LANGUAGE sql
+    SET search_path TO ''
+    AS $$
+  SELECT r.id FROM app.current_actor() a
+  JOIN institution.institution_role r ON r.institution_id = a.institution_id
+  WHERE r.user_id = p_user_id AND r.role = 'teacher'
+    AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  FOR SHARE OF r
+$$;
+
+
+--
+-- Name: notice_fingerprint(integer, text, text, text, timestamp with time zone, timestamp with time zone, text, text[], text, integer, integer); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.notice_fingerprint(p_template_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_word_min integer, p_word_max integer) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT encode(pg_catalog.sha256(pg_catalog.convert_to(
+    'ductus-notice-fingerprint-v1' || E'\n'
+    || '{"aiPolicy":' || to_json(p_ai_policy)::text
+    || ',"aiPurposes":' || CASE WHEN p_ai_policy = 'prohibited' THEN '[]' ELSE coalesce(
+         (SELECT '[' || string_agg(to_json(s.p)::text, ',' ORDER BY s.p COLLATE "C") || ']'
+            FROM (SELECT DISTINCT u.p FROM unnest(p_ai_purposes) AS u(p)) s),
+         '[]') END
+    || ',"dueAt":' || to_json(to_char(p_due_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text
+    || ',"evidenceProfile":' || to_json(p_evidence_profile)::text
+    || ',"instructions":' || to_json(p_instructions)::text
+    || ',"opensAt":' || to_json(to_char(p_opens_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text
+    || ',"templateVersion":' || p_template_version::text
+    || ',"title":' || to_json(p_title)::text
+    || ',"wordMax":' || coalesce(p_word_max::text, 'null')
+    || ',"wordMin":' || coalesce(p_word_min::text, 'null')
+    || ',"workType":' || to_json(p_work_type)::text
+    || '}',
+    'UTF8')), 'hex')
 $$;
 
 
@@ -3483,6 +4620,105 @@ $$;
 
 
 --
+-- Name: publish_faculty_rule_version(text, integer, text, text[], text, boolean); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.publish_faculty_rule_version(p_work_type text, p_expected_version integer, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_latest institution.faculty_rule_version;
+  v_current integer;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The role row FOR SHARE: a revocation waits for this transaction, and one
+  -- that committed first leaves no row to find.
+  PERFORM 1 FROM institution.institution_role r
+   WHERE r.institution_id = actor.institution_id AND r.user_id = actor.user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+   FOR SHARE OF r;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+
+  IF p_work_type IS NULL OR p_work_type NOT IN ('short_paper', 'essay', 'seminar_paper', 'bachelor_thesis',
+                                                'master_thesis', 'specialist_thesis', 'doctoral_thesis')
+     OR institution.ai_policy_rank(p_ai_policy) IS NULL
+     OR p_evidence_profile IS NULL OR p_evidence_profile NOT IN ('basic', 'extended')
+     OR p_import_allowed IS NULL
+     OR p_expected_version IS NULL OR p_expected_version < 0
+     OR p_ai_purposes IS NULL OR coalesce(pg_catalog.array_ndims(p_ai_purposes), 1) <> 1 THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- One dimension from here on, so array_position and unnest are safe.
+  IF coalesce(pg_catalog.array_lower(p_ai_purposes, 1), 1) <> 1
+     OR pg_catalog.cardinality(p_ai_purposes) > 5
+     OR pg_catalog.array_position(p_ai_purposes, NULL) IS NOT NULL
+     OR NOT p_ai_purposes <@ ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
+     OR (SELECT count(DISTINCT u) FROM pg_catalog.unnest(p_ai_purposes) AS u) <> pg_catalog.cardinality(p_ai_purposes)
+     OR (p_ai_policy = 'prohibited' AND pg_catalog.cardinality(p_ai_purposes) > 0) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+
+  -- Publications of one rule run one at a time; the next statement reads
+  -- what the one before committed.
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'faculty_rule_version:' || actor.institution_id::text || ':' || p_work_type, 0));
+  SELECT * INTO v_latest FROM institution.faculty_rule_version v
+   WHERE v.institution_id = actor.institution_id AND v.work_type = p_work_type
+   ORDER BY v.version_no DESC LIMIT 1;
+  v_current := coalesce(v_latest.version_no, 0);
+
+  IF p_expected_version <> v_current THEN
+    IF p_expected_version = v_current - 1
+       AND v_latest.published_by = actor.user_id
+       AND v_latest.ai_policy = p_ai_policy AND v_latest.ai_purposes = p_ai_purposes
+       AND v_latest.evidence_profile = p_evidence_profile AND v_latest.import_allowed = p_import_allowed THEN
+      RETURN v_current;
+    END IF;
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+
+  WITH published AS (
+    INSERT INTO institution.faculty_rule_version
+      (institution_id, work_type, version_no, ai_policy, ai_purposes, evidence_profile, import_allowed,
+       origin, published_by)
+    VALUES (actor.institution_id, p_work_type, v_current + 1, p_ai_policy, p_ai_purposes, p_evidence_profile,
+            p_import_allowed, 'administrator', actor.user_id)
+    RETURNING institution_id, work_type, version_no, published_by, published_at
+  )
+  INSERT INTO audit.faculty_rule_event (institution_id, work_type, version_no, kind, actor_id, occurred_at)
+  SELECT institution_id, work_type, version_no, 'published', published_by, published_at FROM published;
+
+  INSERT INTO institution.faculty_work_rule
+    (institution_id, work_type, ai_policy, ai_purposes, evidence_profile, import_allowed, updated_at)
+  VALUES (actor.institution_id, p_work_type, p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed, now())
+  ON CONFLICT (institution_id, work_type) DO UPDATE
+    SET ai_policy = EXCLUDED.ai_policy, ai_purposes = EXCLUDED.ai_purposes,
+        evidence_profile = EXCLUDED.evidence_profile, import_allowed = EXCLUDED.import_allowed,
+        updated_at = EXCLUDED.updated_at;
+  RETURN v_current + 1;
+END
+$$;
+
+
+--
+-- Name: refuse_acknowledgment_change(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.refuse_acknowledgment_change() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'notice acknowledgment is immutable' USING ERRCODE = 'ZD403';
+END
+$$;
+
+
+--
 -- Name: refuse_change(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3492,6 +4728,20 @@ CREATE FUNCTION institution.refuse_change() RETURNS trigger
     AS $$
 BEGIN
   RAISE EXCEPTION 'assignment version is immutable' USING ERRCODE = 'ZD403';
+END
+$$;
+
+
+--
+-- Name: refuse_rule_version_change(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.refuse_rule_version_change() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'published rule version is immutable' USING ERRCODE = 'ZD403';
 END
 $$;
 
@@ -3528,6 +4778,57 @@ $$;
 
 
 --
+-- Name: request_mentorship(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.request_mentorship(p_teacher_id uuid, p_work_type text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_id uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF p_work_type IS NULL
+     OR p_work_type NOT IN ('bachelor_thesis', 'master_thesis', 'specialist_thesis', 'doctoral_thesis') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- Requests and approvals of one student's kind of work take turns, so a
+  -- request made and approved while this one runs cannot slip between the
+  -- check below and the insert. The approval takes the same lock first.
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    'institution.mentorship_request:' || actor.institution_id || ':' || actor.user_id || ':' || p_work_type, 0));
+  IF p_teacher_id IS NOT DISTINCT FROM actor.user_id
+     OR institution.lock_teacher_role(p_teacher_id) IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM institution.mentorship m
+    WHERE m.institution_id = actor.institution_id AND m.student_id = actor.user_id
+      AND m.work_type = p_work_type AND m.ended_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  BEGIN
+    WITH requested AS (
+      INSERT INTO institution.mentorship_request (institution_id, student_id, teacher_id, work_type)
+      VALUES (actor.institution_id, actor.user_id, p_teacher_id, p_work_type)
+      RETURNING id, institution_id, student_id, teacher_id
+    ), logged AS (
+      INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
+      SELECT institution_id, id, student_id, teacher_id, 'requested', actor.user_id, now() FROM requested
+    )
+    SELECT id INTO v_id FROM requested;
+  EXCEPTION WHEN unique_violation THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END;
+  RETURN v_id;
+END
+$$;
+
+
+--
 -- Name: require_actor(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3539,6 +4840,52 @@ BEGIN
   SELECT a.user_id, a.institution_id INTO user_id, institution_id FROM app.current_actor() a;
   IF user_id IS NULL THEN
     RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+END
+$$;
+
+
+--
+-- Name: require_admin_request(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.require_admin_request(p_user_id uuid, p_request_ref text) RETURNS uuid
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_institution_id uuid;
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  IF p_request_ref IS NULL OR p_request_ref <> pg_catalog.btrim(p_request_ref)
+     OR NOT coalesce(institution.is_plain_label(p_request_ref), false) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  SELECT u.institution_id INTO v_institution_id FROM identity.user_account u WHERE u.id = p_user_id FOR SHARE;
+  IF v_institution_id IS NULL THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'institution.institution_admin:' || v_institution_id::text, 0));
+  RETURN v_institution_id;
+END
+$$;
+
+
+--
+-- Name: require_course_teacher(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid) RETURNS record
+    LANGUAGE plpgsql STABLE
+    SET search_path TO ''
+    AS $$
+BEGIN
+  SELECT a.user_id, a.institution_id INTO user_id, institution_id FROM institution.require_actor() a;
+  IF institution.actor_course_role(p_course_id) IS DISTINCT FROM 'teacher' THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
 END
 $$;
@@ -3578,6 +4925,34 @@ $$;
 
 
 --
+-- Name: revoke_institution_admin(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.revoke_institution_admin(p_user_id uuid, p_request_ref text) RETURNS boolean
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
+  v_written integer;
+BEGIN
+  WITH revoked AS (
+    UPDATE institution.institution_role r SET revoked_at = now()
+     WHERE r.institution_id = v_institution_id AND r.user_id = p_user_id
+       AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event
+    (institution_id, role_id, teacher_id, role, kind, actor_id, request_ref, occurred_at)
+  SELECT revoked.institution_id, revoked.id, revoked.user_id, revoked.role, 'revoked', NULL, p_request_ref, now()
+  FROM revoked;
+  GET DIAGNOSTICS v_written = ROW_COUNT;
+  RETURN v_written > 0;
+END
+$$;
+
+
+--
 -- Name: revoke_teacher_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3587,16 +4962,306 @@ CREATE FUNCTION institution.revoke_teacher_role(p_teacher_id uuid) RETURNS boole
     AS $$
 DECLARE
   actor record;
+  v_written integer;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
   IF NOT institution.actor_has_role('admin') THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
-  UPDATE institution.institution_role r SET revoked_at = now()
-   WHERE r.institution_id = actor.institution_id AND r.user_id = p_teacher_id
-     AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL;
-  RETURN FOUND;
+  WITH revoked AS (
+    UPDATE institution.institution_role r SET revoked_at = now()
+     WHERE r.institution_id = actor.institution_id AND r.user_id = p_teacher_id
+       AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
+  SELECT revoked.institution_id, revoked.id, revoked.user_id, revoked.role, 'revoked', actor.user_id, now()
+  FROM revoked;
+  GET DIAGNOSTICS v_written = ROW_COUNT;
+  RETURN v_written > 0;
 END
+$$;
+
+
+--
+-- Name: revoke_work_access(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.revoke_work_access(p_grant_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  g record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+
+  SELECT w.assignment_id, w.granted_by, w.revoked_at INTO g
+  FROM institution.work_grant w
+  WHERE w.id = p_grant_id AND w.institution_id = actor.institution_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR (g.granted_by <> actor.user_id
+         AND institution.work_relation(actor.user_id, g.assignment_id)
+               IS DISTINCT FROM 'teacher') THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = 'ZD403';
+  END IF;
+
+  IF g.revoked_at IS NOT NULL THEN
+    RETURN false;
+  END IF;
+
+  UPDATE institution.work_grant
+  SET revoked_at = statement_timestamp(), revoked_by = actor.user_id
+  WHERE id = p_grant_id;
+  RETURN true;
+END
+$$;
+
+
+--
+-- Name: set_course_editor(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_course_editor(p_course_id uuid, p_editor_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_ended timestamptz;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF NOT institution.is_course_team_teacher(p_editor_id, p_course_id) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- Two changes of the same course wait for each other here.
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  IF EXISTS (SELECT 1 FROM institution.course_editor e
+             WHERE e.course_id = p_course_id AND e.user_id = p_editor_id AND e.valid_to IS NULL) THEN
+    RETURN;
+  END IF;
+  UPDATE institution.course_editor e SET valid_to = greatest(now(), e.valid_from)
+   WHERE e.course_id = p_course_id AND e.valid_to IS NULL
+  RETURNING e.valid_to INTO v_ended;
+  INSERT INTO institution.course_editor (course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_course_id, actor.institution_id, p_editor_id, actor.user_id, greatest(now(), v_ended));
+END
+$$;
+
+
+--
+-- Name: set_course_holder(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_course_holder(p_course_id uuid, p_holder_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_ended timestamptz;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF NOT institution.is_confirmed_teacher(p_holder_id, p_course_id) OR NOT EXISTS (
+       SELECT 1 FROM institution.course_member m
+       WHERE m.course_id = p_course_id AND m.user_id = p_holder_id AND m.role = 'teacher' AND m.member_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- Two replacements of the same course wait for each other here.
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  IF EXISTS (SELECT 1 FROM institution.course_holder h
+             WHERE h.course_id = p_course_id AND h.user_id = p_holder_id AND h.valid_to IS NULL) THEN
+    RETURN;
+  END IF;
+  UPDATE institution.course_holder h SET valid_to = greatest(now(), h.valid_from)
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL
+  RETURNING h.valid_to INTO v_ended;
+  INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), v_ended));
+END
+$$;
+
+
+--
+-- Name: set_team_substitution(uuid, uuid, uuid, timestamp with time zone); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_team_substitution(p_course_id uuid, p_absent_id uuid, p_substitute_id uuid, p_valid_to timestamp with time zone) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_id uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
+  IF p_absent_id IS NOT DISTINCT FROM p_substitute_id
+     OR NOT institution.is_course_team_member(p_absent_id, p_course_id)
+     OR NOT institution.is_course_team_member(p_substitute_id, p_course_id)
+     OR p_valid_to IS NULL OR p_valid_to <= now() OR p_valid_to > now() + interval '1 year' THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
+  SELECT s.id INTO v_id FROM institution.team_substitution s
+   WHERE s.course_id = p_course_id AND s.absent_id = p_absent_id AND s.ended_at IS NULL
+     AND s.substitute_id = p_substitute_id AND s.valid_to = p_valid_to;
+  IF v_id IS NOT NULL THEN
+    RETURN v_id;
+  END IF;
+  UPDATE institution.team_substitution s SET ended_at = greatest(now(), s.valid_from)
+   WHERE s.course_id = p_course_id AND s.absent_id = p_absent_id AND s.ended_at IS NULL;
+  INSERT INTO institution.team_substitution (course_id, institution_id, absent_id, substitute_id, assigned_by, valid_to)
+  VALUES (p_course_id, actor.institution_id, p_absent_id, p_substitute_id, actor.user_id, p_valid_to)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END
+$$;
+
+
+--
+-- Name: teachers_without_affiliation(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.teachers_without_affiliation() RETURNS TABLE(user_id uuid, confirmed_at timestamp with time zone)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- A right recorded under another institution does not count; the account
+  -- is the one of this issuer and unique id, so another account of the same
+  -- person never lifts the mark.
+  RETURN QUERY
+  SELECT r.user_id, r.confirmed_at
+  FROM institution.institution_role r
+  WHERE r.institution_id = actor.institution_id
+    AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM identity.teacher_eligibility e
+      WHERE e.user_id = r.user_id AND e.institution_id = actor.institution_id
+    )
+  ORDER BY r.confirmed_at, r.user_id;
+END
+$$;
+
+
+--
+-- Name: team_notification_recipients(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.team_notification_recipients(p_course_id uuid, p_student_id uuid) RETURNS SETOF uuid
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  WITH candidate (level, user_id) AS (
+    SELECT 1, t.user_id
+    FROM institution.seminar_group_member g
+    JOIN institution.seminar_group_teacher t ON t.group_id = g.group_id AND t.valid_to IS NULL
+    WHERE g.course_id = p_course_id AND g.user_id = p_student_id AND g.valid_to IS NULL
+      AND institution.is_course_team_member(t.user_id, p_course_id)
+    UNION ALL
+    SELECT 2, e.user_id FROM institution.course_editor e
+    WHERE e.course_id = p_course_id AND e.valid_to IS NULL AND institution.is_course_team_teacher(e.user_id, p_course_id)
+    UNION ALL
+    SELECT 3, h.user_id FROM institution.course_holder h
+    WHERE h.course_id = p_course_id AND h.valid_to IS NULL AND institution.is_course_team_teacher(h.user_id, p_course_id)
+    UNION ALL
+    SELECT 4, m.user_id FROM institution.course_member m
+    WHERE m.course_id = p_course_id AND m.role = 'teacher' AND m.member_to IS NULL
+      AND institution.is_course_team_member(m.user_id, p_course_id)
+  ),
+  chosen AS (
+    SELECT c.user_id FROM candidate c
+    WHERE c.level = (SELECT min(level) FROM candidate)
+      AND EXISTS (SELECT 1 FROM institution.course_member m
+                  WHERE m.course_id = p_course_id AND m.user_id = p_student_id AND m.role = 'student'
+                    AND m.member_to IS NULL)
+  )
+  SELECT DISTINCT coalesce(
+    (SELECT s.substitute_id FROM institution.team_substitution s
+     WHERE s.course_id = p_course_id AND s.absent_id = c.user_id AND s.ended_at IS NULL
+       AND s.valid_from <= now() AND now() < s.valid_to
+       AND institution.is_course_team_member(s.substitute_id, p_course_id)),
+    c.user_id)
+  FROM chosen c
+$$;
+
+
+--
+-- Name: withdraw_mentorship_request(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.withdraw_mentorship_request(p_request_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  req institution.mentorship_request;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT * INTO req FROM institution.mentorship_request r
+  WHERE r.id = p_request_id AND r.institution_id = actor.institution_id AND r.student_id = actor.user_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  ELSIF req.approved_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  ELSIF req.withdrawn_at IS NOT NULL THEN
+    RETURN false;
+  END IF;
+  WITH withdrawn AS (
+    UPDATE institution.mentorship_request r SET withdrawn_at = now() WHERE r.id = req.id
+    RETURNING r.id, r.institution_id, r.student_id, r.teacher_id
+  )
+  INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
+  SELECT institution_id, id, student_id, teacher_id, 'withdrawn', actor.user_id, now() FROM withdrawn;
+  RETURN true;
+END
+$$;
+
+
+--
+-- Name: work_relation(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.work_relation(p_user_id uuid, p_assignment_id uuid) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT CASE
+           WHEN r.relation = 'teacher' AND NOT EXISTS (
+             SELECT 1 FROM institution.institution_role ir
+             WHERE ir.user_id = p_user_id AND ir.institution_id = r.institution_id
+               AND ir.role = 'teacher' AND ir.confirmed_at IS NOT NULL AND ir.revoked_at IS NULL)
+             THEN NULL
+           ELSE r.relation
+         END
+  FROM (
+    SELECT a.institution_id,
+           CASE
+             WHEN a.course_id IS NOT NULL THEN (
+               SELECT m.role FROM institution.course_member m
+               WHERE m.course_id = a.course_id AND m.institution_id = a.institution_id
+                 AND m.user_id = p_user_id AND m.member_to IS NULL)
+             ELSE (
+               SELECT CASE WHEN ms.mentor_id = p_user_id THEN 'teacher'
+                           WHEN ms.student_id = p_user_id THEN 'student' END
+               FROM institution.mentorship ms
+               WHERE ms.id = a.mentorship_id AND ms.institution_id = a.institution_id
+                 AND ms.ended_at IS NULL)
+           END AS relation
+    FROM institution.assignment a
+    WHERE a.id = p_assignment_id
+  ) r
 $$;
 
 
@@ -3664,6 +5329,68 @@ CREATE TABLE audit.enrollment_code_event (
 );
 
 ALTER TABLE ONLY audit.enrollment_code_event FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: faculty_rule_event; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.faculty_rule_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    work_type text NOT NULL,
+    version_no integer NOT NULL,
+    kind text NOT NULL,
+    actor_id uuid NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT faculty_rule_event_kind_check CHECK ((kind = 'published'::text))
+);
+
+ALTER TABLE ONLY audit.faculty_rule_event FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: mentorship_event; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.mentorship_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    kind text NOT NULL,
+    actor_id uuid NOT NULL,
+    mentorship_id uuid,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT mentorship_event_check CHECK (((kind = 'approved'::text) = (mentorship_id IS NOT NULL))),
+    CONSTRAINT mentorship_event_kind_check CHECK ((kind = ANY (ARRAY['requested'::text, 'withdrawn'::text, 'approved'::text])))
+);
+
+ALTER TABLE ONLY audit.mentorship_event FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: teacher_role_event; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.teacher_role_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    role_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    role text NOT NULL,
+    kind text NOT NULL,
+    actor_id uuid,
+    occurred_at timestamp with time zone NOT NULL,
+    request_ref text,
+    CONSTRAINT teacher_role_event_kind_check CHECK ((kind = ANY (ARRAY['confirmed'::text, 'revoked'::text]))),
+    CONSTRAINT teacher_role_event_origin_check CHECK ((((role = 'admin'::text) = (request_ref IS NOT NULL)) AND ((role = 'admin'::text) = (actor_id IS NULL)))),
+    CONSTRAINT teacher_role_event_request_ref_check CHECK (((request_ref IS NULL) OR ((request_ref = btrim(request_ref)) AND institution.is_plain_label(request_ref)))),
+    CONSTRAINT teacher_role_event_role_check CHECK ((role = ANY (ARRAY['teacher'::text, 'admin'::text])))
+);
+
+ALTER TABLE ONLY audit.teacher_role_event FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -4110,13 +5837,28 @@ CREATE TABLE identity.session (
     expires_at timestamp with time zone NOT NULL,
     closed_at timestamp with time zone,
     close_reason text,
+    last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
-    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text]))),
+    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text]))),
+    CONSTRAINT session_last_seen_check CHECK ((last_seen_at >= created_at)),
     CONSTRAINT session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
 
 ALTER TABLE ONLY identity.session FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: teacher_eligibility; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.teacher_eligibility (
+    user_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY identity.teacher_eligibility FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -4177,6 +5919,7 @@ CREATE TABLE institution.assignment_version (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     word_min integer,
     word_max integer,
+    institution_id uuid NOT NULL,
     CONSTRAINT assignment_version_check CHECK (institution.is_assignment_content(title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes, evidence_profile, import_allowed)),
     CONSTRAINT assignment_version_version_no_check CHECK ((version_no >= 1)),
     CONSTRAINT assignment_version_word_range_check CHECK (institution.is_word_range(word_min, word_max))
@@ -4206,6 +5949,24 @@ ALTER TABLE ONLY institution.course FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: course_editor; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.course_editor (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT course_editor_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.course_editor FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: course_enrollment_code; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -4217,10 +5978,29 @@ CREATE TABLE institution.course_enrollment_code (
     active boolean DEFAULT true NOT NULL,
     created_by uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    institution_id uuid NOT NULL,
     CONSTRAINT course_enrollment_code_code_hash_check CHECK ((octet_length(code_hash) = 32))
 );
 
 ALTER TABLE ONLY institution.course_enrollment_code FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: course_holder; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.course_holder (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT course_holder_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.course_holder FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -4256,6 +6036,34 @@ CREATE TABLE institution.enrollment_attempt (
 );
 
 ALTER TABLE ONLY institution.enrollment_attempt FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: faculty_rule_version; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.faculty_rule_version (
+    institution_id uuid NOT NULL,
+    work_type text NOT NULL,
+    version_no integer NOT NULL,
+    ai_policy text NOT NULL,
+    ai_purposes text[] NOT NULL,
+    evidence_profile text NOT NULL,
+    import_allowed boolean NOT NULL,
+    origin text NOT NULL,
+    published_by uuid,
+    published_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT faculty_rule_version_ai_policy_check CHECK ((institution.ai_policy_rank(ai_policy) IS NOT NULL)),
+    CONSTRAINT faculty_rule_version_ai_purposes_check CHECK (((ai_purposes <@ ARRAY['formatting'::text, 'proofreading'::text, 'literature_search'::text, 'transcription'::text, 'translation'::text]) AND (cardinality(ai_purposes) <= 5) AND (COALESCE(array_ndims(ai_purposes), 1) = 1))),
+    CONSTRAINT faculty_rule_version_check CHECK (((origin = 'administrator'::text) = (published_by IS NOT NULL))),
+    CONSTRAINT faculty_rule_version_check1 CHECK (((ai_policy <> 'prohibited'::text) OR (cardinality(ai_purposes) = 0))),
+    CONSTRAINT faculty_rule_version_evidence_profile_check CHECK ((evidence_profile = ANY (ARRAY['basic'::text, 'extended'::text]))),
+    CONSTRAINT faculty_rule_version_origin_check CHECK ((origin = ANY (ARRAY['operator'::text, 'administrator'::text]))),
+    CONSTRAINT faculty_rule_version_version_no_check CHECK ((version_no >= 1)),
+    CONSTRAINT faculty_rule_version_work_type_check CHECK ((work_type = ANY (ARRAY['short_paper'::text, 'essay'::text, 'seminar_paper'::text, 'bachelor_thesis'::text, 'master_thesis'::text, 'specialist_thesis'::text, 'doctoral_thesis'::text])))
+);
+
+ALTER TABLE ONLY institution.faculty_rule_version FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -4340,6 +6148,29 @@ ALTER TABLE ONLY institution.mentorship FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: mentorship_request; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.mentorship_request (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    teacher_id uuid NOT NULL,
+    work_type text NOT NULL,
+    requested_at timestamp with time zone DEFAULT now() NOT NULL,
+    withdrawn_at timestamp with time zone,
+    approved_at timestamp with time zone,
+    mentorship_id uuid,
+    CONSTRAINT mentorship_request_check CHECK ((student_id <> teacher_id)),
+    CONSTRAINT mentorship_request_check1 CHECK ((num_nonnulls(withdrawn_at, approved_at) <= 1)),
+    CONSTRAINT mentorship_request_check2 CHECK (((approved_at IS NULL) = (mentorship_id IS NULL))),
+    CONSTRAINT mentorship_request_work_type_check CHECK ((work_type = ANY (ARRAY['bachelor_thesis'::text, 'master_thesis'::text, 'specialist_thesis'::text, 'doctoral_thesis'::text])))
+);
+
+ALTER TABLE ONLY institution.mentorship_request FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: notice_acknowledgment; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -4348,7 +6179,10 @@ CREATE TABLE institution.notice_acknowledgment (
     version_no integer NOT NULL,
     student_id uuid NOT NULL,
     acknowledged_at timestamp with time zone DEFAULT now() NOT NULL,
-    institution_id uuid NOT NULL
+    institution_id uuid NOT NULL,
+    notice_template_version integer,
+    notice_fingerprint text,
+    CONSTRAINT notice_acknowledgment_fingerprint_check CHECK (((num_nulls(notice_template_version, notice_fingerprint) = 2) OR ((num_nulls(notice_template_version, notice_fingerprint) = 0) AND (notice_template_version >= 1) AND (notice_fingerprint ~ '^[0-9a-f]{64}$'::text))))
 );
 
 ALTER TABLE ONLY institution.notice_acknowledgment FORCE ROW LEVEL SECURITY;
@@ -4372,6 +6206,112 @@ CREATE TABLE institution.notification (
 );
 
 ALTER TABLE ONLY institution.notification FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: seminar_group; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.seminar_group (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    name text NOT NULL,
+    created_by uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT seminar_group_name_check CHECK (institution.is_plain_label(name))
+);
+
+ALTER TABLE ONLY institution.seminar_group FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: seminar_group_member; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.seminar_group_member (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    group_id uuid NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT seminar_group_member_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.seminar_group_member FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: seminar_group_teacher; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.seminar_group_teacher (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    group_id uuid NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    CONSTRAINT seminar_group_teacher_check CHECK ((valid_to >= valid_from))
+);
+
+ALTER TABLE ONLY institution.seminar_group_teacher FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: team_substitution; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.team_substitution (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    absent_id uuid NOT NULL,
+    substitute_id uuid NOT NULL,
+    assigned_by uuid NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone NOT NULL,
+    ended_at timestamp with time zone,
+    CONSTRAINT team_substitution_check CHECK ((absent_id <> substitute_id)),
+    CONSTRAINT team_substitution_check1 CHECK ((valid_to > valid_from)),
+    CONSTRAINT team_substitution_check2 CHECK ((ended_at >= valid_from))
+);
+
+ALTER TABLE ONLY institution.team_substitution FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: work_grant; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.work_grant (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    assignment_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    grantee_id uuid NOT NULL,
+    kind text NOT NULL,
+    actions text[] NOT NULL,
+    valid_from timestamp with time zone NOT NULL,
+    valid_to timestamp with time zone NOT NULL,
+    granted_by uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
+    revoked_at timestamp with time zone,
+    revoked_by uuid,
+    CONSTRAINT work_grant_actions_check CHECK (institution.is_grant_action_set(actions)),
+    CONSTRAINT work_grant_finite CHECK ((isfinite(valid_from) AND isfinite(valid_to))),
+    CONSTRAINT work_grant_grantee CHECK (((grantee_id <> student_id) AND (grantee_id <> granted_by))),
+    CONSTRAINT work_grant_interval CHECK (((valid_to > valid_from) AND ((valid_to - valid_from) <= '366 days'::interval))),
+    CONSTRAINT work_grant_kind_check CHECK ((kind = ANY (ARRAY['co_mentor'::text, 'committee'::text]))),
+    CONSTRAINT work_grant_revoked CHECK (((revoked_at IS NULL) = (revoked_by IS NULL)))
+);
+
+ALTER TABLE ONLY institution.work_grant FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -4421,6 +6361,54 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_institution_id_work_type_version_no_kind_key; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.faculty_rule_event
+    ADD CONSTRAINT faculty_rule_event_institution_id_work_type_version_no_kind_key UNIQUE (institution_id, work_type, version_no, kind);
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.faculty_rule_event
+    ADD CONSTRAINT faculty_rule_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mentorship_event mentorship_event_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mentorship_event mentorship_event_request_id_kind_key; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_request_id_kind_key UNIQUE (request_id, kind);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_role_id_kind_key; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_role_id_kind_key UNIQUE (role_id, kind);
 
 
 --
@@ -4696,6 +6684,14 @@ ALTER TABLE ONLY evidence.signing_key
 
 
 --
+-- Name: signing_key signing_key_key_id_institution_key; Type: CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.signing_key
+    ADD CONSTRAINT signing_key_key_id_institution_key UNIQUE (key_id, institution_id);
+
+
+--
 -- Name: signing_key signing_key_pkey; Type: CONSTRAINT; Schema: evidence; Owner: -
 --
 
@@ -4848,6 +6844,14 @@ ALTER TABLE ONLY identity.session
 
 
 --
+-- Name: teacher_eligibility teacher_eligibility_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.teacher_eligibility
+    ADD CONSTRAINT teacher_eligibility_pkey PRIMARY KEY (user_id);
+
+
+--
 -- Name: user_account user_account_id_institution_id_key; Type: CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -4896,11 +6900,27 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
+-- Name: assignment_version assignment_version_due_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.assignment_version
+    ADD CONSTRAINT assignment_version_due_institution_key UNIQUE (assignment_id, version_no, due_at, institution_id);
+
+
+--
 -- Name: assignment_version assignment_version_due_key; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
     ADD CONSTRAINT assignment_version_due_key UNIQUE (assignment_id, version_no, due_at);
+
+
+--
+-- Name: assignment_version assignment_version_id_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.assignment_version
+    ADD CONSTRAINT assignment_version_id_institution_key UNIQUE (assignment_id, version_no, institution_id);
 
 
 --
@@ -4912,6 +6932,14 @@ ALTER TABLE ONLY institution.assignment_version
 
 
 --
+-- Name: course_editor course_editor_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: course_enrollment_code course_enrollment_code_code_hash_key; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -4920,11 +6948,27 @@ ALTER TABLE ONLY institution.course_enrollment_code
 
 
 --
+-- Name: course_enrollment_code course_enrollment_code_id_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_enrollment_code
+    ADD CONSTRAINT course_enrollment_code_id_institution_key UNIQUE (id, institution_id);
+
+
+--
 -- Name: course_enrollment_code course_enrollment_code_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.course_enrollment_code
     ADD CONSTRAINT course_enrollment_code_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: course_holder course_holder_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_pkey PRIMARY KEY (id);
 
 
 --
@@ -4976,11 +7020,35 @@ ALTER TABLE ONLY institution.enrollment_attempt
 
 
 --
+-- Name: faculty_rule_version faculty_rule_version_institution_id_work_type_version_no_pu_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_institution_id_work_type_version_no_pu_key UNIQUE (institution_id, work_type, version_no, published_by);
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_pkey PRIMARY KEY (institution_id, work_type, version_no);
+
+
+--
 -- Name: faculty_work_rule faculty_work_rule_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.faculty_work_rule
     ADD CONSTRAINT faculty_work_rule_pkey PRIMARY KEY (institution_id, work_type);
+
+
+--
+-- Name: institution_role institution_role_binding_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.institution_role
+    ADD CONSTRAINT institution_role_binding_key UNIQUE (id, institution_id, user_id, role);
 
 
 --
@@ -5016,6 +7084,30 @@ ALTER TABLE ONLY institution.mentorship
 
 
 --
+-- Name: mentorship_request mentorship_request_id_institution_id_student_id_teacher_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_id_institution_id_student_id_teacher_id_key UNIQUE (id, institution_id, student_id, teacher_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_mentorship_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_mentorship_id_key UNIQUE (mentorship_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: notice_acknowledgment notice_acknowledgment_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -5037,6 +7129,70 @@ ALTER TABLE ONLY institution.notification
 
 ALTER TABLE ONLY institution.notification
     ADD CONSTRAINT notification_recipient_id_event_key_key UNIQUE (recipient_id, event_key);
+
+
+--
+-- Name: seminar_group seminar_group_course_id_name_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_course_id_name_key UNIQUE (course_id, name);
+
+
+--
+-- Name: seminar_group seminar_group_id_course_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_id_course_id_institution_id_key UNIQUE (id, course_id, institution_id);
+
+
+--
+-- Name: seminar_group seminar_group_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_id_institution_id_key UNIQUE (id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: seminar_group seminar_group_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: team_substitution team_substitution_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: work_grant work_grant_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_pkey PRIMARY KEY (id);
 
 
 --
@@ -5073,6 +7229,27 @@ CREATE INDEX course_member_event_course_idx ON audit.course_member_event USING b
 --
 
 CREATE INDEX enrollment_code_event_course_idx ON audit.enrollment_code_event USING btree (course_id, occurred_at);
+
+
+--
+-- Name: faculty_rule_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX faculty_rule_event_institution_idx ON audit.faculty_rule_event USING btree (institution_id, occurred_at);
+
+
+--
+-- Name: mentorship_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX mentorship_event_institution_idx ON audit.mentorship_event USING btree (institution_id, occurred_at);
+
+
+--
+-- Name: teacher_role_event_institution_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX teacher_role_event_institution_idx ON audit.teacher_role_event USING btree (institution_id, occurred_at);
 
 
 --
@@ -5209,10 +7386,24 @@ CREATE UNIQUE INDEX assignment_mentorship_idx ON institution.assignment USING bt
 
 
 --
+-- Name: course_editor_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX course_editor_open_idx ON institution.course_editor USING btree (course_id) WHERE (valid_to IS NULL);
+
+
+--
 -- Name: course_enrollment_code_active_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
 CREATE UNIQUE INDEX course_enrollment_code_active_idx ON institution.course_enrollment_code USING btree (course_id) WHERE active;
+
+
+--
+-- Name: course_holder_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX course_holder_open_idx ON institution.course_holder USING btree (course_id) WHERE (valid_to IS NULL);
 
 
 --
@@ -5237,6 +7428,13 @@ CREATE INDEX enrollment_attempt_user_idx ON institution.enrollment_attempt USING
 
 
 --
+-- Name: faculty_rule_version_published_by_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX faculty_rule_version_published_by_idx ON institution.faculty_rule_version USING btree (published_by);
+
+
+--
 -- Name: institution_role_open_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
@@ -5258,6 +7456,27 @@ CREATE UNIQUE INDEX mentorship_open_idx ON institution.mentorship USING btree (i
 
 
 --
+-- Name: mentorship_request_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX mentorship_request_open_idx ON institution.mentorship_request USING btree (institution_id, student_id, work_type) WHERE ((withdrawn_at IS NULL) AND (approved_at IS NULL));
+
+
+--
+-- Name: mentorship_request_student_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX mentorship_request_student_idx ON institution.mentorship_request USING btree (student_id);
+
+
+--
+-- Name: mentorship_request_teacher_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX mentorship_request_teacher_open_idx ON institution.mentorship_request USING btree (teacher_id) WHERE ((withdrawn_at IS NULL) AND (approved_at IS NULL));
+
+
+--
 -- Name: mentorship_student_idx; Type: INDEX; Schema: institution; Owner: -
 --
 
@@ -5276,6 +7495,41 @@ CREATE INDEX notice_acknowledgment_student_idx ON institution.notice_acknowledgm
 --
 
 CREATE INDEX notification_recipient_order_idx ON institution.notification USING btree (recipient_id, created_at DESC, id DESC);
+
+
+--
+-- Name: seminar_group_member_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX seminar_group_member_open_idx ON institution.seminar_group_member USING btree (course_id, user_id) WHERE (valid_to IS NULL);
+
+
+--
+-- Name: seminar_group_teacher_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX seminar_group_teacher_open_idx ON institution.seminar_group_teacher USING btree (group_id, user_id) WHERE (valid_to IS NULL);
+
+
+--
+-- Name: team_substitution_open_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE UNIQUE INDEX team_substitution_open_idx ON institution.team_substitution USING btree (course_id, absent_id) WHERE (ended_at IS NULL);
+
+
+--
+-- Name: work_grant_grantee_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX work_grant_grantee_idx ON institution.work_grant USING btree (grantee_id, assignment_id, student_id);
+
+
+--
+-- Name: work_grant_work_idx; Type: INDEX; Schema: institution; Owner: -
+--
+
+CREATE INDEX work_grant_work_idx ON institution.work_grant USING btree (assignment_id, student_id);
 
 
 --
@@ -5318,6 +7572,48 @@ CREATE TRIGGER enrollment_code_event_append_only BEFORE DELETE OR UPDATE ON audi
 --
 
 CREATE TRIGGER enrollment_code_event_no_truncate BEFORE TRUNCATE ON audit.enrollment_code_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_event_append_only BEFORE DELETE OR UPDATE ON audit.faculty_rule_event FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_event_no_truncate BEFORE TRUNCATE ON audit.faculty_rule_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: mentorship_event mentorship_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER mentorship_event_append_only BEFORE DELETE OR UPDATE ON audit.mentorship_event FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: mentorship_event mentorship_event_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER mentorship_event_no_truncate BEFORE TRUNCATE ON audit.mentorship_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: teacher_role_event teacher_role_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER teacher_role_event_append_only BEFORE DELETE OR UPDATE ON audit.teacher_role_event FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: teacher_role_event teacher_role_event_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER teacher_role_event_no_truncate BEFORE TRUNCATE ON audit.teacher_role_event FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
 
 
 --
@@ -5468,10 +7764,38 @@ CREATE TRIGGER submission_receipt_no_truncate BEFORE TRUNCATE ON evidence.submis
 
 
 --
+-- Name: institution close_sessions_on_home_org_change; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_home_org_change AFTER UPDATE OF aai_home_org ON identity.institution FOR EACH ROW WHEN (((old.aai_home_org IS NOT NULL) AND (old.aai_home_org IS DISTINCT FROM new.aai_home_org))) EXECUTE FUNCTION identity.close_sessions_on_home_org_change();
+
+
+--
+-- Name: institution_issuer close_sessions_on_issuer_removal; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_issuer_removal AFTER DELETE OR UPDATE ON identity.institution_issuer FOR EACH ROW EXECUTE FUNCTION identity.close_sessions_on_issuer_removal();
+
+
+--
+-- Name: institution_issuer close_sessions_on_issuer_truncate; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER close_sessions_on_issuer_truncate AFTER TRUNCATE ON identity.institution_issuer FOR EACH STATEMENT EXECUTE FUNCTION identity.close_sessions_on_issuer_truncate();
+
+
+--
 -- Name: assignment_version assignment_version_immutable; Type: TRIGGER; Schema: institution; Owner: -
 --
 
 CREATE TRIGGER assignment_version_immutable BEFORE DELETE OR UPDATE ON institution.assignment_version FOR EACH ROW EXECUTE FUNCTION institution.refuse_change();
+
+
+--
+-- Name: assignment_version assignment_version_institution_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER assignment_version_institution_fill BEFORE INSERT ON institution.assignment_version FOR EACH ROW EXECUTE FUNCTION institution.assignment_version_institution_fill();
 
 
 --
@@ -5493,6 +7817,62 @@ CREATE TRIGGER assignment_version_no_truncate BEFORE TRUNCATE ON institution.ass
 --
 
 CREATE TRIGGER assignment_version_notify AFTER INSERT ON institution.assignment_version FOR EACH ROW WHEN ((new.version_no > 1)) EXECUTE FUNCTION institution.notify_assignment_version();
+
+
+--
+-- Name: course_enrollment_code course_enrollment_code_institution_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER course_enrollment_code_institution_fill BEFORE INSERT ON institution.course_enrollment_code FOR EACH ROW EXECUTE FUNCTION institution.course_enrollment_code_institution_fill();
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_has_event; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER faculty_rule_version_has_event AFTER INSERT ON institution.faculty_rule_version DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN ((new.origin = 'administrator'::text)) EXECUTE FUNCTION institution.check_rule_version_event();
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_immutable; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_version_immutable BEFORE DELETE OR UPDATE ON institution.faculty_rule_version FOR EACH ROW EXECUTE FUNCTION institution.refuse_rule_version_change();
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_no_truncate; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER faculty_rule_version_no_truncate BEFORE TRUNCATE ON institution.faculty_rule_version FOR EACH STATEMENT EXECUTE FUNCTION institution.refuse_rule_version_change();
+
+
+--
+-- Name: institution_role institution_role_admin_appointed; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER institution_role_admin_appointed AFTER INSERT ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL))) EXECUTE FUNCTION institution.check_admin_appointment();
+
+
+--
+-- Name: institution_role institution_role_admin_reappointed; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER institution_role_admin_reappointed AFTER UPDATE ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL) AND ((old.role <> 'admin'::text) OR (old.confirmed_at IS NULL) OR (old.revoked_at IS NOT NULL) OR (((old.id IS DISTINCT FROM new.id) OR (old.institution_id IS DISTINCT FROM new.institution_id)) OR (old.user_id IS DISTINCT FROM new.user_id))))) EXECUTE FUNCTION institution.check_admin_appointment();
+
+
+--
+-- Name: institution_role institution_role_keeps_admin; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER institution_role_keeps_admin AFTER UPDATE ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((old.role = 'admin'::text) AND (old.confirmed_at IS NOT NULL) AND (old.revoked_at IS NULL) AND (NOT ((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL) AND (NOT (((old.id IS DISTINCT FROM new.id) OR (old.institution_id IS DISTINCT FROM new.institution_id)) OR (old.user_id IS DISTINCT FROM new.user_id))))))) EXECUTE FUNCTION institution.check_last_admin();
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_fingerprint_immutable; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER notice_acknowledgment_fingerprint_immutable BEFORE UPDATE OF notice_template_version, notice_fingerprint ON institution.notice_acknowledgment FOR EACH ROW EXECUTE FUNCTION institution.refuse_acknowledgment_change();
 
 
 --
@@ -5560,11 +7940,11 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 
 --
--- Name: enrollment_code_event enrollment_code_event_code_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+-- Name: enrollment_code_event enrollment_code_event_code_institution_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
 --
 
 ALTER TABLE ONLY audit.enrollment_code_event
-    ADD CONSTRAINT enrollment_code_event_code_id_fkey FOREIGN KEY (code_id) REFERENCES institution.course_enrollment_code(id);
+    ADD CONSTRAINT enrollment_code_event_code_institution_fkey FOREIGN KEY (code_id, institution_id) REFERENCES institution.course_enrollment_code(id, institution_id);
 
 
 --
@@ -5573,6 +7953,62 @@ ALTER TABLE ONLY audit.enrollment_code_event
 
 ALTER TABLE ONLY audit.enrollment_code_event
     ADD CONSTRAINT enrollment_code_event_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: faculty_rule_event faculty_rule_event_version_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.faculty_rule_event
+    ADD CONSTRAINT faculty_rule_event_version_fkey FOREIGN KEY (institution_id, work_type, version_no, actor_id) REFERENCES institution.faculty_rule_version(institution_id, work_type, version_no, published_by);
+
+
+--
+-- Name: mentorship_event mentorship_event_actor_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_actor_id_institution_id_fkey FOREIGN KEY (actor_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_mentorship_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_mentorship_id_institution_id_fkey FOREIGN KEY (mentorship_id, institution_id) REFERENCES institution.mentorship(id, institution_id);
+
+
+--
+-- Name: mentorship_event mentorship_event_request_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.mentorship_event
+    ADD CONSTRAINT mentorship_event_request_fkey FOREIGN KEY (request_id, institution_id, student_id, teacher_id) REFERENCES institution.mentorship_request(id, institution_id, student_id, teacher_id);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_actor_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_actor_id_institution_id_fkey FOREIGN KEY (actor_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_role_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_role_fkey FOREIGN KEY (role_id, institution_id, teacher_id, role) REFERENCES institution.institution_role(id, institution_id, user_id, role);
+
+
+--
+-- Name: teacher_role_event teacher_role_event_teacher_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.teacher_role_event
+    ADD CONSTRAINT teacher_role_event_teacher_id_institution_id_fkey FOREIGN KEY (teacher_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -5800,14 +8236,6 @@ ALTER TABLE ONLY evidence.signing_key
 
 
 --
--- Name: submission submission_assignment_id_assignment_version_due_at_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
---
-
-ALTER TABLE ONLY evidence.submission
-    ADD CONSTRAINT submission_assignment_id_assignment_version_due_at_fkey FOREIGN KEY (assignment_id, assignment_version, due_at) REFERENCES institution.assignment_version(assignment_id, version_no, due_at);
-
-
---
 -- Name: submission submission_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
@@ -5832,11 +8260,11 @@ ALTER TABLE ONLY evidence.submission_receipt
 
 
 --
--- Name: submission_receipt_issuance submission_receipt_issuance_key_id_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+-- Name: submission_receipt_issuance submission_receipt_issuance_key_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
 ALTER TABLE ONLY evidence.submission_receipt_issuance
-    ADD CONSTRAINT submission_receipt_issuance_key_id_fkey FOREIGN KEY (key_id) REFERENCES evidence.signing_key(key_id);
+    ADD CONSTRAINT submission_receipt_issuance_key_institution_fkey FOREIGN KEY (key_id, institution_id) REFERENCES evidence.signing_key(key_id, institution_id);
 
 
 --
@@ -5845,14 +8273,6 @@ ALTER TABLE ONLY evidence.submission_receipt_issuance
 
 ALTER TABLE ONLY evidence.submission_receipt_issuance
     ADD CONSTRAINT submission_receipt_issuance_submission_id_institution_id_p_fkey FOREIGN KEY (submission_id, institution_id, principal_id) REFERENCES evidence.submission(id, institution_id, principal_id);
-
-
---
--- Name: submission_request submission_request_assignment_id_assignment_version_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
---
-
-ALTER TABLE ONLY evidence.submission_request
-    ADD CONSTRAINT submission_request_assignment_id_assignment_version_fkey FOREIGN KEY (assignment_id, assignment_version) REFERENCES institution.assignment_version(assignment_id, version_no);
 
 
 --
@@ -5896,11 +8316,27 @@ ALTER TABLE ONLY evidence.submission_request
 
 
 --
+-- Name: submission_request submission_request_version_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.submission_request
+    ADD CONSTRAINT submission_request_version_institution_fkey FOREIGN KEY (assignment_id, assignment_version, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id);
+
+
+--
 -- Name: submission submission_submission_request_id_institution_id_principal__fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
 --
 
 ALTER TABLE ONLY evidence.submission
     ADD CONSTRAINT submission_submission_request_id_institution_id_principal__fkey FOREIGN KEY (submission_request_id, institution_id, principal_id, assignment_id, assignment_version, revision, artifact_hash, requested_at) REFERENCES evidence.submission_request(id, institution_id, principal_id, assignment_id, assignment_version, revision, content_hash, requested_at);
+
+
+--
+-- Name: submission submission_version_institution_fkey; Type: FK CONSTRAINT; Schema: evidence; Owner: -
+--
+
+ALTER TABLE ONLY evidence.submission
+    ADD CONSTRAINT submission_version_institution_fkey FOREIGN KEY (assignment_id, assignment_version, due_at, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, due_at, institution_id);
 
 
 --
@@ -5928,6 +8364,14 @@ ALTER TABLE ONLY identity.session
 
 
 --
+-- Name: teacher_eligibility teacher_eligibility_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.teacher_eligibility
+    ADD CONSTRAINT teacher_eligibility_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: user_account user_account_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -5952,11 +8396,11 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
--- Name: assignment assignment_current_version_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment assignment_current_version_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment
-    ADD CONSTRAINT assignment_current_version_fkey FOREIGN KEY (id, current_version) REFERENCES institution.assignment_version(assignment_id, version_no) DEFERRABLE INITIALLY DEFERRED;
+    ADD CONSTRAINT assignment_current_version_institution_fkey FOREIGN KEY (id, current_version, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id) DEFERRABLE INITIALLY DEFERRED;
 
 
 --
@@ -5968,19 +8412,19 @@ ALTER TABLE ONLY institution.assignment
 
 
 --
--- Name: assignment_version assignment_version_assignment_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment_version assignment_version_assignment_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
-    ADD CONSTRAINT assignment_version_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES institution.assignment(id);
+    ADD CONSTRAINT assignment_version_assignment_institution_fkey FOREIGN KEY (assignment_id, institution_id) REFERENCES institution.assignment(id, institution_id);
 
 
 --
--- Name: assignment_version assignment_version_created_by_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: assignment_version assignment_version_created_by_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.assignment_version
-    ADD CONSTRAINT assignment_version_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity.user_account(id);
+    ADD CONSTRAINT assignment_version_created_by_institution_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -5992,19 +8436,67 @@ ALTER TABLE ONLY institution.course
 
 
 --
--- Name: course_enrollment_code course_enrollment_code_course_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: course_editor course_editor_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_editor course_editor_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: course_editor course_editor_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_editor
+    ADD CONSTRAINT course_editor_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_enrollment_code course_enrollment_code_course_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.course_enrollment_code
-    ADD CONSTRAINT course_enrollment_code_course_id_fkey FOREIGN KEY (course_id) REFERENCES institution.course(id);
+    ADD CONSTRAINT course_enrollment_code_course_institution_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
 
 
 --
--- Name: course_enrollment_code course_enrollment_code_created_by_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+-- Name: course_enrollment_code course_enrollment_code_created_by_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.course_enrollment_code
-    ADD CONSTRAINT course_enrollment_code_created_by_fkey FOREIGN KEY (created_by) REFERENCES identity.user_account(id);
+    ADD CONSTRAINT course_enrollment_code_created_by_institution_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_holder course_holder_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_holder course_holder_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: course_holder course_holder_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_holder
+    ADD CONSTRAINT course_holder_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -6045,6 +8537,22 @@ ALTER TABLE ONLY institution.course_member
 
 ALTER TABLE ONLY institution.enrollment_attempt
     ADD CONSTRAINT enrollment_attempt_user_id_fkey FOREIGN KEY (user_id) REFERENCES identity.user_account(id);
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES identity.institution(id);
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_published_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.faculty_rule_version
+    ADD CONSTRAINT faculty_rule_version_published_by_institution_id_fkey FOREIGN KEY (published_by, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -6096,19 +8604,35 @@ ALTER TABLE ONLY institution.mentorship
 
 
 --
+-- Name: mentorship_request mentorship_request_mentorship_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_mentorship_id_institution_id_fkey FOREIGN KEY (mentorship_id, institution_id) REFERENCES institution.mentorship(id, institution_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: mentorship_request mentorship_request_teacher_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.mentorship_request
+    ADD CONSTRAINT mentorship_request_teacher_id_institution_id_fkey FOREIGN KEY (teacher_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: mentorship mentorship_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.mentorship
     ADD CONSTRAINT mentorship_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
-
-
---
--- Name: notice_acknowledgment notice_acknowledgment_assignment_id_version_no_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
---
-
-ALTER TABLE ONLY institution.notice_acknowledgment
-    ADD CONSTRAINT notice_acknowledgment_assignment_id_version_no_fkey FOREIGN KEY (assignment_id, version_no) REFERENCES institution.assignment_version(assignment_id, version_no);
 
 
 --
@@ -6128,11 +8652,155 @@ ALTER TABLE ONLY institution.notice_acknowledgment
 
 
 --
+-- Name: notice_acknowledgment notice_acknowledgment_version_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.notice_acknowledgment
+    ADD CONSTRAINT notice_acknowledgment_version_institution_fkey FOREIGN KEY (assignment_id, version_no, institution_id) REFERENCES institution.assignment_version(assignment_id, version_no, institution_id);
+
+
+--
 -- Name: notification notification_recipient_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
 ALTER TABLE ONLY institution.notification
     ADD CONSTRAINT notification_recipient_id_institution_id_fkey FOREIGN KEY (recipient_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group seminar_group_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: seminar_group seminar_group_created_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group
+    ADD CONSTRAINT seminar_group_created_by_institution_id_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_group_id_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_group_id_course_id_institution_id_fkey FOREIGN KEY (group_id, course_id, institution_id) REFERENCES institution.seminar_group(id, course_id, institution_id);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_member
+    ADD CONSTRAINT seminar_group_member_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_group_id_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_group_id_course_id_institution_id_fkey FOREIGN KEY (group_id, course_id, institution_id) REFERENCES institution.seminar_group(id, course_id, institution_id);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.seminar_group_teacher
+    ADD CONSTRAINT seminar_group_teacher_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_absent_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_absent_id_institution_id_fkey FOREIGN KEY (absent_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_assigned_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_assigned_by_institution_id_fkey FOREIGN KEY (assigned_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: team_substitution team_substitution_substitute_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.team_substitution
+    ADD CONSTRAINT team_substitution_substitute_id_institution_id_fkey FOREIGN KEY (substitute_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_assignment_id_institution_id_fkey FOREIGN KEY (assignment_id, institution_id) REFERENCES institution.assignment(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_granted_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_granted_by_institution_id_fkey FOREIGN KEY (granted_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_grantee_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_grantee_id_institution_id_fkey FOREIGN KEY (grantee_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_revoked_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_revoked_by_institution_id_fkey FOREIGN KEY (revoked_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -6172,6 +8840,45 @@ ALTER TABLE audit.enrollment_code_event ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY enrollment_code_event_owner ON audit.enrollment_code_event TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: faculty_rule_event; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.faculty_rule_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: faculty_rule_event faculty_rule_event_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY faculty_rule_event_owner ON audit.faculty_rule_event TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: mentorship_event; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.mentorship_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mentorship_event mentorship_event_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY mentorship_event_owner ON audit.mentorship_event TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: teacher_role_event; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.teacher_role_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: teacher_role_event teacher_role_event_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY teacher_role_event_owner ON audit.teacher_role_event TO ductus_identity USING (true) WITH CHECK ((role = 'teacher'::text));
 
 
 --
@@ -6525,6 +9232,19 @@ CREATE POLICY session_owner ON identity.session TO ductus_identity USING (true) 
 
 
 --
+-- Name: teacher_eligibility; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.teacher_eligibility ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: teacher_eligibility teacher_eligibility_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY teacher_eligibility_owner ON identity.teacher_eligibility TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: user_account; Type: ROW SECURITY; Schema: identity; Owner: -
 --
 
@@ -6584,6 +9304,26 @@ CREATE POLICY assignment_version_read ON institution.assignment_version FOR SELE
 ALTER TABLE institution.course ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: course_editor; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.course_editor ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: course_editor course_editor_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_editor_owner ON institution.course_editor TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: course_editor course_editor_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_editor_read ON institution.course_editor FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
 -- Name: course_enrollment_code; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -6601,6 +9341,26 @@ CREATE POLICY course_enrollment_code_owner ON institution.course_enrollment_code
 --
 
 CREATE POLICY course_enrollment_code_read ON institution.course_enrollment_code FOR SELECT TO ductus_app USING ((institution.actor_course_role(course_id) = 'teacher'::text));
+
+
+--
+-- Name: course_holder; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.course_holder ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: course_holder course_holder_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_holder_owner ON institution.course_holder TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: course_holder course_holder_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY course_holder_read ON institution.course_holder FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
 
 
 --
@@ -6648,6 +9408,26 @@ ALTER TABLE institution.enrollment_attempt ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY enrollment_attempt_owner ON institution.enrollment_attempt TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: faculty_rule_version; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.faculty_rule_version ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: faculty_rule_version faculty_rule_version_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY faculty_rule_version_owner ON institution.faculty_rule_version TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: faculty_rule_version faculty_rule_version_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY faculty_rule_version_read ON institution.faculty_rule_version FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ( SELECT institution.actor_has_role('admin'::text) AS actor_has_role)));
 
 
 --
@@ -6724,6 +9504,26 @@ CREATE POLICY mentorship_read ON institution.mentorship FOR SELECT TO ductus_app
 
 
 --
+-- Name: mentorship_request; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.mentorship_request ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mentorship_request mentorship_request_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY mentorship_request_owner ON institution.mentorship_request TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: mentorship_request mentorship_request_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY mentorship_request_read ON institution.mentorship_request FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR ((teacher_id = ( SELECT app.current_user_id() AS current_user_id)) AND (withdrawn_at IS NULL) AND (approved_at IS NULL) AND ( SELECT institution.actor_has_role('teacher'::text) AS actor_has_role)))));
+
+
+--
 -- Name: notice_acknowledgment; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -6754,6 +9554,106 @@ ALTER TABLE institution.notification ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY notification_owner ON institution.notification TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: seminar_group; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.seminar_group ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seminar_group_member; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.seminar_group_member ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seminar_group_member seminar_group_member_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_member_owner ON institution.seminar_group_member TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: seminar_group_member seminar_group_member_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_member_read ON institution.seminar_group_member FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
+-- Name: seminar_group seminar_group_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_owner ON institution.seminar_group TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: seminar_group seminar_group_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_read ON institution.seminar_group FOR SELECT TO ductus_app USING ((institution.actor_course_role(course_id) = 'teacher'::text));
+
+
+--
+-- Name: seminar_group_teacher; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.seminar_group_teacher ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_teacher_owner ON institution.seminar_group_teacher TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: seminar_group_teacher seminar_group_teacher_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY seminar_group_teacher_read ON institution.seminar_group_teacher FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
+-- Name: team_substitution; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.team_substitution ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: team_substitution team_substitution_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY team_substitution_owner ON institution.team_substitution TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: team_substitution team_substitution_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY team_substitution_read ON institution.team_substitution FOR SELECT TO ductus_app USING (((absent_id = ( SELECT app.current_user_id() AS current_user_id)) OR (substitute_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+
+
+--
+-- Name: work_grant; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.work_grant ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: work_grant work_grant_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY work_grant_owner ON institution.work_grant TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: work_grant work_grant_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY work_grant_read ON institution.work_grant FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((grantee_id = ( SELECT app.current_user_id() AS current_user_id)) OR (student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_assignment_role(assignment_id) = 'teacher'::text))));
 
 
 --
@@ -6823,4 +9723,25 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261031200000'),
     ('20261101010000'),
     ('20261101150000'),
-    ('20261101160000');
+    ('20261101160000'),
+    ('20261101180000'),
+    ('20261101190000'),
+    ('20261101200000'),
+    ('20261101201000'),
+    ('20261101210000'),
+    ('20261102120000'),
+    ('20261102150000'),
+    ('20261102160000'),
+    ('20261102190000'),
+    ('20261102200000'),
+    ('20261102210000'),
+    ('20261102220000'),
+    ('20261103010000'),
+    ('20261103030000'),
+    ('20261103100000'),
+    ('20261104090000'),
+    ('20261104100000'),
+    ('20261104110000'),
+    ('20261104120000'),
+    ('20261104130000'),
+    ('20261105110000');

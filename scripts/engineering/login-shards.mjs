@@ -3,7 +3,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { LOGIN_SHARDS, WEIGHTS_PATH, planLoginShards, specFilesOf } from "./login-shard-plan.mjs";
+import { LOGIN_SHARDS, WEIGHTS_PATH, planLoginProjects } from "./login-shard-plan.mjs";
 
 export { LOGIN_SHARDS };
 
@@ -38,19 +38,23 @@ export function verifyLoginShards(shards, weights) {
   assert.ok(listed[0].length > 0, "The login inventory is empty");
   assert.equal(new Set(listed[0]).size, listed[0].length, "The login inventory repeats a test");
   for (const other of listed.slice(1)) assert.deepEqual(other, listed[0], "The shards listed different suites");
-  const plan = planLoginShards(specFilesOf(shards[0].inventory), weights);
+  const plan = planLoginProjects(shards[0].inventory, weights);
 
   const ran = new Map();
   let skipped = 0;
   for (const [index, { report, shardPlan }] of shards.entries()) {
-    assert.deepEqual(shardPlan, { shard: index + 1, total: LOGIN_SHARDS, files: plan[index] }, `Shard ${index + 1}: wrong plan`);
+    assert.deepEqual(shardPlan, { shard: index + 1, total: LOGIN_SHARDS, ...plan[index] }, `Shard ${index + 1}: wrong plan`);
     assert.equal(report.config?.shard ?? null, null, `Shard ${index + 1}: the run must follow the plan, not --shard`);
     assert.deepEqual(report.errors ?? [], [], `Shard ${index + 1}: the run has errors`);
     for (const { id, test, file } of testsOf(report)) {
-      assert.ok(plan[index].includes(file), `Shard ${index + 1} ran a file outside its plan: ${id}`);
+      assert.equal(test.projectName, plan[index].project, `Shard ${index + 1} ran a project outside its plan: ${id}`);
+      assert.ok(plan[index].files.includes(file), `Shard ${index + 1} ran a file outside its plan: ${id}`);
       assert.ok(!ran.has(id), `Ran in two shards: ${id}`);
       ran.set(id, index + 1);
-      if (test.status === "skipped") { skipped += 1; continue; }
+      if (test.status === "skipped") {
+        assert.ok(!(file === "demo-flow.spec.ts" && test.projectName === "login-webkit"), "WebKit demo-flow must execute, not skip");
+        skipped += 1; continue;
+      }
       assert.equal(test.status, "expected", `Not passed (${test.status}): ${id}`);
       assert.ok((test.results ?? []).length > 0, `No result: ${id}`);
     }

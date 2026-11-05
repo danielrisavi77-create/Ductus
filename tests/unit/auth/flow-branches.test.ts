@@ -225,6 +225,20 @@ describe("finishLogin when the session ports fail", () => {
     expect(logged).not.toContain("ana@demo.ductus.test");
   });
 
+  // DAN-491: the two fallbacks of errorCode, a rejection that is not an Error
+  // and an Error whose code is not text.
+  it.each([
+    ["a value that is not an Error", "connect ana@demo.ductus.test", '"open_session","unknown"'],
+    ["an Error with a numeric code", Object.assign(new TypeError("ana@demo.ductus.test"), { code: 111 }), '"open_session","TypeError"'],
+  ])("logs only a fallback code when opening the session rejects with %s", async (_, reason, expected) => {
+    deps.openSession.mockRejectedValueOnce(reason);
+    expect((await approvedCallback()).status).toBe(503);
+    const logged = JSON.stringify(errors.mock.calls);
+    expect(logged).toContain(expected);
+    expect(logged).not.toContain("ana@demo.ductus.test");
+    expect(logged).not.toContain("111");
+  });
+
   it("shows the neutral 400 page on a conflict", async () => {
     deps.openSession.mockResolvedValueOnce({ ok: false, reason: "conflict" });
     const response = await approvedCallback();
@@ -257,7 +271,7 @@ describe("finishLogin when the session ports fail", () => {
 
 describe("logout", () => {
   it("clears the cookie without calling the database when there is no session", async () => {
-    const response = await logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers: { "sec-fetch-site": "same-origin" } }), deps);
+    const response = await logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers: { "sec-fetch-site": "same-origin", origin: APP } }), deps);
     expect(response.status).toBe(303);
     expect(deps.closeSession).not.toHaveBeenCalled();
     expect(setCookies(response).get(SESSION_COOKIE_NAME)).toMatch(/Max-Age=0$/);
@@ -268,10 +282,14 @@ describe("isSameOrigin", () => {
   const request = (headers: Record<string, string>) => new Request(`${APP}/api/auth/logout`, { method: "POST", headers });
 
   it.each([
-    ["Sec-Fetch-Site same-origin over a foreign Origin", { "sec-fetch-site": "same-origin", origin: "https://zlo.test" }, true],
+    ["Sec-Fetch-Site same-origin over this Origin", { "sec-fetch-site": "same-origin", origin: APP }, true],
+    ["this Origin without Sec-Fetch-Site", { origin: APP }, true],
+    ["Sec-Fetch-Site same-origin over a foreign Origin (DAN-302 L2)", { "sec-fetch-site": "same-origin", origin: "https://zlo.test" }, false],
+    ["Sec-Fetch-Site same-origin without Origin (DAN-302 L2)", { "sec-fetch-site": "same-origin" }, false],
+    ["Sec-Fetch-Site none over this Origin", { "sec-fetch-site": "none", origin: APP }, false],
     ["Sec-Fetch-Site cross-site over this Origin", { "sec-fetch-site": "cross-site", origin: APP }, false],
     ["an empty Sec-Fetch-Site over this Origin", { "sec-fetch-site": "", origin: APP }, false],
-    ["Sec-Fetch-Site in capitals", { "sec-fetch-site": "Same-Origin" }, false],
+    ["Sec-Fetch-Site in capitals", { "sec-fetch-site": "Same-Origin", origin: APP }, false],
     ["this Origin with a trailing slash", { origin: `${APP}/` }, false],
     ["this Origin over http", { origin: APP.replace("https", "http") }, false],
   ])("decides on %s", (_name, headers, expected) => {

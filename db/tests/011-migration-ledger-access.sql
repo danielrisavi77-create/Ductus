@@ -6,7 +6,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(54);
+SELECT plan(59);
 
 -- Every role but the migrator: each ductus_* role, and every role that is a
 -- member of one, whatever its name, so a login added later is covered too.
@@ -38,8 +38,8 @@ CREATE TEMP VIEW ledger_access AS
 
 SELECT ok(
   ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth',
-        'ductus_app_local', 'ductus_auth_local'] <@ ARRAY(SELECT rolname FROM ledger_role),
-  'the check covers the six group roles and both local logins'
+        'ductus_app_local', 'ductus_worker_local', 'ductus_auth_local'] <@ ARRAY(SELECT rolname FROM ledger_role),
+  'the check covers the six group roles and the three local logins'
 );
 SELECT is_empty(
   'SELECT found FROM ledger_access',
@@ -52,8 +52,10 @@ GRANT SELECT ON public.schema_migrations TO ductus_worker;
 SELECT set_eq(
   'SELECT found FROM ledger_access',
   $$ VALUES ('ductus_worker: SELECT on public.schema_migrations'),
-            ('ductus_worker: column SELECT on public.schema_migrations') $$,
-  'SELECT granted to ductus_worker is noticed'
+            ('ductus_worker: column SELECT on public.schema_migrations'),
+            ('ductus_worker_local: SELECT on public.schema_migrations'),
+            ('ductus_worker_local: column SELECT on public.schema_migrations') $$,
+  'SELECT granted to ductus_worker is noticed, also on the login that inherits it'
 );
 REVOKE SELECT ON public.schema_migrations FROM ductus_worker;
 GRANT INSERT (version) ON public.schema_migrations TO ductus_retention;
@@ -133,6 +135,9 @@ SELECT throws_ok(statement, '42501', NULL, 'ductus_auth: ' || what || ' on the l
 RESET ROLE;
 SET LOCAL ROLE ductus_app_local;
 SELECT throws_ok(statement, '42501', NULL, 'ductus_app_local: ' || what || ' on the ledger is denied') FROM ledger_statement;
+RESET ROLE;
+SET LOCAL ROLE ductus_worker_local;
+SELECT throws_ok(statement, '42501', NULL, 'ductus_worker_local: ' || what || ' on the ledger is denied') FROM ledger_statement;
 RESET ROLE;
 SET LOCAL ROLE ductus_auth_local;
 SELECT throws_ok(statement, '42501', NULL, 'ductus_auth_local: ' || what || ' on the ledger is denied') FROM ledger_statement;

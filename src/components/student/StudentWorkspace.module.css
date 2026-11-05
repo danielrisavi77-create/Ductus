@@ -1,0 +1,229 @@
+/*
+ * DAN-309 (B2), "Moji radovi" on /zadaci/radovi: the row list of
+ * docs/design/ductura/pocetna.dc.html, laid out only on the existing tokens
+ * of app/globals.css (paper and graphite, D-188), so the page follows the
+ * shell's palette and theme. --synced stays the save state's own colour and
+ * is not used here; a submission is told in words, with the accent.
+ */
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px clamp(16px, 4vw, 44px) 64px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.heading {
+  padding-bottom: 24px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 56px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.lede {
+  margin: 8px 0 0;
+  font-size: 21px;
+  line-height: 1.35;
+  color: var(--ink-2);
+}
+
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field:first-child {
+  flex: 1 1 260px;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.input {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--field-rule);
+  border-radius: var(--radius-control);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+}
+
+.input:focus-visible,
+.reset:focus-visible,
+.action:focus-visible,
+.secondary:focus-visible {
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
+}
+
+.reset {
+  align-self: center;
+  color: var(--ink-2);
+}
+
+.noMatch {
+  margin: 24px 0;
+  color: var(--ink-2);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.eyebrow,
+.facts {
+  margin: 0;
+}
+
+.eyebrow {
+  font-size: 13px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.itemTitle {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 14px;
+}
+
+.stateText[data-tone="wait"] {
+  color: var(--warn);
+}
+
+.stateText[data-tone="done"] {
+  color: var(--accent);
+}
+
+.stateText[data-tone="idle"] {
+  color: var(--ink);
+}
+
+.due {
+  color: var(--ink-2);
+}
+
+.action,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.action:hover,
+.secondary:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 720px;
+  padding: 32px 0;
+}
+
+.state p {
+  margin: 0;
+}
+
+.stateTitle {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.stateBody {
+  font-size: 18px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 700px) {
+  .page {
+    padding-top: 32px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .lede {
+    font-size: 18px;
+  }
+
+  .item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .action {
+    justify-self: start;
+  }
+
+  .stateTitle {
+    font-size: 30px;
+  }
+}

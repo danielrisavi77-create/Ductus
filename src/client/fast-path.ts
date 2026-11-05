@@ -16,6 +16,7 @@
  */
 
 import { TEXT_BLOCK_KINDS, type FastPathLoad, type FastPathRecord, type FastPathStudent, type WorkState } from "@/components/teacher/fast-path";
+import { isDocumentId } from "@/domain/collaboration";
 import { isEvidenceMinuteV2 } from "@/domain/forensics/evidence-segment-v2";
 
 import { parseProcessSummaryV1 } from "./process-summary";
@@ -49,8 +50,8 @@ function record(value: unknown): FastPathRecord | null {
 }
 
 function student(value: unknown): FastPathStudent | null {
-  if (!exactly(value, ["id", "givenName", "surname", "work", "lastChangeAt", "record"])) return null;
-  const { id, givenName, surname, work, lastChangeAt } = value;
+  if (!exactly(value, ["id", "givenName", "surname", "documentId", "work", "lastChangeAt", "record"])) return null;
+  const { id, givenName, surname, documentId, work, lastChangeAt } = value;
   if (typeof id !== "string" || id === "" || !WORK.includes(work as WorkState)) return null;
   // D1: a name is a pair; either both parts are there or neither.
   const named = typeof givenName === "string" && typeof surname === "string" && givenName !== "" && surname !== "";
@@ -59,7 +60,18 @@ function student(value: unknown): FastPathStudent | null {
   // Before the notice is confirmed there is no record (#757).
   const checked = value.record === null ? null : record(value.record);
   if ((value.record !== null && checked === null) || (work === "notice_pending" && checked !== null)) return null;
-  return { id, givenName: givenName as string | null, surname: surname as string | null, work: work as WorkState, lastChangeAt, record: checked };
+  // #1284: the work to open is there exactly when the record is, and never before the notice.
+  const pending = work === "notice_pending";
+  if (pending ? documentId !== null : !isDocumentId(documentId) || checked === null) return null;
+  return {
+    id,
+    givenName: givenName as string | null,
+    surname: surname as string | null,
+    documentId: documentId as string | null,
+    work: work as WorkState,
+    lastChangeAt,
+    record: checked,
+  };
 }
 
 /** The students when `value` is exactly the fast path answer, otherwise null. */

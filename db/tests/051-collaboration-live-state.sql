@@ -225,7 +225,7 @@ SELECT is(pg_temp.ask('vesna', $$ SELECT institution.publish_assignment_version(
 SELECT is(pg_temp.publish_as('ana', 'doc-a', pg_temp.val('t3'), pg_temp.val('b2')), 'ZD403: forbidden',
   'after a new version of the assignment the owner cannot publish until she acknowledges it');
 SELECT is(pg_temp.read_as('ana', 'doc-a', NULL), pg_temp.read_as('vesna', 'doc-a', NULL), 'reading stays allowed');
-SELECT matches(pg_temp.ask('dora', $$ SELECT institution.acknowledge_notice({z1}, 3) $$), '^[0-9]{4}-', 'Dora acknowledges the third version');
+SELECT matches(pg_temp.ask('dora', $$ SELECT institution.acknowledge_notice({z1}, 3, 1) $$), '^[0-9]{4}-', 'Dora acknowledges the third version');
 SELECT matches(pg_temp.publish_as('dora', 'doc-d', NULL, pg_temp.val('b1')), '^accepted\|', 'with the current notice acknowledged she publishes');
 
 -- Direct access to the table (4.12 point 2): refused, and with a mistaken

@@ -73,11 +73,12 @@ async function snapshot(page: Page, name: string): Promise<void> {
 
 test("anonymous visitor and a student see no work", async ({ page }) => {
   await page.goto("/nastavnik/brz-put");
-  await expect(page.getByText(messagesHr.teacher.signedOut)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.signedOutTitle })).toBeVisible();
   await expect(page.getByRole("navigation", { name: t.studentsLabel })).toHaveCount(0);
 
   await signIn(page, "/nastavnik/brz-put", "Demo studentica");
-  await expect(page.getByText(t.denied)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
+  await expect(page.locator('a[href^="/api/auth/login"]')).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: t.studentsLabel })).toHaveCount(0);
   await expect(page.getByText(DEMO_FAST_PATH[0]!.surname!)).toHaveCount(0);
 });

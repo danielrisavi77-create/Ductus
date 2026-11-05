@@ -12,6 +12,7 @@ import {
 } from "@/components/editor/LocalDocument";
 import { showsInventedPanels } from "@/components/editor/demo-panels";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
+import SourcesPanel from "@/components/editor/SourcesPanel";
 import { LocalStatusLength } from "@/components/editor/StatusLength";
 import AppShell from "@/components/shell/AppShell";
 import PanelTabs from "@/components/shell/PanelTabs";
@@ -145,7 +146,7 @@ export default async function WorkspacePage({
   ) : undefined;
   const heading = <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>;
   const workspace = (
-    <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
+    <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain drawer>
       <WorkspaceShell
         mode={view.mode}
         writingHref={radPath(assignmentId)}
@@ -175,7 +176,7 @@ export default async function WorkspacePage({
             label={t.workspace.panelTabs}
             initial="comments"
             tabs={[
-              { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
+              { id: "sources", label: t.workspace.tabSources, content: journal ? <SourcesPanel /> : <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
               {
                 id: "instructions",
                 label: t.workspace.tabInstructions,

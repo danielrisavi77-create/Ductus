@@ -25,7 +25,8 @@ export const D97_PATHS = [
   "plugins/ductura-engineering/",
 ];
 // D-97 also covers DECISIONS entries about who may merge/review; not decidable by path alone.
-export const D97_MANUAL_PATHS = ["docs/DECISIONS.md"];
+// DAN-372: docs/odluke/ holds one file per decision, the index stays in DECISIONS.md.
+export const D97_MANUAL_PATHS = ["docs/DECISIONS.md", "docs/odluke/"];
 
 export const normalizePath = (p) =>
   String(p).replaceAll("\\", "/").replace(/\/{2,}/g, "/").replace(/^(?:\.?\/)+/, "");

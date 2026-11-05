@@ -12,6 +12,7 @@ Dio plana backenda. Verzija, status i popis svih odjeljaka su u indeksu `docs/BA
 | Povrat u točku na UpCloud Developer: postupak (Hub, API ili podrška), stvarni RPO, trajanje, stvara li novu instancu | Dodatak A, oko 30 minuta i nekoliko centi | B0.1 |
 | Cijene UpCloud VM-a: sažeci cjenika se razlikuju (Cloud Native 4 GB / 1 vCPU 12 EUR i 8 GB / 2 vCPU 24 EUR prema jednom, 2 vCPU / 4 GB 15 EUR prema drugom) i je li disk uključen | Pogledati cjenik u konzoli pri otvaranju računa | B0.1 |
 | Uloge na upravljanoj bazi: `CREATE ROLE NOLOGIN`, `ALTER FUNCTION OWNER`, `GRANT role TO role`, `max_connections`, promjena log parametara, ekstenzije | Pokrenuti skriptu uloga i pgTAP | B0.1 |
+| Zapisivanje parametara naredbi za aplikacijsku prijavu (F-036, DAN-169): smiju li se postaviti `log_parameter_max_length = 0` i `log_parameter_max_length_on_error = 0`, vodi li pružatelj zapis upita izvan PostgreSQL postavki, i prolazi li provjera web procesa (`src/server/db/log-settings.ts`) na upravljanoj bazi | Postavke u konzoli pružatelja i prvi `withActor` poziv na stagingu | B0.1 |
 | Latencija VM do baze i trajanje `reserve` | Mjerenje | B0.1 |
 | Jesu li UpCloud Cloud Native tipovi dostupni i po kojoj cijeni za računalo koje ne guši pri rekonstrukciji | Cjenik i narudžba | B0.1 |
 | Rekonstrukcija 15.000 i 80.000 riječi (vrijeme, memorija, volumen kontrolnih točaka) | Lokalna osnovica gotova 3. 10. 2026. (`docs/spikes/B0.2.md`): CPU i memorija nisu problem, volumen točaka svakih 200 koraka jest. Ostaje ponoviti na stroju koji se stvarno kupuje | B0.2 |

@@ -74,14 +74,25 @@ test("spec files come from every nested suite of a listing", () => {
 test("the CLI writes the plan and the test list of one shard and refuses a bad shard", () => {
   const cwd = mkdtempSync(join(tmpdir(), "login-shard-plan-"));
   mkdirSync(join(cwd, ".ci-reports"));
-  const listing = { config: { shard: null }, suites: Object.keys(repoWeights).map((f) => ({ file: f, specs: [{ file: f }], suites: [] })) };
+  const listing = { config: { shard: null }, suites: Object.keys(repoWeights).map((f) => ({ file: f, specs: [{ file: f, tests: [{ projectName: "login-chromium" }] }], suites: [] })) };
   writeFileSync(join(cwd, ".ci-reports/inventory.json"), JSON.stringify(listing));
   const expected = planLoginShards(Object.keys(repoWeights), repoWeights);
   for (let shard = 1; shard <= LOGIN_SHARDS; shard++) {
     assert.deepEqual(runLoginShardPlan([String(shard)], cwd), expected[shard - 1]);
-    assert.deepEqual(JSON.parse(readFileSync(join(cwd, ".ci-reports/plan.json"), "utf8")), { shard, total: LOGIN_SHARDS, files: expected[shard - 1] });
+    assert.deepEqual(JSON.parse(readFileSync(join(cwd, ".ci-reports/plan.json"), "utf8")), { shard, total: LOGIN_SHARDS, project: "login-chromium", files: expected[shard - 1] });
     assert.equal(readFileSync(join(cwd, ".ci-reports/test-list.txt"), "utf8"), `${expected[shard - 1].join("\n")}\n`);
+    assert.equal(readFileSync(join(cwd, ".ci-reports/project.txt"), "utf8"), "login-chromium\n");
   }
+  const both = structuredClone(listing);
+  for (const suite of both.suites.filter((s) => ["demo-flow.spec.ts", "login.spec.ts"].includes(s.file))) {
+    suite.specs[0].tests.push({ projectName: "login-webkit" });
+  }
+  writeFileSync(join(cwd, ".ci-reports/inventory.json"), JSON.stringify(both));
+  assert.deepEqual(runLoginShardPlan(["6"], cwd), ["demo-flow.spec.ts", "login.spec.ts"]);
+  assert.deepEqual(JSON.parse(readFileSync(join(cwd, ".ci-reports/plan.json"), "utf8")), {
+    shard: 6, total: LOGIN_SHARDS, project: "login-webkit", files: ["demo-flow.spec.ts", "login.spec.ts"],
+  });
+  assert.equal(readFileSync(join(cwd, ".ci-reports/project.txt"), "utf8"), "login-webkit\n");
   for (const bad of ["0", String(LOGIN_SHARDS + 1), "1.5", "", "1; id"]) assert.throws(() => runLoginShardPlan([bad], cwd), /Shard must be/);
   writeFileSync(join(cwd, ".ci-reports/inventory.json"), JSON.stringify({ ...listing, config: { shard: { current: 1, total: 3 } } }));
   assert.throws(() => runLoginShardPlan(["1"], cwd), /full suite/);
