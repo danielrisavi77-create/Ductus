@@ -13,7 +13,7 @@ Dokument daje redoslijed faza i koraka, **bez datuma**. Ciljni datumi po fazi i 
 - Sigurnosni nalazi navode se samo kao ID; pojedinosti su u privatnom registru.
 - Faze idu redom po ovisnostima, ali koraci različitih uloga teku usporedno kad ne ovise jedan o drugom. Faza je gotova tek kad je uvjet završetka dokazan testom ili zapisom.
 - **Uvjetni koraci (val 3, T3)**: korak označen „(uvjetno)” čeka odluku vlasnika, izmjenu Ustava ili PRODUCT §5, ili pravno mišljenje, i **ne gradi se** dok se uvjet ne riješi. Uvjetni korak nije dio uvjeta završetka svoje faze; uvjeti su u odjeljku „Uvjetni koraci” niže (odluka orkestratora T3, #87 c.6544288967, opcija C).
-- **Oznake iz mape ekrana** u ugovorima i tiketima uvijek idu s punim nazivom ekrana, jer kolidiraju s oznakama u `docs/FEATURES.md` i `docs/DECISIONS.md` (npr. S-14, A-10, P-01). Mapa ekrana nije u repou.
+- **Oznake iz mape ekrana** u ugovorima i tiketima uvijek idu s punim nazivom ekrana, jer kolidiraju s oznakama u `docs/FEATURES.md` i `docs/DECISIONS.md` (npr. S-14, A-10, P-01). Mapa ekrana je u `docs/design/EKRANI.md`.
 
 ## Redoslijed
 
@@ -257,7 +257,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M7.10 | Prenosiv zapis s QR provjerom (D-49), javna provjera potvrde i otvoreni verifikator zapisa (A-07 iz `docs/FEATURES.md`) | B, F | M3.9 | DAN-389 |
 | M7.11 | (uvjetno) Priprema za razgovor: deterministički popis mjesta uz studentove izjave, „razgovor održan” bez polja za ocjenu (D-53; ekran N-14 priprema za razgovor i obranu) | F, B | M6.5, M7.5, M7.7, uvjet U-3 | novo |
 | M7.12 | (uvjetno) Priprema za obranu, samo za studenta (A-04 iz `docs/FEATURES.md`) | F | M7.11, uvjet U-3 | novo |
-| M7.13 | „Moj rad u brojkama” za studenta, bez ritma i usporedbe (A-10 iz `docs/FEATURES.md`; ne miješati s ekranom A-10 slučajevi i paket dokaza). Brojke samo iz verzija i samo za studenta, prema D-63 | F | M7.1, M5.8, spajanje #1030 (izuzetak u PRODUCT §5 pravilu 4) | novo |
+| M7.13 | „Moj rad u brojkama” za studenta, bez ritma i usporedbe (A-10 iz `docs/FEATURES.md`, u mapi ekrana S-47; ne miješati s ekranom A-10 slučajevi i paket dokaza). Brojke samo iz verzija i samo za studenta, prema D-63 | F | M7.1, M5.8, spajanje #1030 (izuzetak u PRODUCT §5 pravilu 4) | novo |
 
 **Ekrani:** S-05 obavijest (S3), S-15 panel Rad, S-30 pregled prije predaje, S-31 izjava, S-32 potvrda, S-33 sažetak procesa, S-43 napomene i osporavanje, N-05 brz put, N-10 sažetak i karta podrijetla, N-11 usporedba verzija, N-13 produljenje roka, J-03 provjera potvrde.
 

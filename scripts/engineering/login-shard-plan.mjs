@@ -61,15 +61,39 @@ export function planLoginShards(files, weights, total = LOGIN_SHARDS) {
   return shards.map((list) => list.sort());
 }
 
+// Engine state must never cross a database boundary: the walk-through creates
+// immutable assignment/submission state for the same invented demo accounts.
+// Reserve the last runner for WebKit, retaining the six-runner budget.
+export function planLoginProjects(inventory, weights) {
+  const projects = new Map();
+  const walk = (suite) => {
+    for (const spec of suite.specs ?? []) for (const test of spec.tests ?? []) {
+      assert.ok(["login-chromium", "login-webkit"].includes(test.projectName), `Unexpected login project: ${test.projectName}`);
+      if (!projects.has(test.projectName)) projects.set(test.projectName, new Set());
+      projects.get(test.projectName).add(spec.file);
+    }
+    for (const child of suite.suites ?? []) walk(child);
+  };
+  assert.ok(Array.isArray(inventory?.suites), "Missing suites");
+  for (const suite of inventory.suites) walk(suite);
+  assert.ok(projects.has("login-chromium"), "Missing Chromium inventory");
+  const webkit = [...(projects.get("login-webkit") ?? [])].sort();
+  for (const file of webkit) assert.match(file, SPEC_FILE, `Unexpected login spec file: ${file}`);
+  const chromium = planLoginShards([...projects.get("login-chromium")], weights, webkit.length ? LOGIN_SHARDS - 1 : LOGIN_SHARDS)
+    .map((files) => ({ project: "login-chromium", files }));
+  return webkit.length ? [...chromium, { project: "login-webkit", files: webkit }] : chromium;
+}
+
 export function runLoginShardPlan(argv = process.argv.slice(2), cwd = process.cwd()) {
   const shard = Number(argv[0]);
   assert.ok(Number.isInteger(shard) && shard >= 1 && shard <= LOGIN_SHARDS, `Shard must be 1..${LOGIN_SHARDS}, got ${argv[0]}`);
   const inventory = JSON.parse(readFileSync(resolve(cwd, ".ci-reports/inventory.json"), "utf8"));
   assert.equal(inventory.config?.shard ?? null, null, "The inventory must list the full suite");
   const weights = JSON.parse(readFileSync(WEIGHTS_PATH, "utf8"));
-  const files = planLoginShards(specFilesOf(inventory), weights)[shard - 1];
+  const { project, files } = planLoginProjects(inventory, weights)[shard - 1];
   mkdirSync(resolve(cwd, ".ci-reports"), { recursive: true });
-  writeFileSync(resolve(cwd, ".ci-reports/plan.json"), `${JSON.stringify({ shard, total: LOGIN_SHARDS, files }, null, 2)}\n`);
+  writeFileSync(resolve(cwd, ".ci-reports/plan.json"), `${JSON.stringify({ shard, total: LOGIN_SHARDS, project, files }, null, 2)}\n`);
+  writeFileSync(resolve(cwd, ".ci-reports/project.txt"), `${project}\n`);
   // Playwright --test-list: one spec file per line, relative to the testDir.
   writeFileSync(resolve(cwd, ".ci-reports/test-list.txt"), `${files.join("\n")}\n`);
   console.log(`Login shard ${shard}/${LOGIN_SHARDS}: ${files.join(", ")}`);

@@ -88,6 +88,14 @@ export function createDemoEnvironment(source = process.env) {
   }
   authUrl.password = authPassword;
 
+  // `pnpm db:migrate` provisions the worker login (db/local/worker-login.sql)
+  // only from DUCTUS_WORKER_LOCAL_PASSWORD; nothing in the demo connects as it,
+  // so an unset value gets a fresh random one that is never printed or stored.
+  const workerPassword = source.DUCTUS_WORKER_LOCAL_PASSWORD || randomBytes(32).toString("base64url");
+  if (workerPassword.length < 16) {
+    throw new Error("DUCTUS_WORKER_LOCAL_PASSWORD must be at least 16 characters.");
+  }
+
   // The development signing seed lives outside the repository, in the home
   // directory, so every run (and every checkout) finds the same key. An
   // absolute path set by the operator wins; the signer refuses one inside the repository.
@@ -103,6 +111,7 @@ export function createDemoEnvironment(source = process.env) {
     APP_DATABASE_URL: appUrl.href,
     AUTH_DATABASE_URL: authUrl.href,
     DUCTUS_AUTH_LOCAL_PASSWORD: authPassword,
+    DUCTUS_WORKER_LOCAL_PASSWORD: workerPassword,
     S3_ENDPOINT: "http://127.0.0.1:9100",
     S3_ACCESS_KEY_ID: "ductus-local",
     S3_SECRET_ACCESS_KEY: "ductus-local-only",

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { NOTICE_TEMPLATE_VERSION } from "@/domain/notice/fingerprint";
 import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -52,8 +53,8 @@ export async function handleAcknowledgment(request: Request, assignmentId: strin
   try {
     const result = await deps.withActor(deps.sessionToken, (tx) =>
       tx.query<{ acknowledged_at: Date }>(
-        "SELECT institution.acknowledge_notice($1::uuid, $2::integer) AS acknowledged_at",
-        [assignmentId, input.versionNo],
+        "SELECT institution.acknowledge_notice($1::uuid, $2::integer, $3::integer) AS acknowledged_at",
+        [assignmentId, input.versionNo, NOTICE_TEMPLATE_VERSION],
       ),
     );
     const at = result.rows[0]?.acknowledged_at;

@@ -18,7 +18,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
 import {
-  citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
+  citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
   type SourceField, type SourceFields, type SourceKind,
 } from "./sources";
 import styles from "./SourcesPanel.module.css";
@@ -56,7 +56,10 @@ function SourcesForm() {
   const [listPage, setListPage] = useState("");
 
   const check = sourceFromFields(fields);
-  const invalid = new Set<SourceField>(tried && !check.ok ? [...check.missing, ...(check.yearInvalid ? ["year" as const] : []), ...check.tooLong, ...check.unstorable] : []);
+  // DAN-484: a value over its limit or one the sheet would change is shown as
+  // it is typed or pasted, never cut; an empty field only after a click.
+  const problems = formErrors(check, page, tried);
+  const invalid = new Set<SourceField>(problems.flatMap((p) => ("field" in p ? [p.field] : p.kind === "yearInvalid" ? ["year" as const] : [])));
 
   // Checked again at the click: a sign-out stops writing without a render.
   const canWrite = () => editable && editor !== null && !editor.isDestroyed && editor.isEditable;
@@ -106,14 +109,16 @@ function SourcesForm() {
     </button>
   );
 
-  const errors = tried && !check.ok ? [
-    ...check.missing.map((field) => t.required.replace("{field}", t[field])),
-    ...(check.yearInvalid ? [t.yearInvalid] : []),
-    ...check.tooLong.map((field) => t.tooLong.replace("{field}", t[field]).replace("{n}", String(FIELD_MAX[field]))),
-    ...check.unstorable.map((field) => t.unstorable.replace("{field}", t[field])),
-  ] : [];
-  if (tried && !pageFits(page)) errors.push(pageTooLong);
-  if (tried && !storable(page)) errors.push(t.pageUnstorable);
+  const errors = problems.map((p) => {
+    switch (p.kind) {
+      case "missing": return t.required.replace("{field}", t[p.field]);
+      case "yearInvalid": return t.yearInvalid;
+      case "tooLong": return t.tooLong.replace("{field}", t[p.field]).replace("{n}", String(FIELD_MAX[p.field]));
+      case "unstorable": return t.unstorable.replace("{field}", t[p.field]);
+      case "pageTooLong": return pageTooLong;
+      case "pageUnstorable": return t.pageUnstorable;
+    }
+  });
 
   return (
     <div className={styles.panel}>
@@ -149,10 +154,11 @@ function SourcesForm() {
           )}
           <label className={styles.field}>
             <span>{t.citePage}</span>
-            <input value={page} aria-invalid={tried && !pageValid(page) ? "true" : undefined} onChange={(event) => setPage(event.target.value)} />
+            <input value={page} aria-invalid={pageValid(page) ? undefined : "true"} onChange={(event) => setPage(event.target.value)} />
           </label>
           {errors.length > 0 ? (
-            <ul className={styles.errors} role="alert">{errors.map((text) => <li key={text}>{text}</li>)}</ul>
+            // The role sits around the list: on the list itself it takes away its items (axe, DAN-484).
+            <div role="alert"><ul className={styles.errors}>{errors.map((text) => <li key={text}>{text}</li>)}</ul></div>
           ) : null}
           {check.ok ? (
             <section className={styles.preview} aria-labelledby={`${id}-preview`}>

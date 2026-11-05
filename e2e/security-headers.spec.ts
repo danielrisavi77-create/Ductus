@@ -136,6 +136,13 @@ test.describe("security headers on the build (DAN-296 inventory)", () => {
     expect(response.headers()["cache-control"]).toBe("no-store");
   });
 
+  test("/api/ready is never stored, whatever the database answers", async ({ request }) => {
+    const response = await request.get("/api/ready");
+    expect([200, 503]).toContain(response.status());
+    expectConfigHeaders(response, "api");
+    expect(response.headers()["cache-control"]).toBe("no-store");
+  });
+
   test("an unknown API path is a JSON 404 under the API policy, never an HTML page", async ({ request }) => {
     // DAN-489 review finding: app/not-found.tsx rendered here as HTML without
     // a nonce, so `default-src 'none'` refused its styles and scripts.

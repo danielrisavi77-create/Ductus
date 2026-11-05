@@ -129,7 +129,7 @@ SELECT is(
 
 -- 4. The notice of a mentorship's work is acknowledged as any other.
 SELECT is(
-  pg_temp.ask('boris', $$ SELECT (institution.acknowledge_notice({zm3}, 1) IS NOT NULL)::text $$), 'true',
+  pg_temp.ask('boris', $$ SELECT (institution.acknowledge_notice({zm3}, 1, 1) IS NOT NULL)::text $$), 'true',
   'Boris acknowledges the current version of his work'
 );
 SELECT is(
@@ -138,13 +138,13 @@ SELECT is(
 );
 SELECT is(pg_temp.ask(v.actor, v.statement), v.expected, v.actor || ': ' || v.note)
 FROM (VALUES
-  (1, 'marko', $$ SELECT institution.acknowledge_notice({zm1}, 1)::text $$, 'ZD403: forbidden',
+  (1, 'marko', $$ SELECT institution.acknowledge_notice({zm1}, 1, 1)::text $$, 'ZD403: forbidden',
    'the mentor cannot acknowledge for the student'),
-  (2, 'nina', $$ SELECT institution.acknowledge_notice({zm3}, 1)::text $$, 'ZD403: forbidden',
+  (2, 'nina', $$ SELECT institution.acknowledge_notice({zm3}, 1, 1)::text $$, 'ZD403: forbidden',
    'a mentor without a confirmed role cannot either'),
-  (3, 'dora', $$ SELECT institution.acknowledge_notice({zm2}, 1)::text $$, 'ZD403: forbidden',
+  (3, 'dora', $$ SELECT institution.acknowledge_notice({zm2}, 1, 1)::text $$, 'ZD403: forbidden',
    'the work of an ended mentorship takes no acknowledgment'),
-  (4, 'ana', $$ SELECT institution.acknowledge_notice({zm1}, 2)::text $$, 'ZD409: conflict',
+  (4, 'ana', $$ SELECT institution.acknowledge_notice({zm1}, 2, 1)::text $$, 'ZD409: conflict',
    'only the current version can be acknowledged')
 ) AS v (n, actor, statement, expected, note)
 ORDER BY v.n;
@@ -219,8 +219,10 @@ LANGUAGE sql AS $$
                       assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy,
                       ai_purposes, evidence_profile, import_allowed, created_by)
                     VALUES (%s, 2, 'Druga verzija', 'Upute.', %L, now(), now() + interval '30 days', %L, %L::text[],
-                            %L, %L::boolean, {marko}) $q$,
-                p_assignment, p_work_type, p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed)
+                            %L, %L::boolean, %s) $q$,
+                p_assignment, p_work_type, p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed,
+                -- The author is of the assignment's institution, which the key requires (DAN-442).
+                CASE p_assignment WHEN '{z3}' THEN '{petra}' ELSE '{marko}' END)
 $$;
 
 SELECT is(pg_temp.try(v.statement), v.expected, v.note)
@@ -292,7 +294,7 @@ SELECT is(pg_temp.msees('marko'), 'mentorships: - | assignments: z2 | versions: 
           'ended mentorship: the mentor loses it and its work at once, and keeps his course');
 SELECT is(pg_temp.ask('ana', $$ SELECT institution.has_acknowledged_current({zm1})::text $$), 'false',
           'ended mentorship: the earlier acknowledgment no longer counts');
-SELECT is(pg_temp.ask('ana', $$ SELECT institution.acknowledge_notice({zm1}, 1)::text $$), 'ZD403: forbidden',
+SELECT is(pg_temp.ask('ana', $$ SELECT institution.acknowledge_notice({zm1}, 1, 1)::text $$), 'ZD403: forbidden',
           'ended mentorship: nothing more is acknowledged');
 UPDATE institution.mentorship SET ended_at = NULL WHERE id = pg_temp.id('ms1');
 

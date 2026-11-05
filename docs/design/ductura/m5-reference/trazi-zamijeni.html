@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traži i zamijeni (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca M5.UX-R · DAN-510 · prijedlog slike · #1390</div>
+  <h1>Traži i zamijeni</h1>
+  <p>Traka iznad teksta (Ctrl+F); na mobitelu stoji iznad tipkovnice. Zamjena ostaje obična promjena studenta. Podaci su izmišljeni.</p>
+</header>
+<main class="page">
+<div class="variants">
+  <section class="variant" aria-labelledby="z1">
+    <div class="ref-tag">Stanje 1 · traka</div>
+    <div class="panel" role="search" aria-labelledby="z1"><div class="panel-body">
+      <h2 id="z1" style="font-size:17px">Traži i zamijeni</h2>
+      <div class="field"><label for="q1">Traži</label><input id="q1" class="input" value="Zagreb"></div>
+      <div class="field"><label for="r1">Zamijeni s</label><input id="r1" class="input" value="Zagrebu"></div>
+      <p class="count" role="status">3 od 214</p>
+      <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small secondary" type="button">Prethodni</button><button class="btn small secondary" type="button">Sljedeći</button><button class="btn small" type="button">Zamijeni</button><button class="btn small secondary" type="button">Zamijeni sve</button><button class="btn small ghost" type="button">Zatvori</button></div>
+      <label class="meta"><input type="checkbox"> Č = C (ne razlikuj dijakritike)</label>
+    </div></div>
+  </section>
+  <section class="variant" aria-labelledby="z2">
+    <div class="ref-tag">Stanje 2 · nula pogodaka</div>
+    <div class="panel"><div class="panel-body">
+      <div class="field"><label for="q2" id="z2">Traži</label><input id="q2" class="input" value="Rijeka"></div>
+      <p class="note" role="status">Nema pogodaka za „Rijeka”.</p>
+    </div></div>
+  </section>
+  <section class="variant" aria-labelledby="z3">
+    <div class="ref-tag">Stanje 3 · zamijeni sve, potvrda</div>
+    <div class="dialog" role="dialog" aria-labelledby="z3">
+      <h2 id="z3" style="font-size:19px">Zamijeniti 214 pojavljivanja?</h2>
+      <p class="note">Moguće je poništiti jednim korakom.</p>
+      <div class="acts"><button class="btn" type="button">Zamijeni sve</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+  <section class="variant" aria-labelledby="z4">
+    <div class="ref-tag">Stanje 4 · zaštićeni dijelovi</div>
+    <div class="panel"><div class="panel-body" id="z4">
+      <p class="count" role="status">3 od 188</p>
+      <p class="meta">preskočeno 26</p>
+      <label class="note"><input type="checkbox"> Uključi navode i literaturu</label>
+      <p class="meta">Navodi u blok-citatu i unosi popisa literature po zadanom se preskaču.</p>
+    </div></div>
+  </section>
+  <section class="variant" aria-labelledby="z5">
+    <div class="ref-tag">Stanje 5 · samo za čitanje, predano</div>
+    <div class="panel"><div class="panel-body" id="z5">
+      <div class="field"><label for="q5">Traži</label><input id="q5" class="input" value="Zagreb"></div>
+      <p class="count">3 od 214</p>
+      <button class="btn small" type="button" aria-disabled="true">Zamijeni</button>
+      <p class="meta">Zamjena nije dostupna jer je rad predan.</p>
+    </div></div>
+  </section>
+  <section class="variant" aria-labelledby="z7">
+    <div class="ref-tag">Stanje 7 · hrvatski izbor</div>
+    <div class="panel"><div class="panel-body" id="z7">
+      <label class="note"><input type="checkbox" checked> Č = C, Š = S, Ž = Z, Ć = C, Đ = D</label>
+      <p class="meta">Velika i mala slova ne razlikuju se.</p>
+      <p class="meta" role="status">Tražim…</p>
+    </div></div>
+  </section>
+</div>
+</main>
+</body>
+</html>

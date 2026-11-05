@@ -32,7 +32,7 @@ export const hr = {
     sideNav: "Bočna navigacija",
     workNav: "Radni prostor",
     home: `${APP_NAME}, početna`,
-    space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
+    space: { teacher: "Nastavnički prostor", student: "Studentski prostor", admin: "Administracija ustanove" },
     nav: {
       assignments: "Moji zadaci",
       // DAN-309 (B2): the student's own works across courses, /zadaci/radovi.
@@ -44,8 +44,9 @@ export const hr = {
       mentoredWorks: "Radovi uz mentora",
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
+      institution: "Pregled ustanove",
     },
-    role: { teacher: "Nastavnik", student: "Student" },
+    role: { teacher: "Nastavnik", student: "Student", admin: "Administrator" },
     demoNote: "Nijedan stvarni osobni podatak.",
     signOut: "Odjava",
     openNav: "Otvori navigaciju",
@@ -510,6 +511,32 @@ export const hr = {
   // Screen 11, the teacher's fast path (F-11, D-80 point 2). Lines are facts in words (PRODUCT §5 rule 2).
   // Z3 (A), #476 6289158306: the teacher's entry at /nastavnik. The order is
   // the route's (year, name; assignments by due time) and nothing reorders it.
+  // DAN-313 (A-01): counts only, for the administrator's own institution;
+  // never a person, a course name or an activity time.
+  institutionOverview: {
+    title: "Pregled ustanove",
+    lead: "Brojke vrijede samo za vašu ustanovu i računaju se pri otvaranju stranice. Pojedine osobe i kolegiji ovdje se ne prikazuju.",
+    unnamed: "Naziv ustanove nije upisan",
+    countsLabel: "Brojke ustanove",
+    counts: {
+      confirmedTeachers: {
+        label: "Potvrđeni nastavnici",
+        note: "Uloga je potvrđena i nije opozvana.",
+      },
+      teacherCandidates: {
+        label: "Čekaju potvrdu uloge",
+        note: "Zadnja prijava preko AAI@EduHr dala je pravo nastavnika, a ulogu još niste potvrdili.",
+      },
+      teachersWithoutAffiliation: {
+        label: "Nastavnici bez prava pri zadnjoj prijavi",
+        note: "Uloga ostaje potvrđena; samo zadnja prijava nije dala pravo nastavnika.",
+      },
+      courses: { label: "Kolegiji", note: "Svi kolegiji ustanove." },
+      students: { label: "Studenti", note: "Upisani u barem jedan kolegij, svaka osoba jednom." },
+    },
+    unavailable: "Pregled ustanove trenutačno nije dostupan. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+  },
   teacherCourses: {
     title: "Moji kolegiji",
     lead: "Kolegiji u kojima predajete i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
@@ -668,6 +695,37 @@ export const hr = {
       toolsNone: "U ovom zadatku uporaba alata generativne umjetne inteligencije nije dopuštena.",
       checks: "Provjera oblika · FPZG",
       checksNote: "Provjera pomaže; ništa ne blokira predaju.",
+      // M4 (DAN-506): S-11 "Upute i provjera oblika", states 1a-6 of the
+      // approved reference (docs/design/ductura/m4-reference). Not rendered yet.
+      shape: {
+        title: "Upute i provjera oblika",
+        loading: "Učitavam pravila za ovu vrstu rada.",
+        loadFailed: "Pravila se trenutačno ne mogu učitati. Rad i dalje možete pisati i predati.",
+        retry: "Pokušaj ponovno",
+        disabled: "Provjera oblika trenutačno nije uključena na ovoj ustanovi. Predaja nije zbog toga ograničena.",
+        disabledCause: "Uzrok vidi samo administrator, na zaslonu Pravila fakulteta.",
+        checkedSummary: "Provjereno pravila: {count}, verzija paketa {version} · provjereno u {time}",
+        findingsHeading: "Odstupanja od pravila",
+        goTo: "Idi na: {place}",
+        source: "Izvor: {source}",
+        notChecked: "nije provjereno",
+        staleHeader: "Provjereno u {time}, paket {version}",
+        staleNote: "Dokument je promijenjen nakon provjere. Raniji nalazi ostaju vidljivi dok ne provjerite ponovno.",
+        staleLabel: "Zastarjelo, dokument je promijenjen",
+        recheck: "Provjeri ponovno",
+        newerPackage: "Dostupna je verzija paketa {newer}. Ovaj rad i dalje koristi verziju {version}.",
+        unavailable: "Provjera oblika za ovu vrstu rada nije dostupna.",
+        officialRules: "Pravila pročitajte u službenom dokumentu:",
+        partialCovered: "Za ovu vrstu rada paket pokriva ova pravila:",
+        partialOthers: "Ostala pravila pročitajte u službenom dokumentu:",
+        typeUnknown: "Vrsta rada još nije određena, pa nije poznato koja pravila vrijede.",
+        scopeHeading: "Opseg: {min} do {max} riječi",
+        scopeNarrowed: "Nastavnik je suzio unutar raspona {min} do {max} iz paketa.",
+        scopeNow: "U radu sada:",
+        scopeWords: "{count} riječi",
+        scopeCounting: "Broje se riječi teksta rada, bez sažetka, popisa literature i priloga.",
+        informative: "Informativno. Ne utječe na predaju.",
+      },
     },
     rad: {
       stages: "Etape",
@@ -1181,9 +1239,13 @@ export const hr = {
     copyDiscardConfirm: "Da, odbaci kopiju",
     copyKeep: "Zadrži kopiju",
     copyDiscardFailed: "Kopija nije odbačena i ostaje na ovom uređaju. Pokušajte ponovno.",
-    logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjerite vezu i pokušajte ponovno.",
+    // #1330, #1444: ended here; nothing calls the server again.
+    logoutDevice:
+      "Odjava je na ovom uređaju gotova. Poslužitelj trenutačno ne odgovara, pa ondje prijava prestaje pri sljedećoj prijavi ili kad istekne.",
+    logoutClose: "Zatvori",
     signedOutElsewhere:
-      "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitajte stranicu.",
+      "Prijava više ne vrijedi, pa ova kartica više ne prikazuje rad. Rad nastavljate kad se ponovno prijavite.",
+    signInAgain: "Prijavi se",
   },
   // FE-D3 (DAN-222): /prijava, Prijava v5 of the design handoff without the
   // e-mail sign-in and the "Što Ductura čuva" panel (D-09, #476). AAI@EduHr is
@@ -1239,6 +1301,7 @@ export const hr = {
       fastPath: "brz put kroz radove",
       mentoredWorks: "radove uz mentora",
       home: "svoj prostor",
+      institution: "pregled svoje ustanove",
     },
     deniedTitle: "Nemate pristup ovom prikazu",
     deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
@@ -1247,6 +1310,40 @@ export const hr = {
     backToOwn: "Natrag na moj prostor",
   },
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
+  // M4 (DAN-506): A-04 "Pravila fakulteta", read-only (D-217), reference #1403.
+  facultyRules: {
+    title: "Pravila fakulteta",
+    intro: "Paket pravila oblika rada koji ustanova koristi. Zaslon je samo za čitanje; novu verziju paketa uvozi tim Ducture.",
+    visibleHeading: "Što studenti i nastavnici vide",
+    colWorkType: "Vrsta rada",
+    colPanel: "Prikaz u panelu Upute i provjera oblika",
+    colCause: "Uzrok",
+    shapeCheck: "Provjera oblika, paket {version}",
+    causeCovered: "Paket pokriva ovu vrstu rada.",
+    causeNotCovered: "Paket {version} ne pokriva ovu vrstu rada.",
+    notApplicable: "Ne odnosi se na ovu vrstu rada.",
+    disabledHeading: "Nije uključeno za cijelu ustanovu",
+    disabledSeen: "Studenti i nastavnici vide: „Provjera oblika trenutačno nije uključena na ovoj ustanovi. Predaja nije zbog toga ograničena.”",
+    disabledLicence: "Licenca za paket pravila nije aktivna od {date}.",
+    disabledOther: "Drugi mogući uzroci: paket nije uvezen; uvezeni paket nije valjan.",
+    packageHeading: "Paket pravila",
+    version: "Verzija",
+    imported: "Uvezeno",
+    publisher: "Izdavač",
+    coveredTypes: "Pokrivene vrste rada",
+    notCovered: "Nije pokriveno",
+    ruleCount: "Broj pravila",
+    rulesHeading: "Pravila i njihov puni tekst",
+    verbatim: "Doslovni navod · {source}",
+    historyHeading: "Povijest verzija",
+    historyVersion: "Verzija",
+    historyImported: "Uvezeno",
+    historyCovered: "Pokrivene vrste rada",
+    inUse: "{version} (u uporabi)",
+    historyNote: "Rad zadržava verziju paketa s kojom je provjeren; nova verzija ne mijenja ranije provjere.",
+    adminHeading: "Postavke koje uređuje administrator",
+    adminNote: "Pravilo o AI pomoćniku, pružatelji, pragovi i rokovi nisu dio paketa pravila. Uređuju se odvojeno, na zaslonu Postavke ustanove.",
+  },
   errorPage: {
     notFoundTitle: "Stranica ne postoji",
     notFoundBody: "Na ovoj adresi nema stranice. Provjerite adresu ili se vratite na početnu.",

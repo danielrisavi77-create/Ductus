@@ -16,6 +16,8 @@
  * After a submission the server confirmed, what this device holds of the
  * work is offered for deletion the same way, with two clicks (F-154, owner
  * decision 1.3). "Odjavi se" still leaves it on this device (D-118).
+ * Without the server's answer the sign-out has still ended here (#1330): the
+ * dialog only says so and offers "Zatvori", no second try (#1444).
  */
 
 import { useEffect, useId, useRef, useState, type MouseEvent, type RefObject, type SyntheticEvent } from "react";
@@ -30,6 +32,7 @@ import {
   logoutActions,
   logoutText,
   nextDiscardStep,
+  nothingHeld,
   settleDiscard,
   type DiscardEvent,
   type DiscardStep,
@@ -42,8 +45,8 @@ export type LogoutDialogProps = {
   plan: LogoutPlan;
   /** A sign-out is running; the dialog cannot be left meanwhile. */
   working: boolean;
-  /** The last sign-out did not reach the server; nothing was deleted. */
-  failed: boolean;
+  /** The sign-out ended on this device without the server's answer (#1330). */
+  signedOutHere: boolean;
   onConfirm: () => void;
   onStay: () => void;
   onExport: () => void;
@@ -64,7 +67,7 @@ export type LogoutDialogProps = {
 export default function LogoutDialog({
   plan,
   working,
-  failed,
+  signedOutHere,
   onConfirm,
   onStay,
   onExport,
@@ -81,13 +84,13 @@ export default function LogoutDialog({
   const textId = useId();
   const { text, note, offerExport } = logoutText(plan);
   const { exportFirst, confirmLabel } = logoutActions(plan);
-  const copy = copyPart(copies, Boolean(onRestoreCopy && onDiscardCopy));
+  const copy = signedOutHere ? null : copyPart(copies, Boolean(onRestoreCopy && onDiscardCopy));
   const [discard, setDiscard] = useState<DiscardStep>("idle");
   const step = (event: DiscardEvent) => setDiscard((now) => nextDiscardStep(now, event));
   const keepRef = useRef<HTMLButtonElement>(null);
   const discardRef = useRef<HTMLButtonElement>(null);
   // F-154: the same two clicks for what was written after the submission.
-  const after = afterSubmissionPart(plan, Boolean(onDiscardAfterSubmission));
+  const after = signedOutHere ? null : afterSubmissionPart(plan, Boolean(onDiscardAfterSubmission));
   const [afterDiscard, setAfterDiscard] = useState<DiscardStep>("idle");
   const afterStep = (event: DiscardEvent) => setAfterDiscard((now) => nextDiscardStep(now, event));
   const afterKeepRef = useRef<HTMLButtonElement>(null);
@@ -98,14 +101,9 @@ export default function LogoutDialog({
   const askingCopy = copy !== null && discard === "confirm";
   const askingAfter = after !== null && afterDiscard === "confirm";
   const asking = askingCopy || askingAfter;
-  const copyShown = copy !== null;
-  useEffect(() => {
-    if (!copyShown && discard === "confirm") step("keep");
-  }, [copyShown, discard]);
-  const afterShown = after !== null;
-  useEffect(() => {
-    if (!afterShown && afterDiscard === "confirm") afterStep("keep");
-  }, [afterShown, afterDiscard]);
+  // Taken back in the render that sees the part gone, as "Zadrži" would.
+  if (copy === null && discard === "confirm") setDiscard(nextDiscardStep(discard, "keep"));
+  if (after === null && afterDiscard === "confirm") setAfterDiscard(nextDiscardStep(afterDiscard, "keep"));
   // Set when Escape took the question back, so the close the browser may
   // send after it opens the dialog again instead of counting as "Ostani".
   const withdrawn = useRef(false);
@@ -135,6 +133,11 @@ export default function LogoutDialog({
       (afterDiscardRef.current ?? stayRef.current)?.focus();
     }
   }, [afterDiscard]);
+
+  // Its buttons are gone, so "Zatvori" takes the focus.
+  useEffect(() => {
+    if (signedOutHere) stayRef.current?.focus();
+  }, [signedOutHere]);
 
   const askDiscard = () => {
     withdrawn.current = false;
@@ -221,8 +224,7 @@ export default function LogoutDialog({
     >
       <div className={styles.body}>
         <h2 id={titleId} className={styles.title}>{t.logoutTitle}</h2>
-        <p id={textId} className={styles.text}>{text}</p>
-        {note ? <p className={styles.note}>{note}</p> : null}
+        {signedOutHere ? null : <Intro textId={textId} text={text} note={note} />}
         {copy ? (
           <section className={styles.copy} aria-label={t.copyTitle}>
             <p className={styles.text}>{copy.text}</p>
@@ -265,12 +267,8 @@ export default function LogoutDialog({
             onConfirm={confirmAfter}
           />
         ) : null}
-        {/* The live region exists before its text, so the failure is announced. */}
-        <div role="alert">
-          {failed ? <p className={styles.error}>{t.logoutFailed}</p> : null}
-          {discard === "failed" ? <p className={styles.error}>{t.copyDiscardFailed}</p> : null}
-        </div>
-        <MainActions
+        <Alert signedOutHere={signedOutHere} kept={!nothingHeld(plan)} textId={textId} discardFailed={discard === "failed"} />
+        {signedOutHere ? <CloseAction stayRef={stayRef} onClose={onStay} /> : <MainActions
           exportFirst={exportFirst}
           offerExport={offerExport}
           working={working}
@@ -280,9 +278,42 @@ export default function LogoutDialog({
           onConfirm={onConfirm}
           onExport={onExport}
           onStay={onStay}
-        />
+        />}
       </div>
     </dialog>
+  );
+}
+
+/** The dialog's own sentence and its note. Its own element for the term scan. */
+function Intro({ textId, text, note }: { textId: string; text: string; note: string | null }) {
+  return (
+    <>
+      <p id={textId} className={styles.text}>{text}</p>
+      {note ? <p className={styles.note}>{note}</p> : null}
+    </>
+  );
+}
+
+/** The live region, there before its text so it is announced. Its own element for the term scan. */
+function Alert({ signedOutHere, kept, textId, discardFailed }: {
+  signedOutHere: boolean; kept: boolean; textId: string; discardFailed: boolean;
+}) {
+  return (
+    <div role="alert">
+      {signedOutHere ? <p id={textId} className={styles.text}>{t.logoutDevice}</p> : null}
+      {signedOutHere && kept ? <p className={styles.note}>{t.logoutKept}</p> : null}
+      {discardFailed ? <p className={styles.error}>{t.copyDiscardFailed}</p> : null}
+    </div>
+  );
+}
+
+function CloseAction({ stayRef, onClose }: { stayRef: RefObject<HTMLButtonElement | null>; onClose: () => void }) {
+  return (
+    <div className={styles.actions}>
+      <button ref={stayRef} type="button" className={styles.stay} onClick={onClose}>
+        {t.logoutClose}
+      </button>
+    </div>
   );
 }
 

@@ -12,7 +12,6 @@ const LISTED_ASSOCIATIONS = new Set(["MEMBER", "COLLABORATOR"]);
 // always is, a member or collaborator only when its login is listed here.
 // Adding a login is a D-97 change; never list a bot or triage account.
 export const TRUSTED_VERDICT_LOGINS = Object.freeze([]);
-const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 export const APP_RUNTIMES = new Map([
   ["claude", new Set(["claude"])],
@@ -361,6 +360,49 @@ function prevailing({ current, carried }) {
   return carriedLater && NEGATIVE.has(carried.verdict) ? carried : current;
 }
 
+// F-027 (M0.6c, #1091): a FAIL or BLOCK the parser cannot read exactly still
+// blocks; a PASS counts only in its exact form. Any verdict line of the block,
+// also with markdown or spaces around its name, that names FAIL or BLOCK (or
+// BLOK) makes the comment negative. Read here only to find a negative.
+// Letters and digits bound the word, not `\b`, so markdown such as `_` around
+// it still reads as FAIL or BLOCK.
+const NEGATIVE_WORD_RE = /(?<![A-Z0-9])(FAIL|BLOC?K)[A-Z]*(?![A-Z0-9])/;
+// One literal pattern per verdict field, with markdown or spaces around its
+// name, a heading (`#` to `######`, with or without a space) included, a
+// numbered list marker (`1.`, `1)`, `1\.`) anywhere among them (p06f), and a
+// task list box (`[ ]`, `[x]`, `[X]`, also escaped as `\[ \]`) the same way
+// (p06g), holding any whitespace, several or none (p06h).
+const VERDICT_LINE_RE = new Map([
+  ["Review-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)]|\\?\[[\sxX]*\\?\])*Review-Verdict[\s*_`>~+#-]*:(.*)$/i],
+  ["QA-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)]|\\?\[[\sxX]*\\?\])*QA-Verdict[\s*_`>~+#-]*:(.*)$/i],
+]);
+function negativeWord(body, name) {
+  const line = VERDICT_LINE_RE.get(name);
+  if (!line) throw new Error(`No verdict line pattern for ${name}.`);
+  for (const text of metadataLines(body)) {
+    const word = NEGATIVE_WORD_RE.exec(line.exec(text)?.[1]?.toUpperCase() ?? "")?.[1];
+    if (word) return word === "FAIL" ? "FAIL" : "BLOCK";
+  }
+  return null;
+}
+
+// Where a negative belongs. A full SHA, or a prefix of at least seven hex
+// digits, of the current or a carried head is that head; of any other head it
+// is elsewhere (null). Anything else, missing, words, fewer than seven or more
+// than forty hex digits (r4434690343), is the current head, since nothing
+// readable names another one.
+function readableHead(value) {
+  const named = (value ?? "").replace(/^[\s*_`]+|[\s*_`.,;]+$/g, "").toLowerCase();
+  return /^[0-9a-f]{7,40}$/.test(named) ? named : null;
+}
+function negativeHead(value, headSha, carriedHeads) {
+  const sha = headSha.toLowerCase();
+  const named = readableHead(value);
+  if (!named || sha.startsWith(named)) return { head: sha, current: true };
+  const onCarried = [...carriedHeads, ...(carriedHeads.heldNegatives ?? [])].find((carriedSha) => carriedSha.toLowerCase().startsWith(named));
+  return onCarried ? { head: onCarried.toLowerCase(), current: false } : null;
+}
+
 function latestVerdicts(entries, {
   agentField,
   headField,
@@ -393,17 +435,24 @@ function latestVerdicts(entries, {
     // neither a PASS nor a FAIL, so an edit never brings back the principal's
     // earlier PASS on that head. An edited FAIL or BLOCK keeps its verdict. An
     // edit that moves the comment to another head, removes the block or names
-    // another principal is not covered here (rest of F-012, owner).
-    const counted = sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase());
-    if (!counted) continue;
-    const readable = Boolean(verdict) && VERDICTS.has(verdict) && !(extraField && !extra);
-    const held = entry.edited && !(readable && NEGATIVE.has(verdict));
-    if (!readable && !held) continue;
+    // another principal is not covered here (rest of F-012, owner). A negative
+    // in any form (F-027) keeps its verdict, edited or not, and needs no
+    // QA-Scope; its head is read by `negativeHead`.
+    const negative = negativeWord(entry.body, verdictField);
+    let place;
+    if (negative) {
+      place = negativeHead(head, headSha, carriedHeads);
+    } else if (sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) {
+      place = { head: head.toLowerCase(), current: sameHead(head, headSha) };
+    }
+    if (!place) continue;
+    const pass = !negative && verdict === "PASS" && !(extraField && !extra);
+    if (!negative && !pass && !entry.edited) continue;
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict: held ? "EDITED" : verdict, extra, fallback,
-      fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
-      current: sameHead(head, headSha) };
+    const candidate = { agent, head: place.head, verdict: negative ?? (entry.edited ? "EDITED" : "PASS"), extra,
+      fallback, fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
+      current: place.current };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
@@ -623,8 +672,12 @@ function evaluateGateCore({
       // D-196 (c.6549357009 t. 2): a review PASS without QA, because QA is not
       // required for this file list; Merge authorization reads it like qaPass.
       // F-173: only a review posted through an App counts, never an
-      // owner-account CLI comment (D-162, D-193).
-      ...(passingReviews.some((review) => !review.cli) ? { qaExemptPass: true } : {}),
+      // owner-account CLI comment (D-162, D-193). F-180: and only from an App
+      // other than the one the declared author runs on, as F-173 asks of QA on
+      // the non-exempt path; a same-App review keeps the owner's command.
+      ...(passingReviews.some((review) => !review.cli && !APP_RUNTIMES.get(review.identity.appSlug)?.has(authorRuntime))
+        ? { qaExemptPass: true }
+        : {}),
       description: `Independently authenticated review is valid for current head (critical, ${qaExempt} only: QA not required).${carriedNote(passingReviews, headSha)}`,
     };
   }
@@ -752,18 +805,32 @@ export function carriedHeadCandidates(comments, headSha, path) {
   const steps = path ?? [];
   // The walk may stop once it has seen every named head (F-148): no verdict
   // head is then beyond it, so none can be dropped silently.
-  const seen = new Set(steps.map((commit) => commit?.sha?.toLowerCase()));
-  const allSeen = [...named].every((sha) => seen.has(sha));
+  // A negative may name its head by a prefix (F-027), so a named head is
+  // matched as a prefix of a walked commit; a full SHA matches only itself.
+  const shas = steps.map((commit) => commit?.sha?.toLowerCase()).filter(Boolean);
+  const names = (sha) => [...named].some((head) => sha.startsWith(head));
+  const allSeen = [...named].every((head) => shas.some((sha) => sha.startsWith(head)));
   if (!allSeen && !steps.some((commit) => (commit?.parents?.length ?? 0) < 2)) {
     return { heads: [], reason: "first-parent walk did not reach a non-merge commit" };
   }
-  const heads = steps
-    .map((commit) => commit?.sha?.toLowerCase())
-    .filter((sha) => named.has(sha) && onlyBaseMerges(steps, sha));
+  const heads = shas.filter((sha) => names(sha) && onlyBaseMerges(steps, sha));
   if (heads.length > MAX_CARRIED_HEADS) {
     return { heads: [], reason: `more than ${MAX_CARRIED_HEADS} verdict heads behind base merges` };
   }
   return { heads, reason: null };
+}
+
+/**
+ * F-027: the named heads that `path` already reached behind base merges only,
+ * whether or not the walk finished. The runner keeps them for a FAIL or BLOCK
+ * when the carry-over check cannot finish; they never carry a PASS.
+ */
+export function foundCarryHeads(comments, headSha, path) {
+  const named = [...namedCarryHeads(comments, headSha)];
+  const steps = path ?? [];
+  return steps
+    .map((commit) => commit?.sha?.toLowerCase())
+    .filter((sha) => sha && named.some((head) => sha.startsWith(head)) && onlyBaseMerges(steps, sha));
 }
 
 /**
@@ -781,6 +848,11 @@ export function namedCarryHeads(comments, headSha) {
       if (block === "Owner-Command" && !validCommandShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
+      // F-027: a negative names its head as `negativeHead` reads it, so a
+      // prefix or a decorated SHA of an earlier head is walked for too.
+      const verdictField = { "Agent-Review": "Review-Verdict", "QA-Agent": "QA-Verdict" }[block];
+      const negativeAt = verdictField && negativeWord(entry.body, verdictField) ? readableHead(field(entry.body, headField)) : null;
+      if (negativeAt && !headSha.toLowerCase().startsWith(negativeAt)) named.add(negativeAt);
     }
   }
   return named;
@@ -812,6 +884,12 @@ function changeKey(file) {
     file?.previous_filename ?? null,
     file?.status ?? null,
     file?.patch,
+    // F-046: the whole tree entry (mode and type) at the compared head and at
+    // that compare's merge base, which the compare does not show; attached by
+    // `carriedHeads`. A base merge that changed only the entry under a PR file
+    // changes what the PR does to the base.
+    file?.entry,
+    file?.baseEntry,
   ]);
 }
 
@@ -819,13 +897,15 @@ function changeKey(file) {
  * `current` and `earlier` are GET compare/{base}...{head} for the current and
  * the earlier head: the PR's own diff must be identical, file by file. A
  * file without a patch (binary, too large) shows only its head side, so the
- * PR's effect on the base cannot be compared and nothing carries.
+ * PR's effect on the base cannot be compared and nothing carries. Without its
+ * tree entries (`entry`, `baseEntry`, F-046) nothing carries either.
  */
 export function sameChange(current, earlier) {
   const a = current?.files ?? [];
   const b = earlier?.files ?? [];
   if (a.length === 0 || a.length !== b.length || a.length >= COMPARE_FILE_CAP) return false;
-  if ([...a, ...b].some((file) => typeof file?.patch !== "string")) return false;
+  const whole = (file) => typeof file?.patch === "string" && typeof file?.entry === "string" && typeof file?.baseEntry === "string";
+  if (![...a, ...b].every(whole)) return false;
   const keys = (files) => files.map(changeKey).sort();
   const left = keys(a);
   const right = keys(b);
@@ -1023,7 +1103,8 @@ export function evaluateMergeAuthorization({
   // D-196 (trial to 14 Nov 2026): a critical PR with no D-97 path needs no owner
   // command when the gate passed by counting verdicts: a separate QA PASS
   // (`qaPass`), or a review PASS on a PR that is QA-exempt by its file list (only
-  // tests or only documents, `qaExemptPass`; owner, #87 c.6549357009 t. 2). A gate
+  // tests or only documents, `qaExemptPass`, set only for a review from another App
+  // than the author's, F-180; owner, #87 c.6549357009 t. 2). A gate
   // that passed by an Owner Override keeps the command. F-173: every file must be
   // on the D-196 allowlist (ownerFreeCritical: application code, migrations,
   // tests, low-doc documents); any other file keeps the command, D-97 or not.

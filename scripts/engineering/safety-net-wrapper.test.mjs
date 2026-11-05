@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { answer, decide, isCdToRoot, isInstallCommand, main, runCli } from "../hooks/safety-net.mjs";
+import { answer, decide, foreignRules, isCdToRoot, isInstallCommand, main, readRegular, runCli, samePath, treeDigest } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -118,7 +118,8 @@ const shellTest = (name, fn) =>
       assert.ok(!IN_CI, "bash is required in CI to test the hook command from .claude/settings.json");
       return t.skip("bash not found; run on Linux CI or install Git Bash");
     }
-    fn();
+    // Returned, so an async body is awaited and its failures count.
+    return fn(t);
   });
 
 test("settings.json routes Bash and PowerShell through the wrapper, not the bare package", () => {
@@ -561,8 +562,8 @@ test("review: every part of the verdict key starts a new probe", { timeout: 1800
       await step("legacy SAFETY_NET_ variable", () => (env = { ...env, SAFETY_NET_WORKTREE: "1" }));
       await step("listed tool-directory variable", () => (env = { ...env, XDG_CONFIG_HOME: path.join(home, "xdg") }));
       {
-        // Same rulebook content in another checkout directory: another state.
-        write(path.join(other, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"), "{}");
+        // Same configuration in another checkout directory: another state.
+        fs.cpSync(project, path.join(other, ".cc-safety-net"), { recursive: true });
         write(path.join(other, ".git"), "gitdir: elsewhere");
         const before = probes();
         assert.equal((await ls(other)).code, 0);
@@ -1100,3 +1101,761 @@ test("A13 the PR metadata precheck blocks when it throws on a PR command, and ig
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+// F-035 (a): rules count only from the project root, from the top of a checkout
+// that shares the root's git directory, or as a byte-identical copy of the
+// root's project config. Any other rule source is refused, also when its
+// reduced rulebook still denies the two probe commands.
+const RULES = [".cc-safety-net", "rules", "ductus-rules", "rulebook.json"];
+const plantRules = (dir, content = '{"reduced":1}') => {
+  fs.mkdirSync(path.join(dir, ...RULES.slice(0, -1)), { recursive: true });
+  fs.writeFileSync(path.join(dir, ...RULES), content);
+};
+const foreign = (result, label) => {
+  assert.equal(result.code, 2, `${label}: ${result.stdout}`);
+  assert.match(result.stderr, /not a checkout of this repository|could not be compared/, label);
+};
+const gitRepo = (dir) => {
+  for (const args of [["init", "-q", "-b", "main"], ["add", "package.json"], ["commit", "-q", "-m", "init"]]) {
+    const done = gitIn(dir, ...args);
+    assert.equal(done.status, 0, done.stderr);
+  }
+};
+// What `git worktree add` writes, by hand: the admin directory under the common
+// git directory and the `.git` file of the worktree that names it.
+const linkWorktree = (common, top, name, { back = path.join(top, ".git") } = {}) => {
+  const admin = path.join(common, "worktrees", name);
+  fs.mkdirSync(admin, { recursive: true });
+  fs.writeFileSync(path.join(admin, "gitdir"), `${back}\n`);
+  fs.writeFileSync(path.join(admin, "commondir"), "../..\n");
+  fs.writeFileSync(path.join(top, ".git"), `gitdir: ${admin}\n`);
+  return admin;
+};
+const scratch = (fn) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-f035-"));
+  const done = () => fs.rmSync(base, { recursive: true, force: true });
+  let result;
+  try {
+    result = fn(base);
+  } finally {
+    if (typeof result?.then !== "function") done();
+  }
+  return typeof result?.then === "function" ? result.finally(done) : result;
+};
+
+test("F-035 a: rules outside the checkout count only as a byte-identical copy of the project's", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const ask = (cwd, command = "ls") => run(tree, "Bash", command, cwd);
+      const cases = {
+        "no .git": () => {},
+        "a .git file naming nothing": (dir) => fs.writeFileSync(path.join(dir, ".git"), "gitdir: elsewhere\n"),
+        "a git directory of another repository": (dir) => assert.equal(gitIn(dir, "init", "-q").status, 0),
+        "a .git link to the project's git directory": (dir) => fs.symlinkSync(path.join(tree.root, ".git"), path.join(dir, ".git")),
+      };
+      for (const [label, plant] of Object.entries(cases)) {
+        const dir = path.join(base, label.replace(/\W+/g, "-"));
+        fs.mkdirSync(path.join(dir, "sub"), { recursive: true });
+        plantRules(dir);
+        plant(dir);
+        foreign(await ask(dir), label);
+        const below = await ask(path.join(dir, "sub"));
+        // Without a checkout boundary the search looks only at the cwd itself,
+        // so from below there is no rulebook at all: blocked either way.
+        if (label === "no .git") assert.equal(below.code, 2, `${label}, from below`);
+        else foreign(below, `${label}, from below`);
+        // The way back to the project root stays open.
+        assert.equal((await ask(dir, `cd "${tree.root}"`)).code, 0, `${label}: cd to the root`);
+      }
+      const copy = path.join(base, "copy");
+      fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(copy, ".cc-safety-net"), { recursive: true });
+      assert.equal((await ask(copy)).code, 0, "a byte-identical copy is accepted");
+      fs.appendFileSync(path.join(copy, ...RULES), " ");
+      foreign(await ask(copy), "one byte more");
+      assert.equal((await ask(tree.root)).code, 0, "the root itself");
+    })));
+
+test("F-035 a: a subdirectory with its own reduced rules is refused, the root's rules still apply below it", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, async (tree) => {
+    fs.writeFileSync(path.join(tree.root, ".git"), "gitdir: elsewhere");
+    const sub = path.join(tree.root, "src");
+    fs.mkdirSync(path.join(sub, "deep"), { recursive: true });
+    assert.equal((await run(tree, "Bash", "ls", path.join(sub, "deep"))).code, 0, "before");
+    plantRules(sub);
+    for (const cwd of [sub, path.join(sub, "deep")]) foreign(await run(tree, "Bash", "ls", cwd), cwd);
+  }));
+
+test("F-035 a: a genuine worktree of the repository keeps its own rules, inside or outside the checkout", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const inside = path.join(tree.root, ".claude", "worktrees", "w");
+      const outside = path.join(base, "wt");
+      for (const [dir, branch] of [[inside, "w"], [outside, "o"]]) {
+        const added = gitIn(tree.root, "worktree", "add", "-q", "-b", branch, dir);
+        assert.equal(added.status, 0, added.stderr);
+        plantRules(dir, `{"branch":"${branch}"}`);
+        fs.mkdirSync(path.join(dir, "sub"));
+        for (const cwd of [dir, path.join(dir, "sub")]) assert.equal((await run(tree, "Bash", "ls", cwd)).code, 0, cwd);
+      }
+      // The project root may itself be a worktree; the main checkout is then the same repository.
+      const main = path.join(base, "main");
+      fs.mkdirSync(main);
+      fs.writeFileSync(path.join(main, "package.json"), "{}");
+      gitRepo(main);
+      fs.rmSync(path.join(tree.root, ".git"), { recursive: true, force: true });
+      linkWorktree(path.join(main, ".git"), tree.root, "tree");
+      plantRules(main, '{"main":1}');
+      assert.equal((await run(tree, "Bash", "ls", main)).code, 0, "main checkout of a worktree root");
+    })));
+
+test("F-035 a: a forged or copied worktree link is refused", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const common = path.join(tree.root, ".git");
+      const genuine = path.join(base, "genuine");
+      assert.equal(gitIn(tree.root, "worktree", "add", "-q", "-b", "g", genuine).status, 0);
+      const cases = {
+        "admin directory links back to another checkout": (dir) => linkWorktree(common, dir, "forged", { back: path.join(genuine, ".git") }),
+        "the .git file of a genuine worktree, copied": (dir) => fs.copyFileSync(path.join(genuine, ".git"), path.join(dir, ".git")),
+        // Codex c.6627100367: a hard link shares the inode of the genuine file.
+        "the .git file of a genuine worktree, hard-linked": (dir) => fs.linkSync(path.join(genuine, ".git"), path.join(dir, ".git")),
+        "admin directory outside worktrees/": (dir) => {
+          const admin = path.join(base, "admin", "x");
+          fs.mkdirSync(admin, { recursive: true });
+          fs.writeFileSync(path.join(admin, "gitdir"), path.join(dir, ".git"));
+          fs.writeFileSync(path.join(admin, "commondir"), common);
+          fs.writeFileSync(path.join(dir, ".git"), `gitdir: ${admin}`);
+        },
+        "gitdir of the admin directory is a link": (dir) => {
+          const admin = linkWorktree(common, dir, "linked");
+          fs.renameSync(path.join(admin, "gitdir"), path.join(base, "gitdir-target"));
+          fs.symlinkSync(path.join(base, "gitdir-target"), path.join(admin, "gitdir"));
+        },
+        "the .git file is a link to a genuine one": (dir) => {
+          linkWorktree(common, dir, "viaLink", { back: path.join(dir, ".git") });
+          fs.renameSync(path.join(dir, ".git"), path.join(base, "dotgit-target"));
+          fs.symlinkSync(path.join(base, "dotgit-target"), path.join(dir, ".git"));
+        },
+      };
+      for (const [label, plant] of Object.entries(cases)) {
+        const dir = path.join(base, label.replace(/\W+/g, "-"));
+        fs.mkdirSync(dir);
+        plantRules(dir);
+        plant(dir);
+        foreign(await run(tree, "Bash", "ls", dir), label);
+      }
+    })));
+
+test("F-035 a (r4435902776): a FIFO in place of .git, gitdir or commondir blocks at once", { timeout: 60000 }, (t) => {
+  if (process.platform !== "linux") {
+    assert.ok(!IN_CI, "CI runs on Linux, where mkfifo exists");
+    return t.skip("mkfifo is Linux-only here; this case runs on Linux CI");
+  }
+  return withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const common = path.join(tree.root, ".git");
+      const fifo = (file) => {
+        fs.rmSync(file, { force: true });
+        assert.equal(spawnSync("mkfifo", [file]).status, 0, `mkfifo ${file}`);
+      };
+      const cases = {
+        ".git": (dir) => fifo(path.join(dir, ".git")),
+        gitdir: (dir) => fifo(path.join(linkWorktree(common, dir, "fifo-gitdir"), "gitdir")),
+        commondir: (dir) => fifo(path.join(linkWorktree(common, dir, "fifo-commondir"), "commondir")),
+        "a rule file": (dir) => fifo(path.join(dir, ".cc-safety-net", "rules", "extra.json")),
+      };
+      for (const [label, plant] of Object.entries(cases)) {
+        const dir = path.join(base, label.replace(/\W+/g, "-"));
+        fs.mkdirSync(dir);
+        plantRules(dir);
+        plant(dir);
+        const started = Date.now();
+        const result = await decide({ root: tree.root, input: event("Bash", "ls", dir), timeoutMs: 1500 });
+        foreign(result, label);
+        assert.ok(Date.now() - started < 3000, `${label}: ${Date.now() - started} ms`);
+      }
+    }));
+});
+
+test("F-035 a: the file reader returns only regular files within the limit, never waits and follows links only when told", () =>
+  scratch((base) => {
+    const file = path.join(base, "file");
+    fs.writeFileSync(file, "abc");
+    const link = path.join(base, "link");
+    fs.symlinkSync(file, link);
+    assert.equal(readRegular(file)?.toString(), "abc");
+    assert.equal(readRegular(file, { max: 2 }), null, "too big");
+    assert.equal(readRegular(link), null, "a link is refused by default");
+    assert.equal(readRegular(link, { follow: true })?.toString(), "abc");
+    assert.equal(readRegular(base), null, "a directory");
+    assert.equal(readRegular(path.join(base, "missing")), null);
+    if (process.platform === "linux") {
+      const fifo = path.join(base, "fifo");
+      assert.equal(spawnSync("mkfifo", [fifo]).status, 0);
+      assert.equal(readRegular(fifo), null, "a FIFO without a writer");
+      assert.equal(readRegular(fifo, { follow: true }), null);
+    }
+  }));
+
+test("F-035 a: a project config too large to compare is refused", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      plantRules(base);
+      for (let i = 0; i < 30; i++) fs.writeFileSync(path.join(base, ".cc-safety-net", `f${i}.json`), "{}");
+      const result = await decide({ root: tree.root, input: event("Bash", "ls", base), limits: { maxEntries: 10 } });
+      foreign(result, "over the entry limit");
+      assert.match(result.stderr, /could not be compared/);
+    })));
+
+// F-035 (a), review c.6590482994: with foreign rules only the way back to the
+// project root stays open, the install commands included; the other ways
+// without usable rules keep the install exception.
+test("F-035 a: foreign rules leave only cd to the root open, also for the install commands", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      gitRepo(tree.root);
+      const installs = ["pnpm install", "pnpm install --frozen-lockfile"];
+      const stranger = path.join(base, "stranger");
+      fs.mkdirSync(stranger);
+      plantRules(stranger);
+      const otherRepo = path.join(base, "other-repo");
+      fs.mkdirSync(path.join(otherRepo, "sub"), { recursive: true });
+      assert.equal(gitIn(otherRepo, "init", "-q").status, 0);
+      plantRules(otherRepo);
+      const empty = path.join(base, "empty");
+      fs.mkdirSync(empty);
+      const ownBelow = path.join(tree.root, "src");
+      fs.mkdirSync(path.join(ownBelow, ".cc-safety-net"), { recursive: true });
+      fs.writeFileSync(path.join(ownBelow, ".cc-safety-net", "config.json"), "{}");
+      // Review c.6591599265: a directory with its own config below foreign rules.
+      const foreignOwn = path.join(otherRepo, "own");
+      fs.mkdirSync(path.join(foreignOwn, ".cc-safety-net"), { recursive: true });
+      fs.writeFileSync(path.join(foreignOwn, ".cc-safety-net", "config.json"), "{}");
+      const rows = [
+        // [class, cwd, command, expected code, stderr pattern when blocked]
+        ...installs.flatMap((command) => [
+          ["1/2 foreign, no .git", stranger, command, 2, /not a checkout of this repository/],
+          ["1/2 foreign, another repository", otherRepo, command, 2, /not a checkout of this repository/],
+          ["4 foreign, from below the .git boundary", path.join(otherRepo, "sub"), command, 2, /not a checkout of this repository/],
+          ["5 own rules, the project root", tree.root, command, 0],
+          ["6 no rulebook, no foreign directory", empty, command, 0],
+          ["7 own config below the rulebook", ownBelow, command, 0],
+          ["8 own config below foreign rules", foreignOwn, command, 2, /not a checkout of this repository/],
+        ]),
+        ["8 own config below foreign rules", foreignOwn, "ls", 2, /not a checkout of this repository/],
+        ...[stranger, otherRepo, path.join(otherRepo, "sub"), foreignOwn].map((cwd) => ["3 foreign, cd to the root", cwd, `cd "${tree.root}"`, 0]),
+        // Controls: the same directories still block an ordinary command.
+        ["6 control", empty, "ls", 2, /no project rulebook/],
+        ["7 control", ownBelow, "ls", 2, /has its own \.cc-safety-net/],
+      ];
+      for (const [label, cwd, command, code, stderr] of rows) {
+        const result = await run(tree, "Bash", command, cwd);
+        assert.equal(result.code, code, `${label}: ${command} in ${cwd}\n${result.stderr}`);
+        if (stderr) assert.match(result.stderr, stderr, `${label}: ${command}`);
+      }
+    })));
+
+// F-035 (a), QA c.6591641283: the tree digest is an unambiguous encoding, so two
+// different configuration trees never give the same digest.
+test("F-035 a: different trees give different digests, identical copies the same", () =>
+  scratch((base) => {
+    let n = 0;
+    const tree = (build) => {
+      const dir = path.join(base, `t${n++}`, "cfg");
+      fs.mkdirSync(dir, { recursive: true });
+      build(dir);
+      return dir;
+    };
+    const file = (dir, rel, content = "") => {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(dir, rel), content);
+    };
+    const rulebook = "rules/ductus-rules/rulebook.json";
+    const rows = [
+      // [class, tree A, tree B, same digest]
+      [
+        "D1 file content continues as the record of the next file",
+        (d) => (file(d, rulebook, "R"), file(d, "rules/rule.json", "M")),
+        (d) => file(d, rulebook, "R\nf:rules/rule.json:M"),
+        false,
+      ],
+      ["D4 an empty file against no entry", (d) => file(d, "a"), () => {}, false],
+      ["D4 an empty file against an empty directory", (d) => file(d, "a"), (d) => fs.mkdirSync(path.join(d, "a")), false],
+      ["D6 a byte-identical copy", (d) => (file(d, rulebook, "R"), file(d, "rules/rule.json", "M")), (d) => (file(d, rulebook, "R"), file(d, "rules/rule.json", "M")), true],
+    ];
+    // Line breaks and colons in names and link targets exist outside Windows only.
+    if (process.platform !== "win32") {
+      rows.push(
+        ["D2 a name with a line break against two entries", (d) => fs.mkdirSync(path.join(d, "a\nd:b")), (d) => (fs.mkdirSync(path.join(d, "a")), fs.mkdirSync(path.join(d, "b"))), false],
+        ["D2 a name with a colon against a file and its content", (d) => file(d, "a:1", ""), (d) => file(d, "a", "1:"), false],
+        [
+          "D5 a link target with a line break against a link and an entry",
+          (d) => fs.symlinkSync("t\ndangling:l\nd:x", path.join(d, "l")),
+          (d) => (fs.symlinkSync("t", path.join(d, "l")), fs.mkdirSync(path.join(d, "x\ndangling:l"))),
+          false,
+        ],
+      );
+    }
+    if (process.platform === "linux") {
+      // A link to a file that cannot be read (EIO) against one to a file whose
+      // content is the placeholder the walk used for an unreadable file.
+      const via = (target) => (d) => {
+        fs.symlinkSync(target, path.join(d, "..", "t"));
+        fs.symlinkSync("../t", path.join(d, "a"));
+      };
+      const placeholder = path.join(base, "placeholder");
+      fs.writeFileSync(placeholder, "unreadable");
+      rows.push(["D3 an unreadable file against its placeholder", via("/proc/self/mem"), via(placeholder), false]);
+    } else assert.ok(!IN_CI, "CI runs on Linux, where /proc exists");
+    const wrong = rows.filter(([, a, b, same]) => (treeDigest(tree(a)) === treeDigest(tree(b))) !== same).map(([label]) => label);
+    assert.deepEqual(wrong, []);
+  }));
+
+test("F-035 a (QA c.6591641283): a copy whose rulebook spells out a missing file is not taken as identical", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      const rules = path.join(tree.root, ".cc-safety-net", "rules");
+      fs.writeFileSync(path.join(rules, "rule.json"), "M");
+      const rulebook = fs.readFileSync(path.join(tree.root, ...RULES), "utf8");
+      plantRules(base, `${rulebook}\nf:rules/rule.json:M`);
+      foreign(await run(tree, "Bash", "ls", base), "forged copy");
+      fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(base, "copy", ".cc-safety-net"), { recursive: true });
+      assert.equal((await run(tree, "Bash", "ls", path.join(base, "copy"))).code, 0, "a byte-identical copy is still accepted");
+    })));
+
+// F-035 a (review c.6592372807, QA c.6592414127): an entry of the project config
+// whose content cannot be established never counts as part of a byte-identical
+// copy. The same entry in the root and in the foreign copy blocks, for both
+// tools, while the root, cd to the root and an identical copy stay open (P1-P3).
+// `ask(tool, command, cwd, env)` is the caller under test and resolves to
+// { code, stdout, stderr }; `env` is what a spawned hook process needs on top of
+// its own. `check(result, label)` adds its own assertions.
+//
+// DAN-557: root (uid 0, a cloud container) reads past a mode of 000, so where
+// the kernel ignores the mode the refusal it gives everyone else (EACCES) is
+// injected on the same calls: reading the locked entry, and any access beneath
+// a locked directory. Nothing else is touched. The function is self-contained,
+// because its source is also the preload of a spawned hook process. It returns
+// the function that puts the originals back.
+function denyReads(fs, path, locked) {
+  const under = (target) => locked.some((entry) => target === entry || target.startsWith(entry + path.sep));
+  const beneath = (target) => locked.some((entry) => target.startsWith(entry + path.sep));
+  const saved = {};
+  const wrap = (name, denied, refuse) => {
+    const original = (saved[name] = fs[name]);
+    fs[name] = Object.assign(function (target, ...rest) {
+      if (typeof target === "string" && denied(path.resolve(target))) {
+        if (refuse !== undefined) return refuse;
+        throw Object.assign(new Error(`EACCES: permission denied, ${name} '${target}'`), { code: "EACCES", errno: -13, syscall: name, path: target });
+      }
+      return original.call(this, target, ...rest);
+    }, original);
+  };
+  for (const name of ["openSync", "readFileSync", "opendirSync", "readdirSync"]) wrap(name, under);
+  for (const name of ["lstatSync", "statSync", "realpathSync", "readlinkSync"]) wrap(name, beneath);
+  wrap("existsSync", beneath, false);
+  return () => Object.assign(fs, saved);
+}
+// True when a mode of 000 stops this process from reading (not so for root).
+const modesBind = (base) => {
+  const probe = path.join(base, "mode-probe");
+  fs.writeFileSync(probe, "probe");
+  fs.chmodSync(probe, 0o000);
+  try {
+    fs.readFileSync(probe);
+    return false;
+  } catch {
+    return true;
+  } finally {
+    fs.chmodSync(probe, 0o600);
+    fs.rmSync(probe);
+  }
+};
+// GitHub CI must keep the kernel's own refusal; there the mode has to bind.
+const kernelOnlyInGitHubCi = (bind) =>
+  assert.ok(bind || process.env.GITHUB_ACTIONS !== "true", "GitHub CI runs the tests without root, where a mode of 000 takes effect");
+
+// DAN-557, contract #1091 c.6639688992: classes S1-S6 of the injected refusal.
+// Without root the expected table is also what the kernel itself does, so the
+// simulation is checked against the real mechanism; with root the kernel alone
+// lets S1-S3 through and the strict digest gives a value, which is why the
+// injection is needed (the negative case).
+test("DAN-557: the injected EACCES matches what a mode of 000 does without root", () =>
+  scratch((base) => {
+    const file = path.join(base, "extra.bin");
+    const dir = path.join(base, "locked");
+    fs.writeFileSync(file, "AAAA");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, "x"), "x");
+    fs.writeFileSync(path.join(base, "extra.bin2"), "B");
+    fs.mkdirSync(path.join(base, "locked2"));
+    fs.writeFileSync(path.join(base, "plain"), "C");
+    const bind = modesBind(base);
+    kernelOnlyInGitHubCi(bind);
+    const rows = [
+      // [class, call, refused]
+      ["S1 open a locked file", () => fs.closeSync(fs.openSync(file, "r")), true],
+      ["S1 read a locked file", () => fs.readFileSync(file), true],
+      ["S2 opendir a locked directory", () => fs.opendirSync(dir).closeSync(), true],
+      ["S2 readdir a locked directory", () => fs.readdirSync(dir), true],
+      ["S3 read beneath a locked directory", () => fs.readFileSync(path.join(dir, "x")), true],
+      ["S3 lstat beneath a locked directory", () => fs.lstatSync(path.join(dir, "x")), true],
+      ["S3 realpath beneath a locked directory", () => fs.realpathSync(path.join(dir, "x")), true],
+      ["S3 exists beneath a locked directory (false, not thrown)", () => fs.existsSync(path.join(dir, "x")) || absent(), true],
+      ["S4 lstat the locked file itself", () => fs.lstatSync(file), false],
+      ["S4 stat the locked directory itself", () => fs.statSync(dir), false],
+      ["S5 a file whose name extends the locked file's", () => fs.readFileSync(path.join(base, "extra.bin2")), false],
+      ["S5 a directory whose name extends the locked one's", () => fs.readdirSync(path.join(base, "locked2")), false],
+      ["S6 a file that is not locked", () => fs.readFileSync(path.join(base, "plain")), false],
+    ];
+    // existsSync never throws; a false answer is reported as the refusal it hides.
+    const absent = () => {
+      throw Object.assign(new Error("exists: false"), { code: "EACCES" });
+    };
+    const outcome = (call) => {
+      try {
+        call();
+        return "ok";
+      } catch (error) {
+        return error.code ?? "refused";
+      }
+    };
+    const table = (refusal) => rows.map(([label, call, refused]) => `${label}: ${refusal ? (refused ? "EACCES" : "ok") : outcome(call)}`);
+    const strict = () => outcome(() => treeDigest(base, [], undefined, { strict: true }));
+    const original = { ...fs };
+    fs.chmodSync(file, 0o000);
+    fs.chmodSync(dir, 0o000);
+    try {
+      const kernel = table();
+      const kernelStrict = strict();
+      const restore = denyReads(fs, path, [file, dir]);
+      let injected;
+      let injectedStrict;
+      try {
+        injected = table();
+        injectedStrict = strict();
+      } finally {
+        restore();
+      }
+      for (const name of Object.keys(original)) assert.equal(fs[name], original[name], `fs.${name} is put back`);
+      assert.deepEqual(injected, table(true), "the injection gives the expected table");
+      assert.equal(injectedStrict, "refused", "with the injection the strict digest refuses");
+      if (bind) {
+        assert.deepEqual(kernel, table(true), "without root the kernel gives the same table");
+        assert.equal(kernelStrict, "refused");
+      } else {
+        assert.deepEqual(kernel, rows.map(([label]) => `${label}: ok`), "root reads past a mode of 000");
+        assert.equal(kernelStrict, "ok", "without the injection root gets a digest");
+      }
+    } finally {
+      fs.chmodSync(file, 0o600);
+      fs.chmodSync(dir, 0o700);
+    }
+  }));
+
+const unreadableMatrix = (tree, base, ask, check = () => []) => async () => {
+  const bind = modesBind(base);
+  kernelOnlyInGitHubCi(bind);
+  // Paths the injection refuses; empty where the kernel does it itself.
+  const lockedPaths = [];
+  let childEnv = {};
+  let restore = () => {};
+  if (!bind) {
+    restore = denyReads(fs, path, lockedPaths);
+    const preload = path.join(base, "deny-reads.mjs");
+    fs.writeFileSync(preload, `import fs from "node:fs";\nimport path from "node:path";\n(${denyReads})(fs, path, JSON.parse(process.env.DUCTUS_TEST_LOCKED));\n`);
+    childEnv = { NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${pathToFileURL(preload).href}`.trim() };
+  }
+  const lock = (target) => {
+    fs.chmodSync(target, 0o000);
+    if (!bind) lockedPaths.push(path.resolve(target));
+  };
+  const envFor = () => (bind ? {} : { ...childEnv, DUCTUS_TEST_LOCKED: JSON.stringify(lockedPaths) });
+  try {
+    return await unreadableRows(tree, base, ask, check, { lock, envFor, lockedPaths });
+  } finally {
+    restore();
+  }
+};
+const unreadableRows = async (tree, base, ask, check, { lock, envFor, lockedPaths }) => {
+  const config = path.join(tree.root, ".cc-safety-net");
+  const locked = (target) => {
+    try {
+      fs.readdirSync(target);
+      return false;
+    } catch {
+      try {
+        fs.readFileSync(target);
+        return false;
+      } catch {
+        return true;
+      }
+    }
+  };
+  const rows = [];
+  // [class, build(config dir, side), clean(config dir)]
+  if (process.platform === "linux") {
+    rows.push(["U1 a file that cannot be read, also by root (EIO)", (d) => fs.symlinkSync("/proc/self/mem", path.join(d, "extra.bin"))]);
+    rows.push(["U4 a FIFO of the same name", (d) => assert.equal(spawnSync("mkfifo", [path.join(d, "pipe")]).status, 0, "mkfifo")]);
+  } else assert.ok(!IN_CI, "CI runs on Linux, where /proc and mkfifo exist");
+  if (process.platform !== "win32") {
+    rows.push(["U5 a dangling link with the same target", (d) => fs.symlinkSync("missing-target", path.join(d, "gone"))]);
+    rows.push([
+      "U2 files of the same name and size, different content, no read permission",
+      (d, side) => {
+        const file = path.join(d, "extra.bin");
+        fs.writeFileSync(file, side === "root" ? "AAAA" : "BBBB");
+        lock(file);
+        assert.ok(locked(file), "the file is unreadable");
+      },
+      (d) => fs.chmodSync(path.join(d, "extra.bin"), 0o600),
+    ]);
+    rows.push([
+      "U3 a directory of the same name without read permission",
+      (d, side) => {
+        const dir = path.join(d, "locked");
+        fs.mkdirSync(dir);
+        fs.writeFileSync(path.join(dir, "x"), side);
+        lock(dir);
+        assert.ok(locked(dir), "the directory is unreadable");
+      },
+      (d) => fs.chmodSync(path.join(d, "locked"), 0o700),
+    ]);
+  } else assert.ok(!IN_CI, "CI runs on Linux, where links and modes work");
+  const before = fs.readdirSync(config);
+  const failures = [];
+  const expect = (result, label, ok) => {
+    if (!ok) failures.push(`${label}: ${result.code} ${result.stdout} ${result.stderr}`);
+    failures.push(...check(result, label));
+  };
+  for (const [i, [label, build, clean]] of rows.entries()) {
+    const copy = path.join(base, `u${i}`);
+    fs.cpSync(config, path.join(copy, ".cc-safety-net"), { recursive: true });
+    build(config, "root");
+    build(path.join(copy, ".cc-safety-net"), "copy");
+    try {
+      try {
+        treeDigest(path.join(copy, ".cc-safety-net"), [], undefined, { strict: true });
+        failures.push(`${label}: the strict digest gives a value`);
+      } catch {
+        // refused, as it must be
+      }
+      for (const tool of TOOLS) {
+        const result = await ask(tool, "ls", copy, envFor());
+        expect(result, `${label} (${tool})`, result.code === 2 && /could not be compared/.test(result.stderr));
+        const back = await ask(tool, `cd "${tree.root}"`, copy, envFor());
+        expect(back, `P1 ${label} (${tool}): cd to the root`, back.code === 0);
+        const own = await ask(tool, "ls", tree.root, envFor());
+        expect(own, `P2 ${label} (${tool}): the root itself`, own.code === 0);
+      }
+    } finally {
+      lockedPaths.length = 0;
+      clean?.(config);
+      clean?.(path.join(copy, ".cc-safety-net"));
+      for (const name of fs.readdirSync(config)) if (!before.includes(name)) fs.rmSync(path.join(config, name), { recursive: true, force: true });
+    }
+  }
+  // P3: with every extra entry gone, a byte-identical copy is accepted again.
+  fs.cpSync(config, path.join(base, "same", ".cc-safety-net"), { recursive: true });
+  for (const tool of TOOLS) {
+    const same = await ask(tool, "ls", path.join(base, "same"), envFor());
+    expect(same, `P3 (${tool}): a byte-identical copy`, same.code === 0);
+  }
+  assert.deepEqual(failures, []);
+  return rows.length;
+};
+
+test("F-035 a (QA c.6592414127): an entry that cannot be read never makes a foreign copy identical", { timeout: 120000 }, () =>
+  withTree({ bin: "allow" }, (tree) => scratch((base) => unreadableMatrix(tree, base, (tool, command, cwd) => run(tree, tool, command, cwd))())));
+
+// F-035 a (QA c.6625690084, #1482 t. 4): the same matrix through the configured
+// caller, not a direct call of decide: the exact PreToolUse command of
+// .claude/settings.json under bash, so node runs scripts/hooks/safety-net.mjs
+// and main -> runCli -> decide read the event from stdin. The event names the
+// foreign cwd explicitly and the hook process starts there too. Exit code,
+// stdout, stderr and the duration within the hook timeout are checked per call.
+// A wrapper that cannot start the hook also exits 2, so its messages never count.
+shellTest("F-035 a (QA c.6625690084): U1-U5 and P1-P3 through the configured PreToolUse hook with an explicit foreign cwd", (t) =>
+  withTree({ bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      // The entry is read from .claude/settings.json; a changed configuration fails here.
+      assert.ok(hookEntry, "PreToolUse hook for safety-net.mjs in .claude/settings.json");
+      const group = settings.hooks.PreToolUse.find((entry) => entry.hooks?.includes(hookEntry));
+      for (const tool of TOOLS) assert.ok(new RegExp(`^(?:${group.matcher})$`).test(tool), `the matcher covers ${tool}`);
+      assert.equal(hookEntry.shell, "bash");
+      assert.ok(Number.isFinite(hookEntry.timeout) && hookEntry.timeout > 0, "the hook timeout comes from the entry");
+      const limitMs = hookEntry.timeout * 1000;
+      const calls = [];
+      const timings = [];
+      const viaHook = (tool, command, cwd, extra = {}) => {
+        const started = Date.now();
+        const done = spawnSync("bash", ["-c", hookEntry.command], {
+          cwd,
+          input: event(tool, command, cwd),
+          encoding: "utf8",
+          env: { ...process.env, ...extra, CLAUDE_PROJECT_DIR: tree.root },
+          timeout: limitMs,
+        });
+        const result = { code: done.status, stdout: done.stdout, stderr: done.stderr, ms: Date.now() - started, error: done.error };
+        calls.push({ tool, command, cwd, ...result });
+        return result;
+      };
+      const check = (result, label) => {
+        const problems = [];
+        if (result.error) problems.push(`${label}: ${result.error.message}`);
+        if (!(result.ms < limitMs)) problems.push(`${label}: ${result.ms} ms is not below the hook timeout of ${limitMs} ms`);
+        // A block answers on stderr only, an allow prints nothing.
+        if (result.code === 2 && result.stdout !== "") problems.push(`${label}: a block printed to stdout: ${result.stdout}`);
+        if (result.code === 2 && !/^Safety hook blocked this command: /.test(result.stderr)) problems.push(`${label}: unexpected block message: ${result.stderr}`);
+        if (result.code === 0 && result.stderr !== "") problems.push(`${label}: an allow printed to stderr: ${result.stderr}`);
+        if (result.code === 0 && result.stdout !== "") problems.push(`${label}: an allow printed to stdout: ${result.stdout}`);
+        for (const wrapper of ["Safety hook cannot run", "failed unexpectedly"]) {
+          if (result.stderr.includes(wrapper)) problems.push(`${label}: the wrapper did not run the hook: ${result.stderr}`);
+        }
+        timings.push(`${label}: exit ${result.code}, ${result.ms} ms`);
+        return problems;
+      };
+      const rows = await unreadableMatrix(tree, base, viaHook, check)();
+      for (const line of timings) t.diagnostic(line);
+      // Every class row asks 3 times per tool, P3 once per tool: nothing was skipped.
+      assert.equal(calls.length, (rows * 3 + 1) * TOOLS.length);
+      assert.ok(calls.some((call) => call.cwd !== tree.root && call.code === 2), "a foreign cwd was blocked through the hook");
+    })));
+
+// F-035 a (Codex c.6627100367): two paths are the same directory only when the
+// file system says so (device and inode, the link itself, never followed), not
+// when their spelling matches in lower case. Cases this file system cannot
+// produce (it may not tell upper from lower case, or never give inode 0) are
+// simulated by swapping fs.lstatSync, fs.realpathSync and process.platform for
+// the one call, never skipped.
+const swapped = async ({ lstat, realpath, platform }, fn) => {
+  const saved = { lstatSync: fs.lstatSync, realpathSync: fs.realpathSync };
+  const own = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    if (lstat) fs.lstatSync = lstat(saved.lstatSync);
+    if (realpath) fs.realpathSync = realpath(saved.realpathSync);
+    if (platform) Object.defineProperty(process, "platform", { ...own, value: platform });
+    return await fn();
+  } finally {
+    Object.assign(fs, saved);
+    Object.defineProperty(process, "platform", own);
+  }
+};
+// lstat with the identity of `to` for the path `from`, or a changed result.
+const lstatAs = (from, to) => (lstat) => (file, options) => lstat(file === from ? to : file, options);
+const lstatEdit = (file, edit) => (lstat) => (name, options) => (name === file ? edit(lstat(name, options)) : lstat(name, options));
+// Two directories whose names differ only in case: real ones where this file
+// system keeps them apart, else `twin` is a real third directory that answers
+// to the lower-case name through the swapped lstat and realpath. The simulation
+// also runs where real twins exist, so it is checked on Linux CI as well.
+const caseTwins = (base, upper, { simulate = false } = {}) => {
+  const lower = path.join(path.dirname(upper), path.basename(upper).toLowerCase());
+  assert.notEqual(lower, upper);
+  if (!simulate && !fs.existsSync(lower)) {
+    fs.mkdirSync(lower);
+    return { lower, cwd: lower, swaps: {} };
+  }
+  const twin = fs.mkdtempSync(path.join(base, "twin-"));
+  const realTwin = fs.realpathSync(twin);
+  const realLower = path.join(fs.realpathSync(path.dirname(upper)), path.basename(lower));
+  return {
+    lower: realLower,
+    cwd: twin,
+    swaps: { lstat: lstatAs(realLower, realTwin), realpath: (realpath) => (file, options) => (realpath(file, options) === realTwin ? realLower : realpath(file, options)) },
+  };
+};
+
+test("F-035 a (Codex c.6627100367): samePath compares file system identity over every input class", () =>
+  scratch(async (base) => {
+    const upper = path.join(base, "Same");
+    fs.mkdirSync(path.join(upper, "sub"), { recursive: true });
+    const twins = caseTwins(base, upper);
+    const simulated = caseTwins(base, upper, { simulate: true });
+    const missing = path.join(base, "missing");
+    const rows = [
+      ["1 the same path", upper, upper, {}, true],
+      ["2 another spelling of the same entry (..)", path.join(upper, "sub") + `${path.sep}..`, upper, {}, true],
+      ["2 a case variant on a file system without case (simulated)", path.join(base, "SAME"), upper, { lstat: lstatAs(path.join(base, "SAME"), upper) }, true],
+      ["3 names differing in case only, two directories", twins.lower, upper, twins.swaps, false],
+      ["3 the same, with win32 as platform", twins.lower, upper, { ...twins.swaps, platform: "win32" }, false],
+      ["3 simulated twins, with win32 as platform", simulated.lower, upper, { ...simulated.swaps, platform: "win32" }, false],
+      ["4 one side missing", missing, upper, {}, false],
+      ["4 both sides missing", missing, missing, {}, false],
+      ["5 lstat fails otherwise (EACCES)", upper, upper, { lstat: lstatEdit(upper, () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); }) }, false],
+      ["6 inode 0: no identity", upper, upper, { lstat: lstatEdit(upper, (stat) => Object.assign(stat, { ino: 0n })) }, false],
+      ["7 the same inode on another device", path.join(upper, "sub"), upper, { lstat: (lstat) => (file, options) => {
+        const stat = lstat(file, options);
+        return file === upper ? Object.assign(stat, { ino: lstat(path.join(upper, "sub"), options).ino, dev: stat.dev + 1n }) : stat;
+      } }, false],
+    ];
+    // 9: a file is itself only while it has one name; a hard link is another entry.
+    const single = path.join(upper, "single");
+    fs.writeFileSync(single, "x");
+    rows.push(["9 a file with one name", single, single, {}, true]);
+    const file = path.join(upper, "file");
+    fs.writeFileSync(file, "x");
+    fs.linkSync(file, path.join(upper, "hard"));
+    rows.push(["9 a hard link to a file", path.join(upper, "hard"), file, {}, false], ["9 a file with a second name, itself", file, file, {}, false]);
+    const link = path.join(base, "link");
+    try {
+      fs.symlinkSync(upper, link, "dir");
+      rows.push(["8 a link to the directory is not the directory", link, upper, {}, false]);
+      rows.push(["2 the same link once the caller resolved it", fs.realpathSync(link), upper, {}, true]);
+    } catch (error) {
+      assert.ok(!IN_CI, `symlinks are available on CI: ${error.message}`);
+      rows.push(["8 a link to the directory (simulated)", link, upper, { lstat: lstatAs(link, path.join(upper, "sub")) }, false]);
+    }
+    for (const [label, a, b, swaps, expected] of rows) {
+      for (const [x, y] of [[a, b], [b, a]]) assert.equal(await swapped(swaps, () => samePath(x, y)), expected, `${label}: ${x} vs ${y}`);
+    }
+  }));
+
+test("F-035 a (Codex c.6627100367): a foreign directory whose name differs in case only is blocked, also on win32", { timeout: 60000 }, () =>
+  withTree({ dir: "Ductus", bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      for (const twins of [caseTwins(base, tree.root), caseTwins(base, tree.root, { simulate: true })]) {
+        plantRules(twins.cwd);
+        for (const platform of [process.platform, "win32"]) {
+          const swaps = { ...twins.swaps, platform };
+          // N1: the reason comes from comparing the config, never from the name.
+          assert.match(await swapped(swaps, () => foreignRules(twins.cwd, tree.root)) ?? "", /not a checkout of this repository/, platform);
+          const result = await swapped(swaps, () => run(tree, "Bash", "ls", twins.cwd));
+          foreign(result, `ls in ${twins.lower} via ${twins.cwd} (${platform})`);
+        }
+      }
+    })));
+
+test("F-035 a (Codex c.6627100367): the root reached by another path keeps its rules; an unknown identity blocks", { timeout: 60000 }, () =>
+  withTree({ dir: "Ductus", bin: "allow" }, (tree) =>
+    scratch(async (base) => {
+      // N2: through a link (the realpath leads back to the root), and through a
+      // case variant on a file system that does not tell case apart (simulated).
+      const link = path.join(base, "root-link");
+      let viaLink = true;
+      try {
+        fs.symlinkSync(tree.root, link, "dir");
+      } catch (error) {
+        assert.ok(!IN_CI, `symlinks are available on CI: ${error.message}`);
+        viaLink = false;
+      }
+      if (viaLink) assert.equal(foreignRules(link, tree.root), null, "the root through a link");
+      const realRoot = fs.realpathSync(tree.root);
+      const variant = path.join(path.dirname(realRoot), "DUCTUS");
+      const insensitive = { lstat: lstatAs(variant, realRoot), realpath: (realpath) => (file, options) => (file === variant ? variant : realpath(file, options)) };
+      for (const platform of [process.platform, "win32"]) {
+        assert.equal(await swapped({ ...insensitive, platform }, () => foreignRules(variant, tree.root)), null, `case variant (${platform})`);
+      }
+      // N3 / K2: when lstat of the root fails, the rules are compared as config;
+      // a different rulebook is then refused.
+      const other = path.join(base, "other");
+      plantRules(other);
+      const failing = { lstat: lstatEdit(realRoot, () => { throw Object.assign(new Error("gone"), { code: "EIO" }); }) };
+      assert.match(await swapped(failing, () => foreignRules(other, tree.root)) ?? "", /not a checkout of this repository/);
+      // Even the root itself is then only accepted as an identical config, not by name.
+      assert.equal(await swapped(failing, () => foreignRules(tree.root, tree.root)), null, "the root compared as config with itself");
+      foreign(await swapped(failing, () => run(tree, "Bash", "ls", other)), "unknown identity, different rules");
+    })));

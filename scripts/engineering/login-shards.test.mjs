@@ -29,7 +29,7 @@ const run = (files, statuses = {}) => {
   return { config: { shard: null }, errors: [], stats: { duration: 1000 }, suites: files.map((f) => all[f.replace(".spec.ts", "")]) };
 };
 const good = () => plan().map((files, i) => ({
-  inventory: inventory(), report: run(files), shardPlan: { shard: i + 1, total: LOGIN_SHARDS, files },
+  inventory: inventory(), report: run(files), shardPlan: { shard: i + 1, total: LOGIN_SHARDS, project: "login-chromium", files },
 }));
 
 test("the ids carry file, describe titles, test title and project", () => {
@@ -138,7 +138,7 @@ test("the CLI reads every shard artifact with the repository weights and a missi
   // The repository weights do not know these files, so all weigh the mean:
   // the plan is then name order, round robin over the shards.
   const flat = planLoginShards(NAMES.map((n) => `${n}.spec.ts`), { "x.spec.ts": 1 });
-  write(flat.map((files, i) => ({ inventory: inventory(), report: run(files), shardPlan: { shard: i + 1, total: LOGIN_SHARDS, files } })));
+  write(flat.map((files, i) => ({ inventory: inventory(), report: run(files), shardPlan: { shard: i + 1, total: LOGIN_SHARDS, project: "login-chromium", files } })));
   assert.equal(runLoginShards({}, cwd).count, 8);
   writeFileSync(join(cwd, ".ci-reports/login/login-shard-2/plan.json"), "{");
   assert.throws(() => runLoginShards({}, cwd));

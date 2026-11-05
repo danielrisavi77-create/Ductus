@@ -13,6 +13,7 @@ import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { cleanUpAssignmentWork, openAssignmentWork } from "./assignment-work";
 import { post } from "./comment-seed";
 import { appCookie, type DemoAccount, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
 // /api/live/<id>, PR #496, BACKEND 4.12) is not on main yet, so the browser's
@@ -470,7 +471,7 @@ test.describe("comments from the live view", () => {
 
     // The student reads the same thread through the same function (PRODUCT §5 rule 5).
     const listed = await (await student.request.post("/api/comments/list", {
-      headers: { origin: "http://localhost:3000" }, data: { documentId },
+      headers: { origin: APP_ORIGIN }, data: { documentId },
     })).json();
     expect(listed.comments.map((row: { authorRole: string; isOwn: boolean; body: string }) => [row.authorRole, row.isOwn, row.body]))
       .toEqual([["teacher", false, BODY]]);
@@ -513,7 +514,7 @@ test.describe("the live route on the work's own document (#711 A11, A14)", () =>
 
     const live = work("Gradske knjižnice su mjesto susreta.");
     const put = await student.request.put(`/api/live/${documentId}`, {
-      headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
+      headers: { origin: APP_ORIGIN, "content-type": "application/json", "if-none-match": "*" }, data: live.body,
     });
     expect(put.status()).toBe(200);
     expect(await put.json()).toMatchObject({ outcome: "accepted" });
@@ -534,7 +535,7 @@ test.describe("the live route on the work's own document (#711 A11, A14)", () =>
       expect(listed[0]).toBe(403);
       expect(listed).toEqual(await answerOf(await post(stranger, "list", { documentId: unknown })));
       const published = await stranger.request.put(`/api/live/${documentId}`, {
-        headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
+        headers: { origin: APP_ORIGIN, "content-type": "application/json", "if-none-match": "*" }, data: live.body,
       });
       expect(await answerOf(published)).toEqual([404, '{"error":"not_found"}']);
     }

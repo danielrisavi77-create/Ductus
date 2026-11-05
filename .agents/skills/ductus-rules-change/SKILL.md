@@ -14,6 +14,6 @@ Pročitati `CLAUDE.md` "Mjerodavni izvori", D-97 i zaglavlje `docs/DECISIONS.md`
 5. Svako upućivanje (`§N`, `D-NN`, putanja) otvoriti na grani i potvrditi da odjeljak postoji i kaže to što se tvrdi, a ne suprotno.
 6. Red prvenstva: `docs/AGENT_SYSTEM_V2.md` §2; `docs/SESSIONS.md` u sukobu ustupa `CLAUDE.md`; u tehničkim pojedinostima `docs/BACKEND.md` ima prednost; iznad repo dokumenta je Ustav, a pitanje ide u Owner queue (`CLAUDE.md`).
 7. Odluka se mijenja samo novim unosom koji navodi koju odluku zamjenjuje; stari unos ostaje (zaglavlje `docs/DECISIONS.md`). Nova odluka koja proturječi ranijoj mora to izričito reći.
-8. Kolizija brojeva odluka. Provjera izvedbe: `gh pr list --state open` i diff `docs/DECISIONS.md` u otvorenim PR-ovima prije izbora broja; ponoviti prije pusha.
+8. Kolizija brojeva odluka. Provjera izvedbe: `gh pr list --state open` (u oblaku REST: `gh api 'repos/<repo>/pulls?state=open&per_page=100'`) i diff `docs/DECISIONS.md` u otvorenim PR-ovima prije izbora broja; ponoviti prije pusha.
 9. Izvedivost. Provjera izvedbe: za svako novo pravilo navesti što ga provodi (gate, hook, skripta i njihov test) ili izričito napisati da je governance dokaz, a ne strojna granica, kako to rade D-97 i ENGINEERING §7. Pravilo koje alati ne mogu izvesti ne opisivati kao da je pokriveno.
 10. Skillovi ostaju tanki adapteri (`CLAUDE.md`; `docs/MULTI-ACCOUNT.md` §5): u njima se mijenja upućivanje, ne prepisuje se pravilo.

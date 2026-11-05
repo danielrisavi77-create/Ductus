@@ -117,6 +117,30 @@ export function sourceFromFields(fields: SourceFields): SourceCheck {
   return { ok: true, source };
 }
 
+/** A problem of the form, in the order the panel lists it. */
+export type FormError =
+  | { kind: "missing" | "tooLong" | "unstorable"; field: SourceField }
+  | { kind: "yearInvalid" | "pageTooLong" | "pageUnstorable" };
+
+/**
+ * DAN-484: what the form names. A value over its limit or one the sheet would
+ * change is named as soon as it is in the field (typed or pasted), and never
+ * cut; an empty field or a malformed year only after a click (`tried`), so an
+ * empty form says nothing.
+ */
+export function formErrors(check: SourceCheck, page: string, tried: boolean): FormError[] {
+  const out: FormError[] = [];
+  if (!check.ok) {
+    if (tried) out.push(...check.missing.map((field) => ({ kind: "missing" as const, field })));
+    if (tried && check.yearInvalid) out.push({ kind: "yearInvalid" });
+    out.push(...check.tooLong.map((field) => ({ kind: "tooLong" as const, field })));
+    out.push(...check.unstorable.map((field) => ({ kind: "unstorable" as const, field })));
+  }
+  if (!pageFits(page)) out.push({ kind: "pageTooLong" });
+  if (!storable(page)) out.push({ kind: "pageUnstorable" });
+  return out;
+}
+
 /** The in-text citation, with the page only when one is given. */
 export function citationText(source: BookSource | ArticleSource, page: string): string {
   const trimmed = page.trim();

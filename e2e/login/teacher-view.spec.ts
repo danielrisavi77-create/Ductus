@@ -8,6 +8,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { post } from "./comment-seed";
 import { closeWork, seedWork, workDocument } from "./work-seed";
 import { clickSignOut, signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // #732 item 7 (DAN-89, contract 6396547184 §6 with 6404284308): "Kako vidi
 // nastavnik" on /rad shows the student's own work of the assignment as its
@@ -223,7 +224,7 @@ test("a sign-out in another tab removes the text from the teacher view (D-118)",
   // The work's own sheet, held by the first tab, as sign-out.spec.ts signs out from it.
   await second.goto(`/rad?zadatak=${assignment}`);
   await clickSignOut(second);
-  await second.waitForURL("http://localhost:3000/");
+  await second.waitForURL(`${APP_ORIGIN}/`);
 
   await expect(liveTextOf(page)).toContainText(t.liveView.connection.signedOut);
   await expect(liveTextOf(page).getByText(TEXT)).toHaveCount(0);

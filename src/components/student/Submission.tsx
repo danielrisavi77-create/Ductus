@@ -63,10 +63,8 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
     setState((s) => (s.phase === "ready" ? { ...s, summary } : s));
   }, [current]);
 
-  const load = useCallback(async () => {
-    const mine = ++generation.current;
-    workRef.current = null;
-    setState({ phase: "loading" });
+  // The read itself; `mine` is the generation of the load that started it.
+  const read = useCallback(async (mine: number) => {
     if (!current()) return;
     const opened = await openWork(assignmentId);
     if (mine !== generation.current || !current()) return;
@@ -94,9 +92,26 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
     void loadSummary(opened.work.documentId, mine);
   }, [assignmentId, current, loadSummary, noticePath]);
 
+  // "Učitaj ponovno": back to "loading", then the read.
+  const load = useCallback(() => {
+    const mine = ++generation.current;
+    workRef.current = null;
+    setState({ phase: "loading" });
+    return read(mine);
+  }, [read]);
+
+  // Another assignment starts from "loading" in the render that first sees it.
+  const [readFor, setReadFor] = useState(assignmentId);
+  if (readFor !== assignmentId) {
+    setReadFor(assignmentId);
+    setState({ phase: "loading" });
+  }
   useEffect(() => {
-    if (!ended) void load();
-  }, [load, ended]);
+    if (ended) return;
+    const mine = ++generation.current;
+    workRef.current = null;
+    void read(mine);
+  }, [read, ended]);
 
   const submit = useCallback(async () => {
     const work = workRef.current;
