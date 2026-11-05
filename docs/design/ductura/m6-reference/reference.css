@@ -30,6 +30,8 @@ a { color: var(--accent); text-decoration: underline; text-decoration-color: var
 .ref-head h1 { font-size: 29px; }
 .ref-head p { color: var(--ink-2); margin-top: 6px; max-width: 70ch; }
 .ref-tag { font: 12px/1.4 var(--ff-mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+.ref-note { color: var(--ink-3); font-size: 12.5px; margin-top: 8px; max-width: 90ch; }
+.ref-cond { outline: 2px dotted var(--ink-3); outline-offset: 3px; }
 .stack { max-width: 1200px; margin: 0 auto; padding: 16px 24px 56px; display: grid; gap: 36px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 
