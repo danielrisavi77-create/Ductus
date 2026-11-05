@@ -10,7 +10,7 @@ Opseg M6.UX-R po odluci orkestratora (#1091): PR 1 M6.2 (S-34, N-09); PR 2 M6.3/
 
 | Datoteka | Što je |
 |---|---|
-| `n09-reprodukcija-nastavnik.html` | N-09: reprodukcija za mentora i nastavnika zadatka, šest stanja kao varijante |
+| `n09-reprodukcija-nastavnik.html` | N-09: reprodukcija za mentora i nastavnika zadatka, sva stanja kao varijante |
 | `s34-reprodukcija-student.html` | S-34: isti prikaz za studenta vlastitog rada |
 | `reference.css` | tokeni „papir i grafit” (DESIGN-SYSTEM §3), fontovi iz `app/fonts` |
 | `snimke/` | PNG snimke, osam komada |
