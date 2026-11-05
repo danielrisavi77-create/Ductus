@@ -61,6 +61,7 @@
 .facts.no-list li::before { content: "× "; color: var(--ink-3); }
 .notice-cols { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; border-top: 1px solid var(--rule-2); padding-top: 12px; }
 .notice-cols h3, .card h3 { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; }
+.card h4 { font: 600 13px/1.4 var(--ff-ui); letter-spacing: 0; margin: 8px 0 0; }
 
 /* S-01 Prijava: raspored iz prijava-v5.dc.html, tekst iz kataloga /prijava */
 .login { display: grid; grid-template-columns: 1fr 430px; gap: 64px; align-items: center; max-width: 1180px; margin: 0 auto; padding: 40px 24px; }

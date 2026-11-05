@@ -35,7 +35,7 @@ Stanje „mobitel” iz §5 su snimke na 400 px. Svaka stranica ima snimku na 14
 - Istekao i nepostojeći kod imaju isti tekst (`student.enroll.errors.refused`).
 - Dani do roka („Rok za 3 dana”) vidi samo student i ne ulaze u sažetak ni nastavnički prikaz (PRODUCT §5 pravilo 4, iznimka D-63).
 - Obavijest S-05 prikazuje sve stavke iz kataloga doslovno, uključujući prikaz uživo i reprodukciju (D-142, D-143), radne zapise mentora (D-130) i rečenicu da Ductura ne procjenjuje autorstvo. Potvrda nije privola i ništa se ne šalje prije potvrde. Nova verzija obavijesti traži novu potvrdu.
-- Ljuska S-02 i S-03 je uska bočna traka od 64 px (D-202 t. 1), isti raspored kao `m2-reference`; logo vodi na studentsku početnu (D-202 t. 2). Ikone iz paketa nisu korištene (D-203 t. 8), pa stavke nose tekst iz kataloga. Ispod 800 px traka postaje gornja crta s gumbom „Izbornik”.
+- Ljuska S-02 do S-05 (zadana stanja S-04 i S-05 također) je uska bočna traka od 64 px (D-202 t. 1), isti raspored kao `m2-reference`; logo vodi na studentsku početnu (D-202 t. 2). Ikone iz paketa nisu korištene (D-203 t. 8), pa stavke nose tekst iz kataloga. Ispod 800 px traka postaje gornja crta s gumbom „Izbornik”.
 - Polje koda u svim stanjima S-04 ima naziv „Kod kolegija” (`label for`); poruka greške i uputa vezane su uz polje preko `aria-describedby`. Kolegij bez zadatka potvrđuje samo upis i ne najavljuje obavijest.
 - Podaci su izmišljeni: Student A, Kolegij A do C, izmišljeni naslovi zadataka i kodovi.
 
@@ -48,7 +48,7 @@ Ovi tekstovi su prijedlog i ulaze u `messages.hr.ts` tek s izvedbom, uz provjeru
 - S-02, S-03: „Rok za 3 dana” (prag od 7 dana potvrđuje izvedba).
 - S-03: oznake „Seminarska grupa 2” i akademska godina uz kolegij (M2.7).
 - S-04: „Već ste upisani u ovaj kolegij.”
-- S-02, S-03: „Izbornik” (gumb kojim se bočna traka ispod 800 px otvara kao ladica, isti kao u `m2-reference`).
+- S-02 do S-05: „Izbornik” (gumb kojim se bočna traka ispod 800 px otvara kao ladica, isti kao u `m2-reference`).
 - S-05: „Nastavnik (mentor) zadatka moći će usporediti dvije poslane verzije rada, poslane na pregled ili predane. Usporedba pokazuje samo razliku između njih. Istu usporedbu svog rada vidjet ćete i Vi.” (PRODUCT §5 pravilo 7, D-202; katalog ima samo `teacherExtended` za prošireni profil).
 - S-05: „Pravilo je postavio nastavnik kolegija (Nastavnik A). Razlikuje se od pravila fakulteta.” i rasklopivo „Pravilo fakulteta (FPZG čl. 8)” (D-175); kad se pravila ne razlikuju, ostaje samo prva rečenica.
 
