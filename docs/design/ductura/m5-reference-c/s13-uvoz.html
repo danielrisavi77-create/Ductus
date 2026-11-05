@@ -54,9 +54,22 @@
     <div class="dialog" role="dialog" aria-labelledby="u3">
       <h2 id="u3" style="font-size:19px">Uvezi izvore</h2>
       <p class="note" role="alert">Nije prepoznat nijedan zapis. Provjerite je li tekst u obliku BibTeX, RIS ili CSL-JSON. Popis izvora nije promijenjen.</p>
-      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn ghost" type="button">Odustani</button></div>
+      <div class="field"><label for="u3t">Zapisi</label><textarea class="input" id="u3t" aria-describedby="u3e">Primjer izvora, 2017, str. 12 {</textarea></div>
+      <p class="meta" id="u3e">Uneseni tekst je zadržan. Ispravite ga u polju pa ponovno pokušajte ili odaberite drugu datoteku.</p>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odaberi datoteku</button><button class="btn ghost" type="button">Odustani</button></div>
     </div>
-    <div class="toast" role="alert"><span>Datoteku nije moguće pročitati. Popis izvora nije promijenjen.</span><button class="btn small secondary" type="button">Odaberi drugu</button></div>
+    <p class="meta">Polje Zapisi ostaje ispunjeno onim što je student zalijepio ili što je pročitano iz datoteke. „Uvezi” ponovno čita trenutačni sadržaj polja.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="u3b">
+    <div class="ref-tag">Stanje 3b · datoteka nečitljiva</div>
+    <div class="dialog" role="dialog" aria-labelledby="u3b">
+      <h2 id="u3b" style="font-size:19px">Uvezi izvore</h2>
+      <p class="note" role="alert">Datoteku nije moguće pročitati. Popis izvora nije promijenjen.</p>
+      <div class="field"><label for="u3bt">Zapisi</label><textarea class="input" id="u3bt" aria-describedby="u3be"></textarea></div>
+      <p class="meta" id="u3be">Odaberite drugu datoteku .bib, .ris ili .json ili zalijepite zapise u polje.</p>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odaberi drugu datoteku</button><button class="btn ghost" type="button">Odustani</button></div>
+    </div>
   </section>
 
   <section class="variant" aria-labelledby="u4">
@@ -80,7 +93,7 @@
   </section>
 
 </div>
-<p class="meta">Tipkovnica (EQ6): polje Zapisi, Uvezi, Odaberi datoteku, Odustani; u ishodu Gotovo pa Dodaj ručno. Po zatvaranju fokus se vraća na gumb Uvezi u kartici.</p>
+<p class="meta">Tipkovnica (EQ6): polje Zapisi, Uvezi, Odaberi datoteku, Odustani (isto u stanjima 3 i 3b); u ishodu Gotovo pa Dodaj ručno. Po zatvaranju fokus se vraća na gumb Uvezi u kartici.</p>
 </main>
 </body>
 </html>
