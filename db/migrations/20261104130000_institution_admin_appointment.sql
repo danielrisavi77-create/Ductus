@@ -39,8 +39,12 @@ SET LOCAL ROLE ductus_identity;
 -- names the administrator who acted; an administrator row names the written
 -- request instead. Every row already there is a teacher row with an actor.
 -- The table is the append-only trail written by two functions; the checks are
--- validated under this migration's lock and the table is short.
+-- validated under this migration's lock and the table is short. The role
+-- check is replaced in the same transaction, and origin_check below keeps
+-- actor_id required for every teacher row: no guarantee is lost.
+-- squawk-ignore ban-drop-constraint
 ALTER TABLE audit.teacher_role_event DROP CONSTRAINT teacher_role_event_role_check;
+-- squawk-ignore ban-drop-not-null
 ALTER TABLE audit.teacher_role_event ALTER COLUMN actor_id DROP NOT NULL;
 ALTER TABLE audit.teacher_role_event ADD COLUMN request_ref text;
 -- squawk-ignore constraint-missing-not-valid
