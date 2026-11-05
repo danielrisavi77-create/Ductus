@@ -83,9 +83,15 @@ export function FastPathLive({ assignmentId, session, signInHref }: {
     };
   }, [tag, at]);
   const current = useCallback(() => !(watchRef.current?.ended() ?? false), []);
+  // Another assignment starts from "loading" in the render that first sees it,
+  // never with the students of the one before.
+  const [readFor, setReadFor] = useState(assignmentId);
+  if (readFor !== assignmentId) {
+    setReadFor(assignmentId);
+    setLoad({ state: "loading" });
+  }
   useEffect(() => {
     if (ended) return;
-    setLoad({ state: "loading" });
     return startFastPathReader({ assignmentId, onChange: setLoad, current });
   }, [assignmentId, current, ended]);
   return h(FastPath, { load: ended ? { state: "signedOut" } : load, signInHref });

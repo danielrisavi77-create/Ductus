@@ -414,6 +414,85 @@ test.describe("comments from the live view", () => {
     await expect(form).toHaveCount(0);
   });
 
+  // D-118 and #1415: a summary and a comment list asked for before the session
+  // ended, and answered only after it, never reach the page.
+  test("a summary and a comment list that answer after the session ended are never shown", async ({ page, browser }) => {
+    const c = messagesHr.comments;
+    const s = messagesHr.summary;
+    const anchor = createTextAnchor({
+      nodeId: PARAGRAPH_ID as NodeId, nodeText: SENTENCE, start: SENTENCE.indexOf("mjesto"), end: SENTENCE.indexOf("mjesto") + "mjesto".length,
+    });
+    const student = await browser.newContext();
+    await signIn(page, "/", "Demo nastavnik");
+    let documentId: string;
+    try {
+      const studentPage = await student.newPage();
+      await signIn(studentPage, "/", "Demo studentica");
+      ({ documentId } = await openAssignmentWork(studentPage));
+    } finally {
+      await student.close();
+    }
+    expect((await post(page, "create", { documentId, body: "Dodaj izvor.", anchor })).status()).toBe(200);
+    await serveText(page, documentId);
+
+    // Both reads reach the route and wait there until the session has ended.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const asked: string[] = [];
+    // Invented summary in the route's shape (ProcessSummaryV1, #515).
+    const summary = {
+      gaps: { evidenceKind: "observed", items: [] },
+      pastes: { evidenceKind: "observed", listed: [], listedAboveCharacters: 200, smallerCount: 0 },
+      recordState: "complete",
+      sessions: { breakAboveMinutes: 30, count: 1, evidenceKind: "observed", items: [{ from: "2026-10-19T08:00:00.000Z", to: "2026-10-19T08:41:00.000Z" }] },
+      summaryFormat: "ductus-process-summary-v1",
+    };
+    await page.route("**/api/process-summary", async (route) => {
+      asked.push("summary");
+      await held;
+      await route.fulfill({ status: 200, body: canonicalizeJcs(summary), headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+    });
+    await page.route("**/api/comments/list", async (route) => {
+      asked.push("list");
+      const answer = await route.fetch();
+      await held;
+      await route.fulfill({ response: answer });
+    });
+
+    await page.goto(`/nastavnik/rad/${documentId}`);
+    await expect(page.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible();
+    await expect.poll(() => [...asked].sort()).toEqual(["list", "summary"]);
+    await expect(page.getByRole("article", { name: c.number.replace("{n}", "1") })).toHaveCount(0);
+
+    await page.evaluate(({ key, channelName }) => {
+      const mark = JSON.parse(localStorage.getItem(key) ?? "null") as { tag: string } | null;
+      if (!mark) throw new Error("The signed-in page must record its session mark");
+      const channel = new BroadcastChannel(channelName);
+      channel.postMessage(mark.tag);
+      channel.close();
+    }, { key: CURRENT_KEY, channelName: SESSION_END_CHANNEL });
+    await expect(page.getByRole("status").filter({ hasText: t.connection.signedOut })).toBeVisible();
+
+    const answered = Promise.all([
+      page.waitForResponse((r) => new URL(r.url()).pathname === "/api/process-summary"),
+      page.waitForResponse((r) => new URL(r.url()).pathname === "/api/comments/list"),
+    ]);
+    release();
+    const [summaryAnswer, listAnswer] = await answered;
+    expect(summaryAnswer.status()).toBe(200);
+    expect(listAnswer.status()).toBe(200);
+    // Two frames after both answers: whatever they would have drawn is drawn.
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+
+    await expect(page.getByRole("status").filter({ hasText: t.connection.signedOut })).toBeVisible();
+    await expect(page.getByRole("region", { name: s.title })).toHaveCount(0);
+    await expect(page.getByText(s.sameForEveryone)).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: c.title })).toHaveCount(0);
+    await expect(page.getByRole("article", { name: c.number.replace("{n}", "1") })).toHaveCount(0);
+    await expect(page.getByText("Dodaj izvor.")).toHaveCount(0);
+    expect(asked.sort()).toEqual(["list", "summary"]);
+  });
+
   test("the teacher marks a passage, comments, and the mark follows the text", async ({ browser }) => {
     const c = messagesHr.comments;
     const tc = messagesHr.teacherComments;
