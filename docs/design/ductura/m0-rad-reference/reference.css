@@ -60,10 +60,11 @@
 .banner .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .dot.saving { background: var(--accent); }
 .dot.warn { background: var(--warn, var(--accent)); }
+.dot.error { background: var(--error); }
 .statusbar .end { margin-left: auto; display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; }
 .ref-note { color: var(--ink-2); font-size: 12.5px; max-width: 70ch; }
-:root { --warn: #e9c58b; --selected: #3a3a36; --raised-rule: #b3aea3; }
-:root[data-theme="light"] { --warn: #7a5420; --selected: #ecebe5; --raised-rule: #85827a; }
+:root { --error: #f0a08f; --warn: #e9c58b; --selected: #3a3a36; --raised-rule: #b3aea3; }
+:root[data-theme="light"] { --error: #9c3f33; --warn: #7a5420; --selected: #ecebe5; --raised-rule: #85827a; }
 
 @media (max-width: 1250px) { .body { grid-template-columns: 220px minmax(0, 1fr); } .side.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule-2); } }
 @media (max-width: 1050px) { .menus, .variants.two { grid-template-columns: 1fr; } }

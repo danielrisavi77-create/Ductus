@@ -33,7 +33,7 @@ Vlasnik, 5. 11. 2026. (#87 c.6645361793): „editor mora imati sve funckije koje
 | Hrvatski navodnici | M5.10 | RP list (ponašanje pri pisanju) |
 | Fokus i izlaz iz fokusa | M5.10, `m5-reference/fokus.html` | RP prva traka; ST stanje 7 |
 | Samo naslovi, puni tekst | M5.2, D-234 | RP lijevi panel; Prikaz |
-| Kartica Struktura: Prve rečenice, Nit, Pojmovnik, pitanje rada, „Vidite samo Vi.” | S-14, M5.14, D-234, D-250 | RP kartica Struktura, stanje 5 |
+| Kartica Struktura: Prve rečenice, Nit, Pojmovnik, pitanje rada, „Vidite samo Vi.” | S-14, M5.14, D-234, D-250, `m5-reference/struktura-s14.html` | RP kartica Struktura, stanje 5 |
 | Komentari: komentar uz tekst, odgovor, glasovni komentar | B-10, M6, D-201 | RP druga traka; kartica Komentari |
 | Upute i provjera oblika | M4.4, `m4-reference` | RP kartica Upute |
 | Kartica Rad | FE-D9 | RP bočni panel |
@@ -48,7 +48,7 @@ Vlasnik, 5. 11. 2026. (#87 c.6645361793): „editor mora imati sve funckije koje
 | Obavijest o praćenju | PRODUCT §5 | RP Više |
 | Stanja spremanja: Spremam lokalno, Spremljeno na uređaju, Sinkroniziram, Spremljeno na poslužitelju, Sukob, Potreban oporavak | `src/domain/sync/labels.ts`, M3 | ST stanja 1 do 5; RP traka stanja |
 | Bez mreže | Z-11, `m3-reference` | ST stanje 3 |
-| Pisanje u drugoj kartici | Z-11, `m3-reference` | ST stanje 6 |
+| Pisanje u drugoj kartici: „Dokument je otvoren u drugoj kartici.” | Z-11, `m3-reference`, `labels.ts` (`MULTI_TAB_BLOCKED_MESSAGE`) | ST stanje 6 |
 | Izvezi tekst, Otvori raniji tekst | #1333, #711 | ST stanja 4, 5 i 11 |
 | Predan rad samo za čitanje | DAN-289 | ST stanje 9 |
 
