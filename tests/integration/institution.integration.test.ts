@@ -128,12 +128,10 @@ beforeAll(async () => {
       [person.token, person.id, person.institution],
     );
   }
-  // The first administrator comes from the operator (docs/PRODUCT.md 6);
-  // everything after it goes through the functions, as the demo data will.
-  await admin.query(
-    "INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'admin', now())",
-    [facultyA, people.admin.id],
-  );
+  // The first administrator comes from the operator procedure (docs/PRODUCT.md 6,
+  // DAN-525) on an invented request; everything after it goes through the
+  // functions, as the demo data will.
+  await admin.query("SELECT institution.appoint_institution_admin($1, 'Zahtjev 1/2026')", [people.admin.id]);
   // DAN-304: only a person whose last login gave the teacher right can be
   // confirmed; here the right is written as that login would write it.
   await admin.query(

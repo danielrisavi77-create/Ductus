@@ -79,7 +79,7 @@ export default function ShellLogout({ scope, session, className, buttonClassName
         <LogoutDialog
           plan={plan}
           working={busy}
-          failed={false}
+          signedOutHere={false}
           onConfirm={post}
           onStay={() => setPlan(null)}
           onExport={() => {}}

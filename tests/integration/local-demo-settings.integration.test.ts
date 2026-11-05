@@ -93,9 +93,8 @@ it("seeds only the local demo settings and preserves configuration and enrollmen
          VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() + interval '1 hour')`,
         [tokens[i], users[i], i === 4 ? otherId : demoId]);
     }
-    await admin.query(
-      "INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'admin', now())",
-      [demoId, users[0]]);
+    // DAN-525: the administrator only through the operator procedure, on an invented request.
+    await admin.query("SELECT institution.appoint_institution_admin($1, $2)", [users[0], `Zahtjev ${suffix}/2026`]);
     // DAN-304: the teacher right of the last login, as that login writes it.
     await admin.query("INSERT INTO identity.teacher_eligibility (user_id, institution_id) VALUES ($1, $2)", [users[1], demoId]);
     await withActor(tokens[0], (tx) => tx.query("SELECT institution.confirm_teacher_role($1)", [users[1]]));

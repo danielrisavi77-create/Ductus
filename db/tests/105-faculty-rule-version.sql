@@ -27,10 +27,15 @@ FROM person WHERE name IN ('ines', 'rita', 'una');
 INSERT INTO identity.session (token_hash, user_id, institution_id, expires_at)
 SELECT sha256(convert_to(t.token, 'UTF8')), p.id, p.institution_id, now() + interval '1 hour'
 FROM person p JOIN tok t USING (name) WHERE p.name IN ('ines', 'rita', 'una');
+-- DAN-525: the operator appoints Ines and Rita on invented requests; Una's
+-- administrator row stays pending.
+DO $$
+BEGIN
+  PERFORM institution.appoint_institution_admin(pg_temp.id(n), 'Zahtjev ' || n || '/2026') FROM unnest(ARRAY['ines', 'rita']) AS n;
+END
+$$;
 INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_by, confirmed_at)
-VALUES (pg_temp.id('fak_a'), pg_temp.id('ines'), 'admin', pg_temp.id('iva'), now()),
-       (pg_temp.id('fak_a'), pg_temp.id('rita'), 'admin', pg_temp.id('iva'), now()),
-       (pg_temp.id('fak_a'), pg_temp.id('una'), 'admin', NULL, NULL);
+VALUES (pg_temp.id('fak_a'), pg_temp.id('una'), 'admin', NULL, NULL);
 
 -- Counted over the two test faculties only, so rows of a seeded database do
 -- not matter.

@@ -19,11 +19,12 @@ SELECT id, institution_id FROM identity.user_account
 CREATE FUNCTION pg_temp.as_owner(p_sql text) RETURNS text
 LANGUAGE sql AS $$ SELECT pg_temp.ask_as('ductus_identity', 'anon', p_sql) $$;
 -- Counts stay inside the fixture's two institutions, so rows another suite left
--- on a shared stack never move them.
+-- on a shared stack never move them, and count teacher rows only: the
+-- fixture's administrators come from the operator procedure (DAN-525, 106).
 CREATE FUNCTION pg_temp.ours(p_institution uuid) RETURNS boolean
 LANGUAGE sql STABLE AS $$ SELECT p_institution IN (pg_temp.id('fak_a'), pg_temp.id('fak_b')) $$;
 CREATE FUNCTION pg_temp.events() RETURNS bigint
-LANGUAGE sql STABLE AS $$ SELECT count(*) FROM audit.teacher_role_event WHERE pg_temp.ours(institution_id) $$;
+LANGUAGE sql STABLE AS $$ SELECT count(*) FROM audit.teacher_role_event WHERE pg_temp.ours(institution_id) AND role = 'teacher' $$;
 -- The teacher role rows of a person, the one in force first.
 CREATE FUNCTION pg_temp.role_row(p_name text, p_nth integer DEFAULT 1) RETURNS uuid
 LANGUAGE sql STABLE AS $$
@@ -55,7 +56,7 @@ SELECT bag_eq(
   $$ SELECT polname::text, polroles::regrole[]::text FROM pg_policy WHERE polrelid = 'audit.teacher_role_event'::regclass $$,
   $$ VALUES ('teacher_role_event_owner', '{ductus_identity}') $$, 'the only policy is the owner''s');
 SELECT columns_are('audit', 'teacher_role_event', ARRAY[
-  'id', 'institution_id', 'role_id', 'teacher_id', 'role', 'kind', 'actor_id', 'occurred_at'
+  'id', 'institution_id', 'role_id', 'teacher_id', 'role', 'kind', 'actor_id', 'request_ref', 'occurred_at'
 ], 'the table has exactly the listed columns: no session, no address, no reason');
 SELECT col_is_unique('audit', 'teacher_role_event', ARRAY['role_id', 'kind'], 'one row per role row and kind');
 SELECT fk_ok('audit', 'teacher_role_event', ARRAY['role_id', 'institution_id', 'teacher_id', 'role'],
@@ -189,16 +190,23 @@ FROM (VALUES
 ) AS v (n, kind, code, why)
 ORDER BY v.n;
 SELECT is(left(pg_temp.as_owner(format($$ INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
-  VALUES (%s, %s, %s, %L, 'confirmed', %s, now()) RETURNING 'written' $$, v.inst, v.role_id, v.teacher, v.role, v.actor)), 6), v.code, v.why)
+  VALUES (%s, %s, %s, %L, %L, %s, now()) RETURNING 'written' $$, v.inst, v.role_id, v.teacher, v.role, v.kind, v.actor)), 6), v.code, v.why)
 FROM (VALUES
-  (1, '{fak_a}', '{vesna_role}', '{vesna}', 'teacher', '{lea}', '23503:', 'an actor of another institution is refused'),
-  (2, '{fak_a}', '{nobody}', '{vesna}', 'teacher', '{iva}', '23503:', 'a role row that does not exist is refused'),
-  (3, '{fak_a}', '{vesna_role}', '{marko}', 'teacher', '{iva}', '23503:', 'another teacher of the same institution is refused for Vesna''s role row'),
-  (4, '{fak_b}', '{vesna_role}', '{vesna}', 'teacher', '{lea}', '23503:', 'another institution is refused for Vesna''s role row'),
-  (5, '{fak_a}', '{iva_admin}', '{iva}', 'teacher', '{iva}', '23503:', 'an administrator role row is refused as a teacher role'),
-  (6, '{fak_a}', '{iva_admin}', '{iva}', 'admin', '{iva}', '23514:', 'a role other than teacher is refused')
-) AS v (n, inst, role_id, teacher, role, actor, code, why)
+  (1, '{fak_a}', '{vesna_role}', '{vesna}', 'teacher', 'confirmed', '{lea}', '23503:', 'an actor of another institution is refused'),
+  (2, '{fak_a}', '{nobody}', '{vesna}', 'teacher', 'confirmed', '{iva}', '23503:', 'a role row that does not exist is refused'),
+  (3, '{fak_a}', '{vesna_role}', '{marko}', 'teacher', 'confirmed', '{iva}', '23503:', 'another teacher of the same institution is refused for Vesna''s role row'),
+  (4, '{fak_b}', '{vesna_role}', '{vesna}', 'teacher', 'confirmed', '{lea}', '23503:', 'another institution is refused for Vesna''s role row'),
+  -- Iva's administrator row already has its confirmation from the operator
+  -- procedure (DAN-525), so the foreign key is probed with the other kind.
+  (5, '{fak_a}', '{iva_admin}', '{iva}', 'teacher', 'revoked', '{iva}', '23503:', 'an administrator role row is refused as a teacher role'),
+  -- The owner writes teacher rows only (DAN-525, QA on PR #1526), so the
+  -- check of an administrator row's origin is probed as the operator below.
+  (6, '{fak_a}', '{iva_admin}', '{iva}', 'admin', 'revoked', '{iva}', '42501:', 'the owner cannot write an administrator row at all')
+) AS v (n, inst, role_id, teacher, role, kind, actor, code, why)
 ORDER BY v.n;
+SELECT is(left(pg_temp.ask_as('ductus', 'anon', $$ INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
+  VALUES ({fak_a}, {iva_admin}, {iva}, 'admin', 'revoked', {iva}, now()) RETURNING 'written' $$), 6),
+  '23514:', 'an administrator row with an administrator as actor and no request is refused, for the operator too');
 SELECT is(pg_temp.events(), 5::bigint, 'no refused row was stored');
 
 -- Forced RLS is the protection, not only the missing grants.
