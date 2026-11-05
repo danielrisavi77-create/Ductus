@@ -98,11 +98,14 @@ beforeAll(async () => {
     if (people[name].eligible) {
       await admin.query("INSERT INTO identity.teacher_eligibility (user_id, institution_id) VALUES ($1, $2)", [id, faculty]);
     }
-    for (const role of people[name].roles as readonly string[]) await admin.query(
-      `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at, revoked_at)
-       VALUES ($1, $2, $3, CASE WHEN $4 THEN NULL ELSE now() END, CASE WHEN $5 THEN now() ELSE NULL END)`,
-      [faculty, id, role.replace(/[?-]$/, ""), role.endsWith("?"), role.endsWith("-")],
-    );
+    // DAN-525: an active administrator only through the operator procedure, on an invented request.
+    for (const role of people[name].roles as readonly string[]) await (role === "admin"
+      ? admin.query("SELECT institution.appoint_institution_admin($1, $2)", [id, `Zahtjev ${name}/2026`])
+      : admin.query(
+        `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at, revoked_at)
+         VALUES ($1, $2, $3, CASE WHEN $4 THEN NULL ELSE now() END, CASE WHEN $5 THEN now() ELSE NULL END)`,
+        [faculty, id, role.replace(/[?-]$/, ""), role.endsWith("?"), role.endsWith("-")],
+      ));
   }
   for (const [session, isClosed] of [[expired, false], [closed, true]] as const) await admin.query(
     `INSERT INTO identity.session (token_hash, user_id, institution_id, created_at, expires_at, closed_at, close_reason)

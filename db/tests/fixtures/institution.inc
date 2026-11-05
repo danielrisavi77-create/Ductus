@@ -73,10 +73,17 @@ INSERT INTO institution.institution_settings (institution_id, display_name, enro
 VALUES (pg_temp.id('fak_a'), 'Fakultet A (test)', 5, '15 minutes'),
        (pg_temp.id('fak_b'), 'Fakultet B (test)', 5, '15 minutes');
 
+-- DAN-525: administrators only through the operator procedure, on an invented request.
+DO $$
+BEGIN
+  PERFORM institution.appoint_institution_admin(p.id, 'Zahtjev ' || p.name || '/2026')
+  FROM person p WHERE p.name IN ('iva', 'lea');
+END
+$$;
+
 INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_by, confirmed_at)
 SELECT p.institution_id, p.id, r.role, pg_temp.id(r.confirmed_by), CASE WHEN r.confirmed THEN now() END
 FROM (VALUES
-  ('iva', 'admin', NULL, true), ('lea', 'admin', NULL, true),
   ('vesna', 'teacher', 'iva', true), ('marko', 'teacher', 'iva', true), ('petra', 'teacher', 'lea', true),
   ('nina', 'teacher', NULL, false)
 ) AS r (name, role, confirmed_by, confirmed)
