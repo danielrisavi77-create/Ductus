@@ -98,36 +98,54 @@ function called(n) {
   );
 }
 
-// The value an object literal or binding pattern destructures, if it is one.
+// The values an object literal or binding pattern destructures, or undefined
+// when it is not a pattern. A nested pattern takes the outer value and, when
+// that is undefined, its default, so both are sources
+// (`{ nested: { skip } = test } = {}`, `{ test: { skip } } = test`).
 function destructured(n) {
-  let p = n.parent;
-  // A nested pattern destructures the same source (`{ test: { skip } } = test`).
-  while (ts.isBindingElement(p) && p.name === n)
-    [n, p] = [p.parent, p.parent.parent];
-  while (
-    ts.isPropertyAssignment(p) ||
-    // A default (`{ opts = { skip: true } } = {}`) is options, not the pattern.
-    (ts.isShorthandPropertyAssignment(p) &&
-      p.objectAssignmentInitializer !== n) ||
-    ts.isArrayLiteralExpression(p) ||
-    ts.isSpreadElement(p) ||
-    ts.isSpreadAssignment(p) ||
-    ts.isObjectLiteralExpression(p) ||
-    isWrap(p)
-  )
-    [n, p] = [p, p.parent];
-  if (ts.isBinaryExpression(p) && p.left === n)
-    return p.operatorToken.kind === ts.SyntaxKind.EqualsToken ? p.right : null;
-  if (ts.isVariableDeclaration(p) && p.name === n) {
-    const loop = p.parent.parent;
-    if (ts.isForOfStatement(loop) || ts.isForInStatement(loop))
-      return loop.expression;
-    return p.initializer ?? null;
+  const values = [];
+  let pattern = false;
+  for (let p = n.parent; ; p = n.parent) {
+    if (ts.isBindingElement(p) && p.name === n) {
+      if (p.initializer) values.push(p.initializer);
+      n = p.parent;
+    } else if (
+      ts.isBinaryExpression(p) &&
+      p.left === n &&
+      p.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    ) {
+      values.push(p.right);
+      pattern = true;
+      n = p;
+    } else if (
+      ts.isPropertyAssignment(p) ||
+      // A default (`{ opts = { skip: true } } = {}`) is options, not the pattern.
+      (ts.isShorthandPropertyAssignment(p) &&
+        p.objectAssignmentInitializer !== n) ||
+      ts.isArrayLiteralExpression(p) ||
+      ts.isSpreadElement(p) ||
+      ts.isSpreadAssignment(p) ||
+      ts.isObjectLiteralExpression(p) ||
+      isWrap(p)
+    )
+      n = p;
+    else {
+      if (ts.isVariableDeclaration(p) && p.name === n) {
+        const loop = p.parent.parent;
+        if (ts.isForOfStatement(loop) || ts.isForInStatement(loop))
+          values.push(loop.expression);
+        else if (p.initializer) values.push(p.initializer);
+      } else if (
+        (ts.isForOfStatement(p) || ts.isForInStatement(p)) &&
+        p.initializer === n
+      )
+        values.push(p.expression);
+      else if (ts.isParameter(p) && p.name === n) {
+        if (p.initializer) values.push(p.initializer);
+      } else if (!pattern) return undefined;
+      return values;
+    }
   }
-  if ((ts.isForOfStatement(p) || ts.isForInStatement(p)) && p.initializer === n)
-    return p.expression;
-  if (ts.isParameter(p) && p.name === n) return p.initializer ?? null;
-  return undefined;
 }
 const fromRoot = (value) => !!value && ROOTS.has(rootName(value) ?? "");
 
@@ -151,12 +169,12 @@ export function scan(src, file = "a.test.mjs") {
         found.add(lineOf(keyOf(n)));
     }
     if (ts.isObjectLiteralExpression(n)) {
-      const value = destructured(n);
+      const values = destructured(n);
       for (const p of n.properties)
         if (p.name && OPTIONS.has(staticName(p.name) ?? ""))
-          if (value === undefined || fromRoot(value)) found.add(lineOf(p.name));
+          if (!values || values.some(fromRoot)) found.add(lineOf(p.name));
     }
-    if (ts.isObjectBindingPattern(n) && fromRoot(destructured(n)))
+    if (ts.isObjectBindingPattern(n) && destructured(n)?.some(fromRoot))
       for (const e of n.elements)
         if (OPTIONS.has(staticName(e.propertyName ?? e.name) ?? ""))
           found.add(lineOf(e));
@@ -290,6 +308,30 @@ const CASES = [
     "let opts; ({ opts = { skip: true } } = {});",
     "let opts; ({ opts = { timeout: 1 } } = {});",
   ],
+  // Review FAIL c.6647079464: a nested pattern also takes its default when the
+  // outer value is undefined, so both the default and the outer source count.
+  [
+    "const { nested: { skip } = test } = {};",
+    "const { nested: { skip } = cfg } = {};",
+  ],
+  [
+    "const { a: { b: { todo } = it } = {} } = {};",
+    "const { a: { b: { todo } = {} } = cfg } = {};",
+  ],
+  ["const [{ skip } = test] = [];", "const [{ skip } = cfg] = [];"],
+  [
+    "function f({ a: { only } = describe } = {}) { return only; }",
+    "function f({ a: { only } = opts } = {}) { return only; }",
+  ],
+  [
+    "for (const { a: { skip } = suite } of [{}]);",
+    "for (const { a: { skip } = cfg } of [{}]);",
+  ],
+  [
+    "let skip; ({ test: { skip } = {} } = test);",
+    "let skip; ({ test: { skip } = {} } = cfg);",
+  ],
+  ["test('a', { skip: true } || {});", "test('a', cfg || { timeout: 1 });"],
   // K4: names are compared cooked.
   ["t.sk\\u0069p();", "t.sk\\u0069pped();"],
   ["t.\\u{73}kip();", "t.\\u{73}kips();"],
@@ -377,6 +419,7 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
       'test("c", { todo: "r" }, () => {});',
       'test("d", (t) => { t.skip("r"); });',
       'skip("e", () => {});',
+      'const { n: { todo: td } = test } = {}; td("f", () => {});',
     ],
     "clean.test.mjs": [
       'import test from "node:test";',
@@ -403,7 +446,7 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
         scan(src).lines,
       ];
     }
-    assert.deepEqual(counts["marked.test.mjs"], ["4", "1", [1, 2, 3, 4, 5]]);
+    assert.deepEqual(counts["marked.test.mjs"], ["4", "2", [1, 2, 3, 4, 5, 7]]);
     assert.deepEqual(counts["clean.test.mjs"], ["0", "0", []]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
