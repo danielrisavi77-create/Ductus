@@ -8,9 +8,10 @@
 //
 // The compose path (stack:up, db:migrate, test:db) and CI are unchanged. The
 // same files run in the same order as `pnpm db:migrate`: db/local/migrator.sql,
-// dbmate up --strict as ductus_migrator, db/local/app-login.sql and
-// db/local/auth-login.sql. The provisioning files run on the local socket as
-// the cluster's own superuser (auth-login.sql refuses anything but a socket);
+// dbmate up --strict as ductus_migrator, db/local/app-login.sql,
+// db/local/worker-login.sql and db/local/auth-login.sql. The provisioning
+// files run on the local socket as the cluster's own superuser (app-login.sql
+// refuses TCP, worker-login.sql and auth-login.sql anything but a socket);
 // dbmate and pg_prove log in over loopback TCP as `ductus`, the superuser
 // compose makes. Only loopback hosts are accepted, and no PG*, PSQL* or DBMATE_*
 // variable of the caller reaches a child, so nothing here can aim at another
@@ -46,6 +47,7 @@ const RESERVED_DATABASE = new Set(["postgres", "template0", "template1"]);
 // The psql variables holding secrets are read from these child variables.
 export const BOOTSTRAP_PASSWORD_VAR = "DUCTUS_NATIVE_BOOTSTRAP_PASSWORD";
 export const AUTH_PASSWORD_VAR = "DUCTUS_NATIVE_AUTH_PASSWORD";
+export const WORKER_PASSWORD_VAR = "DUCTUS_NATIVE_WORKER_PASSWORD";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
 const PORT = /^[1-9][0-9]{0,4}$/;
 const SOCKET_DIR = /^\/[A-Za-z0-9._/-]*$/;
@@ -163,10 +165,11 @@ export function pgProveArgs(config) {
   return [...tcp(config), "--recurse", "--ext", ".sql", "db/tests"];
 }
 
-function authPassword(env) {
-  const given = env.DUCTUS_AUTH_LOCAL_PASSWORD;
+/** A local login password from `name`, or a random one per run when it is unset. */
+function localLoginPassword(env, name) {
+  const given = env[name];
   if (given === undefined || given === "") return randomBytes(24).toString("hex");
-  if (given.length < 16) throw new Error("DUCTUS_AUTH_LOCAL_PASSWORD must be at least 16 characters");
+  if (given.length < 16) throw new Error(`${name} must be at least 16 characters`);
   return given;
 }
 
@@ -177,7 +180,8 @@ function authPassword(env) {
  */
 export async function up({ env, run, isRoot, store = fileStore(passwordFile(env)), wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), log = console.log }) {
   const config = nativeConfig(env);
-  const auth = authPassword(env);
+  const auth = localLoginPassword(env, "DUCTUS_AUTH_LOCAL_PASSWORD");
+  const worker = localLoginPassword(env, "DUCTUS_WORKER_LOCAL_PASSWORD");
   const password = loginPassword(env, store, { create: true });
   const cenv = childEnv(env, password);
   const ready = () => run("pg_isready", ["-q", "-h", config.host, "-p", config.port], { env: cenv });
@@ -208,6 +212,11 @@ export async function up({ env, run, isRoot, store = fileStore(passwordFile(env)
     env: { ...cenv, DATABASE_URL: dbmateUrl(config, password) },
   });
   await step("db/local/app-login.sql", ...admin(config.database), { stdinFile: join(ROOT, "db/local/app-login.sql") });
+  await step("db/local/worker-login.sql", ...admin(config.database), {
+    input: `\\getenv worker_password ${WORKER_PASSWORD_VAR}\n`,
+    stdinFile: join(ROOT, "db/local/worker-login.sql"),
+    env: { ...cenv, [WORKER_PASSWORD_VAR]: worker },
+  });
   await step("db/local/auth-login.sql", ...admin(config.database), {
     input: `\\getenv auth_password ${AUTH_PASSWORD_VAR}\n`,
     stdinFile: join(ROOT, "db/local/auth-login.sql"),
