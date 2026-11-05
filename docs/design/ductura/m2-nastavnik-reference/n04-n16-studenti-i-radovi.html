@@ -20,7 +20,7 @@
     <header>
       <div class="ref-tag">Referenca paketa 4 · DAN-567 · N-04, N-16 · prijedlog slike · nema prototipa, crtano po ugovoru iz EKRANI.md · podaci su izmišljeni</div>
       <h1>Studenti i radovi</h1>
-      <p>Popis studenata kolegija (N-04) i radovi koje mentorirate (N-16). Popis je abecedan, bez sortiranja po mjerama i bez oznaka koje procjenjuju radove (PRODUCT §5). Stanje rada piše se riječima u prvoj rečenici retka. Redoslijed tipkovnice N-04: 1 naslov, 2 filtar grupe, 3 redci redom (redak otvara pojedinosti studenta; zasebne radnje „Otvori” nema). N-16: 1 naslov, 2 redci redom, 3 „Otvori” u svakom retku.</p>
+      <p>Popis studenata kolegija (N-04) i radovi koje mentorirate (N-16). Popis je abecedan, bez sortiranja po mjerama i bez oznaka koje procjenjuju radove (PRODUCT §5). Stanje rada piše se riječima u prvoj rečenici retka. Redoslijed tipkovnice N-04: 1 naslov, 2 filtar grupe, 3 redci redom (svaki redak je poveznica na pojedinosti studenta s vidljivim fokusom; zasebne radnje „Otvori” nema). N-16: 1 naslov, 2 redci redom, 3 „Otvori” u svakom retku.</p>
     </header>
 
     <section class="state" aria-labelledby="h4-pop">
@@ -31,12 +31,13 @@
         <button class="btn secondary" type="button" aria-pressed="false">Grupa A (22)</button>
         <button class="btn secondary" type="button" aria-pressed="false">Grupa B (21)</button>
       </div>
-      <div class="list">
-        <div class="item"><div><span class="who">Ana Ogledić</span><div class="facts">Rad je u tijeku. Zadnja izmjena prije 2 sata. Grupa A.</div></div></div>
-        <div class="item"><div><span class="who">Lana Probić</span><div class="facts">Rad nije započet. Grupa A.</div></div></div>
-        <div class="item"><div><span class="who">Marko Primjerić</span><div class="facts">Rad je poslan na pregled. Zadnja izmjena jučer u 18:40. Grupa B.</div></div></div>
-        <div class="item"><div><span class="who">Petar Uzorak</span><div class="facts">Rad je predan. Predano 3. 12. 2026. u 21:05. Grupa B.</div></div></div>
-      </div>
+      <ul class="list rows" aria-label="Studenti kolegija, abecedno">
+        <li><a class="item item-link" href="#"><span><span class="who">Ana Ogledić</span><span class="facts">Rad je u tijeku. Zadnja izmjena prije 2 sata. Grupa A.</span></span></a></li>
+        <li><a class="item item-link ring" href="#"><span><span class="who">Lana Probić</span><span class="facts">Rad nije započet. Grupa A.</span></span></a></li>
+        <li><a class="item item-link" href="#"><span><span class="who">Marko Primjerić</span><span class="facts">Rad je poslan na pregled. Zadnja izmjena jučer u 18:40. Grupa B.</span></span></a></li>
+        <li><a class="item item-link" href="#"><span><span class="who">Petar Uzorak</span><span class="facts">Rad je predan. Predano 3. 12. 2026. u 21:05. Grupa B.</span></span></a></li>
+      </ul>
+      <p class="meta">Svaki redak je poveznica na pojedinosti studenta i dobiva fokus tipkovnicom. Redak „Lana Probić” prikazan je s vidljivim fokusom.</p>
     </section>
 
     <section class="state" aria-labelledby="h4-sg">

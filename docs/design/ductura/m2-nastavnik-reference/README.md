@@ -22,7 +22,7 @@ EQ1: raspored se preuzima iz starih `.dc.html` prototipa, a boje ne. **Ekrani be
 |---|---|
 | `n01-moji-kolegiji.html` | N-01: popunjeno, prazno, učitavanje, greška, mobitel |
 | `n02-n03-kolegij-i-zadatak.html` | N-02: prazno, valjanost obrasca, učitavanje, greška, mobitel. N-03: prazno (korak 1), rokovi i opseg (korak 2), koraci čarobnjaka, dopuštena uporaba alata, pregled, učitavanje, greška, mobitel |
-| `n04-n16-studenti-i-radovi.html` | N-04: popunjeno, seminarska grupa. N-04 i N-16: prazno, učitavanje, greška (uključujući prekinut prikaz uživo), mobitel. N-16: popunjeno |
+| `n04-n16-studenti-i-radovi.html` | N-04: popunjeno (svaki redak je poveznica na pojedinosti studenta, jedan redak prikazan s vidljivim fokusom), seminarska grupa. N-04 i N-16: prazno, učitavanje, greška (uključujući prekinut prikaz uživo), mobitel. N-16: popunjeno |
 | `reference.css` | tokeni „papir i grafit” (DESIGN-SYSTEM §3) i fontovi iz `app/fonts` |
 | `snimke/` | PNG snimke i `SHA256SUMS` |
 
