@@ -14,7 +14,7 @@ EQ1: raspored se preuzima iz starih `.dc.html` prototipa, a boje ne. **Ekrani be
 | N-02 Novi kolegij i zadatak | DJELOMIČNO: `demo-tok-v2.dc.html`, zaslon 2 | raspored obrasca iz prototipa, prebojan; stanja valjanosti i greške po ugovoru |
 | N-03 Čarobnjak zadatka | DJELOMIČNO: isti zaslon (uporaba alata, „Kako vidi student”) | popis alata i bočna kartica iz prototipa; četiri koraka i pregled po ugovoru |
 | N-04 Popis studenata | NEMA | po ugovoru; seminarska grupa po M2.7 |
-| N-16 Radovi uz mentora (podaci) | NEMA | po ugovoru; mentor vidi rad uživo (D-142) |
+| N-16 Radovi uz mentora (podaci) | NEMA | po ugovoru; mentor vidi rad uživo do predaje (D-142), a predani rad kao točno predanu reviziju (D-169) |
 
 ## Sadržaj
 
@@ -28,7 +28,8 @@ EQ1: raspored se preuzima iz starih `.dc.html` prototipa, a boje ne. **Ekrani be
 
 ## Pravila koja slika drži
 
-- Mentor vidi rad uživo (D-142). Nijedan tekst ne tvrdi da mentor vidi rad tek nakon slanja; popis N-16 označava prikaz uživo i prikazuje prekid uživo kao grešku.
+- Mentor vidi rad uživo (D-142). Nijedan tekst ne tvrdi da mentor vidi rad tek nakon slanja; popis N-16 označava prikaz uživo i prikazuje prekid uživo kao grešku. Za predani rad „Otvori predanu reviziju” vodi na točno predanu reviziju, ne na prikaz uživo (D-169).
+- N-16 ne prikazuje vrijeme zadnje izmjene ni oznaku da student trenutačno piše: postojeći čitač N-16 te podatke ne daje (D-202).
 - Popis studenata je abecedan, bez mjera, bez sortiranja po brojevima i bez oznaka koje procjenjuju radove. Stanje rada je u prvoj rečenici retka (PRODUCT §4 t. 4).
 - Uporaba alata: pravilo kolegija polazi od pravila fakulteta i nastavnik ga smije pooštriti i ublažiti (D-175); pravilo zadatka smije samo suziti pravilo kolegija (D-52); fiksni popis zabranjenog ne mijenja se. Tekst stavki je sažetak, u aplikaciji ide doslovno iz Pravilnika.
 - Greška čitanja nikad se ne prikazuje kao prazan popis ni kao nule. Prekinuta veza nakon objave zadatka je „ishod nije poznat” s radnjom „Provjeri stanje”.
