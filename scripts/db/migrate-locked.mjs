@@ -14,7 +14,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import pg from "pg";
+import { connectLockClient } from "../../src/server/db/migration-lock.ts";
 
 /** The one lock key of the Ductus migration runner (a fixed bigint). */
 export const LOCK_KEY = "4207120261031";
@@ -108,23 +108,6 @@ export async function runLocked({ connect, start, heartbeatMs = 5000, lockTimeou
   return code === 0 ? 0 : code || 1;
 }
 
-/** Opens the lock connection, retrying while the server starts (as dbmate --wait does). */
-async function connectWithWait(url, { attempts = 60, delayMs = 1000 } = {}) {
-  const lockUrl = new URL(url);
-  lockUrl.searchParams.delete("role");
-  for (let attempt = 1; ; attempt += 1) {
-    const client = new pg.Client({ connectionString: lockUrl.href, keepAlive: true, application_name: "ductus-migrate-lock" });
-    try {
-      await client.connect();
-      return client;
-    } catch (error) {
-      await client.end().catch(() => {});
-      if (attempt >= attempts) throw error;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-  }
-}
-
 async function main(argv) {
   if (argv.length !== 2 || argv[0] !== "--url" || !argv[1]) {
     console.error("usage: migrate-locked.mjs --url <postgres-url>");
@@ -136,7 +119,7 @@ async function main(argv) {
   process.on("SIGINT", forward);
   process.on("SIGTERM", forward);
   return runLocked({
-    connect: () => connectWithWait(url),
+    connect: () => connectLockClient(url),
     start: () => {
       child = spawn(process.execPath, dbmateArgs(url), { cwd: ROOT, stdio: "inherit", windowsHide: true });
       return child;

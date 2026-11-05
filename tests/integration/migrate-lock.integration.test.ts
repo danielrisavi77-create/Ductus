@@ -4,6 +4,7 @@ import pg from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { LOCK_KEY, runLocked, type LockedChild } from "../../scripts/db/migrate-locked.mjs";
+import { connectLockClient } from "../../src/server/db/migration-lock";
 
 // D-91 (3), DAN-71: the migration runner's advisory lock against the compose
 // PostgreSQL (pnpm stack:up, pnpm db:migrate). A fake child stands in for
@@ -53,7 +54,11 @@ describe("migration lock (D-91 (3))", () => {
   it("holds the advisory lock for the whole run and releases it afterwards", async () => {
     const child = new FakeDbmate();
     let started = false;
-    const done = runLocked({ connect: lockClient, start: () => ((started = true), child), log: () => {} });
+    // The runner's own connection, with dbmate's role parameter on the URL.
+    const url = new URL(ADMIN_URL);
+    url.searchParams.set("role", "ductus_migrator");
+    const connect = () => connectLockClient(url.href, { attempts: 1 });
+    const done = runLocked({ connect, start: () => ((started = true), child), log: () => {} });
     await until(() => started);
     expect(await holders()).toHaveLength(1);
     child.exit(0);
