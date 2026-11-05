@@ -45,13 +45,19 @@ LANGUAGE sql STABLE AS $$
    WHERE e.teacher_id = pg_temp.id(p_name) AND e.role = 'admin'
 $$;
 
--- 1. Catalogue: definer procedures, and EXECUTE for no login role at all.
+-- 1. Catalogue: the procedures run as their caller, EXECUTE for no login
+-- role at all, and the owner's policy on the trail admits teacher rows only.
 SELECT is(
   (SELECT string_agg(p.proname || ' ' || p.prosecdef::text, ', ' ORDER BY p.proname)
      FROM pg_proc p WHERE p.pronamespace = 'institution'::regnamespace
       AND p.proname IN ('appoint_institution_admin', 'revoke_institution_admin', 'require_admin_request')),
-  'appoint_institution_admin true, require_admin_request false, revoke_institution_admin true',
-  'the two procedures run as the owner; the shared check runs as its caller');
+  'appoint_institution_admin false, require_admin_request false, revoke_institution_admin false',
+  'the procedures and the shared check run as their caller, not as the owner (QA, PR #1526)');
+SELECT is(
+  (SELECT string_agg(p.policyname || ' ' || p.cmd || ' ' || array_to_string(p.roles, ',') || ' ' || p.with_check, '; ')
+     FROM pg_policies p WHERE p.schemaname = 'audit' AND p.tablename = 'teacher_role_event'),
+  'teacher_role_event_owner ALL ductus_identity (role = ''teacher''::text)',
+  'the owner writes only teacher rows of the trail');
 SELECT is_empty(
   $$ SELECT r.rolname || ' ' || f.fn
        FROM pg_roles r,
@@ -187,6 +193,23 @@ SELECT is(pg_temp.as_owner($$ UPDATE institution.institution_role SET confirmed_
 SELECT is(pg_temp.admin_rows('dora'), 'false false', 'Dora keeps only her pending row');
 SELECT is((SELECT role || ' ' || (confirmed_at IS NOT NULL)::text FROM institution.institution_role WHERE user_id = pg_temp.id('nina')),
   'teacher false', 'and Nina only her pending teacher row');
+-- Nor by writing the operator's 'confirmed' row beside it: the row and the
+-- event in one statement share an xmin, so only the trail's policy refuses
+-- this, and the owner calling the procedure gets no further (QA, PR #1526).
+SELECT is(pg_temp.as_owner($$
+  WITH appointed AS (
+    INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at)
+    VALUES ({fak_b}, {tomo}, 'admin', now()) RETURNING id, institution_id, user_id, role)
+  INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, request_ref, occurred_at)
+  SELECT institution_id, id, user_id, role, 'confirmed', NULL, 'Zahtjev 14/2026', now() FROM appointed
+  RETURNING 'written' $$),
+  '42501: new row violates row-level security policy for table "teacher_role_event"',
+  'the owner cannot write an administrator row together with an operator''s confirmation');
+SELECT is(pg_temp.as_owner($$ SELECT institution.appoint_institution_admin({tomo}, 'Zahtjev 15/2026')::text $$),
+  '42501: new row violates row-level security policy for table "teacher_role_event"',
+  'nor appoint through the procedure, which runs with the owner''s rights then');
+SELECT is(pg_temp.admin_rows('tomo'), '', 'Tomo has no administrator row');
+SELECT is(pg_temp.trail('tomo'), NULL, 'and no event in the trail');
 
 -- 7. The last administrator: outside the procedure the owner cannot revoke
 -- the only one of fak_b, but may revoke one of several; the operator may
@@ -202,7 +225,22 @@ SELECT is(left(pg_temp.as_owner($$ UPDATE institution.institution_role SET role 
 SELECT is(pg_temp.as_owner($$ UPDATE institution.institution_role SET confirmed_at = NULL
   WHERE user_id = {lea} AND role = 'admin' AND revoked_at IS NULL RETURNING 'written' $$),
   'ZD409: last administrator', 'nor made pending again');
+-- Nor revoked together with an operator's 'revoked' row, which would let the
+-- last-administrator check through (QA, PR #1526).
+SELECT is(pg_temp.as_owner($$
+  WITH revoked AS (
+    UPDATE institution.institution_role SET revoked_at = now()
+     WHERE user_id = {lea} AND role = 'admin' AND revoked_at IS NULL RETURNING id, institution_id, user_id, role)
+  INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, request_ref, occurred_at)
+  SELECT institution_id, id, user_id, role, 'revoked', NULL, 'Zahtjev 16/2026', now() FROM revoked
+  RETURNING 'written' $$),
+  '42501: new row violates row-level security policy for table "teacher_role_event"',
+  'the owner cannot revoke the last administrator together with an operator''s revocation');
+SELECT is(pg_temp.as_owner($$ SELECT institution.revoke_institution_admin({lea}, 'Zahtjev 17/2026')::text $$),
+  '42501: new row violates row-level security policy for table "teacher_role_event"',
+  'nor through the procedure');
 SELECT is(pg_temp.admin_rows('lea'), 'true false', 'Lea is still the administrator of fak_b');
+SELECT is(pg_temp.trail('lea'), 'confirmed fak_b Zahtjev lea/2026 true', 'with only her appointment in the trail');
 SELECT is(pg_temp.as_owner($$ UPDATE institution.institution_role SET revoked_at = now()
   WHERE user_id = {vesna} AND role = 'admin' AND revoked_at IS NULL RETURNING 'written' $$),
   'written', 'with Iva still in office, Vesna''s row can be closed without the procedure');

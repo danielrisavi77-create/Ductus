@@ -199,9 +199,14 @@ FROM (VALUES
   -- Iva's administrator row already has its confirmation from the operator
   -- procedure (DAN-525), so the foreign key is probed with the other kind.
   (5, '{fak_a}', '{iva_admin}', '{iva}', 'teacher', 'revoked', '{iva}', '23503:', 'an administrator role row is refused as a teacher role'),
-  (6, '{fak_a}', '{iva_admin}', '{iva}', 'admin', 'revoked', '{iva}', '23514:', 'an administrator row with an administrator as actor and no request is refused')
+  -- The owner writes teacher rows only (DAN-525, QA on PR #1526), so the
+  -- check of an administrator row's origin is probed as the operator below.
+  (6, '{fak_a}', '{iva_admin}', '{iva}', 'admin', 'revoked', '{iva}', '42501:', 'the owner cannot write an administrator row at all')
 ) AS v (n, inst, role_id, teacher, role, kind, actor, code, why)
 ORDER BY v.n;
+SELECT is(left(pg_temp.ask_as('ductus', 'anon', $$ INSERT INTO audit.teacher_role_event (institution_id, role_id, teacher_id, role, kind, actor_id, occurred_at)
+  VALUES ({fak_a}, {iva_admin}, {iva}, 'admin', 'revoked', {iva}, now()) RETURNING 'written' $$), 6),
+  '23514:', 'an administrator row with an administrator as actor and no request is refused, for the operator too');
 SELECT is(pg_temp.events(), 5::bigint, 'no refused row was stored');
 
 -- Forced RLS is the protection, not only the missing grants.

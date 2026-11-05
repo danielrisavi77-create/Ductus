@@ -11,6 +11,13 @@
 --   request (a register number, never a name) and no actor, since the
 --   operator is not a user of the institution. A call that changes nothing
 --   writes nothing and returns false.
+-- - Only the operator writes an administrator row of the trail. Both
+--   procedures run with the rights of their caller (SECURITY INVOKER), and the
+--   policy of the trail's owner, ductus_identity, admits only teacher rows, so
+--   neither the owner, nor a function it owns, nor the owner calling the
+--   procedure can write one. An administrator row of the trail therefore
+--   comes from a role the policy does not bind (today the superuser operator);
+--   the checks below rely on that.
 -- - A deferred check refuses to commit an active confirmed administrator row
 --   that the procedure did not appoint: confirm_teacher_role, a direct write
 --   or an un-revoke cannot make one.
@@ -57,6 +64,11 @@ ALTER TABLE audit.teacher_role_event ADD CONSTRAINT teacher_role_event_origin_ch
 ALTER TABLE audit.teacher_role_event ADD CONSTRAINT teacher_role_event_request_ref_check
   CHECK (request_ref IS NULL OR (request_ref = btrim(request_ref) AND institution.is_plain_label(request_ref)));
 
+-- The trail is under FORCE ROW LEVEL SECURITY, so this binds its owner too:
+-- the owner and the functions it owns (confirm_teacher_role and the teacher
+-- revocation) write teacher rows only.
+ALTER POLICY teacher_role_event_owner ON audit.teacher_role_event WITH CHECK (role = 'teacher');
+
 -- Shared by both procedures: returns the institution of an existing user,
 -- whose row stays as read until commit, once the reference is a plain label
 -- without surrounding spaces.
@@ -91,7 +103,7 @@ $$;
 -- the person is appointed on a new row.
 CREATE FUNCTION institution.appoint_institution_admin(p_user_id uuid, p_request_ref text)
 RETURNS boolean
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = ''
 AS $$
 DECLARE
   v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
@@ -122,7 +134,7 @@ $$;
 -- Operator only; it may revoke the last administrator.
 CREATE FUNCTION institution.revoke_institution_admin(p_user_id uuid, p_request_ref text)
 RETURNS boolean
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = ''
 AS $$
 DECLARE
   v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
@@ -144,7 +156,8 @@ END
 $$;
 
 -- At commit the row is read again: an active confirmed administrator needs
--- the procedure's 'confirmed' row written together with the row as it now
+-- the procedure's 'confirmed' row (only the operator writes one, see the
+-- policy above) written together with the row as it now
 -- stands, no 'revoked' row, and must not be a revoked row made active again.
 -- The procedure writes the row and its 'confirmed' row in one statement, so
 -- both carry the same transaction id (xmin), in a subtransaction too. Any
@@ -245,6 +258,7 @@ DROP FUNCTION institution.check_admin_appointment();
 DROP FUNCTION institution.revoke_institution_admin(uuid, text);
 DROP FUNCTION institution.appoint_institution_admin(uuid, text);
 DROP FUNCTION institution.require_admin_request(uuid, text);
+ALTER POLICY teacher_role_event_owner ON audit.teacher_role_event WITH CHECK (true);
 ALTER TABLE audit.teacher_role_event DROP CONSTRAINT teacher_role_event_request_ref_check;
 ALTER TABLE audit.teacher_role_event DROP CONSTRAINT teacher_role_event_origin_check;
 ALTER TABLE audit.teacher_role_event DROP CONSTRAINT teacher_role_event_role_check;

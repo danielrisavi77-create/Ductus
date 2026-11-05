@@ -210,8 +210,8 @@ SELECT bag_eq(
     'check_rule_version_event() definer',
     'publish_faculty_rule_version(p_work_type text, p_expected_version integer, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean) definer app',
     'require_admin_request(p_user_id uuid, p_request_ref text)',
-    'appoint_institution_admin(p_user_id uuid, p_request_ref text) definer',
-    'revoke_institution_admin(p_user_id uuid, p_request_ref text) definer',
+    'appoint_institution_admin(p_user_id uuid, p_request_ref text)',
+    'revoke_institution_admin(p_user_id uuid, p_request_ref text)',
     'check_admin_appointment() definer',
     'check_last_admin() definer'
   ],

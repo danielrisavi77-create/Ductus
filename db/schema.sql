@@ -3337,7 +3337,7 @@ $$;
 --
 
 CREATE FUNCTION institution.appoint_institution_admin(p_user_id uuid, p_request_ref text) RETURNS boolean
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 DECLARE
@@ -4913,7 +4913,7 @@ $$;
 --
 
 CREATE FUNCTION institution.revoke_institution_admin(p_user_id uuid, p_request_ref text) RETURNS boolean
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 DECLARE
@@ -8862,7 +8862,7 @@ ALTER TABLE audit.teacher_role_event ENABLE ROW LEVEL SECURITY;
 -- Name: teacher_role_event teacher_role_event_owner; Type: POLICY; Schema: audit; Owner: -
 --
 
-CREATE POLICY teacher_role_event_owner ON audit.teacher_role_event TO ductus_identity USING (true) WITH CHECK (true);
+CREATE POLICY teacher_role_event_owner ON audit.teacher_role_event TO ductus_identity USING (true) WITH CHECK ((role = 'teacher'::text));
 
 
 --
