@@ -188,6 +188,59 @@ describe("falsification pairs: the record cannot tell these apart (#384 30, 31)"
     expect(new Set(summaries.map((summary) => canonicalizeJcs(summary))).size).toBe(1);
     expect(summaries[0].pastes).toMatchObject({ listed: [], smallerCount: 0 });
   });
+
+  it("pasting one's notes and pasting external AI text keep the same unobserved origin (#55)", async () => {
+    // The source outside Ductus is deliberately only a fixture label, never
+    // evidence. Both documents contain the same observed clipboard events.
+    const observed = [minuteSegment("10:00", [pasted("L".repeat(250)), pasted("ipsum")])];
+    const results = await Promise.all(["own-notes", "external-ai"].map(async (documentId) =>
+      projectProcessSummary({ ...(await buildPackage(observed, documentId)), thresholds: THRESHOLDS }),
+    ));
+    for (const result of results) {
+      // Equality alone would also accept two equally judgemental summaries.
+      expect(result).toEqual({
+        ok: true,
+        summary: {
+          summaryFormat: PROCESS_SUMMARY_FORMAT_V1,
+          sessions: { evidenceKind: "observed", breakAboveMinutes: 30, count: 1,
+            items: [{ from: at("10:00"), to: at("10:00") }] },
+          pastes: { evidenceKind: "observed", listedAboveCharacters: 200,
+            listed: [{ at: { from: at("10:00"), to: at("10:00") }, characters: 250, origin: "not_observed" }],
+            smallerCount: 1 },
+          gaps: { evidenceKind: "observed", items: [] },
+          recordState: "complete",
+        },
+      });
+    }
+    expect(canonicalizeJcs(results[0])).toBe(canonicalizeJcs(results[1]));
+  });
+
+  it("an accidental outage and deliberate offline writing never reveal the unobserved reason (#55)", async () => {
+    // A time interval alone is not a gap. With an actual sequence gap, both
+    // histories must expose the same discontinuity without inventing a cause.
+    for (const skipEvents of [0, 2]) {
+      const observed = [minuteSegment("10:00"), { ...minuteSegment("12:00"), skipEvents }];
+      const results = await Promise.all(["outage", "deliberate-offline"].map(async (documentId) =>
+        projectProcessSummary({ ...(await buildPackage(observed, documentId)), thresholds: THRESHOLDS }),
+      ));
+      for (const result of results) {
+        expect(result).toEqual({
+          ok: true,
+          summary: {
+            summaryFormat: PROCESS_SUMMARY_FORMAT_V1,
+            sessions: { evidenceKind: "observed", breakAboveMinutes: 30, count: 2,
+              items: [{ from: at("10:00"), to: at("10:00") }, { from: at("12:00"), to: at("12:00") }] },
+            pastes: { evidenceKind: "observed", listedAboveCharacters: 200, listed: [], smallerCount: 0 },
+            gaps: { evidenceKind: "observed", items: skipEvents === 0 ? [] : [
+              { previousEndedAt: at("10:00"), nextStartedAt: at("12:00") },
+            ] },
+            recordState: skipEvents === 0 ? "complete" : "has_gaps",
+          },
+        });
+      }
+      expect(canonicalizeJcs(results[0])).toBe(canonicalizeJcs(results[1]));
+    }
+  });
 });
 
 describe("sessions by P-01 (#384 D)", () => {
