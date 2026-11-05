@@ -151,6 +151,7 @@ Vlasnik je 28. 10. 2026. odlučio sva proturječja iz v1.0 (#960 c.6469934229):
 ## 9. Veza s drugim dokumentima
 
 - Ekrani i rute: `docs/design/ductura/INTEGRACIJA.md`; Archivum ekrani: #923.
+- Mapa ekrana, status referenci i redoslijed crtanja: `docs/design/EKRANI.md`.
 - Funkcionalni tokovi i Rječnik: `docs/PRODUCT.md`.
 - Vizualna provjera PR-ova: D-183 (#949) i `docs/SESSIONS.md` §6 (#959).
 
