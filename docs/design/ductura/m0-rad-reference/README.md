@@ -12,7 +12,7 @@ Paket 2 iz plana dizajna: radni prostor studenta (Z-01) s editorom (S-10), tema 
 | Stranica | Sadržaj |
 |---|---|
 | `radni-prostor.html` | Z-01 i S-10 zadano: ljuska, naslovi u radu, dvije trake alata, bijeli list, bočni panel s karticama, traka stanja; otvoreni izbornici Umetni, Prikaz i Više; kartica Struktura |
-| `stanja.html` | sprema se, spremljeno na poslužitelju, bez mreže, sukob, potreban oporavak, druga kartica, fokus, tamni list, predan rad, dvije odjave |
+| `stanja.html` | sprema se, spremljeno na poslužitelju, bez mreže, sukob, potreban oporavak, ne sprema se na uređaj, druga kartica, fokus, tamni list, predan rad, dvije odjave |
 
 Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`: Playwright Chromium, cijela stranica, DPR 1, nakon `document.fonts.ready`, bez vodoravnog pomicanja na obje širine. Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SHA256SUMS`.
 

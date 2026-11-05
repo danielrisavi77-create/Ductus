@@ -47,6 +47,7 @@ Vlasnik, 5. 11. 2026. (#87 c.6645361793): „editor mora imati sve funckije koje
 | Vodič | M5.12 | RP Više |
 | Obavijest o praćenju | PRODUCT §5 | RP Više |
 | Stanja spremanja: Spremam lokalno, Spremljeno na uređaju, Sinkroniziram, Spremljeno na poslužitelju, Sukob, Potreban oporavak | `src/domain/sync/labels.ts`, M3 | ST stanja 1 do 5; RP traka stanja |
+| Ne sprema se na uređaj: upozorenje tijekom pisanja i Izvezi tekst (nema prostora, pohrana nedostupna) | #1333, `messages.hr.ts` (`failureQuota`, `failureUnavailable`), `m3-reference/s10-stanja-spremanja.html` stanja 2a do 2c | ST stanje 5b |
 | Bez mreže | Z-11, `m3-reference` | ST stanje 3 |
 | Pisanje u drugoj kartici: „Dokument je otvoren u drugoj kartici.” | Z-11, `m3-reference`, `labels.ts` (`MULTI_TAB_BLOCKED_MESSAGE`) | ST stanje 6 |
 | Izvezi tekst, Otvori raniji tekst | #1333, #711 | ST stanja 4, 5 i 11 |
