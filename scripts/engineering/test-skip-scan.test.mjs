@@ -13,7 +13,9 @@
 // - `skip`, `todo` or `only` imported from node:test, or destructured from
 //   `describe`, `it`, `test` or `suite`.
 // Names are compared after escapes are cooked (`t.sk\u0069p`, `t["sk\ip"]`).
-// A file that does not parse is an error, never clean. Out of reach: names
+// A file that does not parse is an error, never clean. The scan may be
+// conservative: a rare valid form may be reported and fail CI loudly, but a
+// marker that node:test applies is never passed silently. Out of reach: names
 // built at run time (`t[name]`), a method passed on uncalled (`run(t.skip)`),
 // options taken from a class instance or JSON, and destructuring from the test
 // function under another name (`const { skip } = await import("node:test")`).
@@ -52,6 +54,10 @@ const ALLOWED = [
   [
     "scripts/engineering/safety-net-wrapper.test.mjs",
     'return t.skip("bash not found; run on Linux CI or install Git Bash");',
+  ],
+  [
+    "scripts/engineering/safety-net-wrapper.test.mjs",
+    'return t.skip("mkfifo is Linux-only here; this case runs on Linux CI");',
   ],
 ];
 
@@ -318,7 +324,8 @@ const CASES = [
   ["class A { m() { t.skip(); } }", "class A { class\nm() { let skip; } }"],
   [
     "new\nclass { m(t) { t.skip(); } }",
-    "class A {\n  new\n  class\n  m() {}\n}",
+    // Review FAIL c.6626652086: a field `new` ended by ASI, then a field `class`.
+    "class A {\n  new\n  class\n  m() { let skip; skip = true; }\n}",
     2,
   ],
 ];
