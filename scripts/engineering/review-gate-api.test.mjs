@@ -248,3 +248,146 @@ test("a named head that is not on the path still walks to the PR's own commit (F
   assert.deepEqual([...carried], [chainSha(1)]);
   assert.equal(commitCalls(calls), 5);
 });
+// DAN-664 (#1551): a transient 5xx or network error is retried inside the same
+// limits; a 4xx, an abort or a timeout never is; the error names the call and
+// never the token. Fake fetch only; `retryDelayMs` keeps the backoff short.
+const secret = "ghs_SECRETtoken0123456789";
+const reply = (status, value = { ok: status }) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => value,
+  text: async () => `body ${status}`,
+});
+const scripted = (steps) => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ path: url.replace("https://api.test", ""), init });
+    const step = steps[Math.min(calls.length, steps.length) - 1];
+    if (step instanceof Error) throw step;
+    return reply(step);
+  };
+  return { fetchImpl, calls };
+};
+const retryApi = (fetchImpl, extra = {}) =>
+  createApi({ fetchImpl, baseUrl: "https://api.test", token: secret, timeoutMs: 1000, retryDelayMs: 5, ...extra });
+const networkError = () => new TypeError("fetch failed");
+const noToken = (error) => !String(error.message).includes(secret) && !/authorization|bearer/i.test(error.message);
+
+for (const [name, steps, calls] of [
+  ["500 then 200", [500, 200], 2],
+  ["502 then 200", [502, 200], 2],
+  ["503 then 200", [503, 200], 2],
+  ["504 then 200", [504, 200], 2],
+  ["500, 503 then 200", [500, 503, 200], 3],
+  ["a network error then 200", [networkError(), 200], 2],
+  ["a network error, 502 then 200", [networkError(), 502, 200], 3],
+]) {
+  test(`a transient failure is retried: ${name} (DAN-664)`, async () => {
+    const { fetchImpl, calls: seen } = scripted(steps);
+    assert.deepEqual(await retryApi(fetchImpl)("/repos/o/r/pulls/1"), { ok: 200 });
+    assert.equal(seen.length, calls);
+  });
+}
+
+test("a 204 after a 5xx returns null (DAN-664)", async () => {
+  const { fetchImpl, calls } = scripted([503, 204]);
+  assert.equal(await retryApi(fetchImpl)("/repos/o/r/x"), null);
+  assert.equal(calls.length, 2);
+});
+
+for (const [name, steps, pattern] of [
+  ["500", [500], /^GitHub API GET \/repos\/o\/r\/pulls\/1\?page=2 500: body 500$/],
+  ["502", [502], /^GitHub API GET \/repos\/o\/r\/pulls\/1\?page=2 502: /],
+  ["599", [599], /^GitHub API GET \/repos\/o\/r\/pulls\/1\?page=2 599: /],
+  ["a network error", [networkError()], /^GitHub API GET \/repos\/o\/r\/pulls\/1\?page=2 failed: fetch failed$/],
+]) {
+  test(`a lasting ${name} fails after three calls and names the call, not the token (DAN-664)`, async () => {
+    const { fetchImpl, calls } = scripted(steps);
+    await assert.rejects(retryApi(fetchImpl)("/repos/o/r/pulls/1?page=2"), (error) => {
+      assert.match(error.message, pattern);
+      assert.ok(noToken(error), error.message);
+      return true;
+    });
+    assert.equal(calls.length, 3);
+  });
+}
+
+for (const status of [400, 401, 403, 404, 409, 422, 429, 304, 199]) {
+  test(`${status} is never retried and names the call, not the token (DAN-664)`, async () => {
+    const { fetchImpl, calls } = scripted([status, 200]);
+    await assert.rejects(retryApi(fetchImpl)("/repos/o/r/pulls/1"), (error) => {
+      assert.equal(error.message, `GitHub API GET /repos/o/r/pulls/1 ${status}: body ${status}`);
+      assert.ok(noToken(error), error.message);
+      return true;
+    });
+    assert.equal(calls.length, 1);
+  });
+}
+
+test("a long error body is cut so the message stays short (DAN-664)", async () => {
+  const fetchImpl = async () => ({ ok: false, status: 404, text: async () => "x".repeat(5000) });
+  await assert.rejects(retryApi(fetchImpl)("/x"), (error) => error.message.length < 600);
+});
+
+test("a status write is retried with the same body and headers; other writes are not (DAN-664)", async () => {
+  const body = JSON.stringify({ state: "success", context: "Engineering review gate", description: "ok" });
+  const write = scripted([502, 201]);
+  assert.deepEqual(await retryApi(write.fetchImpl)(`/repos/o/r/statuses/${head}`, { method: "POST", body }), { ok: 201 });
+  assert.equal(write.calls.length, 2);
+  const [first, second] = write.calls;
+  assert.equal(first.path, second.path);
+  assert.equal(second.init.method, "POST");
+  assert.equal(second.init.body, body);
+  assert.deepEqual(second.init.headers, first.init.headers);
+  for (const [method, path] of [
+    ["POST", "/repos/o/r/issues/1/comments"],
+    ["POST", `/repos/o/r/statuses/${head}/extra`],
+    ["PATCH", "/repos/o/r/pulls/1"],
+    ["DELETE", `/repos/o/r/statuses/${head}`],
+    ["PUT", `/repos/o/r/statuses/${head}`],
+  ]) {
+    const other = scripted([503, 201]);
+    await assert.rejects(retryApi(other.fetchImpl)(path, { method, body }), (error) => error.message === `GitHub API ${method} ${path} 503: body 503`);
+    assert.equal(other.calls.length, 1, `${method} ${path}`);
+  }
+});
+
+test("an outer abort during the backoff ends the call with no further attempt (DAN-664)", async () => {
+  const controller = new AbortController();
+  const { fetchImpl, calls } = scripted([500, 200]);
+  const api = retryApi(fetchImpl, { retryDelayMs: 5000 });
+  setTimeout(() => controller.abort(new Error("budget spent")), 20);
+  const { ms } = await elapsed(() => assert.rejects(api("/x", { signal: controller.signal }), /budget spent/));
+  assert.ok(ms < 1000, `took ${ms} ms`);
+  assert.equal(calls.length, 1);
+});
+
+test("the per-call limit covers the backoff: no attempt after it (DAN-664)", async () => {
+  const { fetchImpl, calls } = scripted([503, 200]);
+  const api = retryApi(fetchImpl, { timeoutMs: 50, retryDelayMs: 5000 });
+  const { ms } = await elapsed(() => assert.rejects(api("/x"), { name: "TimeoutError" }));
+  assert.ok(ms < 1000, `took ${ms} ms`);
+  assert.equal(calls.length, 1);
+});
+
+test("an abort, a timeout or a non-network error from fetch is not retried (DAN-664)", async () => {
+  for (const thrown of [new DOMException("stopped", "AbortError"), new DOMException("stopped", "TimeoutError"), new Error("broken")]) {
+    const calls = [];
+    const fetchImpl = async () => {
+      calls.push(1);
+      throw thrown;
+    };
+    await assert.rejects(retryApi(fetchImpl)("/x"), (error) => error === thrown);
+    assert.equal(calls.length, 1, thrown.name);
+  }
+});
+
+test("a broken 2xx body is not retried (DAN-664)", async () => {
+  const calls = [];
+  const fetchImpl = async () => {
+    calls.push(1);
+    return { ok: true, status: 200, json: async () => { throw new SyntaxError("bad json"); } };
+  };
+  await assert.rejects(retryApi(fetchImpl)("/x"), SyntaxError);
+  assert.equal(calls.length, 1);
+});

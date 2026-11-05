@@ -23,12 +23,21 @@ const reply = (status, body) => ({
 });
 let statusCount = 0;
 let pullListReads = 0;
+// A failing write stays down for its retries (DAN-664): the log keeps one line
+// per write, and each retry of the same write is counted in FAKE_LOG.retries.
+let downWrite = null;
 globalThis.fetch = async (url, options = {}) => {
   const path = new URL(url).pathname;
   if ((options.method ?? "GET") === "POST" && path.includes("/statuses/")) {
+    const write = path + options.body;
+    if (write === downWrite) {
+      appendFileSync(process.env.FAKE_LOG + ".retries", "1\\n");
+      return reply(500, { message: "down" });
+    }
     appendFileSync(process.env.FAKE_LOG, JSON.stringify({ path, body: JSON.parse(options.body) }) + "\\n");
     statusCount++;
-    return plan.statusFails || statusCount === plan.failPostNumber ? reply(500, { message: "down" }) : reply(201, {});
+    downWrite = plan.statusFails || statusCount === plan.failPostNumber ? write : null;
+    return downWrite ? reply(500, { message: "down" }) : reply(201, {});
   }
   if (plan.fail.some((p) => path.endsWith(p))) throw new TypeError("fetch failed");
   if (/\\/pulls\\/\\d+$/.test(path)) {
@@ -71,7 +80,8 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
     },
   });
   const posts = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
-  return { code: result.status, posts, stderr: result.stderr };
+  const retries = existsSync(`${log}.retries`) ? readFileSync(`${log}.retries`, "utf8").trim().split("\n").length : 0;
+  return { code: result.status, posts, retries, stderr: result.stderr };
 }
 
 const comment = { issue: { number: 7, pull_request: {} } };
@@ -110,9 +120,11 @@ test("a failed PR read marks the event head pending when the event names one", (
 });
 
 test("a failing status post still ends the run with exit 1 and no crash", () => {
-  const { code, posts, stderr } = run(comment, { fail: ["/issues/7/comments"], statusFails: true });
+  const { code, posts, retries, stderr } = run(comment, { fail: ["/issues/7/comments"], statusFails: true });
   assert.equal(code, 1);
   assert.equal(posts.length, 1);
+  // DAN-664: the write was tried three times in all before the run gave up.
+  assert.equal(retries, 2);
   assert.match(stderr, /Could not mark the head pending/);
 });
 
