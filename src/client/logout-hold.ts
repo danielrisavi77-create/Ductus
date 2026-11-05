@@ -1,4 +1,5 @@
 import type { LogoutPlan } from "@/components/editor/logout-plan";
+import type { SyncState } from "@/domain/sync/states";
 import { AtomicDexieJournal, type LogoutHold } from "@/lib/journal/atomic-dexie-journal";
 
 import { browserMarkStore, hasEnded, type MarkStore, type SessionMark } from "./session-marks";
@@ -90,6 +91,39 @@ export async function withinHoldLimit<T>(read: () => Promise<T>, fallback: T, ti
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * How long "Odjava" waits for a send or an open already in flight once
+ * writing stopped (#1542). Past it the dialog opens on what the saver and the
+ * journal hold now: a step that ends later is still recorded, since the
+ * journal is deleted only when nothing in it is unconfirmed (D-118).
+ */
+export const LOGOUT_SETTLE_LIMIT_MS = 2_000;
+
+/** States in which the sheet may hold text the journal does not. */
+export const NOT_STORED: readonly SyncState[] = ["EDITING", "SAVING_LOCAL", "ERROR", "RECOVERY_REQUIRED"];
+
+export type SettlingSaver = {
+  settled(): Promise<void>;
+  snapshot(): { readonly state: SyncState; readonly failure: unknown };
+};
+
+/**
+ * Whether some typed text did not reach the journal, once the saver settled
+ * or the limit passed (#1542). A server that never answers cannot hold the
+ * sign-out: text still on its way to the journal counts as not stored.
+ */
+export async function unsavedAfterSettle(
+  saver: SettlingSaver,
+  empty: () => boolean,
+  limitMs = LOGOUT_SETTLE_LIMIT_MS,
+): Promise<boolean> {
+  await withinHoldLimit(() => saver.settled(), undefined, limitMs);
+  // A first save that failed leaves the journal empty while the sheet holds
+  // text; only the saver's state tells.
+  const saved = saver.snapshot();
+  return !empty() && (saved.failure !== null || NOT_STORED.includes(saved.state));
 }
 
 /**

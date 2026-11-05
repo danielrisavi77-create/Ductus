@@ -48,7 +48,6 @@ import {
   browserMarkStore, currentSession, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
 } from "@/client/session-marks";
 import { localChip, type LocalChip } from "@/domain/sync/labels";
-import type { SyncState } from "@/domain/sync/states";
 import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
 import { startFreshHistory } from "@/editor/history";
 import { replaceWithStoredDocument } from "@/editor/identity";
@@ -60,7 +59,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { signInHref, signInTarget, SIGN_IN_DEFAULT_TARGET } from "@/components/auth/sign-in-link";
 import {
-  editorSignOutPlan, planAfterDiscard, readLogoutHold, untilLoaded, withinHoldLimit, type HoldRead,
+  editorSignOutPlan, planAfterDiscard, readLogoutHold, unsavedAfterSettle, untilLoaded, withinHoldLimit, type HoldRead,
 } from "@/client/logout-hold";
 import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
@@ -81,9 +80,6 @@ const EXPORT_FILE_NAME = "ductus-rad.txt";
 type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable" | "signed-out";
 
 type Failure = SaverFailure | "invalid";
-
-/** States in which the sheet may hold text the journal does not. */
-const NOT_STORED: readonly SyncState[] = ["EDITING", "SAVING_LOCAL", "ERROR", "RECOVERY_REQUIRED"];
 
 /** What the tab holding the document's lock does for a sign-out. */
 type LockedLogout = {
@@ -471,13 +467,10 @@ export function LocalDocumentProvider({
             own?.stop();
             readyRef.current = false;
             editor.setEditable(false, false);
-            // No new send starts behind the dialog; the one in flight ends (W4).
+            // No new send starts behind the dialog; the one in flight ends
+            // (W4), but a server that does not answer holds nothing (#1542).
             evidence?.pause();
-            await saver.settled();
-            // A first save that failed leaves the journal empty while the
-            // sheet holds text; only the saver's state tells.
-            const saved = saver.snapshot();
-            return !editor.isEmpty && (saved.failure !== null || NOT_STORED.includes(saved.state));
+            return unsavedAfterSettle(saver, () => editor.isEmpty);
           },
           resume: () => {
             if (disposed) return;

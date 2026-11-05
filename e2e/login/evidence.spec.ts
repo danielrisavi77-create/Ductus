@@ -6,7 +6,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { pluralHr } from "../../src/lib/i18n/hr";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { flipSignatureByte, stackCheckpoint } from "./evidence-receipt";
-import { clickSignOut, editorMounted, signIn } from "./support";
+import { clickSignOut, editorMounted, logoutDialogOf, signIn } from "./support";
 import { admin, closeWork, seedSubmission, seedWork, workDocument } from "./work-seed";
 import { APP_ORIGIN } from "./origin";
 
@@ -514,3 +514,36 @@ test("O2 (DAN-289): a submitted work opens read-only and sends nothing after the
   expect(live.map(pathOf)).toEqual([]);
   await shoot(page, "o2-predani-rad");
 });
+
+// #1542 (plan #1546): a send the server never answers, or an opening it never
+// answers, holds neither the sign-out dialog nor the sign-out. The text the
+// journal holds stays on the device for the next sign-in (D-118).
+for (const waiting of ["commit", "open"] as const) {
+  test(`#1542: sign-out while the ${waiting} gets no answer ends on this device and keeps the text`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const { documentId } = await openSheet(page);
+    const asked = page.waitForRequest((r) => pathOf(r) === `/api/evidence/${waiting}` && r.method() === "POST", { timeout: OPEN });
+    if (waiting === "commit") {
+      await page.route(COMMIT, () => {});
+    } else {
+      // The 409 makes the sheet ask the open route again (F-155), which never answers.
+      await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
+      await page.route("**/api/evidence/open", () => {});
+    }
+    await type(page, " Izmišljeni tekst bez odgovora.");
+    await asked;
+    await expect(chipOf(page)).not.toHaveAttribute("data-state", "SYNCED");
+    await page.route("**/api/auth/logout", () => {});
+
+    const dialog = logoutDialogOf(page);
+    await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+    // The preparation waits at most for its limits, not for the server.
+    await expect(dialog).toBeVisible({ timeout: 6_000 });
+    const confirm = new RegExp(`^(${t.auth.logoutConfirm}|${t.auth.logoutConfirmUnsaved})$`);
+    if (waiting === "commit") await expect(dialog.getByRole("button", { name: t.auth.logoutConfirm, exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: confirm }).click();
+    await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice, { timeout: 15_000 });
+    // Nothing unsent was deleted with the sign-out.
+    expect((await localOf(page, documentId)).pending.length).toBeGreaterThan(0);
+  });
+}
