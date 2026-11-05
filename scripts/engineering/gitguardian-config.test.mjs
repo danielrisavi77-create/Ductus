@@ -42,10 +42,22 @@ test("every input class is accepted or refused", () => {
     ["version 1", `version: 1\nsecret:\n  ignored_paths:\n    - ${OK}\n`, /version/],
     ["duplicate version", `version: 1\n${file([OK])}`, /duplicate key/],
     ["duplicate entry", file([OK, OK]), /duplicate/],
+    ["NEL hides an entry behind a comment", `${file([OK])}`.replace(OK, `${OK} # c\u0085    - src/**`), /unsupported character U\+0085/],
+    ["line separator U+2028 after a comment", file([OK]).replace(OK, `${OK} # c\u2028    - src/**`), /unsupported character U\+2028/],
+    ["paragraph separator U+2029 after a comment", file([OK]).replace(OK, `${OK} # c\u2029    - src/**`), /unsupported character U\+2029/],
+    ["lone CR after a comment", file([OK]).replace(OK, `${OK} # c\r    - src/**`), /unsupported character U\+000D/],
+    ["vertical tab after a comment", file([OK]).replace(OK, `${OK} # c\u000b    - src/**`), /unsupported character U\+000B/],
+    ["form feed after a comment", file([OK]).replace(OK, `${OK} # c\u000c    - src/**`), /unsupported character U\+000C/],
+    ["byte order mark", `\ufeff${file([OK])}`, /unsupported character U\+FEFF/],
+    ["non-ASCII letter in a comment", file([OK]).replace(OK, `${OK} # č`), /unsupported character U\+010D/],
     ["tab indentation", `version: 2\nsecret:\n\tignored_paths:\n\t\t- ${OK}\n`, /unsupported|unknown/],
   ];
   for (const [name, text] of accepted) assert.deepEqual(parseGitGuardianConfig(text).ignoredPaths, [OK], name);
   for (const [name, text, re] of refused) assert.throws(() => parseGitGuardianConfig(text), re, name);
+});
+
+test("CRLF line ends are accepted", () => {
+  assert.deepEqual(parseGitGuardianConfig(file([OK]).replace(/\n/g, "\r\n")).ignoredPaths, [OK]);
 });
 
 test("comments and blank lines are allowed", () => {

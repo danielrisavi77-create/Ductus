@@ -8,7 +8,13 @@ const fail = (message) => { throw new Error(`.gitguardian.yaml: ${message}`); };
 
 /** Parses `version: 2` + `secret.ignored_paths` (a list of plain paths) and nothing else. */
 export function parseGitGuardianConfig(text) {
-  const lines = String(text).split(/\r?\n/)
+  const source = String(text);
+  // PyYAML (used by ggshield) ends a line, and so a comment, at more characters than \n: lone CR, VT, FF, U+0085,
+  // U+2028 and U+2029. Stripping comments here would hide an entry behind one of them, so only printable ASCII,
+  // tab (refused per line below) and \n or \r\n line ends are accepted.
+  const bad = /[^\x20-\x7E\t\n]|\r(?!\n)/.exec(source.replace(/\r\n/g, "\n"));
+  if (bad) fail(`unsupported character U+${bad[0].codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
+  const lines = source.split(/\r?\n/)
     .map((raw) => ({ raw, body: raw.replace(/\s+#.*$/, "").replace(/^\s*#.*$/, "") }))
     .filter(({ body }) => body.trim() !== "");
   let version = null;
