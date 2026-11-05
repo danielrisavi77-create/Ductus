@@ -322,7 +322,7 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M9.Z1 | Provjera cjeline M9 na sintetičkim podacima: svaki prijenos zapisan s pružateljem, modelom i svrhom; prekidači isključeni po zadanom; prazna konfiguracija troška isključuje AI | B | M9.4, M9.5, M9.6, M9.7 | novo |
-| M9.Z2 | Stanje na kontrolnoj točki 15. 1. 2027. i prijava vlasniku što je otvoreno (M9.1, M9.PRIV, M9.AIACT, M9.UX-R); M9 se ne reže bez vlasnika (D-199 t. 6, D-270 O12) | V | M9.Z1 | novo |
+| M9.Z2 | Stanje na kontrolnoj točki 15. 1. 2027. i prijava vlasniku što je otvoreno (M9.1, M9.PRIV, M9.AIACT, M9.UX-R); M9 se ne reže bez vlasnika (D-199 t. 6, D-270 O12). Izvještaj ne čeka M9.Z1 jer se podnosi dok su koraci M9.4 do M9.7 još otvoreni; M9.Z1 je zasebna završna provjera | V | M9.1 | novo |
 
 **Ovisnosti izvan M9:** M3.1 (B-8) i M3.2-P03 (nositelj formata evidencije) te M8.0-S1 (zajednički ugovor formata, D-269 O8) navode se kako ih navodi objedinjeni plan rb27; naziva M3.2-P03 i M8.0-S1 još nema u ovom dokumentu, a tiketi se otvaraju nakon potvrde plana (M9.0b, D-270 O13). M7.5 je preduvjet za M9.5. **Redoslijed i rokovi (D-199 t. 6, D-266 t. 6):** M10 → M9 → M11; M9.1 do 15. 12. 2026., M9.2 i M9.3 oko 15. 1. 2027., M9.4 do M9.7 do 15. 2. 2027. (M9.5 nakon M7.5), M10 oko 10. 2., M11 22. 2.; kontrolne točke 30. 11. 2026. i 15. 1. 2027.
 
