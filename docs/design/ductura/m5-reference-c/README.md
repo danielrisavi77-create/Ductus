@@ -9,7 +9,7 @@ Raspored uvoza preuzet je iz `../editor-v11.dc.html` (Uvezi u kartici Literatura
 | Stranica | Stanja | Izvori |
 |---|---|---|
 | `s06-planer.html` | popunjeno, bez cilja (i bez roka), rok je prošao, prazno, učitavanje i greška | M5.15, D-63 (b), D-60, PRODUCT §5 pravilo 4, EQ7, #1030 (spojen) |
-| `s07-pravopis.html` | uključeno na bijelom i tamnom listu, postavka, isključeno, jezik nepoznat ili bez rječnika, rječnik se učitava ili nije učitan | M5.11, D-233, D-236, `docs/spikes/M5.11-S.md` |
+| `s07-pravopis.html` | uključeno na bijelom i tamnom listu, postavka, isključeno, jezik nepoznat, nema rječnika za jezik rada, rječnik se učitava ili nije učitan | M5.11, D-233, D-236, `docs/spikes/M5.11-S.md` |
 | `s13-uvoz.html` | uvoz, djelomičan uvoz, ništa nije prepoznato ili datoteka nečitljiva, popis nakon uvoza | D-59, D-62, `../m5-reference/s13-literatura.html` |
 
 Mobitel je snimka širine 400 px. Zajednička stanja (učitavanje, greška, bez mreže, samo za čitanje) za karticu Literatura već postoje u `../m5-reference/s13-literatura.html` i ovdje se ne ponavljaju.
@@ -22,6 +22,7 @@ Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`. Izrađene su Pl
   - Brojke su izvedene iz verzija rada na poslužitelju: riječi po danu, riječi na dan do roka, napredak po poglavlju i dani do roka. Iz vremena pojedine promjene ne izvodi se ništa. Nema brzine, pauza ni ritma (D-63 (b)).
   - Planer vidi samo student, pa nosi oznaku „Vidite samo Vi”. Ne ulazi u sažetak procesa, izvoz, predaju ni nastavnički prikaz.
   - Oznaka se odnosi na planer, ne na tekst rada. Tekst mentor vidi uživo (D-142), i nijedna rečenica na slici ne tvrdi drukčije.
+  - Ciljevi po poglavlju su iz profila rada u Lekti ili od mentora (D-60), a nastavnik ih smije suziti na verziji zadatka (D-220). Zbroj ciljeva četiriju poglavlja jednak je opsegu rada (6.000 do 8.000).
   - Bez cilja i nakon roka planer ne računa riječi na dan. Ne prikazuje ni opomenu ni boju upozorenja. Vlastiti cilj studenta nije nacrtan jer nije definiran.
 - **Pravopis.**
   - Provjera radi samo s rječnikom na uređaju i prema jeziku rada (D-236).
@@ -32,8 +33,9 @@ Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`. Izrađene su Pl
 - **Uvoz.**
   - Uvoz dodaje izvore samo u popis i nikad ne upisuje u tekst.
   - Već postojeći izvor se ne udvostručuje.
-  - Neprepoznat zapis prikazuje se doslovno, s razlogom i radnjom „Dodaj ručno”.
-  - Nepotpun opis je neutralna oznaka s isprekidanim rubom (D-62).
+  - Zapis koji se može pročitati uvozi se i kad mu nedostaje autor ili izdavač. Nepotpun opis je neutralna oznaka s isprekidanim rubom (D-62).
+  - „Nije prepoznat” je samo zapis koji nije u obliku BibTeX, RIS ni CSL-JSON. Prikazuje se doslovno, s razlogom i radnjom „Dodaj ručno”.
+  - Broj u ishodu i popis nakon uvoza se slažu: 4 uvezena i 1 već postojeći čine 5 stavki popisa.
   - Izravni dohvat iz Zotera s korisničkim ključem iz prototipa nije nacrtan: Zotero je val 2 (D-227), a rukovanje ključem nije definirano.
 
 ## Granice
