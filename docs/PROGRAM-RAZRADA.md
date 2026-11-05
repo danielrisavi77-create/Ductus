@@ -369,7 +369,7 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M11.1 | Računi dobavljača i spike B0.1 (PITR, RTT, KMS); DAN-52 ostaje uski tiket za objektnu pohranu (M11.1-P03), kišobran B0.1 za M11.1-P01 i P02 otvara orkestrator (D-277 NQ04). Računi su radnja vlasnika (D-278 NQ18) | V, P | računi | DAN-52 |
-| M11.2 | Produkcijski Dockerfile, Caddy, OpenTofu, proba povrata baze i bucketa; jedini nositelj probe povrata je M11.2-P04 u `scripts/operations/restore-drill/`; D-91 t. 3 i DAN-71 nosi M11.2-P03 (D-277 NQ05, NQ07) | P | M11.1 | DAN-298 |
+| M11.2 | Produkcijski Dockerfile, Caddy, OpenTofu, proba povrata baze i bucketa; jedini nositelj probe povrata je M11.2-P04 u `scripts/operations/restore-drill/`; D-91 t. 3 je spojen preko #1051, M11.2-P03 samo za eventualni ostatak (D-277 NQ05, NQ07) | P | M11.1 | DAN-298 |
 | M11.3 | Health i readiness, provjera okoline pri pokretanju, strukturirani log u `src/server/log/`, kostur `docs/OPERATIONS.md`; DAN-299 ostaje Done, ostatak ide u tri uska nova tiketa (D-277 NQ03, NQ06) | P, B | | DAN-299 |
 | M11.4 | Staging s AAI@EduHr Labom i sintetički prolaz evidencije na istim vrstama resursa | P | M11.2, M1.2 | DAN-426 |
 | M11.5 | Sučelje na engleskom (D-70) i postavke profila | F | | DAN-427 |
