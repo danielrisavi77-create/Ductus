@@ -143,6 +143,19 @@ Dopuštene radnje (ne krše Rječnik):
 
 Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslovni citat pravilnika izuzima se samo u izričito označenom polju za citat, nikad cijela datoteka.
 
+### Dodatni engleski popis (D-276, NQ12)
+
+Uz engleski stupac gore (D-90 t. 3) i unose `lang: "en"` u `scripts/forbidden-terms/terms.ts`, za sučelje na engleskom (D-70) vrijedi i ovaj dodatni popis. Aditivan je: hrvatski popis, tablica i pravila 1 do 17 ne mijenjaju se, a postojeći skener ostaje stroži ondje gdje je već strožiji (npr. „plagiarism” se hvata u svim oblicima, a ne samo kao presuda). Isti uvjeti kao za hrvatske retke vrijede za složenice istog korijena i za „Dopuštene radnje”. Uključuje ga korak M11.5-P01a u skener.
+
+| Ne koristiti nikad (engleski) | Koristiti umjesto toga |
+| --- | --- |
+| suspicious, suspicion (o radu ili studentu) | (ništa; opis činjenice bez ocjene) |
+| risk score, trust score, attention score, suspicion score | (ništa; nema zbroja ni ocjene) |
+| plagiarism, plagiarised (kao presuda o radu ili studentu) | (ništa; ne procjenjuje se autorstvo) |
+| cheating, dishonest, misconduct (o radu ili studentu) | (ništa; opis činjenice bez ocjene) |
+| AI-generated, AI-detected, flagged as AI | opaženo pisanje u uređivaču |
+| flagged, flagged for review (o studentu ili radu) | (ništa; „za pregled” bez ocjene) |
+
 ---
 
 ## 6. Tokovi

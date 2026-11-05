@@ -334,6 +334,8 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 **Ekrani:** S-18 vlastita povijest rada, S-42 dnevnik pristupa, S-44 izvoz vlastitih podataka, A-05 čuvanje i pravno zadržavanje, A-06 revizijski trag pristupa, A-08 izlaz iz usluge.
 
+**Proba povrata:** M10 ne gradi zasebnu skriptu. Nositelj je M11.2-P04 u `scripts/operations/restore-drill/`; M10.2-P06b dodaje scenarij brisanja u istu skriptu, a M10.Z2 je koristi na stvarnoj infrastrukturi (D-277 NQ05).
+
 **Uvjet završetka:** izlazni kriterij M10 iz `docs/PROGRAM.md` (brisanje po roku testirano; lanac provjerljiv nakon brisanja sadržaja); pravno zadržavanje zaustavlja brisanje (test). Koraci M10.9 i M10.10 (uvjetno) nisu dio uvjeta završetka.
 
 ## M11 GO uvjeti
@@ -344,20 +346,22 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M11.1 | Računi dobavljača i spike B0.1 (PITR, RTT, KMS) | V, P | računi | DAN-52 |
-| M11.2 | Produkcijski Dockerfile, Caddy, OpenTofu, proba povrata baze i bucketa | P | M11.1 | DAN-298 |
-| M11.3 | Health i readiness, provjera okoline pri pokretanju, strukturirani log, kostur `docs/OPERATIONS.md` | P, B | | DAN-299 |
+| M11.1 | Računi dobavljača i spike B0.1 (PITR, RTT, KMS); DAN-52 ostaje uski tiket za objektnu pohranu (M11.1-P03), kišobran B0.1 za M11.1-P01 i P02 otvara orkestrator (D-277 NQ04). Računi su radnja vlasnika (D-278 NQ18) | V, P | računi | DAN-52 |
+| M11.2 | Produkcijski Dockerfile, Caddy, OpenTofu, proba povrata baze i bucketa; jedini nositelj probe povrata je M11.2-P04 u `scripts/operations/restore-drill/`; D-91 t. 3 i DAN-71 nosi M11.2-P03 (D-277 NQ05, NQ07) | P | M11.1 | DAN-298 |
+| M11.3 | Health i readiness, provjera okoline pri pokretanju, strukturirani log u `src/server/log/`, kostur `docs/OPERATIONS.md`; DAN-299 ostaje Done, ostatak ide u tri uska nova tiketa (D-277 NQ03, NQ06) | P, B | | DAN-299 |
 | M11.4 | Staging s AAI@EduHr Labom i sintetički prolaz evidencije na istim vrstama resursa | P | M11.2, M1.2 | DAN-426 |
 | M11.5 | Sučelje na engleskom (D-70) i postavke profila | F | | DAN-427 |
-| M11.6 | Pristupačnost WCAG 2.1 AA, ručna provjera čitačem zaslona i izjava o pristupačnosti (F-03) | F | | DAN-428 |
+| M11.6 | Pristupačnost WCAG 2.2 AA (D-276 NQ01, D-248), ručna provjera čitačem zaslona i izjava o pristupačnosti u obliku koji traži hrvatski propis, uz poziv na EN 301 549 (F-03) | F | | DAN-428 |
 | M11.7 | Statusna stranica i postupak incidenta (F-10 iz `docs/FEATURES.md`) | P | M11.2 | DAN-429 |
-| M11.8 | Obavijest o privatnosti, DPIA, ugovor o obradi i popis podizvršitelja s DPA-ima | V | FPZG, pravno mišljenje | DAN-430 |
+| M11.8 | Obavijest o privatnosti, DPIA, ugovor o obradi i popis podizvršitelja s DPA-ima; DAN-430 dijele M9.PRIV i M11.8, jedan nositelj dokumenta je M11.8-P01 (D-278 NQ11) | V | FPZG, pravno mišljenje | DAN-430 |
 | M11.9 | Prije pilota: nadzor i uzbune, build bez source mapa, vanjski penetracijski test, ograničenja zahtjeva, SBOM | P, B | M11.2 | DAN-184 do DAN-187, DAN-322 |
 | M11.10 | „Prijavi problem”, mobilni prikaz svih ekrana, stranica „Kako Ductura radi” | F | | DAN-431 |
-| M11.11 | Licenca, uvjeti korištenja i odluka o vidljivosti repoa | V | | DAN-188 |
-| M11.12 | Brze bilješke s mobitela u bilježnicu projekta (S-03). Bilješka koja ulazi u rad je promjena dokumenta s vrstom izvora „mobilna bilješka” (pravilo 8) | F, B | M5.9, M11.10 | novo |
+| M11.11 | Licenca, uvjeti korištenja i odluka o vidljivosti repoa; M11.11-P01 priprema licencu, uvjete i popis onoga što ne smije biti javno, odluka je vlasnikova uz pravnika (D-277 NQ02) | V | | DAN-188 |
+| M11.12 | Brze bilješke s mobitela u bilježnicu projekta (S-03). Bilješka koja ulazi u rad je promjena dokumenta s vrstom izvora „mobilna bilješka” (pravilo 8). Nije GO uvjet i ne blokira M11.Z1; gradi se u valu 3 samo ako ostane kapaciteta, inače odmah nakon pilota (D-277 NQ09) | F, B | M5.9, M11.10 | novo |
 
 **Ekrani:** A-07 integracije i status AAI@EduHr, A-09 zdravlje sustava i kopije, J-01 naslovnica, J-02 kako Ductura radi, J-05 statusna stranica i izjava o pristupačnosti, Z-09 postavke, Z-10 prijavi problem, Z-12 mobilni prikaz.
+
+**Odgovori NQ01 do NQ18:** zapisani su u D-276 do D-279. Nadzor u pilotu bez novog vanjskog pružatelja praćenja grešaka: uzbune dolaze iz vlastitih provjera (spremnost, crveni worker, rok predaje) i prikaza u aplikaciji; vanjski pružatelj ide kroz M11.8-P02 uz unos na popis podizvršitelja i DPA (D-277 NQ10). Rizik M11.5-P02 (postavke profila) i M11.10-P01 (tablica prijava) podignut je na critical (D-278 NQ14). Pentest ide u rani val 3, nakon M11.4-P01 i M11.9-P03, samo nad stagingom (D-278 NQ16). Radnje vlasnika (paket zahtjeva FPZG-u, pentest, pravna osoba i ugovor o obradi, računi B0.1, licenca i vidljivost) ostaju otvorene u Owner queueu.
 
 **Uvjet završetka:** svaki redak tablice „GO uvjeti za stvarne studente” u `docs/PROGRAM.md` zelen i zapisan s dokazom.
 
