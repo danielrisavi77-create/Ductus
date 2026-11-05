@@ -15,12 +15,12 @@ Prijedlog slike, bez produktnog koda. Spajanje ove mape vlasnikovom porukom „S
 
 | Ekran | Stanja |
 | --- | --- |
-| Z-03 | sesija istekla (uz izmjene samo na uređaju), odjavljen u drugoj kartici, bez mreže |
+| Z-03 | sesija istekla (2 sata neaktivnosti ili najviše 12 sati, D-200; istek nije odjava; uz izmjene samo na uređaju), odjavljen u drugoj kartici, bez mreže |
 | Z-04 | stranica ne postoji, greška poslužitelja s oznakom za podršku |
 | Z-05 | nema ovlasti |
 | Z-06 | kostur popisa, dugo učitavanje, smanjeno kretanje (kostur miruje) |
 | Z-08 | slanje na pregled (nastavak pisanja dopušten), konačna predaja (zaključava rad), opasna radnja, dijalog s poljem (fokus u dijalogu) |
-| A-02, A-03, A-04 | učitavanje (A-02), greška (A-03, A-04); ostala stanja ostaju u m2-reference |
+| A-02, A-03, A-04 | učitavanje i greška za svaki od tri ekrana (šest okvira); ostala stanja ostaju u m2-reference |
 | Fokus | prsten 3 px / razmak 4 px, preskok na sadržaj, fokus nije zaklonjen (WCAG 2.2, 2.4.11), redoslijed tipkovnice 1 do 5 |
 
 ## Snimke

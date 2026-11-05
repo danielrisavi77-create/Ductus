@@ -20,7 +20,7 @@
   <div class="grid">
     <div class="frame" role="alert">
       <h3>Sesija je istekla</h3>
-      <p>Odjavljeni ste nakon 8 sati bez prijave. Prijavite se ponovno i nastavite gdje ste stali.</p>
+      <p>Sesija je istekla zbog 2 sata neaktivnosti ili nakon najviše 12 sati prijave (D-200). Istek nije odjava: prijavite se ponovno i nastavite gdje ste stali.</p>
       <p class="status"><span class="chip">3 izmjene</span> čuvaju se samo na ovom uređaju. Šalju se na poslužitelj čim se prijavite.</p>
       <div class="row"><a class="btn" href="#">Prijavite se ponovno</a></div>
     </div>
@@ -121,10 +121,14 @@
 <section aria-labelledby="zA">
   <div class="ref-tag">A-02, A-03, A-04 · zajedničko učitavanje i greška</div>
   <h2 id="zA">Učitavanje i greška administratorskih popisa</h2>
+  <p class="meta">Isti uzorak na svakom ekranu: kostur dok se učitava (Z-06), a pri grešci poruka s radnjom „Pokušaj ponovno”. Redak po ekranu.</p>
   <div class="grid">
-    <div class="frame" aria-busy="true"><h3>Korisnici i uloge</h3><div class="sk" role="status"><span class="sr">Učitavanje popisa korisnika…</span><i class="w2"></i><i class="w3"></i><i class="w2"></i></div></div>
-    <div class="frame"><h3>Kolegiji i grupe</h3><p class="alert" role="alert"><strong>Popis kolegija trenutačno nije dostupan.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
-    <div class="frame"><h3>Pravila fakulteta</h3><p class="alert" role="alert"><strong>Pravila fakulteta trenutačno nisu dostupna.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
+    <div class="frame" aria-busy="true"><div class="ref-tag">A-02 · učitavanje</div><h3>Korisnici i uloge</h3><div class="sk" role="status"><span class="sr">Učitavanje popisa korisnika…</span><i class="w2"></i><i class="w3"></i><i class="w2"></i></div></div>
+    <div class="frame" aria-busy="true"><div class="ref-tag">A-03 · učitavanje</div><h3>Kolegiji i grupe</h3><div class="sk" role="status"><span class="sr">Učitavanje popisa kolegija…</span><i class="w2"></i><i class="w3"></i><i class="w2"></i></div></div>
+    <div class="frame" aria-busy="true"><div class="ref-tag">A-04 · učitavanje</div><h3>Pravila fakulteta</h3><div class="sk" role="status"><span class="sr">Učitavanje pravila fakulteta…</span><i class="w2"></i><i class="w3"></i><i class="w2"></i></div></div>
+    <div class="frame"><div class="ref-tag">A-02 · greška</div><h3>Korisnici i uloge</h3><p class="alert" role="alert"><strong>Popis korisnika trenutačno nije dostupan.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
+    <div class="frame"><div class="ref-tag">A-03 · greška</div><h3>Kolegiji i grupe</h3><p class="alert" role="alert"><strong>Popis kolegija trenutačno nije dostupan.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
+    <div class="frame"><div class="ref-tag">A-04 · greška</div><h3>Pravila fakulteta</h3><p class="alert" role="alert"><strong>Pravila fakulteta trenutačno nisu dostupna.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
   </div>
 </section>
 </main>
