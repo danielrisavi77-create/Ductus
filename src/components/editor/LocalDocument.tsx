@@ -40,7 +40,7 @@
 import type { Transaction } from "@tiptap/pm/state";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
-  createContext, useContext, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode,
+  createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ReactNode,
 } from "react";
 
 import type { CanonicalDocument } from "@/domain/document";
@@ -76,6 +76,17 @@ import { nothingHeld, type LogoutPlan } from "./logout-plan";
 /** Quiet time after the last change before a candidate is proposed. */
 const DEBOUNCE_MS = 400;
 const EXPORT_FILE_NAME = "ductus-rad.txt";
+
+/** Nothing to subscribe to: only the server and browser snapshots differ. */
+const never = () => () => {};
+
+/**
+ * Checked here, not left to Dexie: browsers report a missing IndexedDB under
+ * different error names, and the author must see the same notice.
+ */
+function noBrowserStorage(): boolean {
+  return typeof navigator === "undefined" || !navigator.locks || typeof indexedDB === "undefined" || !indexedDB;
+}
 
 type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable" | "signed-out";
 
@@ -187,7 +198,12 @@ export function LocalDocumentProvider({
   livePublish?: boolean;
   children: ReactNode;
 }) {
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [loadPhase, setPhase] = useState<Phase>("loading");
+  // A browser without Web Locks or IndexedDB never leaves "loading" by itself:
+  // it shows "unavailable" from the first render after hydration (the server
+  // has no storage to judge).
+  const storageMissing = useSyncExternalStore(never, noBrowserStorage, () => false);
+  const phase: Phase = storageMissing && loadPhase === "loading" ? "unavailable" : loadPhase;
   // The phase as last rendered, for a sign-out that waits out the load (#874).
   const phaseRef = useRef<Phase>(phase);
   const wakeRef = useRef(new Set<() => void>());
@@ -268,7 +284,8 @@ export function LocalDocumentProvider({
       timerRef.current = setTimeout(() => flushRef.current(), DEBOUNCE_MS);
     },
   });
-  editorRef.current = editor;
+  // Set after each commit, before any timer, listener or effect of it can flush.
+  useLayoutEffect(() => { editorRef.current = editor; });
 
   // Every change the author makes while the sheet is writable, with its
   // source; loading the stored document happens while it is not (3d-2c2 §2).
@@ -315,13 +332,9 @@ export function LocalDocumentProvider({
     let disposed = false;
     let release: (() => void) | null = null;
     const abort = new AbortController();
-    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
-    // Checked here, not left to Dexie: browsers report a missing IndexedDB
-    // under different error names, and the author must see the same notice.
-    if (!locks || typeof indexedDB === "undefined" || !indexedDB) {
-      setPhase("unavailable");
-      return;
-    }
+    // Nothing to open: the phase above already reads "unavailable".
+    if (noBrowserStorage()) return;
+    const locks = navigator.locks;
     // The session of this page has ended: what was typed still goes to this
     // person's journal, then the sheet is emptied so the next person at the
     // browser neither reads nor writes it. The lock is kept, so this tab

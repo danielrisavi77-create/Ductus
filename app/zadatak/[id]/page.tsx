@@ -27,8 +27,10 @@ export default async function AssignmentNoticePage({ params }: { params: Promise
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const [read, { role, scope }] = await Promise.all([readNotice(token, id, withActor), readShellAccount(token, withActor)]);
   const here = `/zadatak/${encodeURIComponent(id)}`;
+  // One server time for the render: the shell's session mark and the notice window.
+  const session = shellSession(token);
   return (
-    <AppShell session={shellSession(token)} role={role} scope={scope} crumbs={[t.student.title]}>
+    <AppShell session={session} role={role} scope={scope} crumbs={[t.student.title]}>
       <div className={`page ${styles.screen}`}>
         {/* DAN-344 (Archivum S03): a student's way back to her courses and assignments. */}
         {role === "student" ? (
@@ -44,7 +46,7 @@ export default async function AssignmentNoticePage({ params }: { params: Promise
           </Suspense>
         ) : null}
         {read.kind === "available" ? (
-          <AssignmentNotice view={read.view} timing={noticeWindow(read.view.opensAt, read.view.dueAt, Date.now())} />
+          <AssignmentNotice view={read.view} timing={noticeWindow(read.view.opensAt, read.view.dueAt, session.at)} />
         ) : (
           <section className={styles.card} aria-labelledby="zadatak">
             <h1 id="zadatak">{t.student.title}</h1>

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
+import { dbmateArgs } from "../db/migrate-locked.mjs";
 import { compare, dumpedVersions, migrationVersions, parseArgs, SCHEMA, serverImage, shim } from "./db-schema.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -90,5 +91,9 @@ test("CI dumps the freshly migrated database and compares it before any other te
   assert.equal(job.split("db-schema.mjs").length - 1, 1, "one schema check");
   assert.match(job, /name: db-schema-\$\{\{ matrix\.shard \}\}\n/, "the dump is kept as the db-schema artifact");
   const scripts = JSON.parse(read("package.json")).scripts;
-  assert.match(scripts["db:migrate"], /dbmate --url "[^"]+" --no-dump-schema --wait up --strict/);
+  // D-91 (3): db:migrate applies migrations through the locked runner, which
+  // runs exactly `dbmate --url <url> --no-dump-schema --wait up --strict`.
+  assert.match(scripts["db:migrate"], /node scripts\/db\/migrate-locked\.mjs --url "[^"]+"/);
+  assert.doesNotMatch(scripts["db:migrate"], /\bdbmate\b.*\s(up|migrate)\b/, "no direct dbmate up beside the runner");
+  assert.deepEqual(dbmateArgs("u").slice(1), ["--url", "u", "--no-dump-schema", "--wait", "up", "--strict"]);
 });
