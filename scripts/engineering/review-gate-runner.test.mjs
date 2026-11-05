@@ -537,3 +537,55 @@ test("a failed status write of a side-base PR leaves no green status on the shar
     assert.ok(failed.posts.every((p) => p.body.state === "pending"), `POST ${failPostNumber}`);
   }
 });
+
+// DAN-452 (F-013 continued): a Codex PR review judged the diff against the base
+// of its time, so after the last base change it is no D-139 Codex evidence,
+// also when it names the same head. One table over every input class; the
+// D-139 path (Claude review, second Claude session QA) is the only one where a
+// PR review turns the gate green.
+const secondSessionComments = (at) => [
+  byOwnerAt(`Agent-Review: claude:b:reviewer\nReview-Head: ${HEAD}\nReview-Verdict: PASS\n`, at),
+  byOwnerAt(
+    `QA-Agent: claude:c:qa\nQA-Head: ${HEAD}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\nProvider-Fallback: claude-second-session — Codex review na headu ${HEAD}\n`,
+    at,
+  ),
+];
+const codexOnHead = (submittedAt, extra = {}) => ({
+  user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, state: "COMMENTED", commit_id: HEAD,
+  body: "Codex Review", ...(submittedAt === undefined ? {} : { submitted_at: submittedAt }), ...extra,
+});
+const CHANGE = "2026-10-31T11:00:00Z";
+const reviewClasses = [
+  ["control: no base change", [], [codexOnHead("2026-10-31T10:00:00Z")], "success"],
+  ["submitted before the change", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z")], "pending"],
+  ["submitted in the same second as the change", [baseChange(CHANGE)], [codexOnHead(CHANGE)], "pending"],
+  ["submitted between two changes", [baseChange("2026-10-31T10:00:00Z"), baseChange(CHANGE)], [codexOnHead("2026-10-31T10:30:00Z")], "pending"],
+  ["submitted after the last change", [baseChange(CHANGE)], [codexOnHead("2026-10-31T11:00:01Z")], "success"],
+  ["submitted_at null", [baseChange(CHANGE)], [codexOnHead(null)], "pending"],
+  ["submitted_at missing", [baseChange(CHANGE)], [codexOnHead(undefined)], "pending"],
+  ["submitted_at unreadable", [baseChange(CHANGE)], [codexOnHead("garbage")], "pending"],
+  ["before an automatic change", [autoChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z")], "pending"],
+  ["after an automatic change", [autoChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z")], "success"],
+  ["a failed automatic change is no boundary", [{ event: "automatic_base_change_failed", created_at: CHANGE }], [codexOnHead("2026-10-31T10:00:00Z")], "success"],
+  ["an old and a new review", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z"), codexOnHead("2026-10-31T12:00:00Z")], "success"],
+  ["the new review names another head", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z"), codexOnHead("2026-10-31T12:00:00Z", { commit_id: BASE })], "pending"],
+];
+
+test("a Codex PR review counts as D-139 evidence only after the last base change (DAN-452)", () => {
+  for (const [name, timeline, reviews, expected] of reviewClasses) {
+    const out = run(comment, { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline, reviews });
+    assert.equal(out.code, 0, name);
+    assert.equal(gateState(out), expected, name);
+  }
+});
+
+// The filter must not weaken quota evidence: a review of the exhausted App
+// still voids it from the full list, also when the review is no Codex evidence.
+test("a Codex PR review dropped by the base change filter still voids quota evidence (DAN-452)", () => {
+  const input = { pr: fallbackPr, files: srcFile, openPulls: [fallbackPr], comments: quotaFallback, timeline: [baseChange(CHANGE)] };
+  assert.equal(gateState(run(comment, input)), "success");
+  for (const submittedAt of [null, undefined, "garbage", "2026-10-31T12:05:00Z"]) {
+    const out = run(comment, { ...input, reviews: [codexOnHead(submittedAt)] });
+    assert.equal(gateState(out), "pending", String(submittedAt));
+  }
+});
