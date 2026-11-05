@@ -145,5 +145,20 @@
     "status": "ruta dolazi",
     "reason": "Student povlači vlastiti otvoreni zahtjev za mentorstvo (M2.6-P03); RPC postoji za ductus_app, ruta još nije spojena.",
     "ticket": "DAN-515"
+  },
+  {
+    "function": "pgboss.create_queue",
+    "status": "bez rute",
+    "reason": "Funkcija paketa pg-boss, ugrađena doslovno; zove je samo radni proces (ductus_worker) za red bez particije, nikad HTTP zahtjev (D-74, D-91)."
+  },
+  {
+    "function": "pgboss.delete_queue",
+    "status": "bez rute",
+    "reason": "Funkcija paketa pg-boss, ugrađena doslovno; EXECUTE nema nijedna Ductus uloga ni PUBLIC, pa je ne zove ni radni proces (D-91)."
+  },
+  {
+    "function": "pgboss.job_table_run_async",
+    "status": "bez rute",
+    "reason": "DDL pomoćnik paketa pg-boss, ugrađen doslovno; EXECUTE nema nijedna Ductus uloga ni PUBLIC, tablice gradi samo migracija (D-91)."
   }
 ]

@@ -11,11 +11,14 @@ SET LOCAL lc_messages TO 'C';
 
 SELECT plan(60);
 
--- Every schema of the application; pgTAP lives in public.
+-- Every schema of the application; pgTAP lives in public. The pg-boss queue
+-- (DAN-517) is the package's own schema, installed verbatim: its jobs carry
+-- identifiers only (D-74), no institution, and its foreign keys cascade by the
+-- package's design. 106 pins that schema.
 CREATE TEMP VIEW app_class AS
 SELECT c.oid, n.nspname || '.' || c.relname AS name
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind IN ('r', 'p') AND n.nspname NOT LIKE 'pg\_%' AND n.nspname NOT IN ('information_schema', 'public');
+WHERE c.relkind IN ('r', 'p') AND n.nspname NOT LIKE 'pg\_%' AND n.nspname NOT IN ('information_schema', 'public', 'pgboss');
 CREATE FUNCTION pg_temp.has_key(p_rel oid) RETURNS boolean
 LANGUAGE sql STABLE AS $$
   SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = p_rel AND attname = 'institution_id' AND NOT attisdropped)
