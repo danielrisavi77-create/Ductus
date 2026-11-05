@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(44);
+SELECT plan(45);
 
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
@@ -20,21 +20,22 @@ SELECT is_empty(
 );
 
 -- Logins come from the environment, never from a migration. The local stack
--- provisions exactly two: the login of the web process
--- (db/local/app-login.sql) and the login of the login callback
+-- provisions exactly three: the login of the web process
+-- (db/local/app-login.sql), the login of the worker process
+-- (db/local/worker-login.sql) and the login of the login callback
 -- (db/local/auth-login.sql). They carry no attribute of their own; what each
 -- may do comes from its single membership, listed further down, and from
 -- nothing granted or set on the login itself, checked after the ductus_app rows.
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND rolcanlogin $$,
-  ARRAY['ductus_app_local', 'ductus_auth_local'],
-  'the local application and login-callback logins are the only ductus_* roles with a login'
+  ARRAY['ductus_app_local', 'ductus_worker_local', 'ductus_auth_local'],
+  'the local application, worker and login-callback logins are the only ductus_* roles with a login'
 );
 SELECT is_empty(
   $$ SELECT rolname::text FROM pg_roles
-     WHERE rolname IN ('ductus_app_local', 'ductus_auth_local')
+     WHERE rolname IN ('ductus_app_local', 'ductus_worker_local', 'ductus_auth_local')
        AND NOT (rolinherit AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)) $$,
-  'ductus_app_local and ductus_auth_local have no SUPERUSER, BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
+  'ductus_app_local, ductus_worker_local and ductus_auth_local have no SUPERUSER, BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
 );
 
 -- The migrator is the only role with DDL, yet it is neither a superuser nor
@@ -91,13 +92,14 @@ CREATE TEMP VIEW allowed_membership AS
     'ductus_migrator in ductus_identity: set',
     'ductus_migrator in ductus_queue: set',
     'ductus_app_local in ductus_app: inherit',
+    'ductus_worker_local in ductus_worker: inherit',
     'ductus_auth_local in ductus_auth: inherit'
   ]) AS membership;
 
 SELECT bag_eq(
   'SELECT membership FROM ductus_membership',
   'SELECT membership FROM allowed_membership',
-  'the only memberships: the migrator as creator and with SET on the owner roles, plus the local logins in ductus_app and ductus_auth'
+  'the only memberships: the migrator as creator and with SET on the owner roles, plus the local logins in ductus_app, ductus_worker and ductus_auth'
 );
 -- Negative controls: the comparison above must notice a membership that is
 -- not on the list. Each one is added, seen and taken back.
@@ -177,13 +179,16 @@ SELECT ok(
 -- is every ductus_* role that can log in and every login that is a member of
 -- a ductus_* role, so the rows below follow the membership list, not a name.
 -- Each login is held to its group: ductus_auth for a login whose only
--- ductus_* membership is ductus_auth (the login callback), ductus_app for
+-- ductus_* membership is ductus_auth (the login callback), ductus_worker for
+-- one whose only membership is ductus_worker (the worker), ductus_app for
 -- every other, including one with no membership at all.
 CREATE TEMP VIEW ductus_login AS
   SELECT r.oid, r.rolname::text AS login,
-         CASE WHEN ARRAY(SELECT DISTINCT pg_get_userbyid(m.roleid)::text FROM pg_auth_members m
-                         WHERE m.member = r.oid AND pg_get_userbyid(m.roleid) LIKE 'ductus\_%') = ARRAY['ductus_auth']
-              THEN 'ductus_auth'::name ELSE 'ductus_app'::name END AS grp
+         CASE ARRAY(SELECT DISTINCT pg_get_userbyid(m.roleid)::text FROM pg_auth_members m
+                    WHERE m.member = r.oid AND pg_get_userbyid(m.roleid) LIKE 'ductus\_%')
+              WHEN ARRAY['ductus_auth'] THEN 'ductus_auth'::name
+              WHEN ARRAY['ductus_worker'] THEN 'ductus_worker'::name
+              ELSE 'ductus_app'::name END AS grp
   FROM pg_roles r
   WHERE r.rolcanlogin
     AND (r.rolname LIKE 'ductus\_%'
@@ -280,6 +285,13 @@ SELECT isnt_empty(
   'a ductus_app right granted to the login-callback login is noticed as a right beyond ductus_auth'
 );
 REVOKE EXECUTE ON FUNCTION identity.close_current_session() FROM ductus_auth_local;
+-- The worker login is held to ductus_worker in the same way.
+GRANT EXECUTE ON FUNCTION identity.close_current_session() TO ductus_worker_local;
+SELECT isnt_empty(
+  $$ SELECT found FROM login_extra_privilege WHERE found LIKE 'ductus\_worker\_local: %' $$,
+  'a ductus_app right granted to the worker login is noticed as a right beyond ductus_worker'
+);
+REVOKE EXECUTE ON FUNCTION identity.close_current_session() FROM ductus_worker_local;
 GRANT CREATE ON DATABASE ductus TO ductus_app_local;
 SELECT isnt_empty(
   'SELECT found FROM login_dependency',

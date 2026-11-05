@@ -1,8 +1,10 @@
 # Ductus: program rada
 
-Verzija 0.4 · 1. 11. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.5 · 4. 11. 2026. · Odgovorna osoba: Daniel Rišavi
 
 **D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored. Novi raspored je D-199 t. 6 (ODLUČENO 1. 11. 2026.): kod vala 1 spreman 22. 2. 2027., pilot 1. 3. 2027.; datumi u odjeljcima ispod koji su stariji od te odluke ostaju povijesni zapis. D-203 (ODLUČENO 1. 11. 2026., E3) mijenja datum pilota: nakon koda spremnog 22. 2. 2027. slijedi puna tehnička proba od oko četiri tjedna, a nastavna aktivacija dolazi tek nakon uspješnog prihvata i suglasnosti FPZG-a, oko 22. 3. 2027. ili poslije. Datum 1. 3. 2027. ostaje kao trag prethodnog cilja. Razrada svake faze na korake, bez datuma, je u `docs/PROGRAM-RAZRADA.md`.
+
+**D-266 (ODLUČENO 4. 11. 2026.):** datum pilota je prema D-203 E3: kod vala 1 spreman 22. 2. 2027., zatim tehnička proba od oko četiri tjedna, a nastava oko 22. 3. 2027. ili kasnije, nakon prihvata i suglasnosti FPZG-a; 1. 3. 2027. je samo trag. Cilj razvoja ostaje M0 do M11 (D-191), a M12 je faza provedbe pilota, ne razvoja. Rok M9.1 je 15. 12. 2026. (Q-10 A). GO tablica ima 16 redaka (Q-7 A).
 
 Faze idu redom po ovisnostima. Faza je gotova tek kad je njezin izlazni kriterij dokazan testom ili zapisom, ne kad je kod napisan. Procjene su u večerima rada (oko 3 sata) jedne osobe uz AI agente i služe samo za planiranje.
 
@@ -10,7 +12,7 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 
 ## Rok
 
-- Ljetni semestar 2026./2027.: prema okvirnom kalendaru Sveučilišta u Zagrebu nastava počinje 22. 3. 2027. FPZG ima vlastiti kalendar; točan datum potvrditi s fakultetom.
+- Ljetni semestar 2026./2027.: prema okvirnom kalendaru Sveučilišta u Zagrebu nastava počinje 22. 3. 2027. FPZG ima vlastiti kalendar; točan datum potvrditi s fakultetom (akademski kalendar je u paketu zahtjeva FPZG-u, D-264 Q09).
 - Tehnička proba (faza A) traje oko 4 tjedna prije početka nastave, pa kod za prvi val mora biti spreman **oko 22. 2. 2027.**
 - Od 3. 10. 2026. do 22. 2. 2027. ima oko 20 tjedana.
 - **D-203 E3:** 22. 2. 2027. ostaje cilj spremnosti koda vala 1. Puna tehnička proba se ne skraćuje radi datuma, a nastavna aktivacija čeka uspješan prihvat i suglasnost FPZG-a.
@@ -33,7 +35,7 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 | **M9 AI pomoćnik** (u pilotu, D-194; mijenja D-77) | Pristup pomoćniku preko računa kod pružatelja (model računa i pružatelj su otvoreni, D-194 t. 6 i 7), popis dopuštenih pružatelja po fakultetu i zadatku bez kineskih pružatelja i modela (D-194 t. 2), sve namjene iz D-64 uključujući transkripciju i alate pružatelja (D-194 t. 4), prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42), razgovori uz izjavu (D-41), zaštita sadržaja pri lekturi (D-46), poznato podrijetlo i podudaranje s AI odgovorom (D-58) | Nedopušten pružatelj nije dostupan; svako prenošenje u evidenciji; nepriloženi razgovori nisu vidljivi nastavniku; promijenjena brojka ili citat prikazani prije primjene; prepisan AI odgovor označen; svrhe razine 2 nedostupne dok ih nastavnik ne uključi, pomoćnik koji pita (D-64) | 14 do 19 |
 | **M10 Podaci** | Klase podataka, brisanje po roku, izvoz za studenta i za bivšeg studenta preko administratora | Brisanje po roku testirano; lanac ostaje provjerljiv nakon brisanja sadržaja | 3 |
 | **M11 GO uvjeti** | Produkcijski okoliš u EU-u (D-08), staging s AAI@EduHr Labom, proba povrata iz kopije, DPIA i ugovor o obradi, obavijest o privatnosti, pristupačnost, `docs/OPERATIONS.md` | Sve stavke iz tablice GO uvjeta zelene i zapisane | 3 + vanjski rokovi |
-| **M12 Pilot** | Faza A tehnička proba, faza B nastava, faza C evaluacija | Mjerila iz `PRODUCT.md` §12 izmjerena i zapisana | Ljetni semestar |
+| **M12 Pilot** (provedba pilota, ne faza razvoja; D-266) | Faza A tehnička proba, faza B nastava, faza C evaluacija | Pragovi korisnosti i razumijevanja iz `PRODUCT.md` §12 zapisani prije faze A (GO t. 11, Q-12 A); mjerila izmjerena i zapisana | Ljetni semestar |
 
 **Zbroj prema tablici: 99 do 134 večeri** (69 do 93 prije dodataka D-40 do D-64). Procjene ovakvih projekata u pravilu se prekorače, pa je realan raspon **145 do 195 večeri**. Cijeli opseg ne stane u jedan semestar pripreme; zato vrijede valovi i kontrolna točka niže.
 
@@ -62,7 +64,7 @@ Sastanak s FPZG-om održava se kad je demo gotov. Demo je prvi dio pravog sustav
 
 **Procjena:** oko 18 do 26 večeri (M0, B1 osnovno, dijelovi M2, M3, M5, M6, M7 iz vala 1). Uz puno radno vrijeme oko 3 do 4 tjedna od početka M0, dakle cilj **početak studenog 2026.**, ovisno o spajanju `pisac-editor` PR #49 i #50 i lokalnom stroju s Dockerom.
 
-Ovo nije dodatni posao: sve stavke su dio vala 1 i samo su poredane tako da prvi prikaz bude rano. Kontrolna točka 15. 12. 2026. ostaje.
+Ovo nije dodatni posao: sve stavke su dio vala 1 i samo su poredane tako da prvi prikaz bude rano. Kontrolna točka 15. 12. 2026. ostaje (povijesni zapis; D-203 t. 5 seli je na 20. 12. 2026.).
 
 ## Raspored po valovima [ODLUČENO D-36, verzija 2]
 
@@ -189,14 +191,15 @@ Jedan crveni uvjet znači da val ne kreće.
 | Tehnički | Produkcijska konfiguracija nema lažnog OIDC pružatelja | Test u CI-ju |
 | Tehnički | Nema zabranjenih riječi u sučelju | Automatska provjera u CI-ju |
 | Pristupačnost | axe bez kritičnih nalaza; svi tokovi tipkovnicom; editor i pregled prije predaje provjereni čitačem zaslona | Izvještaj axe i zapis ručne provjere |
-| Podatkovni | DPIA i ugovor o obradi s FPZG-om potpisani; DPIA i pravno mišljenje (D-55, D-151) pokrivaju i AI pomoćnika, uključujući transkripciju i alate pružatelja (D-194 t. 4 i 5). Ugovor potpisuje pravna osoba operatera koju vlasnik osniva kad fakultet odobri pilot, prije prvih stvarnih podataka (D-194 t. 3) | Dokumenti |
+| Podatkovni | DPIA i ugovor o obradi s FPZG-om potpisani; DPIA i pravno mišljenje (D-55, D-151) pokrivaju i AI pomoćnika, uključujući transkripciju i alate pružatelja (D-194 t. 4 i 5). Ugovor potpisuje pravna osoba operatera, koju vlasnik osniva odmah, usporedno s FPZG-om (D-266, Q-1 B; mijenja D-194 t. 3); ugovor o obradi potpisuje se prije tehničke probe i ovisi o oboje (D-264 Q13) | Dokumenti |
 | Podatkovni | Rokovi čuvanja i dopušteni AI pružatelji potvrđeni | `DECISIONS.md` D-30, D-35 |
 | Podatkovni | Obavijest o privatnosti objavljena i ugrađena u obavijest o zadatku | Tekst obavijesti |
 | Nastavni | Koordinator na FPZG-u, odabrani kolegiji i mentori, odluka o obveznosti (D-04) | Zapis dogovora |
-| Nastavni | Pragovi za korisnost i razumijevanje iz `PRODUCT.md` §12 definirani | Zapis u `DECISIONS.md` |
+| Nastavni | Pragovi za korisnost i razumijevanje iz `PRODUCT.md` §12 definirani prije tehničke probe (faza A; D-266, Q-12 A) | Zapis u `DECISIONS.md` |
 | Operativni | Kontakt za podršku, postupak incidenta, imenovana osoba na FPZG-u koja smije zaustaviti pilot | `docs/OPERATIONS.md` (nastaje u M11) |
 | Operativni | Registracija u AAI@EduHr Registru resursa odobrena | Potvrda Srca |
 | Podatkovni | Popis podizvršitelja (hosting, baza, objekti, KMS, e-pošta, praćenje grešaka, AI pružatelji koje ustanova odobri, GitHub ako objavljuje korijene) s DPA-ima priložen ugovoru s FPZG-om (čl. 28(2) GDPR-a) | Dokument |
 | Tehnički | Proba povrata baze **i** bucketa uspješna; sintetički prolaz evidencije na stagingu koji koristi iste vrste resursa kao produkcija | Zapis probe |
+| Sigurnosni | Kritični nalazi vanjskog pentesta zatvoreni i potvrđeni ponovnim testom; trošak pentesta unutar stropa koji odredi vlasnik (D-266, Q-7 A) | Izvještaj ponovnog testa; vlasnikova potvrda da je trošak unutar stropa |
 
 Pilot se zaustavlja ako se dogodi kritičan neovlašten pristup, gubitak rada ili lažan status (npr. "spremljeno" a nije).

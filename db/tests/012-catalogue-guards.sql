@@ -29,7 +29,8 @@ CREATE TEMP VIEW app_relation AS
 -- has_*_privilege functions resolve groups and PUBLIC, so a right reached
 -- either way shows here. The one exception is the pg-boss queue (DAN-517):
 -- the worker uses its tables directly and they hold identifiers only (D-74);
--- 106 pins those rights exactly.
+-- 106 pins those rights exactly. The local worker login inherits them, and 010
+-- holds that a login has no right beyond its group.
 CREATE TEMP VIEW stray_privilege AS
   SELECT r.rolname || ': ' || p.privilege || ' on ' || a.name AS found
   FROM (SELECT rolname::text FROM pg_roles x
@@ -42,13 +43,14 @@ CREATE TEMP VIEW stray_privilege AS
   WHERE (has_table_privilege(r.rolname, a.oid, p.privilege)
          OR (p.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
              AND has_any_column_privilege(r.rolname, a.oid, p.privilege)))
-    AND NOT (r.rolname = 'ductus_worker' AND a.nspname = 'pgboss');
+    AND NOT (r.rolname IN ('ductus_worker', 'ductus_worker_local') AND a.nspname = 'pgboss');
 
 SELECT is_empty('SELECT found FROM stray_privilege',
   'no role but the owners and ductus_app, nor PUBLIC, holds a right on an application relation');
 GRANT SELECT ON institution.course TO ductus_worker;
-SELECT set_eq('SELECT found FROM stray_privilege', ARRAY['ductus_worker: SELECT on institution.course'],
-  'a table right granted to ductus_worker is noticed');
+SELECT set_eq('SELECT found FROM stray_privilege',
+  ARRAY['ductus_worker: SELECT on institution.course', 'ductus_worker_local: SELECT on institution.course'],
+  'a table right granted to ductus_worker is noticed, also on the worker login that inherits it');
 REVOKE SELECT ON institution.course FROM ductus_worker;
 CREATE ROLE test_reporting NOLOGIN;
 GRANT SELECT ON institution.course TO test_reporting;

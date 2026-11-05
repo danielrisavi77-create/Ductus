@@ -97,9 +97,9 @@ SELECT bag_eq(
         AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
         AND has_function_privilege('ductus_worker', p.oid, 'EXECUTE') $$,
   $$ VALUES ('app.worker_pending_receipts(uuid,integer)'), ('app.worker_receipt_keys(uuid)'),
-            ('app.worker_attach_receipt_signature(uuid,text,jsonb)'),
+            ('app.worker_attach_receipt_signature(uuid,text,jsonb)'), ('app.worker_pending_backlog()'),
             ('pgboss.job_now()'), ('pgboss.create_queue(text,jsonb)') $$,
-  'the worker role executes exactly the three worker RPCs and the two pg-boss functions of its queue (DAN-517)');
+  'the worker role executes exactly the three worker RPCs, the backlog (107-worker-pending-backlog.sql) and the two pg-boss functions of its queue (DAN-517)');
 SELECT is_empty(
   $$ SELECT r || ' ' || p.oid::regprocedure::text FROM pg_proc p
       CROSS JOIN unnest(ARRAY['ductus_app', 'ductus_retention', 'ductus_auth', 'ductus_identity', 'ductus_test_stranger']) AS r
