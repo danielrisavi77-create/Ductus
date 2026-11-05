@@ -228,14 +228,22 @@ jobs:
           key: stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-      # Browser binaries only; "Install browsers" below still runs and installs
-      # the system packages (--with-deps), it skips the download on a hit.
+      # DAN-663: browser binaries and the downloaded .deb files, keyed by the
+      # playwright-core version in pnpm-lock.yaml (it pins the browser builds)
+      # and the runner image. "Install browsers" below still runs: on a hit it
+      # skips the browser download and apt takes the packages from the cache.
+      - name: Playwright version
+        id: playwright
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: node scripts/engineering/playwright-version.mjs
       - name: Restore Playwright browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-all
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/ductus-apt
+          key: pw-${{ runner.os }}-${{ steps.playwright.outputs.image }}-${{ steps.playwright.outputs.version }}-all
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       # The login-callback login (db/local/auth-login.sql) and the worker
@@ -284,8 +292,13 @@ jobs:
       # part of the required Local stack status. No retries, no filter.
       # Firefox and WebKit need the system packages, so this is always the
       # --with-deps path (the Chromium-only shortcut does not apply).
+      # DAN-663: the script caps every attempt and its whole run (10 min);
+      # timeout-minutes is the backstop, so a stuck apt fails the job early.
       - name: Install browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        timeout-minutes: 15
+        env:
+          PLAYWRIGHT_APT_CACHE_DIR: ~/.cache/ductus-apt
         run: bash scripts/engineering/playwright-install.sh chromium firefox webkit
       - name: UI pilot expected test inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -416,12 +429,18 @@ jobs:
           key: stack-login-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             stack-login-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Playwright version
+        id: playwright
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: node scripts/engineering/playwright-version.mjs
       - name: Restore Playwright browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-webkit
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/ductus-apt
+          key: pw-${{ runner.os }}-${{ steps.playwright.outputs.image }}-${{ steps.playwright.outputs.version }}-chromium-webkit
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Local auth login password
@@ -440,14 +459,19 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Install login browser
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        timeout-minutes: 15
         env:
           PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
+          PLAYWRIGHT_APT_CACHE_DIR: ~/.cache/ductus-apt
         run: bash scripts/engineering/playwright-install.sh chromium
       # DAN-232: the login E2E runs over https and the sign-in and demo walk-through
       # specs also run in WebKit (playwright.login.config.ts, #1223). WebKit needs
       # its system packages, so this step has no no-deps shortcut.
       - name: Install login WebKit
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        timeout-minutes: 15
+        env:
+          PLAYWRIGHT_APT_CACHE_DIR: ~/.cache/ductus-apt
         run: bash scripts/engineering/playwright-install.sh webkit
       # F-152: the demo account bootstrap's guards drive a real Chromium, which
       # only this job installs; each shard runs them (a few seconds).

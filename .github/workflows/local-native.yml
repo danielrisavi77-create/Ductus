@@ -60,8 +60,19 @@ jobs:
       - run: pnpm local:up:native --prepare-only
       # The second run changes nothing and must succeed as well.
       - run: pnpm local:up:native --prepare-only
+      # DAN-663: browsers cached by playwright-core version and runner image;
+      # the script caps the install, timeout-minutes is the backstop.
+      - name: Playwright version
+        id: playwright
+        run: node scripts/engineering/playwright-version.mjs
+      - name: Restore Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: pw-${{ runner.os }}-${{ steps.playwright.outputs.image }}-${{ steps.playwright.outputs.version }}-chromium
       - name: Install login browser
         shell: bash
+        timeout-minutes: 15
         run: bash scripts/engineering/playwright-install.sh chromium
       # With the K-3 sample data, as a local run has it: "Demo nastavnik" is a
       # confirmed teacher (T6), which on Compose an earlier spec provisions

@@ -24,6 +24,8 @@ describe("pg import boundary (eslint.config.mjs)", () => {
     ["src/application/example.ts", 'import { Pool } from "pg";\nexport const x = Pool;\n'],
     ["app/api/example/route.ts", 'import Cursor from "pg-cursor";\nexport const x = Cursor;\n'],
     ["src/server/session.ts", 'import { escapeLiteral } from "pg/lib/utils";\nexport const x = escapeLiteral;\n'],
+    // D-91 (3): the migration runner takes its lock connection from src/server/db.
+    ["scripts/db/migrate-locked.mjs", 'import pg from "pg";\nexport const x = pg;\n'],
   ])("rejects the driver in %s", async (filePath, code) => {
     expect(await restrictedImports(filePath, code)).toBe(1);
   });

@@ -1,0 +1,80 @@
+/* Referenca paketa 2 (DAN-564): tokeni i dijelovi iz m5-reference, ovdje samo radni prostor. Nije produktni kod. */
+@import url("../m5-reference/reference.css");
+
+.page.wide, .ref-head { max-width: 1400px; }
+.item .tag { justify-self: start; }
+.side .seg button { padding: 0 8px; font-size: 12.5px; }
+.variants.two { grid-template-columns: repeat(2, 1fr); }
+/* DESIGN-SYSTEM §3: .sheet je tamni list, data-sheet-theme="light" bijeli; m5 crta samo bijeli, pa se tamni ovdje dodaje. */
+.sheet.dark { --sheet: #2e2e2b; --ink: #faf9f5; --ink-2: #dedbd3; --ink-3: #c9c5bb; --rule: #8c887f; --well: #3a3a36; --accent: #c8aa6e; }
+.sheet { max-width: 720px; width: 100%; justify-self: center; font-size: 16.5px; }
+.sheet h2 { font-size: 26px; } .sheet h3 { font-size: 19px; }
+.sheet .run { font: 600 11.5px/1.4 var(--ff-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); display: flex; justify-content: space-between; }
+.sheet .cite { border-bottom: 1px dotted var(--accent); }
+.sheet .open { border: 1px dashed var(--accent); border-radius: 4px; padding: 0 4px; font: 13px var(--ff-ui); }
+.sheet .spell { text-decoration: underline wavy var(--accent); text-underline-offset: 4px; }
+.sheet table { border-collapse: collapse; font: 14px/1.5 var(--ff-ui); width: 100%; }
+.sheet th, .sheet td { border: 1px solid var(--rule); padding: 4px 8px; text-align: left; }
+.sheet .notes { border-top: 1px solid var(--rule); padding-top: 8px; font-size: 14px; }
+.sheet ol { margin: 0; padding-left: 22px; }
+.sheet { --card: #fcfbf8; } .sheet.dark { --card: #33332f; }
+.sheet .imgbox { aspect-ratio: auto; height: 160px; font: 14px var(--ff-ui); }
+
+/* Ljuska Z-01 */
+.app { border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; background: var(--ground); }
+.topbar, .crumbs { display: flex; gap: 8px 16px; align-items: center; flex-wrap: wrap; padding: 8px 16px; background: var(--chrome); border-bottom: 1px solid var(--rule-2); }
+.brand { font: 600 19px var(--ff-display); margin-right: 8px; }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav a, .tabs button { color: var(--ink-2); text-decoration: none; padding: 6px 10px; border-radius: 5px; min-height: 32px; display: inline-flex; align-items: center; }
+.nav a[aria-current="page"], .tabs button[aria-selected="true"] { background: var(--selected, var(--well)); color: var(--ink); font-weight: 600; }
+.push { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.crumbs .path { color: var(--ink-3); font-size: 12.5px; }
+.crumbs h1 { font-size: 21px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 5px; overflow: clip; }
+.seg button { background: transparent; color: var(--ink-2); border: 0; padding: 0 12px; min-height: 32px; font: inherit; }
+.seg button[aria-pressed="true"] { background: var(--well); color: var(--ink); font-weight: 600; }
+.body { display: grid; grid-template-columns: 240px minmax(0, 1fr) 320px; min-height: 640px; }
+.side { background: var(--chrome); padding: 12px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.side.left { border-right: 1px solid var(--rule-2); } .side.right { border-left: 1px solid var(--rule-2); }
+.side h2 { font-size: 17px; }
+.outline { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.outline li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; border-radius: 4px; }
+.outline li[aria-current="true"] { background: var(--well); }
+.outline .n { font: 12px var(--ff-mono); color: var(--ink-3); }
+.center { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.toolbar { display: grid; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--rule-2); background: var(--chrome); }
+.tools { display: flex; gap: 2px 4px; align-items: center; flex-wrap: wrap; }
+.tools .sep { width: 1px; height: 20px; background: var(--rule-2); margin: 0 4px; }
+.tb { background: transparent; color: var(--ink); border: 1px solid transparent; border-radius: 5px; min-height: 32px; padding: 0 8px; font: 13px var(--ff-ui); }
+.tb.menu::after { content: " ▾"; color: var(--ink-3); }
+.select { min-height: 32px; border: 1px solid var(--field-rule); border-radius: 5px; background: var(--field); color: var(--ink); padding: 0 8px; font: 13px var(--ff-ui); }
+.canvas { padding: 24px 16px; display: grid; align-content: start; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--rule-2); padding-bottom: 6px; }
+.tabs button { background: transparent; border: 0; font: inherit; }
+.menus { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+.menu-list { list-style: none; margin: 0; padding: 6px; background: var(--raised); border: 1px solid var(--raised-rule, var(--rule)); border-radius: 6px; display: grid; }
+.menu-list li { padding: 6px 10px; border-radius: 4px; display: flex; justify-content: space-between; gap: 12px; }
+.menu-list .k { font: 12px var(--ff-mono); color: var(--ink-3); }
+.menu-list .hr { border-top: 1px solid var(--rule-2); padding: 0; margin: 4px 0; }
+.banner { background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--warn, var(--accent)); border-radius: 6px; padding: 10px 12px; display: grid; gap: 8px; }
+.banner .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.dot.saving { background: var(--accent); }
+.dot.warn { background: var(--warn, var(--accent)); }
+.dot.error { background: var(--error); }
+.statusbar .end { margin-left: auto; display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; }
+.ref-note { color: var(--ink-2); font-size: 12.5px; max-width: 70ch; }
+:root { --error: #f0a08f; --warn: #e9c58b; --selected: #3a3a36; --raised-rule: #b3aea3; }
+:root[data-theme="light"] { --error: #9c3f33; --warn: #7a5420; --selected: #ecebe5; --raised-rule: #85827a; }
+
+@media (max-width: 1250px) { .body { grid-template-columns: 220px minmax(0, 1fr); } .side.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule-2); } }
+@media (max-width: 1050px) { .menus, .variants.two { grid-template-columns: 1fr; } }
+@media (max-width: 800px) {
+  .body { grid-template-columns: 1fr; }
+  .side.left { border-right: 0; border-bottom: 1px solid var(--rule-2); }
+  .canvas { padding: 12px 0; }
+  .sheet { border-radius: 0; border-left: 0; border-right: 0; padding: 16px; }
+}
+@media (max-width: 640px) {
+  .tb, .select, .seg button, .nav a, .tabs button { min-height: 44px; }
+  .tools { flex-wrap: nowrap; overflow-x: auto; }
+}

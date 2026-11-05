@@ -294,47 +294,69 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 ## M9 AI pomoćnik
 
-**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela; ulazi u val 1 (D-199 t. 1).
+**Cilj:** student, kad zadatak to dopušta, koristi AI pomoćnika unutar Ductusa, a svako prenošenje teksta zapisano je s pružateljem, modelom i svrhom (pravilo 13). D-191 ga vraća u cilj programa, a D-194 uvodi u pilot (1. 3. 2027.) sa svim namjenama osim kineskih pružatelja i modela; ulazi u val 1 (D-199 t. 1). Odgovori O1 do O13 za M9 zapisani su u D-267 do D-270 (po vlasnikovoj delegaciji); model računa (O1) ostaje PRIJEDLOG.
 
 **Gotovo na mainu:** pravilo AI-ja i dopuštene svrhe na kolegiju i zadatku (#943). **Nema:** posrednika prema pružatelju ni sučelja pomoćnika.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M9.1 | Izbor pružatelja, model računa i ugovorni model (D-194 t. 6 i 7, PRIJEDLOG; razlog D-77), uz pravno mišljenje i DPIA | V | | DAN-400 |
+| M9.0-S1 | Jedan ugovor nove verzije formata evidencije za „import” (M8) i „ai-transfer” (M9) te podrijetlo lijepljenja; `evidence-receipt-v2` i formati v2 i v3 ostaju (D-269 O8) | B | M3.1, M3.2-P03, M8.0-S1 | novo; nositelj M3 |
+| M9.0-S2 | Port prema pružatelju i sintetički adapter; stvarni adapter tek nakon M9.1-P04; prazna konfiguracija troška znači da je AI isključen (D-267 O1, O5) | B | M9.0-S1 | novo |
+| M9.0-S3 | Prekidač po ustanovi, isključen po zadanom, za transkripciju i alate pružatelja; pretraga weba samo kroz Ductusov alat s poslužiteljskim popisom odredišta; bez gumba za snimanje (D-267 O9, O10) | B | M9.0-S2 | novo |
+| M9.UX | Referentne slike za S-16 panel Asistent, po D-183 (D-269 O7) | F | | novo |
+| M9.UX-R | Odobrenje slika S-16 od vlasnika; UI koraci M9 čekaju ga, backend ne (D-269 O7) | V | M9.UX | novo; radnja vlasnika |
+| M9.PRIV | Privatnost: pitanje FPZG-u o „objašnjenju pojma” (D-264 Q09, D-268 O2), pravno mišljenje i DPIA (D-257) kao uvjet uključivanja prekidača iz M9.0-S3 | V | | novo; radnja vlasnika |
+| M9.AIACT | Klasifikacija AI pomoćnika prema Aktu o umjetnoj inteligenciji (D-256) prije uključivanja za stvarne studente | V | M9.PRIV | novo |
+| M9.1 | Izbor pružatelja, model računa i ugovorni model (D-194 t. 6 i 7, PRIJEDLOG; razlog D-77), uz pravno mišljenje i DPIA. Rok 15. 12. 2026., kontrolna točka 30. 11. (D-270 O12) | V | | DAN-400 |
 | M9.2 | Posrednik prema pružatelju: `provider.only`, ograničenje troška, tajne po modelu računa koji se odluči (D-74 pod preispitivanjem, D-194) | B | M9.1 | DAN-401 |
-| M9.3 | Dopušteni pružatelji po fakultetu i zadatku | B | M2.12, M9.2 | DAN-402 |
-| M9.4 | Panel Asistent i prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42) | F, B | M9.3, M3.1 | DAN-411 |
-| M9.5 | Razgovori priloženi uz izjavu; nepriloženi nisu vidljivi nastavniku (D-41) | B, F | M9.4, M7.5 | DAN-412 |
-| M9.6 | Zaštita brojki i citata pri lekturi (D-46); poznato podrijetlo i podudaranje s odgovorom pomoćnika (D-58; oznaka podudaranja je uvjetna, U-4) | B, F | M9.4 | DAN-413 |
-| M9.7 | Svrhe razine 2 nedostupne dok ih nastavnik ne uključi; pomoćnik koji pita (D-64) | F, B | M9.4 | DAN-414 |
+| M9.3 | Dopušteni pružatelji po fakultetu i zadatku; popis iz verzionirane konfiguracije `config/faculties`, potvrda FPZG-a (D-270 O11) | B | M2.12, M9.2 | DAN-402 |
+| M9.4 | Panel Asistent i prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42); ponovna primjena bez mreže samo uz aktualnu provjeru prava (D-268 O4); katalog od 10 svrha (D-268 O2) | F, B | M9.3, M3.1, M9.0-S1, M9.UX-R | DAN-411 |
+| M9.5 | Razgovori priloženi uz izjavu; nepriloženi nisu vidljivi nastavniku (D-41); prijenos teksta koji je kasnije obrisan i dalje čini razgovor obveznim (D-268 O3, D-263 Q22) | B, F | M9.4, M7.5 | DAN-412 |
+| M9.6 | Zaštita brojki i citata pri lekturi (D-46); poznato podrijetlo i podudaranje s odgovorom pomoćnika (D-58; oznaka podudaranja je uvjetna, U-4); oznaka ostaje isključena do M9.6-P04 nakon pilota, poznati prijenos i podrijetlo lijepljenja vrijede bez nje (D-268 O6) | B, F | M9.4 | DAN-413 |
+| M9.7 | Svrhe razine 2 nedostupne dok ih nastavnik ne uključi, uključujući „objašnjenje pojma” (D-268 O2); pomoćnik koji pita (D-64) | F, B | M9.4 | DAN-414 |
 
 **Ekrani:** S-16 panel Asistent. N-19 (AI pomoć nastavniku) je PRIJEDLOG i ne gradi se.
+
+**Zatvaranje M9:**
+
+| Korak | Naziv | Uloga | Ovisi o | Tiket |
+| --- | --- | --- | --- | --- |
+| M9.Z1 | Provjera cjeline M9 na sintetičkim podacima: svaki prijenos zapisan s pružateljem, modelom i svrhom; prekidači isključeni po zadanom; prazna konfiguracija troška isključuje AI | B | M9.4, M9.5, M9.6, M9.7 | novo |
+| M9.Z2 | Stanje na kontrolnoj točki 15. 1. 2027. i prijava vlasniku što je otvoreno (M9.1, M9.PRIV, M9.AIACT, M9.UX-R); M9 se ne reže bez vlasnika (D-199 t. 6, D-270 O12). Izvještaj je vezan za datum, ne za završetak koraka: ne čeka ni M9.1 (o njegovu stanju izvještava) ni M9.Z1 (zasebna završna provjera) | V | | novo |
+
+**Ovisnosti izvan M9:** M3.1 (B-8) i M3.2-P03 (nositelj formata evidencije) te M8.0-S1 (zajednički ugovor formata, D-269 O8) navode se kako ih navodi objedinjeni plan rb27; naziva M3.2-P03 i M8.0-S1 još nema u ovom dokumentu, a tiketi se otvaraju nakon potvrde plana (M9.0b, D-270 O13). M7.5 je preduvjet za M9.5. **Redoslijed i rokovi (D-199 t. 6, D-266 t. 6):** M10 → M9 → M11; M9.1 do 15. 12. 2026., M9.2 i M9.3 oko 15. 1. 2027., M9.4 do M9.7 do 15. 2. 2027. (M9.5 nakon M7.5), M10 oko 10. 2., M11 22. 2.; kontrolne točke 30. 11. 2026. i 15. 1. 2027.
 
 **Uvjet završetka:** izlazni kriterij M9 iz `docs/PROGRAM.md`, bez oznake podudaranja s odgovorom AI pomoćnika iz M9.6 (D-58, uvjet U-4): ta oznaka (stavka „prepisan AI odgovor označen” u izlaznom kriteriju) nije dio uvjeta završetka M9 dok se U-4 ne riješi.
 
 ## M10 Podaci
 
-**Cilj:** podaci se čuvaju po klasama i rokovima, brišu se po roku tako da lanac ostaje provjerljiv, i mogu se izvesti.
+**Cilj:** podaci se čuvaju po klasama i rokovima, brišu se po roku tako da lanac ostaje provjerljiv, i mogu se izvesti. Odgovori MQ01 do MQ16 za M10 zapisani su u D-271 do D-275 (po vlasnikovoj delegaciji); rokovi čuvanja ostaju PRIJEDLOG do potvrde FPZG-a (D-30).
 
 **Gotovo na mainu:** revizijski trag pristupa (pgTAP 080 do 083), upisa i članstva. **Nema:** klasa podataka, brisanja po roku, pravnog zadržavanja ni izvoza za studenta.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M10.1 | Rokovi čuvanja s FPZG-om (D-30) | V | FPZG | Owner queue |
-| M10.2 | Klase podataka i brisanje po roku, uključujući stanje prikaza uživo, verzije i vrijeme po promjeni | B | M10.1 | DAN-297 |
-| M10.3 | Pravno zadržavanje (F-02) | B | M10.2 | DAN-415 |
-| M10.4 | Student vidi tko je i kada otvorio njegov rad (pravilo 17, C4) | B, F | | DAN-294 |
-| M10.5 | Izvoz za studenta i za bivšeg studenta preko administratora | B, F | M8.6 | DAN-316 (dio) |
-| M10.6 | Izlaz iz usluge: izvoz svih podataka fakulteta (F-04) | B | M10.5 | DAN-416 |
+| M10.0-S1 | Jedan ugovor brisanja: tablica `erasure` samo za dodavanje (nadgrobni zapis), uske SECURITY DEFINER funkcije samo za `ductus_retention`, zasebna migracija koja sužava okidač nad `audit.access_log`, potpisana kontrolna točka evidencije brisanja (D-272 MQ04, MQ05, MQ07) | B | M3.2-P03 | novo |
+| M10.0-S2 | Raspored u workeru (pg-boss) s prvim poslom `purge_ended_sessions`; prije potvrde D-30 izvršavaju se samo već odlučeni poslovi, ostalo je probni prolaz (D-273 MQ08, MQ14) | B | M10.0-S1 | novo |
+| M10.1 | Rokovi čuvanja s FPZG-om (D-30); popis DATA-CLASS od 30 klasa u 8 kategorija (C-21) nad mainom u trenutku izrade (M10.1-P01, D-271 MQ01, MQ03); tiket prati D-264 Q11 (D-275 MQ16) | V | FPZG | Owner queue |
+| M10.2 | Klase podataka i brisanje po roku, uključujući stanje prikaza uživo, verzije i vrijeme po promjeni; hash i potvrde se čuvaju zasebno, radi dokaza predaje (D-272 MQ06) | B | M10.1, M10.0-S1, B0.1 (bucket kontrolne točke) | DAN-297 |
+| M10.3 | Pravno zadržavanje (F-02); postavlja ga admin ustanove s referencom (broj slučaja), skida drugi admin ili operater, više zadržavanja vrijedi neovisno (D-274 MQ11) | B | M10.2 | DAN-415 |
+| M10.4 | Student vidi tko je i kada otvorio njegov rad (pravilo 17, C4); M10.4-P02 popisuje sve putove koji vraćaju sadržaj ili sažetak, retci po 5 minuta grupirani po danu, bez zbroja posjeta i trajanja (D-274 MQ10) | B, F | M3.11 | DAN-294 |
+| M10.5 | Izvoz za studenta i za bivšeg studenta preko referade: referada prima zahtjev i provjerava identitet, admin ustanove pokreće posao s referencom, jednokratna poveznica na 24 h (D-271 MQ02) | B, F | M8.6, M3.11 | DAN-316 (dio) |
+| M10.6 | Izlaz iz usluge: izvoz svih podataka fakulteta (F-04); pokreće operater na pisani zahtjev ustanove, bez brisanja; P01 ugovor u valu 3, P02 i P03 nakon pilota a prije njegova kraja (D-274 MQ12) | B | M10.5 | DAN-416 |
 | M10.7 | Administracija čuvanja, pravnog zadržavanja i revizijskog traga | F | M10.2, M2.11 | DAN-417 |
-| M10.8 | Studentova vlastita povijest rada (D-131) | B, F | pravno mišljenje D-55 | DAN-424 |
+| M10.8 | (uvjetno) Studentova vlastita povijest rada (D-131); ne gradi se do pravnog mišljenja (D-55) i potvrde C-19, klasa 12 ostaje rezervirana u DATA-CLASS (D-274 MQ09, uvjet U-8) | B, F | pravno mišljenje D-55, C-19, uvjet U-8 | DAN-424 |
 | M10.9 | (uvjetno) Paket za zaštitu studenta: proširenje prenosivog zapisa (D-49, S-01 iz `docs/FEATURES.md`; ekran S-46 paket zaštite) | B, F | M7.10, M10.5, uvjet U-5 | novo |
 | M10.10 | (uvjetno) Izvješće za evaluaciju smjernica (F-01, FPZG čl. 13), samo agregati | B, F | M6.10, M10.7, uvjet U-6 | novo |
 | M10.11 | Portfelj nakon studija: izvoz predanog rada za portfelj (S-10) | B, F | M8.6, M10.5 | novo |
+| M10.UX-R | Odobrenje referentnih slika ekrana M10 od vlasnika, prije UI koraka (D-183, `docs/SESSIONS.md` §6) | V | | novo; radnja vlasnika |
+| M10.PRIV | Privatnost: potvrda rokova i hasha (D-264 Q09, Q11), postupak provjere identiteta u referadi (D-271 MQ02), klauzula o izlazu u ugovoru o obradi (D-264 Q13) | V | | novo; radnja vlasnika |
+| M10.Z1 | Proba povrata na sintetičkom obliku: kontrolna točka evidencije brisanja mora se podudarati prije otvaranja povrata (D-272 MQ07, D-273 MQ15) | B | M10.2, M10.3 | novo |
+| M10.Z2 | Proba povrata na stagingu sa stvarnom infrastrukturom u valu 3 (D-273 MQ15) | P | M10.Z1, B0.1 | novo; računi i staging su radnja vlasnika |
 
 **Ekrani:** S-18 vlastita povijest rada, S-42 dnevnik pristupa, S-44 izvoz vlastitih podataka, A-05 čuvanje i pravno zadržavanje, A-06 revizijski trag pristupa, A-08 izlaz iz usluge.
 
-**Uvjet završetka:** izlazni kriterij M10 iz `docs/PROGRAM.md` (brisanje po roku testirano; lanac provjerljiv nakon brisanja sadržaja); pravno zadržavanje zaustavlja brisanje (test). Koraci M10.9 i M10.10 (uvjetno) nisu dio uvjeta završetka.
+**Uvjet završetka:** izlazni kriterij M10 iz `docs/PROGRAM.md` (brisanje po roku testirano; lanac provjerljiv nakon brisanja sadržaja); pravno zadržavanje zaustavlja brisanje (test). Koraci M10.8, M10.9 i M10.10 (uvjetno) nisu dio uvjeta završetka.
 
 ## M11 GO uvjeti
 
@@ -363,7 +385,7 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 ## Uvjetni koraci (val 3, T3)
 
-Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.6544288967, opcija C; delegirano u #87 c.6543799262, t. 3): stavke bez vanjskog preduvjeta su koraci svojih faza (M5.14 do M5.15, M6.11, M7.13, M8.7, M10.11, M11.12), a već raspoređene stavke ostaju gdje jesu (M6.9 konzultacije, M6.10 zbirni pregled, M7.6 vremeplov, M7.10 prenosiv zapis, M8.3 uvoz PDF-a, M5.7 provjera izvora, M6.2 reprodukcija s poviješću odlomka, M10.8 povijest rada). Stavke ispod imaju pravni ili ustavni uvjet, ne grade se dok se on ne riješi i nisu dio uvjeta završetka svoje faze. Odluku o svakom uvjetu donosi vlasnik.
+Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.6544288967, opcija C; delegirano u #87 c.6543799262, t. 3): stavke bez vanjskog preduvjeta su koraci svojih faza (M5.14 do M5.15, M6.11, M7.13, M8.7, M10.11, M11.12), a već raspoređene stavke ostaju gdje jesu (M6.9 konzultacije, M6.10 zbirni pregled, M7.6 vremeplov, M7.10 prenosiv zapis, M8.3 uvoz PDF-a, M5.7 provjera izvora, M6.2 reprodukcija s poviješću odlomka, M10.8 povijest rada, od D-274 MQ09 uvjetna i bez osnovnog prijema). Stavke ispod imaju pravni ili ustavni uvjet, ne grade se dok se on ne riješi i nisu dio uvjeta završetka svoje faze. Odluku o svakom uvjetu donosi vlasnik.
 
 | Uvjet | Koraci | Što treba riješiti | Granica |
 | --- | --- | --- | --- |
@@ -374,6 +396,7 @@ Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.654
 | U-5 | M10.9 | Tekst paketa i QR provjere ne smije tvrditi autorstvo; dokument izlazi izvan sustava. | pravilo 9, C-13 |
 | U-6 | M10.10 | Agregati bez rizika, ranga i ocjena; isti prag od najmanje 5 studenata kao N-11. | pravilo 2 |
 | U-7 | M8.12 | Dodaci idu u sljedeći val, ne u pilot (D-198 t. 2, ODLUČENO 1. 11. 2026.). Prije gradnje pisana potvrda FPZG-a, pravno mišljenje, DPIA i provjera ograničenja Microsofta i Googlea. Do tada vrijede D-79 i D-80. | D-79, D-80 |
+| U-8 | M10.8 | Pravno mišljenje D-55 (razmjernost čuvanja obrisanog teksta) i potvrda C-19. Do tada se ne gradi, a klasa 12 ostaje rezervirana u DATA-CLASS. DAN-424 i DAN-463 se ne udvostručuju. | D-131, D-55, D-274 MQ09 |
 
 Planer (M5.15) i „Moj rad u brojkama” (M7.13) više nisu uvjetni prema odluci vlasnika o D-63 („1. da 2. da”, #87), ali izričiti izuzetak u PRODUCT §5 pravilu 4 (napredak po poglavlju, dani do roka, napredak iz verzija) upisuje tek docs PR #1030: **M5.15 i M7.13 ne počinju prije spajanja #1030.** A-08 (dnevni vremenski žig kod vanjskog pružatelja) ostaje izvan rasporeda.
 

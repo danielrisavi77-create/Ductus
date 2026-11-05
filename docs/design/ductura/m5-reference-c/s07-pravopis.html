@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-07 — Pravopis prema jeziku rada (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 5 · DAN-568 · prijedlog slike · M5.11</div>
+  <h1>S-07 — Pravopis prema jeziku rada</h1>
+  <p>Provjera radi samo s rječnikom na uređaju i prema jeziku rada, ne prema jeziku sučelja (D-233, D-236). Ugrađena provjera preglednika u editoru je isključena. Crta je neutralna, bez crvene (D-62). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="v1">
+    <div class="ref-tag" id="v1">Stanje 1 · uključeno, bijeli list</div>
+    <div class="sheet">
+      <p>Javni prostor u gradu nije samo <span class="sp">fizčki</span> okvir, nego i mjesto na kojem se pregovara o pravu na grad (Autor A, 2019: 14).</p>
+    </div>
+    <div class="menu" role="menu" aria-label="Prijedlozi za riječ fizčki">
+      <button type="button" role="menuitem">fizički</button>
+      <button type="button" role="menuitem">fizikalni</button>
+      <p class="meta">Prijedlozi su iz rječnika na ovom uređaju.</p>
+    </div>
+    <div class="statusbar" role="status"><span><span class="dot" aria-hidden="true"></span>Spremljeno na poslužitelju</span><button class="btn small secondary" type="button" aria-haspopup="dialog">Pravopis: hrvatski</button><span>1.248 riječi</span></div>
+  </section>
+
+  <section class="variant" aria-labelledby="v1b">
+    <div class="ref-tag" id="v1b">Stanje 1b · uključeno, tamni list</div>
+    <div class="sheet dark">
+      <p>Javni prostor u gradu nije samo <span class="sp">fizčki</span> okvir, nego i mjesto na kojem se pregovara o pravu na grad (Autor A, 2019: 14).</p>
+    </div>
+    <p class="meta">Crta uzima boju tinte lista; na tamnom listu ostaje jednako uočljiva.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="v2">
+    <div class="ref-tag" id="v2">Stanje 2 · postavka pravopisa</div>
+    <div class="dialog" role="dialog" aria-labelledby="v2h">
+      <h2 id="v2h" style="font-size:19px">Pravopis</h2>
+      <p class="kv"><span>Jezik rada</span><b>hrvatski</b></p>
+      <label><input type="checkbox" checked> Provjeravaj pravopis</label>
+      <p class="note">Pravopis se provjerava rječnikom na ovom uređaju. Ductura tekst rada ne šalje na vanjsku uslugu za pravopis.</p>
+      <div class="acts"><button class="btn secondary" type="button">Zatvori</button></div>
+    </div>
+    <p class="meta">Otvara se gumbom „Pravopis” u traci stanja; po zatvaranju fokus se vraća na taj gumb. Esc zatvara.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="v3">
+    <div class="ref-tag" id="v3">Stanje 3 · isključeno</div>
+    <div class="sheet">
+      <p>Javni prostor u gradu nije samo fizčki okvir, nego i mjesto na kojem se pregovara o pravu na grad (Autor A, 2019: 14).</p>
+    </div>
+    <div class="statusbar" role="status"><span><span class="dot" aria-hidden="true"></span>Spremljeno na poslužitelju</span><button class="btn small secondary" type="button" aria-haspopup="dialog">Pravopis: isključen</button><span>1.248 riječi</span></div>
+    <p class="meta">Bez crte i bez prijedloga. Ni preglednik ne provjerava jer je njegova provjera u editoru isključena.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="v4">
+    <div class="ref-tag" id="v4">Stanje 4 · jezik nepoznat</div>
+    <div class="dialog" role="dialog" aria-labelledby="v4h">
+      <h2 id="v4h" style="font-size:19px">Pravopis</h2>
+      <p class="kv"><span>Jezik rada</span><b>nije zadan</b></p>
+      <p class="note" role="status">Jezik rada nije poznat, pa se pravopis ne provjerava. Ductura tekst rada ne šalje na vanjsku uslugu za pravopis.</p>
+      <div class="acts"><button class="btn secondary" type="button">Zatvori</button></div>
+    </div>
+    <div class="statusbar"><button class="btn small secondary" type="button" aria-haspopup="dialog">Pravopis: nije dostupan</button></div>
+  </section>
+
+  <section class="variant" aria-labelledby="v4b">
+    <div class="ref-tag" id="v4b">Stanje 4b · nema rječnika za jezik rada</div>
+    <div class="dialog" role="dialog" aria-labelledby="v4bh">
+      <h2 id="v4bh" style="font-size:19px">Pravopis</h2>
+      <p class="kv"><span>Jezik rada</span><b>talijanski</b></p>
+      <p class="note" role="status">Za talijanski na ovom uređaju nema rječnika, pa se pravopis ne provjerava. Ductura tekst rada ne šalje na vanjsku uslugu za pravopis.</p>
+      <div class="acts"><button class="btn secondary" type="button">Zatvori</button></div>
+    </div>
+    <div class="statusbar"><button class="btn small secondary" type="button" aria-haspopup="dialog">Pravopis: nije dostupan</button></div>
+  </section>
+
+  <section class="variant" aria-labelledby="v5">
+    <div class="ref-tag" id="v5">Stanje 5 · rječnik se učitava ili nije učitan</div>
+    <div class="statusbar" role="status"><button class="btn small secondary" type="button" aria-haspopup="dialog" aria-busy="true">Pravopis: učitavam rječnik</button></div>
+    <div class="statusbar" role="alert"><button class="btn small secondary" type="button" aria-haspopup="dialog">Pravopis: rječnik nije učitan</button><button class="btn small ghost" type="button">Pokušaj ponovno</button></div>
+    <p class="meta">Pisanje i spremanje ne čekaju rječnik; dok se ne učita, crte nema.</p>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): list, gumb Pravopis u traci stanja, u dijalogu potvrdni okvir pa Zatvori. Izbornik prijedloga otvara se tipkom kontekstnog izbornika na označenoj riječi; strelice biraju, Enter zamjenjuje, Esc zatvara.</p>
+</main>
+</body>
+</html>

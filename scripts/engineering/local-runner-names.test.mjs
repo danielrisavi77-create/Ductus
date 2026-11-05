@@ -13,8 +13,10 @@ import test from "node:test";
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 
+// `[\\/]+` also catches a backslash escaped in JSON, YAML or a JS string
+// ("scripts\\demo\\up.mjs" in the raw manifest text).
 export const RETIRED = [
-  /scripts[\\/]demo[\\/]/i,
+  /scripts[\\/]+demo[\\/]+/i,
   /\bdemo:(up|prepare|bootstrap-accounts)\b/i,
   /\btest:demo\b/i,
   /\bdemo-native\b/i,
@@ -31,6 +33,17 @@ export function retiredScriptKeys(scripts) {
   return Object.keys(scripts).filter((name) => RETIRED_SCRIPT_KEY.test(name));
 }
 
+// The manifest is checked as raw text and again after JSON.parse, on every
+// script name and command, so no encoding of a path can hide it.
+export function retiredInManifest(text) {
+  const { scripts = {} } = JSON.parse(text);
+  const found = new Set(retiredIn(text));
+  for (const [name, command] of Object.entries(scripts)) {
+    for (const pattern of retiredIn(`${name} ${command}`)) found.add(pattern);
+  }
+  return [...found];
+}
+
 export function retiredTrackedFiles(paths) {
   return paths.filter((file) => /^scripts[\\/]demo[\\/]/i.test(file));
 }
@@ -40,6 +53,7 @@ export function retiredTrackedFiles(paths) {
 const CLASSES = [
   { name: "1 package.json script key", keys: { bad: { "demo:up": "x", "test:demo:browser": "x", "Demo:prepare": "x" }, good: { "local:up": "x", "test:local": "x", "db:demo-k3": "x" } } },
   { name: "2 script path, either slash, any case", bad: ["node scripts/demo/up.mjs", "node scripts\\demo\\native\\up.mjs", "node Scripts/Demo/up.mjs"], good: ["node scripts/local/up.mjs", "node scripts\\local\\native\\up.mjs", "node scripts/demonstration.mjs"] },
+  { name: "2a script path inside the JSON manifest", manifest: { bad: [{ "local:up": "node scripts\\demo\\up.mjs" }, { "local:up:native": "node scripts\\demo\\native\\up.mjs" }, { "local:up": "node Scripts/Demo/up.mjs" }, { "local:x": "pnpm test:demo" }], good: [{ "local:up": "node scripts\\local\\up.mjs" }, { "local:up": "node scripts/local/up.mjs" }, { "db:demo-k3": "x" }] } },
   { name: "2b retired pnpm command", bad: ["pnpm demo:up", "pnpm demo:up:native", "pnpm demo:prepare", "pnpm demo:bootstrap-accounts", "pnpm test:demo", "pnpm test:demo:browser"], good: ["pnpm local:up", "pnpm local:up:native", "pnpm test:local:browser"] },
   { name: "3 retired flag", bad: ["up.mjs --no-demo-data", "--NO-DEMO-DATA"], good: ["up.mjs --no-sample-data"] },
   { name: "4 workflow name, job or group", bad: ["demo-native.yml", "name: Demo native (Windows)", "group: demo-native-${{ github.ref }}"], good: ["local-native.yml", "name: Local native (Windows)", "group: local-native-${{ github.ref }}"] },
@@ -52,6 +66,11 @@ for (const row of CLASSES) {
     if (row.keys) {
       assert.deepEqual(retiredScriptKeys(row.keys.bad).length, Object.keys(row.keys.bad).length);
       assert.deepEqual(retiredScriptKeys(row.keys.good), []);
+    } else if (row.manifest) {
+      // Serialized exactly as package.json stores it, backslashes escaped.
+      const json = (scripts) => JSON.stringify({ scripts }, null, 2);
+      for (const scripts of row.manifest.bad) assert.notDeepEqual(retiredInManifest(json(scripts)), [], json(scripts));
+      for (const scripts of row.manifest.good) assert.deepEqual(retiredInManifest(json(scripts)), [], json(scripts));
     } else if (row.files) {
       assert.deepEqual(retiredTrackedFiles(row.files.bad), row.files.bad);
       assert.deepEqual(retiredTrackedFiles(row.files.good), []);
@@ -72,7 +91,7 @@ test("class 5: no tracked file is left under scripts/demo/ and scripts/local/ ho
 
 test("classes 1 to 3: package.json names the local scripts and none of the retired ones", () => {
   const manifest = read("package.json");
-  assert.deepEqual(retiredIn(manifest), []);
+  assert.deepEqual(retiredInManifest(manifest), []);
   const { scripts } = JSON.parse(manifest);
   assert.deepEqual(retiredScriptKeys(scripts), []);
   for (const name of ["local:up", "local:prepare", "local:up:native", "local:bootstrap-accounts", "test:local", "test:local:browser"]) {

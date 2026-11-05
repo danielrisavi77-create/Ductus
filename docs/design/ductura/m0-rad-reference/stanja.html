@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stanja radnog prostora</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 2 · DAN-564 · prijedlog slike</div>
+  <h1>Stanja rada (S-10, Z-11, Z-13, Z-02)</h1>
+  <p>Spremanje, mreža, sukob, oporavak, fokus, tamni list, predan rad i odjava. Oznake stanja su iz <code>src/domain/sync/labels.ts</code>, poruke iz <code>src/lib/i18n/messages.hr.ts</code>. „Spremljeno na poslužitelju” se pokazuje samo uz potpisanu potvrdu.</p>
+</header>
+<main class="page wide">
+  <div class="variants">
+    <section class="variant" aria-labelledby="s1"><div class="ref-tag" id="s1">Stanje 1 · sprema se</div>
+      <div class="sheet" data-sheet-theme="light"><p>Klasični pristup polazi od racionalnog izbora (Autor A, 2019: 14), a ovaj rad dodaje povjerenje</p></div>
+      <div class="statusbar" role="status"><span><span class="dot saving" aria-hidden="true"></span>Spremam lokalno</span><div class="end"><span>1.284 riječi</span></div></div>
+      <p class="ref-note">Točka pulsira u boji naglaska; boja „spremljeno na poslužitelju” nikad nije ista kao naglasak.</p></section>
+    <section class="variant" aria-labelledby="s2"><div class="ref-tag" id="s2">Stanje 2 · spremljeno na poslužitelju</div>
+      <div class="sheet" data-sheet-theme="light"><p>Klasični pristup polazi od racionalnog izbora (Autor A, 2019: 14), a ovaj rad dodaje povjerenje.</p></div>
+      <div class="statusbar" role="status"><span><span class="dot" aria-hidden="true"></span>Spremljeno na poslužitelju</span><div class="end"><span>1.285 riječi</span></div></div>
+      <p class="ref-note">Puna točka u boji „synced”. Između toga traka redom pokazuje Spremljeno na uređaju i Sinkroniziram.</p></section>
+    <section class="variant" aria-labelledby="s3"><div class="ref-tag" id="s3">Stanje 3 · bez mreže (Z-11)</div>
+      <div class="banner" role="status"><span>Bez mreže. Tekst se i dalje sprema na ovom uređaju.</span></div>
+      <div class="sheet" data-sheet-theme="light"><p>Pisanje se nastavlja bez prekida.</p></div>
+      <div class="statusbar" role="status"><span><span class="dot local" aria-hidden="true"></span>Spremljeno na uređaju</span><div class="end"><span>Bez mreže</span></div></div></section>
+    <section class="variant" aria-labelledby="s4"><div class="ref-tag" id="s4">Stanje 4 · sukob</div>
+      <div class="banner" role="alert"><span>Rad na poslužitelju razlikuje se od teksta na ovom uređaju. Tekst ostaje na uređaju i ništa se ne šalje dok ne odlučite kako dalje.</span>
+        <div class="acts"><button class="btn small" type="button">Izvezi tekst</button></div></div>
+      <div class="statusbar" role="status"><span><span class="dot warn" aria-hidden="true"></span>Sukob</span></div></section>
+    <section class="variant" aria-labelledby="s5"><div class="ref-tag" id="s5">Stanje 5 · potreban oporavak (Z-11)</div>
+      <div class="banner" role="alert"><span>Lokalni zapis nije moguće pouzdano pročitati. Ostaje netaknut, a ova kartica ništa ne sprema.</span>
+        <div class="acts"><button class="btn small" type="button">Izvezi tekst</button><button class="btn small secondary" type="button">Otvori raniji tekst</button></div></div>
+      <div class="statusbar" role="status"><span><span class="dot error" aria-hidden="true"></span>Potreban oporavak</span></div></section>
+    <section class="variant" aria-labelledby="s5b"><div class="ref-tag" id="s5b">Stanje 5b · ne sprema se na uređaj (#1333)</div>
+      <div class="banner" role="alert"><span>Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.</span>
+        <div class="acts"><button class="btn small" type="button">Izvezi tekst</button></div></div>
+      <div class="statusbar" role="status"><span><span class="dot error" aria-hidden="true"></span>Ne sprema se na uređaj</span><div class="end"><span>1.248 riječi</span></div></div>
+      <p class="ref-note">Upozorenje ostaje vidljivo tijekom pisanja. Pohrana nedostupna i ostale varijante: <code>m3-reference/s10-stanja-spremanja.html</code>, stanja 2a do 2c.</p></section>
+    <section class="variant" aria-labelledby="s6"><div class="ref-tag" id="s6">Stanje 6 · pisanje u drugoj kartici (Z-11)</div>
+      <div class="banner" role="status"><span>Ova kartica ništa ne sprema dok je druga otvorena. Kad je zatvorite, tekst se ovdje ponovno učitava.</span></div>
+      <div class="sheet" data-sheet-theme="light" aria-readonly="true"><p>List je samo za čitanje.</p></div>
+      <div class="statusbar" role="status"><span><span class="dot warn" aria-hidden="true"></span>Dokument je otvoren u drugoj kartici.</span></div></section>
+    <section class="variant" aria-labelledby="s7"><div class="ref-tag" id="s7">Stanje 7 · fokus</div>
+      <div class="tools"><button class="btn small secondary" type="button">Izlaz iz fokusa</button><span class="meta">Esc</span></div>
+      <div class="sheet" data-sheet-theme="light"><h3>2. Teorijski okvir</h3><p>Bez bočnih panela i druge trake alata. List ostaje na sredini.</p></div>
+      <div class="statusbar" role="status"><span><span class="dot" aria-hidden="true"></span>Spremljeno na poslužitelju</span><div class="end"><span>486 riječi u poglavlju</span></div></div></section>
+    <section class="variant" aria-labelledby="s8"><div class="ref-tag" id="s8">Stanje 8 · tamni list (Z-13)</div>
+      <div class="sheet dark"><h3>2. Teorijski okvir</h3><p>Tamni list drži grafitnu boju i u svijetloj ljusci. Izbor se čuva samo u pregledniku.</p></div>
+      <div class="seg" role="group" aria-label="Tema lista"><button type="button" aria-pressed="false">Bijeli list</button><button type="button" aria-pressed="true">Tamni list</button></div></section>
+    <section class="variant" aria-labelledby="s9"><div class="ref-tag" id="s9">Stanje 9 · predan rad</div>
+      <div class="banner" role="status"><span>Rad je predan, pa se ovdje više ne može pisati. Izmjene napravljene nakon predaje nisu u predanom radu i ostaju samo na ovom uređaju.</span></div>
+      <div class="sheet" data-sheet-theme="light" aria-readonly="true"><p>Klasični pristup polazi od racionalnog izbora (Autor A, 2019: 14).</p></div></section>
+  </div>
+  <div class="variants two">
+    <section class="variant" aria-labelledby="o1"><div class="ref-tag" id="o1">Stanje 10 · odjava s izmjenama samo na uređaju (Z-02)</div>
+      <div class="dialog" role="dialog" aria-labelledby="o1t"><h2 id="o1t">Odjava</h2>
+        <p>3 izmjene postoje samo na ovom uređaju. Odjava zatvara sesiju.</p>
+        <p class="note">Zapis ostaje vezan uz Vas na ovom uređaju i nastavljate ga kad se ponovno prijavite. Osoba koja se nakon Vas prijavi na ovom uređaju ne vidi Vaš rad.</p>
+        <div class="acts"><button class="btn" type="button">Odjavi se</button><button class="btn secondary" type="button">Ostani</button></div></div></section>
+    <section class="variant" aria-labelledby="o2"><div class="ref-tag" id="o2">Stanje 11 · odjava kad uređaj nije mogao pohraniti tekst (Z-02)</div>
+      <div class="dialog" role="dialog" aria-labelledby="o2t"><h2 id="o2t">Odjava</h2>
+        <p>Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezite tekst prije odjave.</p>
+        <div class="acts"><button class="btn" type="button">Izvezi tekst</button><button class="btn secondary" type="button">Odjavi se bez izvoza</button><button class="btn secondary" type="button">Ostani</button></div></div>
+      <p class="ref-note">Odjava se nikad ne blokira (D-118); radnja samo kaže što košta.</p></section>
+  </div>
+</main>
+</body>
+</html>

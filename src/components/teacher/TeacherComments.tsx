@@ -133,11 +133,18 @@ export function useComments(documentId: string, current: () => boolean, active: 
     const result = await listComments(documentId, current);
     if (mine === generation.current) setOutcome(result);
   }, [documentId, current, active]);
+  // Dropped in the render that first sees `active` change (D-118).
+  const [wasActive, setWasActive] = useState(active);
+  if (active !== wasActive) {
+    setWasActive(active);
+    setOutcome(null);
+  }
   useEffect(() => {
     if (active) void load();
-    else { generation.current += 1; setOutcome(null); }
+    else generation.current += 1;
   }, [load, active]);
-  return { outcome, load };
+  // An answer that lands between that render and the effect is never shown.
+  return { outcome: active ? outcome : null, load };
 }
 
 export default function TeacherComments({ documentId, outcome, placed, draft, current, onReload, onDraftDone, onShow }: {
