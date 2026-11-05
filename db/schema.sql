@@ -3617,12 +3617,13 @@ BEGIN
     v_restored := OLD.revoked_at IS NOT NULL;
   END IF;
   IF EXISTS (SELECT 1 FROM institution.institution_role r
-             WHERE r.id = NEW.id AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL)
-     AND (v_restored
-          OR NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
-                         WHERE e.role_id = NEW.id AND e.role = 'admin' AND e.kind = 'confirmed')
-          OR EXISTS (SELECT 1 FROM audit.teacher_role_event e
-                     WHERE e.role_id = NEW.id AND e.kind = 'revoked')) THEN
+             WHERE r.id = NEW.id AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+               AND (v_restored
+                    OR NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                                   WHERE e.role_id = r.id AND e.role = 'admin' AND e.kind = 'confirmed'
+                                     AND e.xmin = r.xmin)
+                    OR EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                               WHERE e.role_id = r.id AND e.kind = 'revoked'))) THEN
     RAISE EXCEPTION 'administrator not appointed by the operator' USING ERRCODE = 'ZD409';
   END IF;
   RETURN NULL;

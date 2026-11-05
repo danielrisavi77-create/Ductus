@@ -137,12 +137,17 @@ END
 $$;
 
 -- At commit the row is read again: an active confirmed administrator needs
--- the procedure's 'confirmed' row and no 'revoked' row, and must not be a
--- revoked row made active again. The procedure never restores a revoked row
--- (it inserts a new one), and a revocation outside it writes no 'revoked'
--- row, so without the last condition its earlier 'confirmed' row would
--- admit the restore. The caller may be ductus_app, which cannot read the
--- trail: hence the definer.
+-- the procedure's 'confirmed' row written together with the row as it now
+-- stands, no 'revoked' row, and must not be a revoked row made active again.
+-- The procedure writes the row and its 'confirmed' row in one statement, so
+-- both carry the same transaction id (xmin), in a subtransaction too. Any
+-- later write that brings the row back into office (clearing and setting
+-- confirmed_at again, or a restore after a revocation outside the procedure,
+-- which writes no 'revoked' row) gives the row another xmin, so an earlier
+-- 'confirmed' row no longer admits it. A later change to the same row in
+-- another savepoint of the procedure's transaction is refused too (fail
+-- closed). The caller may be ductus_app, which cannot read the trail: hence
+-- the definer.
 CREATE FUNCTION institution.check_admin_appointment() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
@@ -153,12 +158,13 @@ BEGIN
     v_restored := OLD.revoked_at IS NOT NULL;
   END IF;
   IF EXISTS (SELECT 1 FROM institution.institution_role r
-             WHERE r.id = NEW.id AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL)
-     AND (v_restored
-          OR NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
-                         WHERE e.role_id = NEW.id AND e.role = 'admin' AND e.kind = 'confirmed')
-          OR EXISTS (SELECT 1 FROM audit.teacher_role_event e
-                     WHERE e.role_id = NEW.id AND e.kind = 'revoked')) THEN
+             WHERE r.id = NEW.id AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+               AND (v_restored
+                    OR NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                                   WHERE e.role_id = r.id AND e.role = 'admin' AND e.kind = 'confirmed'
+                                     AND e.xmin = r.xmin)
+                    OR EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                               WHERE e.role_id = r.id AND e.kind = 'revoked'))) THEN
     RAISE EXCEPTION 'administrator not appointed by the operator' USING ERRCODE = 'ZD409';
   END IF;
   RETURN NULL;
