@@ -85,7 +85,10 @@ END
 $$;
 
 -- Operator only. RETURNING gives only a row inserted now or a pending row
--- confirmed now; an administrator already active is left as it was.
+-- confirmed now; an administrator already active is left as it was. The
+-- trail holds one 'confirmed' row per role row, so a pending row that was
+-- confirmed once before (made pending by a direct write) is closed first and
+-- the person is appointed on a new row.
 CREATE FUNCTION institution.appoint_institution_admin(p_user_id uuid, p_request_ref text)
 RETURNS boolean
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
@@ -94,6 +97,10 @@ DECLARE
   v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
   v_written integer;
 BEGIN
+  UPDATE institution.institution_role r SET revoked_at = now()
+   WHERE r.institution_id = v_institution_id AND r.user_id = p_user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NULL AND r.revoked_at IS NULL
+     AND EXISTS (SELECT 1 FROM audit.teacher_role_event e WHERE e.role_id = r.id AND e.kind = 'confirmed');
   WITH appointed AS (
     INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
     VALUES (v_institution_id, p_user_id, 'admin', NULL, now())

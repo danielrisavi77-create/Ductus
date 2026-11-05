@@ -3344,6 +3344,10 @@ DECLARE
   v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
   v_written integer;
 BEGIN
+  UPDATE institution.institution_role r SET revoked_at = now()
+   WHERE r.institution_id = v_institution_id AND r.user_id = p_user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NULL AND r.revoked_at IS NULL
+     AND EXISTS (SELECT 1 FROM audit.teacher_role_event e WHERE e.role_id = r.id AND e.kind = 'confirmed');
   WITH appointed AS (
     INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
     VALUES (v_institution_id, p_user_id, 'admin', NULL, now())

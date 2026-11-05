@@ -236,18 +236,15 @@ SELECT is(pg_temp.as_owner($$ UPDATE institution.institution_role SET confirmed_
   'ZD409: administrator not appointed by the operator',
   'but not confirmed again on the strength of the operator''s earlier confirmation');
 SELECT is(pg_temp.admin_rows('dora'), 'false false', 'Dora''s row stays pending');
--- The trail holds one 'confirmed' row per role row, so the operator does not
--- confirm such a row a second time either; the row is closed and the
--- operator appoints her on a new one.
-SELECT is(left(pg_temp.op($$ SELECT institution.appoint_institution_admin({vesna}, 'Zahtjev 12/2026')::text $$), 6),
-  '23505:', 'the operator''s call on a row confirmed once already is refused');
-SELECT is(pg_temp.admin_rows('vesna'), 'false false', 'and leaves the row pending');
-SELECT is(pg_temp.as_owner($$ UPDATE institution.institution_role SET revoked_at = now()
-  WHERE user_id = {vesna} AND role = 'admin' AND revoked_at IS NULL RETURNING 'written' $$), 'written',
-  'the pending row can be closed');
+SELECT is(pg_temp.op($$ SELECT institution.appoint_institution_admin({dora}, 'Zahtjev 13/2026')::text $$), 'true',
+  'the operator appoints Dora again');
+SELECT is(pg_temp.admin_rows('dora'), 'false true, true false', 'on a new row as well');
+-- Only the operator brings her back. The trail holds one 'confirmed' row per
+-- role row, so the procedure closes the pending row confirmed once already
+-- and appoints her on a new one (QA, PR #1526).
 SELECT is(pg_temp.op($$ SELECT institution.appoint_institution_admin({vesna}, 'Zahtjev 12/2026')::text $$), 'true',
-  'and the operator appoints Vesna again');
-SELECT is(pg_temp.admin_rows('vesna'), 'false true, true false', 'on a new row beside the closed one');
+  'the operator appoints Vesna again');
+SELECT is(pg_temp.admin_rows('vesna'), 'false true, true false', 'on a new row, the stale pending one closed');
 SELECT is((SELECT count(DISTINCT e.role_id) || ': ' || string_agg(e.request_ref, ', ' ORDER BY e.request_ref)
              FROM audit.teacher_role_event e
             WHERE e.teacher_id = pg_temp.id('vesna') AND e.role = 'admin' AND e.kind = 'confirmed'),
