@@ -29,6 +29,7 @@ Vlasnik, 5. 11. 2026. (#87 c.6645361793): „editor mora imati sve funckije koje
 | Uputnica na poglavlje | D-201 | RP Umetni |
 | Otvoreno mjesto za izvor | D-61, D-137, PRODUCT §5 | RP list; Umetni |
 | Lijepljenje s oznakom izvora | D-43, PRODUCT §4 | RP Umetni |
+| Oznake podrijetla u studentskom prikazu: karta podrijetla na mjestima lijepljenja, uvoza, AI prijenosa i izmjena nastavnika; „Napisano u Ducturi” samo kao oznaka mjesta, uz stalno objašnjenje „Ductus ne zna tko je tipkao”; bez zbroja, udjela i postotka; isključeno kad je prekidač „Podrijetlo teksta” isključen | D-57, D-127, D-58, D-61, PRODUCT §5 i §7, M7.7 (DAN-384), N-10 | Nije nacrtano na ovoj slici: oznake su prikaz karte podrijetla koji se gradi u M7.7; mjerodavni ekrani su N-10 (sažetak i karta podrijetla, mentor) i S-30 (pregled prije predaje, student; D-61), a isti prikaz vide mentor i student (D-127) |
 | Traži i zamijeni, Ctrl+F | M5.10, `m5-reference/trazi-zamijeni.html` | RP druga traka; Prikaz |
 | Hrvatski navodnici | M5.10 | RP list (ponašanje pri pisanju) |
 | Fokus i izlaz iz fokusa | M5.10, `m5-reference/fokus.html` | RP prva traka; ST stanje 7 |
@@ -62,7 +63,6 @@ Ove funkcije su u datoteci Ductura DEMO V3 · Editor v11 (vlasnikova datoteka, i
 3. Vodoravna crta.
 4. Predložak strukture.
 5. Veći tekst (prikaz).
-6. Oznake podrijetla u studentskom prikazu.
-7. „Ostavite poruku sebi”.
-8. Pretraži u gornjoj traci (pretraga cijele aplikacije).
-9. Samo za demo, ne ulazi u proizvod: promjena demo uloge, vodič za demo, sigurnosna kopija i „Preuzmi kopiju” demo stanja, naslovna stranica demo datoteke.
+6. „Ostavite poruku sebi”.
+7. Pretraži u gornjoj traci (pretraga cijele aplikacije).
+8. Samo za demo, ne ulazi u proizvod: promjena demo uloge, vodič za demo, sigurnosna kopija i „Preuzmi kopiju” demo stanja, naslovna stranica demo datoteke.
