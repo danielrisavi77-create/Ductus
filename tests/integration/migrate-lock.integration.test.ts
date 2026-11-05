@@ -79,6 +79,44 @@ describe("migration lock (D-91 (3))", () => {
     }
   });
 
+  it("two runs started together never run dbmate at the same time", async () => {
+    // Istodobnost: the second run waits on pg_advisory_lock; its dbmate may
+    // start only after the first dbmate has exited and the lock was released.
+    const events: string[] = [];
+    let running = 0;
+    let overlapped = false;
+    const children: FakeDbmate[] = [];
+    const start = (name: string) => () => {
+      running += 1;
+      if (running > 1) overlapped = true;
+      events.push(`start ${name}`);
+      const child = new FakeDbmate();
+      child.once("exit", () => {
+        running -= 1;
+        events.push(`exit ${name}`);
+      });
+      children.push(child);
+      return child;
+    };
+    const a = runLocked({ connect: lockClient, start: start("a"), log: () => {} });
+    const b = runLocked({ connect: lockClient, start: start("b"), log: () => {} });
+    await until(() => children.length === 1);
+    // The other run must still be waiting on the lock, not running dbmate.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(children).toHaveLength(1);
+    expect(await holders()).toHaveLength(1);
+    children[0]!.exit(0);
+    await until(() => children.length === 2);
+    expect(await holders()).toHaveLength(1);
+    children[1]!.exit(0);
+    expect(await Promise.all([a, b])).toEqual([0, 0]);
+    expect(overlapped).toBe(false);
+    const first = events[0]!.slice("start ".length);
+    const second = first === "a" ? "b" : "a";
+    expect(events).toEqual([`start ${first}`, `exit ${first}`, `start ${second}`, `exit ${second}`]);
+    expect(await holders()).toEqual([]);
+  });
+
   it("stops dbmate and fails when the lock session is terminated", async () => {
     const child = new FakeDbmate();
     let started = false;
