@@ -5,7 +5,7 @@ Paket 2 iz plana dizajna: radni prostor studenta (Z-01) s editorom (S-10), tema 
 ## Vlasnikove odluke
 
 - 5. 11. 2026., o starim prototipovima (#87 c.6645288294): „Ok, solidni su, ali treba prilagoditi našoj boji”. Raspored iz `editor-v11.dc.html` vrijedi, boje ne.
-- 5. 11. 2026., o datoteci `Ductura_DEMO_V3_EDITOR_V11.html` (#87 c.6645361793): „Želim da preuzmemo dio i iz ovoga, a editor mora imati sve funckije koje smo već prije definirali”. Datoteka je u repou kao `../demo-v3-editor-v11.html`.
+- 5. 11. 2026., o datoteci Ductura DEMO V3 · Editor v11 (vlasnikova datoteka, izvan repoa) ([#87 c.6645361793](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6645361793)): „Želim da preuzmemo dio i iz ovoga, a editor mora imati sve funckije koje smo već prije definirali”. Datoteka je samo izvor rasporeda i nije u repou.
 
 ## Stranice
 

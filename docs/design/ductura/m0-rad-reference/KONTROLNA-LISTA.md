@@ -54,7 +54,7 @@ Vlasnik, 5. 11. 2026. (#87 c.6645361793): „editor mora imati sve funckije koje
 
 ## U demu, nije definirano: pitanje vlasniku
 
-Ove funkcije su u `demo-v3-editor-v11.html`, a nisu u FEATURES, DECISIONS ni spojenim referentnim slikama. Nisu nacrtane.
+Ove funkcije su u datoteci Ductura DEMO V3 · Editor v11 (vlasnikova datoteka, izvan repoa; #87 c.6645361793), a nisu u FEATURES, DECISIONS ni spojenim referentnim slikama. Nisu nacrtane.
 
 1. Istakni označeno (isticanje bojom).
 2. Poravnaj lijevo, Centriraj, Obostrano poravnanje.
