@@ -134,4 +134,37 @@ describe("F-6a / DAN-35 course API contract", () => {
       expect(await res.text()).not.toContain("do not leak raw SQL values");
     }
   });
+
+  // DAN-302 L1: a client that never finishes the body cannot hold the route open.
+  it("times out a body that never ends after 5 s, without a transaction", async () => {
+    vi.useFakeTimers();
+    try {
+      const { deps, withActor } = port();
+      const state = { cancelled: false };
+      const slow = new ReadableStream<Uint8Array>({
+        pull: () => new Promise<void>(() => {}),
+        cancel: () => { state.cancelled = true; },
+      });
+      const pending = handleCreateCourse(new Request(URL, {
+        method: "POST",
+        headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "content-type": "application/json" },
+        body: slow,
+        duplex: "half",
+      } as RequestInit), deps);
+      await vi.advanceTimersByTimeAsync(4_999);
+      let settled = false;
+      void pending.then(() => { settled = true; });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const res = await pending;
+      expect(res.status).toBe(408);
+      expect(await res.json()).toEqual({ error: "body_timeout" });
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(state.cancelled).toBe(true);
+      expect(withActor).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -11,6 +11,7 @@ import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE, signIn } from "./support";
 import { localAppUrl } from "./local-db-url";
 import { admin } from "./work-seed";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-344, Archivum S01_prazna: a student without an open course sees the
 // first arrival, never the unavailable state, with the same EnrollForm as
@@ -38,7 +39,7 @@ async function unpark(ids: string[]): Promise<void> {
 
 /** An invented course with one open assignment and an enrolment code, made by the demo teacher. */
 async function seedCourse(browser: Browser): Promise<{ course: string; code: string; assignment: string }> {
-  const teacherPage = await browser.newPage({ baseURL: "http://localhost:3000" });
+  const teacherPage = await browser.newPage({ baseURL: APP_ORIGIN });
   const pool = new pg.Pool({ connectionString: localAppUrl() });
   try {
     await signIn(teacherPage, "/", "Demo nastavnik");

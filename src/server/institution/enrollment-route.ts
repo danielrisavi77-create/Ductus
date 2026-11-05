@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import type { WithActor } from "@/server/db/with-actor";
@@ -80,17 +81,11 @@ export function createEnrollmentPostHandler(
   const actor = dependencies.withActor ?? withActor;
   const getRedirectUri = dependencies.getRedirectUri ?? (() => process.env.OIDC_REDIRECT_URI);
   return async (request) => {
-    const callback = getRedirectUri();
-    let expectedOrigin: string | null = null;
-    try {
-      if (callback) {
-        const url = new URL(callback);
-        if (url.protocol === "http:" || url.protocol === "https:") expectedOrigin = url.origin;
-      }
-    } catch { /* Misconfiguration fails closed. */ }
+    // Misconfiguration fails closed: a null origin answers 503.
+    const origin = expectedOrigin({ NODE_ENV: process.env.NODE_ENV, OIDC_REDIRECT_URI: getRedirectUri() });
     return handleEnrollment(request, {
       withActor: actor,
-      expectedOrigin,
+      expectedOrigin: origin,
       sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
     });
   };

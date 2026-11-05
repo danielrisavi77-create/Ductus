@@ -6,6 +6,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { closeWork, openWorkOf, seedWork } from "./work-seed";
 import { post } from "./comment-seed";
 import { editorMounted, SAVED_HERE, signIn, signOutHoweverHeld, signOutWithoutDialog, type DemoAccount } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // F-086 and F-088 (#476 contract 6383859615): one browser, one person after
 // another. Nothing the previous sign-in held in the page, its text, its undo
@@ -93,7 +94,7 @@ test("student, teacher, student in one browser: no text, undo, comment or reply 
   await snapshot(page, "1-studentica-pise");
   // The dialog opens only while the evidence still waits for its receipt (3d-2c2b).
   await signOutHoweverHeld(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
 
   await signInAgain(page, "Demo nastavnik");
   await expect(editorOf(page)).toHaveText("");
@@ -145,7 +146,9 @@ test("a tab that never heard the session end starts empty when the next person's
   // The old tab never reloads: the shell's link renders /rad under the new
   // cookie (the assignment is not the next person's, #711 F1). While it waits
   // for the journal, the sheet already shows nothing of before.
-  // The side bar's item, not the top bar's Početna, which also leads to /rad (#802).
+  // The side bar's item; the top bar's Početna leads to /zadaci (D-202 t. 2).
+  // On /rad the side bar is a drawer behind ☰.
+  await page.getByRole("button", { name: t.shell.openNav }).click();
   await page.getByRole("navigation", { name: t.shell.workNav }).locator('a[href="/rad"]').click();
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "blocked");
   await expect(editorOf(page)).toHaveText("");

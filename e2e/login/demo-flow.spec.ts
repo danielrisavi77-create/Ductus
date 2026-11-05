@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
+import { expect, test as base, type BrowserContext, type Page, type Request } from "@playwright/test";
 import pg from "pg";
 
 import { formatBibliographyEntry, formatInText } from "../../src/domain/citation/format";
@@ -28,11 +28,15 @@ import {
   signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
 import { localAdminUrl } from "./local-db-url";
+import { caretAtEnd as caretAtEndOf } from "../support/caret";
+import { demoLaunchOptions } from "./launch-options";
+import { APP_ORIGIN } from "./origin";
+import { loginPagePaths, warmLoginPages } from "../../scripts/demo/login-e2e-https.mjs";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
 // steps attach a screenshot each, so the playwright-report-login artifact of
-// the run holds both. Chromium only (D-98 addition).
+// the run holds both. Chromium and WebKit (D-98 addition, DAN-232).
 //
 // The test grows with the demo: the steps below run what main already shows
 // (F-5 sign-in and sign-out, local offline recovery and account isolation). The screens of
@@ -48,11 +52,15 @@ import { localAdminUrl } from "./local-db-url";
 // form showed "mm/dd/yyyy" and "11/02/2026, 09:00 AM". The browser of this file
 // starts in Croatian, as a Croatian teacher's browser would, so the demo
 // screenshots show the dates as the teacher sees them.
-const BROWSER_ENV = Object.fromEntries(
-  Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-);
-test.use({
-  launchOptions: { args: ["--lang=hr-HR"], env: { ...BROWSER_ENV, LANG: "hr_HR.UTF-8", LANGUAGE: "hr" } },
+// `--lang` is a Chromium argument; WebKit refuses to start with it, so the
+// options depend on the engine (e2e/login/launch-options.ts, DAN-232).
+const test = base.extend({
+  launchOptions: [
+    async ({ browserName }, use) => {
+      await use(demoLaunchOptions(browserName, process.env));
+    },
+    { scope: "worker" },
+  ],
 });
 
 const run = promisify(execFile);
@@ -104,23 +112,8 @@ const blocksOf = (contents: JournalContents) => contents.snapshot!.document.node
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 
-/**
- * Puts the caret at the end of the last block, where a writer continues the text. A click
- * and Control+End right after a load left it at the end of the citation paragraph, in CI and
- * on the native runner (DAN-348 N5); the DOM selection set here is followed by the editor
- * as a mouse selection is, as in the F-9 step.
- */
-async function caretAtEnd(page: Page): Promise<void> {
-  await editorOf(page).click();
-  await editorOf(page).evaluate((editor) => {
-    const range = document.createRange();
-    range.selectNodeContents(editor.lastElementChild!);
-    range.collapse(false);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(range);
-  });
-  await page.keyboard.press("End");
-}
+/** The caret at the end of the last block, where a writer continues the text (`../support/caret`). */
+const caretAtEnd = (page: Page) => caretAtEndOf(page, editorOf(page));
 
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 
@@ -191,7 +184,7 @@ async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
   if (held) await signOutHoweverHeld(page);
   else await signOutWithoutDialog(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   await forgetProviderLogin(page.context());
@@ -381,6 +374,15 @@ test.afterEach(async () => {
   k4Document = null;
 });
 
+test.beforeAll(async ({ request }) => {
+  // Validate and prepare every anonymous page template within the setup budget.
+  // This is not a barrier against later development updates: real API handlers
+  // still compile during the flow. No role, session or workflow state is made;
+  // every original browser action and assertion below runs unchanged.
+  const paths = loginPagePaths(readdirSync("app", { recursive: true }) as string[]);
+  await warmLoginPages(request, APP_ORIGIN, paths);
+});
+
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
   // The whole text of the K-4 work as the steps leave it: EXPECTED_TEXT until
@@ -417,7 +419,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     roleGrantedByThisTest = !(await teacherRoleActive());
     if (roleGrantedByThisTest) {
       await page.goto("/nastavnik/zadatak/novi");
-      await expect(page.getByText(t.teacher.denied)).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: t.access.deniedTitle })).toBeVisible();
       await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
     }
     // DAN-346: against `pnpm demo:up:native` the same command uses the native
@@ -476,7 +478,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await page.goto(`/api/auth/login?returnTo=${encodeURIComponent("/rad")}`);
     await expect(page.getByRole("heading", { level: 1, name: "Demo prijava" })).toBeVisible();
     await page.getByRole("button", { name: "Demo studentica" }).click();
-    await page.waitForURL("http://localhost:3000/rad");
+    await page.waitForURL(`${APP_ORIGIN}/rad`);
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     expect(await sessionRow(token)).toMatchObject({
       institution: "demo-fakultet",
@@ -500,10 +502,16 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await page.goto("/upis");
     page.on("request", observe);
     try {
-      await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
+      // A fill before hydration sets only the DOM value: the controlled input keeps "" and the
+      // button stays disabled (WebKit, run 41782517938). Fill again until the form has the code.
+      const submitButton = page.getByRole("button", { name: t.student.enroll.submit });
+      await expect(async () => {
+        await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
+        await expect(submitButton).toBeEnabled({ timeout: 1_000 });
+      }).toPass({ timeout: 30_000 });
       const response = page.waitForResponse((r) =>
         new URL(r.url()).pathname === "/api/institution/enrollments" && r.request().method() === "POST");
-      await page.getByRole("button", { name: t.student.enroll.submit }).click();
+      await submitButton.click();
       const enrolled = await response;
       enrolledCourse = course;
       expect(enrolled.status()).toBe(200);
@@ -542,7 +550,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
   await test.step("2. F-7: studentica potvrđuje obavijest zadatka iz koraka 1 i otvara ga u radu", async () => {
     expect(k4Assignment).not.toBeNull();
     const id = k4Assignment!;
-    await expect(page).toHaveURL(`http://localhost:3000/zadatak/${id}`);
+    await expect(page).toHaveURL(`${APP_ORIGIN}/zadatak/${id}`);
     const { rows: [current] } = await withAdmin((client) => client.query<{ version: number }>(
       "SELECT current_version AS version FROM institution.assignment WHERE id = $1", [id]));
     const confirm = page.getByRole("button", { name: t.student.confirm });
@@ -559,7 +567,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
         WHERE n.assignment_id = $1 AND u.hr_edu_person_unique_id = $2`, [id, STUDENT_ID]));
     expect(rows).toEqual([{ version_no: current!.version }]);
     await page.getByRole("link", { name: t.student.openEditor }).click();
-    await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
+    await page.waitForURL(`${APP_ORIGIN}/rad?zadatak=${id}`);
     // DAN-330: the work starts on the student's click.
     await page.getByRole("button", { name: t.workspace.startWork }).click();
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
@@ -590,7 +598,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     page.on("request", observe);
     try {
       await page.goto(`/rad?zadatak=${assignment!.id}`);
-      await page.waitForURL(`http://localhost:3000${noticePath}`);
+      await page.waitForURL(`${APP_ORIGIN}${noticePath}`);
       await expect(page.getByRole("heading", { name: t.student.recordedHeading })).toBeVisible();
       await expect(editorOf(page)).toHaveCount(0);
       const confirm = page.getByRole("button", { name: t.student.confirm });
@@ -624,7 +632,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       page.off("request", observe);
     }
     await page.getByRole("link", { name: t.student.openEditor }).click();
-    await page.waitForURL(`http://localhost:3000/rad?zadatak=${assignment!.id}`);
+    await page.waitForURL(`${APP_ORIGIN}/rad?zadatak=${assignment!.id}`);
     // #711 F1: the fixture's document has the fixed local id, which a signed-in
     // student never writes into: the same neutral sheet as any other refusal.
     await expect(page.locator(".sheet-area")).toContainText(t.workspace.unavailable);
@@ -702,7 +710,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       const body = canonicalizeJcs((await localCheckpoint(page)).snapshot!.document);
       const etag = `"${createHash("sha256").update(body, "utf8").digest("hex")}"`;
       const published = await page.request.put(livePath(), {
-        headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: body,
+        headers: { origin: APP_ORIGIN, "content-type": "application/json", "if-none-match": "*" }, data: body,
       });
       expect(published.status()).toBe(200);
       expect(await published.json()).toMatchObject({ outcome: "accepted" });
@@ -1065,15 +1073,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
       // The caret goes to the end of the last block before typing: in CI a
       // click and Control+End once left it at the end of the citation paragraph.
-      await editorOf(page).locator("p").last().click();
-      await editorOf(page).evaluate((editor) => {
-        const range = document.createRange();
-        range.selectNodeContents(editor.lastElementChild!);
-        range.collapse(false);
-        window.getSelection()!.removeAllRanges();
-        window.getSelection()!.addRange(range);
-      });
-      await page.keyboard.press("End");
+      await caretAtEnd(page);
       await page.keyboard.press("Enter");
       await page.keyboard.type(LIVE_TEXT);
       // A new paragraph: the editor's text joins the blocks without a separator.
@@ -1120,7 +1120,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
     // Demo point 4: the way in is the workspace's own link.
     await page.getByRole("link", { name: t.workspace.submitLink, exact: true }).click();
-    await page.waitForURL(`http://localhost:3000/rad/${k4Assignment!}/predaja`);
+    await page.waitForURL(`${APP_ORIGIN}/rad/${k4Assignment!}/predaja`);
     await expect(page.getByRole("heading", { level: 1, name: s.title })).toBeVisible();
     const steps = page.getByRole("list", { name: s.title });
     await expect(steps.getByRole("listitem").filter({ hasText: s.steps.submit })).toHaveAttribute("aria-current", "step");

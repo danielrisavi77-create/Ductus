@@ -29,7 +29,8 @@ CREATE FUNCTION pg_temp.open(p_issuer text, p_unique_id text, p_home_org text, p
 RETURNS text LANGUAGE plpgsql AS $$
 DECLARE v_detail text; v_hint text;
 BEGIN
-  PERFORM identity.open_session(p_issuer, 'sub-' || p_unique_id, p_unique_id, p_home_org, pg_temp.h(p_hash));
+  -- DAN-304: ductus_auth reaches only the eight-argument form (024).
+  PERFORM identity.open_session(p_issuer, 'sub-' || p_unique_id, p_unique_id, p_home_org, pg_temp.h(p_hash), NULL, NULL, false);
   RETURN 'ok';
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL, v_hint = PG_EXCEPTION_HINT;
@@ -194,10 +195,11 @@ SELECT is(pg_temp.open('https://idp-b.test', 'mallory@a.issuer.test', 'a.issuer.
   'the issuer of B is refused for a person of A');
 SELECT is(pg_temp.open('https://idp-a.test', 'mallory@c.issuer.test', 'c.issuer.test', 'n3'), 'ZD503: institution not set up',
   'the issuer of A is refused for a person of C');
--- The seven-argument login (plan 7) is held to the same rule and stores no name.
+-- The login with names (plan 7) is held to the same rule and stores no name;
+-- since DAN-304 ductus_auth reaches it through the eight-argument form.
 SELECT throws_ok(
   $$ SELECT identity.open_session('https://idp-none.test', 'sub-mallory', 'mallory@a.issuer.test', 'a.issuer.test',
-                                  sha256('n4'), 'Ime', 'Prezime') $$,
+                                  sha256('n4'), 'Ime', 'Prezime', true) $$,
   'ZD503', 'institution not set up', 'the login with names from an unrecorded issuer is refused'
 );
 RESET ROLE;
@@ -276,19 +278,20 @@ SELECT is(
 RESET ROLE;
 
 -- 11. The login function keeps its boundary: definer, owner, empty
--- search_path, and EXECUTE for ductus_auth alone.
+-- search_path, and EXECUTE for ductus_auth alone. Since DAN-304 that is the
+-- eight-argument form; the older ones are closed to ductus_auth (021, 084).
 SELECT ok(p.prosecdef, 'open_session is SECURITY DEFINER')
-FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea)'::regprocedure;
+FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea, text, text, boolean)'::regprocedure;
 SELECT is(pg_get_userbyid(p.proowner)::text, 'ductus_identity', 'open_session belongs to ductus_identity')
-FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea)'::regprocedure;
+FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea, text, text, boolean)'::regprocedure;
 SELECT is(p.proconfig, ARRAY['search_path=""'], 'open_session runs with an empty search_path')
-FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea)'::regprocedure;
+FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea, text, text, boolean)'::regprocedure;
 SELECT is_empty(
   $$ SELECT r.rolname FROM (SELECT rolname::text FROM pg_roles
                             WHERE rolname LIKE 'ductus\_%'
                               AND rolname NOT IN ('ductus_auth', 'ductus_identity', 'ductus_auth_local')
                             UNION ALL SELECT 'public') AS r (rolname)
-     WHERE has_function_privilege(r.rolname, 'identity.open_session(text, text, text, text, bytea)', 'EXECUTE') $$,
+     WHERE has_function_privilege(r.rolname, 'identity.open_session(text, text, text, text, bytea, text, text, boolean)', 'EXECUTE') $$,
   'no role but ductus_auth, its local login and the owner, nor PUBLIC, may execute open_session'
 );
 

@@ -1,10 +1,13 @@
+import fc from "fast-check";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
+
+import { noticeFingerprint } from "@/domain/notice/fingerprint";
 
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 import { createAssignmentPostHandler } from "./assignment-route";
-import { createAssignmentResponse } from "./create-assignment";
+import { createAssignmentResponse, parseAssignmentInput } from "./create-assignment";
 
 type QueryRow = Record<string, unknown>;
 
@@ -325,5 +328,66 @@ describe("createAssignmentResponse", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// DAN-306, review c.6632344287 and QA c.6632559838: the supported years are
+// 1000 to 9999 after conversion to UTC, as institution.is_assignment_content
+// holds them (db/tests/105-notice-fingerprint.sql, section 12). An offset
+// that moves the instant out of that range is refused, one that keeps it in
+// is accepted; the notice fingerprint then writes the same year as SQL.
+describe("the supported years of an assignment instant (DAN-306)", () => {
+  const INSTANTS: ReadonlyArray<readonly [string, boolean, string]> = [
+    ["2026-11-02T08:00:00Z", true, "Z inside the range"],
+    ["0001-01-01T00:00:00+14:00", false, "a positive offset into UTC year 0"],
+    ["0001-01-01T00:00:00+01:00", false, "a positive offset into UTC year 0"],
+    ["1000-01-01T00:00:00+01:00", false, "a positive offset into UTC year 999"],
+    ["9999-12-31T23:00:00-01:00", false, "a negative offset into UTC year 10000"],
+    ["1000-01-01T00:00:00-01:00", true, "an offset that stays at the lower edge"],
+    ["0999-12-31T23:00:00-01:00", true, "a local year 999 that is UTC year 1000"],
+    ["1000-01-01T00:00:00Z", true, "the first supported instant"],
+    ["9999-12-31T23:59:59.999Z", true, "the last supported millisecond"],
+    ["9999-12-31T23:00:00+14:00", true, "an offset that stays at the upper edge"],
+    ["0999-12-31T23:59:59.999999Z", false, "the last microsecond before the range"],
+    ["1000-01-01T00:00:00.000001Z", true, "the first microsecond of the range"],
+    ["0000-01-01T00:00:00Z", false, "year 0000"],
+    ["0500-06-01T00:00:00Z", false, "a year below 1000"],
+    ["2026-11-02T08:00:00", false, "no zone"],
+    ["2026-02-30T08:00:00Z", false, "a day that does not exist"],
+  ];
+
+  it.each(INSTANTS)("%s: accepted %s (%s)", (instant, accepted) => {
+    expect(parseAssignmentInput({ ...INPUT, opensAt: instant }) !== null).toBe(accepted);
+    expect(parseAssignmentInput({ ...INPUT, dueAt: instant }) !== null).toBe(accepted);
+  });
+
+  it("accepts an instant if and only if its UTC year is 1000 to 9999, and then has a fingerprint", async () => {
+    const low = new Date(0);
+    low.setUTCFullYear(1, 0, 1);
+    const high = new Date(0);
+    high.setUTCFullYear(10000, 0, 2);
+    const offsets = fc.oneof(fc.integer({ min: -(13 * 60 + 59), max: 13 * 60 + 59 }), fc.constantFrom(14 * 60, -14 * 60));
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: low.getTime() - 86_400_000, max: high.getTime() }), offsets, async (ms, offset) => {
+        const local = new Date(ms + offset * 60_000);
+        const year = local.getUTCFullYear();
+        fc.pre(year >= 1 && year <= 9999);
+        const sign = offset < 0 ? "-" : "+";
+        const zone = `${sign}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}:${String(Math.abs(offset) % 60).padStart(2, "0")}`;
+        const instant = `${local.toISOString().slice(0, 23)}${zone}`;
+        const utcYear = new Date(ms).getUTCFullYear();
+        const supported = utcYear >= 1000 && utcYear <= 9999;
+        expect(parseAssignmentInput({ ...INPUT, opensAt: instant }) !== null).toBe(supported);
+        if (supported) {
+          await expect(noticeFingerprint({
+            templateVersion: 1, title: INPUT.title, instructions: INPUT.instructions, workType: INPUT.workType,
+            opensAt: new Date(Date.parse(instant)).toISOString(), dueAt: "2026-12-01T22:59:00.000Z",
+            aiPolicy: INPUT.aiPolicy, aiPurposes: INPUT.aiPurposes, evidenceProfile: INPUT.evidenceProfile,
+            wordMin: null, wordMax: null,
+          })).resolves.toMatch(/^[0-9a-f]{64}$/);
+        }
+      }),
+      { numRuns: 300 },
+    );
   });
 });

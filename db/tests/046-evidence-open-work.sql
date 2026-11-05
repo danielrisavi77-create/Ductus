@@ -117,7 +117,8 @@ SELECT bag_eq(
             ('app.read_submission_record(uuid)'), ('app.prepare_submission_receipt(uuid,text,text)'),
             ('app.assignment_works(uuid)'), ('app.work_submitted(uuid)'), ('app.fast_path_works(uuid)'),
             ('app.assignment_submissions(uuid)'), ('app.teacher_assignment_names(uuid)'),
-            ('app.attach_submission_receipt(uuid,text,jsonb)'), ('app.read_submission_receipt(uuid)') $$,
+            ('app.attach_submission_receipt(uuid,text,jsonb)'), ('app.read_submission_receipt(uuid)'),
+            ('app.student_workspace()') $$,
   'the web role executes exactly the expected evidence RPCs');
 SELECT is_empty(
   $$ SELECT r || ' ' || p.oid::regprocedure::text FROM pg_proc p
@@ -287,8 +288,17 @@ SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', 'TRUNCATE evidence.docu
 SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', format(
   $q$ INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES (%L, %L, 1, %L) $q$,
   pg_temp.doc('tomo', 'z3'), pg_temp.id('fak_b'), repeat('x', 2097153))), '^23514:', 'bytes over 2 MiB are refused');
-SELECT is((SELECT created_at FROM evidence.document_checkpoint WHERE document_id = pg_temp.doc('ana', 'z1')), now(),
-  'the time is the database''s');
+-- DAN-302 L5: the time is the database clock when the row is written, as
+-- for the revision, not the start of the transaction (now()), and so never
+-- earlier than the revision it belongs to.
+SELECT ok((SELECT k.created_at > now() AND k.created_at <= clock_timestamp()
+             FROM evidence.document_checkpoint k WHERE k.document_id = pg_temp.doc('ana', 'z1') AND k.revision = 0),
+  'the time is the database clock when the checkpoint is written, not the start of the transaction');
+SELECT is_empty(
+  $$ SELECT k.document_id, k.revision FROM evidence.document_checkpoint k
+       JOIN evidence.document_revision r USING (document_id, institution_id, revision)
+      WHERE k.created_at < r.created_at $$,
+  'no checkpoint is older than its revision');
 -- The answer carries the current revision; its checkpoint is written with
 -- the acceptance from step 3, so until then there is none.
 SELECT matches(pg_temp.open('ana', pg_temp.id('z1')), '^opened\|[0-9a-f-]{36}\|standard-v1\|1\|f{64}\|\|0\|$',

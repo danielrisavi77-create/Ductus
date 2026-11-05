@@ -412,16 +412,17 @@ afterAll(async () => {
 });
 
 describe("teacher fast path over the API and app.fast_path_works (B-11c, #757)", () => {
-  it("gives Vesna Ana's text and the summary the process-summary route returns, and Dora without a name or work", async () => {
+  it("gives Vesna Ana's text, work id and the summary the process-summary route returns, and Dora without a name or work", async () => {
     const response = await fastPath(tokens.vesna);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const read = (await response.json()) as FastPathRead;
     expect(read.kind).toBe("ok");
     if (read.kind !== "ok") return;
-    expect(read.students.map((s) => [s.id, s.givenName, s.surname, s.work])).toStrictEqual([
-      [people.ana, "Ana", "Testić", "writing"],
-      [people.dora, null, null, "notice_pending"],
+    // #1284: Ana's row names her work document, Dora's row without work names none.
+    expect(read.students.map((s) => [s.id, s.givenName, s.surname, s.documentId, s.work])).toStrictEqual([
+      [people.ana, "Ana", "Testić", documentId, "writing"],
+      [people.dora, null, null, null, "notice_pending"],
     ]);
     const [ana, dora] = read.students;
     expect(dora!.record).toBeNull();
@@ -441,7 +442,7 @@ describe("teacher fast path over the API and app.fast_path_works (B-11c, #757)",
     expect(await openings()).toStrictEqual(["vesna teacher fast_path of ana"]);
   });
 
-  it("gives a student the same empty list as an assignment that does not exist, never 403 or 404", async () => {
+  it("gives a student the same empty list as an assignment that does not exist, never 403 or 404 or a work id", async () => {
     for (const name of ["ana", "dora"] as const) {
       const response = await fastPath(tokens[name]);
       expect(response.status).toBe(200);

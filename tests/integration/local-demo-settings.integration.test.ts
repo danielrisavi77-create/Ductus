@@ -93,9 +93,10 @@ it("seeds only the local demo settings and preserves configuration and enrollmen
          VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() + interval '1 hour')`,
         [tokens[i], users[i], i === 4 ? otherId : demoId]);
     }
-    await admin.query(
-      "INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'admin', now())",
-      [demoId, users[0]]);
+    // DAN-525: the administrator only through the operator procedure, on an invented request.
+    await admin.query("SELECT institution.appoint_institution_admin($1, $2)", [users[0], `Zahtjev ${suffix}/2026`]);
+    // DAN-304: the teacher right of the last login, as that login writes it.
+    await admin.query("INSERT INTO identity.teacher_eligibility (user_id, institution_id) VALUES ($1, $2)", [users[1], demoId]);
     await withActor(tokens[0], (tx) => tx.query("SELECT institution.confirm_teacher_role($1)", [users[1]]));
     courseId = (await withActor(tokens[1], async (tx) =>
       (await tx.query<{ id: string }>(
@@ -141,8 +142,19 @@ it("seeds only the local demo settings and preserves configuration and enrollmen
       await admin.query("DELETE FROM institution.course WHERE id = $1", [courseId]);
     }
     await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = ANY($1)", [users]);
+    // DAN-497: the confirmation above left an append-only audit row; only a replica session removes it.
+    const cleaner = await admin.connect();
+    try {
+      await cleaner.query("BEGIN");
+      await cleaner.query("SET LOCAL session_replication_role = replica");
+      await cleaner.query("DELETE FROM audit.teacher_role_event WHERE teacher_id = ANY($1)", [users]);
+      await cleaner.query("COMMIT");
+    } finally {
+      cleaner.release();
+    }
     await admin.query("DELETE FROM institution.institution_role WHERE user_id = ANY($1)", [users]);
     await admin.query("DELETE FROM identity.session WHERE user_id = ANY($1)", [users]);
+    await admin.query("DELETE FROM identity.teacher_eligibility WHERE user_id = ANY($1)", [users]);
     await admin.query("DELETE FROM identity.user_account WHERE id = ANY($1)", [users]);
     if (demoId) {
       await admin.query("DELETE FROM institution.institution_settings WHERE institution_id = $1", [demoId]);

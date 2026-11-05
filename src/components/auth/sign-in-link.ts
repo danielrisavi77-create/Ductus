@@ -23,12 +23,28 @@ export function signInHref(target: string): string {
 
 const SESSION_SHAPE = /^[A-Za-z0-9_-]{43}$/;
 
+/** True for /prijava however a browser could spell it, so a forward never lands back on it. */
+function isSignInPage(target: string): boolean {
+  let path = target.split(/[?#]/, 1)[0];
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    return true;
+  }
+  return path.toLowerCase().replace(/\/+$/, "") === "/prijava";
+}
+
 /**
  * Where /prijava sends a visitor who already carries a cookie of the
- * session's shape: on to "/", which reads the session once and sends the
- * person to their own page (DAN-325). Decided by the shape alone, so
- * /prijava never reads the database (F-151); null keeps the sign-in screen.
+ * session's shape: on to the page they asked to return to (#1231), which
+ * reads the session itself and shows Z-03 when it is closed, or to "/" when
+ * nothing safe is asked for, which sends the person to their own page
+ * (DAN-325). Decided by the shape alone, so /prijava never reads the
+ * database (F-151); null keeps the sign-in screen. /prijava itself as the
+ * target would forward in a loop, so it becomes "/".
  */
-export function signedInRedirect(token: string | undefined): typeof SIGN_IN_DEFAULT_TARGET | null {
-  return token !== undefined && SESSION_SHAPE.test(token) ? SIGN_IN_DEFAULT_TARGET : null;
+export function signedInRedirect(token: string | undefined, returnTo?: unknown): string | null {
+  if (token === undefined || !SESSION_SHAPE.test(token)) return null;
+  const target = signInTarget(returnTo);
+  return isSignInPage(target) ? SIGN_IN_DEFAULT_TARGET : target;
 }

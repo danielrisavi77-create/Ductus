@@ -115,6 +115,18 @@ test("A: a summary created before the quota message and edited after it voids th
   assert.equal(evaluate([summary, codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)]).state, "pending");
 });
 
+// F-013 (Codex r4433843947): the comments after the last base change drop a
+// summary created before it, but the summary's later edit is still App
+// activity and voids the evidence, read from the full history.
+test("A: a summary created before a base change and edited after the quota message still voids the evidence (F-013)", () => {
+  const summary = codex("### Codex Review Summary\n\nCompleted.", -10 * MIN, { updated_at: iso(5 * MIN) });
+  const after = [codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)];
+  const run = (historyComments) =>
+    evaluateGate({ body: "Agent: chatgpt:a:backend\nRisk: critical\nTask: B-1\n", headSha: head, ownerLogin, comments: after, historyComments });
+  assert.equal(run([summary, ...after]).state, "pending");
+  assert.equal(run(undefined).state, "success", "control: without the history the summary is not seen");
+});
+
 test("control: a summary edited before the quota message keeps the evidence (#128)", () => {
   const summary = codex("### Codex Review Summary\n\nCompleted.", -10 * MIN, { updated_at: iso(-5 * MIN) });
   assert.equal(evaluate([summary, codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)]).state, "success");

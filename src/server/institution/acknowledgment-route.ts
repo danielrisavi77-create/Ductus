@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 
+import { NOTICE_TEMPLATE_VERSION } from "@/domain/notice/fingerprint";
+import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import type { WithActor } from "@/server/db/with-actor";
@@ -51,8 +53,8 @@ export async function handleAcknowledgment(request: Request, assignmentId: strin
   try {
     const result = await deps.withActor(deps.sessionToken, (tx) =>
       tx.query<{ acknowledged_at: Date }>(
-        "SELECT institution.acknowledge_notice($1::uuid, $2::integer) AS acknowledged_at",
-        [assignmentId, input.versionNo],
+        "SELECT institution.acknowledge_notice($1::uuid, $2::integer, $3::integer) AS acknowledged_at",
+        [assignmentId, input.versionNo, NOTICE_TEMPLATE_VERSION],
       ),
     );
     const at = result.rows[0]?.acknowledged_at;
@@ -73,18 +75,12 @@ export function createAcknowledgmentPostHandler(
   const actor = dependencies.withActor ?? withActor;
   const getRedirectUri = dependencies.getRedirectUri ?? (() => process.env.OIDC_REDIRECT_URI);
   return async (request, context) => {
-    const callback = getRedirectUri();
-    let expectedOrigin: string | null = null;
-    try {
-      if (callback) {
-        const url = new URL(callback);
-        if (url.protocol === "http:" || url.protocol === "https:") expectedOrigin = url.origin;
-      }
-    } catch { /* Misconfiguration fails closed. */ }
+    // Misconfiguration fails closed: a null origin answers 503.
+    const origin = expectedOrigin({ NODE_ENV: process.env.NODE_ENV, OIDC_REDIRECT_URI: getRedirectUri() });
     const { assignmentId } = await context.params;
     return handleAcknowledgment(request, assignmentId, {
       withActor: actor,
-      expectedOrigin,
+      expectedOrigin: origin,
       sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
     });
   };

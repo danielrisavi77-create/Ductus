@@ -34,7 +34,7 @@
       "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
       "contracts": [
         "src/application/ports/authorization.ts:AuthorizationCheck",
-        "docs/BACKEND.md §4.3/4.4",
+        "docs/backend/prijava-i-ovlasti.md §4.3/4.4",
         "candidate app.current_actor()"
       ],
       "entrypoints": [
@@ -62,7 +62,7 @@
       "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
       "contracts": [
         "src/application/ports/authorization.ts:AuthorizationCheck",
-        "docs/BACKEND.md §4.3/4.4",
+        "docs/backend/prijava-i-ovlasti.md §4.3/4.4",
         "candidate app.current_actor()"
       ],
       "entrypoints": [
@@ -90,7 +90,7 @@
       "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
       "contracts": [
         "src/application/ports/authorization.ts:AuthorizationCheck",
-        "docs/BACKEND.md §4.3/4.4",
+        "docs/backend/prijava-i-ovlasti.md §4.3/4.4",
         "candidate app.current_actor()"
       ],
       "entrypoints": [
@@ -125,7 +125,7 @@
       "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
       "contracts": [
         "src/application/ports/authorization.ts:AuthorizationCheck",
-        "docs/BACKEND.md §4.3/4.4",
+        "docs/backend/prijava-i-ovlasti.md §4.3/4.4",
         "candidate app.current_actor()"
       ],
       "entrypoints": [
@@ -165,7 +165,7 @@
       "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
       "contracts": [
         "src/application/ports/authorization.ts:AuthorizationCheck",
-        "docs/BACKEND.md §4.3/4.4",
+        "docs/backend/prijava-i-ovlasti.md §4.3/4.4",
         "candidate app.current_actor()"
       ],
       "entrypoints": [
@@ -194,7 +194,7 @@
       "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
       "contracts": [
         "src/application/ports/authorization.ts:AuthorizationCheck",
-        "docs/BACKEND.md §4.3/4.4",
+        "docs/backend/prijava-i-ovlasti.md §4.3/4.4",
         "candidate app.current_actor()"
       ],
       "entrypoints": [

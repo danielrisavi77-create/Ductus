@@ -149,7 +149,9 @@ test("A08-A09,A17: an earlier head counts only through verified D-101 carry (D-1
   assert.equal(gate([review(undefined, { head: H.toUpperCase() }), qa(undefined, { head: H.toUpperCase() })]).state, "success");
 });
 
-test("A10-A11: FAIL/BLOCK dominates pairs; only same-principal current PASS resolves it", () => {
+// F-023 (owner decision 31. 10. 2026.): a same-principal PASS on the same head
+// no longer resolves a FAIL/BLOCK; only a new head or the owner does.
+test("A10-A11: FAIL/BLOCK dominates pairs; a same-principal PASS on the same head does not resolve it (F-023)", () => {
   for (const kind of ["review", "qa"]) {
     for (const value of ["FAIL", "BLOCK"]) {
       for (const [agent, app] of [["codex:objector", APP], ["claude:objector", "claude"]]) {
@@ -158,7 +160,7 @@ test("A10-A11: FAIL/BLOCK dominates pairs; only same-principal current PASS reso
           const comments = before ? [negative, ...pair()] : [...pair(), negative];
           pending(comments);
           pending([...comments, verdict(kind, agent, { head: OLD, app })], { carriedHeads: new Set([OLD]) });
-          assert.equal(gate([...comments, verdict(kind, agent, { app })]).state, "success");
+          pending([...comments, verdict(kind, agent, { app })]);
         }
         const comments = [...pair(), verdict(kind, agent, { value, app, head: OLD })];
         pending(comments, { carriedHeads: new Set([OLD]) });

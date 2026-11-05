@@ -26,7 +26,7 @@ const evaluate = (comments, carriedHeads = new Set()) =>
 
 const merge = (sha) => ({ sha, parents: [{}, {}], mergesBase: true });
 const plain = (sha) => ({ sha, parents: [{}] });
-const file = (patch) => ({ filename: "a.mjs", status: "modified", patch });
+const file = (patch) => ({ filename: "a.mjs", status: "modified", patch, entry: "100644 blob", baseEntry: "100644 blob" });
 
 test("an override on an earlier head counts once that head is carried", () => {
   assert.equal(evaluate([override(earlier)], new Set([earlier])).state, "success");
@@ -142,9 +142,13 @@ test("a carried FAIL posted before the override does not void it", () => {
   assert.equal(evaluate(comments, new Set([earlier, mid])).state, "success");
 });
 
-test("a later PASS by the same session supersedes its earlier carried FAIL", () => {
+// F-023 (owner decision 31. 10. 2026.): a later PASS on the same carried head
+// does not supersede the FAIL; a PASS on the current head (a new push) does.
+test("a later PASS by the same session on the same carried head does not supersede its FAIL (F-023)", () => {
   const comments = [override(earlier), verdictQa(mid, "FAIL"), verdictQa(mid, "PASS")];
-  assert.equal(evaluate(comments, new Set([earlier, mid])).state, "success");
+  assert.equal(evaluate(comments, new Set([earlier, mid])).state, "pending");
+  const pushed = [override(earlier), verdictQa(mid, "FAIL"), verdictQa(head, "PASS")];
+  assert.equal(evaluate(pushed, new Set([earlier, mid])).state, "success");
 });
 
 test("invalid override comments do not count against the carried-head limit", () => {

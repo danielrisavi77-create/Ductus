@@ -32,16 +32,21 @@ export const hr = {
     sideNav: "Bočna navigacija",
     workNav: "Radni prostor",
     home: `${APP_NAME}, početna`,
-    space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
+    space: { teacher: "Nastavnički prostor", student: "Studentski prostor", admin: "Administracija ustanove" },
     nav: {
       assignments: "Moji zadaci",
+      // DAN-309 (B2): the student's own works across courses, /zadaci/radovi.
+      works: "Moji radovi",
       courses: "Moji kolegiji",
       newCourse: "Novi kolegij i zadatak",
       fastPath: "Brz put",
+      // DAN-492 (N-16): the works a teacher mentors, outside any course.
+      mentoredWorks: "Radovi uz mentora",
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
+      institution: "Pregled ustanove",
     },
-    role: { teacher: "Nastavnik", student: "Student" },
+    role: { teacher: "Nastavnik", student: "Student", admin: "Administrator" },
     demoNote: "Nijedan stvarni osobni podatak.",
     signOut: "Odjava",
     openNav: "Otvori navigaciju",
@@ -316,11 +321,58 @@ export const hr = {
   teacher: {
     title: "Novi kolegij i zadatak",
     signedOut: "Prijavite se nastavničkim računom.",
-    denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
     unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušajte ponovno.",
     signIn: "Prijavi se",
     backHome: "Na početnu",
     backCourses: "Moji kolegiji",
+    // DAN-310 (M2.4-P01): a further assignment in a course the teacher already has.
+    existingCourse: {
+      title: "Novi zadatak u kolegiju",
+      link: "Novi zadatak u kolegiju",
+      missing: "Kolegij nije dostupan ovom računu.",
+      unavailable: "Kolegij trenutačno nije moguće učitati. Pokušajte ponovno.",
+      codeKept: "Upisni kod kolegija ostaje isti.",
+      studentsNotified: "Studenti upisani u kolegij vide zadatak među svojim zadacima.",
+    },
+    // DAN-310 (M2.4-P02): a new version of a published assignment.
+    newVersion: {
+      title: "Nova verzija zadatka",
+      link: "Nova verzija",
+      current: "Na snazi je verzija {n}.",
+      lead: "Izmjene se objavljuju kao verzija {n}. Verzija koja je sada na snazi ostaje zapisana, a studenti novu verziju potvrđuju prije nastavka pisanja.",
+      fixed: "Vrsta rada, profil zapisa i uvoz ostaju kao u verziji na snazi.",
+      purposesHint: "Možete samo ukloniti uporabu koju verzija na snazi dopušta, ne i dodati novu.",
+      wordsHint: "Raspon se može samo ublažiti: najmanji broj smanjiti ili ukloniti, najveći povećati ili ukloniti.",
+      previewHeading: "Što se mijenja",
+      before: "Sada",
+      after: "Nakon objave",
+      empty: "nije zadano",
+      noPurposes: "nijedna uporaba",
+      consequence: "Objavom nastaje verzija {n}. Studenti upisani u kolegij vide je u obavijesti o zadatku i potvrđuju je prije nastavka pisanja. Već napisan tekst ostaje kakav jest.",
+      publish: "Objavi verziju {n}",
+      pending: "Objavljivanje…",
+      published: "Objavljena je verzija {n}. Studenti je potvrđuju prije nastavka pisanja.",
+      unchanged: "Nema promjena u odnosu na verziju na snazi, pa se ništa ne objavljuje.",
+      widening: "Ovaj raspon riječi stroži je od onoga na snazi, pa se ne može objaviti. Najmanji broj smanjite ili uklonite, a najveći povećajte ili uklonite.",
+      reload: "Učitaj aktualnu verziju",
+      missing: "Zadatak nije dostupan ovom računu.",
+      unavailable: "Zadatak trenutačno nije moguće učitati. Pokušajte ponovno.",
+      fields: {
+        title: "Naslov",
+        instructions: "Upute studentima",
+        opensAt: "Otvaranje",
+        dueAt: "Rok",
+        aiPurposes: "Dopuštene uporabe",
+        wordRange: "Raspon riječi",
+      },
+      errors: {
+        invalid: "Provjerite naslov, otvaranje, rok i raspon riječi. Rok mora biti nakon otvaranja. Ništa nije objavljeno.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno; ništa nije objavljeno.",
+        forbidden: "Za ovaj račun nije dopušteno objavljivanje nove verzije ovog zadatka.",
+        conflict: "Zadatak je u međuvremenu dobio noviju verziju. Vaše izmjene nisu objavljene i ostaju u obrascu. Učitajte aktualnu verziju pa ih ponovite.",
+        unavailable: "Objava verzije nije potvrđena. Pokušajte ponovno.",
+      },
+    },
     course: {
       heading: "Kolegij",
       name: "Naziv",
@@ -459,6 +511,32 @@ export const hr = {
   // Screen 11, the teacher's fast path (F-11, D-80 point 2). Lines are facts in words (PRODUCT §5 rule 2).
   // Z3 (A), #476 6289158306: the teacher's entry at /nastavnik. The order is
   // the route's (year, name; assignments by due time) and nothing reorders it.
+  // DAN-313 (A-01): counts only, for the administrator's own institution;
+  // never a person, a course name or an activity time.
+  institutionOverview: {
+    title: "Pregled ustanove",
+    lead: "Brojke vrijede samo za vašu ustanovu i računaju se pri otvaranju stranice. Pojedine osobe i kolegiji ovdje se ne prikazuju.",
+    unnamed: "Naziv ustanove nije upisan",
+    countsLabel: "Brojke ustanove",
+    counts: {
+      confirmedTeachers: {
+        label: "Potvrđeni nastavnici",
+        note: "Uloga je potvrđena i nije opozvana.",
+      },
+      teacherCandidates: {
+        label: "Čekaju potvrdu uloge",
+        note: "Zadnja prijava preko AAI@EduHr dala je pravo nastavnika, a ulogu još niste potvrdili.",
+      },
+      teachersWithoutAffiliation: {
+        label: "Nastavnici bez prava pri zadnjoj prijavi",
+        note: "Uloga ostaje potvrđena; samo zadnja prijava nije dala pravo nastavnika.",
+      },
+      courses: { label: "Kolegiji", note: "Svi kolegiji ustanove." },
+      students: { label: "Studenti", note: "Upisani u barem jedan kolegij, svaka osoba jednom." },
+    },
+    unavailable: "Pregled ustanove trenutačno nije dostupan. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+  },
   teacherCourses: {
     title: "Moji kolegiji",
     lead: "Kolegiji u kojima predajete i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
@@ -484,10 +562,27 @@ export const hr = {
       none: "Nije predano",
     },
   },
+  // DAN-492 (M2.6-P02, N-16), design pregled-radova-v2: only what the read gives (D-202).
+  mentoredWorks: {
+    title: "Radovi uz mentora",
+    lead: "Završni, diplomski i drugi radovi kojima ste mentor. Prikaz samo čita; ništa ne mijenja.",
+    listTitle: "Radovi · abecedno",
+    orderNote: "Popis se ne može poredati po brojevima.",
+    empty: "Nemate otvorenih mentorstava.",
+    unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+    unnamed: "Ime nije dostupno",
+    open: "Otvori rad",
+    // The state as text only, never a colour (D-128).
+    state: {
+      not_started: "Student još nije započeo rad.",
+      in_progress: "U pisanju",
+      submitted: "Predano",
+    },
+  },
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
-    denied: "Ovaj prikaz vidi samo nastavnik.",
     loading: "Učitavanje radova…",
     unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
     // F-11 (#757, contract c.6397637802 §3; owner c.6397679688).
@@ -550,6 +645,42 @@ export const hr = {
     tabInstructions: "Upute",
     tabComments: "Komentari",
     sourcesEmpty: "Literatura rada prikazuje se ovdje.",
+    // DAN-343 (contract on #866): the "Literatura" tab, design editor-v11 "Brzi izvor".
+    sources: {
+      add: "+ Izvor",
+      formTitle: "Novi izvor",
+      type: "Vrsta izvora",
+      book: "Knjiga",
+      article: "Članak u časopisu",
+      family: "Prezime autora",
+      given: "Ime autora",
+      secondAuthor: "Drugi autor (neobavezno)",
+      family2: "Prezime drugog autora",
+      given2: "Ime drugog autora",
+      year: "Godina",
+      title: "Naslov",
+      place: "Mjesto izdanja",
+      publisher: "Izdavač",
+      journal: "Časopis",
+      volume: "Godište",
+      issue: "Broj",
+      pages: "Stranice",
+      citePage: "Stranica navoda (neobavezno)",
+      preview: "Ovako će biti upisano",
+      addAndCite: "Dodaj i citiraj",
+      addOnly: "Samo u Literaturu",
+      cancel: "Odustani",
+      cite: "Citiraj",
+      listTitle: "Izvori dodani u ovom radu",
+      empty: "Dodaj izvor; navod i unos u popisu literature upisuju se u stilu FPZG-a.",
+      required: "Upiši: {field}.",
+      yearInvalid: "Godina ima četiri znamenke.",
+      tooLong: "{field} ima najviše {n} znakova.",
+      pageTooLong: "Stranica navoda ima najviše {n} znakova.",
+      unstorable: "{field} sadrži znak koji list ne prima; upiši polje ponovno.",
+      pageUnstorable: "Stranica navoda sadrži znak koji list ne prima; upiši je ponovno.",
+      readOnly: "List je samo za čitanje; izvori se ne mogu dodati.",
+    },
     instructionsEmpty: "Upute zadatka prikazuju se ovdje.",
     commentsEmpty: "Komentari nastavnika prikazuju se ovdje.",
     // FE-D9 (06c): "Upute" and "Rad" of the right panel, design editor-v11 §5.1.
@@ -564,6 +695,37 @@ export const hr = {
       toolsNone: "U ovom zadatku uporaba alata generativne umjetne inteligencije nije dopuštena.",
       checks: "Provjera oblika · FPZG",
       checksNote: "Provjera pomaže; ništa ne blokira predaju.",
+      // M4 (DAN-506): S-11 "Upute i provjera oblika", states 1a-6 of the
+      // approved reference (docs/design/ductura/m4-reference). Not rendered yet.
+      shape: {
+        title: "Upute i provjera oblika",
+        loading: "Učitavam pravila za ovu vrstu rada.",
+        loadFailed: "Pravila se trenutačno ne mogu učitati. Rad i dalje možete pisati i predati.",
+        retry: "Pokušaj ponovno",
+        disabled: "Provjera oblika trenutačno nije uključena na ovoj ustanovi. Predaja nije zbog toga ograničena.",
+        disabledCause: "Uzrok vidi samo administrator, na zaslonu Pravila fakulteta.",
+        checkedSummary: "Provjereno pravila: {count}, verzija paketa {version} · provjereno u {time}",
+        findingsHeading: "Odstupanja od pravila",
+        goTo: "Idi na: {place}",
+        source: "Izvor: {source}",
+        notChecked: "nije provjereno",
+        staleHeader: "Provjereno u {time}, paket {version}",
+        staleNote: "Dokument je promijenjen nakon provjere. Raniji nalazi ostaju vidljivi dok ne provjerite ponovno.",
+        staleLabel: "Zastarjelo, dokument je promijenjen",
+        recheck: "Provjeri ponovno",
+        newerPackage: "Dostupna je verzija paketa {newer}. Ovaj rad i dalje koristi verziju {version}.",
+        unavailable: "Provjera oblika za ovu vrstu rada nije dostupna.",
+        officialRules: "Pravila pročitajte u službenom dokumentu:",
+        partialCovered: "Za ovu vrstu rada paket pokriva ova pravila:",
+        partialOthers: "Ostala pravila pročitajte u službenom dokumentu:",
+        typeUnknown: "Vrsta rada još nije određena, pa nije poznato koja pravila vrijede.",
+        scopeHeading: "Opseg: {min} do {max} riječi",
+        scopeNarrowed: "Nastavnik je suzio unutar raspona {min} do {max} iz paketa.",
+        scopeNow: "U radu sada:",
+        scopeWords: "{count} riječi",
+        scopeCounting: "Broje se riječi teksta rada, bez sažetka, popisa literature i priloga.",
+        informative: "Informativno. Ne utječe na predaju.",
+      },
     },
     rad: {
       stages: "Etape",
@@ -833,6 +995,34 @@ export const hr = {
       due: "Rok {time}",
       noticeFirst: "Prvo pročitajte obavijest",
     },
+    // DAN-309 (M2.3-P02, B2): "Moji radovi" on /zadaci/radovi. Each state is
+    // told only from what the server read returned; nothing about the text.
+    works: {
+      title: "Moji radovi",
+      lede: "Vaši radovi na svim kolegijima i njihovo stanje.",
+      search: "Traži po naslovu ili kolegiju",
+      year: "Akademska godina",
+      allYears: "Sve godine",
+      apply: "Prikaži",
+      reset: "Poništi odabir",
+      noMatch: "Nijedan rad ne odgovara odabiru.",
+      emptyHeading: "Još nemate radova.",
+      emptyBody: "Radovi se ovdje prikazuju kad se upišete u kolegij sa zadatkom.",
+      enroll: "Upiši kolegij kodom",
+      list: "Popis radova",
+      due: "Rok {time}",
+      state: {
+        newVersion: "Nova verzija uputa ({version}), još nije potvrđena",
+        notice: "Upute još nisu potvrđene",
+        notStarted: "Rad nije započet",
+        inProgress: "Rad je započet, nije predan",
+        submitted: "Predano {time}",
+        afterDeadline: "Predano {time}, nakon roka",
+      },
+      readNotice: "Pročitaj upute",
+      start: "Otvori zadatak",
+      open: "Otvori rad",
+    },
     // DAN-344: the Archivum S01 texts of /zadaci, verbatim from the owner's
     // package (26. 10. 2026.), in "Vi"; the subtitle without its mentoring
     // half, which this page does not have. Only what the own-assignments read
@@ -925,6 +1115,9 @@ export const hr = {
       replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćete i Vi.",
       purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidite Vi.",
+      // DAN-235 (D-130, PRODUCT §5 rules 5 and 17): the mentor's working records by kind.
+      // Rubric, report draft and grade publication are conditional (D-135, D-136): stated as unavailable, never promised.
+      workingNotes: `Mentor (nastavnik zadatka) moći će voditi i radne zapise o Vašem radu: oznaku zadnjeg pregleda s vremenom, privatne bilješke i predloške komentara. Oni nisu prikaz rada: nećete ih vidjeti u aplikaciji, ali ćete ih moći zatražiti pravom pristupa. U njima nema mjera ni zaključaka koje je izračunala ${APP_NAME}. Ne ulaze u sažetak, izvoz ni predaju, brišu se kad i rad i ne smiju utjecati na kašnjenje ni ocjenu. Rubrika i nacrt izvješća također bi bili radni zapisi, ali se u Ducturi zasad ne vode. Ni objava ocjene u Ducturi zasad nije dostupna.`,
       noVerdict: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja.`,
     },
     // D-05, PRODUCT §6 "Profili evidencije": only for the extended profile.
@@ -1005,6 +1198,8 @@ export const hr = {
     // app sends nothing to the server yet, so it promises no sending (#476).
     logoutTitle: "Odjava",
     logoutConfirm: "Odjavi se",
+    // Unsaved text (#1331): sign-out is still allowed (D-118) but named for what it costs.
+    logoutConfirmUnsaved: "Odjavi se bez izvoza",
     logoutStay: "Ostani",
     logoutPlain: "Odjava zatvara sesiju na ovom uređaju.",
     logoutPending: {
@@ -1044,9 +1239,13 @@ export const hr = {
     copyDiscardConfirm: "Da, odbaci kopiju",
     copyKeep: "Zadrži kopiju",
     copyDiscardFailed: "Kopija nije odbačena i ostaje na ovom uređaju. Pokušajte ponovno.",
-    logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjerite vezu i pokušajte ponovno.",
+    // #1330, #1444: ended here; nothing calls the server again.
+    logoutDevice:
+      "Odjava je na ovom uređaju gotova. Poslužitelj trenutačno ne odgovara, pa ondje prijava prestaje pri sljedećoj prijavi ili kad istekne.",
+    logoutClose: "Zatvori",
     signedOutElsewhere:
-      "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitajte stranicu.",
+      "Prijava više ne vrijedi, pa ova kartica više ne prikazuje rad. Rad nastavljate kad se ponovno prijavite.",
+    signInAgain: "Prijavi se",
   },
   // FE-D3 (DAN-222): /prijava, Prijava v5 of the design handoff without the
   // e-mail sign-in and the "Što Ductura čuva" panel (D-09, #476). AAI@EduHr is
@@ -1087,7 +1286,64 @@ export const hr = {
     helpAccessTitle: "Prijava je uspjela, ali nemate pristup?",
     helpAccessBody: "Javite se koordinatoru na svojoj ustanovi.",
   },
+  // DAN-378 (M1.8): Z-03, a closed session behind the cookie; signed out,
+  // with no session ever shown; Z-05, signed in without the role (UX pass
+  // DAN-450, #1091 c.6561627758). Z-05 speaks of the own account only.
+  access: {
+    expiredTitle: "Sesija je istekla",
+    expiredBody: "Zbog neaktivnosti odjavljeni ste. Prijavite se ponovno i nastavite gdje ste stali.",
+    signedOutTitle: "Niste prijavljeni.",
+    signedOutBody: "Prijavite se da vidite {what}.",
+    what: {
+      courses: "svoje kolegije",
+      newCourse: "obrazac za novi kolegij i zadatak",
+      assignmentVersion: "obrazac za novu verziju zadatka",
+      fastPath: "brz put kroz radove",
+      mentoredWorks: "radove uz mentora",
+      home: "svoj prostor",
+      institution: "pregled svoje ustanove",
+    },
+    deniedTitle: "Nemate pristup ovom prikazu",
+    deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
+    deniedPending: "Ulogu nastavnika potvrđuje administrator fakulteta. Dok se ne potvrdi, ovaj prikaz nije dostupan.",
+    deniedNext: "Javite se koordinatoru na svojoj ustanovi.",
+    backToOwn: "Natrag na moj prostor",
+  },
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
+  // M4 (DAN-506): A-04 "Pravila fakulteta", read-only (D-217), reference #1403.
+  facultyRules: {
+    title: "Pravila fakulteta",
+    intro: "Paket pravila oblika rada koji ustanova koristi. Zaslon je samo za čitanje; novu verziju paketa uvozi tim Ducture.",
+    visibleHeading: "Što studenti i nastavnici vide",
+    colWorkType: "Vrsta rada",
+    colPanel: "Prikaz u panelu Upute i provjera oblika",
+    colCause: "Uzrok",
+    shapeCheck: "Provjera oblika, paket {version}",
+    causeCovered: "Paket pokriva ovu vrstu rada.",
+    causeNotCovered: "Paket {version} ne pokriva ovu vrstu rada.",
+    notApplicable: "Ne odnosi se na ovu vrstu rada.",
+    disabledHeading: "Nije uključeno za cijelu ustanovu",
+    disabledSeen: "Studenti i nastavnici vide: „Provjera oblika trenutačno nije uključena na ovoj ustanovi. Predaja nije zbog toga ograničena.”",
+    disabledLicence: "Licenca za paket pravila nije aktivna od {date}.",
+    disabledOther: "Drugi mogući uzroci: paket nije uvezen; uvezeni paket nije valjan.",
+    packageHeading: "Paket pravila",
+    version: "Verzija",
+    imported: "Uvezeno",
+    publisher: "Izdavač",
+    coveredTypes: "Pokrivene vrste rada",
+    notCovered: "Nije pokriveno",
+    ruleCount: "Broj pravila",
+    rulesHeading: "Pravila i njihov puni tekst",
+    verbatim: "Doslovni navod · {source}",
+    historyHeading: "Povijest verzija",
+    historyVersion: "Verzija",
+    historyImported: "Uvezeno",
+    historyCovered: "Pokrivene vrste rada",
+    inUse: "{version} (u uporabi)",
+    historyNote: "Rad zadržava verziju paketa s kojom je provjeren; nova verzija ne mijenja ranije provjere.",
+    adminHeading: "Postavke koje uređuje administrator",
+    adminNote: "Pravilo o AI pomoćniku, pružatelji, pragovi i rokovi nisu dio paketa pravila. Uređuju se odvojeno, na zaslonu Postavke ustanove.",
+  },
   errorPage: {
     notFoundTitle: "Stranica ne postoji",
     notFoundBody: "Na ovoj adresi nema stranice. Provjerite adresu ili se vratite na početnu.",

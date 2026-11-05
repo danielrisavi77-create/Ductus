@@ -6,6 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { closeWork, seedWork } from "./work-seed";
 import { clickSignOut, SAVED_HERE, signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // #711 F1b (contract 6391402093 §4 and §8 tests 11 and 12; owner decisions O2
 // and O3): the free draft of this device is offered on the student's own work
@@ -104,7 +105,7 @@ test("F1b: another person on the same browser never sees the earlier draft", asy
   await signIn(page, "/rad");
   await writeFree(page, HERS);
   await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await page.context().clearCookies({ name: /^_session/ });
 
   await signIn(page, "/rad", "Demo student 2");
@@ -133,7 +134,7 @@ test("F1b: the offer leaves the page when the session ends in another tab", asyn
   const second = await context.newPage();
   await second.goto("/rad");
   await clickSignOut(second);
-  await second.waitForURL("http://localhost:3000/");
+  await second.waitForURL(`${APP_ORIGIN}/`);
   await expect(offerOf(page)).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText("Raniji tekst koji odlazi s odjavom.");
 });

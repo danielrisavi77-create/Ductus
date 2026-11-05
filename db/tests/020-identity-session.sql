@@ -8,7 +8,7 @@ CREATE ROLE ductus_test_stranger NOLOGIN;
 GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 
-SELECT plan(39);
+SELECT plan(43);
 
 INSERT INTO identity.institution (id, slug) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a'),
@@ -126,18 +126,25 @@ SELECT set_config('app.session_token', (SELECT token FROM tok WHERE name = 'b'),
 SELECT is(app.current_user_id(), '00000000-0000-4000-8000-0000000000b1'::uuid, 'logout of A leaves B open');
 SELECT set_config('app.session_token', '', true);
 SELECT is(identity.close_current_session(), false, 'logout without a token is a no-op');
+-- Closing every session of a user is for the operator alone (DAN-169).
+SELECT throws_ok($$ SELECT identity.close_user_sessions('00000000-0000-4000-8000-0000000000b1') $$, '42501', NULL,
+  'ductus_app: close_user_sessions is denied');
 RESET ROLE;
 
 -- 5. Other roles get neither the table nor the functions.
 SET LOCAL ROLE ductus_worker;
 SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_worker: SELECT on session is denied');
 SELECT throws_ok('SELECT * FROM app.current_actor()', '42501', NULL, 'ductus_worker: current_actor() is denied');
+SELECT throws_ok($$ SELECT identity.close_user_sessions('00000000-0000-4000-8000-0000000000b1') $$, '42501', NULL,
+  'ductus_worker: close_user_sessions is denied');
 RESET ROLE;
 SET LOCAL ROLE ductus_retention;
 SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_retention: SELECT on session is denied');
 RESET ROLE;
 SET LOCAL ROLE ductus_auth;
 SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_auth: SELECT on session is denied (it only executes open_session)');
+SELECT throws_ok($$ SELECT identity.close_user_sessions('00000000-0000-4000-8000-0000000000b1') $$, '42501', NULL,
+  'ductus_auth: close_user_sessions is denied');
 RESET ROLE;
 SET LOCAL ROLE ductus_test_stranger;
 SELECT throws_ok('SELECT * FROM app.current_actor()', '42501', NULL, 'role without grants: current_actor() is denied');
@@ -167,6 +174,24 @@ SELECT is_empty(
   $$ SELECT tablename || '.' || policyname FROM pg_policies
      WHERE schemaname = 'identity' AND roles <> ARRAY['ductus_identity']::name[] $$,
   'every policy on an identity table is for ductus_identity alone'
+);
+-- The session functions (DAN-296): only the web role may close, touch or
+-- sign out everywhere, and only the retention role may purge. open_session
+-- has its own matrix in 021; a login role holds only what its group holds
+-- (010).
+SELECT is_empty(
+  $$ SELECT r.rolname || ': EXECUTE on ' || f.fn
+     FROM (SELECT rolname::text FROM pg_roles
+           WHERE rolname LIKE 'ductus\_%' AND rolname <> 'ductus_identity' AND NOT rolcanlogin
+           UNION ALL SELECT 'public') AS r
+     CROSS JOIN (VALUES
+       ('identity.close_current_session()', 'ductus_app'),
+       ('identity.touch_current_session()', 'ductus_app'),
+       ('identity.close_all_sessions_for_identity()', 'ductus_app'),
+       ('identity.purge_ended_sessions()', 'ductus_retention')
+     ) AS f (fn, allowed)
+     WHERE has_function_privilege(r.rolname, f.fn::regprocedure, 'EXECUTE') <> (r.rolname = f.allowed) $$,
+  'each session function is executable by its one role, by no other role and not by PUBLIC'
 );
 
 SELECT * FROM finish();

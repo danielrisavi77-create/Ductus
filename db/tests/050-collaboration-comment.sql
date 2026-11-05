@@ -291,5 +291,18 @@ FROM (VALUES
 SELECT is(pg_temp.ask('ana', $$ SELECT count(DISTINCT thread_id) FROM collaboration.list_comments('doc-a') $$), '4',
   'the student still reads the threads of the removed teacher');
 
+-- DAN-302 L4: a thread ends at position 10000 with the documented conflict,
+-- not with the table's CHECK (23514), which the route would answer as 503.
+SELECT is(pg_temp.ask_as('ductus_identity', 'ana', format(
+    $$ INSERT INTO collaboration.comment (thread_id, institution_id, position, author_id, author_role, body)
+       VALUES (%L, {fak_a}, 9999, {ana}, 'student', 'Sintetički odgovor.') RETURNING position $$, pg_temp.id('t1'))),
+  '9999', 'the owner fills a thread up to the position before the last');
+SELECT is(pg_temp.ask('ana', $$ SELECT collaboration.reply_comment({t1}, 'Zadnji odgovor.') IS NOT NULL $$), 'true',
+  'a reply may take the last position, 10000');
+SELECT is((SELECT max(position) FROM collaboration.comment WHERE thread_id = pg_temp.id('t1')), 10000,
+  'the reply took position 10000');
+SELECT is(pg_temp.ask('ana', $$ SELECT collaboration.reply_comment({t1}, 'Odgovor previše.') $$), 'ZD409: conflict',
+  'a reply in a full thread is a conflict (DAN-302 L4)');
+
 SELECT * FROM finish();
 ROLLBACK;

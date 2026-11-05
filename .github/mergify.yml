@@ -26,7 +26,19 @@
 # check at a time, each a batch of up to five PRs (one CI run for the batch),
 # formed after at most three minutes of waiting. A failed batch is split until
 # the failing PR is isolated (no batch_max_failure_resolution_attempts), so the
-# others still merge, each as its own squash commit. Every PR in a batch must
+# others still merge, each as its own squash commit. A PR leaves the queue
+# only when it failed alone, or as the last PR of a failed batch whose earlier
+# parts all passed (Mergify does not retest it: main plus those parts passed,
+# main plus them plus this PR failed). No checks_timeout (a timeout is split
+# like a failure) and no retries (ENGINEERING_SYSTEM section 10).
+# DAN-449 (owner, 1 Nov 2026): two queues with the same conditions. `critical`
+# comes first, so `@Mergifyio queue` without a name lands there; its batches
+# hold at most two PRs, so a failure costs one more run and one round, and a
+# PR dropped as last had exactly one partner, which passed alone. Low and
+# standard PRs go to `@Mergifyio queue main` (batches of up to five). Mergify
+# sees no risk (F-114), so a wrong route costs only throughput: both queues
+# require Merge authorization. Batches never mix queues. No queue uses
+# batch_size 1, which would check in place and move the original head. Every PR in a batch must
 # meet all six queue conditions on its own head, Merge authorization included. All six
 # conditions remain mandatory on originals AND CI carriers. The gate recognizes
 # carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
@@ -50,8 +62,8 @@
 # the required statuses of `main` plus "Merge authorization".
 
 queue_rules:
-  - name: main
-    batch_size: 5
+  - name: critical
+    batch_size: 2
     batch_max_wait_time: 3 min
     max_checks_retries: 0
     allow_queue_branch_edit: false
@@ -65,6 +77,16 @@ queue_rules:
       - check-success=Dependency review
       - check-success=Engineering review gate
       - check-success=Merge authorization
+    merge_conditions: *required
+    merge_method: squash
+    update_method: merge
+  - name: main
+    batch_size: 5
+    batch_max_wait_time: 3 min
+    max_checks_retries: 0
+    allow_queue_branch_edit: false
+    branch_protection_injection_mode: queue
+    queue_conditions: *required
     merge_conditions: *required
     merge_method: squash
     update_method: merge

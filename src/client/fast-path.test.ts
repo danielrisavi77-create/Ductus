@@ -239,12 +239,37 @@ describe("parseFastPath", () => {
     ["a block kind from the prototype", (b) => { (b.students[0]!.record!.blocks as Record<string, unknown>[])[0]!.kind = "__proto__"; }],
     ["a block kind that is not a string", (b) => { (b.students[0]!.record!.blocks as Record<string, unknown>[])[0]!.kind = ["quote"]; }],
     ["a broken summary", (b) => { (b.students[0]!.record!.summary as Record<string, unknown>).summaryFormat = "v2"; }],
+    ["no work id (#1284)", (b) => { delete b.students[0]!.documentId; }],
+    ["a work id that is not a string", (b) => { b.students[0]!.documentId = 7; }],
+    ["an empty work id", (b) => { b.students[0]!.documentId = ""; }],
+    ["a work id with a control character", (b) => { b.students[0]!.documentId = "doc\u0000"; }],
+    ["a work id over 256 characters", (b) => { b.students[0]!.documentId = "d".repeat(257); }],
+    ["a record without its work id", (b) => { b.students[0]!.documentId = null; }],
+    ["a work id before the notice", (b) => { b.students.find((s) => s.work === "notice_pending")!.documentId = "demo-document-9"; }],
+    ["a work id without a record", (b) => { b.students[0]!.record = null; }],
+    ["a submitted work without a record", (b) => { b.students.find((s) => s.work === "submitted")!.record = null; }],
+    ["a work id with an edge space", (b) => { b.students[0]!.documentId = " demo-document-3"; }],
+    ["a work id over 256 code points", (b) => { b.students[0]!.documentId = "\u{1D49C}".repeat(257); }],
   ];
 
   it.each(breaks)("rejects the whole answer for %s", (_, change) => {
     const body = answer() as unknown as { kind: unknown; students: Student[] };
     change(body);
     expect(parseFastPath(body)).toBeNull();
+  });
+
+  it("gives each work id as it came, and null only before the notice (#1284)", () => {
+    const students = parseFastPath(answer())!;
+    expect(students.map((s) => [s.work, s.documentId])).toEqual(DEMO_FAST_PATH.map((s) => [s.work, s.documentId]));
+    expect(students.filter((s) => s.documentId === null).map((s) => s.work)).toEqual(["notice_pending"]);
+  });
+
+  it("accepts a work id of 1 and of 256 code points, as the server counts them (#1284)", () => {
+    for (const id of ["d", "d".repeat(256), "\u{1D49C}".repeat(256)]) {
+      const body = answer() as unknown as { students: Student[] };
+      body.students[0]!.documentId = id;
+      expect(parseFastPath(body)![0]!.documentId).toBe(id);
+    }
   });
 
   it("accepts bullet items and quotes as blocks (F-150 point 1)", () => {
