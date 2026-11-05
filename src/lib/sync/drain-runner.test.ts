@@ -258,4 +258,64 @@ describe("F-3 3b: drain runner", () => {
     expect(await first).toMatchObject({ kind: "sent", state: "SYNCED" });
     expect(sent).toHaveLength(1);
   });
+
+  it("after a success the backoff starts again from 1s, not from where the last failures left it", async () => {
+    const journal = open();
+    await queue(journal, "tx-1");
+    let clock = 0;
+    const { sent, transport } = scripted(new Error("offline"), new Error("offline"), signed(1), new Error("offline"));
+    const runner = createDrainRunner({ journal, transport, verify: trusted, now: () => clock, jitter: () => 0.5 });
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "ERROR" });
+    expect(await runner.step(ID)).toEqual({ kind: "waiting", notBefore: 1_000 });
+    clock = 1_000;
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "ERROR" });
+    // Two failures in a row: the wait has doubled.
+    expect(await runner.step(ID)).toEqual({ kind: "waiting", notBefore: 3_000 });
+    clock = 3_000;
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "SYNCED", ackedRevision: 1 });
+
+    await queue(journal, "tx-2");
+    clock = 10_000;
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "ERROR" });
+    // The success cleared the schedule: the next failure waits 1s again, not 4s.
+    expect(await runner.step(ID)).toEqual({ kind: "waiting", notBefore: 11_000 });
+    expect(sent.map((row) => row.clientTransactionId)).toEqual(["tx-1", "tx-1", "tx-1", "tx-2"]);
+  });
+
+  it("after a fatal answer a new local save goes out by itself, without a manual retry", async () => {
+    const journal = open();
+    await queue(journal, "tx-1");
+    const { sent, transport } = scripted({ status: "too_large" }, signed(1));
+    const runner = createDrainRunner({ journal, transport, verify: trusted });
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "ERROR" });
+    // Nothing new: the refused row is not tried again on its own.
+    expect(await runner.step(ID)).toEqual({ kind: "needs_retry", state: "ERROR" });
+    expect(sent).toHaveLength(1);
+
+    await queue(journal, "tx-2");
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "SYNCED", ackedRevision: 1 });
+    expect(sent.map((row) => row.clientTransactionId)).toEqual(["tx-1", "tx-2"]);
+    const stored = await journal.read(ID);
+    expect(stored.pending).toEqual([]);
+    expect(stored.snapshot?.revision).toBe(1);
+  });
+
+  it("a local save made while a fatal attempt is in flight still goes out after the refusal", async () => {
+    const journal = open();
+    await queue(journal, "tx-1");
+    const { sent, transport } = scripted(async () => {
+      // The author keeps typing while the request is out.
+      await queue(journal, "tx-2");
+      return { status: "too_large" };
+    }, signed(1));
+    const runner = createDrainRunner({ journal, transport, verify: trusted });
+    const refused = await runner.step(ID);
+    expect(refused).toMatchObject({ kind: "sent", state: "ERROR", ackedRevision: null });
+    expect((await journal.read(ID)).pending.map((row) => row.tx.clientTransactionId)).toContain("tx-2");
+
+    // No new save and no manual retry: the row saved mid-flight is still owed and goes out.
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "SYNCED", ackedRevision: 1 });
+    expect(sent.map((row) => row.clientTransactionId)).toEqual(["tx-1", "tx-2"]);
+    expect((await journal.read(ID)).pending).toEqual([]);
+  });
 });

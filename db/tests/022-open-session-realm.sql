@@ -15,6 +15,10 @@ INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-0000000002a3', 'test-b', 'b.test'),
   ('00000000-0000-4000-8000-0000000002a4', 'test-c', 'c.test'),
   ('00000000-0000-4000-8000-0000000002a5', 'test-kit', 'kit.test');
+-- Every fixture institution takes the one issuer the tests use (the issuer
+-- rule itself is 023).
+INSERT INTO identity.institution_issuer (institution_id, oidc_issuer)
+SELECT i.id, 'https://issuer.test' FROM identity.institution i WHERE i.id::text LIKE '00000000-0000-4000-8000-0000000002a_';
 
 CREATE FUNCTION pg_temp.h(p_name text) RETURNS bytea
 LANGUAGE sql IMMUTABLE AS $$ SELECT sha256(convert_to(p_name, 'UTF8')) $$;
@@ -24,7 +28,7 @@ CREATE FUNCTION pg_temp.open_as(p_unique_id text, p_home_org text, p_subject tex
 RETURNS text LANGUAGE plpgsql AS $$
 DECLARE v_detail text; v_hint text;
 BEGIN
-  PERFORM identity.open_session('https://issuer.test', p_subject, p_unique_id, p_home_org, pg_temp.h(p_hash));
+  PERFORM identity.open_session('https://issuer.test', p_subject, p_unique_id, p_home_org, pg_temp.h(p_hash), NULL, NULL, false);
   RETURN 'ok';
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL, v_hint = PG_EXCEPTION_HINT;
@@ -36,7 +40,7 @@ CREATE FUNCTION pg_temp.context_of(p_unique_id text, p_home_org text, p_hash tex
 RETURNS text LANGUAGE plpgsql AS $$
 DECLARE v_context text;
 BEGIN
-  PERFORM identity.open_session('https://issuer.test', 'sub-' || p_hash, p_unique_id, p_home_org, pg_temp.h(p_hash));
+  PERFORM identity.open_session('https://issuer.test', 'sub-' || p_hash, p_unique_id, p_home_org, pg_temp.h(p_hash), NULL, NULL, false);
   RETURN 'ok';
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_context = PG_EXCEPTION_CONTEXT;

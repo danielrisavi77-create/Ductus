@@ -89,9 +89,8 @@ export default defineConfig({
     video: process.env.CI ? "on" : "retain-on-failure",
     trace: "retain-on-failure",
   },
-  // Browser policy (docs/TESTING.md 2, owner decision D-108 d). CI runs the
-  // Chromium projects (`desktop`, `mobile`) on every PR and all four on every
-  // push to main and nightly (.github/workflows/ci.yml).
+  // Browser policy (docs/TESTING.md 2, M0.3). CI runs all four projects on
+  // every PR, every push to main and nightly (.github/workflows/ci.yml).
   // `mobile` is a Chromium viewport: an addition, never a stand-in for WebKit.
   // Every spec runs in every project; locally, `--project desktop` runs one.
   projects: [

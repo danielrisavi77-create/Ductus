@@ -1,8 +1,10 @@
 # Ductus: dizajn sustav (mjerodavno)
 
-Verzija 1.2 · 28. 10. 2026. · issue #960
+Verzija 1.2 · 28. 10. 2026. · konačni smjer potvrđen 29. 10. 2026. · issue #960
 
 Ovo je **jedini pisani izvor** za izgled aplikacije: boje, tipografiju, oblike, razmake i pravila. Vrijednosti tokena žive u `app/globals.css`; test `src/components/shell/design-doc.test.ts` pada čim se tablica u §3 i `globals.css` raziđu. Sve druge tablice boja u repou (`docs/design/ductura/README.md` §8, slajdovi #323, stari PR-ovi) su povijest.
+
+**Konačni smjer za sve agente, sesije i orkestratora je „papir i grafit”**, prema [Danielovoj potvrdi od 29. 10. 2026.](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007) i D-188. Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato; svijetla ljuska i tamni list ostaju korisnički izbori. Drugi smjer traži novu izričitu vlasnikovu odluku s datumom, izvorom i navodom što zamjenjuje. Postupak izvedbe i provjere je `docs/SESSIONS.md` §6.
 
 ## 1. Redoslijed mjerodavnosti
 
@@ -29,7 +31,7 @@ Nepromjenjiva pravila koja paleta ne dira: WCAG 2.1 AA (D-115), boje podrijetla 
 Četiri opsega u `app/globals.css`:
 
 - **Tamna ljuska** (`:root`, zadano i uvijek; ne prati postavku sustava): topli grafit (D-188): `#242422` tlo, `#292a28` trake i bočna navigacija, `#2e2e2b` paneli i dijalozi, tekst `#faf9f5`, zlato `#c8aa6e` s grafitnim tekstom na njemu.
-- **Svijetla ljuska** (`[data-theme="light"]` na elementu ljuske, izbor korisnika, D-187): `#f3f2ee` podloga, `#faf9f6` trake i paneli, tekst `#242422`, tamno zlato `#806529`.
+- **Svijetla ljuska** (`data-theme="light"` na `<html>`, pa vrijedi i za 404, grešku i učitavanje izvan ljuske; izbor korisnika, D-187; Z-13a. Prijava i javna naslovnica zasad ostaju tamne, do #1024 i J-01): `#f3f2ee` podloga, `#faf9f6` trake i paneli, tekst `#242422`, tamno zlato `#806529`.
 - **Tamni list** (`.sheet`): grafitni panel `#2e2e2b` sa svijetlom tintom; drži je i u svijetloj ljusci.
 - **Bijeli list** (`.sheet[data-sheet-theme="light"]`): gotovo bijeli papir `#fcfbf8`, tinta `#242422`, tamno zlato `#806529`; prekidač u editoru, izbor se čuva samo u pregledniku.
 
@@ -149,6 +151,7 @@ Vlasnik je 28. 10. 2026. odlučio sva proturječja iz v1.0 (#960 c.6469934229):
 ## 9. Veza s drugim dokumentima
 
 - Ekrani i rute: `docs/design/ductura/INTEGRACIJA.md`; Archivum ekrani: #923.
+- Mapa ekrana, status referenci i redoslijed crtanja: `docs/design/EKRANI.md`.
 - Funkcionalni tokovi i Rječnik: `docs/PRODUCT.md`.
 - Vizualna provjera PR-ova: D-183 (#949) i `docs/SESSIONS.md` §6 (#959).
 

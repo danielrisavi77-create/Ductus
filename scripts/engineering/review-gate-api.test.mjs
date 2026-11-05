@@ -22,12 +22,23 @@ const review = (sha) => ({
   created_at: "2026-10-12T10:00:00Z",
 });
 const comments = [review(earlier)];
-const files = { files: [{ filename: "a.mjs", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b", sha: "1".repeat(40) }] };
+const files = {
+  merge_base_commit: { sha: baseSha },
+  files: [{ filename: "a.mjs", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b", sha: "1".repeat(40) }],
+};
+// F-046: the live tip of main and a whole tree for every compared side.
+const tipAndTree = (path) => {
+  if (path === "/repos/o/r/branches/main") return { commit: { sha: baseSha } };
+  if (path.includes("/git/trees/")) return { truncated: false, tree: [{ path: "a.mjs", mode: "100644", type: "blob" }] };
+  return undefined;
+};
 
 const json = (value) => ({ ok: true, status: 200, json: async () => value, text: async () => JSON.stringify(value) });
 
 // head is a clean merge of main on top of `earlier`; both compares are identical.
 function routes(path) {
+  const served = tipAndTree(path);
+  if (served) return served;
   if (path.endsWith(`/commits/${head}`)) return { sha: head, parents: [{ sha: earlier }, { sha: mainParent }] };
   if (path.endsWith(`/commits/${earlier}`)) return { sha: earlier, parents: [{ sha: "0".repeat(40) }] };
   if (path.includes(`/compare/main...${mainParent}`)) return { status: "behind", files: [] };
@@ -186,6 +197,7 @@ function chainFetch(depth) {
   const fetchImpl = async (url) => {
     const path = url.replace("https://api.test", "");
     calls.push(path);
+    if (tipAndTree(path)) return json(tipAndTree(path));
     const at = [...Array(depth + 1).keys()].find((i) => path.endsWith(`/commits/${chainSha(i)}`));
     if (at !== undefined) {
       // A chain of base merges ending in the PR's own commit at `depth`.

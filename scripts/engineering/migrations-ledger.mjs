@@ -70,7 +70,7 @@ export function checkBase(base, migrations) {
 }
 
 /** The migrations of a commit, read from git objects, never from the checkout. */
-function readBase(sha) {
+export function readBase(sha) {
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`--base needs a full commit SHA, got "${sha}"`);
   const git = (args) => execFileSync("git", args, { maxBuffer: 64 * 1024 * 1024 });
   const base = new Map();

@@ -21,6 +21,7 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | N-01 | Obavijesti e-poštom i u aplikaciji (odmah ili dnevni sažetak) | 2 do 3 | 1 |
 | N-02 | Podsjetnici o roku | 1 | 1 |
 | N-03 | Banka komentara | 1 | 2 |
+| N-04 | Glasovni komentar. **Ulazi u program (D-201 t. 3d); gradi se sa sintetičkim podacima u valu 2 (D-240), za stvarne studente isključen do DPIA i pravnog mišljenja** | nije procijenjeno | 2 |
 | N-05 | Promjene od mog zadnjeg pregleda | 2 | 2 |
 | N-07 | Ključni rokovi mentorskog rada | 2 do 3 | 3 |
 | N-08 | Komentor (model u M2) | 1 | 3 |
@@ -40,7 +41,9 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | A-05 | EU modeli istaknuti u katalogu, zemlja obrade uz model | 1 | 2 | Bila izvan pilota (D-77); M9 je u pilotu (D-194), ulazak ove stavke nije odlučen.
 | A-07 | Otvoreni verifikator zapisa | 3 | 3 |
 | A-10 | "Moj rad u brojkama" za studenta, bez ritma i usporedbe | 1 | 3 |
-| S-14 | Panel Nacrt u editoru (obrnuti nacrt, nit argumenta, pojmovnik). **Ulazi u program (vlasnik, 31. 10. 2026., #87 c.6543799262).** Oznaka je iz mape ekrana, ne iz ove serije S-01 do S-12. Specifikacija: `docs/design/PANEL-NACRT-SPEC.md`; smještaj M5.14 i pohrana plana su PRIJEDLOG | 3 do 5 (hipoteza) | M5 |
+| S-14 | Panel Nacrt u editoru (obrnuti nacrt, nit argumenta, pojmovnik). **Ulazi u program (vlasnik, 31. 10. 2026., #87 c.6543799262).** Oznaka je iz mape ekrana, ne iz ove serije S-01 do S-12. Specifikacija: `docs/design/PANEL-NACRT-SPEC.md`; smještaj M5.14, pohrana plana, vidljivost i naziv „Struktura” odlučeni su D-234 (2. 11. 2026.) | 3 do 5 (hipoteza) | M5 |
+
+Napomena o koliziji naziva (#87 [c.6578722946](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6578722946)): u ovoj tablici S-11 je uvodni vodič od dvije minute i to značenje ostaje. Plan M4 istu oznaku koristi za ekran mape ekrana, pa se taj ekran uvijek piše punim nazivom „S-11 — Panel Upute i provjera oblika” (`docs/PROGRAM-RAZRADA.md`, M4).
 
 Zbroj prihvaćenog: oko **55 do 70 večeri** uz grupne radove s izmjenom pisača. Uz 99 do 134 večeri iz `PROGRAM.md` to je više nego što stane u pilot; raspored po valovima i rezovi su sljedeći korak.
 
@@ -67,4 +70,4 @@ Zbroj prihvaćenog: oko **55 do 70 večeri** uz grupne radove s izmjenom pisača
 
 ## Kasnije
 
-S-05 transkripcija intervjua, N-04 glasovni komentar, N-06 rubrika povratne informacije, N-10 predlošci zadataka, F-05 izvoz u Dabar, F-07 članstvo iz ISVU-a, F-08 Merlin (LTI 1.3), A-02 provjera koherentnosti, A-06 ključ fakulteta za AI, A-09 otvorena specifikacija formata evidencije.
+S-05 transkripcija intervjua, N-06 rubrika povratne informacije (M6.13 do M6.15 se u M6 ne grade, D-249), N-10 predlošci zadataka, F-05 izvoz u Dabar, F-07 članstvo iz ISVU-a, F-08 Merlin (LTI 1.3), A-02 provjera koherentnosti, A-06 ključ fakulteta za AI, A-09 otvorena specifikacija formata evidencije.

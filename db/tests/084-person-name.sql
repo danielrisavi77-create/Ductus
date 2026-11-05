@@ -14,6 +14,9 @@ SELECT plan(55);
 INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a', 'a.example'),
   ('00000000-0000-4000-8000-00000000000b', 'test-b', 'b.example');
+INSERT INTO identity.institution_issuer (institution_id, oidc_issuer) VALUES
+  ('00000000-0000-4000-8000-00000000000a', 'https://issuer.test'),
+  ('00000000-0000-4000-8000-00000000000b', 'https://issuer.test');
 
 CREATE FUNCTION pg_temp.h(p_name text) RETURNS bytea
 LANGUAGE sql IMMUTABLE AS $$ SELECT sha256(convert_to(p_name, 'UTF8')) $$;
@@ -22,8 +25,10 @@ LANGUAGE sql IMMUTABLE AS $$ SELECT sha256(convert_to(p_name, 'UTF8')) $$;
 CREATE FUNCTION pg_temp.login(p_who text, p_home_org text, p_hash text, p_given text, p_family text, p_subject text DEFAULT NULL)
 RETURNS text LANGUAGE plpgsql AS $$
 BEGIN
+  -- DAN-304: ductus_auth reaches the names only through the eight-argument
+  -- form (024), which runs the seven-argument one.
   PERFORM identity.open_session('https://issuer.test', coalesce(p_subject, 'sub-' || p_who), p_who || '@' || p_home_org,
-                                p_home_org, pg_temp.h(p_hash), p_given, p_family);
+                                p_home_org, pg_temp.h(p_hash), p_given, p_family, false);
   RETURN 'ok';
 EXCEPTION WHEN OTHERS THEN
   RETURN SQLSTATE || ': ' || SQLERRM;
@@ -59,15 +64,17 @@ SELECT is(pg_get_userbyid(p.proowner)::text, 'ductus_identity', 'open_session wi
 FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea, text, text)'::regprocedure;
 SELECT is(p.proconfig, ARRAY['search_path=""'], 'open_session with names runs with an empty search_path')
 FROM pg_proc p WHERE p.oid = 'identity.open_session(text, text, text, text, bytea, text, text)'::regprocedure;
-SELECT ok(has_function_privilege('ductus_auth', 'identity.open_session(text, text, text, text, bytea, text, text)', 'EXECUTE'),
-  'ductus_auth may execute open_session with names');
+-- DAN-304 (#1181, item 13): closed to the login role, which goes through
+-- the eight-argument form.
+SELECT ok(NOT has_function_privilege('ductus_auth', 'identity.open_session(text, text, text, text, bytea, text, text)', 'EXECUTE'),
+  'ductus_auth may no longer execute the seven-argument open_session');
 SELECT is_empty(
   $$ SELECT r.rolname FROM (SELECT rolname::text FROM pg_roles
                             WHERE rolname LIKE 'ductus\_%'
-                              AND rolname NOT IN ('ductus_auth', 'ductus_identity', 'ductus_auth_local')
+                              AND rolname <> 'ductus_identity'
                             UNION ALL SELECT 'public') AS r (rolname)
      WHERE has_function_privilege(r.rolname, 'identity.open_session(text, text, text, text, bytea, text, text)', 'EXECUTE') $$,
-  'no role but ductus_auth, its local login and the owner, nor PUBLIC, may execute open_session with names'
+  'no role but the owner, nor PUBLIC, may execute the seven-argument open_session'
 );
 
 -- 2. No role reads or writes a name directly; ductus_auth only logs in.

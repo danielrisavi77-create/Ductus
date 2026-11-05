@@ -10,13 +10,15 @@ import { consoleLog, parseClosedObject, readGuardedBody, reply, unavailable, typ
  * student's work for one assignment, made on the first call, with its
  * current state, the snapshot of the current revision and the public receipt
  * keys of its evidence domain, all read in one transaction. Package and
- * institution never leave the server.
+ * institution never leave the server. DAN-331 (F-137): the work is made only
+ * when the body asks to start it (`"start": true`); otherwise a work that does
+ * not exist yet is answered 409 `not_started` and nothing is written.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPEN_SQL = `SELECT outcome, document_id, evidence_profile_id, current_revision, document_hash,
        head_segment_hash, last_sequence_to, snapshot
-  FROM app.open_student_work($1::uuid)`;
+  FROM app.open_student_work($1::uuid, $2::boolean)`;
 // DAN-289 O2: whether the caller's own work for the assignment is submitted (true or false, nothing else).
 const SUBMITTED_SQL = `SELECT app.work_submitted($1::uuid) AS submitted`;
 // Under RLS the session sees only its own packages; the first one, as the open RPC picks it.
@@ -43,7 +45,7 @@ type OpenRow = Record<
 >;
 
 type Opened =
-  | { status: "unauthenticated" | "not_found" | "not_accepting" }
+  | { status: "unauthenticated" | "not_found" | "not_accepting" | "not_started" }
   | { status: "unavailable"; code: string }
   | { status: "opened"; body: Record<string, unknown> };
 
@@ -52,10 +54,13 @@ function count(value: unknown): number | null {
   return typeof n === "number" && Number.isSafeInteger(n) && n >= 0 ? n : null;
 }
 
-async function open(tx: ActorTransaction, assignmentId: string): Promise<Opened> {
-  const { rows } = await tx.query<OpenRow>(OPEN_SQL, [assignmentId]);
+async function open(tx: ActorTransaction, assignmentId: string, start: boolean): Promise<Opened> {
+  const { rows } = await tx.query<OpenRow>(OPEN_SQL, [assignmentId, start]);
   const row = rows.length === 1 ? rows[0] : undefined;
-  if (row?.outcome === "unauthenticated" || row?.outcome === "not_found" || row?.outcome === "not_accepting") {
+  if (
+    row?.outcome === "unauthenticated" || row?.outcome === "not_found" || row?.outcome === "not_accepting" ||
+    row?.outcome === "not_started"
+  ) {
     return { status: row.outcome };
   }
   if (row?.outcome === "not_configured") return { status: "unavailable", code: "work_not_configured" };
@@ -106,13 +111,16 @@ export async function handleEvidenceOpenRequest(request: Request, deps: Evidence
   const log = deps.log ?? consoleLog;
   const read = await readGuardedBody(request, deps.expectedOrigin, deps.sessionToken, { maxBytes: 1024, timeoutMs: 5_000 });
   if (!read.ok) return read.response;
-  const body = parseClosedObject(read.bytes, ["assignmentId"]);
+  const body = parseClosedObject(read.bytes, ["assignmentId"]) ?? parseClosedObject(read.bytes, ["assignmentId", "start"]);
   const assignmentId = body?.assignmentId;
   if (typeof assignmentId !== "string" || !UUID.test(assignmentId)) return reply(422, { status: "invalid" });
+  // Only a literal true starts a work; a missing key and false open an existing one.
+  const start = body !== null && "start" in body ? body.start : false;
+  if (typeof start !== "boolean") return reply(422, { status: "invalid" });
 
   let opened: Opened;
   try {
-    opened = await deps.withActor(read.token, (tx) => open(tx, assignmentId));
+    opened = await deps.withActor(read.token, (tx) => open(tx, assignmentId, start));
   } catch {
     opened = { status: "unavailable", code: "work_failed" };
   }
@@ -126,6 +134,8 @@ export async function handleEvidenceOpenRequest(request: Request, deps: Evidence
     case "not_accepting":
       log("evidence open", opened.status);
       return reply(409, { status: "not_accepting" });
+    case "not_started":
+      return reply(409, { status: "not_started" });
     default:
       log("evidence open", "unavailable", "context", opened.code);
       return unavailable("context");

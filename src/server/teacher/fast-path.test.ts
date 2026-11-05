@@ -37,9 +37,8 @@ const BODY = canonicalizeJcs({
   ],
 });
 
-async function record(documentId: string) {
+async function record(documentId: string, store = new InMemoryEvidencePayloadStore()) {
   const hash = (n: number) => n.toString(16).padStart(64, "0");
-  const store = new InMemoryEvidencePayloadStore();
   const hashes: string[] = [];
   for (const [i, minute] of ["10:00", "10:20"].entries()) {
     const at = `2026-10-20T${minute}:00.000Z`;
@@ -186,13 +185,13 @@ describe("readFastPath (B-11c, #757 D1 and D5)", () => {
       [null, null],
     ]);
     const ana = read.students[3]!;
-    expect(ana).toMatchObject({ id: STUDENT(1), work: "submitted", lastChangeAt: "2026-10-20T10:20:00.000Z" });
+    expect(ana).toMatchObject({ id: STUDENT(1), documentId: "doc-1", work: "submitted", lastChangeAt: "2026-10-20T10:20:00.000Z" });
     expect(ana.record).toMatchObject({
       pastesWithoutSource: 1,
       blocks: [{ kind: "heading", text: "Uvod" }, { kind: "paragraph", text: "Lorem ipsum dolor" }],
     });
     expect(read.students[2]).toStrictEqual({
-      id: STUDENT(5), givenName: "Branka", surname: "Primjer", work: "notice_pending", lastChangeAt: null, record: null,
+      id: STUDENT(5), givenName: "Branka", surname: "Primjer", documentId: null, work: "notice_pending", lastChangeAt: null, record: null,
     });
     // The reader reaches the database only as the session, the assignment as a parameter.
     expect(db.tokens).toStrictEqual([VESNA]);
@@ -258,6 +257,12 @@ describe("readFastPath (B-11c, #757 D1 and D5)", () => {
     ["a hash outside the format", work(1, ["AB"], { head_segment_hash: "AB" })],
     ["no submission flag", work(1, [], { submitted: null })],
     ["no body", work(1, [], { body: null })],
+    ["a work id that is not a string", work(1, [], { document_id: 7 })],
+    ["an empty work id", work(1, [], { document_id: "" })],
+    ["a work id with a control character", work(1, [], { document_id: "doc\u0007" })],
+    ["a work id over 256 characters", work(1, [], { document_id: "d".repeat(257) })],
+    ["a work id with an edge space", work(1, [], { document_id: " doc-1" })],
+    ["a work id over 256 code points", work(1, [], { document_id: "\u{1D49C}".repeat(257) })],
   ])("gives unavailable for a row with %s", async (_, row) => {
     const { lines, log } = logger();
     const read = await readFastPath(VESNA, ASSIGNMENT, database([pending(5), row]).withActor, {
@@ -378,9 +383,51 @@ describe("fast path route (B-11c, #757 D4)", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toStrictEqual({
       kind: "ok",
-      students: [{ id: STUDENT(2), givenName: "Branka", surname: "Primjer", work: "notice_pending", lastChangeAt: null, record: null }],
+      students: [
+        { id: STUDENT(2), givenName: "Branka", surname: "Primjer", documentId: null, work: "notice_pending", lastChangeAt: null, record: null },
+      ],
     });
     expect(db.queries).toStrictEqual([[ASSIGNMENT]]);
+  });
+
+  it("names the work of each row with a record and none for a row without (#1284)", async () => {
+    const { store, hashes } = await record("doc-1");
+    const db = database([work(1, hashes, { document_id: "doc-1" }), pending(2)]);
+    const response = await handleFastPathRequest(post({ assignmentId: ASSIGNMENT }), deps({ withActor: db.withActor, payloads: store }));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { students: Record<string, unknown>[] };
+    expect(body.students.map((s) => [s.id, s.documentId, s.work])).toStrictEqual([
+      [STUDENT(2), null, "notice_pending"],
+      [STUDENT(1), "doc-1", "writing"],
+    ]);
+  });
+
+  it("keeps each work id with its own student when two works come in either order (#1284)", async () => {
+    const one = await record("doc-1");
+    const two = await record("doc-2", one.store);
+    const rows = [
+      work(1, one.hashes, { document_id: "doc-1", given_name: "Ana", family_name: "Testić" }),
+      work(2, two.hashes, { document_id: "doc-2", given_name: "Dora", family_name: "Izmišljena", submitted: true }),
+    ];
+    for (const order of [rows, [...rows].reverse()]) {
+      const read = await readFastPath(VESNA, ASSIGNMENT, database(order).withActor, { payloads: one.store, thresholds: THRESHOLDS });
+      expect(read.kind).toBe("ok");
+      if (read.kind !== "ok") return;
+      expect(read.students.map((s) => [s.id, s.documentId, s.work])).toStrictEqual([
+        [STUDENT(2), "doc-2", "submitted"],
+        [STUDENT(1), "doc-1", "writing"],
+      ]);
+    }
+  });
+
+  it("accepts a work id of 256 characters, the longest the evidence segment holds (#1284)", async () => {
+    const id = "d".repeat(256);
+    const { store, hashes } = await record(id);
+    const read = await readFastPath(VESNA, ASSIGNMENT, database([work(1, hashes, { document_id: id })]).withActor, {
+      payloads: store,
+      thresholds: THRESHOLDS,
+    });
+    expect(read.kind === "ok" && read.students[0]!.documentId).toBe(id);
   });
 
   it("answers the same empty 200 for an assignment the reader does not teach or that does not exist", async () => {

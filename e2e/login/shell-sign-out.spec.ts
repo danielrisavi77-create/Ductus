@@ -5,6 +5,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
   appCookie, clickSignOut, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // D-118 sign-out dialog (#476 contract c.6396619831 with amendment
 // c.6396707923, O1 and O2): before the POST, "Odjava" reads what this
@@ -13,7 +14,7 @@ import {
 // without the editor. Every test runs in a fresh browser context; all text
 // and accounts are invented.
 
-const ORIGIN = "http://localhost:3000";
+const ORIGIN = APP_ORIGIN;
 const PREFIX = "ductus-journal-v1-";
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");

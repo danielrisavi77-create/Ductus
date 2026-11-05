@@ -7,6 +7,6 @@ description: "Ductus sync and journal: local Dexie journal, eight-state sync mac
 
 Ova lokalna kopija služi samo kao router; Ductus repozitorij, kanonski skillovi i dokumenti izvor su istine. Raniji popisi stanja, modula i testova mogu biti zastarjeli.
 
-Za uvjete ACK/SYNCED koristi `.agents/skills/ductus-sync-states/SKILL.md`; za oporavak `.agents/skills/ductus-offline-recovery/SKILL.md`; za logout, brisanje lokalne pohrane i zastarjele tabove `.agents/skills/ductus-local-storage-logout/SKILL.md`. Kanonske reference su `docs/ARCHITECTURE.md` §5, `docs/BACKEND.md` §3, `docs/PRODUCT.md` §5 i `docs/TESTING.md` §§2–3.
+Za uvjete ACK/SYNCED koristi `.agents/skills/ductus-sync-states/SKILL.md`; za oporavak `.agents/skills/ductus-offline-recovery/SKILL.md`; za logout, brisanje lokalne pohrane i zastarjele tabove `.agents/skills/ductus-local-storage-logout/SKILL.md`. Kanonske reference su `docs/ARCHITECTURE.md` §5, `docs/backend/pregled.md` §3, `docs/PRODUCT.md` §5 i `docs/TESTING.md` §§2–3.
 
 Provjeri aktualni kod i relevantne testove u aktivnom checkoutu, osobito kad se radi o ACK-u, potvrdi, rebaseu ili gubitku podataka. Ovaj adapter ne dodaje pravila ni ovlasti.

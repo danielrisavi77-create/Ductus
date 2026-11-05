@@ -60,7 +60,8 @@ export default function OpenWork({ assignmentId, session }: { assignmentId: stri
     setPhase({ kind: "loading" });
     const result = await startWorkAttempt(assignmentId, {
       sessionEnded: () => watch.current?.ended() ?? false,
-      open: openWork,
+      // DAN-331: the click on "Započni rad" is the only caller that may make the work (F-137).
+      open: (id) => openWork(id, fetch, { start: true }),
     });
     inFlight.current = false;
     if (result.status === "sessionEnded") {

@@ -1,18 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { applicationOrigin, evidenceIngestDeps } from "./ingest-deps";
+import { evidenceIngestDeps } from "./ingest-deps";
 
+// The expected origin of the ingest routes is expectedOrigin from
+// src/server/auth/config.ts now (DAN-302 L3); its cases moved to config.test.ts.
 describe("evidence ingest dependencies", () => {
-  it.each([
-    [undefined, null],
-    ["", null],
-    ["ne-url", null],
-    ["file:///tmp/callback", null],
-    ["http://localhost:3000/api/auth/callback", "http://localhost:3000"],
-  ])("takes the expected origin from OIDC_REDIRECT_URI %j", (value, expected) => {
-    expect(applicationOrigin({ OIDC_REDIRECT_URI: value })).toBe(expected);
-  });
-
   it("builds one signer and one storage router per process", () => {
     const first = evidenceIngestDeps();
     const second = evidenceIngestDeps();

@@ -6,7 +6,7 @@
 
 ## 1. Podizvršitelji kako ih predlažu dokumenti
 
-Cijeli dobavljački sloj je **PRIJEDLOG D-08, uvjetan**: potvrda tek nakon B0.1 i B0.2, a trošak premašuje D-66 (ARCHITECTURE §9, BACKEND §1, §7). Država sjedišta dobavljača i njegove matične grupe nije navedena u dokumentima; upisuje se iz ugovora i DPA-a, ne iz ovog nacrta. Ništa iz tablice nije izgrađeno: `package.json` nema klijente za pohranu objekata, KMS, e-poštu ni praćenje grešaka.
+Cijeli dobavljački sloj je **PRIJEDLOG D-08, uvjetan**: potvrda tek nakon B0.1 i B0.2, a trošak je premašivao D-66 i stane u proračun D-199 t. 2 (ARCHITECTURE §9, BACKEND §1, §7). Država sjedišta dobavljača i njegove matične grupe nije navedena u dokumentima; upisuje se iz ugovora i DPA-a, ne iz ovog nacrta. Ništa iz tablice nije izgrađeno: `package.json` nema klijente za pohranu objekata, KMS, e-poštu ni praćenje grešaka.
 
 | Subjekt | Namjena | Što može vidjeti | Lokacija obrade u dokumentima | Provjeriti | Status |
 | --- | --- | --- | --- | --- | --- |

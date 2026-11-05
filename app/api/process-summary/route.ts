@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { evidencePayloadReader } from "@/server/evidence/payload-reader";
@@ -19,20 +20,13 @@ function unavailable(): Response {
 // lands in a URL; the origin comes from the configured OIDC callback. Payloads
 // come from the storage domain of the institution the read RPC names.
 export async function POST(request: NextRequest): Promise<Response> {
-  const callback = process.env.OIDC_REDIRECT_URI;
-  if (!callback) return unavailable();
-  let expectedOrigin: string;
-  try {
-    expectedOrigin = new URL(callback).origin;
-    if (expectedOrigin === "null") throw new Error("invalid application origin");
-  } catch {
-    return unavailable();
-  }
+  const origin = expectedOrigin();
+  if (!origin) return unavailable();
   return handleProcessSummaryRequest(request, {
     withActor,
     payloads: evidencePayloadReader(),
     thresholds: loadProcessSummaryThresholds(),
-    expectedOrigin,
+    expectedOrigin: origin,
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }

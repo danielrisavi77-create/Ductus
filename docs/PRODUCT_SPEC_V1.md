@@ -56,7 +56,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 - W2 Proizvod / Kako radi
 - W3 Za fakultete
 - W4 Sigurnost i privatnost
-- W5 Cijene / pilot / zatraži demo
+- W5 Cijene / pilot / zatraži predstavljanje
 - W6 Kontakt
 - W7 Procurement / institucionalni resursi
 
@@ -123,7 +123,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 
 - hero: “Platforma za dokaziv i transparentan proces akademskog rada.”
 - kratko objašnjenje student → proces → nastavnik → institucija;
-- CTA `Zatraži demo`;
+- CTA `Zatraži predstavljanje`;
 - CTA `Pogledaj proizvod`;
 - preview studentskog editora;
 - preview mentorskog pregleda;
@@ -133,7 +133,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 
 **Glavne akcije:**
 
-- zatraži demo;
+- zatraži predstavljanje;
 - pogledaj proizvod;
 - otvori sigurnost;
 - otvori stranicu za fakultete;
@@ -143,7 +143,7 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 
 - javno pozicioniranje mora ostati institucionalno, akademsko i transparentno;
 - website ne smije izgledati kao consumer AI writing app;
-- demo zahtjev ide prema vlasniku / sales inboxu.
+- zahtjev za predstavljanje ide prema vlasniku / sales inboxu.
 
 **Ovisnosti:** nijedna kritična backend ovisnost; kontakt forma / CRM može kasnije.
 
@@ -798,9 +798,11 @@ Točna verzija pravila koja je vrijedila u trenutku relevantnog događaja / pred
 
 ## 17.1 Vizualni smjer
 
-- dark academic SaaS;
-- charcoal / black-green pozadina;
-- mint / teal primary;
+**Aktualizirano 29. 10. 2026.:** konačni smjer cijele Ducture je „papir i grafit” (D-188; [potvrda vlasnika](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007)). Specifikacija je `docs/design/DESIGN-SYSTEM.md`, postupak `docs/SESSIONS.md` §6. Drugi smjer traži novu izričitu vlasnikovu odluku.
+
+- tamna grafitna ljuska zadano;
+- gotovo bijeli list zadano, uz tamni list kao izbor;
+- prigušeno zlato kao naglasak; svijetla ljuska ostaje korisnički izbor;
 - elegantni serif naglasci za hero i dokument;
 - čisti sans-serif za UI;
 - thin borders;
@@ -810,7 +812,7 @@ Točna verzija pravila koja je vrijedila u trenutku relevantnog događaja / pred
 
 ## 17.2 Boje
 
-Predloženi design tokeni iz vizualnog boarda:
+**Povijest izvornog boarda:** tablica ispod više ne određuje aktivnu paletu. Važeće vrijednosti iz D-188 nalaze se samo u `docs/design/DESIGN-SYSTEM.md`; stare boje se ne prenose u novu izvedbu.
 
 | Token | Vrijednost | Uporaba |
 | --- | --- | --- |
@@ -829,12 +831,15 @@ Predloženi design tokeni iz vizualnog boarda:
 
 ## 17.3 Tipografija
 
-- UI: Inter ili ekvivalentni sans-serif;
-- editorial/document headings: Playfair Display ili ekvivalentni serif;
-- document body može koristiti serif optimiziran za duga čitanja;
-- brojevi / logovi po potrebi mono.
+- UI: Instrument Sans;
+- tekst rada i naslovi: Newsreader;
+- kod i tehničke oznake: JetBrains Mono.
+
+Raniji prijedlozi Inter/Playfair iz izvornog boarda su povijest.
 
 ## 17.4 Kanonski artefakti
+
+Za aktivni dizajn vrijede `docs/design/DESIGN-SYSTEM.md`, `docs/SESSIONS.md` §6 i aktualni Linear zadatak. Sljedeći Drive artefakti su datirane izvorne reference; njihove stare palete ne mijenjaju D-188.
 
 Google Drive mapa `Ductura`:
 
@@ -910,7 +915,7 @@ Ako stavka ima REUSE ili UX GAP, ne otvara se drugi backend task s novim accepta
 - E1-03 Za fakultete
 - E1-04 Security / Privacy
 - E1-05 Pricing / Pilot
-- E1-06 Request demo / contact
+- E1-06 Zatraži predstavljanje / kontakt
 - E1-07 Procurement resources
 
 ## E2 — Policy Governance

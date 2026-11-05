@@ -30,24 +30,13 @@ export type InstitutionReply =
   | { error: string }
   | { code: string }
   | { revoked: boolean }
+  | { confirmed: true }
   | { removed: boolean }
   | { allowed: boolean }
   | { assignmentId: string; versionNo: number };
 
 export function respond(status: number, body: InstitutionReply): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
-}
-
-/** The origin of the configured OIDC callback, or undefined when it is missing or opaque. */
-export function applicationOrigin(): string | undefined {
-  try {
-    const callback = process.env.OIDC_REDIRECT_URI;
-    if (!callback) return undefined;
-    const origin = new URL(callback).origin;
-    return origin === "null" ? undefined : origin;
-  } catch {
-    return undefined;
-  }
 }
 
 /**

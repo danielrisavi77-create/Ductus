@@ -208,10 +208,12 @@ test("PASS from the declared author's own principal still does not count", () =>
   assert.match(ownQa.description, /waiting for separately authenticated QA PASS/);
 });
 
-test("only a newer verdict from the same identity on the same head replaces a negative one", () => {
+// F-023 (owner decision 31. 10. 2026.): not even the same identity replaces a
+// negative verdict on the same head; a new head does (review-gate.test.mjs).
+test("no later verdict on the same head replaces a negative one (F-023)", () => {
   assert.equal(
     gate(prBody(), [review("claude:r1", "BLOCK"), review("claude:r1", "PASS")]).state,
-    "success",
+    "pending",
   );
   // Another identity, another App or another head does not replace it.
   assert.equal(
@@ -235,6 +237,14 @@ test("only a newer verdict from the same identity on the same head replaces a ne
       review("chatgpt:r2", "PASS"),
       qa("grok:q1", "BLOCK"),
       qa("grok:q1", "PASS"),
+    ]).state,
+    "pending",
+  );
+  // A PASS on a new head moves past the negative verdict on the old head.
+  assert.equal(
+    gate(prBody(), [
+      review("claude:r1", "BLOCK", { sha: olderHead }),
+      review("claude:r1", "PASS"),
     ]).state,
     "success",
   );

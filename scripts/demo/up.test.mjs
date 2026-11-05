@@ -72,6 +72,16 @@ test("demo environment uses only local Compose services and creates an auth pass
   assert.equal(env.NODE_ENV, "development");
 });
 
+test("demo environment gives db:migrate a worker login password, its own or a fresh random one", () => {
+  const generated = createDemoEnvironment({});
+  assert.ok(generated.DUCTUS_WORKER_LOCAL_PASSWORD.length >= 16);
+  assert.notEqual(generated.DUCTUS_WORKER_LOCAL_PASSWORD, generated.DUCTUS_AUTH_LOCAL_PASSWORD);
+  assert.notEqual(createDemoEnvironment({}).DUCTUS_WORKER_LOCAL_PASSWORD, generated.DUCTUS_WORKER_LOCAL_PASSWORD);
+  const own = "w".repeat(20);
+  assert.equal(createDemoEnvironment({ DUCTUS_WORKER_LOCAL_PASSWORD: own }).DUCTUS_WORKER_LOCAL_PASSWORD, own);
+  assert.throws(() => createDemoEnvironment({ DUCTUS_WORKER_LOCAL_PASSWORD: "short" }), /DUCTUS_WORKER_LOCAL_PASSWORD must be at least 16 characters/);
+});
+
 test("demo environment replaces the auth password placeholder from .env.example", () => {
   const env = createDemoEnvironment({
     AUTH_DATABASE_URL: "postgres://ductus_auth_local:%3CDUCTUS_AUTH_LOCAL_PASSWORD%3E@127.0.0.1:54329/ductus",

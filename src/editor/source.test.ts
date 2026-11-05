@@ -7,14 +7,15 @@ import { describe, expect, it, vi } from "vitest";
 import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
+import { writeSource } from "@/components/editor/sources";
+import type { EvidenceSegment, EvidenceSource } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 import { projectProcessSummary } from "@/domain/projection/process-summary";
 
 import { changeOf, EvidenceRecorder, type BuiltSegment, type SegmentContext } from "./capture";
 import { tiptapToCanonical } from "./interop";
 import { createEditorExtensions } from "./schema";
-import { NO_OBSERVATION, recordWithSource, SourceObserver, sourceOfChange, type SourceObservation } from "./source";
+import { CITATION_FORM_META, NO_OBSERVATION, recordWithSource, SourceObserver, sourceOfChange, type SourceObservation } from "./source";
 
 /**
  * F-8 step 3d-1c (Q1, DAN-287; contract #476 issuecomment-6385376486 with
@@ -82,7 +83,7 @@ function setup(texts: readonly string[] = ["Odlomak izmisljen jedan", "Odlomak i
   const view = editor.view;
   const recorder = new EvidenceRecorder();
   const initial = canonical(editor);
-  const sources: EvidenceSourceV2[] = [];
+  const sources: EvidenceSource[] = [];
   const changes: { transactions: Transaction[]; at: number }[] = [];
   let at = T0 + 5_000;
   editor.on("transaction", ({ transaction, appendedTransactions }) => {
@@ -386,6 +387,74 @@ describe("3d-1c QA t. 6: pastes are events of their own", () => {
       recordWithSource(t.recorder, [tr2], observation, T0 + 10);
       expect(t.recorder.pendingEvents, source).toBe(2);
     }
+  });
+});
+
+// DAN-343, contract on #866 (`issuecomment-6423076996`): the Literatura form's text is `citation-form`.
+describe("citation-form", () => {
+  const BOOK_ENTRY = "Horvat, Ana (2021) Izmisljena knjiga. Zagreb: Primjer.";
+
+  it("writeSource is one citation-form event, apart from typing before and after", async () => {
+    const t = setup();
+    t.select(9);
+    t.typeChar("x");
+    await endTask();
+    t.wait(50);
+    expect(writeSource(t.editor, "(Horvat, 2021: 15)", BOOK_ENTRY)).toBe(true);
+    await endTask();
+    t.wait(50);
+    t.typeChar("y");
+    const { sources, built, pastes } = await check(t);
+    expect(sources).toEqual(["editor", "citation-form", "editor"]);
+    expect(built.map((one) => one.segment.evidenceSchema)).toContain("ductus-evidence-segment-v3");
+    // Not a paste: the summary and the quick path count no paste for it (contract t. 4).
+    expect(pastes.listed).toEqual([]);
+    expect(pastes.smallerCount).toBe(0);
+  });
+
+  it("a long entry from the form is no paste in the summary", async () => {
+    const t = setup();
+    t.select(9);
+    expect(writeSource(t.editor, null, `Horvat, Ana (2021) ${"Izmisljena knjiga ".repeat(28)}`)).toBe(true);
+    const { sources, pastes } = await check(t);
+    expect(sources).toEqual(["citation-form"]);
+    expect(pastes.listed).toEqual([]);
+    expect(pastes.smallerCount).toBe(0);
+  });
+
+  // Review on #866 (cxr866): with Ctrl+A the end of the selection is the document itself.
+  it("with everything selected the citation goes at the end of the last paragraph and evidence stays intact", async () => {
+    const t = setup();
+    t.editor.commands.selectAll();
+    expect(writeSource(t.editor, "(Horvat, 2021: 15)", BOOK_ENTRY)).toBe(true);
+    const { sources } = await check(t);
+    expect(sources).toEqual(["citation-form"]);
+    const doc = t.editor.state.doc;
+    expect(doc.child(1).textContent).toBe("Odlomak izmisljen dva(Horvat, 2021: 15)");
+    expect(doc.child(2).textContent).toBe("Literatura");
+    expect(doc.child(3).textContent).toBe(BOOK_ENTRY);
+    expect(doc.childCount).toBe(4);
+  });
+
+  it("Undo of the form's text is unattributed", async () => {
+    const t = setup();
+    t.select(9);
+    writeSource(t.editor, "(Horvat, 2021)", null);
+    await endTask();
+    t.wait(50);
+    t.editor.commands.undo();
+    const { sources } = await check(t);
+    expect(sources).toEqual(["citation-form", "unattributed"]);
+  });
+
+  it("the mark next to a clipboard event never gives citation-form", () => {
+    const t = setup();
+    for (const clipboard of [null, "paste"] as const) {
+      const tr = t.editor.state.tr.insertText("a", 9).setMeta(CITATION_FORM_META, true).setMeta("uiEvent", "paste");
+      expect(sourceOfChange([tr], { ...NO_OBSERVATION, clipboard })).toBe(clipboard ?? "unattributed");
+    }
+    const plain = t.editor.state.tr.insertText("a", 9);
+    expect(sourceOfChange([plain], NO_OBSERVATION)).toBe("unattributed");
   });
 });
 

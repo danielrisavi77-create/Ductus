@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 
 const CSS = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
 
+/** The light theme on `<html>` (Z-13a), without the two screens that keep their dark look. */
+const LIGHT = ':root[data-theme="light"]:not(:has(#prijava-kartica, #pocetna-naslov))';
+
 /** The declarations of the first rule whose selector is exactly `selector`. */
 function rule(selector: string): string {
   const start = CSS.split("\n").findIndex((line) => line.trim() === `${selector} {`);
@@ -62,7 +65,7 @@ describe("design tokens (paper and graphite palette, owner decision of 28 Oct 20
   // under 3:1 on paper (2.4 to 2.6), so on light surfaces gold text, marks and
   // focus are the darker gold #806529 (4.6:1 or more).
   it("takes paper, graphite and the dark gold for the light scopes", () => {
-    const shell = rule('[data-theme="light"]');
+    const shell = rule(LIGHT);
     expect(token(shell, "--ground")).toBe("#f3f2ee");
     expect(token(shell, "--chrome")).toBe("#faf9f6");
     expect(token(shell, "--ink")).toBe("#242422");
@@ -76,7 +79,7 @@ describe("design tokens (paper and graphite palette, owner decision of 28 Oct 20
   // Same decision: the light theme supports the new palette, so no colour token
   // falls back to its dark value in the light shell.
   it("gives every colour token of the dark root a light value", () => {
-    const shell = rule('[data-theme="light"]');
+    const shell = rule(LIGHT);
     const colours = root.split("\n").map((l) => l.trim().match(/^(--[a-z0-9-]+):\s*#[0-9a-f]{6,8};$/i)?.[1])
       .filter((name): name is string => name !== undefined);
     expect(colours.length).toBeGreaterThan(30);
@@ -150,7 +153,7 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
   });
 
   it("light shell text is 4.5:1 or more on its ground and chrome, and on the primary", () => {
-    const shell = rule('[data-theme="light"]');
+    const shell = rule(LIGHT);
     const value = (name: string) => token(shell, name)!;
     for (const surface of ["--ground", "--chrome"]) {
       for (const ink of ["--ink", "--ink-2", "--ink-3", "--ink-muted", "--error", "--warn", "--accent"]) {
@@ -186,7 +189,7 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
   // DAN-344: --rule-2 became a line colour; quiet surfaces under text are --well
   // (the mode switch, the "uskoro" chip, hover and disabled backgrounds).
   it("keeps quiet text readable on --well, dark and light, and uses no line colour as a surface", () => {
-    const shell = rule('[data-theme="light"]');
+    const shell = rule(LIGHT);
     for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
       expect(contrast(dark(ink), dark("--well"))).toBeGreaterThanOrEqual(4.5);
       expect(contrast(token(shell, ink)!, token(shell, "--well")!)).toBeGreaterThanOrEqual(4.5);
@@ -203,7 +206,7 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
   // Owner decision of 27 Oct 2026: the light theme has the same AA demands as the
   // dark one. Each scope is the cascade a page can produce: shell, then sheet.
   describe("every theme and sheet scope (AA, owner decision of 27 Oct 2026)", () => {
-    const shell = rule('[data-theme="light"]');
+    const shell = rule(LIGHT);
     const darkSheet = rule(".sheet");
     const whiteSheet = rule('.sheet[data-sheet-theme="light"]');
     const scope = (...blocks: string[]) => (name: string) => {

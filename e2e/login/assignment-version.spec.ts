@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-292 (#747): the new assignment version route exists in the running app
 // and refuses every caller who is not a teacher of the assignment. The
@@ -10,7 +11,7 @@ import { signIn } from "./support";
 // requests at once are proved on the real database in
 // tests/integration/assignment-version-route.integration.test.ts; the demo
 // stack has one institution, and the teacher role belongs to demo-flow.
-const ORIGIN = "http://localhost:3000";
+const ORIGIN = APP_ORIGIN;
 const path = (assignment: string) => `/api/institution/assignments/${assignment}/versions`;
 const BODY = {
   expectedVersion: 1, title: "Izmišljeni esej", instructions: "Upute za izmišljeni zadatak.", workType: "essay",

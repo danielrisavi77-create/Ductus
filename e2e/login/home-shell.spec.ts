@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { appCookie, SESSION_COOKIE, signIn, signOutWithoutDialog } from "./support";
+import { APP_HOST, APP_ORIGIN } from "./origin";
 
 // #802 part B (DAN-325): every signed-in page in the shell has "Početna" in
 // the top bar and a sign-out, at 1440 and 390 px; the signed-in home is in
@@ -17,8 +18,17 @@ const homeCrumbOf = (page: Page) =>
   page.getByRole("navigation", { name: t.shell.breadcrumb }).getByRole("link", { name: t.shell.homeCrumb, exact: true });
 const signOutOf = (page: Page) => page.getByRole("button", { name: t.shell.signOut, exact: true });
 
-/** The sign-out: in the side bar from 800 px, behind ☰ on a phone. */
+/**
+ * The sign-out: in the side bar from 800 px, behind ☰ on a phone. On /rad
+ * the side bar is a drawer at every width, so the sign-out is in the top bar.
+ */
 async function expectSignOut(page: Page, width: number): Promise<void> {
+  // The page the browser is on, not the one asked for: a page may send a
+  // signed-in student on to /rad.
+  if (new URL(page.url()).pathname === "/rad") {
+    await expect(page.getByRole("banner").getByRole("button", { name: t.shell.signOut, exact: true })).toBeVisible();
+    return;
+  }
   if (width < 800) {
     await expect(signOutOf(page)).toBeHidden();
     await page.getByRole("button", { name: t.shell.openNav }).click();
@@ -33,7 +43,7 @@ async function snapshot(page: Page, name: string): Promise<void> {
 /** A cookie of the right shape that no open session has (as in sign-out.spec.ts row 1). */
 async function closedSessionCookie(page: Page): Promise<void> {
   await page.context().addCookies([{
-    name: SESSION_COOKIE, value: "Z".repeat(43), domain: "localhost", path: "/",
+    name: SESSION_COOKIE, value: "Z".repeat(43), domain: APP_HOST, path: "/",
     secure: true, httpOnly: true, sameSite: "Lax",
   }]);
 }
@@ -50,12 +60,14 @@ for (const width of WIDTHS) {
   });
 }
 
-test("QA (2) and (4): a student's Početna leads to /rad; on a teacher page (no role) to / with a sign-out", async ({ page }) => {
+// D-202 t. 2: the brand and Početna lead to the student's home, S01 on
+// /zadaci (D-180), not to the workspace.
+test("QA (2) and (4): a student's Početna and brand lead to S01 on /zadaci; on a teacher page (no role) to / with a sign-out", async ({ page }) => {
   await signIn(page, "/upis");
-  await expect(homeCrumbOf(page)).toHaveAttribute("href", "/rad");
-  await expect(page.getByRole("link", { name: t.shell.home })).toHaveAttribute("href", "/rad");
+  await expect(homeCrumbOf(page)).toHaveAttribute("href", "/zadaci");
+  await expect(page.getByRole("link", { name: t.shell.home })).toHaveAttribute("href", "/zadaci");
   await homeCrumbOf(page).click();
-  await page.waitForURL("http://localhost:3000/rad");
+  await page.waitForURL(`${APP_ORIGIN}/zadaci`);
 
   await page.goto("/nastavnik/brz-put");
   await expect(homeCrumbOf(page)).toHaveAttribute("href", "/");
@@ -69,23 +81,25 @@ test("QA (3): a student on a teacher page with an empty journal signs out withou
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
 });
 
+// DAN-378 (#1231): a cookie whose session is closed reads Z-03 on "/", with
+// one way to sign in again and no shell with only a sign-out; a new sign-in
+// replaces the cookie and leads on by role.
 for (const width of WIDTHS) {
-  test(`a cookie without an open session gets the home in the shell, Početna and the plain sign-out at ${width} px`, async ({ page, context }) => {
+  test(`a cookie without an open session gets Z-03 in the shell, and a new sign-in leads on, at ${width} px`, async ({ page, context }) => {
     await page.setViewportSize({ width, height: width < 800 ? 844 : 900 });
     await closedSessionCookie(page);
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: t.home.welcome })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: t.home.workTitle })).toBeVisible();
-    await expect(page.getByRole("link", { name: t.home.openWorkspace })).toHaveAttribute("href", "/rad");
-    await expect(page.getByRole("link", { name: t.home.openTeacher })).toHaveAttribute("href", "/nastavnik");
-    await expect(page.getByRole("link", { name: t.home.enroll, exact: true })).toHaveAttribute("href", "/upis");
-    await expect(homeCrumbOf(page)).toHaveAttribute("aria-current", "page");
-    await snapshot(page, `home-signed-in-${width}`);
-    await expectSignOut(page, width);
-    await signOutOf(page).click();
-    await page.waitForURL("http://localhost:3000/");
-    expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
-    await expect(page.getByRole("link", { name: t.landing.enter }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: t.access.expiredTitle })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: t.home.welcome })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: t.shell.workNav })).toHaveCount(0);
+    await expect(signOutOf(page)).toHaveCount(0);
+    const signInAgain = page.getByRole("link", { name: t.prijava.button });
+    await expect(signInAgain).toHaveAttribute("href", "/api/auth/login?returnTo=%2F");
+    await snapshot(page, `home-closed-session-${width}`);
+    await signInAgain.click();
+    await page.getByRole("button", { name: "Demo studentica" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/rad`);
+    expect((await appCookie(context, SESSION_COOKIE))?.value).not.toBe("Z".repeat(43));
   });
 }
 

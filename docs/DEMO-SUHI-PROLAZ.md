@@ -1,6 +1,6 @@
 # Suhi prolaz demoa
 
-Tehnički postupak suhog prolaza demoa na `main` (DAN-348, dio DAN-38). Probni prolaz je 26. 10. 2026., radni 29. 10. (PLAN-DEMO §7 t. 3). Proba 31. 10. i snimka za sastanak (D-3, D-4) ostaju vlasnikove i nisu dio ovog postupka.
+Tehnički postupak suhog prolaza na `main` (DAN-348, dio DAN-38). Probni prolaz je 26. 10. 2026., radni 29. 10. (PLAN-DEMO §7 t. 3). Proba 31. 10. i snimka za sastanak (D-3, D-4) ostaju vlasnikove i nisu dio ovog postupka.
 
 Samo izmišljeni podaci i lažni OIDC pružatelj s oznakom "Demo prijava", lokalno (D-09). Prolaz se izvodi na čistom `main`, bez lokalnih izmjena.
 

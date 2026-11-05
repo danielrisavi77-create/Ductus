@@ -19,6 +19,8 @@ import {
 } from "@/lib/sync/evidence-test-kit";
 import type { QueuedTransaction } from "@/domain/sync/journal-types";
 
+import { NOT_STORED, unsavedAfterSettle } from "@/client/logout-hold";
+
 import { EvidenceSession, type EvidenceSessionDeps } from "./evidence-session";
 
 /**
@@ -298,6 +300,26 @@ describe("3d-2c2 evidence session: stops never patch the chain", () => {
     await ready(again.session);
     expect(start).not.toHaveBeenCalled();
     expect(again.session.snapshot().state).toBe("LOCAL_DURABLE");
+  });
+
+  // M0.1 process-capture #10: the check at save compares the editor with the
+  // last document the chain covers, so an unseen change is caught even when
+  // nothing recorded follows it.
+  it("3b: a change the recorder never saw, made last before the save, is a gap as well", async () => {
+    const net = server();
+    const { session, journal } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    sheet.wiring.muted = true;
+    sheet.type("skriveno");
+    sheet.wiring.muted = false;
+    const doc = await sheet.save();
+    const stored = await journal.readEvidence(DOC);
+    expect(stored.meta?.evidenceStopped).toBe("gap");
+    expect(canonicalizeJcs(stored.snapshot!.document)).toBe(canonicalizeJcs(doc));
+    expect(JSON.stringify(doc)).toContain("askriveno");
+    expect(session.snapshot().state).toBe("LOCAL_DURABLE");
   });
 });
 
@@ -1391,5 +1413,99 @@ describe("3d-2c2a Codex #803 (3): close() while load() waits for open", () => {
     expect(startEvidence).not.toHaveBeenCalled();
     expect(onOnline).not.toHaveBeenCalled();
     expect(watchSubmission).not.toHaveBeenCalled();
+  });
+});
+
+describe("#1542 sign-out while the server does not answer (plan #1546)", () => {
+  const LIMIT = 50;
+  /** The editor's sign-out step: writing stops, then the bounded settle. */
+  const quiesce = (session: EvidenceSession) => { session.pause(); return unsavedAfterSettle(session, () => false, LIMIT); };
+  const within = <T>(work: Promise<T>) => Promise.race([work, new Promise<"held">((resolve) => setTimeout(() => resolve("held"), LIMIT * 20))]);
+
+  it("A1: a commit that never answers holds the sign-out plan no longer than the limit; the row stays owed", async () => {
+    const net = server(R0, () => new Promise(() => {}));
+    const { session, journal } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    session.edit();
+    await session.propose(sheet.current());
+    await vi.waitFor(() => expect(net.calls).toHaveLength(1));
+    const unsaved = await within(quiesce(session));
+    expect(unsaved).toBe(false);
+    expect(NOT_STORED).not.toContain(session.snapshot().state);
+    expect((await journal.readEvidence(DOC)).pending).toHaveLength(1);
+    // G: the owed row is neither deleted nor fenced by the sign-out.
+    await expect(journal.destroyForLogout()).rejects.toThrow();
+    expect((await journal.readEvidence(DOC)).pending).toHaveLength(1);
+    expect(net.calls).toHaveLength(1);
+  });
+
+  it("B: a signed answer that comes after the limit is still recorded, then the sign-out deletes the journal", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const net = server(R0, async (body, accept) => { await held; return accept(body); });
+    const { session, journal } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    session.edit();
+    await session.propose(sheet.current());
+    await vi.waitFor(() => expect(net.calls).toHaveLength(1));
+    expect(await within(quiesce(session))).toBe(false);
+    // Istodobnost: the first sign-out is refused while the row is owed.
+    await expect(journal.destroyForLogout()).rejects.toThrow();
+    release();
+    await session.settled();
+    expect(session.snapshot().state).toBe("SYNCED");
+    expect((await journal.readEvidence(DOC)).pending).toEqual([]);
+    await journal.destroyForLogout();
+  });
+
+  it("D: \"Ostani\" after the limit sends again; the step in flight is not sent twice", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const net = server(R0, async (body, accept) => { await held; return accept(body); });
+    const { session } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    session.edit();
+    await session.propose(sheet.current());
+    await vi.waitFor(() => expect(net.calls).toHaveLength(1));
+    expect(await within(quiesce(session))).toBe(false);
+    session.resume();
+    expect(await within(quiesce(session))).toBe(false);
+    session.resume();
+    release();
+    await session.settled();
+    expect(net.calls).toHaveLength(1);
+    expect(session.snapshot().state).toBe("SYNCED");
+  });
+
+  it("A3: an open that never answers after an offline start holds the plan no longer than the limit; text is not lost", async () => {
+    const journal = openJournal();
+    const first = setup({ journal, online: network(false) });
+    await ready(first.session);
+    const earlier = editorFor(first.session);
+    earlier.type(" prvi");
+    await earlier.save();
+    first.session.close();
+    let opens = 0;
+    const open = () => { opens += 1; return opens === 1 ? Promise.resolve<OpenOutcome>({ status: "unavailable" }) : new Promise<OpenOutcome>(() => {}); };
+    const again = setup({ journal, open, over: { storedProfile: (meta) => meta?.evidenceProfileId ?? null } });
+    const loaded = await again.session.load();
+    expect(loaded.kind).toBe("ready");
+    const sheet = editorFor(again.session, (loaded as { document: CanonicalDocument }).document);
+    sheet.type(" drugi");
+    again.session.edit();
+    await again.session.propose(sheet.current());
+    await vi.waitFor(() => expect(opens).toBe(2));
+    const unsaved = await within(quiesce(again.session));
+    expect(unsaved).toBe(NOT_STORED.includes(again.session.snapshot().state));
+    const { pending, snapshot } = await journal.readEvidence(DOC);
+    expect(pending.length).toBeGreaterThan(0);
+    expect(canonicalizeJcs(snapshot!.document)).toBe(canonicalizeJcs(sheet.current()));
+    await expect(journal.destroyForLogout()).rejects.toThrow();
   });
 });

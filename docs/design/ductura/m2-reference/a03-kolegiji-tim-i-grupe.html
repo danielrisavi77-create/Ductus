@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-03 — Kolegiji i akademske godine (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <a class="brand" href="#" aria-label="Ductura, početna stranica administracije"><span class="mark" aria-hidden="true">D</span><span class="word">Ductura</span></a>
+    <button class="btn secondary menu" type="button" aria-expanded="false">Izbornik</button>
+    <nav aria-label="Administracija">
+      <a href="#">Pregled</a>
+      <a href="#">Korisnici</a>
+      <a href="#" aria-current="page">Kolegiji</a>
+      <a href="#">Pravila</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header>
+      <div class="ref-tag">Referenca M2.11-P03 · DAN-313 · prijedlog slike · podaci su izmišljeni</div>
+      <h1>Kolegiji i akademske godine</h1>
+      <p>Kolegiji vaše ustanove po akademskoj godini, s nastavnim timom i seminarskim grupama. Radovi studenata i njihov sadržaj ovdje se ne prikazuju.</p>
+    </header>
+
+    <section class="state" aria-labelledby="h-godina">
+      <div class="ref-tag">Stanje 1 · popunjeno</div>
+      <h2 id="h-godina">Akademska godina 2026./2027.</h2>
+      <div class="dialog-buttons" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" type="button" aria-pressed="true">2026./2027.</button>
+        <button class="btn secondary" type="button" aria-pressed="false">2025./2026.</button>
+      </div>
+      <div class="year">
+        <article class="course" aria-labelledby="c-1">
+          <div class="course-head">
+            <h3 id="c-1">Metodologija istraživanja</h3>
+            <span class="chip">64 upisana studenta</span>
+          </div>
+          <dl class="kv">
+            <dt>Nositelj</dt><dd>Iva Ogledić</dd>
+            <dt>Nastavni tim</dt><dd>Iva Ogledić, Petar Uzorak, Lana Probić</dd>
+          </dl>
+          <div class="groups">
+            <div class="group">
+              <h4>Grupa A</h4>
+              <span>Nastavnik: Petar Uzorak</span>
+              <span class="meta">22 studenta</span>
+              <button class="btn quiet" type="button">Ukloni iz grupe</button>
+            </div>
+            <div class="group">
+              <h4>Grupa B</h4>
+              <span>Nastavnica: Lana Probić</span>
+              <span class="meta">21 student</span>
+              <button class="btn quiet" type="button">Ukloni iz grupe</button>
+            </div>
+            <div class="group">
+              <h4>Grupa C</h4>
+              <div class="flag"><strong>Bez nastavnika</strong><span>Studenti grupe vide kolegij i zadatke.</span></div>
+              <span class="meta">21 student</span>
+              <button class="btn secondary" type="button">Dodijeli nastavnika</button>
+            </div>
+          </div>
+        </article>
+        <article class="course" aria-labelledby="c-2">
+          <div class="course-head">
+            <h3 id="c-2">Pisanje stručnog teksta</h3>
+            <span class="chip">18 upisanih studenata</span>
+          </div>
+          <dl class="kv">
+            <dt>Nositelj</dt><dd>Mara Nacrtić</dd>
+            <dt>Nastavni tim</dt><dd>Mara Nacrtić</dd>
+          </dl>
+          <p class="meta">Kolegij nema seminarskih grupa.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="state" aria-labelledby="h-prazno">
+      <div class="ref-tag">Stanje 2 · prazno</div>
+      <h2 id="h-prazno">Akademska godina 2027./2028.</h2>
+      <div class="card">
+        <p>Za ovu akademsku godinu ustanova nema kolegija.</p>
+        <p class="meta">Kolegij stvara nastavnik s potvrđenom ulogom; potvrda je u „Korisnici i uloge”.</p>
+      </div>
+    </section>
+
+    <section class="state" aria-labelledby="h-dodjela">
+      <div class="ref-tag">Stanje 3 · potvrda dodjele · dijalog i ishod</div>
+      <h2 id="h-dodjela">Dodjela nastavnika grupi</h2>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d-dodjela">
+        <h3 id="d-dodjela">Dodijeliti nastavnika grupi C?</h3>
+        <p>Metodologija istraživanja · 2026./2027.</p>
+        <label for="nastavnik" class="meta">Nastavnik</label>
+        <select id="nastavnik" class="btn secondary" style="justify-self:stretch;text-align:left">
+          <option>Mara Nacrtić</option>
+        </select>
+        <ul>
+          <li>Na izboru su samo potvrđeni nastavnici ove ustanove.</li>
+          <li>Dodjela vrijedi samo za grupu C: nastavnik time ne postaje član nastavnog tima kolegija i ne dobiva ulogu na kolegiju.</li>
+        </ul>
+        <div class="buttons">
+          <button class="btn" type="button">Dodijeli</button>
+          <button class="btn secondary" type="button">Odustani</button>
+        </div>
+      </div>
+      <p class="status" role="status">Mara Nacrtić dodijeljena je grupi C.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-uklanjanje">
+      <div class="ref-tag">Stanje 4 · opoziv dodjele · dijalog i ishod</div>
+      <h2 id="h-uklanjanje">Uklanjanje nastavnika iz grupe</h2>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d-uklanjanje">
+        <h3 id="d-uklanjanje">Ukloniti Petra Uzorka iz grupe A?</h3>
+        <ul>
+          <li>Studenti grupe ostaju upisani u kolegij.</li>
+          <li>Grupa ostaje bez nastavnika dok ne dodijelite drugoga.</li>
+          <li>Uloga nastavnika na ustanovi ostaje; opoziv uloge je u „Korisnici i uloge”.</li>
+        </ul>
+        <div class="buttons">
+          <button class="btn" type="button">Ukloni iz grupe</button>
+          <button class="btn secondary" type="button">Odustani</button>
+        </div>
+      </div>
+      <p class="status" role="status">Petar Uzorak uklonjen je iz grupe A.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-greska">
+      <div class="ref-tag">Stanje 5 · greška · čitanje, radnja i promijenjeno stanje</div>
+      <h2 id="h-greska">Kad nešto ne uspije</h2>
+      <p class="alert" role="alert"><strong>Kolegiji trenutačno nisu dostupni.</strong> Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p>
+      <p class="alert" role="alert"><strong>Ishod dodjele nije poznat.</strong> Veza s poslužiteljem prekinula se prije odgovora, pa nije sigurno je li nastavnik dodijeljen grupi. Provjerite stanje grupe prije nego što pokušate ponovno. <a class="btn secondary" href="#">Provjeri stanje</a></p>
+      <p class="alert" role="alert"><strong>Dodjela nije moguća.</strong> Odabrana osoba više nema potvrđenu ulogu nastavnika. Popis je osvježen.</p>
+      <p class="ref-tag">Neuspjelo čitanje nikad se ne prikazuje kao godina bez kolegija.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-ovlast">
+      <div class="ref-tag">Stanje 6 · bez ovlasti · student, nastavnik, opozvani administrator, druga ustanova</div>
+      <h2 id="h-ovlast">Bez ovlasti</h2>
+      <div class="card notfound">
+        <h3>Stranica ne postoji</h3>
+        <p>Na ovoj adresi nema stranice. Provjerite adresu ili se vratite na početnu.</p>
+      </div>
+      <p class="ref-tag">Isti 404 kao za nepostojeću adresu, bez trake administracije.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>

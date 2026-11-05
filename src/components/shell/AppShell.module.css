@@ -244,11 +244,11 @@
   display: none;
 }
 
-.shell[data-theme="light"] .toLight {
+:global(:root[data-theme="light"]) .toLight {
   display: none;
 }
 
-.shell[data-theme="light"] .toDark {
+:global(:root[data-theme="light"]) .toDark {
   display: inline-flex;
 }
 
@@ -304,6 +304,41 @@
   }
 }
 
+/* The workspace (/rad): the side bar is a drawer behind ☰ at every width, so
+   the editor and its panels take the whole width (owner, 1. 11. 2026.). */
+.drawerShell .sidebar {
+  width: 248px;
+  transform: translateX(-100%);
+  visibility: hidden;
+}
+
+.drawerShell .sidebar[data-open="true"] {
+  transform: none;
+  visibility: visible;
+}
+
+.drawerShell .area {
+  margin-left: 0;
+}
+
+.drawerShell .menuButton {
+  display: inline-flex;
+}
+
+/* The account place moves into the top bar, beside the theme switch. */
+.drawerShell .actions .account {
+  padding: 0;
+  border-top: 0;
+}
+
+/* On a phone the top bar keeps ☰, the way home, the theme and Odjava; the
+   role label stays in the drawer's space line. */
+@media (max-width: 640px) {
+  .drawerShell .actions .who {
+    display: none;
+  }
+}
+
 /* The interface floor: 12 px, and 13 px on a phone (app/globals.css). */
 @media (max-width: 640px) {
   .space,
@@ -315,7 +350,10 @@
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
+/* The slide belongs to the drawer only. On a wide screen the side bar has no
+   transition, so widening the window past 800 px puts it in place at once
+   instead of sliding it in over an empty column (#1325). */
+@media (prefers-reduced-motion: no-preference) and (max-width: 799.98px) {
   .sidebar {
     transition: transform 0.2s, visibility 0.2s;
   }
@@ -323,5 +361,46 @@
   /* Visible at once on opening, so focus can move into the drawer. */
   .sidebar[data-open="true"] {
     transition: transform 0.2s, visibility 0s;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .drawerShell .sidebar {
+    transition: transform 0.2s, visibility 0.2s;
+  }
+
+  .drawerShell .sidebar[data-open="true"] {
+    transition: transform 0.2s, visibility 0s;
+  }
+}
+
+/* Without JavaScript ☰ cannot open the drawer, so wherever the side bar is
+   one, it and signing out stay in the page above the content (I5). On /rad
+   the drawer rules are `.drawerShell .sidebar`, so the fallback carries one
+   class more. A media query, not a <noscript><style>: the page policy
+   (style-src 'self', DAN-489) refuses an inline style. */
+@media (scripting: none) {
+  .shell.drawerShell .sidebar {
+    position: static;
+    width: auto;
+    transform: none;
+    visibility: visible;
+  }
+
+  .shell.drawerShell .menuButton {
+    display: none;
+  }
+}
+
+@media (scripting: none) and (max-width: 799.98px) {
+  .sidebar {
+    position: static;
+    width: auto;
+    transform: none;
+    visibility: visible;
+  }
+
+  .menuButton {
+    display: none;
   }
 }

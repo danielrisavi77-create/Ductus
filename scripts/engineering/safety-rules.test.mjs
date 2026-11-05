@@ -53,7 +53,8 @@ test("force push is blocked in every spelling the tool can match", () => {
 const DOCUMENTED_GAPS = {
   Bash: [
     "git push --force-with-lease=platforma/x origin platforma/x",
-    "git push --prune origin",
+    "git rebase --exec=git\\ add\\ -A HEAD~1",
+    "git push --prune=origin",
     "git -c core.hooksPath=/dev/null commit -m x",
     "git --config-env=core.hooksPath=HP commit -m x",
     "LEFTHOOK=0 git commit -m x",
@@ -98,9 +99,6 @@ const DOCUMENTED_GAPS = {
     // A git or lefthook hook that calls git itself runs from a routine commit.
     "git commit -m x",
     // Programs git runs on its own.
-    "git rebase -x 'git commit -n -m x' HEAD~1",
-    "git rebase --exec 'git add -A' HEAD~1",
-    "git submodule foreach 'git add -A'",
     "git bisect run ./x.sh",
     "git filter-branch --tree-filter ./x.sh HEAD",
     "git difftool -x ./x.sh",
@@ -146,8 +144,6 @@ const DOCUMENTED_GAPS = {
     "node x.mjs",
     "git config alias.ci 'commit -n'",
     "git ci -m x",
-    "git rebase -x 'git commit -n -m x' HEAD~1",
-    "git submodule foreach 'git add -A'",
     "git -c core.editor=./x.ps1 commit",
     "git config core.sshCommand ./x.ps1",
   ],
@@ -155,8 +151,12 @@ const DOCUMENTED_GAPS = {
 
 // docs/SESSIONS.md 4a also names forms next to those gaps that built-in rules block.
 const DOCUMENTED_BUILT_IN_BLOCKS = {
-  Bash: ["GIT_SSH_COMMAND=./x.sh git push", "GIT_SSH=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
-  PowerShell: ["source x.sh", ". x.sh", ". ./x.ps1", "GIT_SSH_COMMAND=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
+  Bash: [
+    "git push --prune origin",
+    "git rebase -x 'git commit -n -m x' HEAD~1",
+    "git rebase --exec 'git add -A' HEAD~1",
+    "git submodule foreach 'git add -A'","GIT_SSH_COMMAND=./x.sh git push", "GIT_SSH=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
+  PowerShell: ["git rebase -x 'git commit -n -m x' HEAD~1", "git submodule foreach 'git add -A'", "source x.sh", ". x.sh", ". ./x.ps1", "GIT_SSH_COMMAND=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
 };
 
 const DOCUMENTED_FALSE_BLOCKS = {
@@ -177,6 +177,62 @@ test("gaps named in docs/SESSIONS.md 4a still pass the hook", () => {
 test("blocked neighbours of the gaps named in docs/SESSIONS.md 4a stay blocked", () => {
   for (const [tool, commands] of Object.entries(DOCUMENTED_BUILT_IN_BLOCKS)) {
     for (const command of commands) assert.notEqual(decide(tool, command), "allowed", `${tool}: ${command}`);
+  }
+});
+
+// F-011: the `deny` rules in .claude/settings.json, read as Claude Code reads a
+// `Tool(pattern)` rule: `*` stands for any text and the pattern covers the whole
+// command, so a rule catches only a command that starts with its leading form.
+const settings = JSON.parse(fs.readFileSync(new URL("../../.claude/settings.json", import.meta.url), "utf8"));
+// Glob match with plain string steps: the first part is a prefix, the last a
+// suffix, and the parts between them occur in order without overlapping.
+function globMatches(pattern, text) {
+  const parts = pattern.split("*");
+  if (parts.length === 1) return text === pattern;
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  if (text.length < first.length + last.length || !text.startsWith(first) || !text.endsWith(last)) return false;
+  let at = first.length;
+  const end = text.length - last.length;
+  for (const part of parts.slice(1, -1)) {
+    const found = text.indexOf(part, at);
+    if (found === -1 || found + part.length > end) return false;
+    at = found + part.length;
+  }
+  return true;
+}
+function denied(tool, command) {
+  const prefix = `${tool}(`;
+  return settings.permissions.deny.some((rule) => rule.startsWith(prefix) && rule.endsWith(")")
+    && globMatches(rule.slice(prefix.length, -1), command));
+}
+
+test("F-011: the glob model matches as Claude Code reads a pattern", () => {
+  assert.equal(globMatches("git config alias.*", "git config alias.ci 'commit -n'"), true);
+  assert.equal(globMatches("git config alias.*", "git config --local alias.ci x"), false);
+  assert.equal(globMatches("git push *--prune*", "git push origin --prune"), true);
+  assert.equal(globMatches("git push *--prune*", "git push origin"), false);
+  assert.equal(globMatches("a*b*a", "aba"), true);
+  assert.equal(globMatches("ab*ba", "aba"), false);
+  assert.equal(globMatches("git status", "git status"), true);
+  assert.equal(globMatches("git status", "git status -s"), false);
+});
+
+test("F-011: the three git config deny rules hold for PowerShell as for Bash", () => {
+  for (const command of ["git config core.hooksPath NUL", "git config alias.ci 'commit -n'", "git config include.path x.cfg"]) {
+    for (const tool of ["Bash", "PowerShell"]) assert.equal(denied(tool, command), true, `${tool}: ${command}`);
+  }
+});
+
+test("F-011: neighbour forms the deny rules miss are named as gaps in docs/SESSIONS.md 4a", () => {
+  const sessions = fs.readFileSync(new URL("../../docs/SESSIONS.md", import.meta.url), "utf8");
+  for (const [command, named] of [
+    ["git -C . -c core.hooksPath=NUL commit -m x", "`git -C <dir> -c ...`"],
+    ["env LEFTHOOK=0 git commit -m x", "`env LEFTHOOK=0 ...`"],
+    ["git config --local core.hooksPath NUL", "`git config --local|--global core.hooksPath ...`"],
+  ]) {
+    for (const tool of ["Bash", "PowerShell"]) assert.equal(denied(tool, command), false, `${tool}: ${command}`);
+    assert.ok(sessions.includes(named), `docs/SESSIONS.md 4a names ${named}`);
   }
 });
 

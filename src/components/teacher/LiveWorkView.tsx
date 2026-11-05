@@ -29,12 +29,14 @@ import TeacherComments, { useComments, type PlacedThread } from "./TeacherCommen
 
 const t = messagesHr.liveView;
 
-export default function LiveWorkView({ documentId, session }: {
+export default function LiveWorkView({ documentId, session, canComment }: {
   documentId: string; session: SessionMark | null;
+  /** Only a teacher gets the comment panel; the server refuses anyone else anyway (`collaboration.actor_role`). */
+  canComment: boolean;
 }) {
   const { view, current } = useLiveView(documentId, session);
   const stopped = liveStopped(view);
-  const comments = useComments(documentId, current, !stopped);
+  const comments = useComments(documentId, current, !stopped && canComment);
   const [draft, setDraft] = useState<TextAnchor | null>(null);
   const textRef = useRef<HTMLDivElement>(null);
 
@@ -61,7 +63,7 @@ export default function LiveWorkView({ documentId, session }: {
         <LiveText view={view} marks={marks} textRef={textRef} onSelect={takeSelection} />
       </div>
       <aside className={styles.aside} aria-label={t.sidePanel}>
-        {stopped ? null : (
+        {stopped || !canComment ? null : (
           <TeacherComments
             documentId={documentId}
             outcome={comments.outcome}

@@ -11,6 +11,18 @@ import {
   MIN_MERGED_AGE_MS, decide, defaultExec, githubRepo, hookOutput, inScope, main, run, unsafePaths,
 } from "./session-worktree-clean.mjs";
 
+// rmSync in Node 24 throws EPERM at once on Windows and ignores maxRetries (#1141),
+// so a directory a finished child still holds for a moment is retried here, bounded.
+function removeDir(dir, deadlineMs = 10000) {
+  const start = Date.now();
+  for (;;) {
+    try { return rmSync(dir, { recursive: true, force: true }); } catch (error) {
+      if (!["EPERM", "EBUSY", "ENOTEMPTY"].includes(error?.code) || Date.now() - start >= deadlineMs) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+
 const NOW = Date.parse("2026-10-18T12:00:00Z");
 const OLD = new Date(NOW - MIN_MERGED_AGE_MS - 1000).toISOString();
 const H = "a".repeat(40);
@@ -76,7 +88,7 @@ const git = (cwd, ...a) =>
 
 function setup(t) {
   const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "sess-clean-")));
-  t.after(() => rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }));
+  t.after(() => removeDir(tmp));
   const remote = join(tmp, "remote.git");
   git(tmp, "init", "-q", "--bare", "-b", "main", remote);
   const work = join(tmp, "Ductus");

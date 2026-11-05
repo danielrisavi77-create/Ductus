@@ -104,12 +104,14 @@
 }
 
 /*
- * Light shell. It applies to the subtree of the shell element that carries
- * `data-theme="light"` (AppShell), never to pages outside the shell. Paper
- * and graphite of D-188; every text token is 4.5:1 or more on --ground
- * and --chrome (tokens.test.ts).
+ * Light theme. The choice is on `<html data-theme="light">` (theme.ts,
+ * Z-13a), so it reaches the shell and every page outside it: 404, error,
+ * loading. Paper and graphite of D-188; every text token is 4.5:1 or more on
+ * --ground and --chrome (tokens.test.ts). The sign-in screen (its card
+ * heading #prijava-kartica, until #1024) and the public home page (its
+ * heading #pocetna-naslov, J-01) keep their dark look for now.
  */
-[data-theme="light"] {
+:root[data-theme="light"]:not(:has(#prijava-kartica, #pocetna-naslov)) {
   --ground: #f3f2ee;
   --chrome: #faf9f6;
   --raised: #faf9f6;

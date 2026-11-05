@@ -99,7 +99,8 @@ export async function verifySignedSubmissionReceiptV2(
     if (receipt.payloadDigestSha256 !== digest.sha256) return refuse("digest_mismatch");
     let valid: unknown;
     try {
-      const imported = await globalThis.crypto.subtle.importKey("spki", spki, { name: "Ed25519" }, false, ["verify"]);
+      // `raw`, not `spki`: WebKit on Linux refuses an SPKI whose point starts with 0x00 (#1247).
+      const imported = await globalThis.crypto.subtle.importKey("raw", point.slice(), { name: "Ed25519" }, false, ["verify"]);
       valid = await globalThis.crypto.subtle.verify({ name: "Ed25519" }, imported, signature, digest.signingInput);
     } catch { return refuse("verification_unavailable"); }
     if (valid !== true) return refuse("signature_invalid");

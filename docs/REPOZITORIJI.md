@@ -230,4 +230,21 @@ Odbijeno kao dodatni trošak ili dupliciranje postojećeg governancea: `github/s
 
 ## 10. Istraživanje razvojnih alata — 25. 10. 2026.
 
-Pregled 55 kandidata u jedanaest kategorija (skillovi, hookovi, MCP, evali, testiranje, supply chain, baza, dokumenti, observability, orkestracija, granice otkaza) nalazi se u `docs/ISTRAZIVANJE-ALATA-2026-10-25.md`. Ne mijenja ovaj inventar i ne dodaje nijednu ovisnost: preporuke PROBATI i PRAĆENJE nisu odluka o instalaciji. Pet koraka plana uvođenja (Squawk, Jazzer.js, Toxiproxy, Syft, skillgrade) čeka nakon 2. 11. 2026. (D-107, D-108), svaki kao zaseban PR uz pravilo iz §1.
+Pregled 55 kandidata u jedanaest kategorija (skillovi, hookovi, MCP, evali, testiranje, supply chain, baza, dokumenti, observability, orkestracija, granice otkaza) nalazi se u `docs/arhiva/ISTRAZIVANJE-ALATA-2026-10-25.md` (arhiva, DAN-373). Ne mijenja ovaj inventar i ne dodaje nijednu ovisnost: preporuke PROBATI i PRAĆENJE nisu odluka o instalaciji. Pet koraka plana uvođenja (Squawk, Jazzer.js, Toxiproxy, Syft, skillgrade) čeka nakon 2. 11. 2026. (D-107, D-108), svaki kao zaseban PR uz pravilo iz §1.
+
+## 11. Istraživanje tehnologija — 19. 10. 2026. (D-251 do D-255)
+
+Sažetak paketa i preslika na program nalaze se u `docs/arhiva/ISTRAZIVANJE-TEHNOLOGIJA-2026-10-19.md`. Ovaj odjeljak ne dodaje nijednu ovisnost: svaki kandidat ulazi tek vlastitim PR-om uz pravilo iz §1. Licence su opažene 19. 10. 2026. i pri uvođenju se ponovno provjeravaju na točnoj verziji i cijelom stablu ovisnosti.
+
+| Repozitorij | Licenca | Faza | Status |
+| --- | --- | --- | --- |
+| `dolanmiu/docx` | MIT | M8.4 | Kandidat za izvoz DOCX-a iz kanonskog dokumenta. TOC polje osvježava Word, pa se tako i označava |
+| `gotenberg/gotenberg` (LibreOffice) | MIT; LibreOffice MPL-2.0 | M8.5, M8.14 | Zadani smjer za PDF/A-2u iz istog DOCX-a (D-254), uvjetno na spike. Izolirani worker, bez mreže, samo OFL fontovi, pinana slika |
+| `veraPDF/veraPDF-library` | GPL-3.0 | M8.14 | Samo CI korak u pinanom kontejneru (D-253). Nije ovisnost aplikacije ni dio produkcijske slike |
+| `mozilla/pdf.js` | Apache-2.0 | M8.7 | Kandidat za prikaz PDF izvora u bilježnici. Ne dokazuje strukturu ni autorstvo |
+| `mwilliamson/mammoth.js` | BSD-2-Clause | M8.1, M8.2 | Već u §7.1. Ne sanitizira HTML: izlaz ide u kanonsku shemu, nikad kao HTML u DOM |
+| `Juris-M/citeproc-js`, `citation-js` `plugin-csl`, CSL stilovi i lokalizacije | CPAL ili AGPL; CC-BY-SA-3.0 | — | Ne uvodi se (D-255). Citati ostaju u `src/domain/citation/format.ts` (D-83) |
+| `tnajdek/zotero-api-client`, `zotero/translation-server` | AGPL-3.0 | — | Ne uvodi se. Zotero najprije kao uvoz iz datoteke (D-232) |
+| `Cvmcosta/ltijs` | Apache-2.0 | — | LTI nije u pilotu (D-198 t. 4). Inačica v7 povlači MongoDB i Redis |
+| `miku/metha` | GPL-3.0 | — | Samo referenca za OAI-PMH (Hrčak, Dabar), ne u runtime |
+| `transparency-dev/merkle` | Apache-2.0 | M3.9 | Već u §4: samo ispitni vektori kao fiksni podaci u testu, bez Go ovisnosti |

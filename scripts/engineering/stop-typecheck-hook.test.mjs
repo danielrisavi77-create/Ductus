@@ -9,6 +9,18 @@ import { fileURLToPath } from "node:url";
 
 import { MAX_SHOWN, TSC_TIMEOUT_MS, changedTsFiles, errorsIn, runStopHook, stopDecision } from "../hooks/stop-typecheck.mjs";
 
+// rmSync in Node 24 throws EPERM at once on Windows and ignores maxRetries (#1141),
+// so a directory a finished child still holds for a moment is retried here, bounded.
+function removeDir(dir, deadlineMs = 10000) {
+  const start = Date.now();
+  for (;;) {
+    try { return fs.rmSync(dir, { recursive: true, force: true }); } catch (error) {
+      if (!["EPERM", "EBUSY", "ENOTEMPTY"].includes(error?.code) || Date.now() - start >= deadlineMs) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
+
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HOOK = path.join(repo, "scripts", "hooks", "stop-typecheck.mjs");
 
@@ -85,7 +97,7 @@ test("runStopHook never runs twice in a row and fails open", () => {
 
 for (const dir of ["node_modules", "NODE_MODULES", "Node_Modules"]) test(`a tracked ${dir}/typescript is never executed`, { timeout: 60_000 }, (t) => {
   const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "stop-tracked-")));
-  t.after(() => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }));
+  t.after(() => removeDir(tmp));
   const git = (...a) => spawnSync("git", a, { cwd: tmp, encoding: "utf8" });
   git("init", "-q");
   const marker = path.join(tmp, "ran.txt");
@@ -118,7 +130,7 @@ test("settings register the Stop hook once, through node with the project path",
 
 test("a real tsc error in an untracked file of a throwaway repo blocks the stop", { timeout: 200_000 }, (t) => {
   const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "stop-tsc-")));
-  t.after(() => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }));
+  t.after(() => removeDir(tmp));
   const git = (...a) => spawnSync("git", a, { cwd: tmp, encoding: "utf8" });
   git("init", "-q");
   fs.writeFileSync(path.join(tmp, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, skipLibCheck: true, types: [] }, include: ["*.ts"] }));

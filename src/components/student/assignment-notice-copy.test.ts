@@ -30,10 +30,21 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("names the key and how long it is held as not recorded, and no measure from time", () => {
     expect(s.notRecorded.inputs).toContain("tipka");
     expect(s.notRecorded.inputs).toContain("držana");
-    expect(s.notRecorded.inputs).toContain("nikad se ne računaju brzina, ritam ni bilo kakva mjera");
-    // D-63: the replay skips long pauses without their length, so pauses are not "never computed".
-    expect(s.notRecorded.inputs).not.toContain("pauze");
-    expect(s.notRecorded.inputs).toContain("preskače duge stanke i ne navodi koliko su trajale");
+    expect(s.notRecorded.inputs).toContain("ne računaju se brzina, ritam ni bilo kakva mjera, osim sesija");
+  });
+
+  it("names the P-01 sessions as the one measure from time (F-171)", () => {
+    expect(s.notRecorded.inputs).toContain("sesije se određuju prekidom dužim od praga P-01");
+    for (const text of notice()) expect(text).not.toMatch(/brzina, pauze|nikad se ne računaju/);
+  });
+
+  it("says the replay neither skips nor marks pauses (D-63, 31. 10. 2026., F-171)", () => {
+    expect(s.notRecorded.inputs).toContain("Reprodukcija neće preskakati ni isticati stanke.");
+    for (const text of notice()) expect(text).not.toMatch(/skočiti|skok/);
+    // The removed D-63 (a): no skipped pauses and no mention of their length.
+    for (const text of notice()) {
+      expect(text).not.toMatch(/preskače duge stanke|preskočena stanka|koliko su trajale/);
+    }
   });
 
   it("announces every change character by character, only for the live view and the replay", () => {
@@ -41,6 +52,18 @@ describe("S3 notice text (D-142, D-143)", () => {
     expect(s.recorded.live).toContain("znak po znak");
     expect(s.recorded.live).toContain("prikazu uživo");
     expect(s.recorded.live).toContain("reprodukciji");
+  });
+
+  it("names the input mark the mentor sees (D-54, D-127, F-171)", () => {
+    expect(s.recorded.live).toContain("bilježit će se i način unosa");
+    expect(s.recorded.live).toContain("nastavnik (mentor) vidjeti oznaku kad uređivač uz unos nije vidio pritisak tipke ni lijepljenje");
+  });
+
+  it("describes the mark as what the editor saw, never as who typed or how (F-177)", () => {
+    // A phone keyboard or an IME also leaves the mark, and a program can press keys without one.
+    expect(s.recorded.live).toContain("nekih tipkovnica na mobitelu");
+    expect(s.recorded.live).toContain("ne tko ga je napisao");
+    for (const text of notice()) expect(text).not.toMatch(/nije unesen tipkovnicom|nije utipkan/);
   });
 
   it("tells the student the mentor sees the work live, deleted text included", () => {
@@ -68,7 +91,31 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("keeps the on-screen order of the lists", () => {
     expect(Object.keys(s.recorded)).toEqual(["steps", "live", "chain", "versions"]);
     expect(Object.keys(s.notRecorded)).toEqual(["inputs", "outside", "device"]);
-    expect(Object.keys(s.teacher)).toEqual(["state", "replay", "purpose", "history", "noVerdict"]);
+    expect(Object.keys(s.teacher)).toEqual(["state", "replay", "purpose", "history", "workingNotes", "noVerdict"]);
+  });
+
+  it("names the mentor's working records by kind and the student's right of access (D-130, DAN-235)", () => {
+    const w = s.teacher.workingNotes;
+    expect(w.startsWith("Mentor (nastavnik zadatka) moći će voditi")).toBe(true);
+    for (const kind of ["oznaku zadnjeg pregleda s vremenom", "privatne bilješke", "predloške komentara", "Rubrika i nacrt izvješća"]) {
+      expect(w).toContain(kind);
+    }
+    expect(w).toContain("nisu prikaz rada");
+    expect(w).toContain("nećete ih vidjeti u aplikaciji");
+    expect(w).toContain("zatražiti pravom pristupa");
+  });
+
+  it("states every D-130 limit and promises nothing D-135 leaves conditional", () => {
+    const w = s.teacher.workingNotes;
+    expect(w).toContain("nema mjera ni zaključaka koje je izračunala Ductura");
+    expect(w).toContain("Ne ulaze u sažetak, izvoz ni predaju");
+    expect(w).toContain("brišu se kad i rad");
+    expect(w).toContain("ne smiju utjecati na kašnjenje ni ocjenu");
+    expect(w).toContain("u Ducturi zasad ne vode");
+    // DAN-235 acceptance: grade publication is named as not available yet (D-135, D-136).
+    expect(w).toContain("Ni objava ocjene u Ducturi zasad nije dostupna");
+    // No access log (rule 17) is built, and nothing promises a future grade publication.
+    expect(w).not.toMatch(/dnevnik pristupa|objavit će|bit će objavljen/);
   });
 
   it("claims nothing the contract leaves open", () => {
