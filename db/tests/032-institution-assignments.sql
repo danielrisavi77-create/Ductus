@@ -51,7 +51,7 @@ FROM unnest(ARRAY['anon', 'expired', 'closed', 'unknown']) WITH ORDINALITY AS a 
 CROSS JOIN (VALUES
   (1, 'create_assignment', format('SELECT institution.create_assignment({k1}, %s)', pg_temp.content())),
   (2, 'publish_assignment_version', format('SELECT institution.publish_assignment_version({z1}, 2, %s)', pg_temp.content())),
-  (3, 'acknowledge_notice', 'SELECT institution.acknowledge_notice({z1}, 2)')
+  (3, 'acknowledge_notice', 'SELECT institution.acknowledge_notice({z1}, 2, 1)')
 ) AS c (n, name, call)
 ORDER BY a.n, c.n;
 SELECT is(
@@ -409,7 +409,7 @@ SELECT is(
 -- 6. acknowledge_notice: a student of the course, for herself, the current
 -- version only (plan 24).
 SELECT is(
-  pg_temp.ask(v.actor, format('SELECT institution.acknowledge_notice(%s, %s)', v.assignment, v.version_no)), 'ZD403: forbidden',
+  pg_temp.ask(v.actor, format('SELECT institution.acknowledge_notice(%s, %s, 1)', v.assignment, v.version_no)), 'ZD403: forbidden',
   format('%s: acknowledge_notice of %s is refused (%s)', v.actor, v.assignment, v.why)
 )
 FROM (VALUES
@@ -424,20 +424,20 @@ FROM (VALUES
 ) AS v (n, actor, assignment, version_no, why)
 ORDER BY v.n;
 SELECT is(
-  pg_temp.ask('dora', format('SELECT institution.acknowledge_notice({z1}, %s)', v.version_no)), 'ZD409: conflict',
+  pg_temp.ask('dora', format('SELECT institution.acknowledge_notice({z1}, %s, 1)', v.version_no)), 'ZD409: conflict',
   'Dora acknowledging ' || v.what || ' of Z1 is a conflict'
 )
 FROM (VALUES (1, '2', 'version 2, which was current a moment ago'), (2, '1', 'version 1'), (3, '4', 'a version that does not exist'),
              (4, 'NULL', 'no version')) AS v (n, version_no, what)
 ORDER BY v.n;
 SELECT matches(
-  pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 3, {dora})'), '^42883: ',
+  pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 3, 1, {dora})'), '^42883: ',
   'acknowledge_notice has no parameter for the student: nobody acknowledges for another'
 );
 SELECT is(pg_temp.counts(), '22 24 4', 'none of these calls stored an acknowledgment');
 
 SELECT is(
-  pg_temp.ask('dora', 'SELECT (institution.acknowledge_notice({z1}, 3) = now())::text'), 'true',
+  pg_temp.ask('dora', 'SELECT (institution.acknowledge_notice({z1}, 3, 1) = now())::text'), 'true',
   'Dora acknowledges version 3 and gets the database time back'
 );
 SELECT is(
@@ -448,7 +448,7 @@ SELECT is(
 UPDATE institution.notice_acknowledgment SET acknowledged_at = now() - interval '1 day'
  WHERE student_id = pg_temp.id('dora') AND version_no = 3;
 SELECT is(
-  pg_temp.ask('dora', $$ SELECT (institution.acknowledge_notice({z1}, 3) = now() - interval '1 day')::text $$)
+  pg_temp.ask('dora', $$ SELECT (institution.acknowledge_notice({z1}, 3, 1) = now() - interval '1 day')::text $$)
   || ' ' || (SELECT count(*) FROM institution.notice_acknowledgment WHERE student_id = pg_temp.id('dora')),
   'true 2', 'acknowledging again returns the first time and adds no row'
 );
@@ -475,7 +475,7 @@ SELECT is(
 -- acknowledged; what she acknowledged stays for the teacher to read.
 SELECT is(
   pg_temp.ask('vesna', 'SELECT institution.remove_student({k1}, {dora})::text')
-  || ' ' || pg_temp.ask('dora', 'SELECT institution.acknowledge_notice({z1}, 3)')
+  || ' ' || pg_temp.ask('dora', 'SELECT institution.acknowledge_notice({z1}, 3, 1)')
   || ' ' || pg_temp.ask('dora', 'SELECT institution.has_acknowledged_current({z1})::text')
   || ' ' || pg_temp.ask('vesna', $$ SELECT count(*) FROM institution.notice_acknowledgment WHERE student_id = {dora} $$),
   'true ZD403: forbidden false 2', 'removed from K1, Dora can no longer acknowledge and no longer counts; Vesna still reads her two rows'

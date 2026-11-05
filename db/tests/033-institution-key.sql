@@ -103,7 +103,7 @@ CREATE TEMP TABLE called (name text PRIMARY KEY, result text);
 INSERT INTO called VALUES
   ('create', pg_temp.ask('vesna', $$ SELECT institution.create_assignment({k1}, 'Ključ ustanove', 'Upute.',
     'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false, NULL, NULL) $$));
-INSERT INTO called VALUES ('acknowledge', pg_temp.ask('dora', 'SELECT institution.acknowledge_notice({z1}, 2)'));
+INSERT INTO called VALUES ('acknowledge', pg_temp.ask('dora', 'SELECT institution.acknowledge_notice({z1}, 2, 1)'));
 INSERT INTO called VALUES
   ('code', pg_temp.ask('vesna', $$ SELECT institution.create_enrollment_code({k1}, now() + interval '7 days') $$));
 SELECT is(
@@ -253,7 +253,7 @@ CROSS JOIN LATERAL (VALUES (1, 'assignment', 'id', z.assignment), (2, 'notice_ac
 ORDER BY v.n, t.m;
 SELECT is(pg_temp.ask(v.actor, v.call), 'ZD403: forbidden', v.actor || ' cannot ' || v.what)
 FROM (VALUES
-  (1, 'tomo', 'acknowledge the notice of an assignment of fak-a', 'SELECT institution.acknowledge_notice({z1}, 2)'),
+  (1, 'tomo', 'acknowledge the notice of an assignment of fak-a', 'SELECT institution.acknowledge_notice({z1}, 2, 1)'),
   (2, 'petra', 'publish a version of an assignment of fak-a',
    $$ SELECT institution.publish_assignment_version({z1}, 2, 'Naslov', 'Upute.', 'essay', '2026-11-02 08:00+01',
       '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false, NULL, NULL) $$),

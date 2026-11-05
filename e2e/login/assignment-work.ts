@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
+import { NOTICE_TEMPLATE_VERSION } from "../../src/domain/notice/fingerprint";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE } from "./support";
@@ -85,7 +86,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
   const pool = new pg.Pool({ connectionString: localAppUrl(), max: 1 });
   try {
     await createWithActor(pool)(token, (tx) =>
-      tx.query("SELECT institution.acknowledge_notice($1, $2)", [assignmentId, 1]));
+      tx.query("SELECT institution.acknowledge_notice($1, $2, $3)", [assignmentId, 1, NOTICE_TEMPLATE_VERSION]));
   } finally {
     await pool.end();
   }
