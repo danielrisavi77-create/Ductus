@@ -94,12 +94,14 @@ export async function withinHoldLimit<T>(read: () => Promise<T>, fallback: T, ti
 }
 
 /**
- * How long "Odjava" waits for a send or an open already in flight once
- * writing stopped (#1542). Past it the dialog opens on what the saver and the
- * journal hold now: a step that ends later is still recorded, since the
- * journal is deleted only when nothing in it is unconfirmed (D-118).
+ * The one limit of a sign-out that waits on the server (#1542, #1444): how
+ * long the logout route may take before the sign-out ends on the device, and
+ * how long "Odjava" waits for a send or an open already in flight once
+ * writing stopped. Past it the dialog opens on what the saver and the journal
+ * hold now: a step that ends later is still recorded, since the journal is
+ * deleted only when nothing in it is unconfirmed (D-118).
  */
-export const LOGOUT_SETTLE_LIMIT_MS = 2_000;
+export const LOGOUT_TIMEOUT_MS = 8_000;
 
 /** States in which the sheet may hold text the journal does not. */
 export const NOT_STORED: readonly SyncState[] = ["EDITING", "SAVING_LOCAL", "ERROR", "RECOVERY_REQUIRED"];
@@ -117,7 +119,7 @@ export type SettlingSaver = {
 export async function unsavedAfterSettle(
   saver: SettlingSaver,
   empty: () => boolean,
-  limitMs = LOGOUT_SETTLE_LIMIT_MS,
+  limitMs = LOGOUT_TIMEOUT_MS,
 ): Promise<boolean> {
   await withinHoldLimit(() => saver.settled(), undefined, limitMs);
   // A first save that failed leaves the journal empty while the sheet holds

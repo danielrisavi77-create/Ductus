@@ -59,7 +59,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { signInHref, signInTarget, SIGN_IN_DEFAULT_TARGET } from "@/components/auth/sign-in-link";
 import {
-  editorSignOutPlan, planAfterDiscard, readLogoutHold, unsavedAfterSettle, untilLoaded, withinHoldLimit, type HoldRead,
+  editorSignOutPlan, LOGOUT_TIMEOUT_MS, planAfterDiscard, readLogoutHold, unsavedAfterSettle, untilLoaded, withinHoldLimit, type HoldRead,
 } from "@/client/logout-hold";
 import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
@@ -614,9 +614,6 @@ export function LocalDocumentProvider({
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
-
-/** How long a sign-out waits for the logout route before it ends on the device. */
-const LOGOUT_TIMEOUT_MS = 8_000;
 
 /**
  * POST to the logout route; true only for its redirect, which comes after

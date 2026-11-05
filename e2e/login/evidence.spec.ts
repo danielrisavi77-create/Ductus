@@ -516,29 +516,35 @@ test("O2 (DAN-289): a submitted work opens read-only and sends nothing after the
 });
 
 // #1542 (plan #1546): a send the server never answers, or an opening it never
-// answers, holds neither the sign-out dialog nor the sign-out. The text the
-// journal holds stays on the device for the next sign-in (D-118).
+// answers, holds neither the sign-out dialog nor the sign-out. Neither tab shows the
+// text after it, and the text the journal holds stays on the device for the
+// next sign-in (D-118).
 for (const waiting of ["commit", "open"] as const) {
-  test(`#1542: sign-out while the ${waiting} gets no answer ends on this device and keeps the text`, async ({ page }) => {
+  test(`#1542: sign-out while the ${waiting} gets no answer ends on this device and keeps the text`, async ({ page, context }) => {
     test.setTimeout(120_000);
+    const TEXT = "Izmišljeni tekst bez odgovora.";
     const { assignment, documentId } = await openSheet(page);
     const asked = page.waitForRequest((r) => pathOf(r) === `/api/evidence/${waiting}` && r.method() === "POST", { timeout: OPEN });
     if (waiting === "commit") {
-      await page.route(COMMIT, () => {});
+      await context.route(COMMIT, () => {});
     } else {
       // The 409 makes the sheet ask the open route again (F-155), which never answers.
-      await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
-      await page.route("**/api/evidence/open", () => {});
+      await context.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
+      await context.route("**/api/evidence/open", () => {});
     }
-    await type(page, " Izmišljeni tekst bez odgovora.");
+    await type(page, ` ${TEXT}`);
     await asked;
     await expect(chipOf(page)).not.toHaveAttribute("data-state", "SYNCED");
-    await page.route("**/api/auth/logout", () => {});
+    await context.route("**/api/auth/logout", () => {});
+    // A second tab of the same session, open while the sign-out runs.
+    const other = await context.newPage();
+    await other.goto("/rad");
+    await editorMounted(other);
 
     const dialog = logoutDialogOf(page);
     await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
-    // The preparation waits at most for its limits, not for the server.
-    await expect(dialog).toBeVisible({ timeout: 6_000 });
+    // The preparation waits at most for its limits (8 s), not for the server.
+    await expect(dialog).toBeVisible({ timeout: 12_000 });
     const confirm = new RegExp(`^(${t.auth.logoutConfirm}|${t.auth.logoutConfirmUnsaved})$`);
     if (waiting === "commit") await expect(dialog.getByRole("button", { name: t.auth.logoutConfirm, exact: true })).toBeVisible();
     await dialog.getByRole("button", { name: confirm }).click();
@@ -546,14 +552,22 @@ for (const waiting of ["commit", "open"] as const) {
     // Nothing unsent was deleted with the sign-out.
     expect((await localOf(page, documentId)).pending.length).toBeGreaterThan(0);
     await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+    // The text of the work is shown in neither tab, nor after a reload of the second.
+    for (const tab of [page, other]) {
+      await expect(editorOf(tab)).not.toContainText(TEXT);
+      await expect(tab.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
+    }
+    await other.reload();
+    await expect(other.locator("body")).not.toContainText(TEXT);
+    await other.close();
 
     // G1: the same person signs in again with a server that answers; the
     // text is back on the sheet and its rows get a signed answer.
-    for (const route of [COMMIT, "**/api/evidence/open", "**/api/auth/logout"]) await page.unroute(route);
-    await page.context().clearCookies({ name: /^_session/ });
+    for (const route of [COMMIT, "**/api/evidence/open", "**/api/auth/logout"]) await context.unroute(route);
+    await context.clearCookies({ name: /^_session/ });
     await signIn(page, "/rad");
     await page.goto(`/rad?zadatak=${assignment}`);
-    await expect(editorOf(page)).toContainText("Izmišljeni tekst bez odgovora.", { timeout: OPEN });
+    await expect(editorOf(page)).toContainText(TEXT, { timeout: OPEN });
     await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
     expect((await localOf(page, documentId)).pending).toEqual([]);
   });

@@ -9,7 +9,7 @@ import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import { nothingHeld, type LogoutPlan } from "@/components/editor/logout-plan";
 
 import {
-  editorPlan, editorSignOutPlan, LOGOUT_HOLD_LIMIT_MS, LOGOUT_LOAD_LIMIT_MS, LOGOUT_SETTLE_LIMIT_MS, readLogoutHold,
+  editorPlan, editorSignOutPlan, LOGOUT_HOLD_LIMIT_MS, LOGOUT_LOAD_LIMIT_MS, LOGOUT_TIMEOUT_MS, readLogoutHold,
   shellLogoutStep, unsavedAfterSettle, untilLoaded, withinHoldLimit,
 } from "./logout-hold";
 import type { SyncState } from "@/domain/sync/states";
@@ -150,7 +150,7 @@ describe("unsavedAfterSettle (#1542)", () => {
   type Settle = "never" | "late" | "now" | "reject";
   const settling = (kind: Settle): (() => Promise<void>) => {
     if (kind === "never") return () => new Promise(() => {});
-    if (kind === "late") return () => new Promise((resolve) => setTimeout(resolve, LOGOUT_SETTLE_LIMIT_MS * 3));
+    if (kind === "late") return () => new Promise((resolve) => setTimeout(resolve, LOGOUT_TIMEOUT_MS * 3));
     if (kind === "reject") return () => Promise.reject(new Error("made-up"));
     return () => Promise.resolve();
   };
@@ -167,7 +167,7 @@ describe("unsavedAfterSettle (#1542)", () => {
     let result: unknown = "open";
     const saver = { settled: settling(row.settle), snapshot: () => ({ state: row.state, failure: row.failure }) };
     void unsavedAfterSettle(saver, () => row.empty).then((value) => { result = value; });
-    await vi.advanceTimersByTimeAsync(LOGOUT_SETTLE_LIMIT_MS);
+    await vi.advanceTimersByTimeAsync(LOGOUT_TIMEOUT_MS);
     expect(result).toBe(row.unsaved);
   });
 
@@ -184,9 +184,9 @@ describe("unsavedAfterSettle (#1542)", () => {
     vi.useFakeTimers();
     let state: SyncState = "SYNCING";
     let result: unknown = "open";
-    const settled = () => new Promise<void>((resolve) => setTimeout(() => { state = "SYNCED"; resolve(); }, LOGOUT_SETTLE_LIMIT_MS - 1));
+    const settled = () => new Promise<void>((resolve) => setTimeout(() => { state = "SYNCED"; resolve(); }, LOGOUT_TIMEOUT_MS - 1));
     void unsavedAfterSettle({ settled, snapshot: () => ({ state, failure: null }) }, () => false).then((value) => { result = value; });
-    await vi.advanceTimersByTimeAsync(LOGOUT_SETTLE_LIMIT_MS - 2);
+    await vi.advanceTimersByTimeAsync(LOGOUT_TIMEOUT_MS - 2);
     expect(result).toBe("open");
     await vi.advanceTimersByTimeAsync(1);
     expect(result).toBe(false);
@@ -201,7 +201,7 @@ describe("unsavedAfterSettle (#1542)", () => {
       const peek = vi.fn(async () => ({ pending: 2, copies: 0, kept: true }));
       void editorSignOutPlan(() => unsavedAfterSettle(saver, () => false), SCOPE, { peek, store: null })
         .then((value) => { plan = value; });
-      await vi.advanceTimersByTimeAsync(LOGOUT_SETTLE_LIMIT_MS - 1);
+      await vi.advanceTimersByTimeAsync(LOGOUT_TIMEOUT_MS - 1);
       expect(plan).toBe("open");
       await vi.advanceTimersByTimeAsync(1);
       expect(plan).toEqual({ unsaved: true, pending: 2, copies: 0, kept: true });
@@ -216,6 +216,14 @@ describe("unsavedAfterSettle (#1542)", () => {
     const quiesce = code.slice(code.indexOf("quiesce: async () => {"), code.indexOf("resume: () => {"));
     expect(quiesce).toContain("return unsavedAfterSettle(saver, () => editor.isEmpty);");
     expect(quiesce).not.toMatch(/await saver\.settled\(\)/);
+  });
+
+  // The orchestrator's contract (#1091 c.6662249586): one limit, the logout route's.
+  it("waits as long as the logout route may take, with the same constant", () => {
+    expect(LOGOUT_TIMEOUT_MS).toBe(8_000);
+    const code = readFileSync(join(process.cwd(), "src/components/editor/LocalDocument.tsx"), "utf8");
+    expect(code).not.toMatch(/const LOGOUT_TIMEOUT_MS\b/);
+    expect(code).toContain("setTimeout(() => abort.abort(), LOGOUT_TIMEOUT_MS)");
   });
 });
 
