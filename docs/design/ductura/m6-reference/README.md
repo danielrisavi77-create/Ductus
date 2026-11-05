@@ -20,6 +20,7 @@ Opseg M6.UX-R po odluci orkestratora (#1091): PR 1 M6.2 (S-34, N-09); PR 2 M6.3/
 | Stanje | Sadržaj |
 |---|---|
 | glavni prikaz | uvod pri prvom otvaranju; kontrola „Promjena n od N” (klizač po redoslijedu, bez vremenske osi); brzina reprodukcije 1×, 2×, 4×; oznaka izvora promjene; opis promjene u `aria-live` |
+| opseg i korak | u glavnom prikazu obje uloge „Što se reproducira”: „Cijeli rad” ili „Jedan odlomak” s izborom odlomka (`docs/PRODUCT.md` §6); korak je jedan unos (jedan znak, jedno lijepljenje, uvoz ili brisanje, D-143), pa su primjeri promjena 1.201, 1.284 i 1.302 jedan umetnut znak, a 1.285 jedno lijepljenje |
 | oznake izvora | utipkano, zalijepljeno (izvor nije opažen), uvezeno, iz AI pomoćnika, izmjena nastavnika, primijenjeni prijedlog |
 | skok po sesijama | „Sesija n” bez trajanja i bez riječi o stankama (D-63) |
 | učitavanje, prazno, pogreška | „Učitavam promjene rada.”, „Nema zabilježenih promjena.”, pogreška koja studentu potvrđuje da rad može pisati i predati |
