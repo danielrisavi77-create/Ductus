@@ -8,9 +8,10 @@
 //
 // The compose path (stack:up, db:migrate, test:db) and CI are unchanged. The
 // same files run in the same order as `pnpm db:migrate`: db/local/migrator.sql,
-// dbmate up --strict as ductus_migrator, db/local/app-login.sql and
-// db/local/auth-login.sql. The provisioning files run on the local socket as
-// the cluster's own superuser (auth-login.sql refuses anything but a socket);
+// dbmate up --strict as ductus_migrator, db/local/app-login.sql,
+// db/local/worker-login.sql and db/local/auth-login.sql. The provisioning
+// files run on the local socket as the cluster's own superuser (app-login.sql
+// and worker-login.sql refuse TCP, auth-login.sql anything but a socket);
 // dbmate and pg_prove log in over loopback TCP as `ductus`, the superuser
 // compose makes. Only loopback hosts are accepted, and no PG*, PSQL* or DBMATE_*
 // variable of the caller reaches a child, so nothing here can aim at another
@@ -208,6 +209,7 @@ export async function up({ env, run, isRoot, store = fileStore(passwordFile(env)
     env: { ...cenv, DATABASE_URL: dbmateUrl(config, password) },
   });
   await step("db/local/app-login.sql", ...admin(config.database), { stdinFile: join(ROOT, "db/local/app-login.sql") });
+  await step("db/local/worker-login.sql", ...admin(config.database), { stdinFile: join(ROOT, "db/local/worker-login.sql") });
   await step("db/local/auth-login.sql", ...admin(config.database), {
     input: `\\getenv auth_password ${AUTH_PASSWORD_VAR}\n`,
     stdinFile: join(ROOT, "db/local/auth-login.sql"),

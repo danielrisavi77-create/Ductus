@@ -44,8 +44,9 @@ CREATE TEMP VIEW stray_privilege AS
 SELECT is_empty('SELECT found FROM stray_privilege',
   'no role but the owners and ductus_app, nor PUBLIC, holds a right on an application relation');
 GRANT SELECT ON institution.course TO ductus_worker;
-SELECT set_eq('SELECT found FROM stray_privilege', ARRAY['ductus_worker: SELECT on institution.course'],
-  'a table right granted to ductus_worker is noticed');
+SELECT set_eq('SELECT found FROM stray_privilege',
+  ARRAY['ductus_worker: SELECT on institution.course', 'ductus_worker_local: SELECT on institution.course'],
+  'a table right granted to ductus_worker is noticed, also on the worker login that inherits it');
 REVOKE SELECT ON institution.course FROM ductus_worker;
 CREATE ROLE test_reporting NOLOGIN;
 GRANT SELECT ON institution.course TO test_reporting;

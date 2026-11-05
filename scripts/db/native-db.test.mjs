@@ -157,8 +157,8 @@ test("db:up:native on a running cluster runs the db:migrate files in order, with
   const { calls, run } = recorder();
   const auth = "s".repeat(16);
   await up({ env: { DUCTUS_AUTH_LOCAL_PASSWORD: auth }, run, isRoot: true, store: memoryStore(LOGIN), log: quiet });
-  assert.deepEqual(calls.map(({ command }) => command), ["pg_isready", "runuser", "runuser", process.execPath, "runuser", "runuser"]);
-  assert.deepEqual(calls.slice(2).map((call) => sqlFile(call) ?? "dbmate"), ["db/local/migrator.sql", "dbmate", "db/local/app-login.sql", "db/local/auth-login.sql"]);
+  assert.deepEqual(calls.map(({ command }) => command), ["pg_isready", "runuser", "runuser", process.execPath, "runuser", "runuser", "runuser"]);
+  assert.deepEqual(calls.slice(2).map((call) => sqlFile(call) ?? "dbmate"), ["db/local/migrator.sql", "dbmate", "db/local/app-login.sql", "db/local/worker-login.sql", "db/local/auth-login.sql"]);
   // Provisioning on the socket as the cluster superuser, never over TCP.
   for (const call of calls.filter(({ command }) => command === "runuser")) {
     assert.deepEqual(call.args.slice(0, 8), ["-u", "postgres", "--", "psql", "-h", "/var/run/postgresql", "-p", "5432"]);
@@ -173,10 +173,12 @@ test("db:up:native on a running cluster runs the db:migrate files in order, with
   const dbmate = calls[3];
   assert.deepEqual(dbmate.args.slice(1), ["--no-dump-schema", "--wait", "up", "--strict"]);
   assert.equal(dbmate.options.env.DATABASE_URL, dbmateUrl(DEFAULT, LOGIN));
-  assert.equal(calls[5].options.input, `\\getenv auth_password ${AUTH_PASSWORD_VAR}\n`);
-  assert.equal(calls[5].options.env[AUTH_PASSWORD_VAR], auth);
+  const authLogin = calls[6];
+  assert.equal(authLogin.options.input, `\\getenv auth_password ${AUTH_PASSWORD_VAR}\n`);
+  assert.equal(authLogin.options.env[AUTH_PASSWORD_VAR], auth);
   assert.equal(calls[1].options.env[AUTH_PASSWORD_VAR], undefined, "each secret only reaches its own step");
-  assert.equal(calls[5].options.env[BOOTSTRAP_PASSWORD_VAR], undefined);
+  assert.equal(calls[5].options.env[AUTH_PASSWORD_VAR], undefined, "the worker login gets no secret");
+  assert.equal(authLogin.options.env[BOOTSTRAP_PASSWORD_VAR], undefined);
   for (const call of calls) assert.equal(call.options.env.PGPASSWORD, LOGIN);
 });
 
@@ -239,7 +241,7 @@ test("not as root the provisioning psql runs as the calling user on the socket",
 });
 
 test("the first failing step stops the run", async () => {
-  const order = ["bootstrap", "migrator.sql", "dbmate", "app-login.sql", "auth-login.sql"];
+  const order = ["bootstrap", "migrator.sql", "dbmate", "app-login.sql", "worker-login.sql", "auth-login.sql"];
   for (const failing of order) {
     let index = -1;
     const { calls, run } = recorder((command) => {
