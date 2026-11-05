@@ -35,7 +35,9 @@ Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`. Izrađene su Pl
   - Već postojeći izvor se ne udvostručuje.
   - Zapis koji se može pročitati uvozi se i kad mu nedostaje autor ili izdavač. Nepotpun opis je neutralna oznaka s isprekidanim rubom (D-62).
   - „Nije prepoznat” je samo zapis koji nije u obliku BibTeX, RIS ni CSL-JSON. Prikazuje se doslovno, s razlogom i radnjom „Dodaj ručno”.
-  - Nakon neuspjeha dijalog ostaje otvoren i polje Zapisi zadržava uneseni tekst, pa ga student može ispraviti i ponovno pokušati ili odabrati drugu datoteku (stanja 3 i 3b). Popis se ne mijenja.
+  - Nakon neuspjeha dijalog ostaje otvoren, a popis se ne mijenja.
+    - Stanje 3 (ništa nije prepoznato): polje Zapisi zadržava uneseni tekst, pa ga student može ispraviti i ponovno pokušati ili odabrati drugu datoteku.
+    - Stanje 3b (datoteka nečitljiva): polje Zapisi je prazno, jer nema pročitanog sadržaja za zadržati; student odabire drugu datoteku ili zalijepi zapise.
   - Broj u ishodu i popis nakon uvoza se slažu: 4 uvezena i 1 već postojeći čine 5 stavki popisa.
   - Izravni dohvat iz Zotera s korisničkim ključem iz prototipa nije nacrtan: Zotero je val 2 (D-227), a rukovanje ključem nije definirano.
 
