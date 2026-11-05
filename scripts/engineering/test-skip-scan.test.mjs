@@ -147,9 +147,17 @@ function destructured(n) {
     }
   }
 }
-// True when a source can evaluate to a test root: through members and calls,
-// and through each operand a logical, comma, conditional or assignment
-// expression can return (`test || {}`, `(0, test)`, `c ? {} : test`).
+// True when a source can evaluate to a test root: through members, calls,
+// `await` and type assertions, and through each operand a logical, comma,
+// conditional or assignment expression can return (`test || {}`,
+// `(0, test)`, `c ? {} : test`, `await test`).
+const VALUE_OF = (n) =>
+  isWrap(n) ||
+  isAccess(n) ||
+  ts.isCallExpression(n) ||
+  ts.isAwaitExpression(n) ||
+  ts.isSatisfiesExpression(n) ||
+  ts.isTypeAssertionExpression(n);
 const EITHER = new Set([
   ts.SyntaxKind.BarBarToken,
   ts.SyntaxKind.AmpersandAmpersandToken,
@@ -160,11 +168,7 @@ const EITHER = new Set([
 ]);
 const RIGHT = new Set([ts.SyntaxKind.CommaToken, ts.SyntaxKind.EqualsToken]);
 function fromRoot(value) {
-  while (
-    value &&
-    (isWrap(value) || isAccess(value) || ts.isCallExpression(value))
-  )
-    value = value.expression;
+  while (value && VALUE_OF(value)) value = value.expression;
   if (!value) return false;
   if (ts.isConditionalExpression(value))
     return fromRoot(value.whenTrue) || fromRoot(value.whenFalse);
@@ -388,6 +392,14 @@ const CASES = [
     "const { skip } = (test || cfg).nested;",
     "const { skip } = (cfg || other).nested;",
   ],
+  [
+    "async function f() { const { skip } = await test; }",
+    "async function f() { const { skip } = await cfg; }",
+  ],
+  [
+    "async function f() { const { n: { todo } = await (0, it) } = {}; }",
+    "async function f() { const { n: { todo } = await (it, cfg) } = {}; }",
+  ],
   // K4: names are compared cooked.
   ["t.sk\\u0069p();", "t.sk\\u0069pped();"],
   ["t.\\u{73}kip();", "t.\\u{73}kips();"],
@@ -477,6 +489,7 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
       'skip("e", () => {});',
       'const { n: { todo: td } = test } = {}; td("f", () => {});',
       'const { n: { skip: sk } = test || {} } = {}; sk("g", () => {});',
+      'const { n: { skip: sw } = await test } = {}; sw("h", () => {});',
     ],
     "clean.test.mjs": [
       'import test from "node:test";',
@@ -504,9 +517,9 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
       ];
     }
     assert.deepEqual(counts["marked.test.mjs"], [
-      "5",
+      "6",
       "2",
-      [1, 2, 3, 4, 5, 7, 8],
+      [1, 2, 3, 4, 5, 7, 8, 9],
     ]);
     assert.deepEqual(counts["clean.test.mjs"], ["0", "0", []]);
   } finally {
