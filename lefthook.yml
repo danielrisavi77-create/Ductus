@@ -155,6 +155,9 @@ pre-commit:
         fi
 
 pre-push:
+  # DAN-432: lint, typecheck and the tests run side by side; each still blocks
+  # the push, and only the test command reads the pushed refs.
+  parallel: true
   commands:
     lint:
       env:
