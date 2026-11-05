@@ -28,9 +28,10 @@ function loadingRoutes(): string[] {
     .sort();
 }
 
-const SCRIPT_TAG = /<script\b[^>]*>/g;
-const SRC = /\ssrc="([^"]+)"/;
-const NONCE = /\snonce="[^"]+"/;
+// HTML tag and attribute names are case-insensitive, and a value may use either quote or none.
+const SCRIPT_TAG = /<script\b[^>]*>/gi;
+const SRC = /\ssrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s"'>]+))/i;
+const NONCE = /\snonce\s*=\s*(?:"[^"]+"|'[^']+'|[^\s"'>]+)/i;
 // The whole of a dev chunk-list registration; anything else in the file fails the match.
 const CHUNK_LIST =
   /^\(globalThis\.TURBOPACK_CHUNK_LISTS \|\| \(globalThis\.TURBOPACK_CHUNK_LISTS = \[\]\)\)\.push\(\{\s*script: typeof document === "object" \? document\.currentScript : undefined,\s*chunks: (\[[^\]]*\]),\s*source: "\w+"\s*\}\);\s*$/;
@@ -59,7 +60,10 @@ for (const route of loadingRoutes()) {
     const withoutNonce = [...html.matchAll(SCRIPT_TAG)]
       .map(([tag]) => tag)
       .filter((tag) => SRC.test(tag) && !NONCE.test(tag))
-      .map((tag) => tag.match(SRC)![1]!);
+      .map((tag) => {
+        const [, double, single, bare] = tag.match(SRC)!;
+        return (double ?? single ?? bare)!;
+      });
     for (const src of withoutNonce) {
       expect(await stylesheetsOnly(request, src), `${src} loads code without the nonce`).not.toBeNull();
     }
