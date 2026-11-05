@@ -74,3 +74,5 @@
   .task { grid-template-columns: 1fr; }
   .card { padding: 16px; }
 }
+.card details { border-top: 1px solid var(--rule-2); padding-top: 6px; }
+.card summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }

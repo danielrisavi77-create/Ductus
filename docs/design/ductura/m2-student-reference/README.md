@@ -46,6 +46,8 @@ Ovi tekstovi su prijedlog i ulaze u `messages.hr.ts` tek s izvedbom, uz provjeru
 - S-02, S-03: „Rok za 3 dana” (prag od 7 dana potvrđuje izvedba).
 - S-03: oznake „Seminarska grupa 2” i akademska godina uz kolegij (M2.7).
 - S-04: „Već ste upisani u ovaj kolegij.”
+- S-05: „Nastavnik (mentor) zadatka moći će usporediti dvije poslane verzije rada, poslane na pregled ili predane. Usporedba pokazuje samo razliku između njih. Istu usporedbu svog rada vidjet ćete i Vi.” (PRODUCT §5 pravilo 7, D-202; katalog ima samo `teacherExtended` za prošireni profil).
+- S-05: „Pravilo je postavio nastavnik kolegija (Nastavnik A). Razlikuje se od pravila fakulteta.” i rasklopivo „Pravilo fakulteta (FPZG čl. 8)” (D-175); kad se pravila ne razlikuju, ostaje samo prva rečenica.
 
 ## Tipkovnica (EQ6)
 
