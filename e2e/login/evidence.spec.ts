@@ -521,7 +521,7 @@ test("O2 (DAN-289): a submitted work opens read-only and sends nothing after the
 for (const waiting of ["commit", "open"] as const) {
   test(`#1542: sign-out while the ${waiting} gets no answer ends on this device and keeps the text`, async ({ page }) => {
     test.setTimeout(120_000);
-    const { documentId } = await openSheet(page);
+    const { assignment, documentId } = await openSheet(page);
     const asked = page.waitForRequest((r) => pathOf(r) === `/api/evidence/${waiting}` && r.method() === "POST", { timeout: OPEN });
     if (waiting === "commit") {
       await page.route(COMMIT, () => {});
@@ -545,5 +545,16 @@ for (const waiting of ["commit", "open"] as const) {
     await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice, { timeout: 15_000 });
     // Nothing unsent was deleted with the sign-out.
     expect((await localOf(page, documentId)).pending.length).toBeGreaterThan(0);
+    await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+
+    // G1: the same person signs in again with a server that answers; the
+    // text is back on the sheet and its rows get a signed answer.
+    for (const route of [COMMIT, "**/api/evidence/open", "**/api/auth/logout"]) await page.unroute(route);
+    await page.context().clearCookies({ name: /^_session/ });
+    await signIn(page, "/rad");
+    await page.goto(`/rad?zadatak=${assignment}`);
+    await expect(editorOf(page)).toContainText("Izmišljeni tekst bez odgovora.", { timeout: OPEN });
+    await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+    expect((await localOf(page, documentId)).pending).toEqual([]);
   });
 }
