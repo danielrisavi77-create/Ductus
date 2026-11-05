@@ -1,15 +1,11 @@
 // DAN-517, attack plan #1021 step 3 (D-71, D-91; docs/backend/baza-i-pogon.md
 // 4.8 t. 7): the worker runs pg-boss with migrate: false, so its schema is a
-// dbmate migration. This checks that the migration and the package agree:
-//
-// - pg-boss is pinned exactly, with the same version in package.json, in the
-//   lockfile importer and in node_modules, and that version builds schema 46;
-// - the up section of the schema migration is PREAMBLE, the transactional
-//   body of getConstructionPlans("pgboss") of the installed package verbatim,
-//   and POSTAMBLE, so nobody edits the generated SQL by hand;
-// - only the three pg-boss migrations name the pgboss schema. A pg-boss
-//   upgrade is a new migration from getMigrationPlans and changes this list
-//   and the pin together (4.8 t. 7), so an upgrade cannot slip in unseen.
+// dbmate migration. This checks that pg-boss is pinned exactly and equally in
+// package.json, the lockfile importer and node_modules, with schema 46; that
+// the up section of the schema migration is PREAMBLE + the transactional body
+// of getConstructionPlans("pgboss") verbatim + POSTAMBLE; and that only the
+// three pg-boss migrations name the schema, so an upgrade (a new migration
+// from getMigrationPlans) changes this list and the pin together.
 //
 //   node scripts/engineering/pgboss-contract.mjs
 import { readFileSync, readdirSync } from "node:fs";
@@ -25,10 +21,8 @@ export const MIGRATIONS = Object.freeze({
   schema: "20261104130100_pgboss_schema.sql",
   access: "20261104130200_pgboss_access.sql",
 });
-// The owner role runs the plan and holds DDL rights only while it runs: CREATE
-// on the schema for its objects, and CREATE on the database because its
-// CREATE SCHEMA IF NOT EXISTS checks that right before it sees that the
-// schema exists. Both are taken back at the end of the same transaction.
+// The owner holds DDL rights only while the plan runs: CREATE on the schema,
+// and on the database because CREATE SCHEMA IF NOT EXISTS checks that first.
 export const PREAMBLE = [
   "SET LOCAL ROLE ductus_migrator;",
   "DO $$ BEGIN EXECUTE format('GRANT CREATE ON DATABASE %I TO ductus_queue', current_database()); END $$;",

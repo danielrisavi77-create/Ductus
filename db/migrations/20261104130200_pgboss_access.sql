@@ -1,17 +1,14 @@
 -- DAN-517, attack plan #1021 step 3 (D-71, D-74; docs/backend/baza-i-pogon.md
--- 4.8 t. 7): who may use the pg-boss schema that the previous migration
--- installed verbatim. Everything here runs as the owner ductus_queue. Only the worker role uses the queue, and only with row
--- rights: it creates no table, index or partition (migrate: false,
--- persistQueueStats: false, reindex: false, queues without partition), so a
--- partitioned queue or a DDL path fails for lack of rights. The web role gets
--- nothing. pg-boss functions run with the rights of the caller; the worker
--- may call the clock and create_queue, nothing that builds tables.
+-- 4.8 t. 7): who may use the pg-boss schema. Only the worker, with row rights:
+-- it builds no table, index or partition (migrate: false, queues without
+-- partition), so a partitioned queue or a DDL path fails for lack of rights.
+-- The web role gets nothing. pg-boss functions are SECURITY INVOKER; the
+-- worker calls only the clock and create_queue.
 --
--- The construction plan creates queue_stats partitions named after the day it
--- ran (today and tomorrow, UTC). Nothing writes queue_stats while
--- persistQueueStats is false (pg-boss 12.38.0 dist/boss.js, #supervisePass),
--- and the dates would make the migrated schema differ from db/schema.sql on
--- every other day (D-91 measure 4), so they are dropped here.
+-- The plan creates queue_stats partitions named after the day it ran. Nothing
+-- writes queue_stats while persistQueueStats is false (pg-boss 12.38.0
+-- dist/boss.js, #supervisePass), and the dates would make the schema differ
+-- from db/schema.sql on other days (D-91 measure 4), so they are dropped.
 -- migrate:up
 SET LOCAL ROLE ductus_queue;
 
