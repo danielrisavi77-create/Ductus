@@ -4,26 +4,54 @@
 // imports it. Node runs it with type stripping, as plain-label-check.ts.
 import pg from "pg";
 
+/** Settles like `promise`, or rejects with the abort reason as soon as `signal` aborts. */
+function unlessAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  let onAbort = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  return Promise.race([promise, aborted]).finally(() => signal.removeEventListener("abort", onAbort));
+}
+
 /**
  * Opens the lock connection, retrying while the server starts (as dbmate
  * --wait does). The `role` query parameter is dbmate's, not the driver's, and
- * is dropped: the advisory lock needs no role. An aborted `signal` stops the
- * retries, and a connection that opens after the abort is closed, not returned.
+ * is dropped: the advisory lock needs no role. Each attempt ends after
+ * `connectTimeoutMs`. An aborted `signal` stops the retries and ends a pending
+ * attempt at once, even one whose server never answers; a connection that
+ * opens after the abort is closed, not returned.
  */
 export async function connectLockClient(
   url: string,
-  { attempts = 60, delayMs = 1000, signal }: { attempts?: number; delayMs?: number; signal?: AbortSignal } = {},
+  {
+    attempts = 60,
+    delayMs = 1000,
+    connectTimeoutMs = 10_000,
+    signal,
+  }: { attempts?: number; delayMs?: number; connectTimeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<pg.Client> {
   const lockUrl = new URL(url);
   lockUrl.searchParams.delete("role");
   for (let attempt = 1; ; attempt += 1) {
     signal?.throwIfAborted();
-    const client = new pg.Client({ connectionString: lockUrl.href, keepAlive: true, application_name: "ductus-migrate-lock" });
+    const client = new pg.Client({
+      connectionString: lockUrl.href,
+      keepAlive: true,
+      connectionTimeoutMillis: connectTimeoutMs,
+      application_name: "ductus-migrate-lock",
+    });
+    const connecting = client.connect();
     try {
-      await client.connect();
+      await unlessAborted(connecting, signal);
     } catch (error) {
-      await client.end().catch(() => {});
-      if (attempt >= attempts || signal?.aborted) throw error;
+      connecting.catch(() => {});
+      // Not awaited: after an abort the driver may not settle connect() or
+      // end(); connectionTimeoutMillis then closes the socket.
+      client.end().catch(() => {});
+      if (signal?.aborted) signal.throwIfAborted();
+      if (attempt >= attempts) throw error;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       continue;
     }

@@ -6,8 +6,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import net from "node:net";
 
 import { dbmateArgs, dbmateBinary, LOCK_KEY, runLocked, startDbmate } from "../db/migrate-locked.mjs";
+import { connectLockClient } from "../../src/server/db/migration-lock.ts";
 
 class FakeClient extends EventEmitter {
   // lock: ok | fail | wait (pending until end()); heartbeat: ok | fail | hang;
@@ -223,6 +225,57 @@ test("a run cancelled while the lock connection opens never takes the lock or st
     assert.deepEqual(client.queries, [], `no lock query when connect ${outcome}`);
     if (outcome === "succeeds") assert.ok(client.ended, "the connection that opened after the cancel is closed");
     assert.match(logs.join("\n"), /cancelled before dbmate started/);
+  }
+});
+
+/** A TCP server that accepts connections and never answers the PostgreSQL handshake. */
+async function silentServer() {
+  const sockets = [];
+  const server = net.createServer((socket) => sockets.push(socket));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    url: `postgres://synthetic:synthetic@127.0.0.1:${server.address().port}/none`,
+    sockets,
+    close: () => {
+      for (const socket of sockets) socket.destroy();
+      return new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
+test("a cancel ends a lock connection whose server never answers, and dbmate never starts", async () => {
+  // #1051 Codex P2 (b3719a01): a handshake that hangs left connect() pending,
+  // so SIGINT/SIGTERM could not end the run.
+  const server = await silentServer();
+  try {
+    const controller = new AbortController();
+    let started = 0;
+    const done = runLocked({
+      connect: () => connectLockClient(server.url, { attempts: 1, signal: controller.signal }),
+      start: () => ((started += 1), new FakeChild()),
+      signal: controller.signal,
+      log: () => {},
+    });
+    for (let i = 0; server.sockets.length === 0 && i < 100; i += 1) await tick(10);
+    assert.equal(server.sockets.length, 1, "the lock connection reached the server");
+    controller.abort();
+    assert.equal(await settled(done, 1000), 1);
+    assert.equal(started, 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test("a lock connection whose server never answers fails after connectTimeoutMs", async () => {
+  const server = await silentServer();
+  try {
+    const attempt = connectLockClient(server.url, { attempts: 1, connectTimeoutMs: 200 }).then(
+      () => "connected",
+      (error) => error.message,
+    );
+    assert.match(String(await settled(attempt, 2000)), /timeout/);
+  } finally {
+    await server.close();
   }
 });
 
