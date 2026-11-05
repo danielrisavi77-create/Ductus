@@ -22,7 +22,11 @@ export function parseGitGuardianConfig(text) {
     const item = /^ {4}- (.+)$/.exec(body);
     if (top) {
       section = null; key = null;
-      if (top[1] === "version") { version = top[2].trim(); continue; }
+      if (top[1] === "version") {
+        if (version !== null) fail("duplicate key \"version\"");
+        version = top[2].trim();
+        continue;
+      }
       if (top[1] !== "secret" || top[2].trim() !== "") fail(`unknown key "${top[1]}"`);
       section = "secret";
     } else if (nested && section === "secret") {

@@ -40,6 +40,7 @@ test("every input class is accepted or refused", () => {
     ["unknown top-level key", file([OK], "other:\n  a: 1\n"), /unknown key/],
     ["missing version", `secret:\n  ignored_paths:\n    - ${OK}\n`, /version/],
     ["version 1", `version: 1\nsecret:\n  ignored_paths:\n    - ${OK}\n`, /version/],
+    ["duplicate version", `version: 1\n${file([OK])}`, /duplicate key/],
     ["duplicate entry", file([OK, OK]), /duplicate/],
     ["tab indentation", `version: 2\nsecret:\n\tignored_paths:\n\t\t- ${OK}\n`, /unsupported|unknown/],
   ];
