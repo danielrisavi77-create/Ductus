@@ -3333,6 +3333,41 @@ $$;
 
 
 --
+-- Name: appoint_institution_admin(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.appoint_institution_admin(p_user_id uuid, p_request_ref text) RETURNS boolean
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
+  v_written integer;
+BEGIN
+  UPDATE institution.institution_role r SET revoked_at = now()
+   WHERE r.institution_id = v_institution_id AND r.user_id = p_user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NULL AND r.revoked_at IS NULL
+     AND EXISTS (SELECT 1 FROM audit.teacher_role_event e WHERE e.role_id = r.id AND e.kind = 'confirmed');
+  WITH appointed AS (
+    INSERT INTO institution.institution_role AS r (institution_id, user_id, role, confirmed_by, confirmed_at)
+    VALUES (v_institution_id, p_user_id, 'admin', NULL, now())
+    ON CONFLICT (institution_id, user_id, role) WHERE revoked_at IS NULL
+    DO UPDATE SET confirmed_by = NULL, confirmed_at = EXCLUDED.confirmed_at
+    WHERE r.confirmed_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event
+    (institution_id, role_id, teacher_id, role, kind, actor_id, request_ref, occurred_at)
+  SELECT appointed.institution_id, appointed.id, appointed.user_id, appointed.role, 'confirmed', NULL,
+         p_request_ref, now()
+  FROM appointed;
+  GET DIAGNOSTICS v_written = ROW_COUNT;
+  RETURN v_written > 0;
+END
+$$;
+
+
+--
 -- Name: approve_mentorship_request(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3567,6 +3602,61 @@ BEGIN
            WHEN 'write' THEN v_owner
            ELSE v_teacher
          END;
+END
+$$;
+
+
+--
+-- Name: check_admin_appointment(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.check_admin_appointment() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_restored boolean := false;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    v_restored := OLD.revoked_at IS NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM institution.institution_role r
+             WHERE r.id = NEW.id AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+               AND (v_restored
+                    OR NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                                   WHERE e.role_id = r.id AND e.role = 'admin' AND e.kind = 'confirmed'
+                                     AND e.xmin = r.xmin)
+                    OR EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                               WHERE e.role_id = r.id AND e.kind = 'revoked'))) THEN
+    RAISE EXCEPTION 'administrator not appointed by the operator' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+
+--
+-- Name: check_last_admin(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.check_last_admin() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'institution.institution_admin:' || OLD.institution_id::text, 0));
+  IF NOT EXISTS (SELECT 1 FROM institution.institution_role r
+                 WHERE r.institution_id = OLD.institution_id AND r.role = 'admin'
+                   AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL)
+     AND NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                     WHERE e.role_id = OLD.id AND e.role = 'admin' AND e.kind = 'revoked') THEN
+    RAISE EXCEPTION 'last administrator' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN NULL;
 END
 $$;
 
@@ -4740,6 +4830,35 @@ $$;
 
 
 --
+-- Name: require_admin_request(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.require_admin_request(p_user_id uuid, p_request_ref text) RETURNS uuid
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_institution_id uuid;
+BEGIN
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  IF p_request_ref IS NULL OR p_request_ref <> pg_catalog.btrim(p_request_ref)
+     OR NOT coalesce(institution.is_plain_label(p_request_ref), false) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  SELECT u.institution_id INTO v_institution_id FROM identity.user_account u WHERE u.id = p_user_id FOR SHARE;
+  IF v_institution_id IS NULL THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'institution.institution_admin:' || v_institution_id::text, 0));
+  RETURN v_institution_id;
+END
+$$;
+
+
+--
 -- Name: require_course_teacher(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4783,6 +4902,34 @@ BEGIN
   )
   INSERT INTO audit.enrollment_code_event (institution_id, course_id, code_id, kind, actor_id, occurred_at)
   SELECT actor.institution_id, p_course_id, ended.id, 'revoked', actor.user_id, now() FROM ended;
+  GET DIAGNOSTICS v_written = ROW_COUNT;
+  RETURN v_written > 0;
+END
+$$;
+
+
+--
+-- Name: revoke_institution_admin(uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.revoke_institution_admin(p_user_id uuid, p_request_ref text) RETURNS boolean
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_institution_id uuid := institution.require_admin_request(p_user_id, p_request_ref);
+  v_written integer;
+BEGIN
+  WITH revoked AS (
+    UPDATE institution.institution_role r SET revoked_at = now()
+     WHERE r.institution_id = v_institution_id AND r.user_id = p_user_id
+       AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+    RETURNING r.id, r.institution_id, r.user_id, r.role
+  )
+  INSERT INTO audit.teacher_role_event
+    (institution_id, role_id, teacher_id, role, kind, actor_id, request_ref, occurred_at)
+  SELECT revoked.institution_id, revoked.id, revoked.user_id, revoked.role, 'revoked', NULL, p_request_ref, now()
+  FROM revoked;
   GET DIAGNOSTICS v_written = ROW_COUNT;
   RETURN v_written > 0;
 END
@@ -5218,10 +5365,13 @@ CREATE TABLE audit.teacher_role_event (
     teacher_id uuid NOT NULL,
     role text NOT NULL,
     kind text NOT NULL,
-    actor_id uuid NOT NULL,
+    actor_id uuid,
     occurred_at timestamp with time zone NOT NULL,
+    request_ref text,
     CONSTRAINT teacher_role_event_kind_check CHECK ((kind = ANY (ARRAY['confirmed'::text, 'revoked'::text]))),
-    CONSTRAINT teacher_role_event_role_check CHECK ((role = 'teacher'::text))
+    CONSTRAINT teacher_role_event_origin_check CHECK ((((role = 'admin'::text) = (request_ref IS NOT NULL)) AND ((role = 'admin'::text) = (actor_id IS NULL)))),
+    CONSTRAINT teacher_role_event_request_ref_check CHECK (((request_ref IS NULL) OR ((request_ref = btrim(request_ref)) AND institution.is_plain_label(request_ref)))),
+    CONSTRAINT teacher_role_event_role_check CHECK ((role = ANY (ARRAY['teacher'::text, 'admin'::text])))
 );
 
 ALTER TABLE ONLY audit.teacher_role_event FORCE ROW LEVEL SECURITY;
@@ -7682,6 +7832,27 @@ CREATE TRIGGER faculty_rule_version_no_truncate BEFORE TRUNCATE ON institution.f
 
 
 --
+-- Name: institution_role institution_role_admin_appointed; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER institution_role_admin_appointed AFTER INSERT ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL))) EXECUTE FUNCTION institution.check_admin_appointment();
+
+
+--
+-- Name: institution_role institution_role_admin_reappointed; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER institution_role_admin_reappointed AFTER UPDATE ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL) AND ((old.role <> 'admin'::text) OR (old.confirmed_at IS NULL) OR (old.revoked_at IS NOT NULL) OR (((old.id IS DISTINCT FROM new.id) OR (old.institution_id IS DISTINCT FROM new.institution_id)) OR (old.user_id IS DISTINCT FROM new.user_id))))) EXECUTE FUNCTION institution.check_admin_appointment();
+
+
+--
+-- Name: institution_role institution_role_keeps_admin; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER institution_role_keeps_admin AFTER UPDATE ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((old.role = 'admin'::text) AND (old.confirmed_at IS NOT NULL) AND (old.revoked_at IS NULL) AND (NOT ((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL) AND (NOT (((old.id IS DISTINCT FROM new.id) OR (old.institution_id IS DISTINCT FROM new.institution_id)) OR (old.user_id IS DISTINCT FROM new.user_id))))))) EXECUTE FUNCTION institution.check_last_admin();
+
+
+--
 -- Name: notice_acknowledgment notice_acknowledgment_fingerprint_immutable; Type: TRIGGER; Schema: institution; Owner: -
 --
 
@@ -8691,7 +8862,7 @@ ALTER TABLE audit.teacher_role_event ENABLE ROW LEVEL SECURITY;
 -- Name: teacher_role_event teacher_role_event_owner; Type: POLICY; Schema: audit; Owner: -
 --
 
-CREATE POLICY teacher_role_event_owner ON audit.teacher_role_event TO ductus_identity USING (true) WITH CHECK (true);
+CREATE POLICY teacher_role_event_owner ON audit.teacher_role_event TO ductus_identity USING (true) WITH CHECK ((role = 'teacher'::text));
 
 
 --
@@ -9555,4 +9726,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261104090000'),
     ('20261104100000'),
     ('20261104110000'),
-    ('20261104120000');
+    ('20261104120000'),
+    ('20261104130000');

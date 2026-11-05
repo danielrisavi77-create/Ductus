@@ -45,10 +45,11 @@ const roleRows = async () => (await admin.query(
 )).rows as { user_id: string; role: string; confirmed: boolean; revoked: boolean }[];
 const withoutUser = (rows: Awaited<ReturnType<typeof roleRows>>, user: string) => rows.filter((row) => row.user_id !== user);
 // DAN-497: the audit rows of one teacher, each checked against the role row it names.
+// The operator's appointment of an administrator (DAN-525) is its own trail, covered by pgTAP 106.
 const roleEvents = async (teacher: string) => (await admin.query(
   `SELECT e.kind, e.actor_id, e.role, e.role_id = r.id AS same_row, e.occurred_at = r.revoked_at AS at_revocation
      FROM audit.teacher_role_event e JOIN institution.institution_role r ON r.id = e.role_id
-    WHERE e.teacher_id = $1 ORDER BY e.occurred_at, e.kind`, [teacher],
+    WHERE e.teacher_id = $1 AND e.role = 'teacher' ORDER BY e.occurred_at, e.kind`, [teacher],
 )).rows as { kind: string; actor_id: string; role: string; same_row: boolean; at_revocation: boolean }[];
 
 // Scoped snapshots of every table in these schemas detect an accidental write
@@ -86,12 +87,15 @@ beforeAll(async () => {
       "INSERT INTO identity.session (token_hash, user_id, institution_id, expires_at) VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now()+interval '1 hour')",
       [person.token, person.id, faculty],
     );
-    // "?" marks a role nobody confirmed, "-" one already revoked.
-    for (const role of roles[name] as readonly string[]) await admin.query(
-      `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at, revoked_at)
-       VALUES ($1, $2, $3, CASE WHEN $4 THEN NULL ELSE now() END, CASE WHEN $5 THEN now() ELSE NULL END)`,
-      [faculty, person.id, role.replace(/[?-]$/, ""), role.endsWith("?"), role.endsWith("-")],
-    );
+    // "?" marks a role nobody confirmed, "-" one already revoked. An active
+    // administrator comes only from the operator procedure (DAN-525), on an invented request.
+    for (const role of roles[name] as readonly string[]) await (role === "admin"
+      ? admin.query("SELECT institution.appoint_institution_admin($1, $2)", [person.id, `Zahtjev ${name}/2026`])
+      : admin.query(
+        `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at, revoked_at)
+         VALUES ($1, $2, $3, CASE WHEN $4 THEN NULL ELSE now() END, CASE WHEN $5 THEN now() ELSE NULL END)`,
+        [faculty, person.id, role.replace(/[?-]$/, ""), role.endsWith("?"), role.endsWith("-")],
+      ));
   }
   for (const [session, isClosed] of [[expired, false], [closed, true]] as const) await admin.query(
     `INSERT INTO identity.session (token_hash, user_id, institution_id, created_at, expires_at, closed_at, close_reason)

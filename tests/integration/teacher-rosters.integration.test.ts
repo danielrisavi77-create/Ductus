@@ -61,10 +61,12 @@ beforeAll(async () => {
       [person.token, person.id, faculty],
     );
   }
+  // DAN-525: the administrator only through the operator procedure, on an invented request.
+  await admin.query("SELECT institution.appoint_institution_admin($1, $2)", [people.admin.id, `Zahtjev ${suffix}/2026`]);
   await admin.query(
     `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_by, confirmed_at)
-     VALUES ($1, $2, 'admin', NULL, now()), ($1, $3, 'teacher', $2, now())`,
-    [faculty, people.admin.id, people.teacher.id],
+     VALUES ($1, $2, 'teacher', $3, now())`,
+    [faculty, people.teacher.id, people.admin.id],
   );
   await admin.query(
     `INSERT INTO institution.course (id, institution_id, name, academic_year, ai_policy, created_by)
@@ -126,6 +128,7 @@ afterAll(async () => {
     await cleaner.query("DELETE FROM institution.assignment WHERE id = $1", [assignment]);
     await cleaner.query("DELETE FROM institution.course_member WHERE course_id = $1", [course]);
     await cleaner.query("DELETE FROM institution.course WHERE id = $1", [course]);
+    await cleaner.query("DELETE FROM audit.teacher_role_event WHERE institution_id = $1", [faculty]);
     await cleaner.query("DELETE FROM institution.institution_role WHERE institution_id = $1", [faculty]);
     await cleaner.query("DELETE FROM identity.person_name WHERE user_id = ANY ($1)", [userIds]);
     await cleaner.query("DELETE FROM identity.session WHERE user_id = ANY ($1)", [userIds]);
