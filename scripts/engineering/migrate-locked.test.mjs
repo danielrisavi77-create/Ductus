@@ -5,28 +5,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 
-import { dbmateArgs, LOCK_KEY, runLocked } from "../db/migrate-locked.mjs";
+import { dbmateArgs, dbmateBinary, LOCK_KEY, runLocked, startDbmate } from "../db/migrate-locked.mjs";
 
 class FakeClient extends EventEmitter {
-  constructor({ lock = "ok", heartbeat = "ok" } = {}) {
+  // lock: ok | fail | wait (pending until end()); heartbeat: ok | fail | hang;
+  // unlock: ok | hang; end: ok | hang.
+  constructor({ lock = "ok", heartbeat = "ok", unlock = "ok", end = "ok" } = {}) {
     super();
     this.queries = [];
     this.ended = false;
     this.lock = lock;
     this.heartbeat = heartbeat;
+    this.unlock = unlock;
+    this.endMode = end;
+    this.waiting = null;
   }
   query(text, params) {
     this.queries.push(params ? `${text} ${params.join(",")}` : text);
     if (text.includes("pg_advisory_lock(") && this.lock === "fail") return Promise.reject(new Error("lock timeout"));
+    if (text.includes("pg_advisory_lock(") && this.lock === "wait") return new Promise((_, reject) => (this.waiting = reject));
+    if (text.includes("pg_advisory_unlock(") && this.unlock === "hang") return new Promise(() => {});
     if (text === "SELECT 1" && this.heartbeat === "fail") return Promise.reject(new Error("gone"));
     if (text === "SELECT 1" && this.heartbeat === "hang") return new Promise(() => {});
     return Promise.resolve({ rows: [] });
   }
   end() {
     this.ended = true;
-    return Promise.resolve();
+    this.waiting?.(new Error("Connection terminated"));
+    return this.endMode === "hang" ? new Promise(() => {}) : Promise.resolve();
   }
 }
 
@@ -72,6 +80,13 @@ function harness(clientOptions, { connectFails = false } = {}) {
 }
 
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The run's result, or "pending" when it has not finished within `ms`. */
+function settled(promise, ms = 2000) {
+  let timer;
+  const late = new Promise((resolve) => (timer = setTimeout(resolve, ms, "pending")));
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
 
 test("the lock is taken before dbmate starts and released after it, and the exit code passes through", async () => {
   for (const code of [0, 3]) {
@@ -136,10 +151,96 @@ test("a dbmate that ignores SIGTERM is killed", async () => {
   assert.equal(await done, 1);
 });
 
+// #1051 Codex P2: a release on a connection that hangs once dbmate has
+// exited must not keep the run waiting, and neither may closing it.
+test("a lock release or a close that hangs ends the run with 1 in bounded time", async () => {
+  for (const options of [{ unlock: "hang" }, { unlock: "hang", end: "hang" }]) {
+    const h = harness(options);
+    const done = h.run();
+    await tick();
+    h.child.exit(0);
+    assert.equal(await settled(done), 1, JSON.stringify(options));
+    assert.match(h.logs.join("\n"), /release did not finish/);
+  }
+  const closing = harness({ end: "hang" });
+  const done = closing.run();
+  await tick();
+  closing.child.exit(0);
+  assert.equal(await settled(done), 0, "a hanging close after a release is bounded and keeps dbmate's code");
+});
+
+// #1051 Codex P2: SIGINT or SIGTERM while the runner waits for the lock
+// cancels the run; it must not start dbmate once the lock is granted.
+test("a run cancelled before dbmate starts never starts it and fails", async () => {
+  const early = harness();
+  const controller = new AbortController();
+  controller.abort();
+  assert.equal(await early.run({ signal: controller.signal }), 1);
+  assert.equal(early.started(), 0);
+
+  const waiting = harness({ lock: "wait" });
+  const cancel = new AbortController();
+  const done = waiting.run({ signal: cancel.signal });
+  await tick();
+  assert.equal(waiting.started(), 0, "still waiting for the lock");
+  cancel.abort();
+  assert.equal(await settled(done), 1);
+  assert.equal(waiting.started(), 0);
+  assert.ok(waiting.client.ended, "the lock connection is closed, so the pending lock fails");
+  assert.match(waiting.logs.join("\n"), /cancelled before dbmate started/);
+  assert.doesNotMatch(waiting.logs.join("\n"), /could not take the lock/);
+});
+
+test("a run cancelled while dbmate runs stops dbmate and fails, even if dbmate then exits 0", async () => {
+  const h = harness();
+  const controller = new AbortController();
+  const done = h.run({ signal: controller.signal, heartbeatMs: 1000 });
+  await tick();
+  controller.abort();
+  assert.deepEqual(h.child.signals, ["SIGTERM"]);
+  h.child.exit(0);
+  assert.equal(await done, 1);
+});
+
 test("dbmate always runs up --strict without a schema dump, and the URL is passed only to dbmate", () => {
   const args = dbmateArgs("postgres://u:secret@h/d");
   assert.deepEqual(args.slice(1), ["--url", "postgres://u:secret@h/d", "--no-dump-schema", "--wait", "up", "--strict"]);
-  assert.match(args[0], /dbmate[\\/]dist[\\/]cli\.js$/);
+  // The platform binary, not node_modules/dbmate/dist/cli.js.
+  assert.equal(args[0], dbmateBinary());
+  assert.match(args[0], /@dbmate[\\/][^\\/]+[\\/]bin[\\/]dbmate(\.exe)?$/);
+});
+
+// #1051 Codex P1: the npm dbmate command is a Node wrapper that runs the
+// binary with spawnSync, so a signal to it never reached dbmate. The runner's
+// child must be dbmate itself, and SIGTERM must leave no dbmate behind.
+test("the runner's child is the dbmate process itself and SIGTERM stops it", async () => {
+  const marker = `ductus_lock_test_${process.pid}_${Date.now()}`;
+  // Nothing listens on port 1, so dbmate keeps waiting for the server (--wait).
+  const child = startDbmate(`postgres://x@127.0.0.1:1/${marker}?sslmode=disable`, { stdio: "ignore" });
+  const exited = new Promise((resolve) => child.once("exit", (code, signal) => resolve(signal ?? code)));
+  try {
+    await tick(300);
+    assert.equal(child.exitCode, null, "dbmate is waiting for the server");
+    if (existsSync("/proc/self/exe")) {
+      assert.equal(realpathSync(`/proc/${child.pid}/exe`), realpathSync(dbmateBinary()), "the child runs the dbmate binary");
+    }
+    child.kill("SIGTERM");
+    assert.equal(await settled(exited, 5000), "SIGTERM");
+    if (existsSync("/proc/self/cmdline")) {
+      await tick(100);
+      const left = readdirSync("/proc").filter((pid) => {
+        if (!/^\d+$/.test(pid)) return false;
+        try {
+          return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes(marker);
+        } catch {
+          return false;
+        }
+      });
+      assert.deepEqual(left, [], "no dbmate process survives SIGTERM");
+    }
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  }
 });
 
 test("pnpm db:migrate applies migrations only through the locked runner", () => {

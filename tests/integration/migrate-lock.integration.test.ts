@@ -84,6 +84,34 @@ describe("migration lock (D-91 (3))", () => {
     }
   });
 
+  it("a run cancelled while it waits for the lock never starts dbmate", async () => {
+    // #1051 Codex P2: SIGINT/SIGTERM in that window must not let the run
+    // start migrations once the other run releases the lock.
+    const other = await lockClient();
+    try {
+      await other.query("SELECT pg_catalog.pg_advisory_lock($1::bigint)", [LOCK_KEY]);
+      const controller = new AbortController();
+      let started = false;
+      let waiter: pg.Client | null = null;
+      const done = runLocked({
+        connect: async () => (waiter = await lockClient()),
+        start: () => ((started = true), new FakeDbmate()),
+        signal: controller.signal,
+        log: () => {},
+      });
+      await until(() => waiter !== null);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      controller.abort();
+      expect(await done).toBe(1);
+      await other.query("SELECT pg_catalog.pg_advisory_unlock($1::bigint)", [LOCK_KEY]);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(started).toBe(false);
+    } finally {
+      await other.end();
+    }
+    expect(await holders()).toEqual([]);
+  });
+
   it("two runs started together never run dbmate at the same time", async () => {
     // Istodobnost: the second run waits on pg_advisory_lock; its dbmate may
     // start only after the first dbmate has exited and the lock was released.
