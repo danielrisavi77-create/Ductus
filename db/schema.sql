@@ -58,6 +58,27 @@ CREATE SCHEMA institution;
 
 
 --
+-- Name: pgboss; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA pgboss;
+
+
+--
+-- Name: job_state; Type: TYPE; Schema: pgboss; Owner: -
+--
+
+CREATE TYPE pgboss.job_state AS ENUM (
+    'created',
+    'retry',
+    'active',
+    'completed',
+    'cancelled',
+    'failed'
+);
+
+
+--
 -- Name: assignment_submissions(uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -5102,6 +5123,244 @@ CREATE FUNCTION institution.work_relation(p_user_id uuid, p_assignment_id uuid) 
 $$;
 
 
+--
+-- Name: create_queue(text, jsonb); Type: FUNCTION; Schema: pgboss; Owner: -
+--
+
+CREATE FUNCTION pgboss.create_queue(queue_name text, options jsonb) RETURNS void
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $_$
+    DECLARE
+      tablename varchar := CASE WHEN options->>'partition' = 'true'
+                            THEN 'j' || encode(sha224(queue_name::bytea), 'hex')
+                            ELSE 'job_common'
+                            END;
+      queue_created_on timestamptz;
+    BEGIN
+
+      WITH q as (
+        INSERT INTO pgboss.queue (
+          name,
+          policy,
+          retry_limit,
+          retry_delay,
+          retry_backoff,
+          retry_delay_max,
+          expire_seconds,
+          retention_seconds,
+          deletion_seconds,
+          warning_queued,
+          dead_letter,
+          partition,
+          table_name,
+          heartbeat_seconds,
+          notify,
+          created_on,
+          updated_on
+        )
+        VALUES (
+          queue_name,
+          options->>'policy',
+          COALESCE((options->>'retryLimit')::int, 2),
+          COALESCE((options->>'retryDelay')::int, 0),
+          COALESCE((options->>'retryBackoff')::bool, false),
+          (options->>'retryDelayMax')::int,
+          COALESCE((options->>'expireInSeconds')::int, 900),
+          COALESCE((options->>'retentionSeconds')::int, 1209600),
+          COALESCE((options->>'deleteAfterSeconds')::int, 604800),
+          COALESCE((options->>'warningQueueSize')::int, 0),
+          options->>'deadLetter',
+          COALESCE((options->>'partition')::bool, false),
+          tablename,
+          (options->>'heartbeatSeconds')::int,
+          COALESCE((options->>'notify')::bool, false),
+          pgboss.job_now(),
+          pgboss.job_now()
+        )
+        ON CONFLICT DO NOTHING
+        RETURNING created_on
+      )
+      SELECT created_on into queue_created_on from q;
+
+      IF queue_created_on IS NULL OR options->>'partition' IS DISTINCT FROM 'true' THEN
+        RETURN;
+      END IF;
+
+      EXECUTE format('CREATE TABLE pgboss.%I (LIKE pgboss.job INCLUDING DEFAULTS)', tablename);
+
+      EXECUTE pgboss.job_table_format($cmd$ALTER TABLE pgboss.job ADD PRIMARY KEY (name, id)$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$ALTER TABLE pgboss.job ADD CONSTRAINT q_fkey FOREIGN KEY (name) REFERENCES pgboss.queue (name) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$ALTER TABLE pgboss.job ADD CONSTRAINT dlq_fkey FOREIGN KEY (dead_letter) REFERENCES pgboss.queue (name) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED$cmd$, tablename);
+
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i11 ON pgboss.job (name, priority DESC, created_on, start_after) WHERE state < 'active' AND NOT blocked$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE UNIQUE INDEX job_i4 ON pgboss.job (name, singleton_on, COALESCE(singleton_key, '')) WHERE state <> 'cancelled' AND singleton_on IS NOT NULL$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i7 ON pgboss.job (name, group_id) WHERE state = 'active' AND group_id IS NOT NULL$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i9 ON pgboss.job (name, id) WHERE blocking AND state = 'completed'$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i12 ON pgboss.job (source_root_id) WHERE source_root_id IS NOT NULL$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE UNIQUE INDEX job_i13 ON pgboss.job (name, singleton_key) WHERE state = 'created' AND upsert_by_key$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i14 ON pgboss.job (name, state, blocked, start_after) WHERE state IN ('created', 'retry', 'active', 'failed')$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i15 ON pgboss.job (name, created_on)$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i16 ON pgboss.job (name, completed_on) WHERE completed_on IS NOT NULL$cmd$, tablename);
+      EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i17 ON pgboss.job (name, singleton_key, created_on) WHERE state < 'active' AND singleton_key IS NOT NULL$cmd$, tablename);
+
+      IF options->>'policy' = 'short' THEN
+        EXECUTE pgboss.job_table_format($cmd$CREATE UNIQUE INDEX job_i1 ON pgboss.job (name, COALESCE(singleton_key, '')) WHERE state = 'created' AND policy = 'short'$cmd$, tablename);
+      ELSIF options->>'policy' = 'singleton' THEN
+        EXECUTE pgboss.job_table_format($cmd$CREATE UNIQUE INDEX job_i2 ON pgboss.job (name, COALESCE(singleton_key, '')) WHERE state = 'active' AND policy = 'singleton'$cmd$, tablename);
+      ELSIF options->>'policy' = 'stately' THEN
+        EXECUTE pgboss.job_table_format($cmd$CREATE UNIQUE INDEX job_i3 ON pgboss.job (name, state, COALESCE(singleton_key, '')) WHERE state <= 'active' AND policy = 'stately'$cmd$, tablename);
+      ELSIF options->>'policy' = 'exclusive' THEN
+        EXECUTE pgboss.job_table_format($cmd$CREATE UNIQUE INDEX job_i6 ON pgboss.job (name, COALESCE(singleton_key, '')) WHERE state <= 'active' AND policy = 'exclusive'$cmd$, tablename);
+      ELSIF options->>'policy' = 'key_strict_fifo' THEN
+        EXECUTE pgboss.job_table_format($cmd$CREATE UNIQUE INDEX job_i8 ON pgboss.job (name, singleton_key) WHERE state IN ('active', 'retry', 'failed') AND policy = 'key_strict_fifo'$cmd$, tablename);
+        EXECUTE pgboss.job_table_format($cmd$CREATE INDEX job_i10 ON pgboss.job (name, singleton_key, state DESC, created_on, id) INCLUDE (start_after) WHERE state < 'active' AND NOT blocked AND policy = 'key_strict_fifo'$cmd$, tablename);
+        EXECUTE pgboss.job_table_format($cmd$ALTER TABLE pgboss.job ADD CONSTRAINT job_key_strict_fifo_singleton_key_check CHECK (NOT (policy = 'key_strict_fifo' AND singleton_key IS NULL))$cmd$, tablename);
+      END IF;
+
+      EXECUTE format('ALTER TABLE pgboss.%I ADD CONSTRAINT cjc CHECK (name=%L)', tablename, queue_name);
+      EXECUTE format('ALTER TABLE pgboss.job ATTACH PARTITION pgboss.%I FOR VALUES IN (%L)', tablename, queue_name);
+    END;
+    $_$;
+
+
+--
+-- Name: delete_queue(text); Type: FUNCTION; Schema: pgboss; Owner: -
+--
+
+CREATE FUNCTION pgboss.delete_queue(queue_name text) RETURNS void
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+    DECLARE
+      v_table varchar;
+      v_partition bool;
+    BEGIN
+
+      SELECT table_name, partition
+      FROM pgboss.queue
+      WHERE name = queue_name
+      INTO v_table, v_partition;
+
+      IF v_partition THEN
+        EXECUTE format('DROP TABLE IF EXISTS pgboss.%I', v_table);
+      ELSE
+        EXECUTE format('DELETE FROM pgboss.%I WHERE name = %L', v_table, queue_name);
+      END IF;
+
+      DELETE FROM pgboss.queue WHERE name = queue_name;
+    END;
+    $$;
+
+
+--
+-- Name: job_now(); Type: FUNCTION; Schema: pgboss; Owner: -
+--
+
+CREATE FUNCTION pgboss.job_now() RETURNS timestamp with time zone
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+      SELECT pg_catalog.now();
+    $$;
+
+
+--
+-- Name: job_table_format(text, text); Type: FUNCTION; Schema: pgboss; Owner: -
+--
+
+CREATE FUNCTION pgboss.job_table_format(command text, table_name text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $_$
+      SELECT format(
+        regexp_replace(
+          regexp_replace(command, '\.job\y', '.%1$I', 'g'),
+          '\yjob_i(\d+)', '%1$s_i\1', 'g'
+        ),
+        table_name
+      );
+    $_$;
+
+
+--
+-- Name: job_table_run(text, text, text); Type: FUNCTION; Schema: pgboss; Owner: -
+--
+
+CREATE FUNCTION pgboss.job_table_run(command text, tbl_name text DEFAULT NULL::text, queue_name text DEFAULT NULL::text) RETURNS void
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+    DECLARE
+      tbl RECORD;
+    BEGIN
+      IF queue_name IS NOT NULL THEN
+        SELECT table_name INTO tbl_name FROM pgboss.queue WHERE name = queue_name;
+      END IF;
+
+      IF tbl_name IS NOT NULL THEN
+        EXECUTE pgboss.job_table_format(command, tbl_name);
+        RETURN;
+      END IF;
+
+      EXECUTE pgboss.job_table_format(command, 'job_common');
+
+      FOR tbl IN SELECT table_name FROM pgboss.queue WHERE partition = true
+      LOOP
+        EXECUTE pgboss.job_table_format(command, tbl.table_name);
+      END LOOP;
+    END;
+    $$;
+
+
+--
+-- Name: job_table_run_async(text, integer, text, text, text); Type: FUNCTION; Schema: pgboss; Owner: -
+--
+
+CREATE FUNCTION pgboss.job_table_run_async(command_name text, version integer, command text, tbl_name text DEFAULT NULL::text, queue_name text DEFAULT NULL::text) RETURNS void
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+    BEGIN
+      IF queue_name IS NOT NULL THEN
+        SELECT table_name INTO tbl_name FROM pgboss.queue WHERE name = queue_name;
+      END IF;
+
+      IF tbl_name IS NOT NULL THEN
+        INSERT INTO pgboss.bam (name, version, status, queue, table_name, command)
+        VALUES (
+          command_name,
+          version,
+          'pending',
+          queue_name,
+          tbl_name,
+          pgboss.job_table_format(command, tbl_name)
+        );
+        RETURN;
+      END IF;
+
+      INSERT INTO pgboss.bam (name, version, status, queue, table_name, command)
+      SELECT
+        command_name,
+        version,
+        'pending',
+        NULL,
+        'job_common',
+        pgboss.job_table_format(command, 'job_common')
+      UNION ALL
+      SELECT
+        command_name,
+        version,
+        'pending',
+        queue.name,
+        queue.table_name,
+        pgboss.job_table_format(command, queue.table_name)
+      FROM pgboss.queue
+      WHERE partition = true;
+    END;
+    $$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -6149,12 +6408,329 @@ ALTER TABLE ONLY institution.work_grant FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: bam; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.bam (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    version integer NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    queue text,
+    table_name text NOT NULL,
+    command text NOT NULL,
+    error text,
+    created_on timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    started_on timestamp with time zone,
+    completed_on timestamp with time zone
+);
+
+ALTER TABLE ONLY pgboss.bam FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: instance; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.instance (
+    id uuid NOT NULL,
+    name text,
+    host text NOT NULL,
+    pid integer NOT NULL,
+    version text NOT NULL,
+    node_version text NOT NULL,
+    application_name text,
+    heartbeat_seconds integer NOT NULL,
+    supervise boolean NOT NULL,
+    schedule boolean NOT NULL,
+    migrate boolean NOT NULL,
+    persist_queue_stats boolean NOT NULL,
+    persist_warnings boolean NOT NULL,
+    pool_max integer,
+    pool_total integer,
+    pool_idle integer,
+    pool_waiting integer,
+    workers jsonb DEFAULT '[]'::jsonb NOT NULL,
+    metrics jsonb,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    crash_restarts integer DEFAULT 0 NOT NULL,
+    crash_restarts_since timestamp with time zone,
+    started_on timestamp with time zone DEFAULT now() NOT NULL,
+    heartbeat_on timestamp with time zone DEFAULT now() NOT NULL,
+    stopped_on timestamp with time zone
+);
+
+ALTER TABLE ONLY pgboss.instance FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: job; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.job (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    data jsonb,
+    state pgboss.job_state DEFAULT 'created'::pgboss.job_state NOT NULL,
+    retry_limit integer DEFAULT 2 NOT NULL,
+    retry_count integer DEFAULT 0 NOT NULL,
+    retry_delay integer DEFAULT 0 NOT NULL,
+    retry_backoff boolean DEFAULT false NOT NULL,
+    retry_delay_max integer,
+    expire_seconds integer DEFAULT 900 NOT NULL,
+    deletion_seconds integer DEFAULT 604800 NOT NULL,
+    singleton_key text,
+    singleton_on timestamp without time zone,
+    group_id text,
+    group_tier text,
+    start_after timestamp with time zone DEFAULT now() NOT NULL,
+    created_on timestamp with time zone DEFAULT now() NOT NULL,
+    started_on timestamp with time zone,
+    completed_on timestamp with time zone,
+    keep_until timestamp with time zone DEFAULT (now() + '336:00:00'::interval) NOT NULL,
+    output jsonb,
+    dead_letter text,
+    policy text,
+    heartbeat_on timestamp with time zone,
+    heartbeat_seconds integer,
+    blocked boolean DEFAULT false NOT NULL,
+    blocking boolean DEFAULT false NOT NULL,
+    pending_dependencies integer DEFAULT 0 NOT NULL,
+    source_name text,
+    source_id uuid,
+    source_created_on timestamp with time zone,
+    source_retry_count integer,
+    source_output jsonb,
+    source_root_id uuid,
+    trace_context jsonb,
+    upsert_by_key boolean
+)
+PARTITION BY LIST (name);
+
+ALTER TABLE ONLY pgboss.job FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: job_common; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.job_common (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    data jsonb,
+    state pgboss.job_state DEFAULT 'created'::pgboss.job_state NOT NULL,
+    retry_limit integer DEFAULT 2 NOT NULL,
+    retry_count integer DEFAULT 0 NOT NULL,
+    retry_delay integer DEFAULT 0 NOT NULL,
+    retry_backoff boolean DEFAULT false NOT NULL,
+    retry_delay_max integer,
+    expire_seconds integer DEFAULT 900 NOT NULL,
+    deletion_seconds integer DEFAULT 604800 NOT NULL,
+    singleton_key text,
+    singleton_on timestamp without time zone,
+    group_id text,
+    group_tier text,
+    start_after timestamp with time zone DEFAULT now() NOT NULL,
+    created_on timestamp with time zone DEFAULT now() NOT NULL,
+    started_on timestamp with time zone,
+    completed_on timestamp with time zone,
+    keep_until timestamp with time zone DEFAULT (now() + '336:00:00'::interval) NOT NULL,
+    output jsonb,
+    dead_letter text,
+    policy text,
+    heartbeat_on timestamp with time zone,
+    heartbeat_seconds integer,
+    blocked boolean DEFAULT false NOT NULL,
+    blocking boolean DEFAULT false NOT NULL,
+    pending_dependencies integer DEFAULT 0 NOT NULL,
+    source_name text,
+    source_id uuid,
+    source_created_on timestamp with time zone,
+    source_retry_count integer,
+    source_output jsonb,
+    source_root_id uuid,
+    trace_context jsonb,
+    upsert_by_key boolean,
+    CONSTRAINT job_key_strict_fifo_singleton_key_check CHECK ((NOT ((policy = 'key_strict_fifo'::text) AND (singleton_key IS NULL))))
+);
+
+ALTER TABLE ONLY pgboss.job_common FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: job_dependency; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.job_dependency (
+    child_name text NOT NULL,
+    child_id uuid NOT NULL,
+    parent_name text NOT NULL,
+    parent_id uuid NOT NULL
+);
+
+ALTER TABLE ONLY pgboss.job_dependency FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: queue; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.queue (
+    name text NOT NULL,
+    policy text NOT NULL,
+    retry_limit integer NOT NULL,
+    retry_delay integer NOT NULL,
+    retry_backoff boolean NOT NULL,
+    retry_delay_max integer,
+    expire_seconds integer NOT NULL,
+    retention_seconds integer NOT NULL,
+    deletion_seconds integer NOT NULL,
+    dead_letter text,
+    partition boolean NOT NULL,
+    table_name text NOT NULL,
+    deferred_count integer DEFAULT 0 NOT NULL,
+    blocked_count integer DEFAULT 0 NOT NULL,
+    queued_count integer DEFAULT 0 NOT NULL,
+    ready_count integer DEFAULT 0 NOT NULL,
+    warning_queued integer DEFAULT 0 NOT NULL,
+    active_count integer DEFAULT 0 NOT NULL,
+    failed_count integer DEFAULT 0 NOT NULL,
+    total_count integer DEFAULT 0 NOT NULL,
+    retained_count integer,
+    retained_on timestamp with time zone,
+    created_delta integer DEFAULT 0 NOT NULL,
+    completed_delta integer DEFAULT 0 NOT NULL,
+    failed_delta integer DEFAULT 0 NOT NULL,
+    delta_on timestamp with time zone,
+    delta_seconds integer,
+    wait_bins integer[],
+    run_bins integer[],
+    ready_oldest_seconds integer,
+    ready_history integer[] DEFAULT '{}'::integer[] NOT NULL,
+    heartbeat_seconds integer,
+    notify boolean DEFAULT false NOT NULL,
+    singletons_active text[],
+    monitor_claim_on timestamp with time zone,
+    monitor_on timestamp with time zone,
+    maintain_on timestamp with time zone,
+    created_on timestamp with time zone DEFAULT now() NOT NULL,
+    updated_on timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT queue_check CHECK ((dead_letter IS DISTINCT FROM name))
+);
+
+ALTER TABLE ONLY pgboss.queue FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: queue_stats; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.queue_stats (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    deferred_count integer DEFAULT 0 NOT NULL,
+    queued_count integer DEFAULT 0 NOT NULL,
+    ready_count integer DEFAULT 0 NOT NULL,
+    active_count integer DEFAULT 0 NOT NULL,
+    failed_count integer DEFAULT 0 NOT NULL,
+    total_count integer DEFAULT 0 NOT NULL,
+    created_delta integer,
+    completed_delta integer,
+    failed_delta integer,
+    delta_seconds integer,
+    delta_on timestamp with time zone,
+    wait_bins integer[],
+    run_bins integer[],
+    ready_oldest_seconds integer,
+    captured_on timestamp with time zone DEFAULT now() NOT NULL
+)
+PARTITION BY RANGE (captured_on);
+
+ALTER TABLE ONLY pgboss.queue_stats FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: schedule; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.schedule (
+    name text NOT NULL,
+    key text DEFAULT ''::text NOT NULL,
+    kind text DEFAULT 'cron'::text NOT NULL,
+    cron text NOT NULL,
+    timezone text DEFAULT 'UTC'::text,
+    data jsonb,
+    options jsonb,
+    created_on timestamp with time zone DEFAULT now() NOT NULL,
+    updated_on timestamp with time zone DEFAULT now() NOT NULL,
+    last_job_id uuid,
+    CONSTRAINT schedule_kind_check CHECK ((kind = ANY (ARRAY['cron'::text, 'rrule'::text])))
+);
+
+ALTER TABLE ONLY pgboss.schedule FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: subscription; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.subscription (
+    event text NOT NULL,
+    name text NOT NULL,
+    created_on timestamp with time zone DEFAULT now() NOT NULL,
+    updated_on timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY pgboss.subscription FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: version; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.version (
+    version integer NOT NULL,
+    cron_on timestamp with time zone,
+    bam_on timestamp with time zone,
+    flow_on timestamp with time zone,
+    reindex_on timestamp with time zone,
+    monitor_backoff_on timestamp with time zone
+);
+
+ALTER TABLE ONLY pgboss.version FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: warning; Type: TABLE; Schema: pgboss; Owner: -
+--
+
+CREATE TABLE pgboss.warning (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    type text NOT NULL,
+    message text NOT NULL,
+    data jsonb,
+    created_on timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY pgboss.warning FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.schema_migrations (
     version character varying NOT NULL
 );
+
+
+--
+-- Name: job_common; Type: TABLE ATTACH; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.job ATTACH PARTITION pgboss.job_common DEFAULT;
 
 
 --
@@ -7030,6 +7606,94 @@ ALTER TABLE ONLY institution.work_grant
 
 
 --
+-- Name: bam bam_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.bam
+    ADD CONSTRAINT bam_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: instance instance_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.instance
+    ADD CONSTRAINT instance_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: job job_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.job
+    ADD CONSTRAINT job_pkey PRIMARY KEY (name, id);
+
+
+--
+-- Name: job_common job_common_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.job_common
+    ADD CONSTRAINT job_common_pkey PRIMARY KEY (name, id);
+
+
+--
+-- Name: job_dependency job_dependency_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.job_dependency
+    ADD CONSTRAINT job_dependency_pkey PRIMARY KEY (child_name, child_id, parent_name, parent_id);
+
+
+--
+-- Name: queue queue_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.queue
+    ADD CONSTRAINT queue_pkey PRIMARY KEY (name);
+
+
+--
+-- Name: queue_stats queue_stats_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.queue_stats
+    ADD CONSTRAINT queue_stats_pkey PRIMARY KEY (id, captured_on);
+
+
+--
+-- Name: schedule schedule_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.schedule
+    ADD CONSTRAINT schedule_pkey PRIMARY KEY (name, key);
+
+
+--
+-- Name: subscription subscription_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.subscription
+    ADD CONSTRAINT subscription_pkey PRIMARY KEY (event, name);
+
+
+--
+-- Name: version version_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.version
+    ADD CONSTRAINT version_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: warning warning_pkey; Type: CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.warning
+    ADD CONSTRAINT warning_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7364,6 +8028,146 @@ CREATE INDEX work_grant_grantee_idx ON institution.work_grant USING btree (grant
 --
 
 CREATE INDEX work_grant_work_idx ON institution.work_grant USING btree (assignment_id, student_id);
+
+
+--
+-- Name: job_common_i1; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE UNIQUE INDEX job_common_i1 ON pgboss.job_common USING btree (name, COALESCE(singleton_key, ''::text)) WHERE ((state = 'created'::pgboss.job_state) AND (policy = 'short'::text));
+
+
+--
+-- Name: job_common_i10; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i10 ON pgboss.job_common USING btree (name, singleton_key, state DESC, created_on, id) INCLUDE (start_after) WHERE ((state < 'active'::pgboss.job_state) AND (NOT blocked) AND (policy = 'key_strict_fifo'::text));
+
+
+--
+-- Name: job_common_i11; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i11 ON pgboss.job_common USING btree (name, priority DESC, created_on, start_after) WHERE ((state < 'active'::pgboss.job_state) AND (NOT blocked));
+
+
+--
+-- Name: job_common_i12; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i12 ON pgboss.job_common USING btree (source_root_id) WHERE (source_root_id IS NOT NULL);
+
+
+--
+-- Name: job_common_i13; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE UNIQUE INDEX job_common_i13 ON pgboss.job_common USING btree (name, singleton_key) WHERE ((state = 'created'::pgboss.job_state) AND upsert_by_key);
+
+
+--
+-- Name: job_common_i14; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i14 ON pgboss.job_common USING btree (name, state, blocked, start_after) WHERE (state = ANY (ARRAY['created'::pgboss.job_state, 'retry'::pgboss.job_state, 'active'::pgboss.job_state, 'failed'::pgboss.job_state]));
+
+
+--
+-- Name: job_common_i15; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i15 ON pgboss.job_common USING btree (name, created_on);
+
+
+--
+-- Name: job_common_i16; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i16 ON pgboss.job_common USING btree (name, completed_on) WHERE (completed_on IS NOT NULL);
+
+
+--
+-- Name: job_common_i17; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i17 ON pgboss.job_common USING btree (name, singleton_key, created_on) WHERE ((state < 'active'::pgboss.job_state) AND (singleton_key IS NOT NULL));
+
+
+--
+-- Name: job_common_i2; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE UNIQUE INDEX job_common_i2 ON pgboss.job_common USING btree (name, COALESCE(singleton_key, ''::text)) WHERE ((state = 'active'::pgboss.job_state) AND (policy = 'singleton'::text));
+
+
+--
+-- Name: job_common_i3; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE UNIQUE INDEX job_common_i3 ON pgboss.job_common USING btree (name, state, COALESCE(singleton_key, ''::text)) WHERE ((state <= 'active'::pgboss.job_state) AND (policy = 'stately'::text));
+
+
+--
+-- Name: job_common_i4; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE UNIQUE INDEX job_common_i4 ON pgboss.job_common USING btree (name, singleton_on, COALESCE(singleton_key, ''::text)) WHERE ((state <> 'cancelled'::pgboss.job_state) AND (singleton_on IS NOT NULL));
+
+
+--
+-- Name: job_common_i6; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE UNIQUE INDEX job_common_i6 ON pgboss.job_common USING btree (name, COALESCE(singleton_key, ''::text)) WHERE ((state <= 'active'::pgboss.job_state) AND (policy = 'exclusive'::text));
+
+
+--
+-- Name: job_common_i7; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i7 ON pgboss.job_common USING btree (name, group_id) WHERE ((state = 'active'::pgboss.job_state) AND (group_id IS NOT NULL));
+
+
+--
+-- Name: job_common_i8; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE UNIQUE INDEX job_common_i8 ON pgboss.job_common USING btree (name, singleton_key) WHERE ((state = ANY (ARRAY['active'::pgboss.job_state, 'retry'::pgboss.job_state, 'failed'::pgboss.job_state])) AND (policy = 'key_strict_fifo'::text));
+
+
+--
+-- Name: job_common_i9; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_common_i9 ON pgboss.job_common USING btree (name, id) WHERE (blocking AND (state = 'completed'::pgboss.job_state));
+
+
+--
+-- Name: job_dep_parent_idx; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX job_dep_parent_idx ON pgboss.job_dependency USING btree (parent_name, parent_id);
+
+
+--
+-- Name: queue_stats_i1; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX queue_stats_i1 ON ONLY pgboss.queue_stats USING btree (name, captured_on DESC) INCLUDE (deferred_count, queued_count, ready_count, active_count, failed_count, total_count);
+
+
+--
+-- Name: warning_i1; Type: INDEX; Schema: pgboss; Owner: -
+--
+
+CREATE INDEX warning_i1 ON pgboss.warning USING btree (created_on DESC);
+
+
+--
+-- Name: job_common_pkey; Type: INDEX ATTACH; Schema: pgboss; Owner: -
+--
+
+ALTER INDEX pgboss.job_pkey ATTACH PARTITION pgboss.job_common_pkey;
 
 
 --
@@ -8617,6 +9421,46 @@ ALTER TABLE ONLY institution.work_grant
 
 
 --
+-- Name: job_common dlq_fkey; Type: FK CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.job_common
+    ADD CONSTRAINT dlq_fkey FOREIGN KEY (dead_letter) REFERENCES pgboss.queue(name) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: job_common q_fkey; Type: FK CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.job_common
+    ADD CONSTRAINT q_fkey FOREIGN KEY (name) REFERENCES pgboss.queue(name) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: queue queue_dead_letter_fkey; Type: FK CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.queue
+    ADD CONSTRAINT queue_dead_letter_fkey FOREIGN KEY (dead_letter) REFERENCES pgboss.queue(name);
+
+
+--
+-- Name: schedule schedule_name_fkey; Type: FK CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.schedule
+    ADD CONSTRAINT schedule_name_fkey FOREIGN KEY (name) REFERENCES pgboss.queue(name) ON DELETE CASCADE;
+
+
+--
+-- Name: subscription subscription_name_fkey; Type: FK CONSTRAINT; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE ONLY pgboss.subscription
+    ADD CONSTRAINT subscription_name_fkey FOREIGN KEY (name) REFERENCES pgboss.queue(name) ON DELETE CASCADE;
+
+
+--
 -- Name: access_log; Type: ROW SECURITY; Schema: audit; Owner: -
 --
 
@@ -9470,6 +10314,226 @@ CREATE POLICY work_grant_read ON institution.work_grant FOR SELECT TO ductus_app
 
 
 --
+-- Name: bam; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.bam ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: instance; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.instance ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: job; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.job ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: job_common; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.job_common ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: job_dependency; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.job_dependency ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: bam pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.bam TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: instance pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.instance TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: job pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.job TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: job_common pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.job_common TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: job_dependency pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.job_dependency TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: queue pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.queue TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: queue_stats pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.queue_stats TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: schedule pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.schedule TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: subscription pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.subscription TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: version pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.version TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: warning pgboss_owner; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_owner ON pgboss.warning TO ductus_queue USING (true) WITH CHECK (true);
+
+
+--
+-- Name: bam pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.bam TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: instance pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.instance TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: job pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.job TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: job_common pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.job_common TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: job_dependency pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.job_dependency TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: queue pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.queue TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: queue_stats pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.queue_stats TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: schedule pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.schedule TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: subscription pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.subscription TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: version pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.version TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: warning pgboss_worker; Type: POLICY; Schema: pgboss; Owner: -
+--
+
+CREATE POLICY pgboss_worker ON pgboss.warning TO ductus_worker USING (true) WITH CHECK (true);
+
+
+--
+-- Name: queue; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.queue ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: queue_stats; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.queue_stats ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: schedule; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.schedule ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: subscription; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.subscription ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: version; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.version ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: warning; Type: ROW SECURITY; Schema: pgboss; Owner: -
+--
+
+ALTER TABLE pgboss.warning ENABLE ROW LEVEL SECURITY;
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -9555,4 +10619,7 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261104090000'),
     ('20261104100000'),
     ('20261104110000'),
-    ('20261104120000');
+    ('20261104120000'),
+    ('20261105100000'),
+    ('20261105100100'),
+    ('20261105100200');
