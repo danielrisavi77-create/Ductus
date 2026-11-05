@@ -206,6 +206,13 @@ SELECT is(pg_temp.admin_rows('lea'), 'true false', 'Lea is still the administrat
 SELECT is(pg_temp.as_owner($$ UPDATE institution.institution_role SET revoked_at = now()
   WHERE user_id = {vesna} AND role = 'admin' AND revoked_at IS NULL RETURNING 'written' $$),
   'written', 'with Iva still in office, Vesna''s row can be closed without the procedure');
+-- That closure writes no 'revoked' row, so only the restore check stops her
+-- earlier 'confirmed' row from admitting the row again (Codex, PR #1526).
+SELECT is(pg_temp.as_owner($$ UPDATE institution.institution_role SET revoked_at = NULL
+  WHERE user_id = {vesna} AND role = 'admin' RETURNING 'written' $$),
+  'ZD409: administrator not appointed by the operator',
+  'and a row closed without the procedure cannot be restored directly either');
+SELECT is(pg_temp.admin_rows('vesna'), 'true true', 'Vesna''s row stays closed');
 SELECT is(pg_temp.op($$ SELECT institution.revoke_institution_admin({lea}, 'Dopis fakulteta 9/2026')::text $$), 'true',
   'the operator revokes the last administrator of fak_b');
 SELECT is(pg_temp.admin_rows('lea'), 'true true', 'fak_b now has no administrator');

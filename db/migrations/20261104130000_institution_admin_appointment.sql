@@ -137,16 +137,26 @@ END
 $$;
 
 -- At commit the row is read again: an active confirmed administrator needs
--- the procedure's 'confirmed' row and no 'revoked' row. The caller may be
--- ductus_app, which cannot read the trail: hence the definer.
+-- the procedure's 'confirmed' row and no 'revoked' row, and must not be a
+-- revoked row made active again. The procedure never restores a revoked row
+-- (it inserts a new one), and a revocation outside it writes no 'revoked'
+-- row, so without the last condition its earlier 'confirmed' row would
+-- admit the restore. The caller may be ductus_app, which cannot read the
+-- trail: hence the definer.
 CREATE FUNCTION institution.check_admin_appointment() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
+DECLARE
+  v_restored boolean := false;
 BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    v_restored := OLD.revoked_at IS NOT NULL;
+  END IF;
   IF EXISTS (SELECT 1 FROM institution.institution_role r
              WHERE r.id = NEW.id AND r.role = 'admin' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL)
-     AND (NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
-                      WHERE e.role_id = NEW.id AND e.role = 'admin' AND e.kind = 'confirmed')
+     AND (v_restored
+          OR NOT EXISTS (SELECT 1 FROM audit.teacher_role_event e
+                         WHERE e.role_id = NEW.id AND e.role = 'admin' AND e.kind = 'confirmed')
           OR EXISTS (SELECT 1 FROM audit.teacher_role_event e
                      WHERE e.role_id = NEW.id AND e.kind = 'revoked')) THEN
     RAISE EXCEPTION 'administrator not appointed by the operator' USING ERRCODE = 'ZD409';
