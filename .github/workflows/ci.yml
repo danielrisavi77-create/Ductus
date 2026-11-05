@@ -238,8 +238,9 @@ jobs:
           key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-all
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      # The login-callback login (db/local/auth-login.sql) gets a random
-      # password per run; none lives in the repo.
+      # The login-callback login (db/local/auth-login.sql) and the worker
+      # login (db/local/worker-login.sql) each get a random password per run;
+      # none lives in the repo.
       - name: Local auth login password
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: |
@@ -247,6 +248,9 @@ jobs:
           echo "::add-mask::${password}"
           echo "DUCTUS_AUTH_LOCAL_PASSWORD=${password}" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
+          worker_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${worker_password}"
+          echo "DUCTUS_WORKER_LOCAL_PASSWORD=${worker_password}" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       # D-91 (4): db:migrate built a fresh database with dbmate --no-dump-schema
@@ -427,6 +431,9 @@ jobs:
           echo "::add-mask::${password}"
           echo "DUCTUS_AUTH_LOCAL_PASSWORD=${password}" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
+          worker_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${worker_password}"
+          echo "DUCTUS_WORKER_LOCAL_PASSWORD=${worker_password}" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - run: pnpm demo:prepare
