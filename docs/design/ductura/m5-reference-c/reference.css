@@ -1,0 +1,21 @@
+/* Paket 5 (DAN-568): tokeni i dijelovi iz m5-reference; ovdje samo dodaci. */
+@import url("../m5-reference/reference.css");
+
+/* DESIGN-SYSTEM §3: tamni list. m5 crta samo bijeli list. */
+.sheet.dark { --sheet: #2e2e2b; --ink: #faf9f5; --ink-2: #dedbd3; --ink-3: #c9c5bb; --rule: #8c887f; --well: #3a3a36; --accent: #c8aa6e; }
+
+/* Pravopis: valovita crta u boji tinte lista, bez crvene (D-62). */
+.sp { text-decoration: underline wavy var(--ink-3); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.menu { background: var(--raised); border: 1px solid var(--rule); border-radius: 8px; padding: 6px; display: grid; gap: 2px; max-width: 260px; }
+.menu button { text-align: left; background: none; border: 0; color: var(--ink); font: inherit; min-height: 32px; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
+.menu .meta { padding: 4px 8px; }
+
+/* Planer: riječi po danu iz verzija, kao trake s brojem. */
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 72px; }
+.days span { background: var(--well); border-top: 3px solid var(--ink-2); border-radius: 3px 3px 0 0; }
+.days-l { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; font: 500 11.5px/1.3 var(--ff-mono); color: var(--ink-3); text-align: center; }
+.chap { display: grid; gap: 4px; }
+.kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.kv b { font: 500 13.5px/1.4 var(--ff-mono); }
+pre.raw { margin: 0; padding: 8px 10px; background: var(--well); border-radius: 5px; font: 12px/1.5 var(--ff-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+textarea.input { min-height: 96px; font: 12px/1.5 var(--ff-mono); resize: vertical; }

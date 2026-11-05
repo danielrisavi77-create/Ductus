@@ -32,7 +32,8 @@ test("the job runs on macOS, read-only, without secrets and without a soft failu
 
 test("the job runs the whole webkit project through the script against the build", () => {
   assert.match(workflow, /^ {6}- run: pnpm build$/m);
-  assert.match(workflow, /^ {8}run: pnpm exec playwright install webkit$/m);
+  // DAN-663: through the capped install script, without --with-deps on macOS.
+  assert.match(workflow, /^ {10}PLAYWRIGHT_SKIP_DEPS: "1"\n {8}run: bash scripts\/engineering\/playwright-install\.sh webkit$/m);
   assert.match(workflow, /^ {10}E2E_NO_BUILD: "1"\n {8}run: node scripts\/engineering\/webkit-macos\.mjs$/m);
 });
 

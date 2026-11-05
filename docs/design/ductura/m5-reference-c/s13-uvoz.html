@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-13 — Uvoz izvora (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 5 · DAN-568 · prijedlog slike · dopuna #1382</div>
+  <h1>S-13 — Uvoz izvora u Literaturu</h1>
+  <p>Dopuna kartice Literatura iz <code>m5-reference/s13-literatura.html</code>: uvoz zapisa BibTeX, RIS ili CSL-JSON iz upravitelja literaturom (D-59). Uvoz dodaje izvore samo u popis; u tekst rada ništa ne upisuje. Zapisi se čitaju na uređaju. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="u1">
+    <div class="ref-tag">Stanje 1 · uvoz</div>
+    <div class="dialog" role="dialog" aria-labelledby="u1">
+      <h2 id="u1" style="font-size:19px">Uvezi izvore</h2>
+      <p class="note">Zalijepite zapise u obliku BibTeX, RIS ili CSL-JSON ili odaberite datoteku .bib, .ris ili .json.</p>
+      <div class="field"><label for="u1t">Zapisi</label><textarea class="input" id="u1t">@book{horvat2019,
+  author = {Horvat, Ana},
+  title = {Primjer knjige o pisanju},
+  year = {2019}, publisher = {Izdavač A}
+}</textarea></div>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odaberi datoteku</button><button class="btn ghost" type="button">Odustani</button></div>
+    </div>
+    <p class="meta">Otvara se gumbom „Uvezi” u zaglavlju kartice Literatura, uz „Dodaj izvor”.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="u2">
+    <div class="ref-tag">Stanje 2 · djelomičan uvoz</div>
+    <div class="dialog" role="dialog" aria-labelledby="u2">
+      <h2 id="u2" style="font-size:19px">Uvoz je djelomičan</h2>
+      <p class="note" role="status">Od 6 zapisa uvezena su 4. Jedan je već u popisu i nije dodan ponovno. Jedan zapis nije prepoznat.</p>
+      <ul class="list">
+        <li class="item"><span class="title">Kovač, B. i Novak, C. (2021). Primjer članka</span><span class="meta">uvezeno</span></li>
+        <li class="item"><span class="title">Primjer, D. (2020). Zbornik radova</span><span class="meta">uvezeno, nedostaje izdavač</span></li>
+        <li class="item"><span class="title">Babić, E. (2018). Primjer poglavlja u knjizi</span><span class="meta">uvezeno</span></li>
+        <li class="item"><span class="title">Primjer mrežnog izvora (2022)</span><span class="meta">uvezeno, nedostaje autor</span></li>
+        <li class="item"><span class="title">Horvat, A. (2019). Primjer knjige o pisanju</span><span class="meta">već u popisu</span></li>
+      </ul>
+      <p class="meta">Nije prepoznat, zapis 6:</p>
+      <pre class="raw">Primjer izvora, 2017, str. 12 {</pre>
+      <p class="note">Zapis nije u obliku BibTeX, RIS ni CSL-JSON. Izvor možete dodati ručno.</p>
+      <div class="acts"><button class="btn" type="button">Gotovo</button><button class="btn secondary" type="button">Dodaj ručno</button></div>
+    </div>
+    <p class="meta">Zapis koji se može pročitati uvozi se i kad mu nešto nedostaje; „nedostaje izdavač” i „nedostaje autor” su neutralne oznake (D-62), a unos se dopunjuje kroz Uredi u popisu. „Nije prepoznat” je samo zapis koji nije u podržanom obliku.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="u3">
+    <div class="ref-tag">Stanje 3 · ništa nije prepoznato</div>
+    <div class="dialog" role="dialog" aria-labelledby="u3">
+      <h2 id="u3" style="font-size:19px">Uvezi izvore</h2>
+      <p class="note" role="alert">Nije prepoznat nijedan zapis. Provjerite je li tekst u obliku BibTeX, RIS ili CSL-JSON. Popis izvora nije promijenjen.</p>
+      <div class="field"><label for="u3t">Zapisi</label><textarea class="input" id="u3t" aria-describedby="u3e">Primjer izvora, 2017, str. 12 {</textarea></div>
+      <p class="meta" id="u3e">Uneseni tekst je zadržan. Ispravite ga u polju pa ponovno pokušajte ili odaberite drugu datoteku.</p>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odaberi datoteku</button><button class="btn ghost" type="button">Odustani</button></div>
+    </div>
+    <p class="meta">Polje Zapisi ostaje ispunjeno onim što je student zalijepio ili što je pročitano iz datoteke. „Uvezi” ponovno čita trenutačni sadržaj polja.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="u3b">
+    <div class="ref-tag">Stanje 3b · datoteka nečitljiva</div>
+    <div class="dialog" role="dialog" aria-labelledby="u3b">
+      <h2 id="u3b" style="font-size:19px">Uvezi izvore</h2>
+      <p class="note" role="alert">Datoteku nije moguće pročitati. Popis izvora nije promijenjen.</p>
+      <div class="field"><label for="u3bt">Zapisi</label><textarea class="input" id="u3bt" aria-describedby="u3be"></textarea></div>
+      <p class="meta" id="u3be">Odaberite drugu datoteku .bib, .ris ili .json ili zalijepite zapise u polje.</p>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odaberi drugu datoteku</button><button class="btn ghost" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="u4">
+    <div class="ref-tag">Stanje 4 · nakon uvoza</div>
+    <div class="panel"><div class="panel-top"><h2 id="u4">Literatura</h2><button class="btn small secondary" type="button">Uvezi</button><button class="btn small" type="button">Dodaj izvor</button></div>
+      <div class="panel-body">
+        <ul class="list">
+          <li class="item"><span class="title">Horvat, A. (2019). Primjer knjige o pisanju</span><span class="meta">citirano 3 puta</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button></span></li>
+          <li class="item"><span class="title">Kovač, B. i Novak, C. (2021). Primjer članka</span><span class="meta">Nije citirano u tekstu</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button></span></li>
+          <li class="item"><span class="title">Primjer, D. (2020). Zbornik radova</span><span class="tag open">Opis nije potpun</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button></span></li>
+          <li class="item"><span class="title">Babić, E. (2018). Primjer poglavlja u knjizi</span><span class="meta">Nije citirano u tekstu</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button></span></li>
+          <li class="item"><span class="title">Primjer mrežnog izvora (2022)</span><span class="tag open">Opis nije potpun</span>
+            <span class="acts"><button class="btn small secondary" type="button">Citiraj</button><button class="btn small ghost" type="button">Uredi</button></span></li>
+        </ul>
+        <p class="foot">Popis je spremljen na poslužitelju.</p>
+      </div></div>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): polje Zapisi, Uvezi, Odaberi datoteku, Odustani (isto u stanjima 3 i 3b); u ishodu Gotovo pa Dodaj ručno. Po zatvaranju fokus se vraća na gumb Uvezi u kartici.</p>
+</main>
+</body>
+</html>
