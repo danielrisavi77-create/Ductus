@@ -798,9 +798,11 @@ Točna verzija pravila koja je vrijedila u trenutku relevantnog događaja / pred
 
 ## 17.1 Vizualni smjer
 
-- dark academic SaaS;
-- charcoal / black-green pozadina;
-- mint / teal primary;
+**Aktualizirano 29. 10. 2026.:** konačni smjer cijele Ducture je „papir i grafit” (D-188; [potvrda vlasnika](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007)). Specifikacija je `docs/design/DESIGN-SYSTEM.md`, postupak `docs/SESSIONS.md` §6. Drugi smjer traži novu izričitu vlasnikovu odluku.
+
+- tamna grafitna ljuska zadano;
+- gotovo bijeli list zadano, uz tamni list kao izbor;
+- prigušeno zlato kao naglasak; svijetla ljuska ostaje korisnički izbor;
 - elegantni serif naglasci za hero i dokument;
 - čisti sans-serif za UI;
 - thin borders;
@@ -810,7 +812,7 @@ Točna verzija pravila koja je vrijedila u trenutku relevantnog događaja / pred
 
 ## 17.2 Boje
 
-Predloženi design tokeni iz vizualnog boarda:
+**Povijest izvornog boarda:** tablica ispod više ne određuje aktivnu paletu. Važeće vrijednosti iz D-188 nalaze se samo u `docs/design/DESIGN-SYSTEM.md`; stare boje se ne prenose u novu izvedbu.
 
 | Token | Vrijednost | Uporaba |
 | --- | --- | --- |
@@ -829,12 +831,15 @@ Predloženi design tokeni iz vizualnog boarda:
 
 ## 17.3 Tipografija
 
-- UI: Inter ili ekvivalentni sans-serif;
-- editorial/document headings: Playfair Display ili ekvivalentni serif;
-- document body može koristiti serif optimiziran za duga čitanja;
-- brojevi / logovi po potrebi mono.
+- UI: Instrument Sans;
+- tekst rada i naslovi: Newsreader;
+- kod i tehničke oznake: JetBrains Mono.
+
+Raniji prijedlozi Inter/Playfair iz izvornog boarda su povijest.
 
 ## 17.4 Kanonski artefakti
+
+Za aktivni dizajn vrijede `docs/design/DESIGN-SYSTEM.md`, `docs/SESSIONS.md` §6 i aktualni Linear zadatak. Sljedeći Drive artefakti su datirane izvorne reference; njihove stare palete ne mijenjaju D-188.
 
 Google Drive mapa `Ductura`:
 

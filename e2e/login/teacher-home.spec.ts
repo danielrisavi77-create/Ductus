@@ -9,6 +9,7 @@ import pg from "pg";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { fillCodeDeadline, signIn } from "./support";
 import { localAdminUrl } from "./local-db-url";
+import { APP_ORIGIN } from "./origin";
 
 // Z3 (A), "Moji kolegiji" at /nastavnik (#476 6289158306). The list comes from
 // the same read as GET /api/teacher/courses; the teacher role comes from the
@@ -51,19 +52,23 @@ async function asTeacher(page: Page): Promise<void> {
 }
 
 async function snapshot(page: Page, name: string): Promise<void> {
-  await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+  await test.info().attach(name, { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
 }
 
-test("anonymous visitor is asked to sign in; a student reads only that there are no courses", async ({ page }) => {
+// DAN-378: Z-05 tells the student the page is not theirs and offers no new sign-in (#1233).
+test("anonymous visitor is asked to sign in; a student reads that the page is not theirs", async ({ page }) => {
   await page.goto("/nastavnik");
-  await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
-  await expect(page.getByText(messagesHr.teacher.signedOut)).toBeVisible();
-  await expect(page.getByRole("link", { name: messagesHr.teacher.signIn }))
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.signedOutTitle })).toBeVisible();
+  await expect(page.getByText(messagesHr.access.signedOutBody.replace("{what}", messagesHr.access.what.courses))).toBeVisible();
+  await expect(page.getByRole("link", { name: messagesHr.prijava.button }))
     .toHaveAttribute("href", "/api/auth/login?returnTo=%2Fnastavnik");
 
   await signIn(page, "/nastavnik", "Demo studentica");
-  await expect(page.getByRole("heading", { level: 2, name: t.empty })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: t.empty })).toHaveCount(0);
   await expect(page.getByText(t.noAssignments)).toHaveCount(0);
+  await expect(page.locator('a[href^="/api/auth/login"]')).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("link", { name: messagesHr.access.backToOwn })).toHaveAttribute("href", "/");
 });
 
 // DAN-325: a confirmed teacher, with or without courses, lands on the list from "/" and from /prijava.
@@ -71,7 +76,7 @@ test("a signed-in teacher's home page and sign-in page lead to the course list",
   await asTeacher(page);
   for (const path of ["/", "/prijava"]) {
     await page.goto(path);
-    await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+    await expect(page).toHaveURL(`${APP_ORIGIN}/nastavnik`);
     await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
   }
 });
@@ -99,7 +104,7 @@ test("a teacher sees their course with its assignment, in the route's order, and
 
   // The way back from the form is the list, not the public home page.
   await page.getByRole("main").getByRole("link", { name: messagesHr.teacher.backCourses }).click();
-  await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+  await expect(page).toHaveURL(`${APP_ORIGIN}/nastavnik`);
   const course = page.getByRole("region", { name: courseName });
   await expect(course).toBeVisible();
   await expect(course.getByText(t.noAssignments)).toBeVisible();
@@ -108,6 +113,7 @@ test("a teacher sees their course with its assignment, in the route's order, and
   const nav = page.getByRole("navigation", { name: messagesHr.shell.workNav });
   await expect(nav.getByRole("link")).toHaveText([
     messagesHr.shell.nav.courses, messagesHr.shell.nav.newCourse, messagesHr.shell.nav.fastPath,
+    messagesHr.shell.nav.mentoredWorks,
   ]);
   await expect(nav.getByRole("link", { name: messagesHr.shell.nav.courses })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: messagesHr.shell.signOut })).toBeVisible();
@@ -180,7 +186,237 @@ test("without JavaScript a teacher on a phone still reaches signing out in the s
     await signOut.click();
     await noScript.waitForLoadState();
     await noScript.goto("/nastavnik");
-    await expect(noScript.getByText(messagesHr.teacher.signedOut)).toBeVisible();
+    await expect(noScript.getByRole("heading", { level: 1, name: messagesHr.access.signedOutTitle })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+async function publishAssignment(page: Page, title: string): Promise<void> {
+  const a = messagesHr.teacher.assignment;
+  await page.getByLabel(a.title).fill(title);
+  await page.getByLabel(a.opensAt).fill("2026-11-02T09:00");
+  await page.getByLabel(a.dueAt).fill("2026-12-15T09:00");
+  await page.getByRole("button", { name: a.publish }).click();
+  await expect(page.getByRole("status").filter({ hasText: a.publishedNotice })).toBeVisible();
+}
+
+// DAN-310 (M2.4-P01): a further assignment in a course the teacher already has,
+// from that course's row, with no second course form and the same code.
+test("a teacher adds a second assignment to an existing course from the course list", async ({ page }) => {
+  const e = messagesHr.teacher.existingCourse;
+  await asTeacher(page);
+  const suffix = Date.now().toString(36);
+  const courseName = `Izmišljeni kolegij ${suffix}`;
+  await page.goto("/nastavnik/zadatak/novi");
+  await page.getByLabel(messagesHr.teacher.course.name).fill(courseName);
+  await fillCodeDeadline(page);
+  await page.getByRole("button", { name: messagesHr.teacher.course.submit }).click();
+  await expect(page.getByRole("status").filter({ hasText: messagesHr.teacher.course.created })).toBeVisible();
+  await publishAssignment(page, `Prvi izmišljeni zadatak ${suffix}`);
+
+  await page.goto("/nastavnik");
+  const course = page.getByRole("region", { name: courseName });
+  await course.getByRole("link", { name: e.link }).click();
+  await expect(page).toHaveURL(/\/nastavnik\/zadatak\/novi\?kolegij=[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { level: 1, name: e.title })).toBeVisible();
+  const summary = page.getByRole("region", { name: messagesHr.teacher.course.heading });
+  await expect(summary.getByText(courseName)).toBeVisible();
+  await expect(summary.getByText(e.codeKept)).toBeVisible();
+  await expect(page.getByLabel(messagesHr.teacher.course.name)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: messagesHr.teacher.course.submit })).toHaveCount(0);
+  await expect(page.getByLabel(messagesHr.teacher.enrollmentCode.validUntil)).toHaveCount(0);
+
+  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(axe.violations).toEqual([]);
+  // D-183: the whole page, both themes, 1440 and 400 px.
+  for (const pass of [0, 1]) {
+    if (pass === 1) await page.getByRole("button", { name: messagesHr.shell.theme }).click();
+    const theme = await page.locator("[data-theme]").first().getAttribute("data-theme");
+    for (const width of [1440, 400]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await snapshot(page, `nastavnik-zadatak-u-kolegiju-${theme}-${width}`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await publishAssignment(page, `Drugi izmišljeni zadatak ${suffix}`);
+  await page.goto("/nastavnik");
+  await expect(page.getByRole("region", { name: courseName }).locator("li").filter({ hasText: /izmišljeni zadatak/u }))
+    .toHaveCount(2);
+
+  // Codex review on #1275: leaving the course for the sidebar's new-course
+  // form on the same route must not keep the course chosen a moment ago.
+  await page.getByRole("region", { name: courseName }).getByRole("link", { name: e.link }).click();
+  await expect(page.getByRole("heading", { level: 1, name: e.title })).toBeVisible();
+  await page.getByRole("link", { name: messagesHr.shell.nav.newCourse, exact: true }).click();
+  await expect(page).toHaveURL(/\/nastavnik\/zadatak\/novi$/);
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.teacher.title })).toBeVisible();
+  const name = page.getByLabel(messagesHr.teacher.course.name);
+  await expect(name).toBeEnabled();
+  await expect(name).toHaveValue("");
+  await expect(page.getByText(courseName)).toHaveCount(0);
+});
+
+// DAN-310 (QA on #1275): the assignment takes the policy of the course it joins,
+// handed over through `existingCourse`, not the course form's default.
+test("an assignment in an existing course that prohibits AI help is sent as prohibited", async ({ page }) => {
+  const e = messagesHr.teacher.existingCourse;
+  const c = messagesHr.teacher.course;
+  await asTeacher(page);
+  const courseName = `Izmišljeni zabranjeni kolegij ${Date.now().toString(36)}`;
+  await page.goto("/nastavnik/zadatak/novi");
+  await page.getByLabel(c.name).fill(courseName);
+  await page.getByLabel(c.policy).selectOption("prohibited");
+  await fillCodeDeadline(page);
+  await page.getByRole("button", { name: c.submit }).click();
+  await expect(page.getByRole("status").filter({ hasText: c.created })).toBeVisible();
+
+  await page.goto("/nastavnik");
+  await page.getByRole("region", { name: courseName }).getByRole("link", { name: e.link }).click();
+  await expect(page.getByRole("heading", { level: 1, name: e.title })).toBeVisible();
+  await expect(page.getByText(messagesHr.teacher.tools.courseProhibits)).toBeVisible();
+  for (const purpose of Object.values(messagesHr.teacher.tools.purposes)) {
+    const box = page.getByRole("checkbox", { name: purpose });
+    await expect(box).toBeDisabled();
+    await expect(box).not.toBeChecked();
+  }
+
+  const request = page.waitForRequest((r) => r.method() === "POST" && /\/api\/institution\/courses\/[0-9a-f-]{36}\/assignments$/.test(r.url()));
+  await publishAssignment(page, "Izmišljeni zadatak bez AI pomoći");
+  const body: unknown = (await request).postDataJSON();
+  expect(body).toMatchObject({ aiPolicy: "prohibited", aiPurposes: [] });
+});
+
+// DAN-310, T001 to T004 for the new entry: no session, no teacher role and a
+// course outside the teacher's own read never show a course or a publish button.
+test("a course id the account cannot read shows neither a course nor a publish button", async ({ page }) => {
+  const foreign = "00000000-0000-4000-8000-00000000dead";
+  const path = `/nastavnik/zadatak/novi?kolegij=${foreign}`;
+  await page.goto(path);
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.signedOutTitle })).toBeVisible();
+  await expect(page.getByRole("link", { name: messagesHr.prijava.button }))
+    .toHaveAttribute("href", `/api/auth/login?returnTo=${encodeURIComponent(path)}`);
+  await expect(page.getByRole("button", { name: messagesHr.teacher.assignment.publish })).toHaveCount(0);
+
+  await signIn(page, path, "Demo studentica");
+  await expect(page.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
+  await expect(page.getByRole("button", { name: messagesHr.teacher.assignment.publish })).toHaveCount(0);
+});
+
+test("a teacher reads a course outside their own list as not available", async ({ page }) => {
+  const e = messagesHr.teacher.existingCourse;
+  await asTeacher(page);
+  await page.goto("/nastavnik/zadatak/novi?kolegij=00000000-0000-4000-8000-00000000dead");
+  await expect(page.getByRole("alert").filter({ hasText: e.missing })).toBeVisible();
+  await expect(page.getByRole("button", { name: messagesHr.teacher.assignment.publish })).toHaveCount(0);
+  await expect(page.getByLabel(messagesHr.teacher.course.name)).toHaveCount(0);
+});
+
+// DAN-310 (M2.4-P02), T025 to T032: a new version from the course list. The
+// preview names each change with its value now and after publishing; a second
+// tab on the old version gets the 409 reply in words and keeps its fields.
+test("a teacher publishes a new version after its preview, and a stale tab is told it is out of date", async ({ page }) => {
+  const n = messagesHr.teacher.newVersion;
+  const a = messagesHr.teacher.assignment;
+  await asTeacher(page);
+  const suffix = Date.now().toString(36);
+  const courseName = `Izmišljeni kolegij verzija ${suffix}`;
+  const title = `Izmišljeni zadatak ${suffix}`;
+  await page.goto("/nastavnik/zadatak/novi");
+  await page.getByLabel(messagesHr.teacher.course.name).fill(courseName);
+  await fillCodeDeadline(page);
+  await page.getByRole("button", { name: messagesHr.teacher.course.submit }).click();
+  await expect(page.getByRole("status").filter({ hasText: messagesHr.teacher.course.created })).toBeVisible();
+  await publishAssignment(page, title);
+
+  await page.goto("/nastavnik");
+  await page.getByRole("region", { name: courseName }).getByRole("link", { name: n.link }).click();
+  await expect(page).toHaveURL(/\/nastavnik\/zadatak\/[0-9a-f-]{36}\/uredi$/);
+  await expect(page.getByRole("heading", { level: 1, name: n.title })).toBeVisible();
+  await expect(page.getByText(n.current.replace("{n}", "1"))).toBeVisible();
+  const publish = page.getByRole("button", { name: n.publish.replace("{n}", "2") });
+  // T032: nothing changed, nothing to publish.
+  await expect(page.getByRole("status").filter({ hasText: n.unchanged })).toBeVisible();
+  await expect(publish).toBeDisabled();
+
+  // T030 is set up here: a second tab reads version 1 before the first publishes.
+  const stale = await page.context().newPage();
+  await stale.goto(page.url());
+  await expect(stale.getByLabel(a.title)).toHaveValue(title);
+
+  await page.getByLabel(a.title).fill(`${title} (dopunjeno)`);
+  const preview = page.getByRole("complementary", { name: n.previewHeading });
+  await expect(preview.getByText(n.fields.title, { exact: true })).toBeVisible();
+  await expect(preview.getByText(title, { exact: true })).toBeVisible();
+  await expect(preview.getByText(`${title} (dopunjeno)`, { exact: true })).toBeVisible();
+  await expect(preview.getByText(n.consequence.replace("{n}", "2"))).toBeVisible();
+  // A minimum where there was none would narrow the range (rule 14).
+  await page.getByLabel(a.wordMin).fill("300");
+  await expect(preview.getByText(n.widening)).toBeVisible();
+  await expect(publish).toBeDisabled();
+  await page.getByLabel(a.wordMin).fill("");
+  await expect(publish).toBeEnabled();
+
+  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(axe.violations).toEqual([]);
+  // D-183: the whole page with the preview, both themes, 1440 and 400 px.
+  for (const pass of [0, 1]) {
+    if (pass === 1) await page.getByRole("button", { name: messagesHr.shell.theme }).click();
+    const theme = await page.locator("[data-theme]").first().getAttribute("data-theme");
+    for (const width of [1440, 400]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await snapshot(page, `nastavnik-nova-verzija-${theme}-${width}`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // T027: a refused or unconfirmed publish says so, keeps the edits and may be tried again.
+  const versions = /^\/api\/institution\/assignments\/[0-9a-f-]{36}\/versions$/;
+  for (const [status, message] of [[422, n.errors.invalid], [503, n.errors.unavailable]] as const) {
+    await page.route((url) => versions.test(url.pathname),
+      (route) => route.fulfill({ status, contentType: "application/json", body: "{}" }), { times: 1 });
+    await publish.click();
+    await expect(page.getByRole("alert").filter({ hasText: message })).toBeVisible();
+    await expect(page.getByLabel(a.title)).toHaveValue(`${title} (dopunjeno)`);
+    await expect(publish).toBeEnabled();
+  }
+
+  await publish.click();
+  await expect(page.getByRole("status").filter({ hasText: n.published.replace("{n}", "2") })).toBeVisible();
+  await expect(publish).toBeDisabled();
+
+  // T029 and T030: the stale tab's version is refused in words, its text stays.
+  await stale.getByLabel(a.instructions).fill("Izmišljena dopuna uputa.");
+  await stale.getByRole("button", { name: n.publish.replace("{n}", "2") }).click();
+  await expect(stale.getByRole("alert").filter({ hasText: n.errors.conflict })).toBeVisible();
+  await expect(stale.getByLabel(a.instructions)).toHaveValue("Izmišljena dopuna uputa.");
+  await expect(stale.getByRole("button", { name: n.publish.replace("{n}", "2") })).toBeDisabled();
+  await snapshot(stale, "nastavnik-nova-verzija-sukob");
+  await stale.getByRole("link", { name: n.reload }).click();
+  await expect(stale.getByText(n.current.replace("{n}", "2"))).toBeVisible();
+  await expect(stale.getByLabel(a.title)).toHaveValue(`${title} (dopunjeno)`);
+  await stale.close();
+});
+
+// T031: someone else's, a missing and a malformed assignment read alike.
+test("a teacher reads an assignment outside their own as not available, with no publish button", async ({ page, browser }) => {
+  const n = messagesHr.teacher.newVersion;
+  await asTeacher(page);
+  for (const id of ["00000000-0000-4000-8000-00000000dead", "nije-zadatak"]) {
+    await page.goto(`/nastavnik/zadatak/${id}/uredi`);
+    await expect(page.getByRole("alert").filter({ hasText: n.missing })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Objavi verziju/u })).toHaveCount(0);
+  }
+  // A student signs in in a context of their own: the teacher's session would skip the provider.
+  const context = await browser.newContext();
+  try {
+    const student = await context.newPage();
+    await signIn(student, "/nastavnik/zadatak/00000000-0000-4000-8000-00000000dead/uredi", "Demo studentica");
+    await expect(student.getByRole("heading", { level: 1, name: messagesHr.access.deniedTitle })).toBeVisible();
+    await expect(student.getByRole("button", { name: /Objavi verziju/u })).toHaveCount(0);
   } finally {
     await context.close();
   }

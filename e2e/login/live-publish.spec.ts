@@ -4,6 +4,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelo
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { closeWork, seedWork, workDocument } from "./work-seed";
 import { logoutDialogOf, signIn } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // B-LIVE step 4 (DAN-216, contract #476 6275905316): the signed-in student's
 // tab publishes the last state of the work with PUT /api/live/<id>
@@ -118,7 +119,7 @@ test("publishing stops at Odjava, starts again on Ostani, and nothing goes out a
   await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
   const fencedAt = Date.now();
   await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
-  await page.waitForURL("http://localhost:3000/");
+  await page.waitForURL(`${APP_ORIGIN}/`);
   await page.waitForTimeout(2500);
   expect(puts.filter((p) => p.at > fencedAt)).toEqual([]);
 });

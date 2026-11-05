@@ -56,7 +56,14 @@ describe("S3 notice text (D-142, D-143)", () => {
 
   it("names the input mark the mentor sees (D-54, D-127, F-171)", () => {
     expect(s.recorded.live).toContain("bilježit će se i način unosa");
-    expect(s.recorded.live).toContain("nastavnik (mentor) vidjeti oznaku kad tekst nije unesen tipkovnicom ni lijepljenjem");
+    expect(s.recorded.live).toContain("nastavnik (mentor) vidjeti oznaku kad uređivač uz unos nije vidio pritisak tipke ni lijepljenje");
+  });
+
+  it("describes the mark as what the editor saw, never as who typed or how (F-177)", () => {
+    // A phone keyboard or an IME also leaves the mark, and a program can press keys without one.
+    expect(s.recorded.live).toContain("nekih tipkovnica na mobitelu");
+    expect(s.recorded.live).toContain("ne tko ga je napisao");
+    for (const text of notice()) expect(text).not.toMatch(/nije unesen tipkovnicom|nije utipkan/);
   });
 
   it("tells the student the mentor sees the work live, deleted text included", () => {
@@ -84,7 +91,31 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("keeps the on-screen order of the lists", () => {
     expect(Object.keys(s.recorded)).toEqual(["steps", "live", "chain", "versions"]);
     expect(Object.keys(s.notRecorded)).toEqual(["inputs", "outside", "device"]);
-    expect(Object.keys(s.teacher)).toEqual(["state", "replay", "purpose", "history", "noVerdict"]);
+    expect(Object.keys(s.teacher)).toEqual(["state", "replay", "purpose", "history", "workingNotes", "noVerdict"]);
+  });
+
+  it("names the mentor's working records by kind and the student's right of access (D-130, DAN-235)", () => {
+    const w = s.teacher.workingNotes;
+    expect(w.startsWith("Mentor (nastavnik zadatka) moći će voditi")).toBe(true);
+    for (const kind of ["oznaku zadnjeg pregleda s vremenom", "privatne bilješke", "predloške komentara", "Rubrika i nacrt izvješća"]) {
+      expect(w).toContain(kind);
+    }
+    expect(w).toContain("nisu prikaz rada");
+    expect(w).toContain("nećete ih vidjeti u aplikaciji");
+    expect(w).toContain("zatražiti pravom pristupa");
+  });
+
+  it("states every D-130 limit and promises nothing D-135 leaves conditional", () => {
+    const w = s.teacher.workingNotes;
+    expect(w).toContain("nema mjera ni zaključaka koje je izračunala Ductura");
+    expect(w).toContain("Ne ulaze u sažetak, izvoz ni predaju");
+    expect(w).toContain("brišu se kad i rad");
+    expect(w).toContain("ne smiju utjecati na kašnjenje ni ocjenu");
+    expect(w).toContain("u Ducturi zasad ne vode");
+    // DAN-235 acceptance: grade publication is named as not available yet (D-135, D-136).
+    expect(w).toContain("Ni objava ocjene u Ducturi zasad nije dostupna");
+    // No access log (rule 17) is built, and nothing promises a future grade publication.
+    expect(w).not.toMatch(/dnevnik pristupa|objavit će|bit će objavljen/);
   });
 
   it("claims nothing the contract leaves open", () => {

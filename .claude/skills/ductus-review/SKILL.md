@@ -5,7 +5,7 @@ description: Independently review a Ductus pull request for hard-rule violations
 
 Operate in **review** mode. Do not edit the reviewed branch.
 
-Read `CLAUDE.md`, the relevant parts of `STATE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3/§4/§6 when applicable, `docs/DECISIONS.md`, and the PR diff.
+Read `CLAUDE.md`, the relevant parts of `STATE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` (index of `docs/backend/`) §3/§4/§6 when applicable, `docs/DECISIONS.md`, and the PR diff.
 
 Prioritize:
 1. violations of hard rules from `CLAUDE.md`;

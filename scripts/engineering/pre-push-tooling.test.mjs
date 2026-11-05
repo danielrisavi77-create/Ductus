@@ -18,9 +18,23 @@ const repository = fileURLToPath(new URL("../../", import.meta.url));
 const gitEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_/i.test(name)));
 const zero = "0".repeat(40);
 
+// #1141: on Windows a git process killed for its output (F-02) still holds the
+// directory for a moment, and rmSync in Node 24 throws EPERM at once without
+// honouring maxRetries. So the retry is done here, bounded; a directory still
+// held after the deadline fails the test as before.
+function removeDir(dir, { deadlineMs = 10000, stepMs = 100, remove = rmSync, now = Date.now } = {}) {
+  const start = now();
+  for (;;) {
+    try { return remove(dir, { recursive: true, force: true }); } catch (error) {
+      if (!["EPERM", "EBUSY", "ENOTEMPTY"].includes(error?.code) || now() - start >= deadlineMs) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, stepMs);
+    }
+  }
+}
+
 // One prepared repository, copied for each test: a fixture is many git processes.
 let template;
-after(() => { if (template) rmSync(template, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); });
+after(() => { if (template) removeDir(template); });
 
 function fixture({ files } = {}) {
   const root = mkdtempSync(join(tmpdir(), "dan361-"));
@@ -61,7 +75,7 @@ function fixture({ files } = {}) {
   const f = {
     root, put, git,
     // Retries: on Windows a git process killed for its output can still hold the directory.
-    close: () => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }),
+    close: () => removeDir(root),
     head: () => git("rev-parse", "HEAD").trim(),
     commit: (...paths) => { git("add", ...(paths.length ? paths : ["."])); git("commit", "-qm", "fixture change"); },
     // Index entries: names a filesystem may refuse, and modes it cannot show.
@@ -349,6 +363,23 @@ test("F-02, F-04: git output that outgrows the buffer ends with no status and ru
   assert.equal(changedAgainstMain(f.root, gitEnv), null);
   assert.equal(f.judged(), "full");
 }));
+
+test("#1141: fixture removal retries a held directory until a deadline and no other error", () => {
+  const fail = (code) => Object.assign(new Error(code), { code });
+  let clock = 0;
+  const now = () => clock;
+  let calls = 0;
+  const heldTwice = () => { calls += 1; clock += 100; if (calls < 3) throw fail("EPERM"); };
+  removeDir("x", { remove: heldTwice, now, stepMs: 1 });
+  assert.equal(calls, 3, "EPERM is retried until the removal succeeds");
+  clock = 0; calls = 0;
+  const alwaysHeld = () => { calls += 1; clock += 100; throw fail("EBUSY"); };
+  assert.throws(() => removeDir("x", { remove: alwaysHeld, now, stepMs: 1, deadlineMs: 1000 }), /EBUSY/);
+  assert.equal(calls, 10, "a directory held past the deadline still fails");
+  calls = 0;
+  assert.throws(() => removeDir("x", { remove: () => { calls += 1; throw fail("EACCES"); }, now, stepMs: 1 }), /EACCES/);
+  assert.equal(calls, 1, "any other error is not retried");
+});
 
 test("F-03: an incomplete or unknown raw record is no list of changes", () => {
   const meta = `:100644 100644 ${"a".repeat(40)} ${"b".repeat(40)} M`;

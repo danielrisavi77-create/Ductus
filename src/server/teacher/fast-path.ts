@@ -1,6 +1,7 @@
 import { isInstitutionId } from "@/application/ports/evidence-object-key";
 import type { InstitutionEvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
 import { readProcessSummary } from "@/application/projection/process-summary-reader";
+import { isDocumentId } from "@/domain/collaboration";
 import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
 import { textBlocksOf, type TextBlock } from "@/domain/document/text-blocks";
 import type { ProcessSummaryThresholds, ProcessSummaryV1 } from "@/domain/projection/process-summary";
@@ -50,6 +51,12 @@ export type FastPathStudent = {
   /** Both null when the account has no name pair (#757 D1); never a stand-in. */
   givenName: string | null;
   surname: string | null;
+  /**
+   * The work the record and text are of, for opening it (#1284, DAN-479);
+   * null exactly when there is no record (`notice_pending`). It comes from the
+   * same row, so only a teacher of the assignment ever gets it (#757 inv. 4).
+   */
+  documentId: string | null;
   work: "notice_pending" | "writing" | "submitted";
   lastChangeAt: string | null;
   record: FastPathRecord | null;
@@ -101,12 +108,12 @@ async function studentOf(row: Row, deps: FastPathDeps): Promise<FastPathStudent 
   if (documentId === null) {
     const rest = [row.submitted, row.revision, row.evidence_package_id, row.head_segment_hash, row.segment_hashes, row.body];
     if (!rest.every((value) => value === null)) return malformed;
-    return { ...person, work: "notice_pending", lastChangeAt: null, record: null };
+    return { ...person, documentId: null, work: "notice_pending", lastChangeAt: null, record: null };
   }
   const { institution_id: institutionId, evidence_package_id: packageId, head_segment_hash: head } = row;
   const hashes = row.segment_hashes;
   if (
-    typeof documentId !== "string" ||
+    !isDocumentId(documentId) ||
     typeof row.submitted !== "boolean" ||
     typeof row.revision !== "string" || !REVISION.test(row.revision) ||
     !isInstitutionId(institutionId) ||
@@ -150,6 +157,7 @@ async function studentOf(row: Row, deps: FastPathDeps): Promise<FastPathStudent 
   const lines = processSummaryLines(summary);
   return {
     ...person,
+    documentId,
     work: row.submitted ? "submitted" : "writing",
     lastChangeAt: lines.lastChangeAt,
     record: { pastesWithoutSource: lines.pastesWithoutSource, blocks: textBlocksOf(text.document), summary },

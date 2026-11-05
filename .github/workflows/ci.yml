@@ -101,6 +101,37 @@ jobs:
           else
             node scripts/engineering/migrations-ledger.mjs
           fi
+      # P6, DAN-499: no two migrations share a dbmate version, in the checkout
+      # (the merge commit on a PR) and, on a PR, against main and every other
+      # open PR (read through the API, so a PR opened later fails too).
+      - name: Migration version collisions (P6, DAN-499)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/engineering/migration-versions.mjs
+      # DAN-319: Squawk lints the up part of every migration the base lacks.
+      # The release has no signature; the pin equals the GitHub API digest
+      # (SQUAWK in squawk-migrations.mjs, which checks it again before each run).
+      - name: Squawk lint of new migrations (DAN-319)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/squawk-2.70.0/squawk"
+          mkdir -p "$(dirname "$bin")"
+          curl -fsSL --proto '=https' --retry 3 -o "$bin" https://github.com/sbdchd/squawk/releases/download/v2.70.0/squawk-linux-x64
+          echo "836ba2ab0c0ec30ae02c9f2cec065b341ff853765ceaa3965c22109c2f53eb1c  $bin" | sha256sum -c -
+          chmod +x "$bin"
+          base=""
+          if [ "$EVENT_NAME" = pull_request ]; then base="$PR_BASE"; elif [ "$EVENT_NAME" = push ]; then base="$PUSH_BEFORE"; fi
+          if [ -n "$base" ]; then
+            [[ "$base" =~ ^[a-f0-9]{40}$ ]]
+            git fetch --no-tags --depth=1 origin "$base"
+            node scripts/engineering/squawk-migrations.mjs --squawk "$bin" --base "$base"
+          else
+            node scripts/engineering/squawk-migrations.mjs --squawk "$bin" --no-base
+          fi
       - name: Engineering PR metadata
         if: github.event_name == 'pull_request'
         env:
@@ -160,7 +191,9 @@ jobs:
         shard: [1, 2, 3]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
-    runs-on: ubuntu-latest
+    # DAN-556: pinned, because the Playwright cache key has no OS version and a
+    # browser built for one Ubuntu release does not start on the next one.
+    runs-on: ubuntu-24.04
     # Official images pinned by their OCI index SHA-256. Local compose defaults
     # remain unchanged. CI never pulls anonymously from Docker Hub itself; the
     # Docker Hub library images come through Google's mirror (mirror.gcr.io,
@@ -216,6 +249,21 @@ jobs:
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+      # D-91 (4): db:migrate built a fresh database with dbmate --no-dump-schema
+      # up --strict; it is dumped to a temporary file and compared with
+      # db/schema.sql from Git HEAD before any test touches it. The dump is
+      # kept as the db-schema-<shard> artifact for the author to commit.
+      - name: Schema matches db/schema.sql (D-91)
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: node scripts/engineering/db-schema.mjs --out "$RUNNER_TEMP/db-schema/schema.sql"
+      - name: Upload the dumped schema
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: db-schema-${{ matrix.shard }}
+          path: ${{ runner.temp }}/db-schema/schema.sql
+          if-no-files-found: ignore
+          retention-days: 7
       - name: pgTAP (pg_prove)
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: pnpm test:db
@@ -258,6 +306,7 @@ jobs:
         with:
           name: e2e-shard-${{ matrix.shard }}
           path: .ci-reports/
+          overwrite: true
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -268,6 +317,7 @@ jobs:
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
+          overwrite: true
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs
@@ -322,8 +372,9 @@ jobs:
 
   # Each shard is its own runner with its own stack and database, so the
   # shared demo account stays one worker per database (playwright.login.config.ts).
-  # The shards split the spec files by measured duration (DAN-375,
-  # scripts/engineering/login-shard-plan.mjs); the matrix size is LOGIN_SHARDS.
+  # Five shards split Chromium files by measured duration (DAN-375); the sixth
+  # runs WebKit alone so demo-flow never inherits another engine's database.
+  # scripts/engineering/login-shard-plan.mjs keeps the six-runner budget.
   stack-login:
     name: Login E2E (${{ matrix.shard }}/6)
     strategy:
@@ -332,7 +383,8 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
-    runs-on: ubuntu-latest
+    # DAN-556: same pin as stack-e2e.
+    runs-on: ubuntu-24.04
     env:
       DUCTUS_POSTGRES_IMAGE: mirror.gcr.io/library/postgres:17.11-trixie@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
       DUCTUS_OBJECTS_IMAGE: ghcr.io/rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
@@ -365,7 +417,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium
+          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-webkit
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Local auth login password
@@ -384,13 +436,20 @@ jobs:
         env:
           PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: bash scripts/engineering/playwright-install.sh chromium
+      # DAN-232: the login E2E runs over https and the sign-in and demo walk-through
+      # specs also run in WebKit (playwright.login.config.ts, #1223). WebKit needs
+      # its system packages, so this step has no no-deps shortcut.
+      - name: Install login WebKit
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: bash scripts/engineering/playwright-install.sh webkit
       # F-152: the demo account bootstrap's guards drive a real Chromium, which
       # only this job installs; each shard runs them (a few seconds).
       - name: Demo account bootstrap tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: pnpm test:demo:browser
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
-      # the fake provider in production); Chromium only (owner decision).
+      # the fake provider in production); Chromium for every spec and WebKit for the
+      # sign-in and full demo-flow specs, over https (#87 c.6588895809).
       # The full suite as this runner sees it, before sharding; the inventory
       # job checks that the shards together ran exactly this.
       - name: Login E2E inventory
@@ -398,7 +457,7 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/inventory.json
         run: pnpm exec playwright test --config playwright.login.config.ts --list --reporter=json
-      # This shard's spec files from the inventory above and the committed
+      # This shard's engine and spec files from the inventory and the committed
       # weights; plan.json goes up with the evidence and is recomputed there.
       - name: Plan login shard
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -409,13 +468,17 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           LOGIN_E2E_JSON: .ci-reports/results.json
-        run: pnpm test:e2e:login --test-list .ci-reports/test-list.txt
+        run: pnpm test:e2e:login --project="$(cat .ci-reports/project.txt)" --test-list .ci-reports/test-list.txt
+      # A re-run of a failed shard keeps the earlier attempt's artifact under the
+      # same name, and the inventory download can pick that stale one (run
+      # 41782517938). overwrite replaces it, so the inventories read this attempt.
       - name: Upload login shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: login-shard-${{ matrix.shard }}
           path: .ci-reports/
+          overwrite: true
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -425,6 +488,7 @@ jobs:
         with:
           name: playwright-report-login-${{ matrix.shard }}
           path: playwright-report-login/
+          overwrite: true
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs

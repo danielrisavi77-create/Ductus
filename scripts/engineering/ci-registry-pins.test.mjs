@@ -15,7 +15,7 @@ const stackJobs = ["stack-e2e", "stack-login"].map((name) => {
   return { name, text };
 });
 
-test("CI pins all stack images outside Docker Hub while local defaults stay intact", () => {
+test("CI pins all stack images outside Docker Hub and compose defaults to the same pins (F-017)", () => {
   const sources = new Map([
     ["DUCTUS_OBJECTS_IMAGE", "ghcr.io/rustfs/rustfs:1.0.0"],
     ["DUCTUS_MAIL_IMAGE", "ghcr.io/axllent/mailpit:v1.31.4"],
@@ -30,9 +30,9 @@ test("CI pins all stack images outside Docker Hub while local defaults stay inta
     }
   }
 
-  assert.ok(compose.includes("image: ${DUCTUS_OBJECTS_IMAGE:-rustfs/rustfs:1.0.0}"));
-  assert.ok(compose.includes("image: ${DUCTUS_MAIL_IMAGE:-axllent/mailpit:v1.31.4}"));
-  assert.ok(compose.includes("OIDC_BASE_IMAGE: ${DUCTUS_OIDC_BASE_IMAGE:-node:24.21.0-alpine}"));
+  assert.ok(compose.includes("image: ${DUCTUS_OBJECTS_IMAGE:-ghcr.io/rustfs/rustfs:1.0.0@sha256:"));
+  assert.ok(compose.includes("image: ${DUCTUS_MAIL_IMAGE:-ghcr.io/axllent/mailpit:v1.31.4@sha256:"));
+  assert.ok(compose.includes("OIDC_BASE_IMAGE: ${DUCTUS_OIDC_BASE_IMAGE:-mirror.gcr.io/library/node:24.21.0-alpine@sha256:"));
   assert.ok(dockerfile.includes("ARG OIDC_BASE_IMAGE=node:24.21.0-alpine"));
   assert.ok(dockerfile.includes("FROM ${OIDC_BASE_IMAGE}"));
 });
@@ -51,7 +51,7 @@ test("Postgres (built with pgTAP) takes a registry-pinned base image in CI and n
   assert.ok(!/^ {4}image:/m.test(block[1]), "postgres must be built, not pulled by a floating image");
   assert.ok(
     block[1].includes("context: infra/postgres") &&
-      block[1].includes("POSTGRES_BASE_IMAGE: ${DUCTUS_POSTGRES_IMAGE:-postgres:17.11-trixie}"),
+      block[1].includes("POSTGRES_BASE_IMAGE: ${DUCTUS_POSTGRES_IMAGE:-mirror.gcr.io/library/postgres:17.11-trixie@sha256:"),
     "compose must pass DUCTUS_POSTGRES_IMAGE into the POSTGRES_BASE_IMAGE build arg",
   );
 

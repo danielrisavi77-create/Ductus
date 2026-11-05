@@ -218,6 +218,25 @@ describe("planRecovery — the options it hands the panel", () => {
     expect(serverOnly.recommended).toBe("adopt-server");
   });
 
+  it("offers only the server's version, and recommends it, when the journal cannot be read at all", () => {
+    const plan = planRecovery(
+      input({ journalReadable: false, serverDocument: SERVER, serverRevision: 7 }),
+    );
+
+    expect(plan.canSalvageLocal).toBe(false);
+    expect(plan.salvage).toBeNull();
+    expect(plan.canAdoptServer).toBe(true);
+    expect(plan.adopt?.document).toEqual(SERVER);
+    expect(plan.adopt?.revision).toBe(7);
+    expect(plan.recommended).toBe("adopt-server");
+    expect(plan.options.map((o) => o.choice)).toEqual(["adopt-server", "salvage-local"]);
+    // The local option is still shown, with why it cannot be taken: unreadable, not empty.
+    expect(plan.options.find((o) => o.choice === "salvage-local")?.blockedBy).toBe(
+      "journal-unreadable",
+    );
+    expect(plan.options.find((o) => o.choice === "adopt-server")?.blockedBy).toBeNull();
+  });
+
   it("covers exactly the declared choices", () => {
     const plan = planRecovery(NOTHING);
     expect(plan.options.map((o) => o.choice).sort()).toEqual([...RECOVERY_CHOICES].sort());

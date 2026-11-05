@@ -1,4 +1,4 @@
-import { createPrivateKey, sign } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { digestSubmissionReceiptPayloadV2, type SubmissionReceiptPayloadV2 } from "./submission-receipt-v2";
 import { verifySignedSubmissionReceiptV2 } from "./submission-receipt-verifier-v2";
@@ -135,5 +135,21 @@ describe("trusted submission receipt v2 verifier", () => {
       vi.stubGlobal("crypto", { subtle: { digest: subtle.digest.bind(subtle), importKey: subtle.importKey.bind(subtle), verify: () => Promise.resolve(result) } });
       expect(await check()).toEqual({ ok: false, reason: "signature_invalid" });
     }
+  });
+  it("verifies under a key whose point starts with 0x00 where the runtime imports no such SPKI (#1247)", async () => {
+    // WebKit on Linux throws DataError for such an SPKI (about one key in 256) and imports the same 32 bytes as `raw`.
+    let pair = generateKeyPairSync("ed25519");
+    while (pair.publicKey.export({ type: "spki", format: "der" })[12] !== 0) pair = generateKeyPairSync("ed25519");
+    const zeroKey = { ...key, keyBase64Url: pair.publicKey.export({ type: "spki", format: "der" }).toString("base64url") };
+    const r = signed();
+    r.signature.signatureBase64Url = sign(null, (await digestSubmissionReceiptPayloadV2(r.payload)).signingInput, pair.privateKey).toString("base64url");
+    const subtle = crypto.subtle;
+    const importKey = vi.fn((...args: Parameters<SubtleCrypto["importKey"]>) =>
+      args[0] === "spki" && (args[1] as Uint8Array)[12] === 0
+        ? Promise.reject(new DOMException("Data provided to an operation does not meet requirements", "DataError"))
+        : subtle.importKey(...args));
+    vi.stubGlobal("crypto", { subtle: { digest: subtle.digest.bind(subtle), importKey, verify: subtle.verify.bind(subtle) } });
+    expect(await check(r, zeroKey)).toEqual({ ok: true, payload });
+    expect(importKey).toHaveBeenCalledTimes(1);
   });
 });

@@ -33,6 +33,13 @@ export interface OidcClient {
   authorizationUrl(checks: LoginChecks): Promise<URL>;
   /** `callbackUrl` carries the query of the callback request, nothing else. */
   verify(callbackUrl: URL, checks: LoginChecks): Promise<VerifiedLogin>;
+  /**
+   * The provider's logout address (RP-initiated logout, DAN-212): its
+   * `end_session_endpoint` with `client_id` and the configured
+   * `post_logout_redirect_uri`, no hint and nothing from a request. Null when
+   * discovery names no endpoint, or one without TLS where TLS is required.
+   */
+  endSessionUrl(): Promise<URL | null>;
 }
 
 /** The provider did not answer, answered 5xx, or timed out. */
@@ -44,6 +51,19 @@ export class ProviderUnavailableError extends Error {
 export const MAX_PROVIDER_RESPONSE_BYTES = 256 * 1024;
 /** Seconds for each request to the provider. */
 export const PROVIDER_TIMEOUT_SECONDS = 10;
+
+/**
+ * The scopes of the authorization request, per provider (DAN-196). AAI@EduHr
+ * releases each hrEdu attribute only for its own scope, never for `profile`,
+ * so the hrEdu scopes of docs/PRODUCT.md §4 are added. `profile` stays: it
+ * carries given_name and family_name, which the name parser reads. No e-mail
+ * and no OIB. Which set is the smallest is an open owner decision (plan #1104).
+ * The local fake provider keeps `openid profile`.
+ */
+export const SCOPES: Readonly<Record<AuthConfig["provider"], string>> = {
+  "aai-eduhr": "openid profile hrEduPersonUniqueID hrEduPersonAffiliation hrEduPersonHomeOrg",
+  "fake-oidc": "openid profile",
+};
 
 export function newLoginChecks(): LoginChecks {
   const token = () => randomBytes(32).toString("base64url");
@@ -108,6 +128,20 @@ export function accountIssuer(issuer: URL): string {
   return issuer.pathname === "/" && !issuer.search && !issuer.hash && href.endsWith("/") ? href.slice(0, -1) : href;
 }
 
+/**
+ * The upper bound of `iat` (#1327, docs/backend/prijava-i-ovlasti.md): the
+ * library only checks that it is a number, so a token issued later than this
+ * clock plus the allowed skew is refused here, as `nbf` is by the library.
+ * How old an `iat` may be is an open owner decision; `exp` bounds the token.
+ */
+export function issuedWithinSkew(
+  iat: unknown,
+  toleranceSeconds: number,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): boolean {
+  return typeof iat === "number" && Number.isFinite(iat) && iat <= nowSeconds + toleranceSeconds;
+}
+
 export function isProviderUnavailable(error: unknown): boolean {
   for (let e = error, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) {
     if (e instanceof ProviderUnavailableError || e.name === "TimeoutError" || e.name === "AbortError") return true;
@@ -159,7 +193,7 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
     async authorizationUrl(checks) {
       return client.buildAuthorizationUrl(await configuration(), {
         redirect_uri: config.redirectUri.href,
-        scope: "openid profile",
+        scope: SCOPES[config.provider],
         state: checks.state,
         nonce: checks.nonce,
         code_challenge: codeChallenge(checks.codeVerifier),
@@ -181,8 +215,25 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
       });
       const idToken = tokens.claims();
       if (!idToken) throw new Error("token response has no ID token");
+      if (!issuedWithinSkew(idToken.iat, config.clockToleranceSeconds)) {
+        throw new Error("ID token iat is ahead of this clock beyond the allowed skew");
+      }
       const userinfo = await client.fetchUserInfo(oidc, tokens.access_token, idToken.sub);
       return { issuer: accountIssuer(config.issuer), idToken, userinfo };
+    },
+
+    async endSessionUrl() {
+      const oidc = await configuration();
+      const endpoint = oidc.serverMetadata().end_session_endpoint;
+      if (typeof endpoint !== "string") return null;
+      let target: URL;
+      try {
+        target = new URL(endpoint);
+      } catch {
+        return null;
+      }
+      if (target.protocol !== "https:" && !(config.allowInsecureRequests && target.protocol === "http:")) return null;
+      return client.buildEndSessionUrl(oidc, { post_logout_redirect_uri: config.postLogoutRedirectUri.href });
     },
   };
 }

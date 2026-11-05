@@ -899,6 +899,8 @@ export const UNREADABLE_HINTS = {
   testModule: "test files are not read, so what such a module shows would pass unchecked; give the module a name that is not a test's, or do not import it from code that runs",
   dataFile: "the strings of an imported .json file are read like a catalogue, and this one is not where the import says; import it by a path from the importing file or from @/",
   computedModule: "the scan follows a module by the name the source writes, so what a name put together when the code runs loads would pass unchecked; write the name as one string",
+  loaderRequest: "the scan follows a module by its path, and an import through a loader (!) shows what the loader makes of the module; import the module without a loader",
+  outsideModule: "the scan reads app/ and src/ only, so the text of a module elsewhere in the repository would pass unchecked; move the module under src/ and import it by the path of its file",
 } as const;
 
 /**
@@ -1071,6 +1073,28 @@ function importedData(root: string, file: string, name: string): string | null |
   return scanKind(target) === "catalogue" ? undefined : target;
 }
 
+/**
+ * Whether an import in `file` names a module of the repository outside the
+ * folders the scan walks, so the scan does not read it (F-024). A `.json` file
+ * is read wherever it is (`importedData`). `@/` is followed from `src/`, as the
+ * project sets it, and an absolute path is always outside; any other name is a
+ * package. An import through a loader (`!`) is reported on its own.
+ */
+function importedOutside(file: string, name: string): boolean {
+  if (name.toLowerCase().endsWith(".json")) return false;
+  const written = name.replaceAll("\\", "/");
+  // The alias is followed like a path from src/, so "@/../ui/text" leaves it.
+  let target: string;
+  if (written.startsWith("@/")) target = path.posix.normalize(`src/${written.slice(2)}`);
+  else if (written.startsWith(".")) target = path.posix.join(path.posix.dirname(file), written);
+  // An absolute path, from the root or a drive, is not a package and is not read.
+  else if (written.startsWith("/") || /^[A-Za-z]:\//.test(written)) return true;
+  else return false;
+  // "app" or "src" itself may load a file at the root ("src.ts"), so only a path into the folder is inside.
+  if (!SCANNED_DIRS.some((dir) => target.startsWith(`${dir}/`))) return true;
+  return target.split("/").some((part) => SKIPPED_DIRS.has(part));
+}
+
 /** A scanned file as read: by its kind, with the other strings of a code file and the modules it imports. */
 interface Scanned {
   readonly file: string;
@@ -1133,6 +1157,9 @@ export interface Unreadable {
  *   files are not read, and a page that imports one shows what is in it;
  * - every import of a `.json` file the scan cannot find and so cannot read
  *   like a catalogue (`importedData`);
+ * - every import of a module of the repository outside `app/` and `src/`
+ *   (`importedOutside`): the scan does not read it, and a page that imports
+ *   it shows what is in it, and every import through a loader (`!`);
  * - every `import()` and `require()` of a module whose name is not one
  *   string: the scan cannot tell which file is loaded, so it cannot read it.
  *
@@ -1156,6 +1183,8 @@ function unreadableIn(root: string): Unreadable[] {
       }
       if (TEST_MODULE.test(name)) unreadable.push({ file, line, reason: `import of the test module "${name}" (${UNREADABLE_HINTS.testModule})` });
       if (importedData(root, file, name) === null) unreadable.push({ file, line, reason: `import of "${name}", a data file the scan cannot find (${UNREADABLE_HINTS.dataFile})` });
+      if (name.includes("!")) unreadable.push({ file, line, reason: `import of "${name}" through a loader (${UNREADABLE_HINTS.loaderRequest})` });
+      else if (importedOutside(file, name)) unreadable.push({ file, line, reason: `import of "${name}", a module outside app/ and src/ (${UNREADABLE_HINTS.outsideModule})` });
     }
     const strings = [...read.texts, ...others].map((text) => ({ ...text, characters: unreadableCharacters(text.text) }));
     for (const text of strings) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { ccrThreads, checkRollup, ghList, graphqlThreads, mainPathsSince, mergedPrs, prView, reviewThreads, toPr } from "./gh.mjs";
-import { evaluateChecks, summarizeThreads } from "./orchestrator-core.mjs";
+import { evaluateChecks, externalReason, summarizeThreads } from "./orchestrator-core.mjs";
 
 const rest = (over = {}) => ({
   number: 7, title: "t", body: null, state: "open", draft: false, merged_at: null, mergeable: true,
@@ -13,10 +13,19 @@ const rest = (over = {}) => ({
 test("toPr maps REST fields to the gh-CLI names", () => {
   assert.deepEqual(toPr(rest()), {
     number: 7, title: "t", body: "", state: "OPEN", isDraft: false, headRefOid: "abc123", headRefName: "feat/x",
-    author: { login: "someone", type: "User" }, baseRefName: "main",
+    headRepo: null, author: { login: "someone", type: "User" }, baseRefName: "main",
     createdAt: "2026-10-01T00:00:00Z", mergedAt: null, mergeable: "MERGEABLE", autoMergeRequest: null,
   });
   assert.deepEqual(toPr(rest({ user: undefined })).author, { login: null, type: null });
+  // F-010: the head repository is carried; a deleted fork has none.
+  assert.equal(toPr(rest({ head: { sha: "abc123", ref: "x", repo: { full_name: "o/r" } } })).headRepo, "o/r");
+  assert.equal(toPr(rest({ head: { sha: "abc123", ref: "x", repo: null } })).headRepo, null);
+  // F-010 end to end: a row whose head repository or author did not come back is external.
+  const own = { full_name: "owner1/repo1" };
+  assert.equal(externalReason(toPr(rest({ head: { sha: "a", ref: "x", repo: own }, user: { login: "owner1", type: "User" } })), "owner1/repo1", "owner1"), null);
+  assert.equal(typeof externalReason(toPr(rest({ user: { login: "owner1", type: "User" } })), "owner1/repo1", "owner1"), "string");
+  assert.equal(typeof externalReason(toPr(rest({ head: { sha: "a", ref: "x", repo: own }, user: undefined })), "owner1/repo1", "owner1"), "string");
+  assert.equal(typeof externalReason(toPr({}), "owner1/repo1", "owner1"), "string");
   assert.equal(toPr(rest({ mergeable: false })).mergeable, "CONFLICTING");
   assert.equal(toPr(rest({ mergeable: null })).mergeable, "UNKNOWN");
   assert.equal(toPr(rest({ state: "closed", merged_at: "2026-10-02T00:00:00Z" })).state, "MERGED");
@@ -73,6 +82,11 @@ test("checkRollup joins check runs and statuses in the rollup shape evaluateChec
   // a completed run without conclusion is not green
   const odd = await checkRollup("abc", { list: async (_p, _e, o) => (o?.key ? [run("x", "completed", null)] : []) });
   assert.deepEqual(evaluateChecks(odd).bad, [{ name: "x", state: "COMPLETED" }]);
+  // the App slug is carried, so the merge queue's own checks can be told apart by App, not by name
+  const slugged = await checkRollup("abc", {
+    list: async (_p, _e, o) => (o?.key ? [{ ...run("Mergify Merge Queue", "in_progress", null), app: { id: 10562, slug: "mergify" } }, run("lint", "completed", "success")] : []),
+  });
+  assert.deepEqual(slugged.map((c) => c.appSlug), ["mergify", null]);
 });
 
 test("ccrThreads maps CCR threads to the node shape and reads authors only when needed", async () => {

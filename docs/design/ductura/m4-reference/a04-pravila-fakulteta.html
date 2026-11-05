@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-04 — Pravila fakulteta (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">Ductura</div>
+    <button class="btn secondary menu" type="button" aria-expanded="false">Izbornik</button>
+    <nav aria-label="Administracija">
+      <a href="#">Ustanova</a>
+      <a href="#" aria-current="page">Pravila fakulteta</a>
+      <a href="#">Postavke ustanove</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header>
+      <div class="ref-tag">Referenca M4.UX-R · DAN-503 · prijedlog slike · podaci su izmišljeni</div>
+      <h1>A-04 — Pravila fakulteta</h1>
+      <p>Paket pravila oblika rada koji ustanova koristi. Zaslon je samo za čitanje; novu verziju paketa uvozi tim Ducture.</p>
+    </header>
+
+    <section aria-labelledby="h-stanje">
+      <h2 id="h-stanje">Što studenti i nastavnici vide</h2>
+      <table>
+        <thead><tr><th>Vrsta rada</th><th>Prikaz u panelu Upute i provjera oblika</th><th>Uzrok</th></tr></thead>
+        <tbody>
+          <tr><td>Završni rad</td><td>Provjera oblika, paket 1.2</td><td>Paket pokriva ovu vrstu rada.</td></tr>
+          <tr><td>Diplomski rad</td><td>Provjera oblika, paket 1.2</td><td>Paket pokriva ovu vrstu rada.</td></tr>
+          <tr><td>Seminarski rad</td><td>„Provjera oblika za ovu vrstu rada nije dostupna.”</td><td>Paket 1.2 ne pokriva ovu vrstu rada.</td></tr>
+        </tbody>
+      </table>
+      <div class="ref-tag" style="margin-top:20px">Varijanta · nije uključeno za cijelu ustanovu</div>
+      <div class="card">
+        <p>Studenti i nastavnici vide: „Provjera oblika trenutačno nije uključena na ovoj ustanovi. Predaja nije zbog toga ograničena.”</p>
+        <dl class="kv">
+          <dt>Uzrok</dt><dd>Licenca za paket pravila nije aktivna od 1. 10. 2026.</dd>
+          <dt>Drugi mogući uzroci</dt><dd>paket nije uvezen; uvezeni paket nije valjan</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-paket">
+      <h2 id="h-paket">Paket pravila</h2>
+      <div class="card">
+        <dl class="kv">
+          <dt>Verzija</dt><dd>1.2</dd>
+          <dt>Uvezeno</dt><dd>14. 9. 2026.</dd>
+          <dt>Izdavač</dt><dd>Izdavač paketa pravila (primjer)</dd>
+          <dt>Pokrivene vrste rada</dt><dd>završni rad, diplomski rad</dd>
+          <dt>Nije pokriveno</dt><dd>seminarski rad: „Provjera oblika za ovu vrstu rada nije dostupna.”</dd>
+          <dt>Broj pravila</dt><dd>9</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-pravila">
+      <h2 id="h-pravila">Pravila i njihov puni tekst</h2>
+      <div class="card">
+        <article class="rule">
+          <h3>Opseg rada</h3>
+          <p class="meta">Završni rad: 5000 do 8000 riječi · diplomski rad: 12000 do 18000 riječi · nastavnik smije suziti raspon unutar ovih granica</p>
+          <p class="quote-label">Doslovni navod · Pravilnik o završnom radu (primjer), čl. 5.</p>
+          <blockquote>Opseg završnog rada iznosi od 5000 do 8000 riječi, ne računajući sažetak, popis literature i priloge.</blockquote>
+        </article>
+        <article class="rule">
+          <h3>Duljina sažetka</h3>
+          <p class="meta">150 do 300 riječi</p>
+          <p class="quote-label">Doslovni navod · Pravilnik o završnom radu (primjer), čl. 6. st. 1.</p>
+          <blockquote>Sažetak sadrži od 150 do 300 riječi i navodi cilj, metodu i glavne rezultate rada.</blockquote>
+        </article>
+        <article class="rule">
+          <h3>Duljina naslova poglavlja</h3>
+          <p class="meta">do 12 riječi</p>
+          <p class="quote-label">Doslovni navod · Pravilnik o završnom radu (primjer), čl. 7. st. 2.</p>
+          <blockquote>Naslov poglavlja ne smije biti dulji od dvanaest riječi.</blockquote>
+        </article>
+        <p class="ref-tag">Referenca prikazuje tri od devet pravila; zaslon prikazuje sva.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-povijest">
+      <h2 id="h-povijest">Povijest verzija</h2>
+      <table>
+        <thead><tr><th>Verzija</th><th>Uvezeno</th><th>Pokrivene vrste rada</th></tr></thead>
+        <tbody>
+          <tr><td>1.2 (u uporabi)</td><td>14. 9. 2026.</td><td>završni rad, diplomski rad</td></tr>
+          <tr><td>1.1</td><td>3. 3. 2026.</td><td>završni rad, diplomski rad</td></tr>
+          <tr><td>1.0</td><td>12. 10. 2025.</td><td>završni rad</td></tr>
+        </tbody>
+      </table>
+      <p class="meta" style="margin-top:8px">Rad zadržava verziju paketa s kojom je provjeren; nova verzija ne mijenja ranije provjere.</p>
+    </section>
+
+    <section aria-labelledby="h-postavke" class="card">
+      <h2 id="h-postavke">Postavke koje uređuje administrator</h2>
+      <p class="note">Pravilo o AI pomoćniku, pružatelji, pragovi i rokovi nisu dio paketa pravila. Uređuju se odvojeno, na zaslonu <a href="#">Postavke ustanove</a>.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>

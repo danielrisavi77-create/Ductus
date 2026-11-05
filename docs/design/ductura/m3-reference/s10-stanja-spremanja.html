@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-10 — Stanja spremanja (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca M3.UX-R · DAN-504 · prijedlog slike</div>
+  <h1>S-10 — Editor: stanja spremanja</h1>
+  <p>Statusna traka i obavijest iznad lista za slanje, potvrdu koja čeka potpis i neuspjeh spremanja na uređaj. Tekst u traci sam kaže posljedicu; točka je samo pomoć. Bočna traka i panel su izostavljeni. Podaci su izmišljeni.</p>
+</header>
+<main class="stack">
+
+  <section aria-labelledby="s1a">
+    <div class="ref-tag" id="s1a">Stanje 1a · slanje · postojeća oznaka</div>
+    <div class="frame">
+      <div class="bar"><span class="brand">Ductura</span><span class="ctx">Seminarski rad · Gradski parkovi i javni prostor</span></div>
+      <div class="area">
+        <article class="sheet">
+          <h2>Uvod</h2>
+          <p>Gradski parkovi nastajali su u različitim razdobljima i s različitim namjenama. Ovaj rad uspoređuje tri parka iz izmišljenog grada Lipovca prema dostupnosti, održavanju i načinu na koji ih stanovnici koriste.</p>
+        </article>
+      </div>
+      <div class="status">
+        <span class="chip progress"><span class="dot" aria-hidden="true"></span>Sinkroniziram</span>
+        <span class="words"><b>1.248</b> riječi</span>
+      </div>
+    </div>
+    <p class="ref-note">Šalje se zapis koji poslužitelj još nije primio. Oznaka i ton ostaju kakvi su danas.</p>
+  </section>
+
+  <section aria-labelledby="s1b">
+    <div class="ref-tag" id="s1b">Stanje 1b · primljeno, potvrda čeka potpis · prije praga · #1332</div>
+    <div class="frame">
+      <div class="bar"><span class="brand">Ductura</span><span class="ctx">Seminarski rad · Gradski parkovi i javni prostor</span></div>
+      <div class="area">
+        <article class="sheet">
+          <h2>Uvod</h2>
+          <p>Gradski parkovi nastajali su u različitim razdobljima i s različitim namjenama. Ovaj rad uspoređuje tri parka iz izmišljenog grada Lipovca prema dostupnosti, održavanju i načinu na koji ih stanovnici koriste.</p>
+        </article>
+      </div>
+      <div class="status">
+        <span class="chip received"><span class="dot" aria-hidden="true"></span>Primljeno na poslužitelju, čeka potvrdu</span>
+        <span class="words"><b>1.248</b> riječi</span>
+      </div>
+    </div>
+    <p class="ref-note">Poslužitelj je primio zapis, potpisana potvrda još nije stigla. Točka je prsten, nikad puna: puna točka u boji poslužitelja pripada samo oznaci „Spremljeno na poslužitelju” uz potpisanu potvrdu. Bez pulsiranja i bez obavijesti iznad lista.</p>
+  </section>
+
+  <section aria-labelledby="s1c">
+    <div class="ref-tag" id="s1c">Stanje 1c · potvrda čeka potpis · nakon praga (prijedlog: 10 minuta) · #1332</div>
+    <div class="frame">
+      <div class="bar"><span class="brand">Ductura</span><span class="ctx">Seminarski rad · Gradski parkovi i javni prostor</span></div>
+      <div class="area">
+        <div class="notice warn" role="status">
+          <p>Poslužitelj je primio tekst, ali potvrda još nije stigla. Tekst je spremljen na uređaju i možete nastaviti pisati.</p>
+        </div>
+        <article class="sheet">
+          <h2>Uvod</h2>
+          <p>Gradski parkovi nastajali su u različitim razdobljima i s različitim namjenama. Ovaj rad uspoređuje tri parka iz izmišljenog grada Lipovca prema dostupnosti, održavanju i načinu na koji ih stanovnici koriste.</p>
+        </article>
+      </div>
+      <div class="status">
+        <span class="chip received-late"><span class="dot" aria-hidden="true"></span>Primljeno na poslužitelju, potvrda kasni</span>
+        <span class="words"><b>1.248</b> riječi</span>
+      </div>
+    </div>
+    <p class="ref-note">Prijelaz: 1a → 1b kad poslužitelj odgovori da je zapis primljen i čeka potpis; 1b → 1c kad potvrda ne stigne u pragu; 1b ili 1c → „Spremljeno na poslužitelju” tek uz potpisanu potvrdu. Trajanje praga predlaže se vlasniku na potvrdu.</p>
+  </section>
+
+  <section aria-labelledby="s2a">
+    <div class="ref-tag" id="s2a">Stanje 2a · ne sprema se na uređaj · nema prostora · #1333</div>
+    <div class="frame">
+      <div class="bar"><span class="brand">Ductura</span><span class="ctx">Seminarski rad · Gradski parkovi i javni prostor</span></div>
+      <div class="area">
+        <div class="notice error" role="alert">
+          <p>Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.</p>
+          <p>Prostor možete osloboditi tako da u postavkama preglednika obrišete podatke drugih stranica, a zatim ponovno učitate ovu stranicu. Podatke ove stranice ne brišite: u njima je zapis teksta na ovom uređaju.</p>
+          <div class="actions"><button class="btn" type="button">Izvezi tekst</button></div>
+        </div>
+        <article class="sheet">
+          <h2>Uvod</h2>
+          <p>Gradski parkovi nastajali su u različitim razdobljima i s različitim namjenama. Ovaj rad uspoređuje tri parka iz izmišljenog grada Lipovca prema dostupnosti, održavanju i načinu na koji ih stanovnici koriste.</p>
+        </article>
+      </div>
+      <div class="status">
+        <span class="chip error"><span class="dot" aria-hidden="true"></span>Ne sprema se na uređaj</span>
+        <button class="btn small secondary" type="button">Izvezi tekst</button>
+        <span class="words"><b>1.248</b> riječi</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="pair">
+    <section aria-labelledby="s2b">
+      <div class="ref-tag" id="s2b">Stanje 2b · ne sprema se na uređaj · pohrana nedostupna · #1333</div>
+      <div class="frame">
+        <div class="bar"><span class="brand">Ductura</span><span class="ctx">Seminarski rad · Gradski parkovi</span></div>
+        <div class="area">
+          <div class="notice error" role="alert">
+            <p>Spremanje na ovom uređaju nije dostupno. Izvezite tekst da ga ne izgubite.</p>
+          </div>
+        </div>
+        <div class="status">
+          <span class="chip error"><span class="dot" aria-hidden="true"></span>Ne sprema se na uređaj</span>
+          <button class="btn small secondary" type="button">Izvezi tekst</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s2c">
+      <div class="ref-tag" id="s2c">Stanje 2c · ne sprema se na uređaj · granica zapisa · #1333</div>
+      <div class="frame">
+        <div class="bar"><span class="brand">Ductura</span><span class="ctx">Seminarski rad · Gradski parkovi</span></div>
+        <div class="area">
+          <div class="notice error" role="alert">
+            <p>Lokalni zapis je dosegao granicu, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.</p>
+          </div>
+        </div>
+        <div class="status">
+          <span class="chip error"><span class="dot" aria-hidden="true"></span>Ne sprema se na uređaj</span>
+          <button class="btn small secondary" type="button">Izvezi tekst</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section aria-labelledby="s2d">
+    <div class="ref-tag" id="s2d">Usporedba · potreban oporavak · oznaka ostaje kakva je</div>
+    <div class="frame">
+      <div class="bar"><span class="brand">Ductura</span><span class="ctx">Seminarski rad · Gradski parkovi i javni prostor</span></div>
+      <div class="status">
+        <span class="chip recovery"><span class="dot" aria-hidden="true"></span>Potreban oporavak</span>
+        <span class="words"><b>1.248</b> riječi</span>
+      </div>
+    </div>
+    <p class="ref-note">Neuspjeh spremanja i oporavak imaju različitu riječ i različitu boju točke. Ostali razlozi neuspjeha (dokument promijenjen na drugom mjestu, neuspjelo spremanje bez poznatog uzroka, tekst koji se ne može spremiti) koriste istu oznaku „Ne sprema se na uređaj” i svoj postojeći tekst obavijesti.</p>
+  </section>
+
+</main>
+</body>
+</html>

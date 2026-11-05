@@ -12,7 +12,6 @@ const LISTED_ASSOCIATIONS = new Set(["MEMBER", "COLLABORATOR"]);
 // always is, a member or collaborator only when its login is listed here.
 // Adding a login is a D-97 change; never list a bot or triage account.
 export const TRUSTED_VERDICT_LOGINS = Object.freeze([]);
-const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 export const APP_RUNTIMES = new Map([
   ["claude", new Set(["claude"])],
@@ -162,9 +161,22 @@ function trustedComments(items, logins, ownerLogin = null) {
       appSlug: commentAppSlug(item, ownerLogin),
       cliChannel: cliChannel(item, ownerLogin),
       createdAt: commentTime(item) || index,
+      edited: wasEdited(item),
       index,
     }))
     .filter((entry) => entry.body);
+}
+
+// F-012: the App a comment was posted through is fixed at creation, while its
+// text can be changed later by any session holding the author's token. A
+// comment whose last edit is later than its creation therefore never gives a
+// PASS; a FAIL or BLOCK still holds, so an edit can only keep a PR waiting.
+function wasEdited(item) {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  // Fails closed: an edit time without a readable creation time is an edit.
+  if (Number.isNaN(updated)) return false;
+  return Number.isNaN(created) || updated > created;
 }
 
 // Evidence holds only while the exhausted App shows nothing else (#128): a
@@ -179,8 +191,12 @@ const lastActivity = (item) => {
   return Number.isNaN(updated) ? created : Math.max(created || 0, updated);
 };
 
-function quotaEvidence(items, reviews = []) {
-  const appComments = (items ?? [])
+// F-013: evidence counts only from `items` (after the last base change), but
+// activity that voids it is read from `activityItems`, the full history, so a
+// summary created before the change and edited after the quota message still
+// voids the evidence.
+function quotaEvidence(items, reviews = [], activityItems = items) {
+  const readApp = (list) => (list ?? [])
     .map((item, index) => {
       const slug = item?.performed_via_github_app?.slug ?? null;
       const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
@@ -194,6 +210,8 @@ function quotaEvidence(items, reviews = []) {
       };
     })
     .filter(Boolean);
+  const appComments = readApp(items);
+  const appActivity = activityItems === items ? appComments : [...appComments, ...readApp(activityItems)];
   // A PR review carries no App slug, only the App's bot account.
   const appReviews = (reviews ?? [])
     .map((review) => {
@@ -202,7 +220,7 @@ function quotaEvidence(items, reviews = []) {
       return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
     })
     .filter(Boolean);
-  const activity = [...appComments, ...appReviews];
+  const activity = [...appActivity, ...appReviews];
   return appComments.filter(
     (item) =>
       item.exhausted &&
@@ -342,6 +360,49 @@ function prevailing({ current, carried }) {
   return carriedLater && NEGATIVE.has(carried.verdict) ? carried : current;
 }
 
+// F-027 (M0.6c, #1091): a FAIL or BLOCK the parser cannot read exactly still
+// blocks; a PASS counts only in its exact form. Any verdict line of the block,
+// also with markdown or spaces around its name, that names FAIL or BLOCK (or
+// BLOK) makes the comment negative. Read here only to find a negative.
+// Letters and digits bound the word, not `\b`, so markdown such as `_` around
+// it still reads as FAIL or BLOCK.
+const NEGATIVE_WORD_RE = /(?<![A-Z0-9])(FAIL|BLOC?K)[A-Z]*(?![A-Z0-9])/;
+// One literal pattern per verdict field, with markdown or spaces around its
+// name, a heading (`#` to `######`, with or without a space) included, a
+// numbered list marker (`1.`, `1)`, `1\.`) anywhere among them (p06f), and a
+// task list box (`[ ]`, `[x]`, `[X]`, also escaped as `\[ \]`) the same way
+// (p06g), holding any whitespace, several or none (p06h).
+const VERDICT_LINE_RE = new Map([
+  ["Review-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)]|\\?\[[\sxX]*\\?\])*Review-Verdict[\s*_`>~+#-]*:(.*)$/i],
+  ["QA-Verdict", /^(?:[\s*_`>~+#-]|\d{1,9}\\?[.)]|\\?\[[\sxX]*\\?\])*QA-Verdict[\s*_`>~+#-]*:(.*)$/i],
+]);
+function negativeWord(body, name) {
+  const line = VERDICT_LINE_RE.get(name);
+  if (!line) throw new Error(`No verdict line pattern for ${name}.`);
+  for (const text of metadataLines(body)) {
+    const word = NEGATIVE_WORD_RE.exec(line.exec(text)?.[1]?.toUpperCase() ?? "")?.[1];
+    if (word) return word === "FAIL" ? "FAIL" : "BLOCK";
+  }
+  return null;
+}
+
+// Where a negative belongs. A full SHA, or a prefix of at least seven hex
+// digits, of the current or a carried head is that head; of any other head it
+// is elsewhere (null). Anything else, missing, words, fewer than seven or more
+// than forty hex digits (r4434690343), is the current head, since nothing
+// readable names another one.
+function readableHead(value) {
+  const named = (value ?? "").replace(/^[\s*_`]+|[\s*_`.,;]+$/g, "").toLowerCase();
+  return /^[0-9a-f]{7,40}$/.test(named) ? named : null;
+}
+function negativeHead(value, headSha, carriedHeads) {
+  const sha = headSha.toLowerCase();
+  const named = readableHead(value);
+  if (!named || sha.startsWith(named)) return { head: sha, current: true };
+  const onCarried = [...carriedHeads, ...(carriedHeads.heldNegatives ?? [])].find((carriedSha) => carriedSha.toLowerCase().startsWith(named));
+  return onCarried ? { head: onCarried.toLowerCase(), current: false } : null;
+}
+
 function latestVerdicts(entries, {
   agentField,
   headField,
@@ -352,6 +413,7 @@ function latestVerdicts(entries, {
   carriedHeads,
 }) {
   const latest = new Map();
+  const negatives = new Map();
 
   for (const entry of entries) {
     if (!canonicalBlock(entry.body, agentField)) continue;
@@ -364,30 +426,64 @@ function latestVerdicts(entries, {
     const fallback = fallbackSlug(fallbackLine);
     const identity = verifiedCommentIdentity(entry, agent);
 
-    if (
-      !isAgent(agent, role) ||
-      !identity ||
-      !identity.principal ||
-      !(sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) ||
-      !verdict ||
-      !VERDICTS.has(verdict) ||
-      (extraField && !extra)
-    ) {
-      continue;
+    if (!isAgent(agent, role) || !identity || !identity.principal) continue;
+
+    // F-012: an edited comment never gives a PASS. An edited comment of a known
+    // principal on a counted head is that principal's latest word on that head
+    // (its time is the edit time, #129), even when the edit left a PASS or an
+    // unreadable verdict: it then holds that head's slot as EDITED, which is
+    // neither a PASS nor a FAIL, so an edit never brings back the principal's
+    // earlier PASS on that head. An edited FAIL or BLOCK keeps its verdict. An
+    // edit that moves the comment to another head, removes the block or names
+    // another principal is not covered here (rest of F-012, owner). A negative
+    // in any form (F-027) keeps its verdict, edited or not, and needs no
+    // QA-Scope; its head is read by `negativeHead`.
+    const negative = negativeWord(entry.body, verdictField);
+    let place;
+    if (negative) {
+      place = negativeHead(head, headSha, carriedHeads);
+    } else if (sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) {
+      place = { head: head.toLowerCase(), current: sameHead(head, headSha) };
     }
+    if (!place) continue;
+    const pass = !negative && verdict === "PASS" && !(extraField && !extra);
+    if (!negative && !pass && !entry.edited) continue;
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
-      cli: entry.cliChannel != null, order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+    const candidate = { agent, head: place.head, verdict: negative ?? (entry.edited ? "EDITED" : "PASS"), extra,
+      fallback, fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
+      current: place.current };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
     const slot = candidate.current ? "current" : "carried";
     if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
     latest.set(key, slots);
+    if (NEGATIVE.has(candidate.verdict)) {
+      // Carried heads have the same PR diff (only clean base merges since), so
+      // a negative on one of them is kept under one key for all of them.
+      const where = candidate.current ? `${key}|current` : `${key}|carried`;
+      const held = negatives.get(where);
+      if (!held || compareOrder(candidate.order, held.order) > 0) negatives.set(where, candidate);
+    }
   }
 
-  return new Map([...latest].map(([key, slots]) => [key, prevailing(slots)]));
+  // F-023 (owner decision #87 issuecomment-6551590871, 1. 11. 2026.): within one
+  // principal, a FAIL or BLOCK on a head is not cleared by a later PASS on that
+  // head. A carried PASS is held by a FAIL or BLOCK on any carried head, since
+  // the gate cannot tell which carried head is newer (review of #1155, F-023-R1).
+  // Only a verdict on the current head (after a new push or a clean base merge,
+  // as before), or the owner's Owner-Override for the exact head, moves past it.
+  // An EDITED slot (F-012) is held the same way, so an edit never turns the
+  // principal's FAIL or BLOCK on that head into a mere wait.
+  const held = (candidate, key) =>
+    candidate && !NEGATIVE.has(candidate.verdict)
+      ? negatives.get(`${key}|${candidate.current ? "current" : "carried"}`) ?? candidate
+      : candidate;
+  return new Map([...latest].map(([key, slots]) => [
+    key,
+    prevailing({ current: held(slots.current, key), carried: held(slots.carried, key) }),
+  ]));
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the
@@ -438,6 +534,9 @@ function evaluateGateCore({
   headSha,
   ownerLogin,
   comments = [],
+  // F-013: every comment, also from before the last base change, for the
+  // D-139 rule that a QA session never reviewed this PR. Defaults to comments.
+  historyComments = null,
   prReviews = [],
   reviewComments = null,
   authorLogin = null,
@@ -591,7 +690,7 @@ function evaluateGateCore({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments, prReviews);
+    const evidence = quotaEvidence(comments, prReviews, historyComments ?? comments);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
@@ -623,7 +722,7 @@ function evaluateGateCore({
     // answered. The QA head is the current head or one carried through clean
     // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
     // does not void it.
-    const everReviewers = reviewerPrincipals(trusted);
+    const everReviewers = reviewerPrincipals(historyComments ? trustedComments(historyComments, trustedLogins, ownerLogin) : trusted);
     const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
     const secondSession = separateAppPass || fallbackPass
       ? null
@@ -706,18 +805,32 @@ export function carriedHeadCandidates(comments, headSha, path) {
   const steps = path ?? [];
   // The walk may stop once it has seen every named head (F-148): no verdict
   // head is then beyond it, so none can be dropped silently.
-  const seen = new Set(steps.map((commit) => commit?.sha?.toLowerCase()));
-  const allSeen = [...named].every((sha) => seen.has(sha));
+  // A negative may name its head by a prefix (F-027), so a named head is
+  // matched as a prefix of a walked commit; a full SHA matches only itself.
+  const shas = steps.map((commit) => commit?.sha?.toLowerCase()).filter(Boolean);
+  const names = (sha) => [...named].some((head) => sha.startsWith(head));
+  const allSeen = [...named].every((head) => shas.some((sha) => sha.startsWith(head)));
   if (!allSeen && !steps.some((commit) => (commit?.parents?.length ?? 0) < 2)) {
     return { heads: [], reason: "first-parent walk did not reach a non-merge commit" };
   }
-  const heads = steps
-    .map((commit) => commit?.sha?.toLowerCase())
-    .filter((sha) => named.has(sha) && onlyBaseMerges(steps, sha));
+  const heads = shas.filter((sha) => names(sha) && onlyBaseMerges(steps, sha));
   if (heads.length > MAX_CARRIED_HEADS) {
     return { heads: [], reason: `more than ${MAX_CARRIED_HEADS} verdict heads behind base merges` };
   }
   return { heads, reason: null };
+}
+
+/**
+ * F-027: the named heads that `path` already reached behind base merges only,
+ * whether or not the walk finished. The runner keeps them for a FAIL or BLOCK
+ * when the carry-over check cannot finish; they never carry a PASS.
+ */
+export function foundCarryHeads(comments, headSha, path) {
+  const named = [...namedCarryHeads(comments, headSha)];
+  const steps = path ?? [];
+  return steps
+    .map((commit) => commit?.sha?.toLowerCase())
+    .filter((sha) => sha && named.some((head) => sha.startsWith(head)) && onlyBaseMerges(steps, sha));
 }
 
 /**
@@ -735,6 +848,11 @@ export function namedCarryHeads(comments, headSha) {
       if (block === "Owner-Command" && !validCommandShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
+      // F-027: a negative names its head as `negativeHead` reads it, so a
+      // prefix or a decorated SHA of an earlier head is walked for too.
+      const verdictField = { "Agent-Review": "Review-Verdict", "QA-Agent": "QA-Verdict" }[block];
+      const negativeAt = verdictField && negativeWord(entry.body, verdictField) ? readableHead(field(entry.body, headField)) : null;
+      if (negativeAt && !headSha.toLowerCase().startsWith(negativeAt)) named.add(negativeAt);
     }
   }
   return named;
@@ -876,9 +994,61 @@ export function targetsDefaultBranch(pr) {
   return typeof ref === "string" && ref.length > 0 && ref === pr?.base?.repo?.default_branch;
 }
 
-// F-165: Auto-merge eligible is refused while another open PR shares the head;
-// a list that was not read counts as shared.
-export const SHARED_HEAD = { state: "pending", description: "Not eligible for auto-merge: another open PR shares this head." };
+// F-013: a verdict judged the diff against the base of its time. After the base
+// changes, the same head carries another diff, so nothing written before the
+// last base change counts. Time of the last base change issue event: a manual
+// `base_ref_changed` or GitHub's `automatic_base_change_succeeded`, which
+// retargets a dependent PR after its base branch is deleted (Codex review
+// c.6562680923 on #1117); -Infinity when the base never changed, Infinity
+// (drop everything) when the events were not read or an event has no readable
+// time. A failed automatic change leaves the base as it was.
+export const BASE_CHANGE_EVENTS = new Set(["base_ref_changed", "automatic_base_change_succeeded"]);
+export function lastBaseChange(events) {
+  if (!Array.isArray(events)) return Infinity;
+  let last = -Infinity;
+  for (const event of events) {
+    if (!BASE_CHANGE_EVENTS.has(event?.event)) continue;
+    const at = Date.parse(event?.created_at ?? "");
+    last = Math.max(last, Number.isNaN(at) ? Infinity : at);
+  }
+  return last;
+}
+
+/**
+ * Items stamped strictly after the cutoff; an unreadable stamp drops the item
+ * once a cutoff exists. With `codexEdits`, a Codex App review summary that was
+ * created earlier but edited after the cutoff is kept too: Codex edits one
+ * summary in place, and that summary is no verdict (only its head-bound clean
+ * state counts as Codex evidence, D-139), so keeping it never revives an old
+ * verdict and it can only void quota evidence (Codex r4434170872).
+ */
+export function sinceBaseChange(items, cutoff, stamp = "created_at", { codexEdits = false } = {}) {
+  const list = Array.isArray(items) ? items : [];
+  if (cutoff === -Infinity) return list;
+  const after = (value) => {
+    const at = Date.parse(value ?? "");
+    return Number.isFinite(at) && at > cutoff;
+  };
+  return list.filter(
+    (item) =>
+      after(item?.[stamp]) ||
+      (codexEdits &&
+        isCodexBot(item?.user) &&
+        item?.performed_via_github_app?.slug === CODEX_APP_SLUG &&
+        typeof item?.body === "string" &&
+        item.body.startsWith(CODEX_SUMMARY_MARKER) &&
+        after(item?.updated_at)),
+  );
+}
+
+// F-165, F-040: a commit status belongs to the head, so while another open PR
+// shares it no status of the gate is green: the verdicts, body and file list
+// of one PR would stand for the other. A list that was not read counts as
+// shared.
+export const SHARED_HEAD = {
+  state: "pending",
+  description: "No green status while another open PR shares this head; close the other PR.",
+};
 export function sharesHeadWithOpenPr(pr, openPulls) {
   if (!Array.isArray(openPulls)) return true;
   const head = String(pr?.head?.sha ?? "").toLowerCase();
@@ -955,7 +1125,7 @@ export function evaluateMergeAuthorization({
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
 
-export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -980,6 +1150,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
     headSha: pr.head.sha,
     ownerLogin,
     comments,
+    historyComments,
     prReviews,
     reviewComments,
     authorLogin: pr.user?.login ?? null,

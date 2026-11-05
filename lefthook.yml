@@ -23,7 +23,8 @@ pre-commit:
       #      together. The container gets the staged diff on stdin, so it runs
       #      with --network none. That flag covers the container only: the
       #      image is pulled beforehand, once, and that pull is not time-bound;
-      #   2. a `gitleaks` binary from PATH (version is whatever is installed),
+      #   2. a `gitleaks` binary from PATH that reports version 8.30.1 (the
+      #      name and version are trusted, not the file itself),
       #      also when Docker answers but the image cannot be pulled;
       #   3. neither: the hook FAILS and the commit is blocked (strict mode,
       #      the default). It says what to start or install.
@@ -44,16 +45,18 @@ pre-commit:
       # Docker or gitleaks available the variable does nothing: the scan runs
       # and a finding still blocks. Rules:
       #   - agents must never set it; an agent without a scanner stops and
-      #     reports instead;
+      #     reports instead. The safety hook refuses an agent command that
+      #     names it, and the skip does not work while CLAUDECODE is set
+      #     (F-017);
       #   - it is not a substitute for --no-verify and does not make
       #     --no-verify acceptable;
       #   - it must never be written into .claude/settings.json, .env, a shell
       #     profile or CI. It is typed on the command line of one commit.
       # A skipped scan is a weaker local check, not a pass: the CI job
-      # "Security scanners" scans the whole history only once a pull request
-      # is open (and on main), and by then the secret is already in the pushed
-      # branch history and must be rotated. A pushed branch without a pull
-      # request is not scanned by CI.
+      # "Security scanners" scans the whole history once a pull request is
+      # open (and on main), and the workflow "Secret scan on push" scans every
+      # other pushed branch; by then the secret is already in the pushed
+      # branch history and must be rotated.
       # Keep the script free of double quotes: on Windows lefthook wraps it in
       # double quotes for `sh -c` without escaping them, so a double-quoted
       # string with a space in it cuts the script short and the hook fails.
@@ -85,11 +88,19 @@ pre-commit:
           echo 'lefthook secrets: the gitleaks image could not be pulled.' >&2
           return 1
         }
+        # F-017: a binary named gitleaks counts only when it reports the pinned
+        # version; any other version leaves the hook strict.
+        gitleaks_pinned() {
+          case $(gitleaks version 2>/dev/null) in
+            8.30.1|v8.30.1) return 0 ;;
+          esac
+          echo 'lefthook secrets: the gitleaks binary in PATH is not version 8.30.1, not used.' >&2
+          return 1
+        }
         if docker_ready && image_ready; then
           git diff --cached | docker run -i --rm --network none $image stdin --redact --no-banner
-        elif command -v gitleaks >/dev/null 2>&1; then
-          echo 'lefthook secrets: Docker or the gitleaks image is not available, scanning with the gitleaks binary from PATH, version:' >&2
-          gitleaks version >&2
+        elif command -v gitleaks >/dev/null 2>&1 && gitleaks_pinned; then
+          echo 'lefthook secrets: Docker or the gitleaks image is not available, scanning with the gitleaks 8.30.1 binary from PATH.' >&2
           git diff --cached | gitleaks stdin --redact --no-banner
         else
           tree=$(git write-tree 2>/dev/null) || tree=
@@ -102,13 +113,18 @@ pre-commit:
               esac
               ;;
           esac
+          # F-017: never inside an agent session (Claude Code sets CLAUDECODE).
+          case ${CLAUDECODE:-} in
+            '') ;;
+            *) skip=no ;;
+          esac
           if [ $skip = yes ]; then
             echo '==========================================================================' >&2
             echo 'WARNING: SECRET SCAN SKIPPED. This commit was NOT checked for secrets.' >&2
             echo 'Docker (or the gitleaks image) is not available and there is no gitleaks' >&2
-            echo 'binary in PATH. Skipped only because DUCTUS_ALLOW_SECRET_SCAN_SKIP equals' >&2
+            echo 'binary 8.30.1 in PATH. Skipped only because DUCTUS_ALLOW_SECRET_SCAN_SKIP equals' >&2
             echo 'the id of the staged content:' $tree >&2
-            echo 'CI (Security scanners) scans only once a pull request is open, and a secret' >&2
+            echo 'CI scans the branch only after it is pushed, and a secret' >&2
             echo 'pushed to a branch stays in its history and must be rotated either way.' >&2
             echo 'Check the staged diff yourself,' >&2
             echo 'or start Docker / install gitleaks and run: pnpm exec lefthook run pre-commit' >&2
@@ -117,7 +133,7 @@ pre-commit:
             echo 'lefthook secrets: FAILED, the staged diff was NOT scanned for secrets.' >&2
             echo 'Docker is not available (not installed, the daemon did not answer within' >&2
             echo '10 s, or the gitleaks image could not be pulled) and there is no gitleaks' >&2
-            echo 'binary in PATH.' >&2
+            echo 'binary 8.30.1 in PATH.' >&2
             echo 'Do one of these and commit again:' >&2
             echo '  - start Docker (Docker Desktop) and wait until docker info answers, or' >&2
             echo '  - install gitleaks 8.30.1 and put it in PATH: https://github.com/gitleaks/gitleaks/releases' >&2

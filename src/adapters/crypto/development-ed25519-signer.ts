@@ -15,7 +15,7 @@ import type {
  * Local/test-only Ed25519 signer.
  *
  * It intentionally generates an ephemeral private key in process memory and
- * refuses construction in NODE_ENV=production. Production evidence signing
+ * refuses construction unless NODE_ENV is development or test. Production evidence signing
  * must use the future KMS/HSM adapter instead.
  */
 export class DevelopmentEd25519SigningKeyProvider
@@ -28,7 +28,9 @@ export class DevelopmentEd25519SigningKeyProvider
     private readonly keyId = "pisac-dev-ed25519",
     private readonly keyVersion = "ephemeral-v1",
   ) {
-    if (process.env.NODE_ENV === "production") {
+    // An allowlist, as for the fake login provider: an unset, empty or
+    // misspelt NODE_ENV counts as production (F-020).
+    if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
       throw new Error(
         "development signer is prohibited in production",
       );

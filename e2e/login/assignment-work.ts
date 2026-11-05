@@ -2,10 +2,12 @@ import { expect, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
+import { NOTICE_TEMPLATE_VERSION } from "../../src/domain/notice/fingerprint";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE } from "./support";
 import { localAdminUrl, localAppUrl } from "./local-db-url";
+import { APP_ORIGIN } from "./origin";
 
 // #711 step E (decision B): the specs that reach a work through the API use
 // the student's own document of an assignment, the one the open route makes
@@ -14,7 +16,7 @@ import { localAdminUrl, localAppUrl } from "./local-db-url";
 // through the admin login of the compose database; the student confirms the
 // notice under her own session and the real route opens the work.
 
-const ORIGIN = "http://localhost:3000";
+const ORIGIN = APP_ORIGIN;
 const TEACHER = "demo-teacher@demo.ductus.test";
 const STUDENT = "demo-student@demo.ductus.test";
 
@@ -84,14 +86,14 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
   const pool = new pg.Pool({ connectionString: localAppUrl(), max: 1 });
   try {
     await createWithActor(pool)(token, (tx) =>
-      tx.query("SELECT institution.acknowledge_notice($1, $2)", [assignmentId, 1]));
+      tx.query("SELECT institution.acknowledge_notice($1, $2, $3)", [assignmentId, 1, NOTICE_TEMPLATE_VERSION]));
   } finally {
     await pool.end();
   }
 
   // The real open route makes the work, as the click on "Započni rad" does (DAN-330).
   const response = await student.request.post("/api/evidence/open", {
-    headers: { origin: ORIGIN, "ductus-protocol": DUCTUS_PROTOCOL_VERSION }, data: { assignmentId },
+    headers: { origin: ORIGIN, "ductus-protocol": DUCTUS_PROTOCOL_VERSION }, data: { assignmentId, start: true },
   });
   expect(response.status()).toBe(200);
   const body = await response.json() as { status?: unknown; documentId?: unknown };

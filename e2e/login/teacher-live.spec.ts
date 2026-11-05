@@ -13,6 +13,7 @@ import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { cleanUpAssignmentWork, openAssignmentWork } from "./assignment-work";
 import { post } from "./comment-seed";
 import { appCookie, type DemoAccount, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog } from "./support";
+import { APP_ORIGIN } from "./origin";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
 // /api/live/<id>, PR #496, BACKEND 4.12) is not on main yet, so the browser's
@@ -338,6 +339,81 @@ test.describe("comments from the live view", () => {
     await expect(card.getByText(c.notPlaced)).toHaveCount(0);
   });
 
+  const PARAGRAPH_ID = "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f";
+  const SENTENCE = "Gradske knjižnice su mjesto susreta i učenja.";
+  const livePage = (sentence: string) => {
+    const doc = JSON.parse(REVISION_ZERO_JCS) as { nodes: Record<string, unknown>[] };
+    doc.nodes = [{ type: "paragraph", id: PARAGRAPH_ID, children: [{ type: "text", text: sentence, marks: [] }] }];
+    const body = canonicalizeJcs(doc);
+    return { body, hash: createHash("sha256").update(body, "utf8").digest("hex") };
+  };
+  const serveText = (page: Page, documentId: string) => {
+    const current = livePage(SENTENCE);
+    return page.route(`**/api/live/${documentId}`, (route) => route.fulfill({
+      status: 200, body: current.body, headers: { etag: `"${current.hash}"`, "content-type": "application/json" },
+    }));
+  };
+
+  // #535 t. 1: the server refuses the student; the page must not offer the panel or ask for the list.
+  test("a student who opens the teacher's address gets no comment panel and no comment request", async ({ browser }) => {
+    const tc = messagesHr.teacherComments;
+    const student = await (await browser.newContext()).newPage();
+    await signIn(student, "/");
+    const { documentId } = await openAssignmentWork(student);
+    const listRequests: string[] = [];
+    student.on("request", (request) => { if (request.url().includes("/api/comments/")) listRequests.push(request.url()); });
+    await serveText(student, documentId);
+    await student.goto(`/nastavnik/rad/${documentId}`);
+    await expect(student.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible();
+    await expect(student.getByRole("heading", { name: messagesHr.comments.title })).toHaveCount(0);
+    await expect(student.getByText(tc.hint)).toHaveCount(0);
+    // Two frames after the text: whatever the page would have asked for has been asked.
+    await student.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+    expect(listRequests).toEqual([]);
+  });
+
+  // #535 t. 3: a comment on its way cannot be cancelled; after a failure the button works again.
+  test("Odustani is disabled while the comment is being published", async ({ browser }) => {
+    const tc = messagesHr.teacherComments;
+    const QUOTE = "mjesto susreta";
+    const teacher = await (await browser.newContext()).newPage();
+    const student = await (await browser.newContext()).newPage();
+    await signIn(student, "/");
+    await signIn(teacher, "/", "Demo nastavnik");
+    const { documentId } = await openAssignmentWork(student);
+    await serveText(teacher, documentId);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    await teacher.route("**/api/comments/create", async (route) => {
+      await held;
+      await route.fulfill({ status: 503, body: "{}", headers: { "content-type": "application/json" } });
+    });
+    await teacher.goto(`/nastavnik/rad/${documentId}`);
+    const text = teacher.getByRole("document", { name: t.documentLabel });
+    await expect(text.getByText(SENTENCE)).toBeVisible();
+    await text.locator("p").evaluate((p, quote) => {
+      const node = document.createTreeWalker(p, NodeFilter.SHOW_TEXT).nextNode()!;
+      const start = node.textContent!.indexOf(quote);
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + quote.length);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+    }, QUOTE);
+    await text.dispatchEvent("mouseup");
+    const form = teacher.getByRole("form", { name: tc.newTitle });
+    await form.getByRole("textbox", { name: tc.bodyLabel }).fill("Dodaj izvor.");
+    const cancel = form.getByRole("button", { name: tc.cancel });
+    await expect(cancel).toBeEnabled();
+    await form.getByRole("button", { name: tc.publish }).click();
+    await expect(cancel).toBeDisabled();
+    release();
+    await expect(form.getByRole("alert")).toBeVisible();
+    await expect(cancel).toBeEnabled();
+    await cancel.click();
+    await expect(form).toHaveCount(0);
+  });
+
   test("the teacher marks a passage, comments, and the mark follows the text", async ({ browser }) => {
     const c = messagesHr.comments;
     const tc = messagesHr.teacherComments;
@@ -395,7 +471,7 @@ test.describe("comments from the live view", () => {
 
     // The student reads the same thread through the same function (PRODUCT §5 rule 5).
     const listed = await (await student.request.post("/api/comments/list", {
-      headers: { origin: "http://localhost:3000" }, data: { documentId },
+      headers: { origin: APP_ORIGIN }, data: { documentId },
     })).json();
     expect(listed.comments.map((row: { authorRole: string; isOwn: boolean; body: string }) => [row.authorRole, row.isOwn, row.body]))
       .toEqual([["teacher", false, BODY]]);
@@ -438,7 +514,7 @@ test.describe("the live route on the work's own document (#711 A11, A14)", () =>
 
     const live = work("Gradske knjižnice su mjesto susreta.");
     const put = await student.request.put(`/api/live/${documentId}`, {
-      headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
+      headers: { origin: APP_ORIGIN, "content-type": "application/json", "if-none-match": "*" }, data: live.body,
     });
     expect(put.status()).toBe(200);
     expect(await put.json()).toMatchObject({ outcome: "accepted" });
@@ -459,7 +535,7 @@ test.describe("the live route on the work's own document (#711 A11, A14)", () =>
       expect(listed[0]).toBe(403);
       expect(listed).toEqual(await answerOf(await post(stranger, "list", { documentId: unknown })));
       const published = await stranger.request.put(`/api/live/${documentId}`, {
-        headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
+        headers: { origin: APP_ORIGIN, "content-type": "application/json", "if-none-match": "*" }, data: live.body,
       });
       expect(await answerOf(published)).toEqual([404, '{"error":"not_found"}']);
     }

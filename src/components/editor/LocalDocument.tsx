@@ -40,12 +40,12 @@
 import type { Transaction } from "@tiptap/pm/state";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
-  createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode,
+  createContext, useContext, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode,
 } from "react";
 
 import type { CanonicalDocument } from "@/domain/document";
 import {
-  browserMarkStore, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
+  browserMarkStore, currentSession, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
 } from "@/client/session-marks";
 import { localChip, type LocalChip } from "@/domain/sync/labels";
 import type { SyncState } from "@/domain/sync/states";
@@ -58,6 +58,7 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
+import { signInHref, signInTarget, SIGN_IN_DEFAULT_TARGET } from "@/components/auth/sign-in-link";
 import {
   editorSignOutPlan, planAfterDiscard, readLogoutHold, untilLoaded, withinHoldLimit, type HoldRead,
 } from "@/client/logout-hold";
@@ -207,6 +208,8 @@ export function LocalDocumentProvider({
   const channelRef = useRef<BroadcastChannel | null>(null);
   // Whose journal the sheet shows (`scope` and document), or null while it is empty.
   const sheetOwnerRef = useRef<string | null>(null);
+  // How this tab stops once its session has ended.
+  const stopRef = useRef<(() => void) | null>(null);
   const markTag = session?.tag ?? null;
   const markAt = session?.at ?? 0;
   const saverRef = useRef<DocumentSaver | null>(null);
@@ -251,6 +254,7 @@ export function LocalDocumentProvider({
     extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput, ArrowCollapse, observer.extension],
     editable: false,
     immediatelyRender: false,
+    injectCSS: false, // app/prosemirror.css (DAN-489)
     editorProps: {
       attributes: () => ({
         role: "textbox",
@@ -348,6 +352,7 @@ export function LocalDocumentProvider({
       setWords(0);
       setPhase("signed-out");
     };
+    stopRef.current = stop;
     const ended = () => markTag !== null && hasEnded(browserMarkStore(), { tag: markTag, at: markAt });
     if (ended()) {
       stop();
@@ -537,6 +542,7 @@ export function LocalDocumentProvider({
     });
 
     return () => {
+      if (stopRef.current === stop) stopRef.current = null;
       flush();
       disposed = true;
       readyRef.current = false;
@@ -590,19 +596,24 @@ export function LocalDocumentProvider({
 
   const signOut = async (): Promise<boolean> => {
     const locked = logoutRef.current;
-    // Nothing was deleted and the session may still be open; the dialog says so.
-    if (!(await postLogout())) return false;
-    // The session has ended: every tab of it stops, and so does the session
-    // the browser held last if it was another one.
-    const ended = endAfterLogout(browserMarkStore(), markTag);
+    const store = browserMarkStore();
+    // Taken now: a session that becomes current meanwhile stays (#1444).
+    const own = markTag ?? currentSession(store)?.tag ?? null;
+    const reached = await postLogout();
+    // Ended here either way; without an answer nothing calls the route again.
+    const ended = endAfterLogout(store, own);
     for (const tag of ended) channelRef.current?.postMessage(tag);
     if (editor && !editor.isDestroyed) {
       editor.setEditable(false, false);
       startFreshHistory(editor.view, "empty");
     }
     sheetOwnerRef.current = null;
-    await (locked ? locked.clear() : clearWithoutEditor(scope, documentId));
-    return true;
+    // Unconfirmed work stays for this person's next sign-in (D-118).
+    await (locked ? locked.clear() : clearWithoutEditor(scope, documentId)).catch(() => undefined);
+    if (reached) return true;
+    if (stopRef.current) stopRef.current();
+    else setPhase("signed-out");
+    return false;
   };
 
   const value: LocalDocumentValue = {
@@ -611,18 +622,42 @@ export function LocalDocumentProvider({
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
 
+/** How long a sign-out waits for the logout route before it ends on the device. */
+const LOGOUT_TIMEOUT_MS = 8_000;
+
 /**
  * POST to the logout route; true only for its redirect, which comes after
- * the session was closed and the cookie cleared. A lost request or response
- * is false, and the caller deletes nothing.
+ * the session was closed and the cookie cleared. A lost request, an error
+ * status and no answer within the time limit are false.
  */
 async function postLogout(): Promise<boolean> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), LOGOUT_TIMEOUT_MS);
   try {
-    const response = await fetch("/api/auth/logout", { method: "POST", redirect: "manual", cache: "no-store" });
+    const response = await fetch("/api/auth/logout", {
+      method: "POST", redirect: "manual", cache: "no-store", signal: abort.signal,
+    });
     return response.type === "opaqueredirect";
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+/**
+ * After a successful `postLogout`: the same POST once more, natively, so the
+ * browser follows the route's redirect on to the provider's logout (DAN-212);
+ * the fetch cannot follow it. It arrives without the cookie, so it closes
+ * nothing twice. A form of its own, so it holds while the page re-renders.
+ */
+function followLogoutNatively(): void {
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = "/api/auth/logout";
+  form.hidden = true;
+  document.body.append(form);
+  form.submit();
 }
 
 /**
@@ -701,6 +736,7 @@ export function LocalEditor() {
       {/* Live regions exist before their text does, so it is announced. */}
       <div className="editor-notice" role="alert">
         {alert ? <p>{alert}</p> : null}
+        {phase === "signed-out" ? <SignInAgain /> : null}
       </div>
       <div className="editor-notice" role="status">
         {phase === "blocked" ? <p>{t.editor.blockedHint}</p>
@@ -715,6 +751,21 @@ export function LocalEditor() {
       {/* `data-phase` is for tests and styling only; it carries no text. */}
       <EditorContent editor={editor} className="editor-surface" data-phase={phase} />
     </>
+  );
+}
+
+/**
+ * A new sign-in through the login route (D-09), back to this page; /prijava
+ * would forward a kept cookie straight back here (#1444).
+ */
+function SignInAgain() {
+  const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.currentTarget.href = signInHref(signInTarget(window.location.pathname + window.location.search));
+  };
+  return (
+    <p>
+      <a className="btn" href={signInHref(SIGN_IN_DEFAULT_TARGET)} onClick={onClick}>{t.auth.signInAgain}</a>
+    </p>
   );
 }
 
@@ -796,14 +847,14 @@ export function LocalLogout() {
   const [preparing, setPreparing] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
   const [working, setWorking] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [signedOutHere, setSignedOutHere] = useState(false);
+  const preparedRef = useRef<LogoutPlan>({ unsaved: false, pending: null });
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (preparing || plan) return;
     setPreparing(true);
-    setFailed(false);
     void prepareSignOut()
       // Writing has stopped either way; an unknown count shows no number.
       .catch((): LogoutPlan => ({ unsaved: false, pending: null }))
@@ -814,6 +865,7 @@ export function LocalLogout() {
           return;
         }
         setPreparing(false);
+        preparedRef.current = next;
         // Nothing at all stays on this device: no dialog (O1, #476 c.6396707923).
         if (nothingHeld(next)) confirm();
         else setPlan(next);
@@ -822,22 +874,20 @@ export function LocalLogout() {
   const confirm = () => {
     if (working) return;
     setWorking(true);
-    setFailed(false);
+    // Without the server's answer the dialog says it ended here (D-118).
     const failure = () => {
-      // Without a dialog yet, a failed sign-out opens one that says so.
-      setPlan((open) => open ?? { unsaved: false, pending: 0 });
-      setFailed(true);
+      setPlan((open) => open ?? preparedRef.current);
+      setSignedOutHere(true);
       setWorking(false);
     };
     void signOut().then((done) => {
-      if (done) window.location.assign("/");
+      if (done) followLogoutNatively();
       else failure();
     }, failure);
   };
   const stay = () => {
     setPlan(null);
-    setFailed(false);
-    staySignedIn();
+    if (!signedOutHere) staySignedIn();
   };
   // Focus goes back to "Odjava" once the dialog has closed: while the modal
   // is open, the button behind it is inert and cannot take focus.
@@ -860,7 +910,7 @@ export function LocalLogout() {
         <LogoutDialog
           plan={plan}
           working={working}
-          failed={failed}
+          signedOutHere={signedOutHere}
           onConfirm={confirm}
           onStay={stay}
           copies={plan.copies}

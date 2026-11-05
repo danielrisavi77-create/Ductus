@@ -92,6 +92,8 @@ export function toPr(p) {
     isDraft: Boolean(p.draft),
     headRefOid: p.head?.sha,
     headRefName: p.head?.ref,
+    // F-010: where the head lives; null for a deleted fork.
+    headRepo: p.head?.repo?.full_name ?? null,
     // The PR author as GitHub reports it; a branch name is chosen by whoever pushes it.
     author: { login: p.user?.login ?? null, type: p.user?.type ?? null },
     baseRefName: p.base?.ref,
@@ -143,6 +145,7 @@ export async function checkRollup(sha, { list = ghList } = {}) {
       workflowName: String(r.check_suite?.id ?? ""),
       name: r.name,
       appId: Number.isInteger(r.app?.id) ? r.app.id : null,
+      appSlug: typeof r.app?.slug === "string" ? r.app.slug : null,
       status: String(r.status ?? "").toUpperCase(),
       conclusion: r.conclusion ? String(r.conclusion).toUpperCase() : (r.status === "completed" ? "" : String(r.status ?? "").toUpperCase()),
       startedAt: r.started_at,
@@ -179,11 +182,15 @@ export async function readGate(sha, { read = gateStatus, tries = 2 } = {}) {
 }
 
 let cachedRepo;
-export function repoId() {
-  cachedRepo ??= ghJson(["api", "repos/{owner}/{repo}"]).then((r) => ({
-    owner: r.owner.login,
-    repo: r.name,
-  }));
+export function repoId({ json = ghJson } = {}) {
+  // A failed read is not cached: the next call (a retry) asks GitHub again (Codex CLI #1197).
+  cachedRepo ??= json(["api", "repos/{owner}/{repo}"]).then(
+    (r) => ({ owner: r.owner.login, repo: r.name }),
+    (e) => {
+      cachedRepo = undefined;
+      throw e;
+    },
+  );
   return cachedRepo;
 }
 
@@ -268,4 +275,49 @@ export async function reviewThreads(n, { graphql = graphqlThreads, ccr = ccrThre
       throw new Error(`review threads unreadable: graphql: ${why(first)}; ccr: ${why(second)}`);
     }
   }
+}
+
+// GitHub answers a busy API with 502, 503 or 504 (and the network sometimes
+// drops the connection); those reads are worth repeating. Anything else, such
+// as 404 or a refused permission, is not.
+const TRANSIENT_RE = /\bHTTP (?:502|503|504)\b|\b(?:502|503|504) (?:Bad Gateway|Service Unavailable|Gateway Time-?out)\b|ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up|TLS handshake timeout|connection reset by peer/i;
+export const transientError = (e) => TRANSIENT_RE.test(`${e?.stderr ?? ""} ${e?.message ?? e ?? ""}`);
+
+/** fn() again on a transient error, at most `tries` times in all, waiting waitMs, 2*waitMs, ... */
+export async function withRetry(fn, { tries = 4, waitMs = 3000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), retryable = transientError } = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= tries || !retryable(e)) throw e;
+      await sleep(waitMs * attempt);
+    }
+  }
+}
+
+/** Numbers of the open PRs, ascending, from the light REST list. */
+export async function openPrNumbers({ list = ghList } = {}) {
+  const prs = await list("repos/{owner}/{repo}/pulls?state=open&per_page=100");
+  const numbers = prs.map((p) => p?.number);
+  if (!numbers.every((n) => Number.isSafeInteger(n) && n > 0)) throw new Error("open PR list has an entry without a number");
+  return numbers.sort((a, b) => a - b);
+}
+
+/**
+ * Every open PR read on its own: the number list first, then read(n) for each,
+ * one after the other, each with retries. One heavy query for all PRs times out
+ * on GitHub (502/504). A PR that stays unreadable is returned as {number, error},
+ * never left out; a failed number list throws.
+ */
+export async function readOpenPrs(read, { numbers = openPrNumbers, retry = withRetry } = {}) {
+  const list = await retry(() => numbers());
+  const out = [];
+  for (const number of list) {
+    try {
+      out.push({ number, value: await retry(() => read(number)) });
+    } catch (e) {
+      out.push({ number, error: String(e?.stderr || e?.message || e).trim().split("\n")[0] });
+    }
+  }
+  return out;
 }
