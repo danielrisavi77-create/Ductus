@@ -884,6 +884,12 @@ function changeKey(file) {
     file?.previous_filename ?? null,
     file?.status ?? null,
     file?.patch,
+    // F-046: the whole tree entry (mode and type) at the compared head and at
+    // that compare's merge base, which the compare does not show; attached by
+    // `carriedHeads`. A base merge that changed only the entry under a PR file
+    // changes what the PR does to the base.
+    file?.entry,
+    file?.baseEntry,
   ]);
 }
 
@@ -891,13 +897,15 @@ function changeKey(file) {
  * `current` and `earlier` are GET compare/{base}...{head} for the current and
  * the earlier head: the PR's own diff must be identical, file by file. A
  * file without a patch (binary, too large) shows only its head side, so the
- * PR's effect on the base cannot be compared and nothing carries.
+ * PR's effect on the base cannot be compared and nothing carries. Without its
+ * tree entries (`entry`, `baseEntry`, F-046) nothing carries either.
  */
 export function sameChange(current, earlier) {
   const a = current?.files ?? [];
   const b = earlier?.files ?? [];
   if (a.length === 0 || a.length !== b.length || a.length >= COMPARE_FILE_CAP) return false;
-  if ([...a, ...b].some((file) => typeof file?.patch !== "string")) return false;
+  const whole = (file) => typeof file?.patch === "string" && typeof file?.entry === "string" && typeof file?.baseEntry === "string";
+  if (![...a, ...b].every(whole)) return false;
   const keys = (files) => files.map(changeKey).sort();
   const left = keys(a);
   const right = keys(b);
