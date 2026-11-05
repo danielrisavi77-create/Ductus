@@ -8,7 +8,8 @@
 // c.6626687486) and each form the earlier version already caught:
 // - a member `skip`, `todo`, `only` or `runOnly` in callee position
 //   (`t.skip()`, `test.skip.each([])()`, `ctx?.todo()`, `t.skip.call(t)`), or
-//   `skip`, `todo` or `only` read from `describe`, `it`, `test` or `suite`;
+//   `skip`, `todo` or `only` read from `describe`, `it`, `test` or `suite`,
+//   seen through the operands of a destructured source (`(await test).skip`);
 // - a `skip`, `todo` or `only` key in an object literal (node:test options);
 // - `skip`, `todo` or `only` imported from node:test, or destructured from
 //   `describe`, `it`, `test` or `suite`.
@@ -81,12 +82,6 @@ const keyOf = (n) =>
   ts.isPropertyAccessExpression(n) ? n.name : n.argumentExpression;
 const memberName = (n) => staticName(keyOf(n), ts.isElementAccessExpression(n));
 
-// The identifier an access or call chain starts from (`test` in `test.skip.each([])`).
-function rootName(n) {
-  while (isWrap(n) || isAccess(n) || ts.isCallExpression(n)) n = n.expression;
-  return ts.isIdentifier(n) ? n.text : null;
-}
-
 // True when the access, possibly through further members, is what is called.
 function called(n) {
   let p = n.parent;
@@ -147,9 +142,10 @@ function destructured(n) {
     }
   }
 }
-// True when a source can evaluate to a test root: through members, calls,
-// `await` and type assertions, and through each operand a logical, comma,
-// conditional or assignment expression can return (`test || {}`,
+// True when a source, or the object a member is read from, can evaluate to a
+// test root (`test.skip.each([])`, `(await test).skip`): through members,
+// calls, `await` and type assertions, and through each operand a logical,
+// comma, conditional or assignment expression can return (`test || {}`,
 // `(0, test)`, `c ? {} : test`, `await test`).
 const VALUE_OF = (n) =>
   isWrap(n) ||
@@ -193,10 +189,7 @@ export function scan(src, file = "a.test.mjs") {
   const visit = (n) => {
     if (isAccess(n) && MEMBERS.has(memberName(n) ?? "")) {
       const name = memberName(n);
-      if (
-        called(n) ||
-        (OPTIONS.has(name) && ROOTS.has(rootName(n.expression) ?? ""))
-      )
+      if (called(n) || (OPTIONS.has(name) && fromRoot(n.expression)))
         found.add(lineOf(keyOf(n)));
     }
     if (ts.isObjectLiteralExpression(n)) {
@@ -297,6 +290,13 @@ const CASES = [
   ["t.skip`r`;", "t.skips`r`;"],
   ["const f = describe.only;", "const f = cfg.only;"],
   ["it.todo('a');", "it.done('a');"],
+  // Review FAIL c.6648780511: a member read from a root sees through `await`
+  // and the other operands exactly as a destructured source does.
+  [
+    "async function f() { const skip = (await test).skip; }",
+    "async function f() { const skip = (await cfg).skip; }",
+  ],
+  ["const todo = (it || {}).todo;", "const todo = (cfg || {}).todo;"],
   // K2: a key in an object literal (node:test options).
   ["test('a', { skip: true });", "test('a', { timeout: 1 });"],
   ["test({ 'only': true });", "test({ 'onlyIf': true });"],
@@ -490,6 +490,7 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
       'const { n: { todo: td } = test } = {}; td("f", () => {});',
       'const { n: { skip: sk } = test || {} } = {}; sk("g", () => {});',
       'const { n: { skip: sw } = await test } = {}; sw("h", () => {});',
+      'const sa = (await test).skip; sa("i", () => {});',
     ],
     "clean.test.mjs": [
       'import test from "node:test";',
@@ -517,9 +518,9 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
       ];
     }
     assert.deepEqual(counts["marked.test.mjs"], [
-      "6",
+      "7",
       "2",
-      [1, 2, 3, 4, 5, 7, 8, 9],
+      [1, 2, 3, 4, 5, 7, 8, 9, 10],
     ]);
     assert.deepEqual(counts["clean.test.mjs"], ["0", "0", []]);
   } finally {
