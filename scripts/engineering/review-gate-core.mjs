@@ -217,7 +217,9 @@ function quotaEvidence(items, reviews = [], activityItems = items) {
     .map((review) => {
       const slug = [...QUOTA_EXHAUSTED_PATTERNS.keys()].find((name) => review?.user?.login === `${name}[bot]`);
       if (!slug || review?.user?.type !== "Bot") return null;
-      return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
+      // A time that is no string is unreadable and counts as latest: fail closed.
+      const at = typeof review?.submitted_at === "string" ? Date.parse(review.submitted_at) : NaN;
+      return { appSlug: slug, createdAt: at || Infinity, exhausted: false };
     })
     .filter(Boolean);
   const activity = [...appActivity, ...appReviews];
@@ -1037,8 +1039,10 @@ export function lastBaseChange(events) {
 export function sinceBaseChange(items, cutoff, stamp = "created_at", { codexEdits = false } = {}) {
   const list = Array.isArray(items) ? items : [];
   if (cutoff === -Infinity) return list;
+  // GitHub sends times as ISO strings; Date.parse reads a number such as 2027
+  // as a year, so any other type is unreadable (DAN-452, plan #1500 A6).
   const after = (value) => {
-    const at = Date.parse(value ?? "");
+    const at = typeof value === "string" ? Date.parse(value) : NaN;
     return Number.isFinite(at) && at > cutoff;
   };
   return list.filter(

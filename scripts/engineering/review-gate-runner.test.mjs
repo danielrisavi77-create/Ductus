@@ -39,7 +39,14 @@ globalThis.fetch = async (url, options = {}) => {
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
   if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
   if (path.endsWith("/issues/7/events")) return reply(200, plan.timeline ?? []);
-  if (path.endsWith("/pulls/7/reviews")) return reply(200, plan.reviews ?? []);
+  if (path.endsWith("/pulls/7/reviews")) {
+    if (!Array.isArray(plan.reviews)) return reply(200, plan.reviews ?? []);
+    const query = new URL(url).searchParams;
+    const per = Number(query.get("per_page")) || 30;
+    const page = Number(query.get("page")) || 1;
+    return reply(200, plan.reviews.slice((page - 1) * per, page * per));
+  }
+  if (path.endsWith("/pulls/7/comments")) return reply(200, plan.reviewComments ?? []);
   if (path.endsWith("/pulls")) {
     pullListReads++;
     if (pullListReads > 1 && plan.failListReread) throw new TypeError("fetch failed");
@@ -51,7 +58,7 @@ globalThis.fetch = async (url, options = {}) => {
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews, reviewComments, openPullsReread, failListReread } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -66,7 +73,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews, reviewComments, openPullsReread, failListReread }),
       FAKE_LOG: log,
     },
   });
@@ -569,6 +576,20 @@ const reviewClasses = [
   ["a failed automatic change is no boundary", [{ event: "automatic_base_change_failed", created_at: CHANGE }], [codexOnHead("2026-10-31T10:00:00Z")], "success"],
   ["an old and a new review", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z"), codexOnHead("2026-10-31T12:00:00Z")], "success"],
   ["the new review names another head", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z"), codexOnHead("2026-10-31T12:00:00Z", { commit_id: BASE })], "pending"],
+  // #1500 A6: GitHub sends ISO strings; Date.parse would read 2027 as a year.
+  ["submitted_at a number read as a later year", [baseChange(CHANGE)], [codexOnHead(2027)], "pending"],
+  ["submitted_at a large number", [baseChange(CHANGE)], [codexOnHead(12345)], "pending"],
+  ["submitted_at an array", [baseChange(CHANGE)], [codexOnHead(["2026-10-31T12:00:00Z"])], "pending"],
+  // #1500 A8: after the change only the Codex bot account counts.
+  ["after the change, type User", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { user: { login: "chatgpt-codex-connector[bot]", type: "User" } })], "pending"],
+  ["after the change, login without [bot]", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { user: { login: "chatgpt-codex-connector", type: "Bot" } })], "pending"],
+  ["after the change, another bot", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { user: { login: "grok-by-xai[bot]", type: "Bot" } })], "pending"],
+  // #1500 A9: only a submitted review state counts.
+  ["after the change, PENDING", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { state: "PENDING" })], "pending"],
+  ["after the change, DISMISSED", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { state: "DISMISSED" })], "pending"],
+  ["after the change, APPROVED", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { state: "APPROVED" })], "success"],
+  // #1500 C4: malformed items are skipped without a crash.
+  ["a null item and one without a user", [baseChange(CHANGE)], [null, { state: "COMMENTED", commit_id: HEAD, submitted_at: "2026-10-31T12:00:00Z" }], "pending"],
 ];
 
 test("a Codex PR review counts as D-139 evidence only after the last base change (DAN-452)", () => {
@@ -588,4 +609,52 @@ test("a Codex PR review dropped by the base change filter still voids quota evid
     const out = run(comment, { ...input, reviews: [codexOnHead(submittedAt)] });
     assert.equal(gateState(out), "pending", String(submittedAt));
   }
+});
+
+// #1500 A6 on the quota side: a review time that is no string is unreadable,
+// so a review of the exhausted App voids the evidence (fail closed).
+test("a Codex PR review with a numeric time voids quota evidence (DAN-452)", () => {
+  const input = { pr: fallbackPr, files: srcFile, openPulls: [fallbackPr], comments: quotaFallback };
+  for (const timeline of [[], [baseChange(CHANGE)]]) {
+    for (const submittedAt of [0, 2027]) {
+      assert.equal(gateState(run(comment, { ...input, timeline, reviews: [codexOnHead(submittedAt)] })), "pending", `${timeline.length} ${submittedAt}`);
+    }
+  }
+});
+
+// #1500 C1: an unread or malformed review list stops the run; the failure path
+// leaves all three statuses pending, never an older green one.
+test("an unread or malformed review list fails the run with every status pending (DAN-452)", () => {
+  const input = { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline: [baseChange(CHANGE)] };
+  for (const [name, extra] of [["read fails", { fail: ["/pulls/7/reviews"] }], ["object", { reviews: {} }], ["string", { reviews: "x" }]]) {
+    const out = run(comment, { ...input, ...extra });
+    assert.equal(out.code, 1, name);
+    assert.deepEqual(states(out.posts), ALL.map((c) => [c, "pending"]), name);
+  }
+});
+
+// #1500 C3: the list is read across pages, so a review past the first 100
+// still counts, and an old one on the second page still does not.
+test("Codex PR reviews past the first page are read and filtered alike (DAN-452)", () => {
+  const filler = Array.from({ length: 100 }, () => ({ user: { login: "someone", type: "User" }, state: "COMMENTED", commit_id: HEAD, submitted_at: "2026-10-31T12:00:00Z" }));
+  const input = { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline: [baseChange(CHANGE)] };
+  assert.equal(gateState(run(comment, { ...input, reviews: [...filler, codexOnHead("2026-10-31T12:00:00Z")] })), "success");
+  assert.equal(gateState(run(comment, { ...input, reviews: [...filler, codexOnHead("2026-10-31T10:00:00Z")] })), "pending");
+});
+
+// #1500 B5: the base change filter covers PR reviews only; an unanswered Codex
+// thread from before the change still blocks the D-139 path.
+test("an unanswered Codex thread from before the base change still blocks (DAN-452)", () => {
+  const thread = { id: 41, user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, body: "P1", created_at: "2026-10-31T10:00:00Z" };
+  const reply = { id: 42, in_reply_to_id: 41, user: { login: "danielrisavi77-create", type: "User" }, author_association: "OWNER", body: "Fixed.", created_at: "2026-10-31T10:10:00Z" };
+  const input = { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline: [baseChange(CHANGE)], reviews: [codexOnHead("2026-10-31T12:00:00Z")] };
+  assert.equal(gateState(run(comment, { ...input, reviewComments: [thread] })), "pending");
+  assert.equal(gateState(run(comment, { ...input, reviewComments: [thread, reply] })), "success", "control: an answered thread");
+});
+
+// #1500 D2: a Codex APPROVED review alone is no Claude review and no QA.
+test("a Codex APPROVED review without canonical verdicts is no success (DAN-452)", () => {
+  const out = run(comment, { pr: eligible, files: srcFile, openPulls: [eligible], comments: [], reviews: [codexOnHead("2026-10-31T12:00:00Z", { state: "APPROVED" })] });
+  assert.equal(gateState(out), "pending");
+  assert.equal(mergeState(out), "pending");
 });
