@@ -55,7 +55,7 @@ Ovi tekstovi su prijedlog i ulaze u `messages.hr.ts` tek s izvedbom, uz provjeru
 
 ## Tipkovnica (EQ6)
 
-Redoslijed fokusa je zapisan ispod zadanog stanja na svakoj stranici. Na S-04 i S-05 numeriran je potpuno: ljuska (početna, navigacija, tema, Odjava), na mobitelu Izbornik, pa sadržaj. Svi gumbi, polja i `summary` imaju najmanje 44 px visine. Ukrasni list na prijavi čitač zaslona preskače i ne prima fokus. Greške se vežu uz polje i čitaju kao `alert`, stanja učitavanja kao `status`.
+Redoslijed fokusa je zapisan ispod zadanog stanja na svakoj stranici i numeriran je potpuno na S-01 do S-05: ljuska (početna, navigacija, tema, Odjava), na mobitelu Izbornik, pa sadržaj; za varijante bez ljuske brojevi vrijede unutar kartice. Prijava (S-01) nema ljusku, pa joj je redoslijed isti na svim širinama. Svi gumbi, polja i `summary` imaju najmanje 44 px visine; tekstualne poveznice (Na naslovnicu, Na početnu, Službena pomoć AAI@EduHr, Moji kolegiji i zadaci, Upiši drugi kolegij) imaju cilj dodira od najmanje 44 px, kao `.panel a` u `m5-reference`. Ukrasni list na prijavi čitač zaslona preskače i ne prima fokus. Greške se vežu uz polje i čitaju kao `alert`, stanja učitavanja kao `status`.
 
 ## Provjera
 

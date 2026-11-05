@@ -91,3 +91,8 @@
 }
 .card details { border-top: 1px solid var(--rule-2); padding-top: 6px; }
 .card summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+
+/* Tekstualne poveznice u paketu: cilj dodira najmanje 44 px (DESIGN-SYSTEM, kao .panel a u m5-reference). */
+.login-top a, .login-card > a, .login-card .row a, .main > a, .card > a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+.login-card > a, .main.narrow > a, .card.center > a { justify-self: center; }
+.login-card .row a, .main:not(.narrow) > a, .card:not(.center) > a { justify-self: start; }
