@@ -21,7 +21,7 @@ EQ1: raspored se preuzima iz starih `.dc.html` prototipa, a boje ne. **Ekrani be
 | Datoteka | Ekrani |
 |---|---|
 | `n01-moji-kolegiji.html` | N-01: popunjeno, prazno, učitavanje, greška, mobitel |
-| `n02-n03-kolegij-i-zadatak.html` | N-02: prazno, valjanost obrasca, učitavanje, greška, mobitel. N-03: koraci čarobnjaka, dopuštena uporaba alata, pregled, učitavanje, greška, mobitel |
+| `n02-n03-kolegij-i-zadatak.html` | N-02: prazno, valjanost obrasca, učitavanje, greška, mobitel. N-03: prazno (korak 1), koraci čarobnjaka, dopuštena uporaba alata, pregled, učitavanje, greška, mobitel |
 | `n04-n16-studenti-i-radovi.html` | N-04: popunjeno, seminarska grupa. N-04 i N-16: prazno, učitavanje, greška (uključujući prekinut prikaz uživo), mobitel. N-16: popunjeno |
 | `reference.css` | tokeni „papir i grafit” (DESIGN-SYSTEM §3) i fontovi iz `app/fonts` |
 | `snimke/` | PNG snimke i `SHA256SUMS` |
@@ -30,7 +30,7 @@ EQ1: raspored se preuzima iz starih `.dc.html` prototipa, a boje ne. **Ekrani be
 
 - Mentor vidi rad uživo (D-142). Nijedan tekst ne tvrdi da mentor vidi rad tek nakon slanja; popis N-16 označava prikaz uživo i prikazuje prekid uživo kao grešku.
 - Popis studenata je abecedan, bez mjera, bez sortiranja po brojevima i bez oznaka koje procjenjuju radove. Stanje rada je u prvoj rečenici retka (PRODUCT §4 t. 4).
-- Uporaba alata (čl. 8): popis dopuštenog nastavnik može samo suziti; fiksni popis zabranjenog ne mijenja se. Tekst stavki je sažetak, u aplikaciji ide doslovno iz Pravilnika.
+- Uporaba alata: pravilo kolegija polazi od pravila fakulteta i nastavnik ga smije pooštriti i ublažiti (D-175); pravilo zadatka smije samo suziti pravilo kolegija (D-52); fiksni popis zabranjenog ne mijenja se. Tekst stavki je sažetak, u aplikaciji ide doslovno iz Pravilnika.
 - Greška čitanja nikad se ne prikazuje kao prazan popis ni kao nule. Prekinuta veza nakon objave zadatka je „ishod nije poznat” s radnjom „Provjeri stanje”.
 - Učitavanje i greška su zajednički uzorak iz paketa 1 (Z-06), primijenjen na svaki ekran. Posebno je prikazan ishod prekinute objave jer samo ondje ishod može biti nepoznat.
 

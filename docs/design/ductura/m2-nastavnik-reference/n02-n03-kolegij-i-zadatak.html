@@ -20,7 +20,7 @@
     <header>
       <div class="ref-tag">Referenca paketa 4 · DAN-567 · N-02, N-03 · prijedlog slike · raspored iz demo-tok-v2.dc.html (zaslon 2), prebojan u papir i grafit · podaci su izmišljeni</div>
       <h1>Novi kolegij i zadatak</h1>
-      <p>Dva koraka: kolegij, zatim zadatak u čarobnjaku u četiri koraka. Uporaba alata slijedi Pravilnik (čl. 8); nastavnik popis može samo suziti. Redoslijed tipkovnice: 1 naslov, 2 polja obrasca redom, 3 „Dalje”, 4 „Natrag”.</p>
+      <p>Dva koraka: kolegij, zatim zadatak u čarobnjaku u četiri koraka. Pravilo uporabe alata kolegija polazi od pravila fakulteta (D-117) i nastavnik ga na razini kolegija smije pooštriti i ublažiti (D-175); pravilo zadatka smije samo suziti pravilo kolegija (D-52). Redoslijed tipkovnice: 1 naslov, 2 polja obrasca redom, 3 „Dalje”, 4 „Natrag”.</p>
     </header>
 
     <section class="state" aria-labelledby="h2-pra">
@@ -46,8 +46,22 @@
       </form>
     </section>
 
+    <section class="state" aria-labelledby="h3-pr">
+      <div class="ref-tag">N-03 · stanje 1 · prazno (korak 1, bez unosa)</div>
+      <h2 id="h3-pr">Novi zadatak: Osnovno</h2>
+      <ol class="steps" aria-label="Koraci čarobnjaka">
+        <li aria-current="step">1 Osnovno</li><li>2 Rokovi i opseg</li><li>3 Uporaba alata</li><li>4 Pregled</li>
+      </ol>
+      <form class="card" novalidate>
+        <div class="formrow"><label for="n3-naslov">Naslov zadatka</label><input class="field" id="n3-naslov" type="text" autocomplete="off"><span class="hint">Do 160 znakova.</span></div>
+        <div class="formrow"><label for="n3-opis">Opis zadatka</label><textarea class="field" id="n3-opis" rows="4"></textarea></div>
+        <div class="row"><a class="btn secondary" href="#">Odustani</a><button class="btn" type="button">Dalje</button></div>
+        <p class="meta">Koraci 2 do 4 otključavaju se redom; ništa se ne objavljuje dok ne potvrdite korak 4.</p>
+      </form>
+    </section>
+
     <section class="state" aria-labelledby="h3-k1">
-      <div class="ref-tag">N-03 · koraci čarobnjaka</div>
+      <div class="ref-tag">N-03 · koraci čarobnjaka (korak 3, koraci 1 i 2 ispunjeni)</div>
       <h2 id="h3-k1">Čarobnjak zadatka</h2>
       <ol class="steps" aria-label="Koraci čarobnjaka">
         <li>1 Osnovno</li><li>2 Rokovi i opseg</li><li aria-current="step">3 Uporaba alata</li><li>4 Pregled</li>
@@ -60,14 +74,14 @@
       <h2 id="h3-alati">Dopuštena uporaba alata</h2>
       <div class="cols">
         <div>
-          <p class="lead">Popis dopuštenog zadan je Pravilnikom (čl. 8). Možete ga samo suziti: isključena stavka prelazi u „Nije dopušteno”. Tekst stavki u aplikaciji ide doslovno iz Pravilnika; ovdje je sažetak.</p>
+          <p class="lead">Zadatak nasljeđuje pravilo kolegija i smije ga samo suziti: isključena stavka prelazi u „Nije dopušteno”. Pravilo kolegija (polazi od pravila fakulteta) postavljate zasebno, pri uređivanju kolegija, i ondje ga smijete i pooštriti i ublažiti. Tekst stavki u aplikaciji ide doslovno iz Pravilnika; ovdje je sažetak.</p>
           <div class="list" role="group" aria-label="Dopušteno">
             <div class="tool"><span>Pretraživanje literature i izvora</span><label><input type="checkbox" checked> Dopušteno</label></div>
             <div class="tool"><span>Provjera pravopisa i gramatike</span><label><input type="checkbox" checked> Dopušteno</label></div>
             <div class="tool"><span>Prijevod izvora na hrvatski</span><label><input type="checkbox"> Dopušteno</label></div>
             <div class="tool"><span>Objašnjenje pojma (razina 2)</span><label><input type="checkbox" checked> Dopušteno</label></div>
           </div>
-          <div class="card" style="margin-top:12px"><strong>Nije dopušteno (fiksno)</strong><p class="meta">Pisanje teksta rada umjesto studenta i drugo što zabranjuje Pravilnik. Ovaj popis ne mijenjate.</p></div>
+          <div class="card" style="margin-top:12px"><strong>Nije dopušteno (fiksno)</strong><p class="meta">Pisanje teksta rada umjesto studenta i drugo što zabranjuje Pravilnik. Ovaj popis ne mijenjate; kolegij ne može dopustiti ni više od pravila kolegija.</p></div>
         </div>
         <aside class="card" aria-label="Kako vidi student">
           <strong>Kako vidi student</strong>
