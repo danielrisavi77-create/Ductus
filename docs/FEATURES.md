@@ -30,7 +30,7 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | N-12 | Popis "tko treba pomoć" kao činjenice, bez rangiranja | 1 | 1 |
 | F-01 | Izvješće za evaluaciju smjernica (FPZG čl. 13) | 2 | 3 |
 | F-02 | Pravno zadržavanje i izvoz za postupak (model u M2 i M10) | 3 | model 1, sučelje kasnije |
-| F-03 | Pristupačnost WCAG 2.1 AA i izjava o pristupačnosti | kroz M5 i M11, plus vanjski pregled | 1 |
+| F-03 | Pristupačnost WCAG 2.2 AA (D-248, D-276) i izjava o pristupačnosti | kroz M5 i M11, plus vanjski pregled | 1 |
 | F-04 | Izlaz iz usluge: izvoz svih podataka fakulteta | 2 | prije ugovora |
 | F-06 | Jezik rada odvojen od jezika sučelja (model u M2) | 2 | 1 |
 | F-09 | Paket za nabavu (DPIA, ugovor o obradi, sigurnosni opis, SLA, izjava o pristupačnosti) | dokumenti | prije pilota |

@@ -145,16 +145,16 @@ Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslov
 
 ### Dodatni engleski popis (D-276, NQ12)
 
-Uz engleski stupac gore (D-90 t. 3) i unose `lang: "en"` u `scripts/forbidden-terms/terms.ts`, za sučelje na engleskom (D-70) vrijedi i ovaj dodatni popis. Aditivan je: hrvatski popis, tablica i pravila 1 do 17 ne mijenjaju se, a postojeći skener ostaje stroži ondje gdje je već strožiji (npr. „plagiarism” se hvata u svim oblicima, a ne samo kao presuda). Isti uvjeti kao za hrvatske retke vrijede za složenice istog korijena i za „Dopuštene radnje”. Uključuje ga korak M11.5-P01a u skener.
+Uz engleski stupac gore (D-90 t. 3) i unose `lang: "en"` u `scripts/forbidden-terms/terms.ts`, za sučelje na engleskom (D-70) vrijede i ovi dodatni izrazi. Popis je aditivan: navodi samo izraze kojih još nema u tablici gore (za „suspicious”, „suspicion” i „plagiarism” vrijedi redak tablice, bez uvjeta i za sve oblike), a hrvatski popis i pravila 1 do 17 ne mijenjaju se. Isti uvjeti kao za hrvatske retke vrijede za složenice istog korijena i za „Dopuštene radnje”. Uključuje ga korak M11.5-P01a u skener.
 
 | Ne koristiti nikad (engleski) | Koristiti umjesto toga |
 | --- | --- |
-| suspicious, suspicion (o radu ili studentu) | (ništa; opis činjenice bez ocjene) |
-| risk score, trust score, attention score, suspicion score | (ništa; nema zbroja ni ocjene) |
-| plagiarism, plagiarised (kao presuda o radu ili studentu) | (ništa; ne procjenjuje se autorstvo) |
-| cheating, dishonest, misconduct (o radu ili studentu) | (ništa; opis činjenice bez ocjene) |
-| AI-generated, AI-detected, flagged as AI | opaženo pisanje u uređivaču |
-| flagged, flagged for review (o studentu ili radu) | (ništa; „za pregled” bez ocjene) |
+| risk score, trust score, attention score, suspicion score | (ništa; nema zbroja ni ocjene) / nothing: no score or rating |
+| cheating, dishonest, misconduct (o radu ili studentu) | (ništa; opis činjenice bez ocjene) / nothing: describe the fact without judgement |
+| AI-detected, flagged as AI | (ništa; podrijetlo teksta ne procjenjuje se, pravilo 13) / nothing: the origin of text is not assessed |
+| flagged, flagged for review (o studentu ili radu) | (ništa; činjenica bez ocjene) / nothing: state the fact without rating |
+
+Tekst koji dolazi iz ugrađenog AI pomoćnika i dalje se prikazuje kao „iz AI pomoćnika (model, vrijeme)” / "from the AI assistant (model, time)" (redak „napisao AI” / „written by AI” gore, pravilo 8). Ovaj popis ne propisuje zamjensku tvrdnju o načinu nastanka teksta.
 
 ---
 
