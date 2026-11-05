@@ -147,7 +147,34 @@ function destructured(n) {
     }
   }
 }
-const fromRoot = (value) => !!value && ROOTS.has(rootName(value) ?? "");
+// True when a source can evaluate to a test root: through members and calls,
+// and through each operand a logical, comma, conditional or assignment
+// expression can return (`test || {}`, `(0, test)`, `c ? {} : test`).
+const EITHER = new Set([
+  ts.SyntaxKind.BarBarToken,
+  ts.SyntaxKind.AmpersandAmpersandToken,
+  ts.SyntaxKind.QuestionQuestionToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+]);
+const RIGHT = new Set([ts.SyntaxKind.CommaToken, ts.SyntaxKind.EqualsToken]);
+function fromRoot(value) {
+  while (
+    value &&
+    (isWrap(value) || isAccess(value) || ts.isCallExpression(value))
+  )
+    value = value.expression;
+  if (!value) return false;
+  if (ts.isConditionalExpression(value))
+    return fromRoot(value.whenTrue) || fromRoot(value.whenFalse);
+  if (ts.isBinaryExpression(value)) {
+    const op = value.operatorToken.kind;
+    if (RIGHT.has(op)) return fromRoot(value.right);
+    if (EITHER.has(op)) return fromRoot(value.left) || fromRoot(value.right);
+  }
+  return ts.isIdentifier(value) && ROOTS.has(value.text);
+}
 
 // The parse errors and the marker lines (1-based, counted by LF) of a source.
 export function scan(src, file = "a.test.mjs") {
@@ -332,6 +359,35 @@ const CASES = [
     "let skip; ({ test: { skip } = {} } = cfg);",
   ],
   ["test('a', { skip: true } || {});", "test('a', cfg || { timeout: 1 });"],
+  // A source that may be the root through a logical, comma, conditional or
+  // assignment expression is the root (review on 86b413be).
+  ["const { skip } = test || {};", "const { skip } = cfg || {};"],
+  [
+    "const { a: { skip } = test || {} } = {};",
+    "const { a: { skip } = cfg || {} } = {};",
+  ],
+  [
+    "const { a: { todo } = true && test } = {};",
+    "const { a: { todo } = cfg && other } = {};",
+  ],
+  [
+    "const { a: { only } = test ?? {} } = {};",
+    "const { a: { only } = cfg ?? {} } = {};",
+  ],
+  [
+    "const { a: { skip } = (0, test) } = {};",
+    "const { a: { skip } = (test, cfg) } = {};",
+  ],
+  ["const { skip } = c ? {} : describe;", "const { skip } = test ? {} : cfg;"],
+  ["let x; const { todo } = (x = it);", "let x; const { todo } = (it = cfg);"],
+  [
+    "let x; const { skip } = (x ||= suite);",
+    "let x; const { skip } = (x ||= cfg);",
+  ],
+  [
+    "const { skip } = (test || cfg).nested;",
+    "const { skip } = (cfg || other).nested;",
+  ],
   // K4: names are compared cooked.
   ["t.sk\\u0069p();", "t.sk\\u0069pped();"],
   ["t.\\u{73}kip();", "t.\\u{73}kips();"],
@@ -420,6 +476,7 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
       'test("d", (t) => { t.skip("r"); });',
       'skip("e", () => {});',
       'const { n: { todo: td } = test } = {}; td("f", () => {});',
+      'const { n: { skip: sk } = test || {} } = {}; sk("g", () => {});',
     ],
     "clean.test.mjs": [
       'import test from "node:test";',
@@ -446,7 +503,11 @@ test("F-035 c: the markers it reports are the ones node:test skips or marks todo
         scan(src).lines,
       ];
     }
-    assert.deepEqual(counts["marked.test.mjs"], ["4", "2", [1, 2, 3, 4, 5, 7]]);
+    assert.deepEqual(counts["marked.test.mjs"], [
+      "5",
+      "2",
+      [1, 2, 3, 4, 5, 7, 8],
+    ]);
     assert.deepEqual(counts["clean.test.mjs"], ["0", "0", []]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
