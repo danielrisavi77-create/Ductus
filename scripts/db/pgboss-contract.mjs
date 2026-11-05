@@ -7,7 +7,7 @@
 // three pg-boss migrations name the schema, so an upgrade (a new migration
 // from getMigrationPlans) changes this list and the pin together.
 //
-//   node scripts/engineering/pgboss-contract.mjs
+//   node scripts/db/pgboss-contract.mjs
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";

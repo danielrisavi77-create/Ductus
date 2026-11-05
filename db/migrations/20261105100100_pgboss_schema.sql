@@ -6,7 +6,7 @@
 -- CREATE SCHEMA IF NOT EXISTS checks the database CREATE right before it sees
 -- the schema of the previous migration, so ductus_queue holds that right and
 -- CREATE on the schema for this transaction only.
--- scripts/engineering/pgboss-contract.mjs compares the section with the
+-- scripts/db/pgboss-contract.mjs compares the section with the
 -- package: do not edit it by hand. Grants, RLS and the dated queue_stats
 -- partitions are the next migration.
 -- migrate:up

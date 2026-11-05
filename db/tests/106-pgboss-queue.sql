@@ -1,6 +1,6 @@
 -- DAN-517, attack plan #1021 step 3 (D-71, D-74, D-91; docs/backend/baza-i-pogon.md
 -- 4.8 t. 7): the pg-boss queue schema and who may use it. The package's SQL
--- is installed verbatim (scripts/engineering/pgboss-contract.mjs); this pins
+-- is installed verbatim (scripts/db/pgboss-contract.mjs); this pins
 -- what the migrations around it decide: the owner, the worker's rights, RLS,
 -- the search_path of the package functions, and that the worker cannot build
 -- tables (migrate: false, queues without partition).
