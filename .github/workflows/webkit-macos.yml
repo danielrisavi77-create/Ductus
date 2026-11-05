@@ -39,9 +39,22 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # macOS needs no system packages, so no --with-deps.
+      # DAN-663: WebKit cached by playwright-core version and runner image, and
+      # installed by the capped script. macOS needs no system packages, so
+      # PLAYWRIGHT_SKIP_DEPS drops --with-deps.
+      - name: Playwright version
+        id: playwright
+        run: node scripts/engineering/playwright-version.mjs
+      - name: Restore Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: pw-${{ runner.os }}-${{ steps.playwright.outputs.image }}-${{ steps.playwright.outputs.version }}-webkit
       - name: Install WebKit
-        run: pnpm exec playwright install webkit
+        timeout-minutes: 15
+        env:
+          PLAYWRIGHT_SKIP_DEPS: "1"
+        run: bash scripts/engineering/playwright-install.sh webkit
       # The whole `webkit` project with Playwright's exit code; the job summary
       # tells failures tracked in #1046 from new ones.
       - name: WebKit E2E
