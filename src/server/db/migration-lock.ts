@@ -8,7 +8,7 @@ import pg from "pg";
  * Opens the lock connection, retrying while the server starts (as dbmate
  * --wait does). The `role` query parameter is dbmate's, not the driver's, and
  * is dropped: the advisory lock needs no role. An aborted `signal` stops the
- * retries.
+ * retries, and a connection that opens after the abort is closed, not returned.
  */
 export async function connectLockClient(
   url: string,
@@ -21,11 +21,17 @@ export async function connectLockClient(
     const client = new pg.Client({ connectionString: lockUrl.href, keepAlive: true, application_name: "ductus-migrate-lock" });
     try {
       await client.connect();
-      return client;
     } catch (error) {
       await client.end().catch(() => {});
       if (attempt >= attempts || signal?.aborted) throw error;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
+      continue;
     }
+    // Cancelled while the connection was opening: the caller gets no client.
+    if (signal?.aborted) {
+      await client.end().catch(() => {});
+      signal.throwIfAborted();
+    }
+    return client;
   }
 }

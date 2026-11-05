@@ -191,6 +191,41 @@ test("a run cancelled before dbmate starts never starts it and fails", async () 
   assert.doesNotMatch(waiting.logs.join("\n"), /could not take the lock/);
 });
 
+// #1051 review/QA FAIL (753b5d22): a signal that arrives while connect() is
+// still opening the connection fires before the abort listener exists. A
+// connect that then succeeds must not lead to the lock or to dbmate.
+test("a run cancelled while the lock connection opens never takes the lock or starts dbmate", async () => {
+  for (const outcome of ["succeeds", "fails"]) {
+    const client = new FakeClient();
+    const logs = [];
+    let started = 0;
+    let finishConnect;
+    const controller = new AbortController();
+    const done = runLocked({
+      connect: () =>
+        new Promise((resolve, reject) => {
+          finishConnect = () => (outcome === "succeeds" ? resolve(client) : reject(new Error("refused")));
+        }),
+      start: () => {
+        started += 1;
+        return new FakeChild();
+      },
+      signal: controller.signal,
+      log: (line) => logs.push(line),
+      heartbeatMs: 5,
+      killGraceMs: 5,
+    });
+    await tick();
+    controller.abort();
+    finishConnect();
+    assert.equal(await settled(done), 1, outcome);
+    assert.equal(started, 0, `dbmate never starts when connect ${outcome}`);
+    assert.deepEqual(client.queries, [], `no lock query when connect ${outcome}`);
+    if (outcome === "succeeds") assert.ok(client.ended, "the connection that opened after the cancel is closed");
+    assert.match(logs.join("\n"), /cancelled before dbmate started/);
+  }
+});
+
 test("a run cancelled while dbmate runs stops dbmate and fails, even if dbmate then exits 0", async () => {
   const h = harness();
   const controller = new AbortController();

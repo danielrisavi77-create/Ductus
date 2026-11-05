@@ -112,6 +112,26 @@ describe("migration lock (D-91 (3))", () => {
     expect(await holders()).toEqual([]);
   });
 
+  it("a run cancelled while its lock connection opens never takes the lock or starts dbmate", async () => {
+    // #1051 review/QA FAIL (753b5d22): the abort fires while client.connect()
+    // is pending, before the runner listens for it; the connect then succeeds.
+    const controller = new AbortController();
+    let started = false;
+    const done = runLocked({
+      connect: () => connectLockClient(ADMIN_URL, { attempts: 1, signal: controller.signal }),
+      start: () => ((started = true), new FakeDbmate()),
+      signal: controller.signal,
+      log: () => {},
+    });
+    // runLocked runs synchronously up to the pending client.connect().
+    controller.abort();
+    expect(await done).toBe(1);
+    expect(started).toBe(false);
+    expect(await holders()).toEqual([]);
+    const open = await admin.query("SELECT 1 FROM pg_catalog.pg_stat_activity WHERE application_name = 'ductus-migrate-lock'");
+    expect(open.rowCount, "the connection that opened after the abort is closed").toBe(0);
+  });
+
   it("two runs started together never run dbmate at the same time", async () => {
     // Istodobnost: the second run waits on pg_advisory_lock; its dbmate may
     // start only after the first dbmate has exited and the lock was released.

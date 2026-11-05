@@ -107,6 +107,13 @@ export async function runLocked({ connect, start, signal, heartbeatMs = 5000, lo
     // releases the lock with it.
     await within(client.end(), killGraceMs);
   };
+  // A signal that came while connect() was opening the connection fired before
+  // the listener existed, so it is checked once more here.
+  if (signal?.aborted) {
+    log("Migration run cancelled before dbmate started.");
+    await finish();
+    return 1;
+  }
 
   try {
     await client.query(`SET lock_timeout = ${Math.max(1, Math.trunc(Number(lockTimeoutMs)))}`);
