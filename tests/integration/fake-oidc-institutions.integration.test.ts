@@ -13,7 +13,7 @@ import { ACCOUNTS, DEMO_HOME_ORG, DEMO_HOME_ORG_B, demoAccountClaims } from "../
 // DAN-483: the two invented institutions of db/local/seed.sql share the fake
 // provider's issuer, so only the home organisation and the realm of the
 // unique id keep their accounts apart. The claims are the fake accounts'
-// own, under a per-run subject: the seeded demo accounts that demo:prepare
+// own, under a per-run subject: the seeded demo accounts that local:prepare
 // and E2E sign in with are never touched. Everything here is synthetic.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const ISSUER = "http://localhost:8090";
@@ -96,7 +96,7 @@ beforeAll(async () => {
   );
   for (const row of seeded.rows) institutionOf.set(row.aai_home_org, row.id);
   if (!institutionOf.has(DEMO_HOME_ORG) || !institutionOf.has(DEMO_HOME_ORG_B)) {
-    throw new Error("Run pnpm db:seed (or pnpm demo:prepare) first: both demo institutions must exist");
+    throw new Error("Run pnpm db:seed (or pnpm local:prepare) first: both demo institutions must exist");
   }
   for (const [name, group] of [[AUTH_LOGIN, "ductus_auth"], [APP_LOGIN, "ductus_app"]]) {
     await admin.query(`DROP ROLE IF EXISTS ${name}`);

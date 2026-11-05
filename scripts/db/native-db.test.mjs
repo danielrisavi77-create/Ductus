@@ -143,7 +143,7 @@ test("test:db:native is the pg_prove of test:db over loopback", async () => {
   assert.match(pkg.scripts["test:db"], /pg_prove -U ductus -d ductus --recurse --ext \.sql \/db\/tests$/, "test:db is unchanged");
   assert.equal(pkg.scripts["test:db:native"], "node scripts/db/native-db.mjs test");
   assert.equal(pkg.scripts["db:up:native"], "node scripts/db/native-db.mjs up");
-  assert.match(pkg.scripts["test:demo"], /scripts\/db\/native-db\.test\.mjs/, "CI runs this file through pnpm test");
+  assert.match(pkg.scripts["test:local"], /scripts\/db\/native-db\.test\.mjs/, "CI runs this file through pnpm test");
   const { calls, run } = recorder(() => 3);
   assert.equal(await testDb({ env: { PGHOST: "db.example.invalid" }, run, store: memoryStore(LOGIN) }), 3, "pg_prove's exit code is the result");
   assert.deepEqual(calls.map(({ command, args }) => [command, ...args]), [

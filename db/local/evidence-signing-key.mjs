@@ -60,7 +60,7 @@ function runPsql({ command, args, env }) {
 
 export async function main(env = process.env, argv = process.argv.slice(2), psql = undefined) {
   // An allowlist, as for the signer: an unset, empty or misspelt NODE_ENV
-  // counts as production (F-020). pnpm demo:prepare sets development.
+  // counts as production (F-020). pnpm local:prepare sets development.
   if (env.NODE_ENV !== "development" && env.NODE_ENV !== "test") {
     throw new Error("the development signing key is refused in production");
   }

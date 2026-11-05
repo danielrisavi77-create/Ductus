@@ -148,6 +148,6 @@ test("every browser install in every workflow is capped and cached", async () =>
       }
     }
   }
-  // ci.yml (three steps), demo-native.yml and webkit-macos.yml.
+  // ci.yml (three steps), local-native.yml and webkit-macos.yml.
   assert.equal(installs, 5);
 });
