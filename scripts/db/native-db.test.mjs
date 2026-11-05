@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   AUTH_PASSWORD_VAR, BOOTSTRAP_PASSWORD_VAR, BOOTSTRAP_SQL, childEnv, dbmateUrl, fileStore, loginPassword,
-  nativeConfig, pgProveArgs, READY_ATTEMPTS, ROLE_MARKER, testDb, up,
+  nativeConfig, pgProveArgs, READY_ATTEMPTS, ROLE_MARKER, testDb, up, WORKER_PASSWORD_VAR,
 } from "./native-db.mjs";
 
 const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"));
@@ -118,6 +118,7 @@ test("children never see the caller's libpq, psql, dbmate or DUCTUS_NATIVE_* var
   const env = {
     PATH: "/bin", PGHOST: "db.example.invalid", pgservice: "x", PGPASSFILE: "/x", PSQLRC: "/x", DBMATE_URL: "x", DATABASE_URL: "kept",
     DUCTUS_NATIVE_PGPASSWORD: "x", [BOOTSTRAP_PASSWORD_VAR]: "injected", [AUTH_PASSWORD_VAR]: "injected",
+    [WORKER_PASSWORD_VAR]: "injected",
   };
   assert.deepEqual(childEnv(env, LOGIN), { PATH: "/bin", DATABASE_URL: "kept", PGPASSWORD: LOGIN });
 });
@@ -156,7 +157,8 @@ test("test:db:native is the pg_prove of test:db over loopback", async () => {
 test("db:up:native on a running cluster runs the db:migrate files in order, with no secret in any argv", async () => {
   const { calls, run } = recorder();
   const auth = "s".repeat(16);
-  await up({ env: { DUCTUS_AUTH_LOCAL_PASSWORD: auth }, run, isRoot: true, store: memoryStore(LOGIN), log: quiet });
+  const worker = "w".repeat(16);
+  await up({ env: { DUCTUS_AUTH_LOCAL_PASSWORD: auth, DUCTUS_WORKER_LOCAL_PASSWORD: worker }, run, isRoot: true, store: memoryStore(LOGIN), log: quiet });
   assert.deepEqual(calls.map(({ command }) => command), ["pg_isready", "runuser", "runuser", process.execPath, "runuser", "runuser", "runuser"]);
   assert.deepEqual(calls.slice(2).map((call) => sqlFile(call) ?? "dbmate"), ["db/local/migrator.sql", "dbmate", "db/local/app-login.sql", "db/local/worker-login.sql", "db/local/auth-login.sql"]);
   // Provisioning on the socket as the cluster superuser, never over TCP.
@@ -166,7 +168,7 @@ test("db:up:native on a running cluster runs the db:migrate files in order, with
   }
   for (const call of calls) {
     const argv = call.args.join(" ");
-    assert.ok(!argv.includes(LOGIN) && !argv.includes(auth) && !argv.includes("password="), `${call.command}: no secret in argv`);
+    assert.ok(!argv.includes(LOGIN) && !argv.includes(auth) && !argv.includes(worker) && !argv.includes("password="), `${call.command}: no secret in argv`);
   }
   assert.equal(calls[1].options.input, BOOTSTRAP_SQL);
   assert.equal(calls[1].options.env[BOOTSTRAP_PASSWORD_VAR], LOGIN);
@@ -177,7 +179,12 @@ test("db:up:native on a running cluster runs the db:migrate files in order, with
   assert.equal(authLogin.options.input, `\\getenv auth_password ${AUTH_PASSWORD_VAR}\n`);
   assert.equal(authLogin.options.env[AUTH_PASSWORD_VAR], auth);
   assert.equal(calls[1].options.env[AUTH_PASSWORD_VAR], undefined, "each secret only reaches its own step");
-  assert.equal(calls[5].options.env[AUTH_PASSWORD_VAR], undefined, "the worker login gets no secret");
+  const workerLogin = calls[5];
+  assert.equal(workerLogin.options.input, `\\getenv worker_password ${WORKER_PASSWORD_VAR}\n`);
+  assert.equal(workerLogin.options.env[WORKER_PASSWORD_VAR], worker, "DUCTUS_WORKER_LOCAL_PASSWORD reaches the worker login");
+  assert.equal(workerLogin.options.env[AUTH_PASSWORD_VAR], undefined, "the worker login gets only its own secret");
+  assert.equal(authLogin.options.env[WORKER_PASSWORD_VAR], undefined, "the auth login gets only its own secret");
+  assert.equal(calls[1].options.env[WORKER_PASSWORD_VAR], undefined);
   assert.equal(authLogin.options.env[BOOTSTRAP_PASSWORD_VAR], undefined);
   for (const call of calls) assert.equal(call.options.env.PGPASSWORD, LOGIN);
 });
@@ -198,21 +205,26 @@ test("F-215: the bootstrap refuses an existing role it did not create, and marks
   assert.match(BOOTSTRAP_SQL, /WHERE NOT EXISTS \(SELECT 1 FROM pg_catalog\.pg_database/);
 });
 
-test("without DUCTUS_AUTH_LOCAL_PASSWORD a random one is made per run; a short one is refused before anything runs", async () => {
+test("without DUCTUS_AUTH_LOCAL_PASSWORD or DUCTUS_WORKER_LOCAL_PASSWORD a random one is made per run; a short one is refused before anything runs", async () => {
   const seen = [];
   for (let i = 0; i < 2; i += 1) {
     const { calls, run } = recorder();
     await up({ env: {}, run, isRoot: true, store: memoryStore(LOGIN), log: quiet });
-    const value = calls.at(-1).options.env[AUTH_PASSWORD_VAR];
-    assert.match(value, /^[0-9a-f]{48}$/, "24 random bytes in hex");
-    seen.push(value);
+    const auth = calls.at(-1).options.env[AUTH_PASSWORD_VAR];
+    const worker = calls.at(-2).options.env[WORKER_PASSWORD_VAR];
+    assert.match(auth, /^[0-9a-f]{48}$/, "24 random bytes in hex");
+    assert.match(worker, /^[0-9a-f]{48}$/, "24 random bytes in hex");
+    assert.notEqual(auth, worker, "each login gets its own password");
+    seen.push(auth, worker);
   }
-  assert.notEqual(seen[0], seen[1]);
-  const { calls, run } = recorder();
-  const store = memoryStore();
-  await assert.rejects(up({ env: { DUCTUS_AUTH_LOCAL_PASSWORD: "short" }, run, isRoot: true, store, log: quiet }), /at least 16/);
-  assert.deepEqual(calls, []);
-  assert.equal(store.writes, 0, "nothing is stored when the run is refused");
+  assert.equal(new Set(seen).size, 4);
+  for (const name of ["DUCTUS_AUTH_LOCAL_PASSWORD", "DUCTUS_WORKER_LOCAL_PASSWORD"]) {
+    const { calls, run } = recorder();
+    const store = memoryStore();
+    await assert.rejects(up({ env: { [name]: "short" }, run, isRoot: true, store, log: quiet }), new RegExp(`${name} must be at least 16`));
+    assert.deepEqual(calls, []);
+    assert.equal(store.writes, 0, "nothing is stored when the run is refused");
+  }
 });
 
 test("a stopped cluster is started as root and waited for; not as another user", async () => {
@@ -258,7 +270,7 @@ test("a second db:up:native runs the same idempotent steps and keeps the stored 
   const store = memoryStore();
   const first = recorder();
   const second = recorder();
-  const env = { DUCTUS_AUTH_LOCAL_PASSWORD: "t".repeat(20) };
+  const env = { DUCTUS_AUTH_LOCAL_PASSWORD: "t".repeat(20), DUCTUS_WORKER_LOCAL_PASSWORD: "w".repeat(20) };
   await up({ env, run: first.run, isRoot: true, store, log: quiet });
   await up({ env, run: second.run, isRoot: true, store, log: quiet });
   assert.equal(store.writes, 1, "the generated password is made once");
