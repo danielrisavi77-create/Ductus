@@ -499,6 +499,16 @@ test("demo walk-through", async ({ browser, page, context }) => {
       const path = new URL(request.url()).pathname;
       if (/^\/api\/(evidence|live|submission)(\/|$)/.test(path)) evidenceRequests.push(path);
     };
+    // DAN-570 (#1541): a script the page policy refuses on /upis left hydration waiting
+    // forever, and "Upiši" stayed disabled (run 42019087345). The listener is there before
+    // any markup runs; a refused script here fails the step even when the race is won.
+    await page.addInitScript(() => {
+      const refused: string[] = [];
+      (window as unknown as { __refusedScripts: string[] }).__refusedScripts = refused;
+      document.addEventListener("securitypolicyviolation", (event) => {
+        if (event.effectiveDirective.startsWith("script-src")) refused.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      });
+    });
     await page.goto("/upis");
     page.on("request", observe);
     try {
@@ -509,6 +519,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
         await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
         await expect(submitButton).toBeEnabled({ timeout: 1_000 });
       }).toPass({ timeout: 30_000 });
+      await page.waitForLoadState("load");
+      expect(await page.evaluate(() => (window as unknown as { __refusedScripts: string[] }).__refusedScripts)).toEqual([]);
       const response = page.waitForResponse((r) =>
         new URL(r.url()).pathname === "/api/institution/enrollments" && r.request().method() === "POST");
       await submitButton.click();
