@@ -85,20 +85,35 @@ fi
 restore_apt_cache() {
   [ -n "$apt_cache" ] || return 0
   compgen -G "${apt_cache}/*.deb" >/dev/null || return 0
-  if ! cap 60 sudo cp "$apt_cache"/*.deb "$archives"/; then
+  local t
+  t=$(window 60)
+  if ! { [ "$t" -gt 0 ] && cap "$t" sudo cp "$apt_cache"/*.deb "$archives"/; }; then
     echo "::warning::could not restore the apt package cache from ${apt_cache}"
   fi
 }
 
+# The save runs after a successful install, so it gets only what is left of the
+# budget. It copies into a fresh directory first: a copy cut off by the budget
+# never leaves a half-written .deb in the cache.
 save_apt_cache() {
   [ -n "$apt_cache" ] || return 0
   if ! compgen -G "${archives}/*.deb" >/dev/null; then
     echo "::notice::apt left no .deb files in ${archives}; the apt package cache stays empty"
     return 0
   fi
-  if ! { mkdir -p "$apt_cache" && cap 60 cp "$archives"/*.deb "$apt_cache"/; }; then
-    echo "::warning::could not save the apt package cache to ${apt_cache}"
+  local t part=""
+  t=$(window 60)
+  if [ "$t" -le 0 ]; then
+    echo "::notice::no time left in the ${budget}s budget to save the apt package cache"
+    return 0
   fi
+  if mkdir -p "$apt_cache" && part=$(mktemp -d "${apt_cache}/.part.XXXXXX") \
+    && cap "$t" cp "$archives"/*.deb "$part"/ && mv -f "$part"/*.deb "$apt_cache"/; then
+    rm -rf "$part"
+    return 0
+  fi
+  [ -n "$part" ] && rm -rf "$part"
+  echo "::warning::could not save the apt package cache to ${apt_cache}"
 }
 
 finish_ok() {

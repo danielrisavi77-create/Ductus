@@ -43,7 +43,7 @@ function removeDir(dir, deadlineMs = 10000) {
   }
 }
 
-async function run({ failures = 0, hang = 0, timeout = "2", budget = "60", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false, skipDeps = false, fakeTimeout = false, noPerl = false, aptCache = null, debs = true, expectCalls = true }) {
+async function run({ failures = 0, hang = 0, timeout = "2", budget = "60", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false, skipDeps = false, fakeTimeout = false, noPerl = false, aptCache = null, debs = true, slowCopy = false, expectCalls = true }) {
   const dir = await mkdtemp(path.join(tmpdir(), "pw-install-"));
   const bin = path.join(dir, "bin");
   const archives = path.join(dir, "archives");
@@ -72,6 +72,8 @@ exit 0
   };
   if (fakeTimeout) fakes.timeout = `#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "timeout: not coreutils"; exit 0; }\necho "fake timeout used" >> "${log}"\nexit 0\n`;
   if (noPerl) fakes.perl = "#!/usr/bin/env bash\nexit 1\n";
+  // A copy that hangs, as on a full or slow disk; it writes part of the file first.
+  if (slowCopy) fakes.cp = "#!/usr/bin/env bash\nfor last; do :; done\n[ -d \"$last\" ] && echo partial > \"$last/new_2.0_all.deb\"\nsleep 40\n";
   for (const [name, body] of Object.entries(fakes)) {
     await writeFile(path.join(bin, name), body);
     await chmod(path.join(bin, name), 0o755);
@@ -235,6 +237,16 @@ test("a broken apt cache only warns", async () => {
   const { status, stdout } = await run({ aptCache: { file: true } });
   assert.equal(status, 0);
   assert.match(stdout, /^::warning::could not save the apt package cache to .*apt$/m);
+});
+
+// The install succeeds, then saving the cache hangs: the save gets only what is
+// left of the 5s budget, and the cut-off copy leaves nothing half-written behind.
+test("a hanging cache save stays within the budget and leaves no partial .deb", async () => {
+  const { status, stdout, cached, seconds } = await run({ aptCache: {}, budget: "5", slowCopy: true });
+  assert.equal(status, 0);
+  assert.ok(seconds < 15, `the cache save took the step to ${seconds}s`);
+  assert.match(stdout, /^::warning::could not save the apt package cache to .*apt$/m);
+  assert.deepEqual(cached, []);
 });
 
 test("apt that keeps no .deb files leaves a notice, not a failure", async () => {
