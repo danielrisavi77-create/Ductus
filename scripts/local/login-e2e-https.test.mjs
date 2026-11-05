@@ -52,7 +52,7 @@ const scratch = () => mkdtempSync(join(tmpdir(), "ductus-https-test-"));
 // config reuses a server only for exactly "1").
 const ORIGINS = [
   ["unset: the server is ours, over https at 127.0.0.1 (never noted as an HSTS host)", {}, "https://127.0.0.1:3000"],
-  ["1: a server started elsewhere (pnpm demo:up), over http", { E2E_REUSE_SERVER: "1" }, "http://localhost:3000"],
+  ["1: a server started elsewhere (pnpm local:up), over http", { E2E_REUSE_SERVER: "1" }, "http://localhost:3000"],
   ["0 is not a reuse", { E2E_REUSE_SERVER: "0" }, "https://127.0.0.1:3000"],
   ["empty is not a reuse", { E2E_REUSE_SERVER: "" }, "https://127.0.0.1:3000"],
   ["true is not a reuse", { E2E_REUSE_SERVER: "true" }, "https://127.0.0.1:3000"],
