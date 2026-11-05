@@ -55,7 +55,7 @@ Ovi tekstovi su prijedlog i ulaze u `messages.hr.ts` tek s izvedbom, uz provjeru
 
 ## Tipkovnica (EQ6)
 
-Redoslijed fokusa je zapisan ispod zadanog stanja na svakoj stranici. Svi gumbi, polja i `summary` imaju najmanje 44 px visine. Ukrasni list na prijavi čitač zaslona preskače i ne prima fokus. Greške se vežu uz polje i čitaju kao `alert`, stanja učitavanja kao `status`.
+Redoslijed fokusa je zapisan ispod zadanog stanja na svakoj stranici. Na S-04 i S-05 numeriran je potpuno: ljuska (početna, navigacija, tema, Odjava), na mobitelu Izbornik, pa sadržaj. Svi gumbi, polja i `summary` imaju najmanje 44 px visine. Ukrasni list na prijavi čitač zaslona preskače i ne prima fokus. Greške se vežu uz polje i čitaju kao `alert`, stanja učitavanja kao `status`.
 
 ## Provjera
 
