@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prijava, referenca</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 3 · DAN-566 · prijedlog slike</div>
+  <h1>S-01 Prijava (AAI@EduHr)</h1>
+  <p>Raspored iz <code>prijava-v5.dc.html</code> (lijevo uvod i list, desno kartica prijave), boje iz DESIGN-SYSTEM §3. Tekst je iz <code>messages.hr.ts</code> (<code>prijava</code>, <code>auth</code>). Jedini ulaz je AAI@EduHr (D-09): nema prijave e-poštom, kartica uloga ni koda prije prijave.</p>
+</header>
+<main class="page wide">
+  <section class="variant" aria-labelledby="z"><div class="ref-tag" id="z">Zadano · prazno</div>
+    <div class="app">
+      <div class="login-top"><span class="brand">Ductura</span><a href="#">Na naslovnicu</a></div>
+      <div class="login">
+        <div class="left">
+          <span class="eyebrow">Vaš akademski prostor</span>
+          <h1>Dobro došli u svoj <em>prostor.</em></h1>
+          <p class="lede">Jedan ulaz za studente i nastavnike. Pisanje, povratna informacija i razgovor o radu.</p>
+          <div class="paper" aria-hidden="true"><span class="meta">Ductura / akademski rad</span><b>Prije prve <em>rečenice.</em></b><span>Jasne upute. Povezan razgovor.</span><span>Student piše. Nastavnik usmjerava.</span></div>
+        </div>
+        <section class="login-card" aria-labelledby="c1">
+          <span class="eyebrow">Prijava</span>
+          <h2 id="c1">Vaš akademski <em>identitet.</em></h2>
+          <p class="note">Prijavite se korisničkim računom AAI@EduHr, istim kojim se prijavljujete u Studomat i Merlin. Studenti i nastavnici koriste isti ulaz.</p>
+          <button class="btn" type="button">Prijava sustavom AAI@EduHr</button>
+          <span class="meta">Lozinku upisujete samo kod AAI@EduHr.</span>
+          <div class="row"><h3>Jedan ulaz. Vaš prostor.</h3><span class="src">Nakon prijave otvara se vaš prostor prema dodijeljenoj ulozi. Ulogu nastavnika potvrđuje administrator fakulteta.</span></div>
+          <details open><summary>Prvi dolazak ili imate kod zadatka?</summary><p class="note">Prvo se prijavite sustavom AAI@EduHr. Kod zadatka od nastavnika upisujete nakon prijave.</p></details>
+          <details><summary>Trebate pomoć?</summary></details>
+        </section>
+      </div>
+      <p class="login-foot">Identitet AAI@EduHr · pristup prema dodijeljenoj ulozi</p>
+    </div>
+    <p class="ref-note">Tipkovnica (EQ6): Na naslovnicu, Prijava sustavom AAI@EduHr, „Prvi dolazak”, „Trebate pomoć?”. List lijevo je ukras: čitač zaslona ga preskače i ne prima fokus.</p>
+  </section>
+  <div class="variants">
+    <section class="variant" aria-labelledby="s1"><div class="ref-tag" id="s1">Stanje 1 · učitavanje, preusmjeravanje</div>
+      <div class="login-card" role="status"><h2>Preusmjeravamo Vas na AAI@EduHr</h2>
+        <div class="bar" aria-hidden="true"><span></span></div>
+        <span class="meta">Lozinku upisujete samo kod AAI@EduHr.</span></div>
+      <p class="ref-note">Naslov je novi tekst (nije u katalogu). Gumb prijave je onemogućen dok traje preusmjeravanje.</p></section>
+    <section class="variant" aria-labelledby="s2"><div class="ref-tag" id="s2">Stanje 2 · greška, odbijena prijava</div>
+      <div class="login-card" role="alert"><h2>Prijava nije dovršena</h2>
+        <p class="note">Prijavu nije bilo moguće dovršiti. Pokušajte ponovno; ako se ponovi, javite se koordinatoru na svojoj ustanovi.</p>
+        <button class="btn" type="button">Pokušaj ponovno</button><a href="#">Na početnu</a></div>
+      <p class="ref-note">Poslužitelj ne razlikuje odbijenu prijavu od druge greške (<code>src/server/auth/flow.ts</code>), pa je tekst isti. Razlog odbijanja ostaje kod AAI@EduHr.</p></section>
+    <section class="variant" aria-labelledby="s3"><div class="ref-tag" id="s3">Stanje 3 · AAI@EduHr nedostupan</div>
+      <div class="login-card" role="alert"><h2>Prijava nije dovršena</h2>
+        <p class="note">Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušajte ponovno za nekoliko minuta.</p>
+        <button class="btn" type="button">Pokušaj ponovno</button></div>
+      <p class="ref-note">Odgovor 503. Drugi način prijave se ne nudi ni privremeno (D-09).</p></section>
+    <section class="variant" aria-labelledby="s4"><div class="ref-tag" id="s4">Stanje 4 · nova osoba bez uloge</div>
+      <div class="login-card" role="status"><h2>Prijava je uspjela</h2>
+        <p class="note">Ovaj račun još nema dodijeljenu ulogu, pa se Vaš prostor ne može otvoriti.</p>
+        <p class="note">Javite se koordinatoru na svojoj ustanovi.</p>
+        <button class="btn secondary" type="button">Odjava</button></div>
+      <p class="ref-note">Prva rečenica je novi tekst; druga je iz <code>prijava.helpAccessBody</code>. Uloga nastavnika bez potvrde je Z-05 (paket 1).</p></section>
+    <section class="variant" aria-labelledby="s5"><div class="ref-tag" id="s5">Stanje 5 · pomoć otvorena</div>
+      <div class="login-card"><details open><summary>Trebate pomoć?</summary>
+        <div class="row"><h3>Ne možete se prijaviti računom AAI@EduHr?</h3><span class="src">Za zaboravljenu korisničku oznaku ili lozinku obratite se službi svoje matične ustanove.</span><a href="#">Službena pomoć AAI@EduHr</a></div>
+        <div class="row"><h3>Prijava je uspjela, ali nemate pristup?</h3><span class="src">Javite se koordinatoru na svojoj ustanovi.</span></div></details></div></section>
+    <section class="variant" aria-labelledby="s6"><div class="ref-tag" id="s6">Stanje 6 · svijetla prijava (EQ10)</div>
+      <p class="ref-note">Svijetla prijava je snimka <code>prijava-svijetla-*.png</code>: isti raspored s tokenima svijetle ljuske (<code>data-theme="light"</code>), bez nove boje. Zadano ostaje tamno.</p></section>
+  </div>
+</main>
+</body>
+</html>
