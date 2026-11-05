@@ -15,12 +15,27 @@
 
 /* Ljuska Z-01, studentska navigacija */
 .app { border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; background: var(--ground); }
-.topbar { display: flex; gap: 8px 16px; align-items: center; flex-wrap: wrap; padding: 8px 16px; background: var(--chrome); border-bottom: 1px solid var(--rule-2); }
 .brand { font: 600 19px var(--ff-display); margin-right: 8px; }
-.nav { display: flex; gap: 4px; flex-wrap: wrap; }
-.nav a { color: var(--ink-2); text-decoration: none; padding: 6px 10px; border-radius: 5px; min-height: 32px; display: inline-flex; align-items: center; }
-.nav a[aria-current="page"] { background: var(--well); color: var(--ink); font-weight: 600; }
-.push { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* Ljuska izvan uređivača: uska bočna traka od 64 px (D-202 t. 1), isti raspored
+   kao m2-reference; ikone iz paketa se ne koriste (D-203 t. 8), stavke nose tekst. */
+.shell { display: grid; grid-template-columns: 64px minmax(0, 1fr); }
+.side { background: var(--chrome); border-right: 1px solid var(--rule-2); padding: 14px 4px; display: flex; flex-direction: column; gap: 14px; }
+.side .brand { display: grid; place-items: center; min-height: 44px; margin: 0; color: var(--ink); text-decoration: none; font: 500 24px/1 var(--ff-display); }
+.side .brand .word { display: none; }
+.side nav { display: grid; gap: 4px; }
+.side nav a { display: grid; place-items: center; text-align: center; min-height: 44px; padding: 6px 2px; border-radius: 5px; color: var(--ink-2); text-decoration: none; font-size: 11px; line-height: 1.2; }
+.side nav a[aria-current="page"] { background: var(--well); color: var(--ink); font-weight: 600; }
+.side-foot { margin-top: auto; display: grid; gap: 6px; }
+.side-foot .btn { width: 100%; padding: 0 2px; font-size: 11px; min-height: 44px; }
+.menu { display: none; }
+@media (max-width: 800px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { flex-direction: row; justify-content: space-between; align-items: center; border-right: 0; border-bottom: 1px solid var(--rule-2); padding: 8px 16px; }
+  .side nav, .side-foot { display: none; }
+  .side .brand .mark { display: none; }
+  .side .brand .word { display: inline; font-size: 19px; }
+  .menu { display: inline-flex; align-items: center; min-height: 44px; }
+}
 .main { max-width: 880px; margin: 0 auto; padding: 32px 24px 40px; display: grid; gap: 24px; }
 .main.narrow { max-width: 640px; text-align: center; justify-items: center; }
 .lede { color: var(--ink-2); }
@@ -67,7 +82,6 @@
 
 @media (max-width: 1050px) { .variants.two, .steps, .notice-cols { grid-template-columns: 1fr; } .login { grid-template-columns: 1fr; gap: 32px; } }
 @media (max-width: 640px) {
-  .nav a { min-height: 44px; }
   .main { padding: 20px 16px 32px; }
   .hero h1 { font-size: 30px; }
   .login { padding: 16px; } .login h1 { font-size: 40px; } .login-card { padding: 20px; }

@@ -17,9 +17,9 @@
     <section class="variant" aria-labelledby="u"><div class="ref-tag" id="u">S-04 zadano · prazno</div>
       <div class="app"><div class="main narrow">
         <section class="card center" aria-labelledby="u1"><h1 id="u1">Upiši kolegij</h1>
-          <label class="field" style="width:100%"><span class="meta">Kod kolegija</span>
-            <span class="code-row"><input class="input code" placeholder="KOD-KOLEGIJA"><button class="btn" type="button">Upiši</button></span></label>
-          <span class="meta">Kod Vam daje nastavnik. Razmaci, crtice i velika ili mala slova nisu bitni.</span></section>
+          <div class="field" style="width:100%"><label class="meta" for="k0">Kod kolegija</label>
+            <span class="code-row"><input class="input code" id="k0" placeholder="KOD-KOLEGIJA" aria-describedby="k0h"><button class="btn" type="button">Upiši</button></span></div>
+          <span class="meta" id="k0h">Kod Vam daje nastavnik. Razmaci, crtice i velika ili mala slova nisu bitni.</span></section>
       </div></div>
       <p class="ref-note">Tipkovnica: polje, Upiši; Enter u polju šalje. Greška se veže uz polje (aria-describedby) i čita se kao alert.</p></section>
     <section class="variant" aria-labelledby="o"><div class="ref-tag" id="o">S-05 zadano · obavijest prije pisanja</div>
@@ -50,24 +50,23 @@
   </div>
   <div class="variants">
     <section class="variant" aria-labelledby="a1"><div class="ref-tag" id="a1">S-04 · upisivanje</div>
-      <div class="card center" aria-busy="true"><div class="code-row"><input class="input code" value="KOLA-7K2M-Q4"><button class="btn" type="button" aria-disabled="true">Upisivanje…</button></div></div></section>
+      <div class="card center" aria-busy="true"><label class="meta" for="k1">Kod kolegija</label><div class="code-row"><input class="input code" id="k1" value="KOLA-7K2M-Q4" readonly><button class="btn" type="button" aria-disabled="true">Upisivanje…</button></div></div></section>
     <section class="variant" aria-labelledby="a2"><div class="ref-tag" id="a2">S-04 · neispravan kod</div>
-      <div class="card center"><div class="code-row"><input class="input code" value="K7" aria-invalid="true"><button class="btn" type="button">Upiši</button></div>
-        <span class="err" role="alert">Kod ima od 8 do 32 slova i brojke. Provjerite ga i upišite ponovno.</span></div></section>
+      <div class="card center"><label class="meta" for="k2">Kod kolegija</label><div class="code-row"><input class="input code" id="k2" value="K7" aria-invalid="true" aria-describedby="k2e"><button class="btn" type="button">Upiši</button></div>
+        <span class="err" id="k2e" role="alert">Kod ima od 8 do 32 slova i brojke. Provjerite ga i upišite ponovno.</span></div></section>
     <section class="variant" aria-labelledby="a3"><div class="ref-tag" id="a3">S-04 · istekao ili nepostojeći kod</div>
-      <div class="card center"><div class="code-row"><input class="input code" value="KOLA-0000-ZZ" aria-invalid="true"><button class="btn" type="button">Upiši</button></div>
-        <span class="err" role="alert">Kod ne postoji ili je istekao. Provjerite ga s nastavnikom.</span></div>
+      <div class="card center"><label class="meta" for="k3">Kod kolegija</label><div class="code-row"><input class="input code" id="k3" value="KOLA-0000-ZZ" aria-invalid="true" aria-describedby="k3e"><button class="btn" type="button">Upiši</button></div>
+        <span class="err" id="k3e" role="alert">Kod ne postoji ili je istekao. Provjerite ga s nastavnikom.</span></div>
       <p class="ref-note">Poslužitelj namjerno ne razlikuje istekao od nepostojećeg koda.</p></section>
     <section class="variant" aria-labelledby="a4"><div class="ref-tag" id="a4">S-04 · već upisan</div>
       <div class="card center" role="status"><p class="note">Već ste upisani u ovaj kolegij.</p><button class="btn" type="button">Otvori zadatak</button></div>
       <p class="ref-note">Novi tekst. Ponovni upis ne stvara drugo članstvo; otvara isti kolegij.</p></section>
     <section class="variant" aria-labelledby="a5"><div class="ref-tag" id="a5">S-04 · greška, bez mreže</div>
-      <div class="card center"><div class="code-row"><input class="input code" value="KOLA-7K2M-Q4"><button class="btn" type="button">Upiši</button></div>
-        <span class="err" role="alert">Nema veze s poslužiteljem. Provjerite mrežu i pokušajte ponovno.</span></div>
+      <div class="card center"><label class="meta" for="k5">Kod kolegija</label><div class="code-row"><input class="input code" id="k5" value="KOLA-7K2M-Q4" aria-describedby="k5e"><button class="btn" type="button">Upiši</button></div>
+        <span class="err" id="k5e" role="alert">Nema veze s poslužiteljem. Provjerite mrežu i pokušajte ponovno.</span></div>
       <p class="ref-note">Ista crta nosi i „Upis trenutačno nije moguć. Pokušajte ponovno.” i „Previše pokušaja. Pokušajte ponovno kasnije.”</p></section>
     <section class="variant" aria-labelledby="a6"><div class="ref-tag" id="a6">S-04 · upisan, kolegij bez zadatka</div>
-      <div class="card center"><p class="ok" role="status">Upisani ste u kolegij. Otvaram obavijest zadatka…</p>
-        <p class="note">Upisani ste u kolegij, ali u njemu zasad nema otvorenog zadatka. Kad ga nastavnik objavi, vratite se na ovu stranicu.</p><a href="#">Upiši drugi kolegij</a></div></section>
+      <div class="card center"><p class="note" role="status">Upisani ste u kolegij, ali u njemu zasad nema otvorenog zadatka. Kad ga nastavnik objavi, vratite se na ovu stranicu.</p><a href="#">Upiši drugi kolegij</a></div></section>
     <section class="variant" aria-labelledby="b1"><div class="ref-tag" id="b1">S-05 · učitavanje</div>
       <div class="card" aria-busy="true"><span class="meta" role="status">Učitavanje zadatka…</span><div class="skel w60"></div><div class="skel w80"></div><div class="skel w40"></div></div></section>
     <section class="variant" aria-labelledby="b2"><div class="ref-tag" id="b2">S-05 · greška</div>
