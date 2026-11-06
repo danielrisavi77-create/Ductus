@@ -3,9 +3,11 @@ import { join, relative } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// D-09: AAI@EduHr is the only login. The auth API is exactly these three
-// routes; a fourth (a password form, a magic link, another provider) fails
-// here and needs a decision first (attacks 27, 28).
+// D-09: AAI@EduHr is the only login. The auth API is exactly these four
+// routes; another (a password form, a magic link, another provider) fails
+// here and needs a decision first (attacks 27, 28). The fourth,
+// back-channel logout, came with one (D-200 P4, DAN-474): the provider posts
+// a signed logout token and the route only closes sessions, never opens one.
 const ROOT = join(process.cwd(), "app");
 
 function routes(dir: string): string[] {
@@ -17,8 +19,9 @@ function routes(dir: string): string[] {
 }
 
 describe("auth route inventory", () => {
-  it("has login, callback and logout under app/api/auth and nothing else", () => {
+  it("has login, callback, logout and back-channel logout under app/api/auth and nothing else", () => {
     expect(routes(join(ROOT, "api", "auth")).sort()).toEqual([
+      "api/auth/backchannel-logout/route.ts",
       "api/auth/callback/route.ts",
       "api/auth/login/route.ts",
       "api/auth/logout/route.ts",
@@ -53,5 +56,28 @@ describe("a login configuration that does not load", () => {
     expect(body).toContain("Prijava nije dovršena");
     expect(body).not.toMatch(/OIDC|DUCTUS_|fake|D-09/);
     expect(log).toHaveBeenCalledWith("login failed", "config", "AuthConfigError");
+  });
+
+  it("G1, G6: back-channel logout answers 503 with no body, naming no variable, and 405 to GET (DAN-474)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DUCTUS_AUTH_PROVIDER", "fake-oidc");
+    vi.stubEnv("OIDC_ISSUER", "http://localhost:8090");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { POST, GET } = await import("../../../app/api/auth/backchannel-logout/route");
+    const response = await POST(
+      new Request("http://localhost:3000/api/auth/backchannel-logout", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "logout_token=a.b.c",
+      }),
+    );
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(await response.text()).toBe("");
+    expect(log).toHaveBeenCalledWith("backchannel logout failed", "config", "AuthConfigError");
+    const other = GET();
+    expect(other.status).toBe(405);
+    expect(other.headers.get("allow")).toBe("POST");
   });
 });

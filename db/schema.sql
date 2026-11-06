@@ -4752,6 +4752,21 @@ $$;
 
 
 --
+-- Name: notice_acknowledgment_binding_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.notice_acknowledgment_binding_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  NEW.notice_binding := CASE WHEN NEW.notice_fingerprint IS NULL THEN 'legacy_unverified' ELSE 'bound' END;
+  RETURN NEW;
+END
+$$;
+
+
+--
 -- Name: notice_fingerprint(integer, text, text, text, timestamp with time zone, timestamp with time zone, text, text[], text, integer, integer); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -6576,6 +6591,8 @@ CREATE TABLE institution.notice_acknowledgment (
     institution_id uuid NOT NULL,
     notice_template_version integer,
     notice_fingerprint text,
+    notice_binding text DEFAULT 'legacy_unverified'::text NOT NULL,
+    CONSTRAINT notice_acknowledgment_binding_check CHECK ((((notice_binding = 'bound'::text) AND (num_nulls(notice_template_version, notice_fingerprint) = 0)) OR ((notice_binding = 'legacy_unverified'::text) AND (num_nulls(notice_template_version, notice_fingerprint) = 2)))),
     CONSTRAINT notice_acknowledgment_fingerprint_check CHECK (((num_nulls(notice_template_version, notice_fingerprint) = 2) OR ((num_nulls(notice_template_version, notice_fingerprint) = 0) AND (notice_template_version >= 1) AND (notice_fingerprint ~ '^[0-9a-f]{64}$'::text))))
 );
 
@@ -8345,6 +8362,20 @@ CREATE CONSTRAINT TRIGGER institution_role_admin_reappointed AFTER UPDATE ON ins
 --
 
 CREATE CONSTRAINT TRIGGER institution_role_keeps_admin AFTER UPDATE ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((old.role = 'admin'::text) AND (old.confirmed_at IS NOT NULL) AND (old.revoked_at IS NULL) AND (NOT ((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL) AND (NOT (((old.id IS DISTINCT FROM new.id) OR (old.institution_id IS DISTINCT FROM new.institution_id)) OR (old.user_id IS DISTINCT FROM new.user_id))))))) EXECUTE FUNCTION institution.check_last_admin();
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_binding_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER notice_acknowledgment_binding_fill BEFORE INSERT ON institution.notice_acknowledgment FOR EACH ROW EXECUTE FUNCTION institution.notice_acknowledgment_binding_fill();
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_binding_immutable; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER notice_acknowledgment_binding_immutable BEFORE UPDATE OF notice_binding ON institution.notice_acknowledgment FOR EACH ROW EXECUTE FUNCTION institution.refuse_acknowledgment_change();
 
 
 --
@@ -10343,4 +10374,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106120000'),
     ('20261106150000'),
     ('20261106160000'),
+    ('20261106170000'),
     ('20261106180000');

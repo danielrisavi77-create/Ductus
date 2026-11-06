@@ -42,6 +42,18 @@ export interface OidcClient {
   endSessionUrl(): Promise<URL | null>;
 }
 
+/**
+ * What the back-channel logout route needs from discovery (DAN-474): the
+ * issuer string the provider published, which a logout token's `iss` must
+ * equal exactly, and the `keys` of its JWKS. Separate from OidcClient so the
+ * login flow and its test doubles do not change.
+ */
+export interface LogoutProvider {
+  discoveredIssuer(): Promise<string>;
+  /** The JWKS `keys` array; throws when the provider does not answer. */
+  jwks(): Promise<readonly unknown[]>;
+}
+
 /** The provider did not answer, answered 5xx, or timed out. */
 export class ProviderUnavailableError extends Error {
   override name = "ProviderUnavailableError";
@@ -149,8 +161,12 @@ export function isProviderUnavailable(error: unknown): boolean {
   return false;
 }
 
-export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = fetch): OidcClient {
+export function createOidcClient(
+  config: AuthConfig,
+  fetchImpl: typeof fetch = fetch,
+): OidcClient & LogoutProvider {
   let discovered: Promise<client.Configuration> | undefined;
+  const providerFetch = limitedFetch(MAX_PROVIDER_RESPONSE_BYTES, fetchImpl);
 
   function configuration(): Promise<client.Configuration> {
     discovered ??= client
@@ -163,7 +179,7 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
         },
         client.ClientSecretBasic(config.clientSecret),
         {
-          [client.customFetch]: limitedFetch(MAX_PROVIDER_RESPONSE_BYTES, fetchImpl),
+          [client.customFetch]: providerFetch,
           timeout: PROVIDER_TIMEOUT_SECONDS,
           // The ID token signature is checked against the provider JWKS even
           // though it came over TLS from the token endpoint (attacks 6, 7).
@@ -234,6 +250,32 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
       }
       if (target.protocol !== "https:" && !(config.allowInsecureRequests && target.protocol === "http:")) return null;
       return client.buildEndSessionUrl(oidc, { post_logout_redirect_uri: config.postLogoutRedirectUri.href });
+    },
+
+    async discoveredIssuer() {
+      return (await configuration()).serverMetadata().issuer;
+    },
+
+    async jwks() {
+      const uri = (await configuration()).serverMetadata().jwks_uri;
+      if (typeof uri !== "string") throw new Error("discovery names no jwks_uri");
+      const target = new URL(uri);
+      // Same rule as the other provider endpoints: TLS unless the local
+      // configuration allows plain HTTP.
+      if (target.protocol !== "https:" && !(config.allowInsecureRequests && target.protocol === "http:")) {
+        throw new Error("jwks_uri is not https");
+      }
+      const response = await providerFetch(target.href, {
+        method: "GET",
+        headers: { accept: "application/json, application/jwk-set+json" },
+        redirect: "error",
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_SECONDS * 1000),
+      } as never);
+      if (response.status !== 200) throw new Error("JWKS request failed");
+      const body: unknown = await response.json();
+      const keys = (body as { keys?: unknown } | null)?.keys;
+      if (typeof body !== "object" || body === null || !Array.isArray(keys)) throw new Error("JWKS has no keys array");
+      return keys;
     },
   };
 }
