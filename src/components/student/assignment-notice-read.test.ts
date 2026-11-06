@@ -53,6 +53,7 @@ describe("F-7 notice read", () => {
         evidenceProfile: "basic",
         opensAt: "2026-11-02T08:00:00.000Z",
         dueAt: "2026-11-30T22:59:00.000Z",
+        aiPolicy: "partially_allowed",
         aiPurposes: ["proofreading", "translation"],
         wordMin: 2000,
         wordMax: 2500,
@@ -89,7 +90,7 @@ describe("F-7 notice read", () => {
     const at = new Date("2026-11-03T10:00:00Z");
     const { withActor } = actor([{ ...row, ai_policy: "prohibited", acknowledged_at: at }]);
     const read = await readNotice(TOKEN, ID, withActor);
-    expect(read.kind === "available" && read.view).toMatchObject({ aiPurposes: [], acknowledgedAt: at.toISOString() });
+    expect(read.kind === "available" && read.view).toMatchObject({ aiPolicy: "prohibited", aiPurposes: [], acknowledgedAt: at.toISOString() });
   });
 
   it("shows no notice to a teacher, an outsider or for a missing assignment", async () => {

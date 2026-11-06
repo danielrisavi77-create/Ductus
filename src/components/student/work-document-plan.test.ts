@@ -31,6 +31,7 @@ function ready(assignmentId = ID): WorkContextRead {
       evidenceProfile: "basic",
       opensAt: OPENS,
       dueAt: DUE,
+      aiPolicy: "prohibited",
       aiPurposes: [],
       wordMin: null,
       wordMax: null,
