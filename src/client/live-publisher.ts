@@ -45,6 +45,13 @@ export type LivePublisherOptions = {
    * person's (as the reader and comments, F-093).
    */
   readonly current?: () => boolean;
+  /**
+   * Asked before every request, ahead of `current`: while it is true (the
+   * page shows the teacher view, #882) nothing goes out and the last state
+   * waits; it is not a halt. A timer that comes due before the page has
+   * stopped the publisher is held here, not by the order of React effects.
+   */
+  readonly held?: () => boolean;
   readonly fetcher?: typeof fetch;
   readonly network?: NetworkSource;
   readonly now?: () => number;
@@ -93,6 +100,7 @@ async function tokenOf(response: Response): Promise<string | null | undefined> {
 /** A stopped publisher; `start` lets it send. */
 export function createLivePublisher(options: LivePublisherOptions): LivePublisher {
   const current = options.current ?? (() => true);
+  const held = options.held ?? (() => false);
   const fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
   const network = options.network ?? browserNetwork;
   const now = options.now ?? (() => Date.now());
@@ -129,6 +137,8 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
 
   async function send(): Promise<void> {
     if (!running || halt !== null || inFlight !== null || pending === null) return;
+    // Held: the state waits for `start` after the return to writing.
+    if (held()) return;
     if (!current()) {
       halt = "signedOut";
       pending = null;

@@ -478,7 +478,7 @@ export function LocalDocumentProvider({
         // local demo journal never does, nor a submitted work (O2, #756).
         const submitted = saver.snapshot().closedBy === "submission";
         publisher = markTag === null || !livePublish || submitted
-          ? null : createLivePublisher({ documentId, current: () => !ended() });
+          ? null : createLivePublisher({ documentId, current: () => !ended(), held: () => heldRef.current });
         publisherRef.current = publisher;
         const own = publisher;
         if (own && result.document) own.offer(result.document);
@@ -583,8 +583,10 @@ export function LocalDocumentProvider({
 
   // A change between writing and the teacher view (#882): the run's own
   // publisher stops at once, an answer in flight included, and starts again
-  // only while this run may still write.
-  useEffect(() => {
+  // only while this run may still write. A layout effect, after the one that
+  // sets heldRef: it runs in the commit that shows the view, before a timer
+  // can come due; the publisher also asks heldRef before every request.
+  useLayoutEffect(() => {
     const publisher = publisherRef.current;
     if (!publisher) return;
     const action = livePublishAction({ held: publishHeld, writable: readyRef.current, halted: publisher.halted() });
