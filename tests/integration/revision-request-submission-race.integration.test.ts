@@ -14,6 +14,8 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // SHARE and then asks whether a submission is recorded; request_submission
 // holds it FOR UPDATE. Every person, course, text and hash is invented;
 // random ids of one random institution, removed afterwards. Loopback only.
+// Step 2b adds two transitions with the same expected counter: the second
+// waits on the request row, then sees the new counter and writes nothing.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The revision request race test runs only against a loopback database (DATABASE_URL).");
@@ -40,6 +42,12 @@ type Created = { request_id: string; row_seq: string; version: number; state: st
 const createSql = "SELECT request_id, row_seq, version, state FROM collaboration.create_revision_request($1, $2::jsonb, $3, $4)";
 const create = (document: string) => async (tx: ActorTransaction) =>
   (await tx.query<Created>(createSql, [document, JSON.stringify(ANCHOR), "Dodaj izvor za ovu tvrdnju.", 1])).rows[0];
+type Moved = { outcome: string; row_seq: string; version: number; state: string };
+const respond = (id: string, seq: string) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+  "SELECT outcome, row_seq, version, state FROM collaboration.respond_revision_request($1, $2, 'done', 'Dodao sam izvor.', 1)",
+  [id, seq])).rows[0];
+const withdraw = (id: string, seq: string) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+  "SELECT outcome, row_seq, version, state FROM collaboration.withdraw_revision_request($1, $2)", [id, seq])).rows[0];
 const submit = (document: string) => async (tx: ActorTransaction) => {
   const requested = (await tx.query<{ outcome: string; submission_request_id: string }>(
     "SELECT outcome, submission_request_id FROM app.request_submission($1, 1)", [document])).rows[0];
@@ -157,7 +165,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await app.end();
+  try {
+    await app.end();
+  } finally {
+    await cleanUp();
+  }
+});
+
+async function cleanUp() {
   const client = await admin.connect();
   try {
     await client.query("BEGIN");
@@ -182,15 +197,19 @@ afterAll(async () => {
     client.release();
     await admin.end();
   }
-});
+}
 
 describe("revision request against a submission, over two real connections", () => {
   it("submission first: the create waits on the document, then is forbidden and writes nothing", async () => {
     const submission = hold(people.ana.token, submit(documents.ana));
-    expect(await submission.answered).toEqual(["requested", "recorded"]);
-    const creating = settle(withActor(people.vesna.token, create(documents.ana)));
-    await waitForBlocked("create_revision_request");
-    submission.release();
+    let creating: ReturnType<typeof settle<Created>>;
+    try {
+      expect(await submission.answered).toEqual(["requested", "recorded"]);
+      creating = settle(withActor(people.vesna.token, create(documents.ana)));
+      await waitForBlocked("create_revision_request");
+    } finally {
+      submission.release();
+    }
     await submission.done;
     // The create must see the commit it waited for, not its older snapshot.
     expect(await creating).toEqual({ value: null, code: "ZD403" });
@@ -200,12 +219,17 @@ describe("revision request against a submission, over two real connections", () 
 
   it("create first: the submission waits on the document, then the request stays and the submission follows", async () => {
     const creating = hold(people.vesna.token, create(documents.dora));
-    const created = await creating.answered;
-    expect(created).toMatchObject({ state: "open", version: 1 });
-    const submission = settle(withActor(people.dora.token, submit(documents.dora)));
-    await waitForBlocked("request_submission");
-    expect(await submitted(documents.dora)).toBe(false);
-    creating.release();
+    let created: Created;
+    let submission: ReturnType<typeof settle<string[]>>;
+    try {
+      created = await creating.answered;
+      expect(created).toMatchObject({ state: "open", version: 1 });
+      submission = settle(withActor(people.dora.token, submit(documents.dora)));
+      await waitForBlocked("request_submission");
+      expect(await submitted(documents.dora)).toBe(false);
+    } finally {
+      creating.release();
+    }
     await creating.done;
     expect(await submission).toEqual({ value: ["requested", "recorded"], code: null });
     expect(await submitted(documents.dora)).toBe(true);
@@ -214,10 +238,15 @@ describe("revision request against a submission, over two real connections", () 
 
   it("two creates at once do not wait on each other and get distinct row_seq values", async () => {
     const first = hold(people.vesna.token, create(documents.boris));
-    const one = await first.answered;
-    // FOR SHARE does not block FOR SHARE: the second create finishes while the first is still open.
-    const two = await withActor(people.vesna.token, create(documents.boris));
-    first.release();
+    let one: Created;
+    let two: Created;
+    try {
+      one = await first.answered;
+      // FOR SHARE does not block FOR SHARE: the second create finishes while the first is still open.
+      two = await withActor(people.vesna.token, create(documents.boris));
+    } finally {
+      first.release();
+    }
     await first.done;
     expect(one.request_id).not.toBe(two.request_id);
     expect(one.row_seq).not.toBe(two.row_seq);
@@ -225,5 +254,53 @@ describe("revision request against a submission, over two real connections", () 
     expect(after.requests).toBe(2);
     expect(after.versions).toBe(2);
     expect([...after.rowSeqs].sort()).toEqual([one.row_seq, two.row_seq].sort());
+  });
+});
+
+// Answers are counted on a request of their own, created on Boris's document after the creates above.
+async function answers(id: string) {
+  const result = await admin.query<{ state: string; row_seq: string; responses: string; closed: string | null }>(
+    `SELECT r.state, r.row_seq::text, (SELECT count(*) FROM collaboration.revision_response s WHERE s.request_id = r.id) AS responses,
+            (SELECT v.closed_as FROM collaboration.revision_request_version v WHERE v.request_id = r.id AND v.version = r.version) AS closed
+       FROM collaboration.revision_request r WHERE r.id = $1`, [id]);
+  const row = result.rows[0];
+  return { state: row.state, rowSeq: row.row_seq, responses: Number(row.responses), closed: row.closed };
+}
+
+describe("two transitions with the same expected counter, over two real connections (C1, C2)", () => {
+  it("two answers: the second waits on the request, then is a conflict and writes nothing", async () => {
+    const created = await withActor(people.vesna.token, create(documents.boris));
+    const first = hold(people.boris.token, respond(created.request_id, created.row_seq));
+    let one: Moved;
+    let second: ReturnType<typeof settle<Moved>>;
+    try {
+      one = await first.answered;
+      expect(one).toMatchObject({ outcome: "applied", version: 1, state: "responded" });
+      second = settle(withActor(people.boris.token, respond(created.request_id, created.row_seq)));
+      await waitForBlocked("respond_revision_request");
+    } finally {
+      first.release();
+    }
+    await first.done;
+    expect(await second).toEqual({ value: { outcome: "conflict", row_seq: one.row_seq, version: 1, state: "responded" }, code: null });
+    expect(await answers(created.request_id)).toEqual({ state: "responded", rowSeq: one.row_seq, responses: 1, closed: null });
+  });
+
+  it("a withdrawal and an answer at once: the one that waited is a conflict", async () => {
+    const created = await withActor(people.vesna.token, create(documents.boris));
+    const first = hold(people.vesna.token, withdraw(created.request_id, created.row_seq));
+    let one: Moved;
+    let second: ReturnType<typeof settle<Moved>>;
+    try {
+      one = await first.answered;
+      expect(one).toMatchObject({ outcome: "applied", version: 1, state: "withdrawn" });
+      second = settle(withActor(people.boris.token, respond(created.request_id, created.row_seq)));
+      await waitForBlocked("respond_revision_request");
+    } finally {
+      first.release();
+    }
+    await first.done;
+    expect(await second).toEqual({ value: { outcome: "conflict", row_seq: one.row_seq, version: 1, state: "withdrawn" }, code: null });
+    expect(await answers(created.request_id)).toEqual({ state: "withdrawn", rowSeq: one.row_seq, responses: 0, closed: "withdrawn" });
   });
 });
