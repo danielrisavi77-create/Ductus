@@ -16,6 +16,11 @@ export interface OpenSessionInput {
   familyName?: string;
   /** The fact from hrEduPersonAffiliation (DAN-304); false removes the right. */
   teacherEligible: boolean;
+  /**
+   * The provider's session id (DAN-474). Only its SHA-256 is stored, on this
+   * session; one the database finds invalid is left out and the login stands.
+   */
+  sid?: string;
   tokenHash: Buffer;
 }
 
@@ -42,7 +47,7 @@ SELECT CASE WHEN (SELECT NOT r.rolsuper AND NOT r.rolbypassrls
                          AND NOT pg_catalog.pg_has_role(r.oid, 'ductus_app', 'MEMBER')
                     FROM pg_catalog.pg_roles r
                    WHERE r.rolname = session_user AND session_user = current_user)
-            THEN identity.open_session($1, $2, $3, $4, $5, $6, $7, $8)
+            THEN identity.open_session($1, $2, $3, $4, $5, $6, $7, $8, $9)
        END AS expires`;
 
 export function createOpenSession(pool: Pick<Pool, "query">): OpenSession {
@@ -57,6 +62,7 @@ export function createOpenSession(pool: Pick<Pool, "query">): OpenSession {
         input.givenName ?? null,
         input.familyName ?? null,
         input.teacherEligible === true,
+        input.sid ?? null,
       ]);
       const expires = rows[0]?.expires;
       if (!(expires instanceof Date)) {

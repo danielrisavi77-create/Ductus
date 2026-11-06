@@ -22,6 +22,8 @@ export interface OpenSessionPort {
     givenName?: string;
     familyName?: string;
     teacherEligible: boolean;
+    /** The provider's session id (DAN-474); without it there is no back-channel logout by `sid`. */
+    sid?: string;
     tokenHash: Buffer;
   }): Promise<
     { ok: true; expires: Date } | { ok: false; reason: "refused" | "conflict" }
