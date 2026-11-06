@@ -64,7 +64,7 @@ Sastanak s FPZG-om održava se kad je demo gotov. Demo je prvi dio pravog sustav
 
 **Procjena:** oko 18 do 26 večeri (M0, B1 osnovno, dijelovi M2, M3, M5, M6, M7 iz vala 1). Uz puno radno vrijeme oko 3 do 4 tjedna od početka M0, dakle cilj **početak studenog 2026.**, ovisno o spajanju `pisac-editor` PR #49 i #50 i lokalnom stroju s Dockerom.
 
-Ovo nije dodatni posao: sve stavke su dio vala 1 i samo su poredane tako da prvi prikaz bude rano. Kontrolna točka 15. 12. 2026. ostaje (povijesni zapis; D-203 t. 5 seli je na 20. 12. 2026.).
+Ovo nije dodatni posao: sve stavke su dio vala 1 i samo su poredane tako da prvi prikaz bude rano. Kontrolnu točku 15. 12. 2026. zamjenjuje kontrolna točka 20. 12. 2026. (D-203 t. 5); kontrolne točke 30. 11. 2026. i 15. 1. 2027. ostaju. Na svakoj od njih vlasnik bira varijantu plana prema izmjerenoj brzini (D-203 t. 1, D-280 Q-17 A).
 
 ## Raspored po valovima [ODLUČENO D-36, verzija 2]
 
@@ -191,7 +191,7 @@ Jedan crveni uvjet znači da val ne kreće.
 | Tehnički | Produkcijska konfiguracija nema lažnog OIDC pružatelja | Test u CI-ju |
 | Tehnički | Nema zabranjenih riječi u sučelju | Automatska provjera u CI-ju |
 | Pristupačnost | axe bez kritičnih nalaza; svi tokovi tipkovnicom; editor i pregled prije predaje provjereni čitačem zaslona | Izvještaj axe i zapis ručne provjere |
-| Podatkovni | DPIA i ugovor o obradi s FPZG-om potpisani; DPIA i pravno mišljenje (D-55, D-151) pokrivaju i AI pomoćnika, uključujući transkripciju i alate pružatelja (D-194 t. 4 i 5). Ugovor potpisuje pravna osoba operatera, koju vlasnik osniva odmah, usporedno s FPZG-om (D-266, Q-1 B; mijenja D-194 t. 3); ugovor o obradi potpisuje se prije tehničke probe i ovisi o oboje (D-264 Q13) | Dokumenti |
+| Podatkovni | DPIA i ugovor o obradi s FPZG-om potpisani; DPIA i pravno mišljenje (D-55, D-151) pokrivaju i AI pomoćnika, uključujući transkripciju i alate pružatelja (D-194 t. 4 i 5). Ugovor potpisuje pravna osoba operatera, koju vlasnik osniva odmah, usporedno s FPZG-om (D-266, Q-1 B; mijenja D-194 t. 3); ugovor o obradi potpisuje se prije tehničke probe, koja počinje kad je kod vala 1 spreman 22. 2. 2027. (D-203 E3), i ovisi o oboje; do tada pristup operatera ima samo vlasnikov račun (D-264 Q13) | Dokumenti |
 | Podatkovni | Rokovi čuvanja i dopušteni AI pružatelji potvrđeni | `DECISIONS.md` D-30, D-35 |
 | Podatkovni | Obavijest o privatnosti objavljena i ugrađena u obavijest o zadatku | Tekst obavijesti |
 | Nastavni | Koordinator na FPZG-u, odabrani kolegiji i mentori, odluka o obveznosti (D-04) | Zapis dogovora |
