@@ -7,8 +7,14 @@ import { D97_PATHS, matchesPath } from "./protected-paths.mjs";
 // D-161: the Mergify queue merges only on the owner's command and only when
 // every required status of `main` is green.
 const config = readFileSync(new URL("../../.github/mergify.yml", import.meta.url), "utf8");
-const lines = config.split(/\r?\n/).filter((line) => !line.trimStart().startsWith("#"));
+// Mergify ignores comment lines, so every assertion reads only the others.
+const withoutComments = (text) => text.split(/\r?\n/).filter((line) => !line.trimStart().startsWith("#"));
+const lines = withoutComments(config);
 const body = lines.join("\n");
+
+// Edited queue branches are rejected by Mergify's default. The option that
+// could allow them is deprecated, so it must not appear with any value.
+const setsQueueBranchEdit = (text) => /allow_queue_branch_edit/.test(withoutComments(text).join("\n"));
 
 const REQUIRED = [
   "Lint, typecheck, test and build",
@@ -66,14 +72,33 @@ test("serial speculation preserves every intermediate result and rejects edited 
   for (const { name, block } of queues()) {
     assert.match(block, /\n    batch_max_wait_time: 3 min\n/, name);
     assert.match(block, /\n    max_checks_retries: 0\n/, name);
-    assert.match(block, /\n    allow_queue_branch_edit: false\n/, name);
     assert.match(block, /\n    branch_protection_injection_mode: queue\n/, name);
     assert.match(block, /\n    merge_method: squash\n/, name);
     assert.match(block, /\n    update_method: merge\n/, name);
   }
+  assert.equal(setsQueueBranchEdit(config), false);
   assert.match(body, /reset_on_external_merge: always\n/);
   assert.match(body, /skip_intermediate_results: false\n/);
   assert.doesNotMatch(body, /draft_bot_account:|queue_branch_prefix:|merge_bot_account:/);
+});
+
+// DAN-572: one row per input class; only a comment may name the option.
+test("the deprecated queue branch edit option is rejected in every position", () => {
+  const insert = (anchor, line) => {
+    assert.equal(config.split(anchor).length, 2, anchor);
+    return config.replace(anchor, `${anchor}${line}\n`);
+  };
+  const cases = [
+    ["false in a queue rule", insert("  - name: main\n", "    allow_queue_branch_edit: false"), true],
+    ["true in a queue rule", insert("  - name: critical\n", "    allow_queue_branch_edit: true"), true],
+    ["quoted or YAML 1.1 truthy", insert("  - name: main\n", "    allow_queue_branch_edit: \"yes\""), true],
+    ["outside any queue rule", `${config}allow_queue_branch_edit: true\n`, true],
+    ["only in a comment", insert("  - name: main\n", "    # allow_queue_branch_edit: true"), false],
+  ];
+  for (const [name, text, rejected] of cases) {
+    assert.notEqual(text, config, name);
+    assert.equal(setsQueueBranchEdit(text), rejected, name);
+  }
 });
 
 // D-177: a failed batch is split until the failing PR is isolated, and each
