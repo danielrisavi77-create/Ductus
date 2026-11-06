@@ -20,7 +20,7 @@ const NO_SCRIPT_ROUTES = ["nastavnik"];
 // header and its title with status 200 before notFound(), so the response
 // would name the page and stop being a 404 (measured on next dev: 200 and
 // "Korisnici i uloge" with loading.tsx, 404 without it).
-const HIDDEN_ROUTES = ["ustanova", "ustanova/korisnici"];
+const HIDDEN_ROUTES = ["ustanova", "ustanova/korisnici", "ustanova/pravila"];
 
 describe("route loading (#732 item 4)", () => {
   it("announces the wait in the page's main, without a session mark", () => {
