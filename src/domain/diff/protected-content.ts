@@ -98,23 +98,48 @@ function scanQuotes(text: string): Scan {
   return { rest: pieces.join("\n"), items };
 }
 
-function escape(text: string): string {
-  return text.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+const YEAR = /^\p{Nd}{4}\p{Ll}?/u;
+
+/** Year, then nothing or the page separator and 1 to 40 characters of pages. */
+function yearPages(rest: string, pageSeparator: string): { year: string; pages: string } | undefined {
+  const m = YEAR.exec(rest);
+  if (!m) return undefined;
+  // \p{Ll}? may give the letter back, as a regex would, if pages start with it.
+  for (const len of m[0].length === 5 ? [5, 4] : [4]) {
+    const after = rest.slice(len);
+    if (after === "") return { year: rest.slice(0, len), pages: "" };
+    const pages = after.slice(pageSeparator.length);
+    if (after.startsWith(pageSeparator) && pages.length >= 1 && pages.length <= 40) {
+      return { year: rest.slice(0, len), pages };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * One part of a source mark: `[authors + separator] year [page separator +
+ * pages]`, authors 1 to 200 characters, the shortest that fits. The
+ * separators come from the style, so this is plain string work, no regex
+ * built from them.
+ */
+function sourcePart(part: string, style: CitationStyle): string | undefined {
+  const { authorYearSeparator: sep, pageSeparator } = style.inText;
+  const key = (authors: string, found: { year: string; pages: string }) =>
+    `${authors}|${found.year}|${found.pages.replace(PAGE_DASH, style.rangeDash)}`;
+  for (let at = part.indexOf(sep, 1); at !== -1 && at <= 200; at = part.indexOf(sep, at + 1)) {
+    const found = yearPages(part.slice(at + sep.length), pageSeparator);
+    if (found) return key(part.slice(0, at), found);
+  }
+  const found = yearPages(part, pageSeparator);
+  return found ? key("", found) : undefined;
 }
 
 function sourceKey(inner: string, style: CitationStyle): string | undefined {
-  const t = style.inText;
-  const part = new RegExp(
-    `^(?:(?<authors>[^;]{1,200}?)${escape(t.authorYearSeparator)})?(?<year>${D}{4}\\p{Ll}?)` +
-      `(?:${escape(t.pageSeparator)}(?<pages>[^;]{1,40}))?$`,
-    "u",
-  );
   const keys: string[] = [];
   for (const raw of inner.split(";")) {
-    const m = part.exec(raw.replace(HS_RUN, " ").trim().normalize("NFC"));
-    if (!m?.groups) return undefined;
-    const pages = m.groups.pages?.replace(PAGE_DASH, style.rangeDash) ?? "";
-    keys.push(`${m.groups.authors ?? ""}|${m.groups.year}|${pages}`);
+    const key = sourcePart(raw.replace(HS_RUN, " ").trim().normalize("NFC"), style);
+    if (key === undefined) return undefined;
+    keys.push(key);
   }
   return keys.join(";");
 }

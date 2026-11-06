@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { fpzgCitationStyle } from "@/domain/citation";
+
 import {
   compareProtectedContent,
   MAX_PROTECTED_TEXT_LENGTH,
@@ -146,6 +148,25 @@ describe("compareProtectedContent", () => {
   it("refuses values that are not text", () => {
     expect(compareProtectedContent(5 as unknown as string, "5")).toEqual({ ok: false, reason: "not-text" });
     expect(compareProtectedContent("5", null as unknown as string)).toEqual({ ok: false, reason: "not-text" });
+  });
+
+  it.each([
+    ["authors with the separator inside", "(Ana Horvat 2007s. 9)", "(Ana Horvat 2007s. 10)"],
+    ["a year letter before a page separator", "(Horvat 2007as. 9)", "(Horvat 2007as. 10)"],
+    ["a page separator that starts with a letter", "(Horvat 2007s. 9)", "(Horvat 2007s. 10)"],
+  ])("reads source marks of another style: %s", (_label, source, proposed) => {
+    const style = {
+      ...fpzgCitationStyle,
+      inText: { ...fpzgCitationStyle.inText, authorYearSeparator: " ", pageSeparator: "s. " },
+    };
+    const check = compareProtectedContent(source, proposed, style);
+    expect(check).toEqual({
+      ok: true,
+      findings: [
+        { kind: "source", change: "removed", text: source, count: 1 },
+        { kind: "source", change: "added", text: proposed, count: 1 },
+      ],
+    });
   });
 
   it.each([
