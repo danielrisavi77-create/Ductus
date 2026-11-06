@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-16 — Panel Asistent, 12 stanja (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 13 · DAN-411 · prijedlog slike · M9.UX</div>
+  <h1>S-16 — Panel Asistent</h1>
+  <p>Asistent postoji samo kao pomoćnik studentu i samo ako zadatak dopušta uporabu (PRODUCT §5 pravila 13 i 15). Razgovor je studentov; nastavnik vidi samo ono što student prenese u rad ili priloži uz izjavu (D-41). Katalog od 10 svrha u dvije razine (D-268 O2). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="v1">
+    <div class="ref-tag" id="v1">Stanje 1 · izbor svrhe</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2><button class="btn small ghost" type="button">Zatvori</button></div>
+      <div class="panel-body">
+        <p class="note">Odaberite svrhu. Svaki prijenos u rad bilježi se s pružateljem, modelom i svrhom.</p>
+        <ul class="purposes">
+          <li><button type="button"><span class="lvl">Razina 1</span><b>Lektura</b></button></li>
+          <li><button type="button"><span class="lvl">Razina 1</span><b>Prijevod</b></button></li>
+          <li><button type="button"><span class="lvl">Razina 1</span><b>Traženje literature</b></button></li>
+          <li><button type="button"><span class="lvl">Razina 1</span><b>Formatiranje</b></button></li>
+          <li><button type="button"><span class="lvl">Razina 1</span><b>Transkripcija</b></button></li>
+        </ul>
+        <p class="foot">Svrhe razine 2 na ovom zadatku nisu uključene.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v2">
+    <div class="ref-tag" id="v2">Stanje 2 · unos uz svrhu</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent · Lektura</h2><button class="btn small ghost" type="button">Promijeni svrhu</button></div>
+      <div class="panel-body">
+        <div class="field"><label for="u2">Tekst za lekturu</label><textarea id="u2" class="input" rows="3">Javni prostor u gradu nije samo fizički okvir, nego i mjesto na kojem se pregovara o pravu na grad.</textarea></div>
+        <p class="meta">Označeni odlomak iz rada ili zalijepljeni tekst. Lektura vraća označene izmjene, ne novi tekst.</p>
+        <button class="btn" type="button">Pošalji Asistentu</button>
+        <p class="foot">Pružatelj: Primjer d.o.o. · model: Model A (izmišljeno)</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v3">
+    <div class="ref-tag" id="v3">Stanje 3 · čekanje odgovora</div>
+    <div class="panel" role="complementary" aria-label="Asistent" aria-busy="true">
+      <div class="panel-top"><h2>Asistent · Lektura</h2></div>
+      <div class="panel-body">
+        <div class="turn you"><span class="who">Vi</span><p>Javni prostor u gradu nije samo fizički okvir…</p></div>
+        <div role="status"><p class="note">Asistent odgovara.</p><div class="skel w80"></div><div class="skel w60" style="margin-top:6px"></div><div class="skel w40" style="margin-top:6px"></div></div>
+        <button class="btn secondary" type="button">Odustani</button>
+        <p class="meta">Pisanje u radu ne čeka odgovor.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v4">
+    <div class="ref-tag" id="v4">Stanje 4 · odgovor s radnjom Prenesi u rad</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent · Lektura</h2></div>
+      <div class="panel-body">
+        <div class="turn"><span class="who">Asistent · Model A · lektura</span><p>Predlažem jednu izmjenu: „pregovara o pravu na grad” umjesto „pregovara oko prava na grad”.</p></div>
+        <div class="facts-row"><span class="tag">Pružatelj: Primjer d.o.o.</span><span class="tag">Model A</span><span class="tag">Svrha: lektura</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button">Prenesi u rad</button><button class="btn secondary" type="button">Ne prenosi</button></div>
+        <p class="meta">Prijenos se zapisuje u evidenciju. Mentor ga vidi s mjestom u radu (D-41).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v5">
+    <div class="ref-tag" id="v5">Stanje 5 · usporedba prije primjene (D-46)</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Provjera prije primjene</h2></div>
+      <div class="panel-body">
+        <p class="note">Lektura je promijenila brojku i oznaku izvora. Potvrdite svaku razliku prije primjene.</p>
+        <table class="cmp"><thead><tr><th scope="col">Vrsta</th><th scope="col">Prije</th><th scope="col">Poslije</th></tr></thead><tbody>
+          <tr><td>Brojka</td><td>14</td><td>41</td></tr>
+          <tr><td>Oznaka izvora</td><td>(Autor A, 2019: 14)</td><td>(Autor A, 2019)</td></tr>
+          <tr><td>Citat</td><td colspan="2">bez razlike</td></tr></tbody></table>
+        <label><input type="checkbox"> Pregledao sam razlike i potvrđujem primjenu</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" aria-disabled="true">Primijeni</button><button class="btn secondary" type="button">Odbaci</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v6">
+    <div class="ref-tag" id="v6">Stanje 6 · preneseno u rad</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent · Lektura</h2></div>
+      <div class="panel-body">
+        <div class="toast" role="status"><span>Preneseno u rad: odlomak 2. Zapisano s pružateljem, modelom i svrhom.</span><button class="btn small ghost" type="button">Idi na mjesto</button></div>
+        <p class="meta">Tekst u radu nosi podrijetlo „iz AI pomoćnika” (D-58). Razgovor ide uz izjavu o uporabi (D-41).</p>
+        <button class="btn secondary" type="button">Nova svrha</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v7">
+    <div class="ref-tag" id="v7">Stanje 7 · pomoćnik koji pita (razina 2)</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent · Brainstorming</h2><span class="tag">Razina 2</span></div>
+      <div class="panel-body">
+        <div class="turn"><span class="who">Asistent · Model A · brainstorming</span><p>Što bi se u Vašem tekstu promijenilo kad biste uklonili pojam „pravo na grad”? Koji bi Vam argument tada nedostajao?</p></div>
+        <div class="field"><label for="u7">Vaš odgovor</label><textarea id="u7" class="input" rows="3"></textarea></div>
+        <button class="btn" type="button">Odgovori</button>
+        <p class="meta">U ovom načinu Asistent postavlja pitanja i ne piše tekst za rad.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v8">
+    <div class="ref-tag" id="v8">Stanje 8 · svrha razine 2 nije uključena</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <ul class="purposes"><li><button type="button" aria-disabled="true"><span class="lvl">Razina 2</span><b>Objašnjenje pojma</b><span class="meta">Nije uključeno na ovom zadatku.</span></button></li></ul>
+        <p class="note" role="status">Ovu svrhu uključuje nastavnik zadatka. Ako Vam treba, pitajte nastavnika.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v9">
+    <div class="ref-tag" id="v9">Stanje 9 · Asistent nije dostupan</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Asistent na ovom zadatku nije dostupan. Pisanje i predaja rade bez njega.</p>
+        <p class="meta">Prikazuje se kad zadatak ne dopušta uporabu, kad ustanova nije uključila Asistenta ili kad ograničenje troška nije podešeno. Razlog se ne iznosi studentu pojedinačno.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v10">
+    <div class="ref-tag" id="v10">Stanje 10 · greška pružatelja</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent · Lektura</h2></div>
+      <div class="panel-body">
+        <div class="turn you"><span class="who">Vi</span><p>Javni prostor u gradu nije samo fizički okvir…</p></div>
+        <p class="note" role="alert">Asistent trenutačno ne odgovara. Ništa nije preneseno u rad.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button">Pokušaj ponovno</button><button class="btn secondary" type="button">Zatvori</button></div>
+        <p class="meta">Rad se i dalje sprema, a ostali dijelovi aplikacije rade.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v11">
+    <div class="ref-tag" id="v11">Stanje 11 · bez mreže</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent · Lektura</h2><span class="tag open">Bez mreže</span></div>
+      <div class="panel-body">
+        <div class="turn"><span class="who">Asistent · Model A · lektura · spremljeno na uređaju</span><p>Predlažem jednu izmjenu: „pregovara o pravu na grad”.</p></div>
+        <p class="note" role="status">Razgovor se čita s ovog uređaja. Prenijeti tekst možete tek kad se mreža vrati i provjeri se pravo na uporabu.</p>
+        <button class="btn" type="button" aria-disabled="true">Prenesi u rad</button>
+        <p class="meta">Već zapisani prijenosi ostaju zapisani (D-268 O4).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v12">
+    <div class="ref-tag" id="v12">Stanje 12 · pravo nije potvrđeno</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent · Lektura</h2></div>
+      <div class="panel-body">
+        <div class="turn"><span class="who">Asistent · Model A · lektura</span><p>Predlažem jednu izmjenu: „pregovara o pravu na grad”.</p></div>
+        <p class="note" role="alert">Uporaba Asistenta na ovom zadatku trenutačno nije dopuštena, pa se odgovor ne može primijeniti. Razgovor ostaje sačuvan.</p>
+        <button class="btn" type="button" aria-disabled="true">Prenesi u rad</button>
+        <p class="meta">Provjera prava radi se na poslužitelju prije svake primjene (D-268 O4).</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): gumb Asistent u traci, u panelu redom naslov, svrhe ili polje unosa, radnje, Zatvori; Esc zatvara panel i vraća fokus na gumb. Onemogućene radnje nose aria-disabled i ostaju u redoslijedu fokusa. Odgovor Asistenta objavljuje se kao role="status".</p>
+</main>
+</body>
+</html>

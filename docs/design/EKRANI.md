@@ -142,7 +142,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | S-20 | Izvoz (A4 pregled) | M8 | DJELOMIČNO | 12 | popunjeno, prazno, učitavanje, greška, mobitel, izvoz .docx/PDF |
 | N-18 | Izvoz predanog rada i paket za Merlin | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel |
 | S-09 | PDF izvori u bilježnici (isticanje, citat) | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel, citat nije pronađen |
-| S-16 | Panel Asistent (12 stanja) | M9 | NEMA | 13 | 12 stanja, bez mreže, proračun (S16-BUD), mobitel |
+| S-16 | Panel Asistent (12 stanja) | M9 | PRIJEDLOG (DAN-411, m9-reference-a) | 13 | 12 stanja, bez mreže, proračun (S16-BUD), mobitel |
 | S31-AI | Izjava o uporabi AI u predaji | M9 | NEMA | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
 | N-AI-ATT | Nastavnik: pregled AI-atribucije | M9 | NEMA | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
 | N-19 | AI pomoć nastavniku | M9 | NEMA | — | — |
