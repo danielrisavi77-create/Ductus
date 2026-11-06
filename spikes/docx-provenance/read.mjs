@@ -25,6 +25,10 @@ export class DocxError extends Error {
 const fail = (code) => { throw new DocxError(code); };
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+// Strict OOXML names the same elements differently; reading it as W would silently return nothing.
+const STRICT = "http://purl.oclc.org/ooxml/wordprocessingml/main";
+// mc:Fallback repeats mc:Choice (e.g. a text box); its paragraphs, text and revisions would count twice.
+const MC = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 const MAIN = "word/document.xml";
 const REVISIONS = new Set(["ins", "del", "moveFrom", "moveTo"]);
 const REMOVED = new Set(["del", "moveFrom"]);
@@ -125,9 +129,10 @@ function parse(bytes, lim) {
   let depth = 0;
   let inText = 0;
   let removed = 0;
+  let fallback = 0;
   let chars = 0;
   const keep = (t) => {
-    if (!inText || removed || !open.length) return;
+    if (!inText || removed || fallback || !open.length) return;
     chars += t.length;
     if (chars > lim.maxTextChars) fail("XML_TEXT");
     paragraphs[open.at(-1)] += t;
@@ -139,7 +144,9 @@ function parse(bytes, lim) {
   sax.on("processinginstruction", () => fail("XML_PI"));
   sax.on("opentag", (node) => {
     if (++depth > lim.maxDepth) fail("XML_DEPTH");
-    if (node.uri !== W) return;
+    if (node.uri === STRICT) fail("DOCX_STRICT");
+    if (node.uri === MC && node.local === "Fallback") fallback++;
+    if (fallback || node.uri !== W) return;
     const name = node.local;
     if (name === "p") { open.push(paragraphs.length); paragraphs.push(""); }
     else if (name === "t") inText++;
@@ -150,7 +157,8 @@ function parse(bytes, lim) {
   });
   sax.on("closetag", (node) => {
     depth--;
-    if (node.uri !== W) return;
+    if (node.uri === MC && node.local === "Fallback") fallback--;
+    if (fallback || node.uri !== W) return;
     const name = node.local;
     if (name === "p") open.pop();
     else if (name === "t") inText--;

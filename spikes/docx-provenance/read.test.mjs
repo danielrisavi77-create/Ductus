@@ -135,6 +135,17 @@ describe("XML classes", () => {
     const cdata = '<w:p><w:r><w:t><![CDATA[a<b]]></w:t></w:r><w:del><w:r><w:t><![CDATA[skriveno]]></w:t></w:r></w:del></w:p>';
     assert.deepEqual(readDocx(docx(xml(cdata))), { paragraphs: ["a<b"], revisions: [{ kind: "del", paragraph: 0 }] });
   });
+  it("X12 Strict OOXML is refused, not read as empty; nothing inside mc:Fallback is counted twice", () => {
+    const strict = `${DECL}<w:document xmlns:w="http://purl.oclc.org/ooxml/wordprocessingml/main"><w:body>${para("a")}</w:body></w:document>`;
+    rejects(docx(strict), "DOCX_STRICT");
+    const MC = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    const box = (t) => `<w:txbxContent>${para(t)}</w:txbxContent>`;
+    const alt = `<w:p><w:r><mc:AlternateContent xmlns:mc="${MC}"><mc:Choice Requires="wps">${box("okvir")}</mc:Choice>`
+      + `<mc:Fallback>${box("okvir")}<w:ins w:id="1"/></mc:Fallback></mc:AlternateContent><w:t>iza</w:t></w:r></w:p>`;
+    assert.deepEqual(readDocx(docx(xml(alt))), { paragraphs: ["iza", "okvir"], revisions: [] });
+    const inside = `<w:p><w:r><w:t>a<mc:Fallback xmlns:mc="${MC}">b</mc:Fallback>c</w:t></w:r></w:p>`;
+    assert.deepEqual(readDocx(docx(xml(inside))).paragraphs, ["ac"]);
+  });
   it("X10 bytes that are not UTF-8, UTF-16 included", () => {
     rejects(docx(Uint8Array.of(...strToU8(xml(para("a"))).subarray(0, 60), 0xff, 0xfe)), "XML_ENCODING");
     const utf16 = new Uint8Array(Buffer.from(`﻿${xml(para("a"), '<?xml version="1.0" encoding="UTF-16"?>')}`, "utf16le"));
