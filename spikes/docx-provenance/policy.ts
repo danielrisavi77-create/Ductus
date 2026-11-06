@@ -105,6 +105,8 @@ export function checkGenerator(source: string): string[] {
   const keywords = source.match(/\bimport\b(?!\s*\.\s*meta)/g)?.length ?? 0;
   const statements = source.match(/\bimport\s+(?:[\w*{}\s,$]+?\s+from\s*)?["'][^"']+["']|\bimport\s*["'][^"']+["']/g)?.length ?? 0;
   if (keywords !== statements) errors.push("generator has an import the check does not recognise");
+  // A re-export loads a module too, and a comment can hide its specifier: every export must be a declaration.
+  if (/\bexport\b(?!\s+(?:const|let|var|class|function|async\s+function)\b)/.test(source)) errors.push("generator has an export that is not a declaration");
   return errors;
 }
 

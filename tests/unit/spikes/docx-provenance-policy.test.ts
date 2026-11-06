@@ -151,7 +151,12 @@ describe("generator imports (A13, A14)", () => {
     'process.binding("tcp_wrap");', 'globalThis["fet" + "ch"]("x");',
     'import JSZip from "jszip";', 'import { unzip } from "fflate/browser";', 'import x from "./helper.mjs";',
     'import\n  { a }\n  from\n  "node:http";',
+    // Re-exports load a module too; a comment must not hide the specifier (review c.6675616322, QA c.6675637491).
+    'export * from /* c */ "node:child_process";', 'export /* c */ * from "node:net";', 'export * as n from // c\n "node:vm";',
+    'export { a } from /* c */ "node:http";', 'export { request } from/**/"node:https";', 'export { buildDocx };',
   ])("rejects %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  it("accepts exported declarations", () =>
+    expect(checkGenerator(OK_GEN + "export const A = 1;\nexport function b() {}\nexport async function c() {}\nexport\n  class D {}\n")).toEqual([]));
   it("rejects an empty generator", () => expect(checkGenerator("")).not.toEqual([]));
 });
 
