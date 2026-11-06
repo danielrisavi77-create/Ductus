@@ -45,6 +45,8 @@ export const hr = {
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
       institution: "Pregled ustanove",
+      // DAN-581 (A-02): the institution's teachers and their roles, /ustanova/korisnici.
+      users: "Korisnici",
     },
     role: { teacher: "Nastavnik", student: "Student", admin: "Administrator" },
     demoNote: "Nijedan stvarni osobni podatak.",
@@ -545,6 +547,8 @@ export const hr = {
     title: "Korisnici i uloge",
     lead: "Nastavnici vaše ustanove i osobe koje čekaju potvrdu uloge. Ulogu nastavnika potvrđujete i opozivate vi; prijava preko AAI@EduHr daje samo pravo da vas osoba čeka na popisu.",
     person: "Osoba",
+    // A person whose name the identity provider has not given (identity.person_name has no row).
+    unnamed: "Ime nije upisano",
     pending: {
       heading: "Čekaju potvrdu uloge",
       note: "Zadnja prijava preko AAI@EduHr dala im je pravo nastavnika. Uloga počinje tek kad je potvrdite.",
@@ -1364,6 +1368,7 @@ export const hr = {
       mentoredWorks: "radove uz mentora",
       home: "svoj prostor",
       institution: "pregled svoje ustanove",
+      users: "korisnike svoje ustanove",
     },
     deniedTitle: "Nemate pristup ovom prikazu",
     deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
