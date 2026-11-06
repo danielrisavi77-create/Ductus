@@ -109,6 +109,14 @@ SELECT bag_eq(
       WHERE has_function_privilege(r, 'collaboration.lock_document_for_write(text)', 'EXECUTE') $$,
   $$ VALUES ('ductus_identity') $$,
   'only the identity role executes lock_document_for_write (A11)');
+SELECT ok((SELECT prosecdef AND proowner = 'ductus_evidence'::regrole AND 'search_path=""' = ANY (proconfig) FROM pg_proc
+    WHERE oid = 'collaboration.revision_above_document(text,uuid,bigint)'::regprocedure),
+  'the evidence role owns revision_above_document, a SECURITY DEFINER function with an empty search_path (#1091 c.6696580072)');
+SELECT bag_eq(
+  $$ SELECT r FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_identity', 'ductus_test_stranger']) AS r
+      WHERE has_function_privilege(r, 'collaboration.revision_above_document(text,uuid,bigint)', 'EXECUTE') $$,
+  $$ VALUES ('ductus_identity') $$,
+  'only the identity role executes revision_above_document, so the web role cannot probe revisions with it');
 SELECT bag_eq(
   $$ SELECT r || ' ' || f FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_evidence', 'ductus_test_stranger']) AS r
       CROSS JOIN unnest(ARRAY['collaboration.create_revision_request(text,jsonb,text,bigint)',
@@ -329,6 +337,8 @@ SELECT matches(pg_temp.ask('vesna', $$ SELECT collaboration.delete_revision_requ
   'the web role cannot delete requests (A1)');
 SELECT matches(pg_temp.ask('vesna', $$ SELECT collaboration.lock_document_for_write('doc-a') $$), '^42501',
   'the web role cannot take the document lock itself');
+SELECT matches(pg_temp.ask('vesna', $$ SELECT collaboration.revision_above_document('doc-a', {fak_a}, 0) $$), '^42501',
+  'the web role cannot read the revision of a document through the ceiling helper');
 GRANT SELECT, INSERT, UPDATE, DELETE ON collaboration.revision_request, collaboration.revision_request_version,
   collaboration.revision_response TO ductus_app;
 SELECT is(pg_temp.ask('vesna', $$ SELECT (SELECT count(*) FROM collaboration.revision_request)
