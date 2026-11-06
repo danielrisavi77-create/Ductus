@@ -43,7 +43,7 @@ Nijedna opcija niže ne gradi na odluci sa statusom PRIJEDLOG. Gdje opcija ovisi
 | --- | --- | --- |
 | A. Administrator ustanove | D-262 Q04 (imenuje ga operater na pisani zahtjev fakulteta); D-16 (prijava AAI@EduHr) | Uloga već postoji u modelu i prijavljuje se kroz AAI. Isti lanac (operater imenuje admina, admin odobrava operateru) slabi odvojenost; administrator prema `docs/PRODUCT.md` ne čita sadržaj, ali bi odobravao da ga čita treća strana. |
 | B. Koordinator pilota na FPZG-u | D-69; Q-3 (paket pitanja FPZG-u) | Osoba još nije imenovana i uloga nije modelirana u aplikaciji; pristanak bi išao izvan aplikacije dok se uloga ne uvede. |
-| C. Službenik za zaštitu podataka (DPO) FPZG-a | D-257, D-29 | Ima pravni kontekst; nije korisnik aplikacije, pa je pristanak nužno izvan nje. |
+| C. Službenik za zaštitu podataka (DPO) FPZG-a | D-257, D-29 | Ima pravni kontekst; danas nema ulogu u aplikaciji, pa bi pristanak bio izvan nje ili bi tražio novu ulogu (prijava samo kroz AAI@EduHr, D-16). |
 | D. Osoba koju imenuje ugovor o obradi | D-199 t. 3 („kako opisuje ugovor o obradi”); D-264 Q13 | Najbliže doslovnom tekstu D-199 t. 3; ugovor nije potpisan, a model u `docs/privacy/05` A.1 je PRIJEDLOG, pa do potpisa nema imenovane osobe. |
 
 **Podpitanje 1a:** smije li pristanak dati jedna osoba ili traži dvije (npr. A i C). Nijedan izvor to ne određuje.
@@ -55,7 +55,7 @@ Nijedna opcija niže ne gradi na odluci sa statusom PRIJEDLOG. Gdje opcija ovisi
 | Opcija | Izvor | Posljedica |
 | --- | --- | --- |
 | A. Pisani zahtjev ili suglasnost fakulteta, a u audit događaju samo referenca na nju | obrazac iz D-262 Q04 i D-271 MQ02 | Ne traži novu ulogu ni sučelje za fakultet. Aplikacija ne može sama provjeriti da referenca odgovara stvarnom dokumentu. |
-| B. Potvrda u aplikaciji: osoba iz pitanja 1, prijavljena kroz AAI@EduHr, potvrđuje zahtjev | D-16, D-09 | Potvrda je vezana uz prijavljeni identitet i strojno provjerljiva. Traži novu radnju i ulogu (nije moguća za opcije C i D iz pitanja 1 bez novog računa, a nova prijava izvan AAI@EduHr nije dopuštena). |
+| B. Potvrda u aplikaciji: osoba iz pitanja 1, prijavljena kroz AAI@EduHr, potvrđuje zahtjev | D-16, D-09 | Potvrda je vezana uz prijavljeni identitet i strojno provjerljiva. Traži novu radnju i ulogu; za opcije C i D iz pitanja 1 i novu ulogu u aplikaciji, uz prijavu samo kroz AAI@EduHr (D-16). |
 | C. Kanal koji propisuje ugovor o obradi | D-199 t. 3 | Ovisi o ugovoru koji još nije potpisan. |
 
 **Podpitanje 2a:** vidi li osoba koja potvrđuje točan opseg (koji rad, koji prikaz, koje razdoblje) prije potvrde. Izvori traže najuži opseg, ali ne kažu tko ga određuje.
