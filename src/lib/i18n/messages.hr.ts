@@ -537,6 +537,68 @@ export const hr = {
     unavailable: "Pregled ustanove trenutačno nije dostupan. Pokušajte ponovno.",
     retry: "Pokušaj ponovno",
   },
+  // DAN-581 (A-02, docs/design/ductura/m2-reference): the administrator
+  // confirms and revokes the teacher role. "Za pregled" is D-200 P7: a lost
+  // right at sign-in does not revoke the role. Names stay in the nominative
+  // on their own line ("Osoba"), since a name cannot be declined reliably.
+  teacherRoles: {
+    title: "Korisnici i uloge",
+    lead: "Nastavnici vaše ustanove i osobe koje čekaju potvrdu uloge. Ulogu nastavnika potvrđujete i opozivate vi; prijava preko AAI@EduHr daje samo pravo da vas osoba čeka na popisu.",
+    person: "Osoba",
+    pending: {
+      heading: "Čekaju potvrdu uloge",
+      note: "Zadnja prijava preko AAI@EduHr dala im je pravo nastavnika. Uloga počinje tek kad je potvrdite.",
+      empty: "Nitko ne čeka potvrdu uloge.",
+      emptyNote: "Osoba se pojavi ovdje nakon prijave preko AAI@EduHr koja joj da pravo nastavnika na ovoj ustanovi.",
+      revokedOn: "uloga opozvana",
+    },
+    confirmed: {
+      heading: "Potvrđeni nastavnici",
+      empty: "Na ustanovi još nema potvrđenih nastavnika.",
+      confirmedOn: "Potvrđeno",
+    },
+    review: {
+      mark: "Za pregled",
+      note: "Zadnja prijava nije dala pravo nastavnika. Uloga nije opozvana i ostaje dok ne odlučite.",
+    },
+    confirmAction: "Potvrdi ulogu",
+    revokeAction: "Opozovi ulogu",
+    cancel: "Odustani",
+    close: "Zatvori",
+    check: "Provjeri stanje",
+    confirmDialog: {
+      label: "Potvrda uloge",
+      title: "Potvrditi ulogu nastavnika?",
+      points: [
+        "Moći će stvarati kolegije i zadatke na ovoj ustanovi.",
+        "Ulogu možete kasnije opozvati.",
+        "Potvrda se upisuje u revizijski trag, s vama kao izvršiteljem.",
+      ],
+    },
+    revokeDialog: {
+      label: "Opoziv uloge",
+      title: "Opozvati ulogu nastavnika?",
+      points: [
+        "Od sljedećeg zahtjeva više ne može raditi kao nastavnik na ovoj ustanovi.",
+        "Kolegiji i zadaci ostaju. Ako je nositelj kolegija, ostaje upisan kao nositelj dok ga nastavnik tog kolegija ne zamijeni.",
+        "Ako mu kasnija prijava da pravo nastavnika, ponovno će čekati vašu potvrdu.",
+        "Opoziv se upisuje u revizijski trag, s vama kao izvršiteljem.",
+      ],
+    },
+    // One line per outcome of teacher-role-action.ts; "unknown" never claims either way.
+    outcome: {
+      confirmed: "Uloga nastavnika je potvrđena. Osoba je sada među potvrđenim nastavnicima.",
+      revoked: "Uloga nastavnika je opozvana.",
+      notCandidate: "Potvrda nije moguća. Ova osoba više ne čeka potvrdu na vašoj ustanovi. Popis je osvježen.",
+      notConfirmed: "Opoziv nije potreban. Ova osoba više nema potvrđenu ulogu na vašoj ustanovi. Popis je osvježen.",
+      unknownConfirm: "Ishod nije poznat. Veza s poslužiteljem prekinula se prije odgovora, pa nije sigurno je li uloga potvrđena. Provjerite stanje prije nego što pokušate ponovno.",
+      unknownRevoke: "Ishod nije poznat. Veza s poslužiteljem prekinula se prije odgovora, pa nije sigurno je li uloga opozvana. Provjerite stanje prije nego što pokušate ponovno.",
+      ended: "Radnja nije provedena. Prijava je istekla ili više nemate ovlast za ovu stranicu. Stranica je osvježena.",
+      invalid: "Radnja nije provedena. Osvježite stranicu i pokušajte ponovno.",
+    },
+    unavailable: "Popis korisnika trenutačno nije dostupan. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+  },
   teacherCourses: {
     title: "Moji kolegiji",
     lead: "Kolegiji u kojima predajete i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
