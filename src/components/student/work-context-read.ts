@@ -98,6 +98,7 @@ export async function readWorkContext(
         evidenceProfile: row.evidence_profile,
         opensAt: row.opens_at.toISOString(),
         dueAt: row.due_at.toISOString(),
+        aiPolicy: row.ai_policy,
         aiPurposes: row.ai_policy === "prohibited"
           ? []
           : AI_PURPOSES.filter((p) => row.ai_purposes.includes(p)),

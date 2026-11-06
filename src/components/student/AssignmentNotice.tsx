@@ -127,7 +127,7 @@ export default function AssignmentNotice({ view, timing }: { view: NoticeView; t
     if (sending.current || !noticeStep(state, { type: "confirm" }).send) return;
     sending.current = true;
     dispatch({ type: "confirm" });
-    const result = await acknowledgeNotice(view.assignmentId, view.versionNo);
+    const result = await acknowledgeNotice(view);
     sending.current = false;
     dispatch({ type: "settled", result });
   }

@@ -141,7 +141,9 @@ describe("notice fingerprint (DAN-306)", () => {
     const viewKeys = [...body.matchAll(/^\s+(\w+):/gm)].map((match) => match[1]);
     expect(viewKeys.length).toBeGreaterThan(5);
     const shown = viewKeys.filter((key) => !["assignmentId", "versionNo", "acknowledgedAt"].includes(key));
-    expect([...NOTICE_FINGERPRINT_FIELDS]).toEqual([...shown, "aiPolicy", "templateVersion"].sort());
+    // DAN-306 P02b: the view now carries aiPolicy too, so the client can hash
+    // what it shows; the set of fields stays exactly the same.
+    expect([...NOTICE_FINGERPRINT_FIELDS]).toEqual([...new Set([...shown, "aiPolicy", "templateVersion"])].sort());
     expect(Object.keys(noticeFingerprintPayload(BASE))).toEqual([...NOTICE_FINGERPRINT_FIELDS]);
     expect(NOTICE_TEMPLATE_VERSION).toBe(1);
   });
