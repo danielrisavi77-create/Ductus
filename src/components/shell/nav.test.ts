@@ -59,8 +59,16 @@ describe("navFor", () => {
   });
 
   it("lists only routes that exist in app/, so no item leads to a 404", () => {
-    for (const { href } of [...navFor("teacher"), ...navFor("student")]) {
+    for (const { href } of [...navFor("teacher"), ...navFor("student"), ...navFor("admin")]) {
       expect(existsSync(join(process.cwd(), "app", href, "page.tsx")), href).toBe(true);
     }
+  });
+
+  it("gives an administrator, from DAN-581 (A-02), the users right after the overview", () => {
+    expect(navFor("admin")).toEqual([
+      { href: "/ustanova", label: "Pregled ustanove" },
+      { href: "/ustanova/korisnici", label: "Korisnici" },
+    ]);
+    expect(navFor("teacher").concat(navFor("student")).some((item) => item.href.startsWith("/ustanova"))).toBe(false);
   });
 });
