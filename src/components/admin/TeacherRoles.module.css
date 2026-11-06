@@ -1,0 +1,160 @@
+/* DAN-581 (A-02): the two lists and the role dialog on the paper sheet (D-188), after the M2 reference. */
+.lists {
+  display: grid;
+  gap: 12px;
+}
+
+.heading {
+  margin: 12px 0 0;
+  font-family: var(--ff-display);
+  font-size: var(--fs-h3);
+  font-weight: 600;
+}
+
+.note,
+.facts {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.list,
+.card {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-lg);
+}
+
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.card p {
+  margin: 0;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.who {
+  font-weight: 600;
+}
+
+.facts {
+  font-size: 12.5px;
+}
+
+.flag {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  padding: 4px 0 4px 10px;
+  border-left: 3px solid var(--warn);
+  font-size: 13px;
+}
+
+.flag strong {
+  color: var(--warn);
+  font-size: 12.5px;
+}
+
+.actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  display: flex;
+  gap: 8px;
+}
+
+.primary {
+  composes: primary from "../shell/Dialog.module.css";
+}
+
+.secondary {
+  composes: secondary from "../shell/Dialog.module.css";
+}
+
+.status,
+.alert {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+}
+
+.status {
+  border-left: 3px solid var(--accent);
+  background: var(--well);
+}
+
+.alert {
+  border-left: 3px solid var(--error);
+  background: var(--error-soft);
+}
+
+.dialog {
+  composes: dialog from "../shell/Dialog.module.css";
+  width: 560px;
+}
+
+.body {
+  composes: body from "../shell/Dialog.module.css";
+  padding: 20px 22px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.choices {
+  composes: actions from "../shell/Dialog.module.css";
+}
+
+.points {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 640px) {
+  .facts,
+  .flag strong {
+    font-size: 13px;
+  }
+
+  .item {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px 14px;
+  }
+
+  .actions {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 6px;
+  }
+
+  .body {
+    padding: 16px;
+  }
+
+  .choices > * {
+    flex: 1 1 auto;
+  }
+}
