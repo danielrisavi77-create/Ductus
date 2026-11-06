@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -183,6 +185,124 @@ test("end_session is published, takes only the registered address, and ends the 
     assert.ok(asksForAccount(await get(authorize)));
   } finally {
     child.kill();
+    await Promise.race([
+      new Promise((resolve) => child.once("exit", resolve)),
+      delay(1_000),
+    ]);
+  }
+});
+
+// DAN-474 (#1620 H1): discovery announces back-channel logout, the ID token
+// carries `sid`, and ending the provider session posts a logout token for
+// that `sid` to the one configured address. A local listener stands in for
+// the app; the account is the invented "demo-student".
+test("back-channel logout is announced and posts a logout token for the session's sid", { timeout: 15_000 }, async () => {
+  const received = [];
+  let arrived;
+  const posted = new Promise((resolve) => (arrived = resolve));
+  const app = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      received.push({ method: request.method, path: request.url, type: request.headers["content-type"], body: Buffer.concat(chunks).toString() });
+      response.writeHead(200, { "cache-control": "no-store" }).end();
+      arrived();
+    });
+  });
+  await new Promise((resolve) => app.listen(0, "127.0.0.1", resolve));
+  const backchannel = `http://localhost:${app.address().port}/api/auth/backchannel-logout`;
+
+  const port = await unusedPort();
+  const issuer = `http://localhost:${port}`;
+  const output = [];
+  const child = spawn(process.execPath, [serverPath], {
+    env: { ...process.env, NODE_ENV: "development", PORT: String(port), ISSUER: issuer, BACKCHANNEL_LOGOUT_URI: backchannel },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  child.stdout.on("data", (chunk) => output.push(chunk.toString()));
+  child.stderr.on("data", (chunk) => output.push(chunk.toString()));
+
+  try {
+    const metadata = await waitForProvider(child, `${issuer}/.well-known/openid-configuration`, output);
+    assert.equal(metadata.backchannel_logout_supported, true);
+    assert.equal(metadata.backchannel_logout_session_supported, true);
+
+    const jar = jarOf();
+    const get = async (url) =>
+      jar.take(await fetch(new URL(url, issuer), { redirect: "manual", headers: { cookie: jar.header() } }));
+    const post = async (url, body) =>
+      jar.take(
+        await fetch(new URL(url, issuer), {
+          method: "POST",
+          redirect: "manual",
+          headers: { cookie: jar.header(), "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams(body),
+        }),
+      );
+    const verifier = randomBytes(32).toString("base64url");
+    const authorize = new URL(metadata.authorization_endpoint);
+    authorize.search = new URLSearchParams({
+      client_id: "ductus-local",
+      redirect_uri: "http://localhost:3000/api/auth/callback",
+      response_type: "code",
+      scope: "openid profile",
+      state: "demo-state",
+      nonce: "demo-nonce",
+      code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+      code_challenge_method: "S256",
+    });
+    const first = await get(authorize);
+    const login = await post(first.headers.get("location") + "/login", { account: "demo-student" });
+    const resumed = await get(login.headers.get("location"));
+    const code = new URL(resumed.headers.get("location")).searchParams.get("code");
+    assert.ok(code);
+
+    const token = await fetch(metadata.token_endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from("ductus-local:ductus-local-only").toString("base64")}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: "http://localhost:3000/api/auth/callback",
+        code_verifier: verifier,
+      }),
+    });
+    assert.equal(token.status, 200);
+    const payload = (jwt) => JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString());
+    const idToken = payload((await token.json()).id_token);
+    assert.equal(typeof idToken.sid, "string");
+
+    const end = new URL(metadata.end_session_endpoint);
+    end.search = new URLSearchParams({ client_id: "ductus-local", post_logout_redirect_uri: "http://localhost:3000/" });
+    const html = await (await get(end)).text();
+    const action = /id="op\.logoutForm" method="post" action="([^"]+)"/.exec(html)?.[1];
+    const xsrf = /name="xsrf" value="([^"]+)"/.exec(html)?.[1];
+    assert.ok(action && xsrf);
+    await post(action, { xsrf, logout: "yes" });
+
+    await Promise.race([posted, delay(5_000).then(() => assert.fail(`no back-channel request: ${output.join("")}`))]);
+    assert.equal(received.length, 1);
+    const [request] = received;
+    assert.equal(request.method, "POST");
+    assert.equal(request.path, "/api/auth/backchannel-logout");
+    assert.match(request.type, /^application\/x-www-form-urlencoded/);
+    const form = new URLSearchParams(request.body);
+    assert.deepEqual([...form.keys()], ["logout_token"]);
+    const logout = payload(form.get("logout_token"));
+    assert.equal(logout.iss, issuer);
+    assert.equal(logout.aud, "ductus-local");
+    assert.equal(logout.sub, idToken.sub);
+    assert.equal(logout.sid, idToken.sid);
+    assert.equal(typeof logout.jti, "string");
+    assert.equal(typeof logout.events?.["http://schemas.openid.net/event/backchannel-logout"], "object");
+    assert.equal("nonce" in logout, false);
+  } finally {
+    child.kill();
+    app.close();
     await Promise.race([
       new Promise((resolve) => child.once("exit", resolve)),
       delay(1_000),
