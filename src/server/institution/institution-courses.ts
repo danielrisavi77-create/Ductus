@@ -160,7 +160,8 @@ function codeOf(error: unknown): string | undefined {
 }
 
 async function read<T>(
-  what: string,
+  /** A constant log message, never built from input. */
+  failure: string,
   sessionToken: string,
   withActor: WithActor,
   query: (tx: ActorTransaction) => Promise<Row[]>,
@@ -174,12 +175,12 @@ async function read<T>(
     if (code === "ZD401") return { kind: "unauthorized" };
     if (code === "ZD403") return { kind: "notFound" };
     if (code === "ZD422") return { kind: "invalid" };
-    console.error(`${what} read failed`, code !== undefined && SQLSTATE.test(code) ? code : "unknown");
+    console.error(failure, code !== undefined && SQLSTATE.test(code) ? code : "unknown");
     return { kind: "unavailable" };
   }
   const value = parse(rows);
   if (value === null) {
-    console.error(`${what} read failed`, "row_malformed");
+    console.error(failure, "row_malformed");
     return { kind: "unavailable" };
   }
   return { kind: "ok", value };
@@ -192,14 +193,14 @@ export async function readInstitutionCourses(
 ): Promise<InstitutionCoursesRead> {
   if (sessionToken === undefined || !TOKEN.test(sessionToken)) return { kind: "unauthorized" };
   if (!isAcademicYear(academicYear)) return { kind: "invalid" };
-  const answer = await read("institution courses", sessionToken, withActor,
+  const answer = await read("institution courses read failed", sessionToken, withActor,
     async (tx) => (await tx.query<Row>(COURSES, [academicYear])).rows, institutionCoursesOf);
   return answer.kind === "ok" ? { kind: "ok", academicYear, courses: answer.value } : answer;
 }
 
 export async function readAcademicYears(sessionToken: string | undefined, withActor: WithActor): Promise<AcademicYearsRead> {
   if (sessionToken === undefined || !TOKEN.test(sessionToken)) return { kind: "unauthorized" };
-  const answer = await read("academic years", sessionToken, withActor,
+  const answer = await read("academic years read failed", sessionToken, withActor,
     async (tx) => (await tx.query<Row>(YEARS)).rows, academicYearsOf);
   if (answer.kind === "ok") return { kind: "ok", years: answer.value };
   // The years take no input; a ZD422 here is not what the function raises.
