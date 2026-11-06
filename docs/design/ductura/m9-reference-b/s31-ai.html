@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S31-AI — Izjava o uporabi AI u predaji (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 14 · DAN-411 · prijedlog slike · M9.UX</div>
+  <h1>S31-AI — Izjava o uporabi AI u predaji</h1>
+  <p>Student prije predaje izjavljuje je li koristio Asistenta, a izjava se sastavlja iz zapisa (D-40): alat, pružatelj, model, svrha, faza i razgovor. Student bira hoće li razgovore priložiti. Tekst je činjenica o uporabi, bez postotka i ocjene (PRODUCT §5 pravila 1, 2, 3, 13). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="v1">
+    <div class="ref-tag" id="v1">Stanje 1 · nema uporabe</div>
+    <div class="panel" role="dialog" aria-labelledby="t1">
+      <div class="panel-top"><h2 id="t1">Izjava o uporabi Asistenta</h2></div>
+      <div class="panel-body">
+        <p>U ovom radu nije zabilježena uporaba Asistenta.</p>
+        <p class="note">Izjava glasi: „Asistenta nisam koristio/koristila u ovom radu.” Možete je ispraviti prije predaje.</p>
+        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v2">
+    <div class="ref-tag" id="v2">Stanje 2 · izjavljeno, razgovori priloženi</div>
+    <div class="panel" role="dialog" aria-labelledby="t2">
+      <div class="panel-top"><h2 id="t2">Izjava o uporabi Asistenta</h2></div>
+      <div class="panel-body">
+        <table class="cmp"><thead><tr><th>Svrha</th><th>Pružatelj i model</th><th>Faza</th></tr></thead>
+          <tbody><tr><td>Lektura</td><td>Primjer d.o.o., Model A</td><td>Pisanje</td></tr>
+          <tr><td>Traženje literature</td><td>Primjer d.o.o., Model A</td><td>Planiranje</td></tr></tbody></table>
+        <p class="note">Preneseno u rad: 2 odlomka, označeno kao „iz AI pomoćnika”.</p>
+        <fieldset class="radio"><legend>Razgovori uz izjavu</legend>
+          <label><input type="radio" name="r2" checked> Priloži razgovore (2)</label>
+          <label><input type="radio" name="r2"> Ne prilaži razgovore</label>
+        </fieldset>
+        <p class="foot">Razgovori su Vaši dok pišete. Nastavnik ih vidi samo ako ih priložite (D-41).</p>
+        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v3">
+    <div class="ref-tag" id="v3">Stanje 3 · izjavljeno, razgovori nisu priloženi</div>
+    <div class="panel" role="dialog" aria-labelledby="t3">
+      <div class="panel-top"><h2 id="t3">Izjava o uporabi Asistenta</h2></div>
+      <div class="panel-body">
+        <p>Zapisana uporaba: Lektura, Primjer d.o.o., Model A, faza pisanja.</p>
+        <p class="note">Razgovori nisu priloženi. Nastavnik će vidjeti izjavu i tekst koji ste prenijeli u rad, ne razgovor.</p>
+        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Priloži razgovore</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v4">
+    <div class="ref-tag" id="v4">Stanje 4 · učitavanje zapisa</div>
+    <div class="panel" role="dialog" aria-labelledby="t4" aria-busy="true">
+      <div class="panel-top"><h2 id="t4">Izjava o uporabi Asistenta</h2></div>
+      <div class="panel-body">
+        <p class="note">Sastavljam izjavu iz zapisa.</p>
+        <div class="skel" style="width:90%"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:80%"></div>
+        <p class="foot">Predaja je moguća kad se izjava sastavi.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v5">
+    <div class="ref-tag" id="v5">Stanje 5 · greška</div>
+    <div class="panel" role="dialog" aria-labelledby="t5">
+      <div class="panel-top"><h2 id="t5">Izjava o uporabi Asistenta</h2></div>
+      <div class="panel-body">
+        <p role="alert">Izjavu nije bilo moguće sastaviti. Ništa nije predano.</p>
+        <div class="acts"><button class="btn" type="button">Pokušaj ponovno</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v6">
+    <div class="ref-tag" id="v6">Stanje 6 · Asistent na zadatku nije dopušten</div>
+    <div class="panel" role="dialog" aria-labelledby="t6">
+      <div class="panel-top"><h2 id="t6">Izjava o uporabi Asistenta</h2></div>
+      <div class="panel-body">
+        <p>Zadatak ne dopušta uporabu Asistenta, pa izjava nije potrebna.</p>
+        <div class="acts"><button class="btn" type="button">Nastavi na predaju</button></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="foot">Tipkovnica: dijalog hvata fokus, Esc ga zatvara i vraća fokus na gumb Predaj; odabir razgovora je skupina izbornih gumba sa strelicama. Greška se objavljuje kao role="alert".</p>
+</main>
+</body>
+</html>

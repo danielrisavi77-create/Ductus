@@ -1,0 +1,18 @@
+/* Paket 14 (DAN-411): tokeni i dijelovi iz m5-reference; ovdje samo dodaci za AI u predaji. */
+@import url("../m5-reference/reference.css");
+
+.turn { background: var(--card); border: 1px solid var(--rule-2); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; }
+.turn.you { background: var(--well); }
+.turn .who { font-size: 12.5px; color: var(--ink-3); }
+.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmp th, .cmp td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+.cmp th { color: var(--ink-3); font-weight: 600; }
+.axes { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.axes li { background: var(--card); border: 1px solid var(--rule-2); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; }
+.axes .k { font: 12px/1.4 var(--ff-mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.radio { display: grid; gap: 6px; border: 0; padding: 0; margin: 0; }
+.radio label { display: flex; gap: 8px; align-items: flex-start; min-height: 44px; padding: 8px 10px; border: 1px solid var(--rule-2); border-radius: 6px; background: var(--card); }
+.ro { color: var(--ink-2); }
+.ro dt { color: var(--ink-3); font-size: 12.5px; }
+.ro dd { margin: 0 0 6px; }
+.panel .acts { display: flex; gap: 8px; flex-wrap: wrap; }
