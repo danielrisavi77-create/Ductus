@@ -17,6 +17,14 @@ describe("isRevisionText (class 8)", () => {
     expect(isRevisionText(text)).toBe(ok);
   });
 
+  it("runs on a Unicode the list of unknown code points was measured for", () => {
+    // Measured on Unicode 17.0 against PostgreSQL's 15.1 (#1654 QA); a newer
+    // Node may compose more, so the list is measured again first.
+    const [major, minor] = (process.versions.unicode ?? "").split(".").map(Number);
+    expect(major * 100 + minor).toBeGreaterThanOrEqual(1501);
+    expect(major * 100 + minor).toBeLessThanOrEqual(1700);
+  });
+
   it("refuses what is not a string", () => {
     for (const value of [null, undefined, 1, true, ["a"], { a: "a" }]) expect(isRevisionText(value)).toBe(false);
   });

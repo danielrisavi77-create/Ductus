@@ -50,7 +50,9 @@ const POOL = [
   ...Array.from({ length: 0x21 }, (_, i) => String.fromCharCode(0x7f + i)),
   "\u00A1", "\u00AD", "\u200E", "\u200F", "\u2029", "\u202A", "\u202B", "\u202C", "\u202D", "\u202E", "\u202F",
   "\u2065", "\u2066", "\u2067", "\u2068", "\u2069", "\u206A", "\u2061", "\uFEFE", "\uFFFD",
-  "\u0300", "\u0301", "\u030C", "\u0327", "\u0338",
+  "\u0300", "\u0301", "\u030C", "\u0327", "\u0334", "\u0338", "\u0307",
+  // Newer than the database's Unicode: the QA pair of #1654 and its kin.
+  "\u0897", "\u{113C2}", "\u{105D2}", "\u{105C9}", "\u{16D63}", "\u{16D67}", "\u1ACF",
 ];
 
 describe("isRevisionText agrees with collaboration.is_revision_text", () => {
@@ -72,6 +74,28 @@ describe("isRevisionText agrees with collaboration.is_revision_text", () => {
   it("agrees on 500 mixed samples", async () => {
     const parts = fc.array(fc.constantFrom(...POOL), { minLength: 0, maxLength: 12 });
     await fc.assert(fc.asyncProperty(parts, async (chosen) => agrees(chosen.join(""))), { numRuns: 500 });
+  });
+
+  // Node and PostgreSQL carry their own Unicode tables (#1654 QA), so every
+  // code point is asked alone, before a lower class mark, after a composed
+  // letter and as its own NFD, which covers each composition and reordering.
+  it("agrees on every code point", { timeout: 300_000 }, async () => {
+    const texts: string[] = [];
+    for (let code = 1; code <= 0x10ffff; code++) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      const x = String.fromCodePoint(code);
+      texts.push(`a${x}`, `a${x}\u0334`, `\u00E1${x}`, `a${x.normalize("NFD")}`);
+    }
+    const differ: string[] = [];
+    for (let start = 0; start < texts.length; start += 40_000) {
+      const batch = texts.slice(start, start + 40_000);
+      const { rows } = await admin.query<{ ok: boolean }>(
+        "SELECT collaboration.is_revision_text(t) AS ok FROM unnest($1::text[]) WITH ORDINALITY u(t, n) ORDER BY n", [batch]);
+      batch.forEach((text, i) => {
+        if (rows[i].ok !== isRevisionText(text)) differ.push([...text].map((c) => c.codePointAt(0)?.toString(16)).join(" "));
+      });
+    }
+    expect(differ).toEqual([]);
   });
 
   it("agrees around the length limit", async () => {

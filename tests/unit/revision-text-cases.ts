@@ -21,6 +21,12 @@ export const TEXT_CASES: [name: string, text: string, ok: boolean][] = [
   ["newline and tab only", "\n\t\n", false],
   ["nfd", "Dora\u0301", false],
   ["nfc", "Dor\u00E1", true],
+  // Characters newer than the database's Unicode 15.1: NFC as the database sees it.
+  ["pair composed only after Unicode 15.1", "\u{113C2}\u{113C2}", true],
+  ["new letter with an old mark", "\u{105D2}\u0307", true],
+  ["new mark before an older one of a lower class", "a\u0897\u0334", true],
+  ["new letter pair", "\u{16D63}\u{16D67}", true],
+  ["old nfd beside a new mark", "Dora\u0301\u0897", false],
   ["length 1", "a", true],
   ["length 2000", "a".repeat(REVISION_TEXT_MAX), true],
   ["length 2001", "a".repeat(REVISION_TEXT_MAX + 1), false],
