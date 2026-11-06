@@ -35,24 +35,25 @@
           <tbody><tr><td>Lektura</td><td>Primjer d.o.o., Model A</td><td>Pisanje</td></tr>
           <tr><td>Traženje literature</td><td>Primjer d.o.o., Model A</td><td>Planiranje</td></tr></tbody></table>
         <p class="note">Preneseno u rad: 2 odlomka, označeno kao „iz AI pomoćnika”.</p>
-        <fieldset class="radio"><legend>Razgovori uz izjavu</legend>
-          <label><input type="radio" name="r2" checked> Priloži razgovore (2)</label>
-          <label><input type="radio" name="r2"> Ne prilaži razgovore</label>
+        <p>Razgovori iz kojih je tekst prenesen u rad (2) prilažu se uz izjavu; možete pregledati njihove točne verzije prije potvrde.</p>
+        <fieldset class="radio"><legend>Ostali razgovori</legend>
+          <label><input type="radio" name="r2" checked> Priloži ostale razgovore (1)</label>
+          <label><input type="radio" name="r2"> Ne prilaži ostale razgovore</label>
         </fieldset>
-        <p class="foot">Razgovori su Vaši dok pišete. Nastavnik ih vidi samo ako ih priložite (D-41).</p>
+        <p class="foot">Ostali razgovori su Vaši dok pišete. Nastavnik ih vidi samo ako ih priložite (D-41).</p>
         <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Natrag na rad</button></div>
       </div>
     </div>
   </section>
 
   <section class="variant" aria-labelledby="v3">
-    <div class="ref-tag" id="v3">Stanje 3 · izjavljeno, razgovori nisu priloženi</div>
+    <div class="ref-tag" id="v3">Stanje 3 · izjavljeno, ostali razgovori nisu priloženi</div>
     <div class="panel" role="dialog" aria-labelledby="t3">
       <div class="panel-top"><h2 id="t3">Izjava o uporabi Asistenta</h2></div>
       <div class="panel-body">
         <p>Zapisana uporaba: Lektura, Primjer d.o.o., Model A, faza pisanja.</p>
-        <p class="note">Razgovori nisu priloženi. Nastavnik će vidjeti izjavu i tekst koji ste prenijeli u rad, ne razgovor.</p>
-        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Priloži razgovore</button></div>
+        <p class="note">Ostali razgovori nisu priloženi. Nastavnik će vidjeti izjavu, razgovore iz kojih je tekst prenesen u rad i taj tekst, ne ostale razgovore.</p>
+        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Priloži ostale razgovore</button></div>
       </div>
     </div>
   </section>
@@ -64,7 +65,7 @@
       <div class="panel-body">
         <p class="note">Sastavljam izjavu iz zapisa.</p>
         <div class="skel" style="width:90%"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:80%"></div>
-        <p class="foot">Predaja je moguća kad se izjava sastavi.</p>
+        <p class="foot">Predaja nije vezana uz sastavljanje izjave.</p>
       </div>
     </div>
   </section>
@@ -75,7 +76,8 @@
       <div class="panel-top"><h2 id="t5">Izjava o uporabi Asistenta</h2></div>
       <div class="panel-body">
         <p role="alert">Izjavu nije bilo moguće sastaviti. Ništa nije predano.</p>
-        <div class="acts"><button class="btn" type="button">Pokušaj ponovno</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+        <p class="note">Tehnička greška ne sprječava predaju: možete predati rad bez sastavljene izjave. Izjava se dopuni kad sastavljanje bude moguće, a nastavnik vidi da je dopuna na čekanju.</p>
+        <div class="acts"><button class="btn" type="button">Pokušaj ponovno</button><button class="btn secondary" type="button">Predaj bez izjave</button><button class="btn secondary" type="button">Natrag na rad</button></div>
       </div>
     </div>
   </section>
@@ -85,8 +87,12 @@
     <div class="panel" role="dialog" aria-labelledby="t6">
       <div class="panel-top"><h2 id="t6">Izjava o uporabi Asistenta</h2></div>
       <div class="panel-body">
-        <p>Zadatak ne dopušta uporabu Asistenta, pa izjava nije potrebna.</p>
-        <div class="acts"><button class="btn" type="button">Nastavi na predaju</button></div>
+        <p>Zadatak ne dopušta ugrađenog Asistenta. Izjavu o uporabi ipak potvrđujete: „nisam koristio/koristila” ili vanjske alate koje ste koristili.</p>
+        <fieldset class="radio"><legend>Izjava o uporabi alata</legend>
+          <label><input type="radio" name="r6" checked> Nisam koristio/koristila AI alate</label>
+          <label><input type="radio" name="r6"> Koristio/koristila sam vanjski alat (dopuna)</label>
+        </fieldset>
+        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button></div>
       </div>
     </div>
   </section>
