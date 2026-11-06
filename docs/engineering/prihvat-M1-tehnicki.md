@@ -21,6 +21,8 @@ Zapis po uzoru na prihvat M0 (#1313): za svaki tehnički korak M1 navodi dokaz n
 | M1.5b ugovorni test za svaku pohranu evidencije | #1342 | DAN-491 | unit `tests/unit/evidence/payload-store-contract.test.ts` | 39 prolazi, 0 palih |
 | M1.6a istek neaktivne sesije, odjava svuda, čišćenje | #1253 | DAN-296 | pgTAP `020-identity-session.sql` (plan 43), `024-session-idle.sql`; `tests/integration/session-idle-migration.integration.test.ts` | pgTAP i integracija `success` u CI-ju |
 | M1.6b nonce CSP, HSTS, Permissions-Policy | #1323 | DAN-489 | unit `src/server/http/content-security-policy.test.ts` (21), `src/components/shell/dev-indicator.test.ts` (2); E2E `e2e/content-security-policy.spec.ts`, `e2e/security-headers.spec.ts` | unit 0 palih; standardni E2E (1/3 do 3/3) `success` |
+| M1.7a zatvaranje sesija pri promjeni ustanove | #1255 | DAN-169 | pgTAP `020-identity-session.sql`, `025-session-institution-change.sql`; `tests/integration/session-close-race.integration.test.ts` | pgTAP i integracija `success` u CI-ju |
+| M1.7b odbijanje pristupa bazi kad prijava loga parametre | #1259 | DAN-169 | unit `src/server/db/log-settings.test.ts` (27); `tests/integration/log-settings.integration.test.ts` | unit 0 palih; integracija `success` u CI-ju |
 | Nalaz F-020 | — | — | samo ID, pojedinosti nisu u javnom repou | zatvaranje u privatnom registru sigurnosne sesije |
 | Nalaz F-021 | — | — | samo ID, pojedinosti nisu u javnom repou | zatvaranje u privatnom registru sigurnosne sesije |
 | Nalaz F-022 | — | — | samo ID, pojedinosti nisu u javnom repou | zatvaranje u privatnom registru sigurnosne sesije |
