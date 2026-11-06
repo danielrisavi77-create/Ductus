@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SessionPrincipal } from "@/server/auth/principal";
 import type { InstitutionOverviewRead } from "@/server/institution/institution-overview";
+import type { FacultyRulesRead } from "@/server/institution/faculty-rules";
 import type { TeacherRolesRead } from "@/server/institution/teacher-roles";
 
 import { institutionScreen, type InstitutionScreen } from "./institution-access";
@@ -79,5 +80,21 @@ describe("institutionScreen for the teacher roles read", () => {
   it("shows no list when the session closed after the lists were read", () => {
     expect(institutionScreen("ok", "signed-out", TOKEN)).toBe("expired");
     expect(institutionScreen("ok", "signed-out", undefined)).toBe("signedOut");
+  });
+});
+
+// DAN-590 (A-04, contract #1091 c.6695058963): /ustanova/pravila takes its
+// screen from the faculty rules read, whose answers are the same four.
+describe("institutionScreen for the faculty rules read", () => {
+  type RulesRead = FacultyRulesRead["kind"] | null;
+  const kinds: Record<FacultyRulesRead["kind"], true> = { ok: true, unauthorized: true, notFound: true, unavailable: true };
+
+  it("has a row in the table above for every answer of the faculty rules read", () => {
+    const reads = new Set<RulesRead>(TABLE.map(([read]) => read));
+    for (const kind of Object.keys(kinds) as FacultyRulesRead["kind"][]) expect(reads.has(kind)).toBe(true);
+  });
+
+  it("hides the page from a caller who is not the administrator", () => {
+    expect(institutionScreen("notFound", "signed-in", TOKEN)).toBe("notFound");
   });
 });
