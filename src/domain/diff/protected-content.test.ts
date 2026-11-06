@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fpzgCitationStyle } from "@/domain/citation";
+import { formatInText, fpzgCitationStyle, type BookSource } from "@/domain/citation";
 
 import {
   compareProtectedContent,
@@ -67,6 +67,32 @@ const table: readonly Row[] = [
     { kind: "number", change: "added", text: "10", count: 1 },
     { kind: "number", change: "added", text: "12", count: 1 },
   ]],
+  // 5a. ranges with a signed end (Codex 4490530266)
+  ["negative range becomes two numbers", "Raspon je −10–−5.", "Vrijednosti su −10 i −5.", [
+    { kind: "number", change: "removed", text: "−10–−5", count: 1 },
+    { kind: "number", change: "added", text: "−10", count: 1 },
+    { kind: "number", change: "added", text: "−5", count: 1 },
+  ]],
+  ["range from a negative start becomes two numbers", "Raspon je −10–12.", "Vrijednosti su −10 i 12.", [
+    { kind: "number", change: "removed", text: "−10–12", count: 1 },
+    { kind: "number", change: "added", text: "−10", count: 1 },
+    { kind: "number", change: "added", text: "12", count: 1 },
+  ]],
+  ["range to a negative end becomes two numbers", "Raspon je 5–−3.", "Vrijednosti su 5 i −3.", [
+    { kind: "number", change: "removed", text: "5–−3", count: 1 },
+    { kind: "number", change: "added", text: "5", count: 1 },
+    { kind: "number", change: "added", text: "−3", count: 1 },
+  ]],
+  same("signed range in minus and hyphen forms", "Raspon je −10–−5.", "Raspon je -10 - -5."),
+  ["changed sign of a range end", "Raspon je −10–−5.", "Raspon je −10–5.", [
+    { kind: "number", change: "removed", text: "−10–−5", count: 1 },
+    { kind: "number", change: "added", text: "−10–5", count: 1 },
+  ]],
+  ["hyphen after a letter is not a range sign", "U COVID-19–20 razdoblju.", "U COVID-19 i 20 razdoblju.", [
+    { kind: "number", change: "removed", text: "19–20", count: 1 },
+    { kind: "number", change: "added", text: "19", count: 1 },
+    { kind: "number", change: "added", text: "20", count: 1 },
+  ]],
   // 6. dates
   same("date with and without spaces", "Dana 6. 11. 2026. održan je skup.", "Dana 6.11.2026. održan je skup."),
   same("date with leading zero", "Dana 6. 11. 2026. održan je skup.", "Dana 06. 11. 2026. održan je skup."),
@@ -119,6 +145,28 @@ const table: readonly Row[] = [
     { kind: "number", change: "removed", text: "3", count: 1 },
     { kind: "number", change: "added", text: "4", count: 1 },
   ]],
+  // 8a. parentheses inside a source mark (Codex 4490530273)
+  ["organisation name with parentheses", "Vidi (Institut (Sjever), 2007).", "Vidi (Udruga (Jug), 2007).", [
+    { kind: "source", change: "removed", text: "(Institut (Sjever), 2007)", count: 1 },
+    { kind: "source", change: "added", text: "(Udruga (Jug), 2007)", count: 1 },
+  ]],
+  same("unchanged mark with parentheses", "Vidi (Institut (Sjever), 2007: 9).", "Prema (Institut (Sjever), 2007: 9)."),
+  ["changed year in a mark with parentheses", "Vidi (Institut (Sjever), 2007).", "Vidi (Institut (Sjever), 2008).", [
+    { kind: "source", change: "removed", text: "(Institut (Sjever), 2007)", count: 1 },
+    { kind: "source", change: "added", text: "(Institut (Sjever), 2008)", count: 1 },
+  ]],
+  ["source mark inside a plain parenthesis", "Tako (vidi (Horvat, 2007: 9)).", "Tako (vidi (Horvat, 2007: 10)).", [
+    { kind: "source", change: "removed", text: "(Horvat, 2007: 9)", count: 1 },
+    { kind: "source", change: "added", text: "(Horvat, 2007: 10)", count: 1 },
+  ]],
+  ["outer mark wins over an inner one", "Vidi (UN (2020), 2021).", "Vidi (UN (2019), 2021).", [
+    { kind: "source", change: "removed", text: "(UN (2020), 2021)", count: 1 },
+    { kind: "source", change: "added", text: "(UN (2019), 2021)", count: 1 },
+  ]],
+  ["stray parentheses around a mark", "a (b (Horvat, 2007) c) d) e.", "a (b (Horvat, 2008) c) d) e.", [
+    { kind: "source", change: "removed", text: "(Horvat, 2007)", count: 1 },
+    { kind: "source", change: "added", text: "(Horvat, 2008)", count: 1 },
+  ]],
   // 9. Unicode spaces around a date
   same("no-break spaces in a date", "Dana 6. 11. 2026.", "Dana 6. 11. 2026."),
   // 10. empty text
@@ -150,6 +198,24 @@ describe("compareProtectedContent", () => {
     expect(compareProtectedContent("5", null as unknown as string)).toEqual({ ok: false, reason: "not-text" });
   });
 
+  it("reads a formatInText mark for an organisation with parentheses", () => {
+    const book = (name: string): BookSource => ({
+      type: "book",
+      authors: [{ kind: "organization", name }],
+      year: 2007,
+      title: "Izmišljeni naslov",
+      place: "Zagreb",
+      publisher: "Nakladnik",
+    });
+    const before = formatInText(book("Institut (Sjever)"), fpzgCitationStyle, "9-12");
+    const after = formatInText(book("Institut (Jug)"), fpzgCitationStyle, "9-12");
+    expect(before).toBe("(Institut (Sjever), 2007: 9–12)");
+    expect(findings(`Vidi ${before}.`, `Vidi ${after}.`)).toEqual([
+      { kind: "source", change: "removed", text: before, count: 1 },
+      { kind: "source", change: "added", text: after, count: 1 },
+    ]);
+  });
+
   it.each([
     ["authors with the separator inside", "(Ana Horvat 2007s. 9)", "(Ana Horvat 2007s. 10)"],
     ["a year letter before a page separator", "(Horvat 2007as. 9)", "(Horvat 2007as. 10)"],
@@ -175,6 +241,9 @@ describe("compareProtectedContent", () => {
     ["opening parentheses", "(".repeat(MAX_PROTECTED_TEXT_LENGTH)],
     ["unfinished source marks", "(Horvat, 2007: ".repeat(MAX_PROTECTED_TEXT_LENGTH / 16)],
     ["dangling ranges", "1-".repeat(MAX_PROTECTED_TEXT_LENGTH / 2)],
+    ["dangling signed ranges", "−1–−".repeat(MAX_PROTECTED_TEXT_LENGTH / 4)],
+    ["nested parentheses", `${"(".repeat(MAX_PROTECTED_TEXT_LENGTH / 2)}${")".repeat(MAX_PROTECTED_TEXT_LENGTH / 2)}`],
+    ["nested source mark candidates", `${"(a ".repeat(MAX_PROTECTED_TEXT_LENGTH / 8)}${"Horvat, 2007)".repeat(MAX_PROTECTED_TEXT_LENGTH / 26)}`],
     ["digit groups", "1.234".repeat(MAX_PROTECTED_TEXT_LENGTH / 5)],
     ["one digit run", "1".repeat(MAX_PROTECTED_TEXT_LENGTH)],
     ["long source mark candidates", `(${"Horvat, ".repeat(37)}x)`.repeat(MAX_PROTECTED_TEXT_LENGTH / 300)],

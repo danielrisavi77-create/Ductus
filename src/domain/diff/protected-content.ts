@@ -36,6 +36,8 @@ const SIGN = String.raw`[+\-‐-–−﹣－]`;
 const GROUP = String.raw`[.   ]`;
 const INT = `${D}{1,3}(?:${GROUP}${D}{3}(?!${D}))+|${D}+`;
 const NUM = `(?:${INT})(?:[.,]${D}+)?`;
+// A sign after a letter or digit is a hyphen (COVID-19) or a range dash.
+const LEAD_SIGN = String.raw`(?<![\p{L}\p{N}])${SIGN}`;
 const NUMBER_PARTS = new RegExp(`^(?<int>${INT})(?:[.,](?<frac>${D}+))?$`, "u");
 const GROUPS = new RegExp(GROUP, "gu");
 const HS_RUN = new RegExp(`${HS}+`, "gu");
@@ -43,8 +45,8 @@ const PAGE_DASH = new RegExp(`${HS}*${DASH}${HS}*`, "gu");
 const TOKEN = new RegExp(
   `(?<dd>${D}{1,2})\\.${HS}{0,2}(?<dm>${D}{1,2})\\.${HS}{0,2}(?<dy>${D}{4})(?!${D})` +
     `|(?<iy>${D}{4})-(?<im>${D}{2})-(?<id>${D}{2})(?!${D})` +
-    `|(?<from>${NUM})${HS}{0,3}${DASH}${HS}{0,3}(?<to>${NUM})` +
-    `|(?<sign>(?<![\\p{L}\\p{N}])${SIGN})?(?<num>${NUM})`,
+    `|(?<fs>${LEAD_SIGN})?(?<from>${NUM})${HS}{0,3}${DASH}${HS}{0,3}(?<ts>${SIGN})?(?<to>${NUM})` +
+    `|(?<sign>${LEAD_SIGN})?(?<num>${NUM})`,
   "gu",
 );
 
@@ -123,15 +125,19 @@ function yearPages(rest: string, pageSeparator: string): { year: string; pages: 
  * built from them.
  */
 function sourcePart(part: string, style: CitationStyle): string | undefined {
-  const { authorYearSeparator: sep, pageSeparator } = style.inText;
+  const { authorYearSeparator: sep, pageSeparator, open, close } = style.inText;
   const key = (authors: string, found: { year: string; pages: string }) =>
     `${authors}|${found.year}|${found.pages.replace(PAGE_DASH, style.rangeDash)}`;
+  // Only authors may hold the marks, as in (Institut (Sjever), 2007): in
+  // (vidi (Horvat, 2007: 9)) the outer part has no year and pages of its own.
+  const plain = (rest: string) => !rest.includes(open) && !rest.includes(close);
   for (let at = part.indexOf(sep, 1); at !== -1 && at <= 200; at = part.indexOf(sep, at + 1)) {
-    const found = yearPages(part.slice(at + sep.length), pageSeparator);
-    if (found) return key(part.slice(0, at), found);
+    const rest = part.slice(at + sep.length);
+    const found = yearPages(rest, pageSeparator);
+    if (found && plain(rest)) return key(part.slice(0, at), found);
   }
   const found = yearPages(part, pageSeparator);
-  return found ? key("", found) : undefined;
+  return found && plain(part) ? key("", found) : undefined;
 }
 
 function sourceKey(inner: string, style: CitationStyle): string | undefined {
@@ -144,30 +150,42 @@ function sourceKey(inner: string, style: CitationStyle): string | undefined {
   return keys.join(";");
 }
 
+/**
+ * Open marks on a stack, cleared at a line break; each close pairs with the
+ * last open, so candidates are nested or disjoint. A candidate is read only
+ * when it is at most `MAX_SOURCE_MARK_LENGTH` long, and the outermost valid
+ * one wins: `(Institut (Sjever), 2007)` is one mark, `(vidi (Horvat, 2007))`
+ * keeps the inner one. Candidates come in order of their end, so a valid one
+ * swallows the kept ones that start inside it; each is kept and dropped at
+ * most once.
+ */
 function scanSources(text: string, style: CitationStyle): Scan {
   const { open, close } = style.inText;
-  const items: Item[] = [];
-  const pieces: string[] = [];
-  let last = 0;
-  let from = -1;
+  const opens: number[] = [];
+  const kept: { from: number; to: number; key: string }[] = [];
   for (let i = 0; i < text.length; i += 1) {
     if (text.startsWith(open, i)) {
-      from = i;
+      opens.push(i);
     } else if (text[i] === "\n") {
-      from = -1;
-    } else if (from !== -1 && text.startsWith(close, i)) {
-      const inner = text.slice(from + open.length, i);
-      const key = inner.length <= MAX_SOURCE_MARK_LENGTH ? sourceKey(inner, style) : undefined;
+      opens.length = 0;
+    } else if (opens.length > 0 && text.startsWith(close, i)) {
+      const from = opens.pop()!;
+      const start = from + open.length;
+      const key = i - start <= MAX_SOURCE_MARK_LENGTH ? sourceKey(text.slice(start, i), style) : undefined;
       if (key !== undefined) {
-        items.push({ key, text: text.slice(from, i + close.length) });
-        pieces.push(text.slice(last, from));
-        last = i + close.length;
+        while (kept.length > 0 && kept[kept.length - 1]!.from > from) kept.pop();
+        kept.push({ from, to: i + close.length, key });
       }
-      from = -1;
     }
   }
+  const pieces: string[] = [];
+  let last = 0;
+  for (const { from, to } of kept) {
+    pieces.push(text.slice(last, from));
+    last = to;
+  }
   pieces.push(text.slice(last));
-  return { rest: pieces.join("\n"), items };
+  return { rest: pieces.join("\n"), items: kept.map(({ from, to, key }) => ({ key, text: text.slice(from, to) })) };
 }
 
 function numberKey(text: string): string {
@@ -176,6 +194,7 @@ function numberKey(text: string): string {
   return m.groups!.frac === undefined ? int : `${int}.${m.groups!.frac}`;
 }
 
+const sign = (text: string | undefined) => (text === undefined ? "" : text === "+" ? "+" : "-");
 const day = (text: string) => text.replace(/^0+(?=\p{Nd})/u, "");
 
 function scanNumbers(text: string): Item[] {
@@ -185,8 +204,8 @@ function scanNumbers(text: string): Item[] {
     let key: string;
     if (g.dy !== undefined) key = `${day(g.dd!)}.${day(g.dm!)}.${g.dy}`;
     else if (g.iy !== undefined) key = `${day(g.id!)}.${day(g.im!)}.${g.iy}`;
-    else if (g.from !== undefined) key = `${numberKey(g.from)}–${numberKey(g.to!)}`;
-    else key = `${g.sign === undefined ? "" : g.sign === "+" ? "+" : "-"}${numberKey(g.num!)}`;
+    else if (g.from !== undefined) key = `${sign(g.fs)}${numberKey(g.from)}–${sign(g.ts)}${numberKey(g.to!)}`;
+    else key = `${sign(g.sign)}${numberKey(g.num!)}`;
     items.push({ key, text: m[0] });
   }
   return items;
