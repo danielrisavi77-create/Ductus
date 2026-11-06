@@ -240,9 +240,11 @@ SELECT ok(
   'purge returns one count, never tokens or identifiers'
 );
 
--- 5. The column and the reasons (#1244 items 9, 27).
+-- 5. The column and the reasons (#1244 items 9, 27). oidc_sid_hash (DAN-474)
+-- is the SHA-256 of the provider's login session id, not an address,
+-- browser or device, and a closed session never holds it.
 SELECT columns_are('identity', 'session',
-  ARRAY['id', 'token_hash', 'user_id', 'institution_id', 'created_at', 'expires_at', 'closed_at', 'close_reason', 'last_seen_at'],
+  ARRAY['id', 'token_hash', 'user_id', 'institution_id', 'created_at', 'expires_at', 'closed_at', 'close_reason', 'last_seen_at', 'oidc_sid_hash'],
   'a session row holds no address, browser or device');
 SELECT col_not_null('identity', 'session', 'last_seen_at', 'last_seen_at is NOT NULL');
 SELECT col_default_is('identity', 'session', 'last_seen_at', 'now()', 'a new row starts its idle time at the database clock');

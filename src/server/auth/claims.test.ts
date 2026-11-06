@@ -328,3 +328,40 @@ describe("teacherEligible from hrEduPersonAffiliation", () => {
     }
   });
 });
+
+// DAN-474, plan of attack #1620 E1 and E5: the provider's session id is kept
+// for back-channel logout only when it is a plain value, and a bad one never
+// costs the login. Synthetic values only.
+describe("sid from the ID token", () => {
+  it("keeps a plain sid from the ID token", () => {
+    expect(identityFromClaims({ ...ANA, sid: "sid-ana-001" })).toStrictEqual({
+      ok: true,
+      identity: { ...ANA_IDENTITY, sid: "sid-ana-001" },
+    });
+    expect(identityFromClaims({ ...ANA, sid: "s".repeat(255) })).toMatchObject({ ok: true, identity: { sid: "s".repeat(255) } });
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["null", null],
+    ["empty", ""],
+    ["a number", 42],
+    ["an array", ["sid-ana-001"]],
+    ["an object", { value: "sid-ana-001" }],
+    ["256 characters", "s".repeat(256)],
+    ["a control character", "sid\u0000ana"],
+    ["an escape", "sid\u001bana"],
+    ["a line break", "sid-ana\n"],
+    ["a zero-width character", "sid​ana"],
+  ])("E5 logs in without a sid when it is %s", (_, sid) => {
+    expect(identityFromClaims({ ...ANA, sid })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
+  });
+
+  it("never takes a sid from userinfo, and the ID token one stands", () => {
+    expect(identityFromClaims(ANA, { sub: ANA.sub, sid: "sid-userinfo" })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
+    expect(identityFromClaims({ ...ANA, sid: "sid-ana-001" }, { sub: ANA.sub, sid: "sid-userinfo" })).toStrictEqual({
+      ok: true,
+      identity: { ...ANA_IDENTITY, sid: "sid-ana-001" },
+    });
+  });
+});

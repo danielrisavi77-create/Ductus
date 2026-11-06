@@ -135,6 +135,23 @@ describe("openSession over a ductus_auth login", () => {
     expect(await nameOf()).toEqual([]);
   });
 
+  // DAN-474 (#1620 E1, E5): only the SHA-256 of the provider's sid is kept,
+  // on the session it opened; one the database finds invalid is left out and
+  // the login stands.
+  it("keeps only the hash of a plain sid and opens the session without an invalid one", async () => {
+    const openSession = createOpenSession(loginPool(AUTH_LOGIN));
+    const sidHash = async (hash: Buffer) =>
+      (await admin.query<{ h: Buffer | null }>("SELECT oidc_sid_hash AS h FROM identity.session WHERE token_hash = $1", [hash])).rows;
+    const plain = input({ sid: `sid-${suffix}` });
+    expect((await openSession(plain)).ok).toBe(true);
+    expect(await sidHash(plain.tokenHash)).toEqual([{ h: createHash("sha256").update(`sid-${suffix}`).digest() }]);
+    for (const sid of ["", "s".repeat(256), "sid\u0007bell"]) {
+      const other = input({ sid });
+      expect((await openSession(other)).ok).toBe(true);
+      expect(await sidHash(other.tokenHash)).toEqual([{ h: null }]);
+    }
+  });
+
   // DAN-304 (#1181, item 14): logins of one account at the same time, some
   // with the right and some without, all open their sessions, none fails on
   // a duplicate key, and one row at most is left.
