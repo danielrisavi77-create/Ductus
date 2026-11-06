@@ -65,6 +65,8 @@ async function buildBundle(entry: string, name: string): Promise<string> {
     logLevel: "silent",
     root,
     resolve: { alias: { "@": path.join(root, "src") } },
+    // tsconfig.json keeps JSX as written for Next; a harness of a component needs it compiled.
+    oxc: { jsx: { runtime: "automatic" } },
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
     build: {
       write: false,
