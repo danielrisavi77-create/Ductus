@@ -43,4 +43,4 @@ Ostali uvjeti završetka tehničkog M1 (`docs/PROGRAM-RAZRADA.md`): `app_user` v
 
 - **M1.1 i M1.2 (DAN-196, DAN-198, DAN-377):** vanjski ulaz vlasnika (ovlast za AAI@EduHr Lab i registracija usluge, prolaz prijave na Labu s testnim računom). Ne zatvaraju se ovim zapisom. Lažni OIDC i CI nisu dokaz stvarnog AAI toka (D-203 D1).
 - **Zatvaranje nalaza F-020, F-021, F-022, F-036 i F-151:** zatvaranje u privatnom registru sigurnosne sesije; ovdje su samo ID-evi i status.
-- Tehnički M1 ne smije se označiti prihvaćenim dok nalaz 1 nije razriješen na zelenom SHA-u.
+- Tehnički M1 ne smije se označiti prihvaćenim dok nisu ispunjena sva tri uvjeta: (a) nalaz 1 razriješen na zelenom SHA-u; (b) skupljen dokaz za korake M1.3 do M1.8 koji ovdje nisu pokriveni (nalaz 5: #1256, #1252, #1242); (c) potvrđeno zatvaranje nalaza F-020, F-021, F-022, F-036 i F-151 u privatnom registru sigurnosne sesije.
