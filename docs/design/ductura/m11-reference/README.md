@@ -17,7 +17,7 @@ Oznake A-07 i A-09 ovdje su oznake ekrana iz `docs/design/EKRANI.md`. U `docs/FE
 |---|---|---|
 | `a07-integracije.html` | popunjeno, AAI nedostupan, prazno, učitavanje, greška | D-09, D-200 P1, D-277 NQ10, Q-10, Q-11, DAN-438 |
 | `a09-zdravlje-kopije.html` | popunjeno, prazno (proba povrata još nije izvedena), učitavanje, greška | D-277 NQ05 i NQ10, P-01 do P-04 |
-| `z09-postavke.html` | popunjeno s temom i obavijestima, prazno (nema kolegija), učitavanje, greška | D-200 P1, D-70, D-247, D-181, PRODUCT §5 pravilo 4, `../pocetna.dc.html` |
+| `z09-postavke.html` | popunjeno s temom i obavijestima, prazno (nema kolegija), učitavanje, greška (poslužitelj je odbio promjenu), greška (ishod nepoznat) | D-200 P1, D-70, D-247, D-181, PRODUCT §5 pravilo 4, `../pocetna.dc.html` |
 | `z10-prijavi-problem.html` | popunjeno, poslano, prazno (nema prijava), učitavanje, greška | D-69, D-09 |
 | `z12-mobilni-prikaz.html` | popis radova, rad s trakom spremanja, obrazac (okviri od 360 px) i pravila uske širine | EKRANI Z-12, D-248 |
 
@@ -38,7 +38,8 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 - **Integracije (A-07).**
   - Prijava je samo sustavom AAI@EduHr, koji pruža Srce (D-09); slika kaže da drugog načina prijave nema.
   - Ductura prima ime i prezime, pripadnost ustanovi i adresu e-pošte; adresa služi samo za obavijesti, nikad za prijavu ni spajanje računa (D-200 P1).
-  - Stanje je rezultat provjera koje Ductura sama izvodi (D-277 NQ10). Kad AAI@EduHr ne odgovara, slika kaže da prijavljeni korisnici nastavljaju raditi i da probleme s računom rješava AAI administrator fakulteta; nikoga ne imenuje.
+  - Stanje je rezultat provjera koje Ductura sama izvodi (D-277 NQ10). Kad AAI@EduHr ne odgovara, slika kaže da korisnici s valjanom sesijom nastavljaju raditi i da probleme s računom rješava AAI administrator fakulteta; nikoga ne imenuje.
+  - Sesija istječe nakon 2 sata bez aktivnosti, a najkasnije nakon 12 sati. Istek nije odjava: rad ostaje na uređaju, a slanje na poslužitelj nastavlja se nakon ponovne prijave, koja ne prolazi dok AAI@EduHr ne odgovara (D-200 P2 i dopuna D-200).
   - Lekta (Q-11), uvoz iz Microsoft 365 (DAN-438) i AI pomoćnik (Q-10) označeni su kao otvorene odluke i nisu uključeni.
 - **Zdravlje sustava i kopije (A-09).**
   - Prikazane su samo vlastite provjere: poslužitelj prima promjene, obrada u pozadini i provjera roka predaje (D-277 NQ10). Uzbune su samo iz tih provjera.
@@ -48,6 +49,7 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
   - Profil dolazi iz sustava AAI@EduHr i ne mijenja se u Ducturi; e-pošta služi samo za obavijesti (D-200 P1).
   - Tema i jezik su izbor jedne mogućnosti s `aria-pressed`; odabrana ima puni rub i riječ „(odabrano)”. Engleski dolazi s M11 (D-70); dotad je sučelje samo na hrvatskom (D-247).
   - Obavijesti su samo o komentarima, doradama i rokovima; nikad o tome koliko student piše (PRODUCT §5 pravilo 4). Rečenica iz prototipa prebačena je u oblik „Vi” (D-181).
+  - Greška ima dva stanja. Kad poslužitelj odbije promjenu, slika kaže da vrijede dosadašnje postavke. Kad odgovor ne stigne, ishod je nepoznat: stranica ponovno učitava postavke s poslužitelja i tek tada kaže koje vrijede.
 - **Prijavi problem (Z-10).**
   - Uz opis se šalju samo stanje spremanja i verzija aplikacije; sadržaj rada se ne šalje (D-69).
   - Vrsta problema određuje tko odgovara: održavatelj Ducture, AAI administrator fakulteta ili koordinator pilota. Nitko nije imenovan i rok odgovora se ne obećava.

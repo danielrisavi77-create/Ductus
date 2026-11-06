@@ -68,19 +68,32 @@
   </section>
 
   <section aria-labelledby="t4" class="variant" data-state="greska">
-    <div class="ref-tag">Stanje 4 · greška</div>
+    <div class="ref-tag">Stanje 4 · greška, poslužitelj je odbio promjenu</div>
     <div class="panel">
       <div class="panel-top"><h2 id="t4">Obavijesti</h2></div>
       <div class="panel-body">
-        <p class="note" role="alert">Promjena obavijesti nije stigla na poslužitelj. Vrijede dosadašnje postavke.</p>
+        <p class="note" role="alert">Poslužitelj nije prihvatio promjenu obavijesti. Vrijede dosadašnje postavke.</p>
         <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="ishod-nepoznat">
+    <div class="ref-tag">Stanje 5 · greška, ishod nepoznat</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t5">Obavijesti</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Odgovor poslužitelja nije stigao, pa još nije poznato je li promjena prihvaćena. Provjeravam postavke na poslužitelju.</p>
+        <div class="skel w60"></div>
+        <p class="meta">Koje postavke vrijede, stranica kaže tek kad ih ponovno učita s poslužitelja. Ako ni provjera ne uspije, nudi Provjeri ponovno.</p>
+        <button class="btn secondary" type="button">Provjeri ponovno</button>
       </div>
     </div>
   </section>
 
 </div>
 <p class="meta">Odabrana tema i jezik imaju puni rub i riječ „(odabrano)”, ne samo boju. Svaki okvir za kvačicu ima polje dodira od 44 px.</p>
-<p class="meta">Tipkovnica (EQ6): 1. naslov Postavke, 2. profil (samo za čitanje), 3. tema, 4. jezik, 5. obavijesti redak po redak (u aplikaciji, e-pošta), 6. Pokušaj ponovno.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Postavke, 2. profil (samo za čitanje), 3. tema, 4. jezik, 5. obavijesti redak po redak (u aplikaciji, e-pošta), 6. Pokušaj ponovno ili Provjeri ponovno.</p>
 </main>
 </body>
 </html>
