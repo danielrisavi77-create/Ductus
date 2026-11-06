@@ -183,6 +183,21 @@ describe("generator import and export classes (A13)", () => {
     expect(checkGenerator(OK_GEN + line), line).toEqual([]));
 });
 
+// A builtin module is reachable without import through process (QA c.6676181719): only process.argv is allowed,
+// and the globals and reflection that reach process without its name are rejected.
+describe("generator builtin loaders (A13)", () => {
+  it.each([
+    'process.getBuiltinModule("https").get("https://example.invalid");', 'process . getBuiltinModule("node:net");',
+    'process["getBuiltinModule"]("node:http");', 'const { getBuiltinModule } = process;', 'const p = process;',
+    'process?.getBuiltinModule("node:tls");', 'process\n  .getBuiltinModule("node:dns");', 'process._linkedBinding("tcp_wrap");',
+    'process.binding("tcp_wrap");', 'process.dlopen(m, "x.node");', 'process.env.HTTPS_PROXY;', 'process.mainModule;',
+    'globalThis.process.getBuiltinModule("node:https");', 'globalThis.fetch("x");', 'global["pro" + "cess"];',
+    'Reflect.get(globalThis, "pro" + "cess");', 'const g = getBuiltinModule;',
+  ])("rejects %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  it.each(['const out = process.argv[2] ?? "out";', 'if (process.argv[1]) {}', 'const a = process\n  .argv;'])(
+    "accepts %j", (line) => expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+});
+
 describe("exact version property", () => {
   it("accepts every X.Y.Z without leading zeros", () => {
     fc.assert(fc.property(fc.nat(), fc.nat(), fc.nat(), (a, b, c) => isExactVersion(`${a}.${b}.${c}`)));

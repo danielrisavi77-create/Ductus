@@ -26,6 +26,10 @@ const GENERATOR_FORBIDDEN: [RegExp, string][] = [
   [/\bimport\s*\(/, "dynamic import()"], [/\brequire\b/, "require"], [/\bfetch\b/, "fetch"], [/\bWebSocket\b/, "WebSocket"],
   [/\bXMLHttpRequest\b|\bEventSource\b/, "browser network API"], [/\beval\b|\bFunction\s*\(/, "code generation"],
   [/\bprocess\s*\.\s*(?:binding|dlopen)\b/, "native binding"], [/\bglobalThis\s*\[/, "computed global access"],
+  // process.getBuiltinModule loads any builtin without import: process is allowed only as process.argv,
+  // and the globals and reflection that reach it without its name are not allowed at all.
+  [/\bprocess\b(?!\s*\.\s*argv\b)/, "process other than process.argv"], [/\bgetBuiltinModule\b/, "builtin module loader"],
+  [/\bglobalThis\b|\bglobal\b|\bReflect\b/, "global object or reflection"],
 ];
 const OTHER_DEP_FIELDS = ["devDependencies", "optionalDependencies", "peerDependencies", "peerDependenciesMeta",
   "bundleDependencies", "bundledDependencies", "overrides", "resolutions", "workspaces"];
