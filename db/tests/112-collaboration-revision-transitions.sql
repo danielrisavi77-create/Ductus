@@ -382,6 +382,27 @@ WHERE course_id = pg_temp.id('k1') AND user_id = pg_temp.id('marko') AND member_
 SELECT is(pg_temp.try('responded', 'marko', a.call), 'ZD403: forbidden|unchanged', 'a teacher who left K1 cannot ' || a.name || ' (A9)')
 FROM action a WHERE a.name <> 'respond';
 
+-- Owner decision (#87 c.6691142048, O7 c.6581656612): REREVIEW_REQUIRED to
+-- STUDENT_RESPONDED is a reopened request answered on its new version. The
+-- answer opens a new response cycle and carries no verdict.
+INSERT INTO ref SELECT 'o7', pg_temp.make('accepted');
+SELECT matches(pg_temp.act('reopen', pg_temp.id('o7'), pg_temp.seq(pg_temp.id('o7'))), '^applied\|[0-9]+\|2\|reopened$',
+  'fixture: the teacher asks for a new review of an accepted request');
+SELECT matches(pg_temp.act('respond', pg_temp.id('o7'), pg_temp.seq(pg_temp.id('o7'))), '^applied\|[0-9]+\|2\|responded$',
+  'the student answers the new version: STUDENT_RESPONDED, not accepted (O7)');
+SELECT is((SELECT string_agg(format('%s|%s|%s|%s|%s|%s', v.version, v.closed_as, v.accepted_revision,
+      v.accepted_range_hash IS NULL, v.closed_at IS NULL, s.version), ';' ORDER BY v.version)
+    FROM collaboration.revision_request_version v
+    LEFT JOIN collaboration.revision_response s ON s.request_id = v.request_id AND s.version = v.version
+    WHERE v.request_id = pg_temp.id('o7')),
+  '1|accepted|5|f|f|1;2|||t|t|2', 'version 1 stays accepted with its answer; version 2 has its answer and no verdict (O7)');
+SELECT is(pg_temp.act('respond', pg_temp.id('o7'), pg_temp.seq(pg_temp.id('o7'))), 'ZD409: transition not allowed',
+  'a second answer on the same version is not allowed (O7)');
+SELECT matches(pg_temp.act('accept', pg_temp.id('o7'), pg_temp.seq(pg_temp.id('o7'))), '^applied\|[0-9]+\|2\|accepted$',
+  'only the teacher''s acceptance closes the new cycle (O7)');
+SELECT is((SELECT closed_as FROM collaboration.revision_request_version WHERE request_id = pg_temp.id('o7') AND version = 2),
+  'accepted', 'version 2 is closed as accepted by the teacher');
+
 -- After the submission is recorded every transition is forbidden, malformed
 -- or not, and nothing changes (B8).
 INSERT INTO ref SELECT 'b8_open', pg_temp.make('open');
