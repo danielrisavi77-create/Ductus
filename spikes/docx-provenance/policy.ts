@@ -2,6 +2,7 @@
 // spike and the static checks that hold the manifest, the npm lockfile and the
 // offline generator to it. A review aid that fails loudly, not a sandbox:
 // runtime isolation of parsing is ARCHITECTURE §5c and M8.8-P02.
+import ts from "typescript";
 
 export type Reviewed = { name: string; version: string; integrity: string; license: string; published: string; direct: boolean };
 
@@ -22,11 +23,21 @@ export const ALLOWED_LICENSES = ["MIT", "ISC", "Apache-2.0", "BSD-2-Clause", "BS
 
 // Modules the generator may load; network, process, worker and vm modules are not here.
 const GENERATOR_IMPORTS = new Set(["node:fs", "node:path", "node:url", ...REVIEWED.filter((p) => p.direct).map((p) => p.name)]);
+// Layer 1, raw text: words that load code or reach the process, wherever they stand (strings and comments too).
 const GENERATOR_FORBIDDEN: [RegExp, string][] = [
-  [/\bimport\s*\(/, "dynamic import()"], [/\brequire\b/, "require"], [/\bfetch\b/, "fetch"], [/\bWebSocket\b/, "WebSocket"],
-  [/\bXMLHttpRequest\b|\bEventSource\b/, "browser network API"], [/\beval\b|\bFunction\s*\(/, "code generation"],
-  [/\bprocess\s*\.\s*(?:binding|dlopen)\b/, "native binding"], [/\bglobalThis\s*\[/, "computed global access"],
+  [/\bimport\s*\(/, "dynamic import()"], [/\brequire\b|\bcreateRequire\b|\bmodule\b/, "require"], [/\bfetch\b/, "fetch"], [/\bWebSocket\b/, "WebSocket"],
+  [/\bXMLHttpRequest\b|\bEventSource\b/, "browser network API"], [/\beval\b|\bFunction\b|\bconstructor\b|__proto__/, "code generation"],
+  [/\bprocess\s*\.\s*(?:binding|dlopen)\b/, "native binding"], [/\bglobalThis\b|\bglobal\b|\bReflect\b/, "global object access"],
+  [/\bprocess\b(?!\s*\??\.\s*argv\b)|getBuiltinModule/, "process other than process.argv"],
+  [/\bimport\s*\.\s*meta\b(?!\s*\??\.\s*url\b)/, "import.meta other than import.meta.url"], [/\\u/, "a unicode escape"],
 ];
+// Layer 2, syntax tree: an allowlist. A name is a local declaration or one of these globals, a member is one of
+// these names or a numeric index, process is only process.argv and import.meta only import.meta.url.
+const ALLOWED_GLOBALS = new Set(["Array", "Boolean", "Date", "JSON", "Map", "Math", "Number", "Object", "Set", "String", "Uint8Array", "undefined", "NaN", "Infinity"]);
+const ALLOWED_MEMBERS = new Set(["argv", "url", "entries", "map", "join", "replace", "length"]);
+// No declaration may shadow a global: references are resolved against every declaration in the file.
+const GLOBAL_NAMES = new Set([...ALLOWED_GLOBALS, ...Object.getOwnPropertyNames(globalThis), "process", "global", "globalThis", "require",
+  "module", "exports", "__filename", "__dirname", "Reflect", "Function", "eval", "navigator", "fetch", "WebSocket", "Proxy", "arguments"]);
 const OTHER_DEP_FIELDS = ["devDependencies", "optionalDependencies", "peerDependencies", "peerDependenciesMeta",
   "bundleDependencies", "bundledDependencies", "overrides", "resolutions", "workspaces"];
 const INSTALL_SCRIPTS = ["preinstall", "install", "postinstall", "prepare", "preprepare", "postprepare", "prepublish", "dependencies"];
@@ -107,7 +118,91 @@ export function checkGenerator(source: string): string[] {
   if (keywords !== statements) errors.push("generator has an import the check does not recognise");
   // A re-export loads a module too, and a comment can hide its specifier: every export must be a declaration.
   if (/\bexport\b(?!\s+(?:const|let|var|class|function|async\s+function)\b)/.test(source)) errors.push("generator has an export that is not a declaration");
-  return errors;
+  return [...errors, ...checkGeneratorTree(source)];
+}
+
+const keyText = (n: ts.Node): string | undefined =>
+  ts.isIdentifier(n) || ts.isPrivateIdentifier(n) || ts.isStringLiteral(n) || ts.isNumericLiteral(n) ? n.text : undefined;
+const isIndex = (n: ts.Node) => ts.isNumericLiteral(n);
+
+/** The allowlist over the syntax tree; anything it does not recognise is an error (fail closed). */
+function checkGeneratorTree(source: string): string[] {
+  // TypeScript reads a line break before an import's "with" as a with statement; JavaScript reads import attributes
+  // (and has no with statement in a module). Spaces of the same length keep every position.
+  const text = source.replace(/((?:\bfrom|\bimport)\s*["'][^"'\n]*["'])(\s+)(?=with\b)/g, (_, a: string, gap: string) => a + " ".repeat(gap.length));
+  const sf = ts.createSourceFile("gen.mjs", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const diagnostics = (sf as unknown as { parseDiagnostics?: unknown }).parseDiagnostics;
+  if (!Array.isArray(diagnostics) || diagnostics.length > 0) return ["generator does not parse"];
+  const errors = new Set<string>();
+  const declared = new Set<string>();
+  const isDeclarationName = (id: ts.Identifier) => {
+    const p = id.parent;
+    return ((ts.isVariableDeclaration(p) || ts.isParameter(p) || ts.isBindingElement(p) || ts.isFunctionDeclaration(p) ||
+      ts.isFunctionExpression(p) || ts.isClassDeclaration(p) || ts.isClassExpression(p) || ts.isImportClause(p) ||
+      ts.isImportSpecifier(p) || ts.isNamespaceImport(p)) && p.name === id);
+  };
+  const visitDeclarations = (n: ts.Node): void => {
+    if (ts.isIdentifier(n) && isDeclarationName(n)) {
+      declared.add(n.text);
+      if (GLOBAL_NAMES.has(n.text)) errors.add(`generator declares the global ${n.text}`);
+    }
+    ts.forEachChild(n, visitDeclarations);
+  };
+  visitDeclarations(sf);
+  const member = (name: ts.Node | undefined) => {
+    if (!name) return;
+    if (ts.isComputedPropertyName(name)) { if (!isIndex(name.expression)) errors.add("generator uses a computed key"); return; }
+    const text = keyText(name);
+    if (text === undefined || !ALLOWED_MEMBERS.has(text)) errors.add(`generator uses the member ${text ?? "?"}`);
+  };
+  const visit = (n: ts.Node): void => {
+    const p = n.parent;
+    if (ts.isTypeNode(n) || ts.isJsxElement(n) || ts.isJsxSelfClosingElement(n) || ts.isJsxFragment(n) || ts.isAsExpression(n) ||
+      ts.isTypeAssertionExpression(n) || ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isDecorator(n) ||
+      ts.isImportEqualsDeclaration(n) || ts.isExportAssignment(n) || ts.isExportDeclaration(n) || ts.isWithStatement(n)) {
+      errors.add(`generator uses unsupported syntax ${ts.SyntaxKind[n.kind]}`);
+      return;
+    }
+    if (ts.isImportDeclaration(n) && !(ts.isStringLiteral(n.moduleSpecifier) && GENERATOR_IMPORTS.has(n.moduleSpecifier.text))) {
+      errors.add("generator imports a module that is not allowed");
+    }
+    if (ts.isCallExpression(n) && n.expression.kind === ts.SyntaxKind.ImportKeyword) errors.add("generator uses dynamic import()");
+    // Destructuring assignment reads members through literal keys the walk below does not see as members.
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      let left: ts.Node = n.left;
+      while (ts.isParenthesizedExpression(left)) left = left.expression;
+      if (ts.isObjectLiteralExpression(left) || ts.isArrayLiteralExpression(left)) errors.add("generator uses destructuring assignment");
+    }
+    if ((ts.isForOfStatement(n) || ts.isForInStatement(n)) && !ts.isVariableDeclarationList(n.initializer)) errors.add("generator uses a loop target that is not a declaration");
+    if (ts.isMetaProperty(n)) {
+      const url = n.keywordToken === ts.SyntaxKind.ImportKeyword && n.name.text === "meta" && ts.isPropertyAccessExpression(p) &&
+        p.expression === n && p.name.text === "url";
+      if (!url) errors.add("generator uses import.meta other than import.meta.url");
+      return;
+    }
+    if (ts.isPropertyAccessExpression(n)) member(n.name);
+    if (ts.isElementAccessExpression(n) && !isIndex(n.argumentExpression)) errors.add("generator uses a computed key");
+    if (ts.isComputedPropertyName(n) && !isIndex(n.expression)) errors.add("generator uses a computed key");
+    if (ts.isBindingElement(n) && ts.isObjectBindingPattern(p)) member(n.propertyName ?? n.name);
+    if (ts.isIdentifier(n) && isReference(n)) {
+      const name = n.text;
+      if (name === "process") {
+        if (!(ts.isPropertyAccessExpression(p) && p.expression === n && p.name.text === "argv")) errors.add("generator uses process other than process.argv");
+      } else if (!declared.has(name) && !ALLOWED_GLOBALS.has(name)) errors.add(`generator uses the global ${name}`);
+    }
+    ts.forEachChild(n, visit);
+  };
+  const isReference = (id: ts.Identifier) => {
+    const p = id.parent;
+    if (isDeclarationName(id)) return false;
+    if (ts.isPropertyAccessExpression(p) && p.name === id) return false;
+    if ((ts.isPropertyAssignment(p) || ts.isMethodDeclaration(p) || ts.isPropertyDeclaration(p) || ts.isGetAccessorDeclaration(p) ||
+      ts.isSetAccessorDeclaration(p) || ts.isImportAttribute(p)) && p.name === id) return false;
+    if ((ts.isImportSpecifier(p) || ts.isBindingElement(p)) && p.propertyName === id) return false;
+    return true;
+  };
+  visit(sf);
+  return [...errors];
 }
 
 export type SpikeFiles = { manifest: string; lockfile: string; generator: string };

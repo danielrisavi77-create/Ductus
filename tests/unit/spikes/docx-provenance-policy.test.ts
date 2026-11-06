@@ -46,7 +46,9 @@ describe("real spike files (A18)", () => {
     for (const p of REVIEWED) expect(ALLOWED_LICENSES).toContain(p.license);
   });
   it("does not need the spike installed: policy imports nothing, this test no spike package", () => {
-    expect(readFileSync(`${DIR}/policy.ts`, "utf8")).not.toMatch(/^\s*(?:import|export)\b[^\n]*\bfrom\b|^\s*import\s*["']/m);
+    // The only import is the root typescript parser (QA c.6676181719); still nothing from the spike.
+    const policyImports = [...readFileSync(`${DIR}/policy.ts`, "utf8").matchAll(/^\s*(?:import|export)\b[^\n]*\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']/gm)].map((m) => m[1] ?? m[2]);
+    expect(policyImports).toEqual(["typescript"]);
     const own = [...readFileSync(new URL(import.meta.url), "utf8").matchAll(/^import[^"']*["']([^"']+)["']/gm)].map((m) => m[1]);
     expect(own.sort()).toEqual(["../../../spikes/docx-provenance/policy", "fast-check", "node:fs", "vitest"]);
   });
@@ -181,6 +183,49 @@ describe("generator import and export classes (A13)", () => {
   it.each(cases(["export_const A = 1;", "export_let b = 1;", "export_var c = 1;", "export_function d() {}",
     "export_async function e() {}", "export_class F {}"], [" ", "\n  "], ""))("accepts the declaration %j", (line) =>
     expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+});
+
+// QA FAIL c.6676181719: a module can be loaded without a static import. Every loading path below must fail
+// for every network and process module, with and without the node: prefix; "MOD" is the module name.
+const NET_PROC = ["http", "https", "net", "tls", "dgram", "dns", "child_process", "worker_threads", "cluster"];
+const LOADERS: [string, string[]][] = [
+  ["K1 process.getBuiltinModule", ['process.getBuiltinModule("MOD").get("x");', 'process /* c */ . getBuiltinModule("MOD");',
+    'process?.getBuiltinModule?.("MOD");', 'process\n  .getBuiltinModule("MOD");', 'process.argv && process.getBuiltinModule("MOD");']],
+  ["K2 computed key", ['process["getBuiltinModule"]("MOD");', 'process["getBuiltin" + "Module"]("MOD");', 'process[`getBuiltinModule`]("MOD");',
+    'const k = "get" + "BuiltinModule"; process.argv[k]; process[k]("MOD");', 'process.argv["con" + "structor"]("return pro" + "cess")()["getBuilt" + "inModule"]("MOD");']],
+  ["K3 alias or destructuring", ['const p = process; p["getBuiltinModule"]("MOD");', 'const p = process; p.getBuiltinModule("MOD");',
+    'const { getBuiltinModule: g } = process; g("MOD");', 'const q = ({ process }).process; q.getBuiltinModule("MOD");',
+    'const [p] = [process]; p["get" + "BuiltinModule"]("MOD");', 'let p; p = process; p.getBuiltinModule("MOD");']],
+  ["K4 global object", ['globalThis.process.getBuiltinModule("MOD");', 'global["pro" + "cess"]["getBuilt" + "inModule"]("MOD");',
+    'Reflect.get(Reflect.get(globalThis, "pro" + "cess"), "getBuilt" + "inModule")("MOD");', 'const g = globalThis; g.process.getBuiltinModule("MOD");']],
+  ["K5 require", ['require("MOD");', 'module.require("MOD");', 'process.mainModule.require("MOD");', 'const r = require; r("MOD");']],
+  ["K6 createRequire", ['import { createRequire } from "node:module";\ncreateRequire(import.meta.url)("MOD");',
+    'import m from "node:module";\nm.createRequire(import.meta.url)("MOD");', 'process.getBuiltinModule("module").createRequire(import.meta.url)("MOD");']],
+  ["K7 import.meta and import()", ['import.meta.resolve("MOD");', 'import.meta["resolve"]("MOD");', 'const meta = import.meta; meta.resolve("MOD");',
+    'await import("MOD");', 'const s = "MOD"; await import(s);']],
+  ["K8 code generation", ['eval(\'process.getBuiltinModule("MOD")\');', '(0, eval)(\'process.getBuiltinModule("MOD")\');',
+    'new Function(\'return process.getBuiltinModule("MOD")\')();', 'Function(\'return process.getBuiltinModule("MOD")\')();',
+    '(() => {}).constructor(\'return process.getBuiltinModule("MOD")\')();',
+    'Object.values(Object.getOwnPropertyDescriptors(Object.getPrototypeOf(() => {}))).find((d) => d.value).value("return pro" + "cess.getBuilt" + "inModule(\'MOD\')")();',
+    '[].map["con" + "structor"]("return pro" + "cess.getBuilt" + "inModule(\'MOD\')")();', '({}).__proto__;\n"MOD";']],
+  ["K9 unicode escape", ['\\u0070rocess.getBuiltinModule("MOD");', 'pro\\u0063ess["getBuiltinModule"]("MOD");',
+    'process.\\u0067etBuiltinModule("MOD");', 'const p = \\u{70}rocess; p.argv; "MOD";']],
+  ["K10 shadowed global or unlisted member", ['{ const Reflect = 0; }\nReflect.get(globalThis, "MOD");',
+    'function f(navigator) { return navigator; }\nf("MOD");', 'Object.getPrototypeOf(process.argv);\n"MOD";', 'process.argv.at(0);\n"MOD";']],
+];
+
+describe("generator module loading without a static import (A13, QA c.6676181719)", () => {
+  const cases = LOADERS.flatMap(([cls, forms]) => forms.flatMap((f) =>
+    NET_PROC.flatMap((m) => [m, `node:${m}`]).map((m): [string, string] => [cls, f.replaceAll("MOD", m)])));
+  it.each(cases)("%s rejects %j", (_cls, line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  it("covers every network and process module in every loader class", () => {
+    expect(cases).toHaveLength(LOADERS.reduce((n, [, f]) => n + f.length, 0) * NET_PROC.length * 2);
+  });
+  it.each([
+    'const out = process.argv[2] ?? "out";', 'const here = import.meta.url;',
+    'if (process.argv[1] && process.argv.length > 1) {}', 'const n = Object.entries({ a: 1 }).map(([k, v]) => k + v).join(",");',
+  ])("accepts %j", (line) => expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+  it("rejects a generator that does not parse", () => expect(checkGenerator(OK_GEN + "const = ;")).not.toEqual([]));
 });
 
 describe("exact version property", () => {
