@@ -1024,6 +1024,12 @@ main:focus {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
+/* The chapter number from deriveChapters (DAN-395); "1." as on the sheet. */
+.outline__number {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
 .outline__untitled {
   font-style: italic;
   color: var(--ink-3);
@@ -1251,6 +1257,13 @@ main:focus {
 .editor-surface .ProseMirror h3 {
   font-size: 16px;
   margin: 12pt 0 6pt;
+}
+
+/* The heading number is a decoration from deriveChapters, never text in the
+   document (DAN-395); "1." and "1.1." as in m0-rad-reference. Neutral
+   numbering, no claim about the FPZG form (D-229). */
+.editor-surface .ProseMirror [data-chapter-number]::before {
+  content: attr(data-chapter-number) ". ";
 }
 
 /* A bullet item (E1) is a flat block, so the list marker sits on the item
