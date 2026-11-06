@@ -71,6 +71,7 @@ import {
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
 import { endRun } from "./run-refs";
+import { livePublishAction } from "./live-hold";
 import { nothingHeld, type LogoutPlan } from "./logout-plan";
 
 /** Quiet time after the last change before a candidate is proposed. */
@@ -179,7 +180,7 @@ function sameIds(editor: Editor, doc: CanonicalDocument): boolean {
 }
 
 export function LocalDocumentProvider({
-  scope, documentId, assignmentId = null, session = null, livePublish = false, children,
+  scope, documentId, assignmentId = null, session = null, livePublish = false, publishHeld = false, children,
 }: {
   scope: string;
   documentId: string;
@@ -196,6 +197,13 @@ export function LocalDocumentProvider({
    * the publisher is never made, so no text leaves the tab.
    */
   livePublish?: boolean;
+  /**
+   * True while the page shows how the teacher sees the work (#882): the
+   * publisher, if any, sends nothing until the page is back to writing. It
+   * is read through a ref, so a change neither reloads the journal nor
+   * restarts the lock run.
+   */
+  publishHeld?: boolean;
   children: ReactNode;
 }) {
   const [loadPhase, setPhase] = useState<Phase>("loading");
@@ -236,6 +244,9 @@ export function LocalDocumentProvider({
   // The live view's publisher (B-LIVE step 4): only while a signed-in tab
   // holds the lock and may write. It is not the evidence and never sets SYNCED.
   const publisherRef = useRef<LivePublisher | null>(null);
+  // The view as last rendered, for a load or "Ostani" that ends after a change.
+  const heldRef = useRef(publishHeld);
+  useLayoutEffect(() => { heldRef.current = publishHeld; });
 
   // Builds and proposes the candidate for what the editor holds now.
   const flushRef = useRef(() => {
@@ -471,7 +482,8 @@ export function LocalDocumentProvider({
         publisherRef.current = publisher;
         const own = publisher;
         if (own && result.document) own.offer(result.document);
-        own?.start();
+        // The teacher view holds it from the start: what was offered waits.
+        if (!heldRef.current) own?.start();
         locked = {
           quiesce: async () => {
             // Nothing typed after this point is accepted.
@@ -492,7 +504,8 @@ export function LocalDocumentProvider({
               readyRef.current = true;
               editor.setEditable(true, false);
             }
-            own?.start();
+            // "Ostani" in the teacher view keeps the publisher held (#882).
+            if (!heldRef.current) own?.start();
           },
           clear: async () => {
             try {
@@ -567,6 +580,17 @@ export function LocalDocumentProvider({
       window.removeEventListener("pageshow", recheck);
     };
   }, [editor, scope, documentId, assignmentId, markTag, markAt, livePublish]);
+
+  // A change between writing and the teacher view (#882): the run's own
+  // publisher stops at once, an answer in flight included, and starts again
+  // only while this run may still write.
+  useEffect(() => {
+    const publisher = publisherRef.current;
+    if (!publisher) return;
+    const action = livePublishAction({ held: publishHeld, writable: readyRef.current, halted: publisher.halted() });
+    if (action === "stop") publisher.stop();
+    else if (action === "start") publisher.start();
+  }, [publishHeld]);
 
   // Writing stays stopped from here until "Ostani" or the end of the
   // session, so the count the dialog shows cannot grow behind it (I2).

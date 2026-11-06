@@ -7,7 +7,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelo
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { post } from "./comment-seed";
 import { closeWork, seedWork, workDocument } from "./work-seed";
-import { clickSignOut, signIn } from "./support";
+import { clickSignOut, logoutDialogOf, signIn } from "./support";
 import { APP_ORIGIN } from "./origin";
 
 // #732 item 7 (DAN-89, contract 6396547184 §6 with 6404284308): "Kako vidi
@@ -229,4 +229,147 @@ test("a sign-out in another tab removes the text from the teacher view (D-118)",
   await expect(liveTextOf(page)).toContainText(t.liveView.connection.signedOut);
   await expect(liveTextOf(page).getByText(TEXT)).toHaveCount(0);
   await expect(liveTextOf(page).locator("[data-node-id]")).toHaveCount(0);
+});
+
+// #882 (DAN-215): while /rad shows the teacher view the tab publishes nothing
+// (BACKEND 4.12 t. 7); the state typed before waits for the return to writing.
+const TOKEN = "33333333-3333-4333-8333-333333333333";
+const isPut = (request: Request) => request.method() === "PUT" && /^\/api\/live\/[^/]+$/.test(pathOf(request));
+const writingOf = (page: Page) => modesOf(page).getByRole("link", { name: t.workspace.modeWriting });
+
+/** Every PUT to the live route with the time it left and its body. */
+function recordPuts(page: Page): { at: number; body: string }[] {
+  const puts: { at: number; body: string }[] = [];
+  page.on("request", (request) => { if (isPut(request)) puts.push({ at: Date.now(), body: request.postData() ?? "" }); });
+  return puts;
+}
+
+/** Into the teacher view by its link; the returned time is after the publisher has been held. */
+async function toTeacherView(page: Page, assignment: string): Promise<number> {
+  await teacherSwitchOf(page).click();
+  await page.waitForURL(`**/rad?zadatak=${assignment}&prikaz=nastavnik`);
+  await expect(teacherSwitchOf(page)).toHaveAttribute("aria-current", "page");
+  await page.waitForTimeout(250);
+  return Date.now();
+}
+
+async function toWriting(page: Page, assignment: string): Promise<void> {
+  await writingOf(page).click();
+  await page.waitForURL(`**/rad?zadatak=${assignment}`);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await editorOf(page).click();
+  await page.keyboard.press("Control+End");
+}
+
+const liveBody = async (page: Page, documentId: string): Promise<string> => {
+  const response = await page.request.get(`/api/live/${documentId}`, { headers: { "ductus-protocol": DUCTUS_PROTOCOL_VERSION } });
+  return response.ok() ? await response.text() : "";
+};
+
+test("a teacher view opened directly publishes nothing, and writing publishes again from the same editor", async ({ page }) => {
+  await signIn(page, "/rad");
+  const { assignment } = await writeWork(page);
+  const opens = record(page, isOpen);
+  const puts = recordPuts(page);
+  await page.goto(`/rad?zadatak=${assignment}&prikaz=nastavnik`);
+  await expect(liveTextOf(page).getByText(TEXT)).toBeVisible({ timeout: OPEN });
+  await page.reload();
+  await expect(liveTextOf(page).getByText(TEXT)).toBeVisible({ timeout: OPEN });
+  await page.waitForTimeout(3000);
+  expect(puts).toEqual([]);
+
+  const opensBefore = opens.length;
+  await toWriting(page, assignment);
+  await expect(editorOf(page)).toHaveText(TEXT);
+  expect(opens.length).toBe(opensBefore);
+  await page.keyboard.type(" Dodatak.");
+  await expect.poll(() => puts.some((put) => put.body.includes("Dodatak.")), { timeout: OPEN }).toBe(true);
+  expect(opens.length).toBe(opensBefore);
+});
+
+test("switching to the teacher view holds the waiting state, and the return to writing publishes it", async ({ page }) => {
+  await signIn(page, "/rad");
+  const { assignment, documentId } = await writeWork(page);
+  const opens = record(page, isOpen);
+  const puts = recordPuts(page);
+  for (let round = 0; round < 3; round += 1) {
+    await page.keyboard.type(` piše ${round}`);
+    await expect.poll(() => puts.some((put) => put.body.includes(`piše ${round}`)), { timeout: OPEN }).toBe(true);
+    // Within a second of the last start: this state waits for the next request.
+    await page.keyboard.type(` čeka ${round}`);
+    const heldAt = await toTeacherView(page, assignment);
+    await page.waitForTimeout(2500);
+    expect(puts.filter((put) => put.at > heldAt)).toEqual([]);
+
+    await toWriting(page, assignment);
+    await expect.poll(() => liveBody(page, documentId), { timeout: OPEN }).toContain(`čeka ${round}`);
+  }
+  expect(opens).toEqual([]);
+});
+
+test("a request in flight is aborted by the switch to the teacher view and is not sent again there", async ({ page }) => {
+  // The route's answers are the test's: the request is held long enough to switch.
+  await page.route((url) => /^\/api\/live\/[^/]+$/.test(url.pathname), async (route) => {
+    if (route.request().method() !== "PUT") return route.fallback();
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    try {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ outcome: "accepted", token: TOKEN }) });
+    } catch {
+      // Aborted by the page meanwhile.
+    }
+  });
+  await signIn(page, "/rad");
+  const assignment = await seedWork({ teacher: true });
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  const puts = recordPuts(page);
+  const failed: Request[] = [];
+  page.on("requestfailed", (request) => { if (isPut(request)) failed.push(request); });
+  await editorOf(page).click();
+  await page.keyboard.type(TEXT);
+  await expect.poll(() => puts.length, { timeout: OPEN }).toBeGreaterThan(0);
+
+  const heldAt = await toTeacherView(page, assignment);
+  await expect.poll(() => failed.length, { timeout: 8000 }).toBeGreaterThan(0);
+  await page.waitForTimeout(5000);
+  expect(puts.filter((put) => put.at > heldAt)).toEqual([]);
+});
+
+test("Odjava from the teacher view: Ostani keeps it held, and nothing goes out after the sign-out", async ({ page }) => {
+  await page.route((url) => /^\/api\/live\/[^/]+$/.test(url.pathname), (route) => route.request().method() === "PUT"
+    ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ outcome: "accepted", token: TOKEN }) })
+    : route.fallback());
+  // The evidence never gets its receipt here, so the text stays owed and "Odjava" opens the dialog.
+  await page.route("**/api/evidence/commit", (route) => route.abort());
+  await signIn(page, "/rad");
+  const assignment = await seedWork({ teacher: true });
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  const puts = recordPuts(page);
+  const dialog = logoutDialogOf(page);
+  await editorOf(page).click();
+  await page.keyboard.type(TEXT);
+  await expect.poll(() => puts.length, { timeout: OPEN }).toBeGreaterThan(0);
+
+  const heldAt = await toTeacherView(page, assignment);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: t.auth.logoutStay }).click();
+  await expect(dialog).toBeHidden();
+  await page.waitForTimeout(2500);
+  expect(puts.filter((put) => put.at > heldAt)).toEqual([]);
+
+  await toWriting(page, assignment);
+  const back = puts.length;
+  await page.keyboard.type(" Dodatak.");
+  await expect.poll(() => puts.length, { timeout: OPEN }).toBeGreaterThan(back);
+
+  const fencedAt = await toTeacherView(page, assignment);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await page.waitForURL(`${APP_ORIGIN}/`);
+  await page.waitForTimeout(2500);
+  expect(puts.filter((put) => put.at > fencedAt)).toEqual([]);
 });

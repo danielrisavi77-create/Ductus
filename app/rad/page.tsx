@@ -249,7 +249,7 @@ export default async function WorkspacePage({
   // The session mark survives the switch of views, so it never reopens the work (#732 item 7).
   return journal ? (
     <WorkDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
-      session={session} livePublish={plan.live}
+      session={session} livePublish={plan.live} publishHeld={view.mode === "teacher-view"}
       assignmentId={plan.kind === "assignment" ? plan.assignmentId : null}>
       {workspace}
     </WorkDocumentProvider>
