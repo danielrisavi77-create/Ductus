@@ -69,14 +69,14 @@ test.describe("editor shell", () => {
     await expect(editorOf(page).locator("h1")).toHaveText("Uvod u temu");
     await expectOn(page, "Naslov 1", true);
     await expect(tool(page, "Odlomak")).toHaveAttribute("aria-pressed", "false");
-    await expect(outlineOf(page).getByRole("button")).toHaveText(["Uvod u temu"]);
+    await expect(outlineOf(page).getByRole("button")).toHaveText(["1. Uvod u temu"]);
 
     // The command went to the journal like typing: it is there after a reload.
     await expect(chipOf(page)).toHaveText(DURABLE);
     await page.reload();
     await expect(editorOf(page).locator("h1")).toHaveText("Uvod u temu");
     await openStructure(page);
-    await expect(outlineOf(page).getByRole("button")).toHaveText(["Uvod u temu"]);
+    await expect(outlineOf(page).getByRole("button")).toHaveText(["1. Uvod u temu"]);
   });
 
   test("the paragraph button turns a heading back; bold, italic, undo and redo work on the selection", async ({ page }) => {
@@ -84,7 +84,7 @@ test.describe("editor shell", () => {
     await editorOf(page).click();
     await page.keyboard.type("Okvir rada");
     await applyTool(page, "Naslov 2");
-    await expect(outlineOf(page).getByRole("button")).toHaveText(["Okvir rada"]);
+    await expect(outlineOf(page).getByRole("button")).toHaveText(["0.1. Okvir rada"]);
     await tool(page, "Odlomak").click();
     await expect(editorOf(page).locator("h2")).toHaveCount(0);
     await expect(outlineOf(page)).toHaveCount(0);
@@ -114,6 +114,9 @@ test.describe("editor shell", () => {
     await expect(items).toHaveCount(2);
     await expect(items.nth(0)).toHaveAttribute("data-level", "1");
     await expect(items.nth(1)).toHaveAttribute("data-level", "2");
+    // The number comes from deriveChapters (DAN-395), never from the text.
+    await expect(outlineOf(page).getByRole("button")).toHaveText(["1. Uvod", "1.1. Pojmovi"]);
+    await expect(editorOf(page).locator("h2")).toHaveText("Pojmovi");
     await expect(outlineOf(page).getByRole("button", { name: "Pojmovi" })).toHaveAttribute("aria-current", "location");
 
     // The editor has focus as soon as the click is handled, not a frame later:
@@ -174,7 +177,7 @@ test.describe("editor shell", () => {
     await editorOf(page).click();
     await block(page, "Uvod", 1);
     await page.keyboard.type("Tekst.");
-    await expect(outlineOf(page).getByRole("button")).toHaveText(["Uvod"]);
+    await expect(outlineOf(page).getByRole("button")).toHaveText(["1. Uvod"]);
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);
   });

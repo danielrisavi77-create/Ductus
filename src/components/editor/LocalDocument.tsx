@@ -53,6 +53,7 @@ import { startFreshHistory } from "@/editor/history";
 import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
 import { ArrowCollapse } from "@/editor/arrow-collapse";
+import { ChapterNumbers } from "@/editor/chapter-numbers";
 import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -274,7 +275,8 @@ export function LocalDocumentProvider({
     // ArrowCollapse: a plain arrow on a selection across blocks moves the
     // caret in the editor state at once, never after the next letter (DAN-247).
     // The source observer's priority puts it before ArrowCollapse's keydown.
-    extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput, ArrowCollapse, observer.extension],
+    // ChapterNumbers: heading numbers as decorations, never text (DAN-395).
+    extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput, ArrowCollapse, ChapterNumbers, observer.extension],
     editable: false,
     immediatelyRender: false,
     injectCSS: false, // app/prosemirror.css (DAN-489)

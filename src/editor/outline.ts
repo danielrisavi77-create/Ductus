@@ -40,7 +40,7 @@ export function headingOutline(doc: PmNode): OutlineEntry[] {
  * Index of the heading whose section holds `from` (the selection start): the
  * last heading at or before it. -1 when the selection is above every heading.
  */
-export function currentHeading(outline: readonly OutlineEntry[], from: number): number {
+export function currentHeading(outline: readonly Pick<OutlineEntry, "pos">[], from: number): number {
   let current = -1;
   for (let i = 0; i < outline.length; i += 1) {
     if (outline[i]!.pos > from) break;
