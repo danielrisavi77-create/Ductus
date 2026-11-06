@@ -1,0 +1,693 @@
+{
+ "browser": "153.0.8010.12",
+ "report": [
+  {
+   "file": "a02-popunjeno-tamna-1440.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-prazno-tamna-1440.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-potvrda-tamna-1440.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-opoziv-tamna-1440.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-ishod-tamna-1440.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-nepoznato-tamna-1440.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-popunjeno-tamna-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-prazno-tamna-400.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-potvrda-tamna-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-opoziv-tamna-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-ishod-tamna-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-nepoznato-tamna-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-popunjeno-svijetla-1440.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-prazno-svijetla-1440.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-potvrda-svijetla-1440.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-opoziv-svijetla-1440.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-ishod-svijetla-1440.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-nepoznato-svijetla-1440.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-popunjeno-svijetla-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-prazno-svijetla-400.png",
+   "overflow": false,
+   "small": [],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-potvrda-svijetla-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-opoziv-svijetla-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-ishod-svijetla-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  },
+  {
+   "file": "a02-nepoznato-svijetla-400.png",
+   "overflow": false,
+   "small": [
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Potvrdi ulogu",
+     "w": 103,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    },
+    {
+     "text": "Opozovi ulogu",
+     "w": 108,
+     "h": 44,
+     "hit": false
+    }
+   ],
+   "fonts": [
+    "InstrumentSans-latin",
+    "InstrumentSans-latin-ext",
+    "Newsreader-latin",
+    "Newsreader-latin-ext"
+   ]
+  }
+ ]
+}
