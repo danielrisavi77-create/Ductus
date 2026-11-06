@@ -1466,6 +1466,19 @@ BEGIN
   -- The deadline of the version the request names, not of a later version.
   v_due := app.assignment_version_due(v_request.assignment_id, v_request.assignment_version);
 
+  -- 4.14: the packages first, in id order as commit_evidence_segment takes its
+  -- one, then the document, as the collaboration writes take it (FOR SHARE in
+  -- lock_document_for_write). A revision-request write that holds the document
+  -- finishes first and stays; one that comes after waits here and then sees
+  -- the submission (ZD403). Taken before the INSERT, so the trigger
+  -- close_submitted_packages finds its rows already held.
+  PERFORM 1 FROM evidence.package k
+   WHERE k.document_id = v_request.document_id AND k.institution_id = v_request.institution_id
+   ORDER BY k.id FOR UPDATE;
+  PERFORM 1 FROM evidence.document d
+   WHERE d.id = v_request.document_id AND d.institution_id = v_request.institution_id
+     FOR UPDATE;
+
   INSERT INTO evidence.submission (
     submission_request_id, institution_id, principal_id, assignment_id, assignment_version, revision,
     artifact_hash, requested_at, due_at, recorded_at
@@ -10679,4 +10692,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106170000'),
     ('20261106180000'),
     ('20261106190000'),
-    ('20261106200000');
+    ('20261106200000'),
+    ('20261106210000');
