@@ -18,7 +18,7 @@ Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`: Playwrightov Ch
 - Prije primjene lekture ili prijevoda uspoređuju se brojke, citati i oznake izvora, a student potvrđuje (D-46, stanje 5).
 - Preneseni tekst nosi podrijetlo „iz AI pomoćnika” (D-58); oznaka podudaranja ostaje isključena (D-268 O6).
 - Bez mreže razgovor se čita s uređaja, a novi prijenos čeka provjeru prava na poslužitelju (D-268 O4, stanja 11 i 12).
-- Proračun: brojač zahtjeva po zadatku, po danu i granica usluge. Iznosi nisu prikazani; student nikad ne plaća (pravilo 15). Granice su ilustrativne, iznose određuje vlasnik nakon mjerenja (D-267 O5). Prazna konfiguracija troška znači da je Asistent isključen (stanje 9).
+- Proračun: mjerilo iskorištene granice po zadatku, po danu i granica usluge (granica je vezana uz trošak, ne uz broj zahtjeva; BACKEND §4.5). Iznosi i brojevi zahtjeva nisu prikazani; student nikad ne plaća (pravilo 15). Granice su ilustrativne, iznose određuje vlasnik nakon mjerenja (D-267 O5). Prazna konfiguracija troška znači da je Asistent isključen (stanje 9).
 - Zapis o uporabi nikad ne ide uz postotak ni ocjenu (pravila 1, 2, 3).
 
 ## Granice

@@ -10,7 +10,7 @@
 <header class="ref-head">
   <div class="ref-tag">Referenca paketa 13 · DAN-411 · prijedlog slike · M9.UX</div>
   <h1>S16-BUD — Ograničenje uporabe Asistenta</h1>
-  <p>Student nikad ne plaća da bi izvršio obvezu (PRODUCT §5 pravilo 15), pa se ne prikazuje novac. Prikazuje se samo koliko se zahtjeva Asistentu još može poslati. Brojke na slici su ilustrativne: iznose granica odlučuje vlasnik nakon mjerenja (D-267 O5), a broje se na poslužitelju po računu (BACKEND poslovi i predaja).</p>
+  <p>Student nikad ne plaća da bi izvršio obvezu (PRODUCT §5 pravilo 15), pa se ne prikazuje novac. Prikazuje se samo koliko je današnje granice iskorišteno, bez broja preostalih zahtjeva jer je granica vezana uz trošak poziva, ne uz njihov broj (BACKEND §4.5). Iznose granica odlučuje vlasnik nakon mjerenja (D-267 O5), a troše se na poslužitelju po računu.</p>
 </header>
 <main class="page"><div class="variants">
 
@@ -19,8 +19,8 @@
     <div class="panel" role="complementary" aria-label="Asistent">
       <div class="panel-top"><h2>Asistent</h2></div>
       <div class="panel-body">
-        <p class="kv" style="display:flex;justify-content:space-between"><span>Danas na ovom zadatku</span><b class="count">4 od 20</b></p>
-        <div class="bar" role="img" aria-label="Poslano 4 od 20 zahtjeva"><span style="width:20%"></span></div>
+        <p class="kv" style="display:flex;justify-content:space-between"><span>Danas na ovom zadatku</span><b class="count">Manji dio granice</b></p>
+        <div class="bar" role="img" aria-label="Iskorišten manji dio današnje granice"><span style="width:20%"></span></div>
         <p class="meta">Brojač se vraća na nulu sutra. Odnosi se samo na Vas i ovaj zadatak.</p>
       </div>
     </div>
@@ -31,9 +31,9 @@
     <div class="panel" role="complementary" aria-label="Asistent">
       <div class="panel-top"><h2>Asistent</h2></div>
       <div class="panel-body">
-        <p style="display:flex;justify-content:space-between"><span>Danas na ovom zadatku</span><b class="count">18 od 20</b></p>
-        <div class="bar" role="img" aria-label="Poslano 18 od 20 zahtjeva"><span style="width:90%"></span></div>
-        <p class="note" role="status">Preostala su još 2 zahtjeva za danas.</p>
+        <p style="display:flex;justify-content:space-between"><span>Danas na ovom zadatku</span><b class="count">Veći dio granice</b></p>
+        <div class="bar" role="img" aria-label="Iskorišten veći dio današnje granice"><span style="width:90%"></span></div>
+        <p class="note" role="status">Većina današnje granice je iskorištena. Sljedeći zahtjev može biti odbijen, ovisno o njegovoj duljini.</p>
       </div>
     </div>
   </section>
@@ -43,8 +43,8 @@
     <div class="panel" role="complementary" aria-label="Asistent">
       <div class="panel-top"><h2>Asistent</h2></div>
       <div class="panel-body">
-        <div class="bar full" role="img" aria-label="Poslano 20 od 20 zahtjeva"><span style="width:100%"></span></div>
-        <p class="note" role="alert">Za ovaj zadatak danas ste iskoristili sve zahtjeve. Sutra se brojač vraća na nulu. Pisanje i predaja rade bez ograničenja.</p>
+        <div class="bar full" role="img" aria-label="Današnja granica je iskorištena"><span style="width:100%"></span></div>
+        <p class="note" role="alert">Za ovaj zadatak danas ste iskoristili granicu. Sutra se brojač vraća na nulu. Pisanje i predaja rade bez ograničenja.</p>
         <button class="btn" type="button" aria-disabled="true">Pošalji Asistentu</button>
       </div>
     </div>
@@ -55,8 +55,8 @@
     <div class="panel" role="complementary" aria-label="Asistent">
       <div class="panel-top"><h2>Asistent</h2></div>
       <div class="panel-body">
-        <p style="display:flex;justify-content:space-between"><span>Danas na svim zadacima</span><b class="count">40 od 40</b></p>
-        <p class="note" role="alert">Danas ste iskoristili sve zahtjeve na svim zadacima. Asistent je ponovno dostupan sutra.</p>
+        <p style="display:flex;justify-content:space-between"><span>Danas na svim zadacima</span><b class="count">Granica iskorištena</b></p>
+        <p class="note" role="alert">Danas ste iskoristili granicu na svim zadacima. Asistent je ponovno dostupan sutra.</p>
         <button class="btn" type="button" aria-disabled="true">Pošalji Asistentu</button>
       </div>
     </div>
