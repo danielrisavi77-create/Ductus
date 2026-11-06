@@ -120,6 +120,21 @@ describe("login against an AAI@EduHr-shaped provider", () => {
     expect(deps.closeSession).not.toHaveBeenCalled();
   });
 
+  // DAN-474 (#1620 E1, E5): the session id of the ID token reaches
+  // openSession as sent; one in userinfo, or a bad one, never does.
+  it("DAN-474 hands the sid of the ID token to openSession and logs in without a bad one", async () => {
+    idp.state.next = { claims: (claims) => ({ ...claims, sid: "sid-aai-7" }) };
+    expect((await complete(await begin())).status).toBe(303);
+    expect(deps.openSession.mock.calls[0][0]).toMatchObject({ sid: "sid-aai-7" });
+
+    for (const sid of ["", "s".repeat(256), "sid\u0001", ["sid-aai-7"]]) {
+      deps.openSession.mockClear();
+      idp.state.next = { claims: (claims) => ({ ...claims, sid }) };
+      expect((await complete(await begin())).status).toBe(303);
+      expect(deps.openSession.mock.calls[0][0]).not.toHaveProperty("sid");
+    }
+  });
+
   it("A17 takes the names from profile, and a request without profile loses them", async () => {
     expect((await complete(await begin())).status).toBe(303);
     expect(deps.openSession.mock.calls[0][0]).toMatchObject({ givenName: "Maja", familyName: "Primjerić" });
