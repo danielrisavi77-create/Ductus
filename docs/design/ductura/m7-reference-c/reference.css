@@ -1,0 +1,26 @@
+/* Paket 8 (DAN-569): tokeni i dijelovi iz m5-reference; ovdje samo dodaci. */
+@import url("../m5-reference/reference.css");
+
+/* Putovnica (J-03): polja potvrde u mono fontu (DESIGN-SYSTEM §4, „Kod, putovnica”). Dugi otisci se lome, bez vodoravnog pomicanja. */
+.pass { display: grid; gap: 8px; margin: 0; }
+.pass div { display: grid; grid-template-columns: 1fr; gap: 1px; }
+.pass dt { color: var(--ink-3); font-size: 12.5px; }
+.pass dd { margin: 0; font: 12.5px/1.5 var(--ff-mono); overflow-wrap: anywhere; }
+.verdict { border: 1px solid var(--rule); border-left: 3px solid var(--ink-2); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; background: var(--card); }
+.verdict.no { border-left-style: dashed; }
+.verdict b { font-weight: 600; }
+.drop { border: 1px dashed var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 8px; justify-items: start; background: var(--well); }
+.pub { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.pub b { font: 500 19px/1.2 var(--ff-display); }
+
+/* Napomene (S-43): samo se dodaju; ispravljena napomena ostaje vidljiva, s uputom na ispravak. */
+.event { border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; }
+.entry { border-left: 2px solid var(--rule); padding: 2px 0 2px 10px; display: grid; gap: 2px; }
+.entry.old { border-left-style: dashed; }
+.entry .who { font-size: 12.5px; color: var(--ink-3); }
+textarea.input { min-height: 88px; resize: vertical; }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Brojke (S-47) */
+.kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.kv b { font: 500 13.5px/1.4 var(--ff-mono); text-align: right; }
