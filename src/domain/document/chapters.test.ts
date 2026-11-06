@@ -57,6 +57,11 @@ describe("deriveChapters: input classes", () => {
     expect(chapters.map((c) => c.parentId)).toEqual([null, id(1), id(2), id(1), null]);
   });
 
+  it("a shallower heading ends the deeper ones: they are no longer parents", () => {
+    const { chapters } = deriveChapters(doc(h(1, 1), h(2, 2), h(3, 1), h(4, 3), h(5, 2), h(6, 1), h(7, 3)));
+    expect(chapters.map((c) => c.parentId)).toEqual([null, id(1), null, id(3), id(3), null, id(6)]);
+  });
+
   it("an empty heading is still a chapter with an empty title", () => {
     expect(deriveChapters(doc(h(1, 1, ""))).chapters[0]).toMatchObject({ title: "", number: "1" });
   });

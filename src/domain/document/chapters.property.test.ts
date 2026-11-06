@@ -20,16 +20,17 @@ import {
 const text = fc.string({ maxLength: 12 });
 const children = fc.array(text.filter((t) => t !== ""), { maxLength: 3 }).map((list) => list.map((t) => textNode(t)));
 type Shape = { kind: "heading"; level: HeadingLevel } | { kind: "paragraph" | "bulletItem" | "quote" };
+// Body blocks twice as often as headings, so long sections are generated too.
 const shape: fc.Arbitrary<Shape> = fc.oneof(
-  fc.constantFrom(1, 2, 3).map((level) => ({ kind: "heading" as const, level: level as HeadingLevel })),
-  fc.constantFrom("paragraph", "bulletItem", "quote").map((kind) => ({ kind })),
+  { weight: 1, arbitrary: fc.constantFrom(1, 2, 3).map((level) => ({ kind: "heading" as const, level: level as HeadingLevel })) },
+  { weight: 2, arbitrary: fc.constantFrom("paragraph", "bulletItem", "quote").map((kind) => ({ kind })) },
 );
 const block = fc.record({ id: fc.uuid({ version: 4 }), shape, children }).map(({ id, shape: s, children: c }) =>
   s.kind === "heading"
     ? ({ type: "heading", id: id as NodeId, level: s.level, children: c } satisfies DocumentNode)
     : ({ type: s.kind, id: id as NodeId, children: c } satisfies DocumentNode),
 );
-const nodes = fc.uniqueArray(block, { maxLength: 30, selector: (b) => b.id });
+const nodes = fc.uniqueArray(block, { maxLength: 40, selector: (b) => b.id });
 const heading = block.filter((b) => b.type === "heading");
 const body = block.filter((b) => b.type !== "heading");
 
@@ -59,6 +60,21 @@ describe("deriveChapters properties", () => {
       expect(compare(padded, before)).toBeGreaterThan(0);
       previous = c.path;
     }
+  });
+
+  test.prop([nodes], { numRuns: 500 })("path and parent match a count over the headings alone", (list) => {
+    const { chapters } = deriveChapters(doc(list));
+    chapters.forEach((c, i) => {
+      // A deeper heading never resets a shallower counter; a shallower one resets it.
+      const counter = (depth: number) => {
+        let count = 0;
+        for (let j = i; j >= 0 && chapters[j]!.level >= depth + 1; j -= 1) if (chapters[j]!.level === depth + 1) count += 1;
+        return count;
+      };
+      expect(c.path).toEqual(Array.from({ length: c.level }, (_, d) => counter(d)));
+      const parent = chapters.slice(0, i).reverse().find((p) => p.level < c.level);
+      expect(c.parentId).toBe(parent ? parent.blockId : null);
+    });
   });
 
   test.prop([nodes, body, fc.nat()])("inserting a body block changes no chapter", (list, b, at) => {
