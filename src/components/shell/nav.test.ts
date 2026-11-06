@@ -54,12 +54,19 @@ describe("navFor", () => {
     expect(student).toContain("/upis");
   });
 
+  it("gives an administrator, from DAN-581 (A-02), the users and roles after the overview", () => {
+    expect(navFor("admin")).toEqual([
+      { href: "/ustanova", label: "Pregled ustanove" },
+      { href: "/ustanova/korisnici", label: "Korisnici i uloge" },
+    ]);
+  });
+
   it("gives no item without a role", () => {
     expect(navFor(null)).toEqual([]);
   });
 
   it("lists only routes that exist in app/, so no item leads to a 404", () => {
-    for (const { href } of [...navFor("teacher"), ...navFor("student")]) {
+    for (const { href } of [...navFor("teacher"), ...navFor("student"), ...navFor("admin")]) {
       expect(existsSync(join(process.cwd(), "app", href, "page.tsx")), href).toBe(true);
     }
   });

@@ -33,6 +33,8 @@ const NAV: Record<ShellRole, readonly NavItem[]> = {
   // DAN-313 (A-01): the administrator's overview of their own institution.
   admin: [
     { href: "/ustanova", label: t.shell.nav.institution },
+    // DAN-581 (A-02): the teacher roles of the same institution.
+    { href: "/ustanova/korisnici", label: t.shell.nav.users },
   ],
 };
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SessionPrincipal } from "@/server/auth/principal";
 import type { InstitutionOverviewRead } from "@/server/institution/institution-overview";
+import type { TeacherRolesRead } from "@/server/institution/teacher-roles";
 
 import { institutionScreen, type InstitutionScreen } from "./institution-access";
 
@@ -61,5 +62,22 @@ describe("institutionScreen", () => {
 
   it("shows the counts only to a signed-in administrator", () => {
     expect(institutionScreen("ok", "signed-in", TOKEN)).toBe("allowed");
+  });
+});
+
+// DAN-581 PR 3 (A-02, contract #1091 c.6677177709): /ustanova/korisnici takes
+// its screen from the teacher roles read, whose answers are the same four.
+describe("institutionScreen for the teacher roles read", () => {
+  type RolesRead = TeacherRolesRead["kind"] | null;
+  const kinds: Record<TeacherRolesRead["kind"], true> = { ok: true, unauthorized: true, notFound: true, unavailable: true };
+
+  it("has a row in the table above for every answer of the teacher roles read", () => {
+    const reads = new Set<RolesRead>(TABLE.map(([read]) => read));
+    for (const kind of Object.keys(kinds) as TeacherRolesRead["kind"][]) expect(reads.has(kind)).toBe(true);
+  });
+
+  it("shows no list when the session closed after the lists were read", () => {
+    expect(institutionScreen("ok", "signed-out", TOKEN)).toBe("expired");
+    expect(institutionScreen("ok", "signed-out", undefined)).toBe("signedOut");
   });
 });

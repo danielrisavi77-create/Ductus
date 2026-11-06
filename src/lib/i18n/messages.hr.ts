@@ -45,6 +45,8 @@ export const hr = {
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
       institution: "Pregled ustanove",
+      // DAN-581 (A-02): the administrator's teacher roles, /ustanova/korisnici.
+      users: "Korisnici i uloge",
     },
     role: { teacher: "Nastavnik", student: "Student", admin: "Administrator" },
     demoNote: "Nijedan stvarni osobni podatak.",
@@ -598,6 +600,8 @@ export const hr = {
     },
     unavailable: "Popis korisnika trenutačno nije dostupan. Pokušajte ponovno.",
     retry: "Pokušaj ponovno",
+    unnamed: "Ime nije dostupno",
+    loading: "Učitavanje popisa korisnika…",
   },
   teacherCourses: {
     title: "Moji kolegiji",
@@ -1364,6 +1368,7 @@ export const hr = {
       mentoredWorks: "radove uz mentora",
       home: "svoj prostor",
       institution: "pregled svoje ustanove",
+      users: "korisnike i uloge svoje ustanove",
     },
     deniedTitle: "Nemate pristup ovom prikazu",
     deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",

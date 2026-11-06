@@ -9,7 +9,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import RouteLoading from "./RouteLoading";
 
-const ROUTES = ["rad", "rad/[assignmentId]/predaja", "nastavnik/brz-put", "upis"];
+const ROUTES = ["rad", "rad/[assignmentId]/predaja", "nastavnik/brz-put", "upis", "ustanova/korisnici"];
 
 // Streaming swaps the page in with a script, so without JavaScript a loading
 // boundary would hide the teacher's shell and its sign-out (I5).
