@@ -160,6 +160,29 @@ describe("generator imports (A13, A14)", () => {
   it("rejects an empty generator", () => expect(checkGenerator("")).not.toEqual([]));
 });
 
+// Every import and export class against every separator that can sit in its gaps ("_"), comments included
+// (orchestrator c.6675688564). A forbidden module must never pass, a re-export never passes, and the
+// plain forms of allowed modules and exported declarations still pass.
+describe("generator import and export classes (A13)", () => {
+  const GAPS = [" ", "\n  ", " /* c */ ", "/**/", " // c\n"];
+  const LOADS = ['import_x_from_"M";', 'import_{ a }_from_"M";', 'import_{ a as b }_from_"M";', 'import_*_as m_from_"M";',
+    'import_x, { a }_from_"M";', 'import_"M";', 'import_x_from_"M"_with { type: "json" };', 'import_("M");',
+    'export_*_from_"M";', 'export_*_as m_from_"M";', 'export_{ a }_from_"M";', 'export_{ a as default }_from_"M";'];
+  const fill = (form: string, gap: string, mod: string) => form.replaceAll("_", gap).replace("M", mod);
+  const cases = (forms: string[], gaps: string[], mod: string) => forms.flatMap((f) => gaps.map((g) => fill(f, g, mod)));
+  it.each(cases(LOADS, GAPS, "node:https"))("rejects a forbidden module in %j", (line) =>
+    expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  it.each(cases(LOADS.filter((f) => f.startsWith("export")), GAPS, "fflate"))("rejects a re-export in %j", (line) =>
+    expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  it.each(cases(['export_{ a };', 'export_{ a as b };', 'export_default_a;', 'export_default_function () {}'], GAPS, ""))(
+    "rejects a non-declaration export in %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  it.each(cases(LOADS.slice(0, 7), [" ", "\n  "], "fflate"))("accepts an allowed module in %j", (line) =>
+    expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+  it.each(cases(["export_const A = 1;", "export_let b = 1;", "export_var c = 1;", "export_function d() {}",
+    "export_async function e() {}", "export_class F {}"], [" ", "\n  "], ""))("accepts the declaration %j", (line) =>
+    expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+});
+
 describe("exact version property", () => {
   it("accepts every X.Y.Z without leading zeros", () => {
     fc.assert(fc.property(fc.nat(), fc.nat(), fc.nat(), (a, b, c) => isExactVersion(`${a}.${b}.${c}`)));
