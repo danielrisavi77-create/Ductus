@@ -1,0 +1,16 @@
+{
+  "name": "ductus-spike-docx-provenance",
+  "private": true,
+  "type": "module",
+  "description": "M8.8 spike: offline synthetic DOCX generator and reviewed ZIP/XML dependencies for document provenance (D-198). Not part of the app build.",
+  "scripts": {
+    "gen": "node gen.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "fflate": "0.8.3",
+    "saxes": "6.0.0"
+  }
+}
