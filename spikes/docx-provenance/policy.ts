@@ -31,7 +31,7 @@ export const GENERATOR_PIN = {
 // The reader (M8.8-P02) is pinned the same way; it may load only the reviewed packages and no Node global.
 export const READER_PIN = {
   path: "spikes/docx-provenance/read.mjs",
-  sha256: "d2f3a5629f823517f42a5a40ebb31f096203ccb306542a7b9281bfd1cddc17d1",
+  sha256: "671f28f0abf024d7a67b497b1908a9881617dc16bff1b4a3e53d4156e4bd2e8a",
   reason: "pregledano u #1610",
 } as const;
 type Pin = { readonly path: string; readonly sha256: string; readonly reason: string };

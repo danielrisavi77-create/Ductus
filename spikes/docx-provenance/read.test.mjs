@@ -97,6 +97,21 @@ describe("ZIP classes", () => {
     rejects(OK, "INPUT_TOO_LARGE", { maxInputBytes: OK.length - 1 });
     for (const x of [undefined, "PK", [80, 75], OK.buffer]) rejects(x, "INPUT_INVALID");
   });
+  it("Z11 an end record whose entry count skips records or disagrees with itself", () => {
+    const twin = docx(xml(para("a")), { "WORD/Document.xml": strToU8(xml(para("b"))) });
+    const eocd = (zip, edit) => {
+      const out = Uint8Array.from(zip);
+      const v = new DataView(out.buffer);
+      let e = out.length - 22;
+      while (v.getUint32(e, true) !== 0x06054b50) e--;
+      edit(v, e);
+      return out;
+    };
+    // A count of 1 would hide the duplicate main part behind it.
+    rejects(eocd(twin, (v, e) => { v.setUint16(e + 8, 1, true); v.setUint16(e + 10, 1, true); }), "ZIP_INVALID");
+    rejects(eocd(twin, (v, e) => v.setUint16(e + 8, 1, true)), "ZIP_INVALID");
+    rejects(eocd(twin, (v, e) => v.setUint16(e + 10, 1, true)), "ZIP_INVALID");
+  });
   it("limits can only be tightened", () => {
     rejects(new Uint8Array(LIMITS.maxInputBytes + 1), "INPUT_TOO_LARGE", { maxInputBytes: Infinity });
     rejects(docx(xml(" ".repeat(1 << 20))), "ZIP_RATIO", { maxRatio: 1e9, maxPartBytes: 1e12 });
@@ -145,6 +160,19 @@ describe("XML classes", () => {
     assert.deepEqual(readDocx(docx(xml(alt))), { paragraphs: ["iza", "okvir"], revisions: [] });
     const inside = `<w:p><w:r><w:t>a<mc:Fallback xmlns:mc="${MC}">b</mc:Fallback>c</w:t></w:r></w:p>`;
     assert.deepEqual(readDocx(docx(xml(inside))).paragraphs, ["ac"]);
+  });
+  it("X13 only the first mc:Choice is read; a second one is not counted again", () => {
+    const MC = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    const box = (t) => `<w:txbxContent>${para(t)}</w:txbxContent>`;
+    const alt = `<w:p><w:r><mc:AlternateContent xmlns:mc="${MC}"><mc:Choice Requires="wps">${box("okvir")}<w:ins w:id="1"/></mc:Choice>`
+      + `<mc:Choice Requires="v">${box("okvir")}<w:ins w:id="2"/></mc:Choice><mc:Fallback>${box("okvir")}</mc:Fallback></mc:AlternateContent></w:r></w:p>`;
+    assert.deepEqual(readDocx(docx(xml(alt))), { paragraphs: ["", "okvir"], revisions: [{ kind: "ins", paragraph: 0 }] });
+  });
+  it("X14 a tab, a line break and a carriage return in a run separate words; a tab stop does not", () => {
+    const run = '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs></w:pPr>'
+      + "<w:r><w:t>a</w:t><w:tab/><w:t>b</w:t><w:br/><w:t>c</w:t><w:cr/><w:t>d</w:t></w:r>"
+      + "<w:del><w:r><w:tab/><w:t>skriveno</w:t></w:r></w:del></w:p>";
+    assert.deepEqual(readDocx(docx(xml(run))), { paragraphs: ["a\tb\nc\nd"], revisions: [{ kind: "del", paragraph: 0 }] });
   });
   it("X10 bytes that are not UTF-8, UTF-16 included", () => {
     rejects(docx(Uint8Array.of(...strToU8(xml(para("a"))).subarray(0, 60), 0xff, 0xfe)), "XML_ENCODING");
@@ -204,6 +232,23 @@ describe("data boundary (D-198 t. 5)", () => {
   it("a revision outside a paragraph has no paragraph index", () => {
     const row = `<w:tbl><w:tr><w:trPr><w:ins w:id="1" w:author="QZ" w:date="QZ"/></w:trPr><w:tc>${para("a")}</w:tc></w:tr></w:tbl>`;
     assert.deepEqual(readDocx(docx(xml(row))), { paragraphs: ["a"], revisions: [{ kind: "ins", paragraph: null }] });
+  });
+  it("a deleted table row or cell keeps none of its text and counts as one deletion", () => {
+    const cell = (t, pr = "") => `<w:tc>${pr}${para(t)}</w:tc>`;
+    const table = `<w:tbl><w:tr><w:trPr><w:del w:id="1" w:author="QZ" w:date="QZ"/></w:trPr>${cell("QZredak")}${cell("QZredak")}</w:tr>`
+      + `<w:tr>${cell("ostaje")}${cell("QZcelija", '<w:tcPr><w:cellDel w:id="2" w:author="QZ" w:date="QZ"/></w:tcPr>')}</w:tr>`
+      + `<w:tr><w:trPr><w:ins w:id="3"/></w:trPr>${cell("novo", '<w:tcPr><w:cellIns w:id="4"/></w:tcPr>')}</w:tr></w:tbl>`;
+    const out = readDocx(docx(xml(table + para("iza"))));
+    assert.deepEqual(out, {
+      paragraphs: ["ostaje", "novo", "iza"],
+      revisions: [{ kind: "del", paragraph: null }, { kind: "del", paragraph: null }, { kind: "ins", paragraph: null }, { kind: "ins", paragraph: null }],
+    });
+    assert.ok(!JSON.stringify(out).includes("QZ"));
+  });
+  it("an earlier row or cell state in w:trPrChange or w:tcPrChange is not counted and hides nothing", () => {
+    const row = '<w:tbl><w:tr><w:trPr><w:trPrChange w:id="1"><w:trPr><w:del w:id="2"/></w:trPr></w:trPrChange></w:trPr>'
+      + `<w:tc><w:tcPr><w:tcPrChange w:id="3"><w:tcPr><w:cellDel w:id="4"/></w:tcPr></w:tcPrChange></w:tcPr>${para("a")}</w:tc></w:tr></w:tbl>`;
+    assert.deepEqual(readDocx(docx(xml(row))), { paragraphs: ["a"], revisions: [] });
   });
 });
 

@@ -27,11 +27,16 @@ const fail = (code) => { throw new DocxError(code); };
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 // Strict OOXML names the same elements differently; reading it as W would silently return nothing.
 const STRICT = "http://purl.oclc.org/ooxml/wordprocessingml/main";
-// mc:Fallback repeats mc:Choice (e.g. a text box); its paragraphs, text and revisions would count twice.
+// mc:AlternateContent holds the same content more than once (e.g. a text box): only its first mc:Choice is
+// read, and a later mc:Choice or the mc:Fallback would count paragraphs, text and revisions twice.
 const MC = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 const MAIN = "word/document.xml";
 const REVISIONS = new Set(["ins", "del", "moveFrom", "moveTo"]);
 const REMOVED = new Set(["del", "moveFrom"]);
+// A revision mark in the properties of a table row (w:trPr) or cell (w:tcPr) applies to the whole row or cell.
+const BOX_REVISIONS = new Map([["ins", "ins"], ["del", "del"], ["cellIns", "ins"], ["cellDel", "del"]]);
+// Content characters outside w:t; without them two words around a tab or a line break would merge.
+const SEPARATORS = new Map([["tab", "\t"], ["br", "\n"], ["cr", "\n"]]);
 const CHUNK = 1024;
 
 // A caller may only tighten a limit; a larger, infinite or non-numeric value is ignored.
@@ -72,7 +77,9 @@ function mainPart(bytes, lim) {
   if (count === 0xffff || cdSize === 0xffffffff || cdOff === 0xffffffff || cdOff + cdSize > e) fail("ZIP_INVALID");
   if (count > lim.maxEntries) fail("ZIP_TOO_MANY_ENTRIES");
   let found = null;
-  for (let i = 0, p = cdOff; i < count; i++) {
+  if (u16(e + 8) !== count) fail("ZIP_INVALID");
+  let p = cdOff;
+  for (let i = 0; i < count; i++) {
     if (p + 46 > cdOff + cdSize || u32(p) !== 0x02014b50) fail("ZIP_INVALID");
     const next = p + 46 + u16(p + 28) + u16(p + 30) + u16(p + 32);
     if (next > cdOff + cdSize) fail("ZIP_INVALID");
@@ -83,6 +90,8 @@ function mainPart(bytes, lim) {
     }
     p = next;
   }
+  // A count that skips records would hide a duplicate main part and entries from maxEntries.
+  if (p !== cdOff + cdSize) fail("ZIP_INVALID");
   if (!found) fail("DOCX_NO_DOCUMENT");
   const { flags, method, crc, csize, usize, lho } = found;
   if (flags & 1 || (method !== 0 && method !== 8)) fail("ZIP_METHOD");
@@ -126,17 +135,22 @@ function parse(bytes, lim) {
   const paragraphs = [];
   const revisions = [];
   const open = [];
+  const boxes = []; // depth of each open w:tr and w:tc
+  const alternates = []; // for each open mc:AlternateContent, whether an mc:Choice was already read
   let depth = 0;
+  let skipAt = 0; // depth of the element whose whole content is skipped: deleted row or cell, other alternative
+  let props = 0;
+  let inRun = 0;
   let inText = 0;
   let removed = 0;
-  let fallback = 0;
   let chars = 0;
-  const keep = (t) => {
-    if (!inText || removed || fallback || !open.length) return;
+  const add = (t) => {
+    if (removed || skipAt || !open.length) return;
     chars += t.length;
     if (chars > lim.maxTextChars) fail("XML_TEXT");
     paragraphs[open.at(-1)] += t;
   };
+  const keep = (t) => { if (inText) add(t); };
   const sax = new SaxesParser({ xmlns: true });
   sax.on("error", () => fail("XML_INVALID"));
   sax.on("xmldecl", (d) => { if (d.encoding !== undefined && d.encoding.toLowerCase() !== "utf-8") fail("XML_ENCODING"); });
@@ -145,22 +159,46 @@ function parse(bytes, lim) {
   sax.on("opentag", (node) => {
     if (++depth > lim.maxDepth) fail("XML_DEPTH");
     if (node.uri === STRICT) fail("DOCX_STRICT");
-    if (node.uri === MC && node.local === "Fallback") fallback++;
-    if (fallback || node.uri !== W) return;
+    if (skipAt) return;
     const name = node.local;
-    if (name === "p") { open.push(paragraphs.length); paragraphs.push(""); }
+    if (node.uri === MC) {
+      if (name === "AlternateContent") alternates.push(false);
+      else if (name === "Fallback" || (name === "Choice" && alternates.at(-1))) skipAt = depth;
+      else if (name === "Choice" && alternates.length) alternates[alternates.length - 1] = true;
+      return;
+    }
+    if (node.uri !== W) return;
+    if (props) {
+      // Only the current properties count; a w:trPrChange or w:tcPrChange holds earlier ones (props > 1).
+      const kind = props === 1 ? BOX_REVISIONS.get(name) : undefined;
+      if (name === "trPr" || name === "tcPr") props++;
+      else if (kind) {
+        revisions.push({ kind, paragraph: open.length ? open.at(-1) : null });
+        if (kind === "del" && boxes.length) { skipAt = boxes.pop(); props = 0; }
+      }
+      return;
+    }
+    if (name === "tr" || name === "tc") boxes.push(depth);
+    else if (name === "trPr" || name === "tcPr") props++;
+    else if (name === "p") { open.push(paragraphs.length); paragraphs.push(""); }
+    else if (name === "r") inRun++;
     else if (name === "t") inText++;
+    else if (inRun && SEPARATORS.has(name)) add(SEPARATORS.get(name));
     else if (REVISIONS.has(name)) {
       revisions.push({ kind: name, paragraph: open.length ? open.at(-1) : null });
       if (REMOVED.has(name)) removed++;
     }
   });
   sax.on("closetag", (node) => {
-    depth--;
-    if (node.uri === MC && node.local === "Fallback") fallback--;
-    if (fallback || node.uri !== W) return;
+    const at = depth--;
+    if (skipAt) { if (at === skipAt) skipAt = 0; return; }
     const name = node.local;
-    if (name === "p") open.pop();
+    if (node.uri === MC) { if (name === "AlternateContent") alternates.pop(); return; }
+    if (node.uri !== W) return;
+    if (props) { if (name === "trPr" || name === "tcPr") props--; return; }
+    if (name === "tr" || name === "tc") boxes.pop();
+    else if (name === "p") open.pop();
+    else if (name === "r") inRun--;
     else if (name === "t") inText--;
     else if (REMOVED.has(name)) removed--;
   });
