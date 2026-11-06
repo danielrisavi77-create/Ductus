@@ -448,11 +448,12 @@ describe("assignments and removal over withActor", () => {
       return result.rows[0].yes;
     });
   // What the student stored for a version, and what the TS mirror computes
-  // from the stored version (DAN-306, E1 and A13); instants to milliseconds.
+  // from the stored version (DAN-306, E1 and A13; P03: the RPC's rows are
+  // bound); instants to milliseconds.
   const storedNotice = async (versionNo: number) =>
     (
       await admin.query(
-        `SELECT notice_template_version, notice_fingerprint FROM institution.notice_acknowledgment
+        `SELECT notice_template_version, notice_fingerprint, notice_binding FROM institution.notice_acknowledgment
          WHERE assignment_id = $1 AND version_no = $2 AND student_id = $3`,
         [assignment, versionNo, people.student.id],
       )
@@ -587,7 +588,7 @@ describe("assignments and removal over withActor", () => {
     expect(await acknowledgedCurrent(people.student.token)).toBe(false);
     // E1 (DAN-306): the row carries the fingerprint of version 2, the version
     // current under the lock, not that of version 3.
-    expect(await storedNotice(2)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(2) });
+    expect(await storedNotice(2)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(2), notice_binding: "bound" });
     expect(await versionFingerprint(2)).not.toBe(await versionFingerprint(3));
 
     // E2: the same student, the same version, two template versions. The
@@ -606,7 +607,7 @@ describe("assignments and removal over withActor", () => {
     } finally {
       await firstTab.end();
     }
-    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4) });
+    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4), notice_binding: "bound" });
 
     // E4: ten parallel confirmations of version 4 leave one row and return the first time.
     const repeats = await Promise.all(
@@ -616,7 +617,7 @@ describe("assignments and removal over withActor", () => {
     );
     expect(repeats.map((at) => at.toISOString())).toEqual(Array.from({ length: 10 }, () => firstAt.toISOString()));
     expect((await confirmed()).rows).toEqual([{ version_no: 2 }, { version_no: 4 }]);
-    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4) });
+    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4), notice_binding: "bound" });
     expect(await acknowledgedCurrent(people.student.token)).toBe(true);
     // Nobody else has confirmed it, the teacher included.
     expect(await acknowledgedCurrent(people.guesser.token)).toBe(false);
@@ -662,9 +663,9 @@ describe("assignments and removal over withActor", () => {
           cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}`,
         },
       }), { params: Promise.resolve({ assignmentId: assignment }) })) as unknown as typeof fetch;
-    const rows = () => admin.query<{ acknowledged_at: Date; notice_template_version: number; notice_fingerprint: string }>(
-      `SELECT acknowledged_at, notice_template_version, notice_fingerprint FROM institution.notice_acknowledgment
-        WHERE assignment_id = $1 AND version_no = 4 AND student_id = $2`,
+    const rows = () => admin.query<{ acknowledged_at: Date; notice_template_version: number; notice_fingerprint: string; notice_binding: string }>(
+      `SELECT acknowledged_at, notice_template_version, notice_fingerprint, notice_binding
+         FROM institution.notice_acknowledgment WHERE assignment_id = $1 AND version_no = 4 AND student_id = $2`,
       [assignment, people.guesser.id],
     );
 
@@ -701,6 +702,7 @@ describe("assignments and removal over withActor", () => {
     expect((await rows()).rows[0]).toMatchObject({
       notice_template_version: NOTICE_TEMPLATE_VERSION,
       notice_fingerprint: fp4,
+      notice_binding: "bound",
     });
     // After the row exists, another fingerprint is still refused and changes nothing.
     const later = await call(people.guesser.token, 4, { fingerprint: "f".repeat(64) });
