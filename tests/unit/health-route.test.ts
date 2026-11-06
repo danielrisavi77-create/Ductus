@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const withActor = vi.fn();
+vi.mock("@/server/db", () => ({ withActor: (...args: unknown[]) => withActor(...args) }));
 
 import { GET, dynamic, runtime } from "../../app/api/health/route";
 
@@ -20,6 +23,18 @@ describe("GET /api/health", () => {
       expect(await GET().json()).toEqual({ status: "ok" });
     } finally {
       process.env = saved;
+    }
+  });
+
+  // DAN-585: health stays free of external calls; dependencies are ready's job.
+  it("calls neither the database nor the network", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      expect(await GET().json()).toEqual({ status: "ok" });
+      expect(withActor).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
     }
   });
 });
