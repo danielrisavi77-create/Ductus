@@ -53,7 +53,7 @@
   </section>
 
   <section class="variant" aria-labelledby="p3">
-    <div class="ref-tag">Stanje 3 · ne podudara se</div>
+    <div class="ref-tag">Stanje 3 · ne podudara se (potpis; datoteka rada)</div>
     <div class="panel"><div class="panel-top pub"><h2 id="p3">Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
       <div class="panel-body">
         <div class="verdict no" role="status"><b>Potpis se ne podudara.</b><span>Sadržaj potvrde nije onaj koji je Ductura potpisala, ili potvrda nije izdana ključem iz javnog registra.</span></div>
@@ -65,7 +65,21 @@
         <button class="btn secondary" type="button">Provjeri drugu datoteku</button>
         <p class="foot">Provjera pokazuje samo je li zapis mijenjan od primitka. Ne pokazuje tko je rad napisao.</p>
       </div></div>
-    <p class="meta">Isti oblik vrijedi za ostale razloge iz ugovora, uz drukčiji redak Razlog: ključ je opozvan; vrijeme potpisa je izvan razdoblja valjanosti ključa; otisak datoteke rada ne odgovara otisku u potvrdi (tada se potpis potvrde može podudarati).</p>
+    <div class="panel"><div class="panel-top pub"><h2>Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
+      <div class="panel-body">
+        <div role="status" style="display: contents">
+          <div class="verdict"><b>Potpis se podudara.</b><span>Potvrda je neizmijenjena od primitka.</span></div>
+          <div class="verdict no"><b>Datoteka rada se ne podudara.</b><span>Otisak odabrane datoteke rada nije otisak zapisan u potvrdi.</span></div>
+        </div>
+        <dl class="pass">
+          <div><dt>Otisak u potvrdi (SHA-256)</dt><dd>4be19c07a2f361d80e55b7c29a14f06e3d8b52c1e970aa4618f2c35d7b09e6a1</dd></div>
+          <div><dt>Otisak odabrane datoteke (SHA-256)</dt><dd>91d3a6f02c7be4185a0e66d2f7c93b18e4a50dc7f2196b3e8a07c5d14fb2e936</dd></div>
+        </dl>
+        <p class="note">Odabrana datoteka nije ona koja je predana uz ovu potvrdu, ili je mijenjana nakon predaje. Ishod ne govori o potvrdi ni o studentu.</p>
+        <button class="btn secondary" type="button">Odaberi drugu datoteku rada</button>
+        <p class="foot">Provjera pokazuje samo je li zapis mijenjan od primitka. Ne pokazuje tko je rad napisao.</p>
+      </div></div>
+    <p class="meta">Svaka provjera ima svoj redak: potpis, valjanost ključa i otisak datoteke rada. Ključ koji je opozvan ili vrijeme potpisa izvan razdoblja valjanosti ključa imaju zaseban naslov „Ključ nije bio valjan pri potpisu.” i tekst „Potvrda se ne prihvaća jer ključ kojim je potpisana nije bio valjan u vrijeme potpisa.”, u istom obliku kao gore, s retkom Razlog i rečenicom pravila 9.</p>
   </section>
 
   <section class="variant" aria-labelledby="p4">
