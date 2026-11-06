@@ -30,7 +30,7 @@ Nijedna opcija niže ne gradi na odluci sa statusom PRIJEDLOG. Gdje opcija ovisi
 
 ## 3. Stanje koda i dokumenata
 
-- `audit.access_log` (`db/migrations/20261021120000_audit_access_log.sql`) bilježi otvaranje rada: ustanova, dokument, zadatak, vlasnik rada, čitatelj, `reader_role` (dopušteno samo `teacher`), `surface` (`live_view` ili `process_summary`) i vrijeme zaokruženo na minutu. Tablica je append-only s prisilnim RLS-om. Nema stupca za razlog ni vrijednosti za operatera, pa danas ne može zapisati pristup podrške.
+- `audit.access_log` (`db/migrations/20261021120000_audit_access_log.sql`, s izmjenama iz `20261021130000_audit_access_log_write.sql`, `20261027200000_fast_path_works.sql` i `20261028121000_replay_source.sql`) bilježi otvaranje rada: ustanova, dokument, zadatak, vlasnik rada, čitatelj, `reader_role` (dopušteno samo `teacher`), `surface` (`live_view`, `process_summary`, `fast_path` ili `replay`) i početak petominutnog intervala (jedan redak po čitatelju, radu i površini u intervalu). Tablica je append-only s prisilnim RLS-om. Nema stupca za razlog ni vrijednosti za operatera, pa danas ne može zapisati pristup podrške.
 - U kodu ne postoji operaterska prijava, sesija, tablica ni RPC (PLAN-TOKOVI, ops portal: ništa od toga prije prihvaćenog ADR-a).
 - **Nesklad A** (ostaje otvoren, Q-19): `docs/ARCHITECTURE.md` §7 iznimni pristup veže uz break-glass općenito, a `docs/backend/pregled.md` navodi „break-glass za administratora u pojednostavljenom obliku”. D-199 t. 3 govori o podršci operatera. Nije odlučeno postoji li i break-glass administratora ustanove.
 - **Nesklad B** (ostaje otvoren): tablica u `docs/ARCHITECTURE.md` kaže da `access_log` sadrži „razlog (uključujući break-glass)”, a shema na `main` taj stupac nema.
@@ -94,7 +94,7 @@ Zašto je ovo vezano uz break-glass: razlog je slobodan tekst koji student ili n
 Otvoreno, a mora biti odlučeno prije DAN-312:
 
 - **8a, oblik razloga:** slobodan tekst, zatvoreni popis kategorija ili kategorija uz neobavezan tekst. Izvor za razlog kao takav je `docs/PRODUCT.md` t. 10; oblik nije određen.
-- **8b, klasa podataka:** (A) DAN-312 čeka popis klasa iz M10.1-P01; (B) DAN-312 bilježi privremenu klasu označenu NEPROVJERENO, bez koda čuvanja (Q-16); (C) razlog se smatra jednakim sadržaju rada dok DATA-CLASS ne odluči drukčije.
+- **8b, klasa podataka:** jedina opcija s izvorom u repou je da DAN-312 čeka popis klasa iz M10.1-P01 (D-271 MQ01 i MQ03; `docs/PROGRAM-RAZRADA.md` M10.1). Repo ne daje izvor za privremenu klasu razloga prije M10.1-P01, pa bi svaki drugi odgovor bio nova vlasnikova odluka.
 - **8c, opseg pristupa podrške:** smije li zabilježeni pristup podrške obuhvatiti razlog produljenja ili je razlog izvan opsega kao i sve što nije potrebno za kvar.
 - **8d, nesklad C:** D-69 daje koordinatoru na FPZG-u netehnička pitanja, uključujući produljenje roka, a razlog je vidljiv samo nastavniku i studentu. Ostaje otvoren (Q-19) dok vlasnik ne odluči vidi li koordinator razlog.
 
