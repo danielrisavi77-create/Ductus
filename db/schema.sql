@@ -2914,6 +2914,71 @@ $_$;
 
 
 --
+-- Name: backchannel_logout(text, text, text, text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.backchannel_logout(p_issuer text, p_subject text, p_sid text, p_jti text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_sid_hash bytea;
+  v_count integer;
+BEGIN
+  IF p_issuer IS NULL OR pg_catalog.length(p_issuer) NOT BETWEEN 1 AND 255
+     OR p_jti IS NULL OR pg_catalog.length(p_jti) NOT BETWEEN 1 AND 255
+     OR (p_subject IS NULL AND p_sid IS NULL)
+     OR pg_catalog.length(p_subject) NOT BETWEEN 1 AND 255 OR p_subject ~ '[[:cntrl:]]'
+     OR pg_catalog.length(p_sid) NOT BETWEEN 1 AND 255 OR p_sid ~ '[[:cntrl:]]' THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+
+  DELETE FROM identity.logout_token_jti WHERE expires_at <= pg_catalog.now();
+  INSERT INTO identity.logout_token_jti (oidc_issuer, jti_hash, expires_at)
+  VALUES (p_issuer, pg_catalog.sha256(pg_catalog.convert_to(p_jti, 'UTF8')), pg_catalog.now() + interval '1 hour')
+  ON CONFLICT (oidc_issuer, jti_hash) DO NOTHING;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  IF v_count = 0 THEN
+    RAISE EXCEPTION 'logout token replayed' USING ERRCODE = 'ZD409';
+  END IF;
+
+  IF p_sid IS NOT NULL THEN
+    v_sid_hash := pg_catalog.sha256(pg_catalog.convert_to(p_sid, 'UTF8'));
+  END IF;
+  UPDATE identity.session s
+     SET closed_at = pg_catalog.now(), close_reason = 'backchannel_logout'
+    FROM identity.user_account u
+   WHERE u.id = s.user_id
+     AND u.oidc_issuer = p_issuer
+     AND (p_subject IS NULL OR u.oidc_subject = p_subject)
+     AND (p_sid IS NULL OR s.oidc_sid_hash = v_sid_hash)
+     AND s.closed_at IS NULL
+     AND s.expires_at > pg_catalog.now();
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END
+$$;
+
+
+--
+-- Name: clear_session_sid(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.clear_session_sid() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  NEW.oidc_sid_hash := NULL;
+  RETURN NEW;
+END
+$$;
+
+
+--
 -- Name: close_all_sessions_for_identity(); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -3238,6 +3303,30 @@ BEGIN
     ON CONFLICT (user_id) DO UPDATE SET updated_at = pg_catalog.now();
   ELSE
     DELETE FROM identity.teacher_eligibility WHERE user_id = v_user;
+  END IF;
+  RETURN v_expires;
+END
+$$;
+
+
+--
+-- Name: open_session(text, text, text, text, bytea, text, text, boolean, text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.open_session(p_issuer text, p_subject text, p_unique_id text, p_home_org text, p_token_hash bytea, p_given_name text, p_family_name text, p_teacher_eligible boolean, p_sid text) RETURNS timestamp with time zone
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_expires timestamptz;
+BEGIN
+  v_expires := identity.open_session(
+    p_issuer, p_subject, p_unique_id, p_home_org, p_token_hash, p_given_name, p_family_name, p_teacher_eligible
+  );
+  IF pg_catalog.length(p_sid) BETWEEN 1 AND 255 AND p_sid !~ '[[:cntrl:]]' THEN
+    UPDATE identity.session
+       SET oidc_sid_hash = pg_catalog.sha256(pg_catalog.convert_to(p_sid, 'UTF8'))
+     WHERE token_hash = p_token_hash AND closed_at IS NULL;
   END IF;
   RETURN v_expires;
 END
@@ -6091,6 +6180,21 @@ ALTER TABLE ONLY identity.institution_issuer FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: logout_token_jti; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.logout_token_jti (
+    oidc_issuer text NOT NULL,
+    jti_hash bytea NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT logout_token_jti_jti_hash_check CHECK ((octet_length(jti_hash) = 32)),
+    CONSTRAINT logout_token_jti_oidc_issuer_check CHECK (((length(oidc_issuer) >= 1) AND (length(oidc_issuer) <= 255)))
+);
+
+ALTER TABLE ONLY identity.logout_token_jti FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: person_name; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -6121,10 +6225,13 @@ CREATE TABLE identity.session (
     closed_at timestamp with time zone,
     close_reason text,
     last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    oidc_sid_hash bytea,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
     CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text]))),
     CONSTRAINT session_last_seen_check CHECK ((last_seen_at >= created_at)),
+    CONSTRAINT session_oidc_sid_hash_check CHECK ((octet_length(oidc_sid_hash) = 32)),
+    CONSTRAINT session_oidc_sid_hash_closed_check CHECK (((closed_at IS NULL) OR (oidc_sid_hash IS NULL))),
     CONSTRAINT session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
 
@@ -7159,6 +7266,14 @@ ALTER TABLE ONLY identity.institution
 
 
 --
+-- Name: logout_token_jti logout_token_jti_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.logout_token_jti
+    ADD CONSTRAINT logout_token_jti_pkey PRIMARY KEY (oidc_issuer, jti_hash);
+
+
+--
 -- Name: person_name person_name_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -7704,6 +7819,13 @@ CREATE INDEX submission_receipt_issuance_submission_idx ON evidence.submission_r
 
 
 --
+-- Name: session_oidc_sid_hash_idx; Type: INDEX; Schema: identity; Owner: -
+--
+
+CREATE INDEX session_oidc_sid_hash_idx ON identity.session USING btree (oidc_sid_hash) WHERE (oidc_sid_hash IS NOT NULL);
+
+
+--
 -- Name: session_user_id_idx; Type: INDEX; Schema: identity; Owner: -
 --
 
@@ -8107,6 +8229,13 @@ CREATE TRIGGER submission_receipt_issuance_no_truncate BEFORE TRUNCATE ON eviden
 --
 
 CREATE TRIGGER submission_receipt_no_truncate BEFORE TRUNCATE ON evidence.submission_receipt FOR EACH STATEMENT EXECUTE FUNCTION evidence.reject_append_only_change();
+
+
+--
+-- Name: session clear_session_sid; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER clear_session_sid BEFORE UPDATE ON identity.session FOR EACH ROW WHEN (((new.closed_at IS NOT NULL) AND (new.oidc_sid_hash IS NOT NULL))) EXECUTE FUNCTION identity.clear_session_sid();
 
 
 --
@@ -9655,6 +9784,19 @@ CREATE POLICY institution_owner ON identity.institution TO ductus_identity USING
 
 
 --
+-- Name: logout_token_jti; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.logout_token_jti ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: logout_token_jti logout_token_jti_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY logout_token_jti_owner ON identity.logout_token_jti TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: person_name; Type: ROW SECURITY; Schema: identity; Owner: -
 --
 
@@ -10195,4 +10337,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261104130000'),
     ('20261105110000'),
     ('20261106120000'),
+    ('20261106150000'),
     ('20261106160000');
