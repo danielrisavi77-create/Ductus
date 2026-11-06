@@ -57,7 +57,7 @@ function isName(value: unknown): value is string {
 }
 
 /** The name pair, null for no name, undefined for a half or malformed pair. */
-function nameOf(given: unknown, family: unknown): PersonName | undefined {
+export function nameOf(given: unknown, family: unknown): PersonName | undefined {
   if (given === null && family === null) return null;
   if (isName(given) && isName(family)) return { givenName: given, familyName: family };
   return undefined;
