@@ -194,8 +194,20 @@ describe("generator builtin loaders (A13)", () => {
     'globalThis.process.getBuiltinModule("node:https");', 'globalThis.fetch("x");', 'global["pro" + "cess"];',
     'Reflect.get(globalThis, "pro" + "cess");', 'const g = getBuiltinModule;',
   ])("rejects %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
-  it.each(['const out = process.argv[2] ?? "out";', 'if (process.argv[1]) {}', 'const a = process\n  .argv;'])(
+  it.each(['const out = process.argv[2] ?? "out";', 'if (process.argv[1]) {}', 'const a = process\n  .argv;',
+    'const self = fileURLToPath(import.meta.url);'])(
     "accepts %j", (line) => expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+  // Classes from the orchestrator's round 2 contract (c.6676289617).
+  it.each([
+    'const h = require("node:http");', 'module.createRequire(import.meta.url)("node:http");', 'const r = createRequire(x);',
+    'import.meta.resolve("node:http");', 'import . meta . resolve("node:https");', 'eval("1");', 'new Function("return 1")();',
+    'const p = process; p.getBuiltinModule("node:http");',
+  ])("rejects %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  const NET_PROC = ["http", "https", "net", "tls", "dgram", "dns", "child_process", "worker_threads", "cluster"];
+  const LOADERS = ['import m from "M";', 'import * as m from "M";', 'import "M";', 'export * from "M";', 'await import("M");',
+    'require("M");', 'process.getBuiltinModule("M");', 'globalThis.process.getBuiltinModule("M");'];
+  it.each(NET_PROC.flatMap((m) => [m, `node:${m}`]).flatMap((m) => LOADERS.map((l) => l.replace("M", m))))(
+    "rejects a network or process module in %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
 });
 
 describe("exact version property", () => {

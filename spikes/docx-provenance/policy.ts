@@ -30,6 +30,7 @@ const GENERATOR_FORBIDDEN: [RegExp, string][] = [
   // and the globals and reflection that reach it without its name are not allowed at all.
   [/\bprocess\b(?!\s*\.\s*argv\b)/, "process other than process.argv"], [/\bgetBuiltinModule\b/, "builtin module loader"],
   [/\bglobalThis\b|\bglobal\b|\bReflect\b/, "global object or reflection"],
+  [/\bcreateRequire\b/, "createRequire"], [/\bimport\s*\.\s*meta\b(?!\s*\.\s*url\b)/, "import.meta other than import.meta.url"],
 ];
 const OTHER_DEP_FIELDS = ["devDependencies", "optionalDependencies", "peerDependencies", "peerDependenciesMeta",
   "bundleDependencies", "bundledDependencies", "overrides", "resolutions", "workspaces"];
