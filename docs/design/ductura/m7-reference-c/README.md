@@ -9,7 +9,7 @@ Sva tri ekrana imaju u EKRANI §5 status NEMA: nijedan nema prototip `.dc.html`.
 | Stranica | Prototip | Stanja | Izvori |
 |---|---|---|---|
 | `s43-napomene.html` | nema; složeno po ugovoru iz EKRANI §5 | popunjeno (napomena, ispravak koji upućuje na staru, dopuna), osporavanje (unos), osporavanje poslano, prazno, učitavanje, greška učitavanja i greška slanja | M7.8, R-08, D-80 t. 7 i 9, PRODUCT §5 pravila 3 i 5 |
-| `j03-provjera-potvrde.html` | nema; složeno po ugovoru iz EKRANI §5 | prazno, podudara se (popunjeno), ne podudara se (potpis; datoteka rada uz podudaran potpis), učitavanje, greška (registar ključeva nedostupan; datoteka bez potvrde) | M7.10, D-49, D-80 t. 11, A-07, `docs/contracts/submission-receipt-v2.md`, PRODUCT §5 pravila 3 i 9 |
+| `j03-provjera-potvrde.html` | nema; složeno po ugovoru iz EKRANI §5 | prazno, podudara se (popunjeno), ne podudara se (potpis; datoteka rada uz podudaran potpis), učitavanje, greška (registar ključeva nedostupan; datoteka bez potvrde) | M7.10, D-49, D-80 t. 11, D-263 Q24, A-07, `docs/contracts/submission-receipt-v2.md`, PRODUCT §5 pravila 3 i 9 |
 | `s47-brojke.html` | nema; složeno po ugovoru iz EKRANI §5 | popunjeno, prazno, prva verzija, učitavanje, greška | M7.13, A-10 u `docs/FEATURES.md`, D-63 (b), D-142, PRODUCT §5 pravilo 4, #1030 |
 
 Mobitel je snimka širine 400 px. Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`. Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.fonts.ready`, bez vodoravnog pomicanja na obje širine. Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SHA256SUMS`. `reference.css` uvozi `../m5-reference/reference.css` i dodaje samo polja putovnice, okvir ishoda, retke unosa i niz gumba.
@@ -34,6 +34,7 @@ Mobitel je snimka širine 400 px. Snimke su u `snimke/<stranica>-<tamna|svijetla
   - Ishod „ne podudara se” govori samo o datoteci koja se provjerava (potvrdi ili datoteci rada), ne o studentu (pravilo 3). Razlikuje se rubom i tekstom, ne bojom. Svaka provjera (potpis, valjanost ključa, otisak datoteke rada) ima svoj ishod i svoj naslov. Kad se potpis podudara, a datoteka rada ne, slika to prikazuje kao dva odvojena ishoda: potvrda je neizmijenjena, a odabrana datoteka rada nije ona predana uz potvrdu. Opozvan ključ i vrijeme potpisa izvan valjanosti ključa imaju zaseban naslov „Ključ nije bio valjan pri potpisu.”, a ne „Potpis se ne podudara”.
   - Kad registar ključeva nije dostupan, o potvrdi se ništa ne zaključuje.
   - Datoteke se provjeravaju u pregledniku (D-49). S poslužitelja se dohvaća samo javni registar ključeva.
+  - QR kod s prenosivog zapisa otvara samo lokalnu provjeru; zapis ili potvrdu korisnik bira sam. Nema javnog krajnjeg mjesta s podacima potvrde (D-263 Q24).
   - Kratki identifikatori (`zad-7f3c`, `dok-19a0`) i ime ključa su izmišljeni oblici prikaza. Ugovor ih ne određuje.
 - **Moj rad u brojkama (S-47).**
   - Brojke su samo iz verzija na poslužitelju: riječi u radu, broj verzija, izvori, citati, fusnote, riječi po poglavlju te riječi po verziji s dodanim i uklonjenim riječima.
@@ -47,7 +48,7 @@ Mobitel je snimka širine 400 px. Snimke su u `snimke/<stranica>-<tamna|svijetla
 
 - Odgovor nastavnika na osporavanje i ishod osporavanja nisu definirani, pa nisu nacrtani.
 - Nastavnički prikaz istih napomena nije zaseban ekran ovog paketa.
-- Sadržaj QR koda nije definiran ugovorom: slika kaže samo da QR otvara stranicu s učitanom potvrdom.
+- Točan sadržaj QR koda (oblik adrese) nije definiran ugovorom. Slika prema D-263 Q24 kaže samo da QR otvara lokalnu provjeru, a paket korisnik bira sam.
 - Pristupni zapis „Tko je otvorio moj rad” (S8 u `../analiza.dc.html`) je S-42 u paketu 15 i ovdje nije nacrtan.
 
 ## Granice
