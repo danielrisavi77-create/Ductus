@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-07 — Integracije i stanje AAI@EduHr (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 18 · DAN-584 · prijedlog slike · M11.UX-R</div>
+  <h1>A-07 — Integracije i stanje AAI@EduHr</h1>
+  <p>Stranica administratora fakulteta. Prototipa nema; složena je po retku A-07 iz <code>docs/design/EKRANI.md</code> od dijelova <code>../m5-reference</code>. Stanje je samo rezultat provjera koje Ductura sama izvodi (D-277 NQ10). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant wide" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Integracije</h2></div>
+      <div class="panel-body cols">
+        <div class="item">
+          <div class="comp"><span class="title">Prijava sustavom AAI@EduHr (pruža Srce)</span><span class="state up">Radi</span></div>
+          <div class="kv"><span>Zadnja uspješna prijava</span><b>14:08</b></div>
+          <div class="kv"><span>Zadnja provjera</span><b>14:10</b></div>
+          <p class="meta">Ductura prima ime i prezime, pripadnost ustanovi i adresu e-pošte. Adresa služi samo za obavijesti, nikad za prijavu ni spajanje računa.</p>
+          <p class="meta">Drugog načina prijave nema.</p>
+        </div>
+        <div class="stack">
+          <div class="comp"><span>Pravila oblika (Lekta)</span><span class="open-mark">Licenca: otvoreno</span></div>
+          <div class="comp"><span>Uvoz iz Microsoft 365</span><span class="open-mark">Suglasnost fakulteta: otvoreno</span></div>
+          <div class="comp"><span>AI pomoćnik</span><span class="open-mark">Pružatelj: otvoreno</span></div>
+          <p class="meta">Integracija se uključuje tek kad je odluka zapisana.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="aai-nedostupan">
+    <div class="ref-tag">Stanje 2 · AAI nedostupan</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t2">Prijava sustavom AAI@EduHr</h2></div>
+      <div class="panel-body">
+        <div class="comp"><span>AAI@EduHr (pruža Srce)</span><span class="state down">Ne odgovara</span></div>
+        <p class="note" role="status">Od 13:52 nove prijave ne prolaze. Prijavljeni korisnici nastavljaju raditi; promjene se šalju na poslužitelj kao i prije.</p>
+        <p class="meta">Probleme s AAI računom rješava AAI administrator fakulteta. Studenti stanje vide na javnoj stranici stanja sustava (J-05).</p>
+        <button class="btn secondary" type="button">Provjeri ponovno</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 3 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t3">Ostale integracije</h2></div>
+      <div class="panel-body"><p class="note">Osim prijave sustavom AAI@EduHr nijedna integracija nije uključena.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 4 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t4">Integracije</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam rezultate provjera.</p><div class="skel w80"></div><div class="skel w60"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 5 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t5">Integracije</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Rezultate provjera trenutačno nije moguće učitati. To ne znači da integracije ne rade.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Stanje se razlikuje riječju i oblikom oznake: puna točka (radi), crtica (ne odgovara). Boja nikad nije jedini znak.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Integracije, 2. AAI@EduHr i stanje, 3. ostale integracije redom, 4. Provjeri ponovno ili Pokušaj ponovno.</p>
+</main>
+</body>
+</html>

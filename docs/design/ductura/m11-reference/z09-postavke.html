@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Z-09 — Postavke (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 18 · DAN-584 · prijedlog slike · M11.UX-R</div>
+  <h1>Z-09 — Postavke</h1>
+  <p>Stranica studenta i mentora. Raspored postavki obavijesti preuzet je iz <code>pocetna.dc.html</code> (izbornik obavijesti) i prebojan u papir i grafit (EQ1); profil, tema i jezik složeni su po retku Z-09 iz <code>docs/design/EKRANI.md</code>. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant wide" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Postavke</h2></div>
+      <div class="panel-body cols">
+        <div class="stack">
+          <h3 class="title">Profil iz sustava AAI@EduHr</h3>
+          <div class="kv"><span>Ime i prezime</span><b>Student A</b></div>
+          <div class="kv"><span>Ustanova</span><b>Fakultet političkih znanosti</b></div>
+          <div class="kv"><span>E-pošta</span><b>student.a@example.edu</b></div>
+          <p class="meta">Podatke daje AAI@EduHr i ovdje se ne mijenjaju. E-pošta služi samo za obavijesti.</p>
+          <h3 class="title" id="tema">Tema</h3>
+          <div class="seg" role="group" aria-labelledby="tema">
+            <button class="btn secondary" type="button" aria-pressed="true">Tamna (odabrano)</button>
+            <button class="btn secondary" type="button" aria-pressed="false">Svijetla</button>
+          </div>
+          <h3 class="title" id="jezik">Jezik sučelja</h3>
+          <div class="seg" role="group" aria-labelledby="jezik">
+            <button class="btn secondary" type="button" aria-pressed="true">Hrvatski (odabrano)</button>
+            <button class="btn secondary" type="button" aria-pressed="false" lang="en">English</button>
+          </div>
+        </div>
+        <div class="stack" data-state="obavijesti">
+          <h3 class="title">Obavijesti</h3>
+          <div class="prefs">
+            <span class="h">Događaj</span><span class="h">U aplikaciji</span><span class="h">E-pošta</span>
+            <span>Novi komentar mentora</span><label><input type="checkbox" checked aria-label="Novi komentar mentora u aplikaciji"></label><label><input type="checkbox" checked aria-label="Novi komentar mentora e-poštom"></label>
+            <span>Zahtjev za doradu</span><label><input type="checkbox" checked aria-label="Zahtjev za doradu u aplikaciji"></label><label><input type="checkbox" checked aria-label="Zahtjev za doradu e-poštom"></label>
+            <span>Mentor je prihvatio doradu</span><label><input type="checkbox" checked aria-label="Mentor je prihvatio doradu u aplikaciji"></label><label><input type="checkbox" aria-label="Mentor je prihvatio doradu e-poštom"></label>
+            <span>Rok za 7 dana i za 1 dan</span><label><input type="checkbox" checked aria-label="Rok u aplikaciji"></label><label><input type="checkbox" checked aria-label="Rok e-poštom"></label>
+          </div>
+          <p class="meta">Ductura ne šalje podsjetnike o tome koliko pišete. Samo o komentarima, doradama i rokovima.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 2 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t2">Obavijesti</h2></div>
+      <div class="panel-body"><p class="note">Još niste upisani ni u jedan kolegij. Obavijesti o komentarima i rokovima stižu kad mentor otvori Vaš rad.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 3 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t3">Postavke</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam postavke.</p><div class="skel w80"></div><div class="skel w60"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 4 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t4">Obavijesti</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Promjena obavijesti nije stigla na poslužitelj. Vrijede dosadašnje postavke.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Odabrana tema i jezik imaju puni rub i riječ „(odabrano)”, ne samo boju. Svaki okvir za kvačicu ima polje dodira od 44 px.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Postavke, 2. profil (samo za čitanje), 3. tema, 4. jezik, 5. obavijesti redak po redak (u aplikaciji, e-pošta), 6. Pokušaj ponovno.</p>
+</main>
+</body>
+</html>
