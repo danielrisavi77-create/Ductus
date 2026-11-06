@@ -6,11 +6,11 @@ Sva tri ekrana imaju u EKRANI §5 status NEMA: nijedan nema prototip `.dc.html`.
 
 ## Stranice
 
-| Stranica | Stanja | Izvori |
-|---|---|---|
-| `s43-napomene.html` | popunjeno (napomena, ispravak koji upućuje na staru, dopuna), osporavanje (unos), osporavanje poslano, prazno, učitavanje, greška učitavanja i greška slanja | M7.8, R-08, D-80 t. 7 i 9, PRODUCT §5 pravila 3 i 5 |
-| `j03-provjera-potvrde.html` | prazno, podudara se (popunjeno), ne podudara se, učitavanje, greška (registar ključeva nedostupan; datoteka bez potvrde) | M7.10, D-49, D-80 t. 11, A-07, `docs/contracts/submission-receipt-v2.md`, PRODUCT §5 pravila 3 i 9 |
-| `s47-brojke.html` | popunjeno, prazno, prva verzija, učitavanje, greška | M7.13, A-10 u `docs/FEATURES.md`, D-63 (b), D-142, PRODUCT §5 pravilo 4, #1030 |
+| Stranica | Prototip | Stanja | Izvori |
+|---|---|---|---|
+| `s43-napomene.html` | nema; složeno po ugovoru iz EKRANI §5 | popunjeno (napomena, ispravak koji upućuje na staru, dopuna), osporavanje (unos), osporavanje poslano, prazno, učitavanje, greška učitavanja i greška slanja | M7.8, R-08, D-80 t. 7 i 9, PRODUCT §5 pravila 3 i 5 |
+| `j03-provjera-potvrde.html` | nema; složeno po ugovoru iz EKRANI §5 | prazno, podudara se (popunjeno), ne podudara se, učitavanje, greška (registar ključeva nedostupan; datoteka bez potvrde) | M7.10, D-49, D-80 t. 11, A-07, `docs/contracts/submission-receipt-v2.md`, PRODUCT §5 pravila 3 i 9 |
+| `s47-brojke.html` | nema; složeno po ugovoru iz EKRANI §5 | popunjeno, prazno, prva verzija, učitavanje, greška | M7.13, A-10 u `docs/FEATURES.md`, D-63 (b), D-142, PRODUCT §5 pravilo 4, #1030 |
 
 Mobitel je snimka širine 400 px. Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`. Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.fonts.ready`, bez vodoravnog pomicanja na obje širine. Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SHA256SUMS`. `reference.css` uvozi `../m5-reference/reference.css` i dodaje samo polja putovnice, okvir ishoda, retke unosa i niz gumba.
 
@@ -27,10 +27,10 @@ Mobitel je snimka širine 400 px. Snimke su u `snimke/<stranica>-<tamna|svijetla
   - Napomena nije obvezna. Prazan popis ne nosi nikakvu oznaku za događaj.
 - **Provjera potvrde (J-03).**
   - Stranica je javna i bez prijave. Polja potvrde su u mono fontu (DESIGN-SYSTEM §4, „Kod, putovnica”).
-  - Prikazana su polja potvrde v2: zahtjev predaje (requestedAt), rok (dueAt), „na vrijeme” iz afterDeadline, vrijeme potpisa (signedAt), zadatak i verzija, rad i revizija, otisak datoteke rada (artifactSha256) i ključ s verzijom.
+  - Prikazana su polja potvrde v2: zahtjev predaje (requestedAt), rok (dueAt), „na vrijeme” iz afterDeadline, vrijeme potpisa (signedAt), zadatak i verzija, rad i revizija, otisak datoteke rada (artifactSha256, 64 heksadekadske znamenke bez razmaka, kako stoji u potvrdi) i ključ s verzijom.
   - Vremena su vrijeme poslužitelja u UTC-u. Slika izričito kaže da to nije vremenski žig treće strane (ugovor: signedAt nije TSA).
   - Ime studenta se ne prikazuje, jer nije polje potvrde.
-  - Ishod „podudara se” kaže samo da je zapis cjelovit i neizmijenjen od primitka. Ne pokazuje tko je rad napisao (pravilo 9).
+  - Ishod „podudara se” kaže samo da je zapis cjelovit i neizmijenjen od primitka. Rečenica „Ne pokazuje tko je rad napisao” (pravilo 9) stoji u oba stanja s ishodom, „podudara se” i „ne podudara se”.
   - Ishod „ne podudara se” govori samo o datoteci potvrde, ne o radu ni o studentu (pravilo 3). Razlikuje se rubom i tekstom, ne bojom. Ostali razlozi iz ugovora (opozvan ključ, vrijeme potpisa izvan valjanosti ključa, otisak datoteke rada) imaju isti oblik s drukčijim retkom Razlog.
   - Kad registar ključeva nije dostupan, o potvrdi se ništa ne zaključuje.
   - Datoteke se provjeravaju u pregledniku (D-49). S poslužitelja se dohvaća samo javni registar ključeva.
