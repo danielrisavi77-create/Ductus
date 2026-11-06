@@ -38,7 +38,7 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
   - Provjera predanog rada kaže samo da zapis nije mijenjan nakon predaje i izričito ne dokazuje tko je tekst napisao.
   - Pružatelj i lokacija poslužitelja su otvoreni dok se ne odaberu (P-01 do P-04); slika ne navodi zemlju ni pružatelja.
   - Odjeljak prototipa o istrazi nije preuzet.
-  - Pravila fakulteta su postavka fakulteta; primjer na slici je izmišljen. Prazno, učitavanje i greška odnose se samo na taj odjeljak, a ostatak stranice uvijek vrijedi.
+  - Pravila fakulteta su postavka fakulteta; primjer na slici je izmišljen. Pravilo AI-ja fakulteta je polazno: nastavnik ga na kolegiju smije pooštriti ili ublažiti, a student mjerodavno pravilo vidi u obavijesti zadatka (D-175, PRODUCT §5 pravilo 12). Prazno, učitavanje i greška odnose se samo na taj odjeljak, a ostatak stranice uvijek vrijedi.
 - **Stanje sustava i pristupačnost (J-05).**
   - Stanje prikazuje samo rezultate provjera koje Ductura sama izvodi (D-277 NQ10). Prijava sustavom AAI@EduHr navedena je kao dio koji pruža Srce.
   - Stanje dijela razlikuje se riječju i oblikom oznake (puna točka ili prsten), ne samo bojom.
