@@ -2,6 +2,7 @@
 // waives a finding; this module only pins what it may contain, how CI must read it,
 // and that the waived dev-only packages stay out of production. An ignored ID covers
 // every package, version and lockfile, so the dev-only claim needs its own check.
+// Every tracked lockfile is scanned, and a negative control proves the scan can fail.
 // Run by osv-exceptions.test.mjs in the "Engineering system unit tests" CI step.
 
 export const ALLOWED_IDS = ["GHSA-g3hv-75wg-m249"];
@@ -13,7 +14,11 @@ export const OSV_SCAN_ARGS = [
   "--config", "/src/osv-scanner.toml",
   "--lockfile", "/src/pnpm-lock.yaml",
   "--lockfile", "/src/infra/fake-oidc/pnpm-lock.yaml",
+  "--lockfile", "/src/spikes/b0.2-reconstruction/package-lock.json",
+  "--lockfile", "/src/spikes/docx-provenance/package-lock.json",
 ];
+export const NEGATIVE_STEP_NAME = "OSV-Scanner synthetic negative control";
+const LOCKFILE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?)$/;
 
 const lines = (text) => text.split(/\r?\n/);
 const fail = (message) => { throw new Error(`OSV exceptions: ${message}`); };
@@ -63,15 +68,19 @@ export function checkIgnoredVulns(text) {
   if (missing.length > 0) fail(`missing ${missing.join(", ")}; change the allowed list in the same PR`);
 }
 
-// The step must be the plain scan: exact arguments, so also no --ignore, no shell
-// operator after them, and nothing beside name and run that could soften the failure.
-export function checkOsvStep(ciText) {
+const securityStep = (ciText, name) => {
   const job = ciText.replace(/\r\n/g, "\n").split("\n  security:\n")[1]?.split(/^ {2}[\w-]+:\n/m)[0];
   if (!job) fail("ci.yml has no security job");
   if (job.includes("continue-on-error")) fail("the security job must not use continue-on-error");
-  const steps = job.split(/^ {6}- /m).filter((step) => step.startsWith(`name: ${OSV_STEP_NAME}\n`));
-  if (steps.length !== 1) fail(`the security job needs exactly one "${OSV_STEP_NAME}" step`);
-  const [, run, ...command] = lines(steps[0]).filter((line) => !/^ {0,7}(#.*)?$/.test(line));
+  const steps = job.split(/^ {6}- /m).filter((step) => step.startsWith(`name: ${name}\n`));
+  if (steps.length !== 1) fail(`the security job needs exactly one "${name}" step`);
+  return lines(steps[0]).filter((line) => !/^ {0,7}(#.*)?$/.test(line));
+};
+
+// The step must be the plain scan: exact arguments, so also no --ignore, no shell
+// operator after them, and nothing beside name and run that could soften the failure.
+export function checkOsvStep(ciText) {
+  const [, run, ...command] = securityStep(ciText, OSV_STEP_NAME);
   if (run?.trim() !== "run: >-") fail(`the step must hold only name and a "run: >-" command`);
   const tokens = command.join(" ").trim().split(/\s+/);
   const prefix = ["docker", "run", "--rm", "-v", '"$PWD:/src"'];
@@ -82,6 +91,44 @@ export function checkOsvStep(ciText) {
   if (!matches(tokens.slice(6), OSV_SCAN_ARGS)) {
     fail(`the step arguments must be exactly: ${OSV_SCAN_ARGS.join(" ")}`);
   }
+  return tokens[5];
+}
+
+// The negative control is held to its exact text, with the scan step's own image,
+// so neither its check nor the image it proves can drift from the real scan.
+export const negativeControlStep = (image) => [
+  `name: ${NEGATIVE_STEP_NAME}`,
+  "shell: bash",
+  "run: |",
+  "set -euo pipefail",
+  'root="$(mktemp -d "$RUNNER_TEMP/ductus-osv-negative.XXXXXX")"',
+  "trap 'rm -rf \"$root\"' EXIT",
+  'mkdir "$root/scan"',
+  'python3 -I scripts/engineering/osv-negative-control.py build spikes/docx-provenance/package-lock.json "$root/scan/package-lock.json"',
+  "status=0",
+  'docker run --rm -v "$root/scan:/scan:ro" -v "$PWD/osv-scanner.toml:/cfg/osv-scanner.toml:ro" \\',
+  `${image} scan source \\`,
+  "--config /cfg/osv-scanner.toml --format json --lockfile /scan/package-lock.json \\",
+  '> "$root/report.json" || status=$?',
+  'python3 -I scripts/engineering/osv-negative-control.py check "$status" "$root/report.json"',
+];
+
+export function checkNegativeControl(ciText) {
+  const image = checkOsvStep(ciText);
+  const actual = securityStep(ciText, NEGATIVE_STEP_NAME).map((line) => line.trim());
+  if (JSON.stringify(actual) !== JSON.stringify(negativeControlStep(image))) {
+    fail(`the "${NEGATIVE_STEP_NAME}" step must match negativeControlStep() with the scan image`);
+  }
+}
+
+// Each tracked lockfile is scanned, and each scanned lockfile is tracked.
+export function checkLockfilesScanned(trackedFiles) {
+  const tracked = trackedFiles.filter((path) => LOCKFILE.test(path)).map((path) => `/src/${path}`).sort();
+  const scanned = OSV_SCAN_ARGS.filter((_, index) => OSV_SCAN_ARGS[index - 1] === "--lockfile").sort();
+  const missing = tracked.filter((path) => !scanned.includes(path));
+  const stale = scanned.filter((path) => !tracked.includes(path));
+  if (missing.length > 0) fail(`not scanned: ${missing.join(", ")}`);
+  if (stale.length > 0) fail(`scanned but not tracked: ${stale.join(", ")}`);
 }
 
 const packageName = (key) => key.match(/^(@?[^@]+)@/)?.[1] ?? fail(`cannot read package key ${key}`);
@@ -150,11 +197,25 @@ export function allPackages(lockText) {
   return new Set([...readPnpmLock(lockText).snapshots.keys()].map(packageName));
 }
 
-export function checkDevOnlyPackages({ rootLock, fakeOidcLock }) {
+// Every package an npm v3 lockfile installs, by its real name (an alias keeps it in "name").
+export function npmLockPackages(text) {
+  const lock = JSON.parse(text);
+  if (lock?.lockfileVersion !== 3 || typeof lock.packages !== "object") fail("expected npm lockfileVersion 3");
+  const names = Object.entries(lock.packages)
+    .filter(([path]) => path !== "")
+    .map(([path, entry]) => entry?.name ?? path.split("node_modules/").at(-1));
+  if (names.length === 0 || names.some((name) => !name)) fail("cannot read npm lockfile packages");
+  return new Set(names);
+}
+
+// The spikes have no dev tree, so a waived package may not appear in them at all.
+export function checkDevOnlyPackages({ rootLock, fakeOidcLock, npmLocks = {} }) {
   const production = productionPackages(rootLock);
   const fakeOidc = allPackages(fakeOidcLock);
+  const npm = Object.entries(npmLocks).map(([path, text]) => [path, npmLockPackages(text)]);
   for (const name of DEV_ONLY_PACKAGES) {
     if (production.has(name)) fail(`${name} reached the production tree of pnpm-lock.yaml`);
     if (fakeOidc.has(name)) fail(`${name} appeared in infra/fake-oidc/pnpm-lock.yaml`);
+    for (const [path, packages] of npm) if (packages.has(name)) fail(`${name} appeared in ${path}`);
   }
 }

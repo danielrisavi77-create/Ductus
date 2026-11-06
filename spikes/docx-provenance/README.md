@@ -1,6 +1,6 @@
 # M8.8: paket za spike podrijetla DOCX-a
 
-Izbor ovisnosti, licence i lockfile: `docs/spikes/M8.8-P01.md`. Odluka: D-198.
+Izbor ovisnosti, licence i lockfile: `docs/spikes/M8.8-P01.md`. Odluka: D-198. OSV skeniranje lockfilea i negativna kontrola: `docs/spikes/M8.8-P02.md`.
 
 ```bash
 npm ci --ignore-scripts

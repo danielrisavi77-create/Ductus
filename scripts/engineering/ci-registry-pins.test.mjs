@@ -83,6 +83,15 @@ test("Gitleaks negative smoke proves scanner rejection, not just a nonzero start
   assert.match(ci, /Scanner failed before producing a report/);
 });
 
+test("OSV negative control runs the same pinned image as the scan (DAN-435)", () => {
+  const images = [...ci.matchAll(/ghcr\.io\/google\/osv-scanner:\S+/g)].map((match) => match[0]);
+  assert.equal(images.length, 2, "the scan and its negative control");
+  assert.match(images[0], new RegExp(`^ghcr\\.io/google/osv-scanner:v2\\.6\\.0${digest}$`));
+  assert.equal(images[1], images[0]);
+  assert.match(ci, /name: OSV-Scanner synthetic negative control/);
+  assert.match(ci, /osv-negative-control\.py check "\$status" "\$root\/report\.json"/);
+});
+
 const workflowsDir = resolve(root, ".github/workflows");
 const workflows = readdirSync(workflowsDir)
   .filter((name) => /\.ya?ml$/.test(name))
