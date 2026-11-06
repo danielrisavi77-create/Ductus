@@ -1,14 +1,18 @@
 import pg from "pg";
 
+import { createBackchannelLogout, type BackchannelLogout } from "./backchannel-logout";
 import { assertNoParameterLogging, withLogCheck } from "./log-settings";
 import { createOpenSession, type OpenSession } from "./open-session";
 import { createWithActor, type WithActor } from "./with-actor";
 
+export type { BackchannelLogout, BackchannelLogoutInput, BackchannelLogoutResult } from "./backchannel-logout";
 export type { OpenSessionInput, OpenSessionResult } from "./open-session";
 export type { ActorTransaction, WithActor } from "./with-actor";
 
 let appWithActor: WithActor | undefined;
+let authPool: pg.Pool | undefined;
 let authOpenSession: OpenSession | undefined;
+let authBackchannelLogout: BackchannelLogout | undefined;
 
 // Limits of the web process pool. Every wait has an end, so a stuck request
 // fails instead of holding a connection or a caller for good.
@@ -118,21 +122,32 @@ export const withActor: WithActor = async (token, fn) => {
   return appWithActor(token, fn);
 };
 
-// AUTH_DATABASE_URL is the login of the login callback: a member of
-// ductus_auth and nothing else (docs/BACKEND.md 4.3; ductus_auth_local in
-// the local stack). Logins are rare and each is one statement, so the pool is
-// small. Without the variable no session can be opened.
-function connectAuth(): OpenSession {
+// AUTH_DATABASE_URL is the login of the login callback and of the
+// back-channel logout route: a member of ductus_auth and nothing else
+// (docs/BACKEND.md 4.3; ductus_auth_local in the local stack). Both are rare
+// and each is one statement, so they share one small pool. Without the
+// variable no session can be opened or closed this way.
+function connectAuth(): pg.Pool {
+  if (authPool) return authPool;
   const connectionString = process.env.AUTH_DATABASE_URL;
   if (!connectionString) {
     throw new Error("AUTH_DATABASE_URL is not set; login stays closed");
   }
-  const pool = new pg.Pool({ ...appPoolConfig(connectionString), max: 2 });
-  return createOpenSession(handleConnectionErrors(pool));
+  authPool = handleConnectionErrors(new pg.Pool({ ...appPoolConfig(connectionString), max: 2 }));
+  return authPool;
 }
 
 /** Opens a session for a verified login; only the login callback calls it. */
 export const openSession: OpenSession = async (input) => {
-  authOpenSession ??= connectAuth();
+  authOpenSession ??= createOpenSession(connectAuth());
   return authOpenSession(input);
+};
+
+/**
+ * Closes the sessions a verified logout token names (DAN-474); only the
+ * back-channel logout route calls it.
+ */
+export const backchannelLogout: BackchannelLogout = async (input) => {
+  authBackchannelLogout ??= createBackchannelLogout(connectAuth());
+  return authBackchannelLogout(input);
 };

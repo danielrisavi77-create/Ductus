@@ -60,12 +60,6 @@
     "ticket": "DAN-314"
   },
   {
-    "function": "identity.backchannel_logout",
-    "status": "ruta dolazi",
-    "reason": "Back-channel odjava pružatelja (D-200 P4); RPC postoji samo za ductus_auth, ruta POST /api/auth/backchannel-logout dolazi u drugom PR-u istog zadatka.",
-    "ticket": "DAN-474"
-  },
-  {
     "function": "identity.close_all_sessions_for_identity",
     "status": "ruta dolazi",
     "reason": "Odjava sa svih uređaja (close_reason logout_all); RPC postoji za ductus_app, ruta još nije spojena.",
