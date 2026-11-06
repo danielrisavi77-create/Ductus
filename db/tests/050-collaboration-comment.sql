@@ -75,8 +75,10 @@ SELECT bag_eq(
   $$ VALUES ('collaboration.create_comment(text,text,jsonb)'), ('collaboration.reply_comment(uuid,text)'),
             ('collaboration.resolve_thread(uuid)'), ('collaboration.reopen_thread(uuid)'),
             ('collaboration.list_comments(text)'), ('collaboration.publish_live_state(text,uuid,text)'),
-            ('collaboration.read_live_state(text,text)') $$,
-  'the web role executes exactly the five comment RPCs and the two live RPCs of 051');
+            ('collaboration.read_live_state(text,text)'),
+            ('collaboration.create_revision_request(text,jsonb,text,bigint)'),
+            ('collaboration.list_revision_requests(text)') $$,
+  'the web role executes exactly the five comment RPCs, the two live RPCs of 051 and the two revision-request RPCs of 110');
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.oid IN ('collaboration.create_comment(text,text,jsonb)'::regprocedure,

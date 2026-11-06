@@ -15,9 +15,20 @@
     "reason": "Interni zapis revizijskog traga bez EXECUTE za aplikacijske uloge; zovu ga RPC-ovi koji imaju rutu."
   },
   {
+    "function": "collaboration.create_revision_request",
+    "status": "ruta dolazi",
+    "reason": "Nastavnik otvara zahtjev za doradu na odlomku (§4.14, D-45); RPC postoji za ductus_app, ruta je korak 3 iz §4.14.",
+    "ticket": "DAN-314"
+  },
+  {
     "function": "collaboration.delete_live_state",
     "status": "bez rute",
     "reason": "Brisanje po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
+  },
+  {
+    "function": "collaboration.delete_revision_requests",
+    "status": "bez rute",
+    "reason": "Brisanje zahtjeva za doradu jednog dokumenta po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
   },
   {
     "function": "collaboration.set_thread_state",
