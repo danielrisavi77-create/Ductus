@@ -47,8 +47,9 @@ const GENERATOR_LOADERS: [RegExp, string][] = [
 // The reader needs no path, argument or global at all, so any of these names fails it.
 const READER_LOADERS: [RegExp, string][] = [
   [/\brequire\b/, "require"], [/\bcreateRequire\b/, "createRequire"], [/\bimport\s*\.\s*meta\b/, "import.meta"],
-  ...["process", "globalThis", "global", "getBuiltinModule", "fetch", "WebSocket", "XMLHttpRequest", "eval", "Function", "Reflect"]
-    .map((n): [RegExp, string] => [new RegExp(`\\b${n}\\b`), n]),
+  [/\bprocess\b/, "process"], [/\bglobalThis\b/, "globalThis"], [/\bglobal\b/, "global"],
+  [/\bgetBuiltinModule\b/, "getBuiltinModule"], [/\bfetch\b/, "fetch"], [/\bWebSocket\b/, "WebSocket"],
+  [/\bXMLHttpRequest\b/, "XMLHttpRequest"], [/\beval\b/, "eval"], [/\bFunction\b/, "Function"], [/\bReflect\b/, "Reflect"],
 ];
 const OTHER_DEP_FIELDS = ["devDependencies", "optionalDependencies", "peerDependencies", "peerDependenciesMeta",
   "bundleDependencies", "bundledDependencies", "overrides", "resolutions", "workspaces"];

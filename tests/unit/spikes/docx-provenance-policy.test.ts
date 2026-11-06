@@ -225,6 +225,12 @@ describe("reader pin (A13)", () => {
       'const u = import.meta.url;', 'require("node:http");', 'new Function("return 1")();', 'eval("1");', 'Reflect.get(global, "x");'])
       expect(checkReaderImports(OK_READER + line), line).not.toEqual([]);
   });
+  it("each forbidden name fails the reader import check on its own, under its own name", () => {
+    for (const name of ["require", "createRequire", "process", "globalThis", "global", "getBuiltinModule", "fetch", "WebSocket",
+      "XMLHttpRequest", "eval", "Function", "Reflect"])
+      expect(checkReaderImports(`${OK_READER}void ${name};\n`), name).toContain(`reader uses ${name}`);
+    expect(checkReaderImports(`${OK_READER}const u = import.meta;\n`)).toContain("reader uses import.meta");
+  });
 });
 
 const OK_GEN = 'import { writeFileSync } from "node:fs";\nimport { join } from "node:path";\nimport { zipSync, strToU8 } from "fflate";\n';
