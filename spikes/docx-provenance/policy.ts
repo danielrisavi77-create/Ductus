@@ -1,6 +1,6 @@
 // M8.8-P01 (DAN-435), attack plan #1597: the reviewed dependency set of this
 // spike and the static checks that hold the manifest, the npm lockfile and the
-// offline generator to it. A review aid that fails loudly, not a sandbox:
+// offline generator (pinned by content hash) to it. A review aid that fails loudly, not a sandbox:
 // runtime isolation of parsing is ARCHITECTURE §5c and M8.8-P02.
 
 export type Reviewed = { name: string; version: string; integrity: string; license: string; published: string; direct: boolean };
@@ -20,17 +20,20 @@ export const REVIEWED: readonly Reviewed[] = [
 // (the test keeps it a subset). A licence outside it needs an owner decision.
 export const ALLOWED_LICENSES = ["MIT", "ISC", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "0BSD"];
 
-// Modules the generator may load; network, process, worker and vm modules are not here.
+// The generator is pinned to the exact bytes reviewed in #1600 (orchestrator c.6676693291): a list of
+// forbidden forms cannot be completed by text checks, a content hash can. Any change to gen.mjs fails
+// here and needs a new review that updates this pin in the same PR.
+export const GENERATOR_PIN = {
+  path: "spikes/docx-provenance/gen.mjs",
+  sha256: "ac94b45086a170ab94ce2f98c754d75ec7f0b48aaaf8a1814d7266fdd338049d",
+  reason: "pregledano u #1600",
+} as const;
+// Modules the generator may load statically; network, process, worker and vm modules are not here.
 const GENERATOR_IMPORTS = new Set(["node:fs", "node:path", "node:url", ...REVIEWED.filter((p) => p.direct).map((p) => p.name)]);
-const GENERATOR_FORBIDDEN: [RegExp, string][] = [
-  [/\bimport\s*\(/, "dynamic import()"], [/\brequire\b/, "require"], [/\bfetch\b/, "fetch"], [/\bWebSocket\b/, "WebSocket"],
-  [/\bXMLHttpRequest\b|\bEventSource\b/, "browser network API"], [/\beval\b|\bFunction\s*\(/, "code generation"],
-  [/\bprocess\s*\.\s*(?:binding|dlopen)\b/, "native binding"], [/\bglobalThis\s*\[/, "computed global access"],
-  // process.getBuiltinModule loads any builtin without import: process is allowed only as process.argv,
-  // and the globals and reflection that reach it without its name are not allowed at all.
-  [/\bprocess\b(?!\s*\.\s*argv\b)/, "process other than process.argv"], [/\bgetBuiltinModule\b/, "builtin module loader"],
-  [/\bglobalThis\b|\bglobal\b|\bReflect\b/, "global object or reflection"],
-  [/\bcreateRequire\b/, "createRequire"], [/\bimport\s*\.\s*meta\b(?!\s*\.\s*url\b)/, "import.meta other than import.meta.url"],
+// Module loaders other than a static import statement.
+const GENERATOR_LOADERS: [RegExp, string][] = [
+  [/\brequire\b/, "require"], [/\bcreateRequire\b/, "createRequire"],
+  [/\bimport\s*\.\s*meta\b(?!\s*\.\s*url\b)/, "import.meta other than import.meta.url"],
 ];
 const OTHER_DEP_FIELDS = ["devDependencies", "optionalDependencies", "peerDependencies", "peerDependenciesMeta",
   "bundleDependencies", "bundledDependencies", "overrides", "resolutions", "workspaces"];
@@ -101,12 +104,48 @@ export function checkLockfile(lock: unknown, pkg: unknown): string[] {
   return errors;
 }
 
-export function checkGenerator(source: string): string[] {
-  if (!source.trim()) return ["generator is empty"];
-  const errors = GENERATOR_FORBIDDEN.filter(([re]) => re.test(source)).map(([, what]) => `generator uses ${what}`);
+// SHA-256 (FIPS 180-4) without imports, so the policy stays free of modules; the test checks it against node:crypto.
+const PRIMES: number[] = [];
+for (let n = 2; PRIMES.length < 64; n++) if (PRIMES.every((q) => n % q !== 0)) PRIMES.push(n);
+const frac32 = (x: number) => Math.floor((x - Math.floor(x)) * 2 ** 32) >>> 0;
+const K = PRIMES.map((p) => frac32(Math.cbrt(p)));
+const H0 = PRIMES.slice(0, 8).map((p) => frac32(Math.sqrt(p)));
+const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
+
+export function sha256Hex(bytes: Uint8Array): string {
+  const len = bytes.length;
+  const block = new Uint8Array(Math.ceil((len + 9) / 64) * 64);
+  block.set(bytes);
+  block[len] = 0x80;
+  const view = new DataView(block.buffer);
+  view.setUint32(block.length - 8, Math.floor(len / 2 ** 29));
+  view.setUint32(block.length - 4, (len * 8) >>> 0);
+  const h = [...H0];
+  const w = new Uint32Array(64);
+  for (let off = 0; off < block.length; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+    }
+    let [a, b, c, d, e, f, g, k] = h;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (k + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) >>> 0;
+      const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      [k, g, f, e, d, c, b, a] = [g, f, e, (d + t1) >>> 0, c, b, a, (t1 + t2) >>> 0];
+    }
+    [a, b, c, d, e, f, g, k].forEach((x, i) => { h[i] = (h[i] + x) >>> 0; });
+  }
+  return h.map((x) => x.toString(16).padStart(8, "0")).join("");
+}
+
+/** Static import checks: every import is a recognised statement of an allowed module, no other loader, no re-export. */
+export function checkGeneratorImports(source: string): string[] {
+  const errors = GENERATOR_LOADERS.filter(([re]) => re.test(source)).map(([, what]) => `generator uses ${what}`);
   const specifiers = [...source.matchAll(/\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']/g)].map((m) => m[1] ?? m[2]);
   for (const s of specifiers) if (!GENERATOR_IMPORTS.has(s)) errors.push(`generator imports ${s}`);
-  // Every import keyword must be a statement the patterns above understood.
+  // Every import keyword must be a statement the patterns above understood; this also rejects import().
   const keywords = source.match(/\bimport\b(?!\s*\.\s*meta)/g)?.length ?? 0;
   const statements = source.match(/\bimport\s+(?:[\w*{}\s,$]+?\s+from\s*)?["'][^"']+["']|\bimport\s*["'][^"']+["']/g)?.length ?? 0;
   if (keywords !== statements) errors.push("generator has an import the check does not recognise");
@@ -115,7 +154,20 @@ export function checkGenerator(source: string): string[] {
   return errors;
 }
 
-export type SpikeFiles = { manifest: string; lockfile: string; generator: string };
+/** The generator must be byte for byte the pinned reviewed file (bytes as stored, LF) and pass the import checks. */
+export function checkGenerator(generator: string | Uint8Array): string[] {
+  const bytes = typeof generator === "string" ? new TextEncoder().encode(generator) : generator;
+  if (bytes.length === 0) return ["generator is empty"];
+  const errors: string[] = [];
+  const digest = sha256Hex(bytes);
+  if (digest !== GENERATOR_PIN.sha256) {
+    errors.push(`${GENERATOR_PIN.path} has sha256 ${digest}, not the pinned ${GENERATOR_PIN.sha256} (${GENERATOR_PIN.reason}): `
+      + "a change to the generator needs a new review and a new pin");
+  }
+  return [...errors, ...checkGeneratorImports(new TextDecoder().decode(bytes))];
+}
+
+export type SpikeFiles = { manifest: string; lockfile: string; generator: string | Uint8Array };
 const parse = (text: string, what: string, errors: string[]): unknown => {
   try { return JSON.parse(text); } catch { errors.push(`${what} is not JSON`); return undefined; }
 };

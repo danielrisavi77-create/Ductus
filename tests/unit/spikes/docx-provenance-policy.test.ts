@@ -2,20 +2,21 @@
 // M8.8-P01 (DAN-435), attack plan #1597: the reviewed dependency set of
 // spikes/docx-provenance. Static checks over the manifest, the npm lockfile
 // and the offline generator; nothing here installs or runs the spike.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
-  ALLOWED_LICENSES, REVIEWED, checkGenerator, checkLockfile, checkManifest, checkSpike,
-  isExactVersion, licenseError, type SpikeFiles,
+  ALLOWED_LICENSES, GENERATOR_PIN, REVIEWED, checkGenerator, checkGeneratorImports, checkLockfile, checkManifest, checkSpike,
+  isExactVersion, licenseError, sha256Hex, type SpikeFiles,
 } from "../../../spikes/docx-provenance/policy";
 
 const DIR = "spikes/docx-provenance";
-const real: SpikeFiles = {
+const real = {
   manifest: readFileSync(`${DIR}/package.json`, "utf8"),
   lockfile: readFileSync(`${DIR}/package-lock.json`, "utf8"),
   generator: readFileSync(`${DIR}/gen.mjs`, "utf8"),
-};
+} satisfies SpikeFiles;
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const manifest = (): Json => JSON.parse(real.manifest);
 const lock = (): Json => JSON.parse(real.lockfile);
@@ -48,11 +49,11 @@ describe("real spike files (A18)", () => {
   it("does not need the spike installed: policy imports nothing, this test no spike package", () => {
     expect(readFileSync(`${DIR}/policy.ts`, "utf8")).not.toMatch(/^\s*(?:import|export)\b[^\n]*\bfrom\b|^\s*import\s*["']/m);
     const own = [...readFileSync(new URL(import.meta.url), "utf8").matchAll(/^import[^"']*["']([^"']+)["']/gm)].map((m) => m[1]);
-    expect(own.sort()).toEqual(["../../../spikes/docx-provenance/policy", "fast-check", "node:fs", "vitest"]);
+    expect(own.sort()).toEqual(["../../../spikes/docx-provenance/policy", "fast-check", "node:crypto", "node:fs", "vitest"]);
   });
   it("gen.mjs is the only script in the spike and may not import a local file (A13)", () => {
     expect(readdirSync(DIR).filter((f) => /\.[cm]?[jt]sx?$/.test(f)).sort()).toEqual(["gen.mjs", "policy.ts"]);
-    expect(checkGenerator(`import { buildDocx } from "./gen.mjs";\n`)).not.toEqual([]);
+    expect(checkGeneratorImports(`import { buildDocx } from "./gen.mjs";\n`)).toContain("generator imports ./gen.mjs");
   });
   it("root manifests do not carry the spike dependencies (A17)", () => {
     const root = readFileSync("package.json", "utf8");
@@ -139,9 +140,57 @@ describe("licence expressions (A10)", () => {
     "rejects %j", (l) => expect(licenseError(l)).not.toBeNull());
 });
 
+// The generator is pinned to the reviewed bytes (orchestrator c.6676693291).
+const GEN_BYTES = readFileSync(`${DIR}/gen.mjs`);
+const PIN_ERROR = "a change to the generator needs a new review";
+const pinFails = (errors: string[]) => errors.some((e) => e.includes(PIN_ERROR) && e.includes(GENERATOR_PIN.reason));
+const appended = (line: string) => `${real.generator}${line}\n`;
+describe("generator pin (A13)", () => {
+  it("the real gen.mjs passes, as bytes and as text, and the pin is its node:crypto sha256", () => {
+    expect(checkGenerator(GEN_BYTES)).toEqual([]);
+    expect(checkGenerator(real.generator)).toEqual([]);
+    expect(createHash("sha256").update(GEN_BYTES).digest("hex")).toBe(GENERATOR_PIN.sha256);
+    expect(GENERATOR_PIN.path).toBe(`${DIR}/gen.mjs`);
+    expect(GEN_BYTES.includes(0x0d)).toBe(false);
+  });
+  it("a change of any one byte fails with the new review message", () => {
+    fc.assert(fc.property(fc.nat(GEN_BYTES.length - 1), fc.integer({ min: 1, max: 255 }), (at, delta) => {
+      const b = Uint8Array.from(GEN_BYTES);
+      b[at] = (b[at] + delta) % 256;
+      return pinFails(checkGenerator(b));
+    }), { numRuns: 300 });
+    expect(pinFails(checkGenerator(GEN_BYTES.subarray(0, -1)))).toBe(true);
+    expect(pinFails(checkGenerator(Buffer.concat([GEN_BYTES, Buffer.from("\n")])))).toBe(true);
+    expect(pinFails(checkGenerator(real.generator.replaceAll("\n", "\r\n")))).toBe(true);
+  });
+  it("a disallowed specifier fails the import check as well as the pin", () => {
+    const swapped = real.generator.replace('from "fflate"', 'from "node:https"');
+    expect(swapped).not.toBe(real.generator);
+    const errors = checkGenerator(swapped);
+    expect(pinFails(errors)).toBe(true);
+    expect(errors).toContain("generator imports node:https");
+    expect(checkGenerator(appended('import x from "jszip";'))).toContain("generator imports jszip");
+  });
+  it("sha256Hex matches node:crypto", () => {
+    expect(sha256Hex(new Uint8Array())).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    expect(sha256Hex(new TextEncoder().encode("abc"))).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    fc.assert(fc.property(fc.uint8Array({ maxLength: 300 }), (b) => sha256Hex(b) === createHash("sha256").update(b).digest("hex")));
+  });
+});
+
 const OK_GEN = 'import { writeFileSync } from "node:fs";\nimport { join } from "node:path";\nimport { zipSync, strToU8 } from "fflate";\n';
+// Every form from earlier findings fails appended to the real gen.mjs, through the pin; a form that loads a
+// module (import, export, require) also fails the import check on its own.
+const LOADS_MODULE = /\b(?:import|export|require|createRequire)\b/;
+const rejects = (line: string) => {
+  expect(pinFails(checkGenerator(appended(line))), line).toBe(true);
+  if (LOADS_MODULE.test(line)) expect(checkGeneratorImports(OK_GEN + line), line).not.toEqual([]);
+};
 describe("generator imports (A13, A14)", () => {
-  it("accepts the allowed imports", () => expect(checkGenerator(OK_GEN)).toEqual([]));
+  it("accepts the allowed imports, and only the pinned file passes the whole check", () => {
+    expect(checkGeneratorImports(OK_GEN)).toEqual([]);
+    expect(pinFails(checkGenerator(OK_GEN))).toBe(true);
+  });
   it.each([
     'import http from "node:http";', 'import "https";', 'import { connect } from "node:net";', 'import tls from "node:tls";',
     'import dns from "node:dns";', 'import dgram from "node:dgram";', 'import h2 from "node:http2";', 'import cp from "node:child_process";',
@@ -154,9 +203,9 @@ describe("generator imports (A13, A14)", () => {
     // Re-exports load a module too; a comment must not hide the specifier (review c.6675616322, QA c.6675637491).
     'export * from /* c */ "node:child_process";', 'export /* c */ * from "node:net";', 'export * as n from // c\n "node:vm";',
     'export { a } from /* c */ "node:http";', 'export { request } from/**/"node:https";', 'export { buildDocx };',
-  ])("rejects %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  ])("rejects %j", (line) => rejects(line));
   it("accepts exported declarations", () =>
-    expect(checkGenerator(OK_GEN + "export const A = 1;\nexport function b() {}\nexport async function c() {}\nexport\n  class D {}\n")).toEqual([]));
+    expect(checkGeneratorImports(OK_GEN + "export const A = 1;\nexport function b() {}\nexport async function c() {}\nexport\n  class D {}\n")).toEqual([]));
   it("rejects an empty generator", () => expect(checkGenerator("")).not.toEqual([]));
 });
 
@@ -171,16 +220,16 @@ describe("generator import and export classes (A13)", () => {
   const fill = (form: string, gap: string, mod: string) => form.replaceAll("_", gap).replace("M", mod);
   const cases = (forms: string[], gaps: string[], mod: string) => forms.flatMap((f) => gaps.map((g) => fill(f, g, mod)));
   it.each(cases(LOADS, GAPS, "node:https"))("rejects a forbidden module in %j", (line) =>
-    expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+    rejects(line));
   it.each(cases(LOADS.filter((f) => f.startsWith("export")), GAPS, "fflate"))("rejects a re-export in %j", (line) =>
-    expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+    rejects(line));
   it.each(cases(['export_{ a };', 'export_{ a as b };', 'export_default_a;', 'export_default_function () {}'], GAPS, ""))(
-    "rejects a non-declaration export in %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+    "rejects a non-declaration export in %j", (line) => rejects(line));
   it.each(cases(LOADS.slice(0, 7), [" ", "\n  "], "fflate"))("accepts an allowed module in %j", (line) =>
-    expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+    expect(checkGeneratorImports(OK_GEN + line), line).toEqual([]));
   it.each(cases(["export_const A = 1;", "export_let b = 1;", "export_var c = 1;", "export_function d() {}",
     "export_async function e() {}", "export_class F {}"], [" ", "\n  "], ""))("accepts the declaration %j", (line) =>
-    expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+    expect(checkGeneratorImports(OK_GEN + line), line).toEqual([]));
 });
 
 // A builtin module is reachable without import through process (QA c.6676181719): only process.argv is allowed,
@@ -193,21 +242,21 @@ describe("generator builtin loaders (A13)", () => {
     'process.binding("tcp_wrap");', 'process.dlopen(m, "x.node");', 'process.env.HTTPS_PROXY;', 'process.mainModule;',
     'globalThis.process.getBuiltinModule("node:https");', 'globalThis.fetch("x");', 'global["pro" + "cess"];',
     'Reflect.get(globalThis, "pro" + "cess");', 'const g = getBuiltinModule;',
-  ])("rejects %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  ])("rejects %j", (line) => rejects(line));
   it.each(['const out = process.argv[2] ?? "out";', 'if (process.argv[1]) {}', 'const a = process\n  .argv;',
     'const self = fileURLToPath(import.meta.url);'])(
-    "accepts %j", (line) => expect(checkGenerator(OK_GEN + line), line).toEqual([]));
+    "accepts %j", (line) => expect(checkGeneratorImports(OK_GEN + line), line).toEqual([]));
   // Classes from the orchestrator's round 2 contract (c.6676289617).
   it.each([
     'const h = require("node:http");', 'module.createRequire(import.meta.url)("node:http");', 'const r = createRequire(x);',
     'import.meta.resolve("node:http");', 'import . meta . resolve("node:https");', 'eval("1");', 'new Function("return 1")();',
     'const p = process; p.getBuiltinModule("node:http");',
-  ])("rejects %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+  ])("rejects %j", (line) => rejects(line));
   const NET_PROC = ["http", "https", "net", "tls", "dgram", "dns", "child_process", "worker_threads", "cluster"];
   const LOADERS = ['import m from "M";', 'import * as m from "M";', 'import "M";', 'export * from "M";', 'await import("M");',
     'require("M");', 'process.getBuiltinModule("M");', 'globalThis.process.getBuiltinModule("M");'];
   it.each(NET_PROC.flatMap((m) => [m, `node:${m}`]).flatMap((m) => LOADERS.map((l) => l.replace("M", m))))(
-    "rejects a network or process module in %j", (line) => expect(checkGenerator(OK_GEN + line), line).not.toEqual([]));
+    "rejects a network or process module in %j", (line) => rejects(line));
 });
 
 describe("exact version property", () => {
