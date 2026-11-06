@@ -583,8 +583,11 @@ export function LocalDocumentProvider({
 
   // A change between writing and the teacher view (#882): the run's own
   // publisher stops at once, an answer in flight included, and starts again
-  // only while this run may still write.
-  useEffect(() => {
+  // only while this run may still write. A layout effect, so the stop happens
+  // in the same commit that shows the teacher view: a passive effect could run
+  // after a publisher timer that falls due in between, and that timer would
+  // start a PUT the view no longer allows.
+  useLayoutEffect(() => {
     const publisher = publisherRef.current;
     if (!publisher) return;
     const action = livePublishAction({ held: publishHeld, writable: readyRef.current, halted: publisher.halted() });

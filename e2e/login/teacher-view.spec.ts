@@ -307,6 +307,84 @@ test("switching to the teacher view holds the waiting state, and the return to w
   expect(opens).toEqual([]);
 });
 
+type Boundary = { armed: boolean; set: number; log: string[] };
+
+/**
+ * In the page, before any of its code: from `arm` on, every timer is kept, and
+ * the moment the teacher link is marked current they all run at once, as if
+ * they fell due in that very commit (timers they set run too, up to a bound).
+ * Calls to fetch with PUT to the live route are logged in page order, so the
+ * log shows whether one started after the teacher view was shown (#882).
+ */
+function boundaryProbe(): void {
+  const state: Boundary = { armed: false, set: 0, log: [] };
+  (window as unknown as { __boundary: Boundary }).__boundary = state;
+  const nativeSet = window.setTimeout.bind(window);
+  const nativeClear = window.clearTimeout.bind(window);
+  const due = new Map<number, () => void>();
+  let capture = false;
+  window.setTimeout = ((handler: TimerHandler, ms?: number, ...args: unknown[]) => {
+    if (!(state.armed || capture) || typeof handler !== "function") return nativeSet(handler, ms, ...args);
+    state.set += 1;
+    const run = () => (handler as (...rest: unknown[]) => void)(...args);
+    const id = nativeSet(() => { due.delete(id); run(); }, ms);
+    due.set(id, run);
+    return id;
+  }) as typeof window.setTimeout;
+  window.clearTimeout = ((id?: number) => {
+    if (id !== undefined) due.delete(id);
+    nativeClear(id);
+  }) as typeof window.clearTimeout;
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+    if (method === "PUT" && /^\/api\/live\/[^/]+$/.test(url.pathname)) state.log.push("put");
+    return nativeFetch(input, init);
+  };
+  new MutationObserver(() => {
+    if (!state.armed || !document.querySelector('a[href*="prikaz=nastavnik"][aria-current="page"]')) return;
+    state.armed = false;
+    state.log.push("held");
+    capture = true;
+    for (let runs = 0; due.size > 0 && runs < 50; runs += 1) {
+      const [id, run] = due.entries().next().value as [number, () => void];
+      due.delete(id);
+      nativeClear(id);
+      run();
+    }
+    capture = false;
+  }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-current"] });
+}
+
+const boundaryOf = (page: Page): Promise<Boundary> =>
+  page.evaluate(() => (window as unknown as { __boundary: Boundary }).__boundary);
+
+test("a publisher timer that falls due as the teacher view is shown starts no PUT", async ({ page }) => {
+  await page.addInitScript(boundaryProbe);
+  await signIn(page, "/rad");
+  const { assignment, documentId } = await writeWork(page);
+  const puts = recordPuts(page);
+  const answered = page.waitForResponse((response) =>
+    isPut(response.request()) && (response.request().postData() ?? "").includes("piše"));
+  await page.keyboard.type(" piše");
+  await answered;
+  // Within a second of the last start, so this state waits on a timer.
+  await page.evaluate(() => { (window as unknown as { __boundary: Boundary }).__boundary.armed = true; });
+  await page.keyboard.type(" čeka");
+  await toTeacherView(page, assignment);
+  await page.waitForTimeout(2500);
+
+  const { set, log } = await boundaryOf(page);
+  expect(set).toBeGreaterThan(0);
+  expect(log).toContain("held");
+  expect(log.slice(log.indexOf("held"))).toEqual(["held"]);
+  expect(puts.filter((put) => put.body.includes("čeka"))).toEqual([]);
+
+  await toWriting(page, assignment);
+  await expect.poll(() => liveBody(page, documentId), { timeout: OPEN }).toContain("čeka");
+});
+
 test("a request in flight is aborted by the switch to the teacher view and is not sent again there", async ({ page }) => {
   // The route's answers are the test's: the request is held long enough to switch.
   await page.route((url) => /^\/api\/live\/[^/]+$/.test(url.pathname), async (route) => {
