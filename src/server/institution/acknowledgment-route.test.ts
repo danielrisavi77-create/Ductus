@@ -132,6 +132,11 @@ describe("DAN-306 acknowledgment with the notice fingerprint", () => {
     expect(calls).toEqual([]);
   });
 
+  // singleKeys is a deliberately strict rule for this one body, not a general
+  // JSON parser: any backslash, or any quote count other than the six that
+  // {"versionNo":n,"fingerprint":"hex"} has, is refused, which also refuses a
+  // repeated or escaped key. A canonical JSON.stringify comparison would be
+  // exact too, but would refuse whitespace and either key order (last test).
   it.each([
     ["B4: only the version, as an old client sends", JSON.stringify({ versionNo: 3 })],
     ["an unknown extra key", JSON.stringify({ versionNo: 3, fingerprint: FP, studentId: ID })],

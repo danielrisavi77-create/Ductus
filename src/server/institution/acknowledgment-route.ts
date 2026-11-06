@@ -36,7 +36,8 @@ function validInput(value: unknown): value is Input {
 // "fingerprint":B} would be read as B while a proxy or log reads A. A valid
 // body has two keys, two plain string keys and one string value: exactly six
 // quotes and no escape, so neither a repeat nor an escaped spelling of a key
-// (fingerpr\u0069nt) gets through.
+// (fingerpr\u0069nt) gets through. A strict rule for this body alone, not a
+// JSON parser.
 function singleKeys(text: string): boolean {
   return !text.includes("\\") && text.split('"').length === 7;
 }
