@@ -16,6 +16,12 @@ const REDIRECT_URIS = redirectUriList(process.env.REDIRECT_URI, DEFAULT_REDIRECT
 // The one address the provider sends the browser back to after its logout
 // (DAN-212), as AAI@EduHr accepts only the registered one.
 const POST_LOGOUT_REDIRECT_URIS = redirectUriList(process.env.POST_LOGOUT_REDIRECT_URI, DEFAULT_POST_LOGOUT_REDIRECT_URIS);
+// Where the provider posts a logout token when its session ends (DAN-474,
+// OpenID Connect Back-Channel Logout). The app on the host by default; a
+// provider in a container needs an address that reaches the app.
+const BACKCHANNEL_LOGOUT_URI = new URL(
+  process.env.BACKCHANNEL_LOGOUT_URI ?? "http://localhost:3000/api/auth/backchannel-logout",
+).href;
 
 const provider = new Provider(ISSUER, {
   clients: [
@@ -24,6 +30,9 @@ const provider = new Provider(ISSUER, {
       client_secret: "ductus-local-only",
       redirect_uris: REDIRECT_URIS,
       post_logout_redirect_uris: POST_LOGOUT_REDIRECT_URIS,
+      backchannel_logout_uri: BACKCHANNEL_LOGOUT_URI,
+      // The ID token and the logout token carry `sid` only with this set.
+      backchannel_logout_session_required: true,
       token_endpoint_auth_method: "client_secret_basic",
     },
   ],
@@ -31,6 +40,7 @@ const provider = new Provider(ISSUER, {
   cookies: { keys: ["ductus-fake-oidc-local-only"] },
   features: {
     devInteractions: { enabled: false },
+    backchannelLogout: { enabled: true },
     // RP-initiated logout (DAN-212): "Demo odjava" ends this provider's session.
     rpInitiatedLogout: {
       enabled: true,
@@ -38,6 +48,17 @@ const provider = new Provider(ISSUER, {
         ctx.body = logoutPage(form);
       },
     },
+  },
+  // oidc-provider refuses outgoing requests to loopback and private addresses
+  // (SSRF protection); the app runs on one here. Only the one configured
+  // back-channel address goes without that check.
+  fetch(url, options) {
+    if (new URL(url).href === BACKCHANNEL_LOGOUT_URI) {
+      const rest = { ...options };
+      delete rest.dispatcher;
+      return globalThis.fetch(url, rest);
+    }
+    return globalThis.fetch(url, options);
   },
   interactions: { url: (_ctx, interaction) => `/interaction/${interaction.uid}` },
   claims: {
