@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J-05 — Stanje sustava i izjava o pristupačnosti (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 17 · DAN-584 · prijedlog slike · M11.UX-R</div>
+  <h1>J-05 — Stanje sustava i izjava o pristupačnosti</h1>
+  <p>Dvije javne stranice bez prijave. Prototipa nemaju; složene su po ugovoru iz <code>docs/design/EKRANI.md</code> od dijelova <code>../m5-reference</code>. Stanje prikazuje samo rezultate provjera koje Ductura sama izvodi (D-277 NQ10). Izjava slijedi cilj WCAG 2.2 AA i EN 301 549 (D-276); dijelovi koji još nisu poznati označeni su kao otvoreni. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Stanje sustava</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Svi dijelovi rade.</p>
+        <div>
+          <div class="comp"><span>Pisanje i slanje na poslužitelj</span><span class="state up">Radi</span></div>
+          <div class="comp"><span>Prijava sustavom AAI@EduHr (pruža Srce)</span><span class="state up">Radi</span></div>
+          <div class="comp"><span>Predaja rada</span><span class="state up">Radi</span></div>
+          <div class="comp"><span>Prikaz za mentora</span><span class="state up">Radi</span></div>
+        </div>
+        <p class="meta">Zadnja provjera: 6. 3. 2027. u 14:10. Stanje prikazuje rezultate provjera koje Ductura sama izvodi.</p>
+      </div>
+    </div>
+    <p class="meta">Stanje se razlikuje bojom i riječju; boja nikad nije jedini znak.</p>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="incident-u-tijeku">
+    <div class="ref-tag">Stanje 2 · incident u tijeku</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t2">Stanje sustava</h2></div>
+      <div class="panel-body">
+        <div class="incident" role="status">
+          <b>Prikaz za mentora kasni</b>
+          <p class="note">Mentori vide promjene s kašnjenjem do 10 minuta. Pisanje i slanje na poslužitelj rade; Vaš tekst nije zahvaćen.</p>
+          <ol class="timeline">
+            <li><b>14:20</b> Uočeno kašnjenje prikaza za mentora.</li>
+            <li><b>14:35</b> Uzrok je pronađen; popravak je u tijeku.</li>
+          </ol>
+        </div>
+        <div>
+          <div class="comp"><span>Pisanje i slanje na poslužitelj</span><span class="state up">Radi</span></div>
+          <div class="comp"><span>Prikaz za mentora</span><span class="state part">Djelomično</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="incident-rijesen">
+    <div class="ref-tag">Stanje 3 · incident riješen</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t3">Stanje sustava</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Svi dijelovi rade.</p>
+        <div class="row">
+          <h3>Riješeno: prikaz za mentora kasnio je</h3>
+          <ol class="timeline">
+            <li><b>14:20</b> Uočeno kašnjenje prikaza za mentora.</li>
+            <li><b>14:35</b> Uzrok je pronađen; popravak je u tijeku.</li>
+            <li><b>15:02</b> Prikaz za mentora radi bez kašnjenja.</li>
+          </ol>
+        </div>
+        <p class="meta">Riješeni incident ostaje na popisu prošlih incidenata.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 4 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t4">Prošli incidenti</h2></div>
+      <div class="panel-body"><p class="note">Nema zabilježenih incidenata.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 5 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t5">Stanje sustava</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam rezultate provjera.</p><div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t6" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 6 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t6">Stanje sustava</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Rezultate provjera trenutačno nije moguće učitati. To ne znači da sustav ne radi.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="izjava" class="variant wide" data-state="izjava">
+    <div class="ref-tag">Stanje 7 · izjava o pristupačnosti</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="izjava">Izjava o pristupačnosti</h2></div>
+      <div class="panel-body decl">
+        <div class="hero">
+          <div class="stack">
+            <h3>Status usklađenosti</h3>
+            <p class="note">Ductura se gradi prema WCAG 2.2 razine AA i normi EN 301 549. <span class="open-mark">Ocjena usklađenosti: upisuje se nakon provjere pristupačnosti</span></p>
+            <h3>Nedostupan sadržaj</h3>
+            <ul>
+              <li>Obrazac za prijavu sustavom AAI@EduHr pruža Srce i nije dio Ducture. <span class="open-mark">Opis obrasca: otvoreno</span></li>
+            </ul>
+            <h3>Priprema izjave</h3>
+            <p class="note">Izjava je pripremljena 6. 3. 2027. prema samoprocjeni. <span class="open-mark">Datum i način provjere: otvoreno</span></p>
+          </div>
+          <div class="stack">
+            <h3>Povratne informacije i kontakt</h3>
+            <p class="note">Ako neki dio Ducture ne možete koristiti, javite nam se na [e-pošta podrške]. <span class="open-mark">Rok odgovora: otvoreno</span></p>
+            <button class="btn" type="button">Prijavi problem s pristupačnošću</button>
+            <h3>Postupak praćenja</h3>
+            <p class="note">Ako odgovor nije zadovoljavajući, možete se obratiti tijelu nadležnom za praćenje pristupačnosti. <span class="open-mark">Mjerodavni propis i tijelo: otvoreno</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="meta">„[e-pošta podrške]” je mjesto za adresu koja još nije određena. Rok odgovora, propis i tijelo za praćenje upisuju se kad se odredi mjerodavni propis (P-06).</p>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Stanje sustava, 2. poruka o stanju, 3. dijelovi sustava redom, 4. incident i vremenska crta, 5. Pokušaj ponovno u stanju greške, 6. naslov Izjava o pristupačnosti, 7. odjeljci izjave redom, 8. Prijavi problem s pristupačnošću.</p>
+</main>
+</body>
+</html>
