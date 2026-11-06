@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J-03 — Provjera potvrde (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 8 · DAN-569 · prijedlog slike · M7.10</div>
+  <h1>J-03 — Provjera potvrde predaje (putovnica)</h1>
+  <p>Javna stranica bez prijave. Otvara se iz QR koda na prenosivom zapisu ili izravno; u oba slučaja korisnik sam bira paket za provjeru (D-263 Q24). Potpis potvrde provjerava se u pregledniku, prema javnom registru ključeva Ducture (D-49, A-07, <code>docs/contracts/submission-receipt-v2.md</code>). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="p1">
+    <div class="ref-tag">Stanje 1 · prazno</div>
+    <div class="panel"><div class="panel-top pub"><h2 id="p1">Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
+      <div class="panel-body">
+        <p class="note">Provjerite je li potvrda predaje izdana u Ducturi i je li neizmijenjena od izdavanja. Račun nije potreban.</p>
+        <div class="drop">
+          <p>Prenosivi zapis (PDF) ili potvrda (JSON)</p>
+          <button class="btn" type="button">Odaberi datoteku</button>
+          <p class="meta">QR kod s prenosivog zapisa otvara samo ovu stranicu. Zapis ili potvrdu odaberite sami; potvrda se ne dohvaća s poslužitelja.</p>
+        </div>
+        <div class="field"><label for="f1">Datoteka rada (neobavezno)</label>
+          <button id="f1" class="btn secondary" type="button">Odaberi DOCX ili PDF rada</button></div>
+        <p class="meta">Uz datoteku rada provjera uspoređuje i njezin otisak s otiskom zapisanim u potvrdi.</p>
+        <p class="foot">Datoteke se provjeravaju u ovom pregledniku i ne šalju se Ducturi. S poslužitelja se dohvaća samo javni registar ključeva.</p>
+      </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="p2">
+    <div class="ref-tag">Stanje 2 · podudara se (popunjeno)</div>
+    <div class="panel"><div class="panel-top pub"><h2 id="p2">Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
+      <div class="panel-body">
+        <div class="verdict" role="status"><b>Potpis se podudara.</b><span>Zapis je cjelovit i neizmijenjen od primitka. Potvrdu je izdala Ductura ključem iz javnog registra.</span></div>
+        <dl class="pass">
+          <div><dt>Zahtjev predaje</dt><dd>2026-11-05T14:32:07.418203Z</dd></div>
+          <div><dt>Rok zadatka</dt><dd>2026-11-20T22:59:59.000000Z</dd></div>
+          <div><dt>Predano</dt><dd>na vrijeme</dd></div>
+          <div><dt>Potpisano</dt><dd>2026-11-05T14:32:09.071552Z</dd></div>
+          <div><dt>Zadatak</dt><dd>zad-7f3c · verzija 2</dd></div>
+          <div><dt>Rad</dt><dd>dok-19a0 · revizija 214</dd></div>
+          <div><dt>Otisak datoteke rada (SHA-256)</dt><dd>4be19c07a2f361d80e55b7c29a14f06e3d8b52c1e970aa4618f2c35d7b09e6a1</dd></div>
+          <div><dt>Ključ</dt><dd>ductura-potvrde · verzija 3 · valjan pri potpisu</dd></div>
+        </dl>
+        <p class="note">Datoteka rada: otisak se podudara s otiskom u potvrdi.</p>
+        <p class="meta">Vremena su vrijeme poslužitelja Ducture u UTC-u, ne vremenski žig treće strane.</p>
+        <p class="foot">Provjera pokazuje samo je li zapis mijenjan od primitka. Ne pokazuje tko je rad napisao.</p>
+      </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="p3">
+    <div class="ref-tag">Stanje 3 · ne podudara se (potpis; datoteka rada)</div>
+    <div class="panel"><div class="panel-top pub"><h2 id="p3">Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
+      <div class="panel-body">
+        <div class="verdict no" role="status"><b>Potpis se ne podudara.</b><span>Sadržaj potvrde nije onaj koji je Ductura potpisala, ili potvrda nije izdana ključem iz javnog registra.</span></div>
+        <dl class="pass">
+          <div><dt>Razlog</dt><dd>potpis ne odgovara sadržaju potvrde</dd></div>
+          <div><dt>Ključ</dt><dd>ductura-potvrde · verzija 3</dd></div>
+        </dl>
+        <p class="note">Ishod govori samo o ovoj datoteci potvrde, ne o radu ni o studentu. Ako je potvrda prenesena ili ispisana drugim alatom, provjerite izvorni PDF prenosivog zapisa.</p>
+        <button class="btn secondary" type="button">Provjeri drugu datoteku</button>
+        <p class="foot">Provjera pokazuje samo je li zapis mijenjan od primitka. Ne pokazuje tko je rad napisao.</p>
+      </div></div>
+    <div class="panel"><div class="panel-top pub"><h2>Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
+      <div class="panel-body">
+        <div role="status" style="display: contents">
+          <div class="verdict"><b>Potpis se podudara.</b><span>Potvrda je neizmijenjena od primitka.</span></div>
+          <div class="verdict no"><b>Datoteka rada se ne podudara.</b><span>Otisak odabrane datoteke rada nije otisak zapisan u potvrdi.</span></div>
+        </div>
+        <dl class="pass">
+          <div><dt>Otisak u potvrdi (SHA-256)</dt><dd>4be19c07a2f361d80e55b7c29a14f06e3d8b52c1e970aa4618f2c35d7b09e6a1</dd></div>
+          <div><dt>Otisak odabrane datoteke (SHA-256)</dt><dd>91d3a6f02c7be4185a0e66d2f7c93b18e4a50dc7f2196b3e8a07c5d14fb2e936</dd></div>
+        </dl>
+        <p class="note">Odabrana datoteka nije ona koja je predana uz ovu potvrdu, ili je mijenjana nakon predaje. Ishod ne govori o potvrdi ni o studentu.</p>
+        <button class="btn secondary" type="button">Odaberi drugu datoteku rada</button>
+        <p class="foot">Provjera pokazuje samo je li zapis mijenjan od primitka. Ne pokazuje tko je rad napisao.</p>
+      </div></div>
+    <p class="meta">Svaka provjera ima svoj redak: potpis, valjanost ključa i otisak datoteke rada. Ključ koji je opozvan ili vrijeme potpisa izvan razdoblja valjanosti ključa imaju zaseban naslov „Ključ nije bio valjan pri potpisu.” i tekst „Potvrda se ne prihvaća jer ključ kojim je potpisana nije bio valjan u vrijeme potpisa.”, u istom obliku kao gore, s retkom Razlog i rečenicom pravila 9.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p4">
+    <div class="ref-tag">Stanje 4 · učitavanje</div>
+    <div class="panel" aria-busy="true"><div class="panel-top pub"><h2 id="p4">Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
+      <div class="panel-body"><p class="note" role="status">Provjeravam potpis u pregledniku.</p><div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div></div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="p5">
+    <div class="ref-tag">Stanje 5 · greška</div>
+    <div class="panel"><div class="panel-top pub"><h2 id="p5">Provjera potvrde predaje</h2><span class="tag">Bez prijave</span></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Provjera nije dovršena: javni registar ključeva trenutačno nije dostupan. O potvrdi zato ništa nije zaključeno.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+        <p class="meta">Datoteka koja nije prenosivi zapis ni potvrda Ducture dobiva poruku „Ova datoteka ne sadrži potvrdu predaje.” i gumb Odaberi datoteku.</p>
+      </div></div>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): naslov, Odaberi datoteku, Odaberi DOCX ili PDF rada; nakon provjere fokus prelazi na ishod (status), zatim polja potvrde i Provjeri drugu datoteku ili Pokušaj ponovno.</p>
+</main>
+</body>
+</html>
