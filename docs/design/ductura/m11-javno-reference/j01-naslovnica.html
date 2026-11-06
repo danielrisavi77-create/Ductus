@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J-01 — Naslovnica (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 17 · DAN-584 · prijedlog slike · M11.UX-R</div>
+  <h1>J-01 — Naslovnica</h1>
+  <p>Javna stranica na adresi Ducture. Raspored je iz <code>../prijava-v5.dc.html</code> (ime, rečenica o proizvodu, prijava, uzorak lista), prebojan u papir i grafit. Prijava je samo sustavom AAI@EduHr (D-09). Svijetla tema je ista stranica sa svijetlom ljuskom (EQ10); zadana ostaje tamna. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="n1" class="variant wide" data-state="odjavljen">
+    <div class="ref-tag">Stanje 1 · odjavljen</div>
+    <div class="panel">
+      <div class="site">
+        <span class="brand">Ductura</span>
+        <nav aria-label="Javne stranice"><a href="j02-kako-radi.html">Kako Ductura radi</a><a href="#provjera">Provjeri rad</a><a href="j05-status-pristupacnost.html">Stanje sustava</a><a href="j05-status-pristupacnost.html#izjava">Pristupačnost</a><button class="btn ghost" type="button" aria-pressed="false">Svijetla tema</button></nav>
+      </div>
+      <div class="panel-body">
+        <div class="hero">
+          <div class="stack">
+            <h2 id="n1">Prostor u kojem pišete rad, a mentor ga prati od prve rečenice do predaje.</h2>
+            <p class="lead">Ductura ne piše umjesto Vas i ne ocjenjuje tko je napisao tekst. Bilježi kako je rad nastajao, da Vi i mentor vidite isto.</p>
+            <button class="btn" type="button">Prijava sustavom AAI@EduHr</button>
+            <p class="meta">Lozinku upisujete samo kod AAI@EduHr; Ductura je ne vidi i ne pamti.</p>
+            <ul class="facts">
+              <li>Mentor i nastavnik zadatka vide rad uživo dok pišete.</li>
+              <li>Sve što oni vide, vidite i Vi.</li>
+              <li>Tipke se ne bilježe; nema mjerenja brzine, stanki ni ritma.</li>
+            </ul>
+            <p class="meta" id="provjera"><a href="j02-kako-radi.html#provjera">Provjeri predani rad</a> · <a href="j02-kako-radi.html">Što se bilježi i tko što vidi</a></p>
+          </div>
+          <div class="sheet">
+            <p><b>Uvod</b></p>
+            <p>Lokalna samouprava u Hrvatskoj od 2001. ima šire nadležnosti, ali gradovi ih nejednako koriste. Rad uspoređuje tri grada srednje veličine.</p>
+            <p>Prvo poglavlje opisuje zakonski okvir, a drugo proračune od 2015. do 2024.</p>
+          </div>
+        </div>
+        <p class="foot">Fakultet političkih znanosti · pilot ak. god. 2026./27.</p>
+      </div>
+    </div>
+    <p class="meta">Uzorak lista je izmišljen tekst; na naslovnici nema stvarnog rada. Rečenice uz prijavu: D-142, PRODUCT §5 pravila 4 i 5. Gumb teme je preklopnik (<code>aria-pressed</code>) istog natpisa u obje teme.</p>
+  </section>
+
+  <section aria-labelledby="n2" class="variant" data-state="prijavljen">
+    <div class="ref-tag">Stanje 2 · prijavljen</div>
+    <div class="panel">
+      <div class="site"><span class="brand">Ductura</span><nav aria-label="Račun"><span class="meta">Prijavljeni ste kao Student A</span><button class="btn secondary" type="button">Odjava</button></nav></div>
+      <div class="panel-body">
+        <h2 id="n2">Dobro došli natrag.</h2>
+        <button class="btn" type="button">Nastavi na moje radove</button>
+        <div class="sheet dark"><p>Zadnja verzija: Lokalna samouprava, 3.420 riječi, poslano na poslužitelj 6. 3. 2027. u 14:05.</p></div>
+      </div>
+    </div>
+    <p class="meta">Prijavljeni korisnik ne vidi gumb za prijavu; naslovnica vodi na popis radova.</p>
+  </section>
+
+  <section aria-labelledby="n3" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 3 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="n3">Obavijesti o radu sustava</h2></div>
+      <div class="panel-body"><p class="note">Nema obavijesti o radu sustava.</p><p class="meta"><a href="j05-status-pristupacnost.html">Stanje sustava</a></p></div>
+    </div>
+    <p class="meta">Traka obavijesti pod zaglavljem; bez obavijesti ostaje samo ova rečenica.</p>
+  </section>
+
+  <section aria-labelledby="n4" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 4 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="n4">Obavijesti o radu sustava</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam stanje sustava.</p><div class="skel w80"></div><div class="skel w40"></div></div>
+    </div>
+    <p class="meta">Prijava je dostupna i dok se traka učitava.</p>
+  </section>
+
+  <section aria-labelledby="n5" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 5 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="n5">Prijava</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Prijava sustavom AAI@EduHr trenutačno ne radi. Radovi na poslužitelju nisu zahvaćeni.</p>
+        <button class="btn" type="button" aria-disabled="true">Prijava sustavom AAI@EduHr</button>
+        <p class="meta">Pojedinosti i očekivani povratak: <a href="j05-status-pristupacnost.html">Stanje sustava</a></p>
+      </div>
+    </div>
+    <p class="meta">Gumb ostaje vidljiv i neaktivan, da se mjesto prijave ne mijenja.</p>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): 1. Kako Ductura radi, 2. Provjeri rad, 3. Stanje sustava, 4. Pristupačnost, 5. Svijetla tema, 6. Prijava sustavom AAI@EduHr, 7. Provjeri predani rad, 8. Što se bilježi i tko što vidi. Uzorak lista nije u redoslijedu fokusa.</p>
+</main>
+</body>
+</html>
