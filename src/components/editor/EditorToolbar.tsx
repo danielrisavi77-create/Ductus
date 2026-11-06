@@ -3,9 +3,11 @@
 /**
  * The toolbar above the sheet (F-8 step 1, design editor-v11 §5.1 point 2).
  *
- * Only what the F1 schema holds: paragraph, bullet item and quote (E1), headings 1-3,
- * bold, italic, undo and redo. Every button runs an editor command, so a change reaches the
- * journal exactly as typing does; the toolbar itself stores nothing.
+ * Only what the F1 schema holds: undo and redo, paragraph and headings 1-3,
+ * bold and italic, bullet item and quote (E1), in the order and the words of
+ * the approved toolbar (DAN-211, m0-rad-reference), groups set apart by a rule.
+ * Every button runs an editor command, so a change reaches the journal
+ * exactly as typing does; the toolbar itself stores nothing.
  *
  * One Tab stop (WAI-ARIA toolbar): arrows, Home and End move between buttons.
  * While the editor may not be written in (loading, another tab, a failure,
@@ -13,14 +15,14 @@
  * and stays reachable, so a keyboard user learns why nothing happens.
  *
  * FE-D5 (editor-v11 "Više ▾", "Prikaz ▾"): when the toolbar is too narrow the
- * headings move, smallest first, into the "Više" menu, where each item runs
- * the very same command with the very same check as its button; "Prikaz"
- * holds the sheet theme. Layout, grouping and labels only: no command changes.
+ * headings move, smallest first, then the quote, the list and "Ponovi", into
+ * the "Više" menu, where each item runs the very same command with the very
+ * same check as its button; "Prikaz" holds the sheet theme. Layout, grouping and labels only: no command changes.
  */
 
 import { useEditorState, type Editor } from "@tiptap/react";
 import {
-  useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode,
+  Fragment, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode,
 } from "react";
 
 import { setSheetTheme, useSheetTheme } from "@/components/shell/useSheetTheme";
@@ -71,48 +73,52 @@ function stateOf(editor: Editor | null): ToolbarState {
 type Tool = {
   key: string;
   label: string;
-  /** What the button shows; the label is its accessible name and title. */
-  glyph: ReactNode;
+  /** Tools of one group sit together; a rule separates the groups (reference `.sep`). */
+  group: "history" | "block" | "mark" | "list";
+  /** What the button shows when it is not its label; the label is its accessible name and title. */
+  glyph?: ReactNode;
   /** Toggle buttons only: whether it is on. */
   pressed?: (state: ToolbarState) => boolean;
   enabled?: (state: ToolbarState) => boolean;
   run: (editor: Editor) => void;
 };
 
+// The order and the words of the approved toolbar (m0-rad-reference
+// radni-prostor.html): Poništi Ponovi | Odlomak Naslov 1-3 | B I | Popis
+// Blok-citat. Words, not icons (D-203 t. 8); only what the F1 schema holds.
 const TOOLS: readonly Tool[] = [
   {
-    key: "paragraph", label: t.toolbar.paragraph, glyph: "¶",
+    key: "undo", label: t.toolbar.undo, group: "history",
+    enabled: (s) => s.canUndo, run: (e) => e.chain().focus().undo().run(),
+  },
+  {
+    key: "redo", label: t.toolbar.redo, group: "history",
+    enabled: (s) => s.canRedo, run: (e) => e.chain().focus().redo().run(),
+  },
+  {
+    key: "paragraph", label: t.toolbar.paragraph, group: "block",
     pressed: (s) => s.paragraph, run: (e) => e.chain().focus().setParagraph().run(),
   },
   ...([1, 2, 3] as const).map((level): Tool => ({
-    key: `heading${level}`, label: t.toolbar[`heading${level}`], glyph: `N${level}`,
+    key: `heading${level}`, label: t.toolbar[`heading${level}`], group: "block",
     pressed: (s) => s[`heading${level}`],
     run: (e) => e.chain().focus().setHeading({ level }).run(),
   })),
   {
-    key: "bold", label: t.toolbar.bold, glyph: <b>B</b>,
+    key: "bold", label: t.toolbar.bold, group: "mark", glyph: <b>B</b>,
     pressed: (s) => s.bold, run: (e) => e.chain().focus().toggleBold().run(),
   },
   {
-    key: "italic", label: t.toolbar.italic, glyph: <i>I</i>,
+    key: "italic", label: t.toolbar.italic, group: "mark", glyph: <i>I</i>,
     pressed: (s) => s.italic, run: (e) => e.chain().focus().toggleItalic().run(),
   },
-  // E1: after B and I, as in editor-v11 ("¶ Naslov Podnaslov | B I • „ ”").
   {
-    key: "bulletItem", label: t.toolbar.bulletItem, glyph: "•",
+    key: "bulletItem", label: t.toolbar.bulletItem, group: "list",
     pressed: (s) => s.bulletItem, run: (e) => e.chain().focus().toggleNode("bulletItem", "paragraph").run(),
   },
   {
-    key: "quote", label: t.toolbar.quote, glyph: "„ ”",
+    key: "quote", label: t.toolbar.quote, group: "list",
     pressed: (s) => s.quote, run: (e) => e.chain().focus().toggleNode("quote", "paragraph").run(),
-  },
-  {
-    key: "undo", label: t.toolbar.undo, glyph: "↶",
-    enabled: (s) => s.canUndo, run: (e) => e.chain().focus().undo().run(),
-  },
-  {
-    key: "redo", label: t.toolbar.redo, glyph: "↷",
-    enabled: (s) => s.canRedo, run: (e) => e.chain().focus().redo().run(),
   },
 ];
 
@@ -213,29 +219,32 @@ export default function EditorToolbar() {
       aria-label={t.toolbar.label}
       onKeyDown={onKeyDown}
     >
-      {shown.map((tool) => {
+      {shown.map((tool, index) => {
         const usable = usableOf(tool);
+        const opensGroup = index > 0 && shown[index - 1]!.group !== tool.group;
         return (
-          <button
-            key={tool.key}
-            type="button"
-            className="btn editor-toolbar__button"
-            data-tool={tool.key}
-            data-roving={tool.key}
-            aria-label={tool.label}
-            title={tool.label}
-            aria-pressed={tool.pressed ? tool.pressed(state) : undefined}
-            aria-disabled={usable ? undefined : "true"}
-            tabIndex={tool.key === stop ? 0 : -1}
-            // Keeps the selection in the sheet; the command refocuses it.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              setFocusKey(tool.key);
-              run(tool);
-            }}
-          >
-            <span aria-hidden="true">{tool.glyph}</span>
-          </button>
+          <Fragment key={tool.key}>
+            {opensGroup ? <span className="editor-toolbar__sep" aria-hidden="true" /> : null}
+            <button
+              type="button"
+              className="btn editor-toolbar__button"
+              data-tool={tool.key}
+              data-roving={tool.key}
+              aria-label={tool.label}
+              title={tool.glyph ? tool.label : undefined}
+              aria-pressed={tool.pressed ? tool.pressed(state) : undefined}
+              aria-disabled={usable ? undefined : "true"}
+              tabIndex={tool.key === stop ? 0 : -1}
+              // Keeps the selection in the sheet; the command refocuses it.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setFocusKey(tool.key);
+                run(tool);
+              }}
+            >
+              {tool.glyph ? <span aria-hidden="true">{tool.glyph}</span> : tool.label}
+            </button>
+          </Fragment>
         );
       })}
       {more.length ? (
@@ -253,8 +262,8 @@ export default function EditorToolbar() {
           items={more.map((tool) => ({
             key: tool.key,
             label: tool.label,
-            glyph: tool.glyph,
-            role: "menuitemcheckbox",
+            ...(tool.glyph ? { glyph: tool.glyph } : {}),
+            role: tool.pressed ? "menuitemcheckbox" : "menuitem",
             checked: tool.pressed ? tool.pressed(state) : false,
             disabled: !usableOf(tool),
           }))}

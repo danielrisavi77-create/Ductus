@@ -848,14 +848,27 @@ main:focus {
   border-bottom: 1px solid var(--rule-2);
 }
 
+/* The reference `.tb` (m0-rad-reference): a word on a clear ground, 13 px. */
 .editor-toolbar .btn {
   min-height: 32px;
   padding: 0 8px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink);
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* The reference `.sep`: a rule between groups of tools, drawn as a line
+   (a border), since a line colour is never a surface. */
+.editor-toolbar__sep {
+  flex: none;
+  width: 0;
+  height: 20px;
+  margin: 0 4px;
+  border-left: 1px solid var(--rule-2);
 }
 
 .editor-toolbar .btn[aria-pressed="true"] {
