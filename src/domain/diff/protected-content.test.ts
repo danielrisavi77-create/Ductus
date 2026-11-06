@@ -155,6 +155,8 @@ describe("compareProtectedContent", () => {
     ["unfinished source marks", "(Horvat, 2007: ".repeat(MAX_PROTECTED_TEXT_LENGTH / 16)],
     ["dangling ranges", "1-".repeat(MAX_PROTECTED_TEXT_LENGTH / 2)],
     ["digit groups", "1.234".repeat(MAX_PROTECTED_TEXT_LENGTH / 5)],
+    ["one digit run", "1".repeat(MAX_PROTECTED_TEXT_LENGTH)],
+    ["long source mark candidates", `(${"Horvat, ".repeat(37)}x)`.repeat(MAX_PROTECTED_TEXT_LENGTH / 300)],
   ])("stays fast on hostile input: %s", (_label, text) => {
     const started = performance.now();
     const check = compareProtectedContent(text, text);
