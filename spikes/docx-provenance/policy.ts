@@ -1,7 +1,7 @@
 // M8.8-P01 (DAN-435), attack plan #1597: the reviewed dependency set of this
 // spike and the static checks that hold the manifest, the npm lockfile and the
-// offline generator (pinned by content hash) to it. A review aid that fails loudly, not a sandbox:
-// runtime isolation of parsing is ARCHITECTURE §5c and M8.8-P02.
+// offline generator and the reader (both pinned by content hash) to it. A review aid that fails loudly,
+// not a sandbox: runtime isolation of parsing is ARCHITECTURE §5c.
 
 export type Reviewed = { name: string; version: string; integrity: string; license: string; published: string; direct: boolean };
 
@@ -28,12 +28,28 @@ export const GENERATOR_PIN = {
   sha256: "ac94b45086a170ab94ce2f98c754d75ec7f0b48aaaf8a1814d7266fdd338049d",
   reason: "pregledano u #1600",
 } as const;
+// The reader (M8.8-P02) is pinned the same way; it may load only the reviewed packages and no Node global.
+export const READER_PIN = {
+  path: "spikes/docx-provenance/read.mjs",
+  sha256: "671f28f0abf024d7a67b497b1908a9881617dc16bff1b4a3e53d4156e4bd2e8a",
+  reason: "pregledano u #1610",
+} as const;
+type Pin = { readonly path: string; readonly sha256: string; readonly reason: string };
+const DIRECT = REVIEWED.filter((p) => p.direct).map((p) => p.name);
 // Modules the generator may load statically; network, process, worker and vm modules are not here.
-const GENERATOR_IMPORTS = new Set(["node:fs", "node:path", "node:url", ...REVIEWED.filter((p) => p.direct).map((p) => p.name)]);
+const GENERATOR_IMPORTS = new Set(["node:fs", "node:path", "node:url", ...DIRECT]);
+const READER_IMPORTS = new Set(DIRECT);
 // Module loaders other than a static import statement.
 const GENERATOR_LOADERS: [RegExp, string][] = [
   [/\brequire\b/, "require"], [/\bcreateRequire\b/, "createRequire"],
   [/\bimport\s*\.\s*meta\b(?!\s*\.\s*url\b)/, "import.meta other than import.meta.url"],
+];
+// The reader needs no path, argument or global at all, so any of these names fails it.
+const READER_LOADERS: [RegExp, string][] = [
+  [/\brequire\b/, "require"], [/\bcreateRequire\b/, "createRequire"], [/\bimport\s*\.\s*meta\b/, "import.meta"],
+  [/\bprocess\b/, "process"], [/\bglobalThis\b/, "globalThis"], [/\bglobal\b/, "global"],
+  [/\bgetBuiltinModule\b/, "getBuiltinModule"], [/\bfetch\b/, "fetch"], [/\bWebSocket\b/, "WebSocket"],
+  [/\bXMLHttpRequest\b/, "XMLHttpRequest"], [/\beval\b/, "eval"], [/\bFunction\b/, "Function"], [/\bReflect\b/, "Reflect"],
 ];
 const OTHER_DEP_FIELDS = ["devDependencies", "optionalDependencies", "peerDependencies", "peerDependenciesMeta",
   "bundleDependencies", "bundledDependencies", "overrides", "resolutions", "workspaces"];
@@ -141,41 +157,45 @@ export function sha256Hex(bytes: Uint8Array): string {
 }
 
 /** Static import checks: every import is a recognised statement of an allowed module, no other loader, no re-export. */
-export function checkGeneratorImports(source: string): string[] {
-  const errors = GENERATOR_LOADERS.filter(([re]) => re.test(source)).map(([, what]) => `generator uses ${what}`);
+function importErrors(source: string, what: string, allowed: Set<string>, loaders: [RegExp, string][]): string[] {
+  const errors = loaders.filter(([re]) => re.test(source)).map(([, name]) => `${what} uses ${name}`);
   const specifiers = [...source.matchAll(/\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']/g)].map((m) => m[1] ?? m[2]);
-  for (const s of specifiers) if (!GENERATOR_IMPORTS.has(s)) errors.push(`generator imports ${s}`);
+  for (const s of specifiers) if (!allowed.has(s)) errors.push(`${what} imports ${s}`);
   // Every import keyword must be a statement the patterns above understood; this also rejects import().
   const keywords = source.match(/\bimport\b(?!\s*\.\s*meta)/g)?.length ?? 0;
   const statements = source.match(/\bimport\s+(?:[\w*{}\s,$]+?\s+from\s*)?["'][^"']+["']|\bimport\s*["'][^"']+["']/g)?.length ?? 0;
-  if (keywords !== statements) errors.push("generator has an import the check does not recognise");
+  if (keywords !== statements) errors.push(`${what} has an import the check does not recognise`);
   // A re-export loads a module too, and a comment can hide its specifier: every export must be a declaration.
-  if (/\bexport\b(?!\s+(?:const|let|var|class|function|async\s+function)\b)/.test(source)) errors.push("generator has an export that is not a declaration");
+  if (/\bexport\b(?!\s+(?:const|let|var|class|function|async\s+function)\b)/.test(source)) errors.push(`${what} has an export that is not a declaration`);
   return errors;
 }
+export const checkGeneratorImports = (source: string) => importErrors(source, "generator", GENERATOR_IMPORTS, GENERATOR_LOADERS);
+export const checkReaderImports = (source: string) => importErrors(source, "reader", READER_IMPORTS, READER_LOADERS);
 
-/** The generator must be byte for byte the pinned reviewed file (bytes as stored, LF) and pass the import checks. */
-export function checkGenerator(generator: string | Uint8Array): string[] {
-  const bytes = typeof generator === "string" ? new TextEncoder().encode(generator) : generator;
-  if (bytes.length === 0) return ["generator is empty"];
+/** The file must be byte for byte the pinned reviewed file (bytes as stored, LF) and pass its import checks. */
+function checkPinned(file: string | Uint8Array, what: string, pin: Pin, imports: (source: string) => string[]): string[] {
+  const bytes = typeof file === "string" ? new TextEncoder().encode(file) : file;
+  if (bytes.length === 0) return [`${what} is empty`];
   const errors: string[] = [];
   const digest = sha256Hex(bytes);
-  if (digest !== GENERATOR_PIN.sha256) {
-    errors.push(`${GENERATOR_PIN.path} has sha256 ${digest}, not the pinned ${GENERATOR_PIN.sha256} (${GENERATOR_PIN.reason}): `
-      + "a change to the generator needs a new review and a new pin");
+  if (digest !== pin.sha256) {
+    errors.push(`${pin.path} has sha256 ${digest}, not the pinned ${pin.sha256} (${pin.reason}): `
+      + `a change to the ${what} needs a new review and a new pin`);
   }
-  return [...errors, ...checkGeneratorImports(new TextDecoder().decode(bytes))];
+  return [...errors, ...imports(new TextDecoder().decode(bytes))];
 }
+export const checkGenerator = (file: string | Uint8Array) => checkPinned(file, "generator", GENERATOR_PIN, checkGeneratorImports);
+export const checkReader = (file: string | Uint8Array) => checkPinned(file, "reader", READER_PIN, checkReaderImports);
 
-export type SpikeFiles = { manifest: string; lockfile: string; generator: string | Uint8Array };
+export type SpikeFiles = { manifest: string; lockfile: string; generator: string | Uint8Array; reader: string | Uint8Array };
 const parse = (text: string, what: string, errors: string[]): unknown => {
   try { return JSON.parse(text); } catch { errors.push(`${what} is not JSON`); return undefined; }
 };
 
-/** All findings for the three spike files; an empty list means the set matches the review. */
+/** All findings for the four spike files; an empty list means the set matches the review. */
 export function checkSpike(files: SpikeFiles): string[] {
   const errors: string[] = [];
   const pkg = parse(files.manifest, "package.json", errors);
   const lock = parse(files.lockfile, "package-lock.json", errors);
-  return [...errors, ...checkManifest(pkg), ...checkLockfile(lock, pkg), ...checkGenerator(files.generator)];
+  return [...errors, ...checkManifest(pkg), ...checkLockfile(lock, pkg), ...checkGenerator(files.generator), ...checkReader(files.reader)];
 }

@@ -1,14 +1,14 @@
 // @vitest-environment node
-// M8.8-P01 (DAN-435), attack plan #1597: the reviewed dependency set of
-// spikes/docx-provenance. Static checks over the manifest, the npm lockfile
-// and the offline generator; nothing here installs or runs the spike.
+// M8.8-P01/P02 (DAN-435), attack plan #1597: the reviewed dependency set of
+// spikes/docx-provenance. Static checks over the manifest, the npm lockfile,
+// the offline generator and the reader; nothing here installs or runs the spike.
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
-  ALLOWED_LICENSES, GENERATOR_PIN, REVIEWED, checkGenerator, checkGeneratorImports, checkLockfile, checkManifest, checkSpike,
-  isExactVersion, licenseError, sha256Hex, type SpikeFiles,
+  ALLOWED_LICENSES, GENERATOR_PIN, READER_PIN, REVIEWED, checkGenerator, checkGeneratorImports, checkLockfile, checkManifest,
+  checkReader, checkReaderImports, checkSpike, isExactVersion, licenseError, sha256Hex, type SpikeFiles,
 } from "../../../spikes/docx-provenance/policy";
 
 const DIR = "spikes/docx-provenance";
@@ -16,6 +16,7 @@ const real = {
   manifest: readFileSync(`${DIR}/package.json`, "utf8"),
   lockfile: readFileSync(`${DIR}/package-lock.json`, "utf8"),
   generator: readFileSync(`${DIR}/gen.mjs`, "utf8"),
+  reader: readFileSync(`${DIR}/read.mjs`, "utf8"),
 } satisfies SpikeFiles;
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const manifest = (): Json => JSON.parse(real.manifest);
@@ -37,6 +38,8 @@ describe("real spike files (A18)", () => {
     expect(checkSpike({ ...real, generator: `import "node:https";\n${real.generator}` })).not.toEqual([]);
     expect(checkSpike({ ...real, lockfile: "" })).not.toEqual([]);
     expect(checkSpike({ ...real, generator: "" })).not.toEqual([]);
+    expect(checkSpike({ ...real, reader: `${real.reader}\n` })).not.toEqual([]);
+    expect(checkSpike({ ...real, reader: "" })).not.toEqual([]);
   });
   it("licence allowlist is a subset of dependency-review allow-licenses (A10)", () => {
     const yml = readFileSync(".github/workflows/dependency-review.yml", "utf8");
@@ -51,9 +54,21 @@ describe("real spike files (A18)", () => {
     const own = [...readFileSync(new URL(import.meta.url), "utf8").matchAll(/^import[^"']*["']([^"']+)["']/gm)].map((m) => m[1]);
     expect(own.sort()).toEqual(["../../../spikes/docx-provenance/policy", "fast-check", "node:crypto", "node:fs", "vitest"]);
   });
-  it("gen.mjs is the only script in the spike and may not import a local file (A13)", () => {
-    expect(readdirSync(DIR).filter((f) => /\.[cm]?[jt]sx?$/.test(f)).sort()).toEqual(["gen.mjs", "policy.ts"]);
+  it("the spike holds only the pinned scripts and their tests, and they may not import a local file (A13)", () => {
+    expect(readdirSync(DIR).filter((f) => /\.[cm]?[jt]sx?$/.test(f)).sort()).toEqual(["gen.mjs", "policy.ts", "read.mjs", "read.test.mjs"]);
     expect(checkGeneratorImports(`import { buildDocx } from "./gen.mjs";\n`)).toContain("generator imports ./gen.mjs");
+    expect(checkReaderImports(`import { buildDocx } from "./gen.mjs";\n`)).toContain("reader imports ./gen.mjs");
+  });
+  it("the reader tests load no network module and no spike file other than gen.mjs and read.mjs", () => {
+    const own = [...readFileSync(`${DIR}/read.test.mjs`, "utf8").matchAll(/\bfrom\s*["']([^"']+)["']|\bimport\s*\(?\s*["']([^"']+)["']/g)]
+      .map((m) => m[1] ?? m[2]);
+    expect([...new Set(own)].sort()).toEqual(["./gen.mjs", "./read.mjs", "fflate", "node:assert/strict", "node:child_process", "node:crypto", "node:test"]);
+  });
+  it("CI runs the reader tests in the required job, unskippable and without install scripts", () => {
+    const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+    const job = ci.split("\n    name: Lint, typecheck, test and build\n")[1]?.split(/\n {2}[\w-]+:\n/)[0] ?? "";
+    const step = job.split("\n      - name: DOCX provenance spike tests\n")[1]?.split(/\n {6}- /)[0] ?? "";
+    expect(step).toBe("        working-directory: spikes/docx-provenance\n        run: npm ci --ignore-scripts && node --test read.test.mjs");
   });
   it("root manifests do not carry the spike dependencies (A17)", () => {
     const root = readFileSync("package.json", "utf8");
@@ -175,6 +190,46 @@ describe("generator pin (A13)", () => {
     expect(sha256Hex(new Uint8Array())).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     expect(sha256Hex(new TextEncoder().encode("abc"))).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     fc.assert(fc.property(fc.uint8Array({ maxLength: 300 }), (b) => sha256Hex(b) === createHash("sha256").update(b).digest("hex")));
+  });
+});
+
+// The reader is pinned the same way (M8.8-P02); its import check is stricter: no node:* module and no global.
+const READER_BYTES = readFileSync(`${DIR}/read.mjs`);
+const readerPinFails = (errors: string[]) => errors.some((e) => e.includes("a change to the reader needs a new review") && e.includes(READER_PIN.reason));
+const OK_READER = 'import { Inflate } from "fflate";\nimport { SaxesParser } from "saxes";\n';
+describe("reader pin (A13)", () => {
+  it("the real read.mjs passes, as bytes and as text, and the pin is its node:crypto sha256", () => {
+    expect(checkReader(READER_BYTES)).toEqual([]);
+    expect(checkReader(real.reader)).toEqual([]);
+    expect(createHash("sha256").update(READER_BYTES).digest("hex")).toBe(READER_PIN.sha256);
+    expect(READER_PIN.path).toBe(`${DIR}/read.mjs`);
+    expect(READER_BYTES.includes(0x0d)).toBe(false);
+    expect(checkReaderImports(OK_READER)).toEqual([]);
+  });
+  it("a change of any one byte fails with the new review message", () => {
+    fc.assert(fc.property(fc.nat(READER_BYTES.length - 1), fc.integer({ min: 1, max: 255 }), (at, delta) => {
+      const b = Uint8Array.from(READER_BYTES);
+      b[at] = (b[at] + delta) % 256;
+      return readerPinFails(checkReader(b));
+    }), { numRuns: 300 });
+    expect(readerPinFails(checkReader(READER_BYTES.subarray(0, -1)))).toBe(true);
+    expect(readerPinFails(checkReader(real.reader.replaceAll("\n", "\r\n")))).toBe(true);
+  });
+  it("a node:* module, a generator-only module or a loader fails the reader import check", () => {
+    const swapped = real.reader.replace('from "fflate"', 'from "node:fs"');
+    expect(swapped).not.toBe(real.reader);
+    expect(checkReader(swapped)).toContain("reader imports node:fs");
+    expect(readerPinFails(checkReader(swapped))).toBe(true);
+    for (const line of ['import { readFileSync } from "node:fs";', 'import "node:https";', 'export * from "saxes";', 'const m = await import("fflate");',
+      'const p = process.env;', 'process.getBuiltinModule("node:net");', 'globalThis.fetch("x");', 'fetch("https://example.invalid");',
+      'const u = import.meta.url;', 'require("node:http");', 'new Function("return 1")();', 'eval("1");', 'Reflect.get(global, "x");'])
+      expect(checkReaderImports(OK_READER + line), line).not.toEqual([]);
+  });
+  it("each forbidden name fails the reader import check on its own, under its own name", () => {
+    for (const name of ["require", "createRequire", "process", "globalThis", "global", "getBuiltinModule", "fetch", "WebSocket",
+      "XMLHttpRequest", "eval", "Function", "Reflect"])
+      expect(checkReaderImports(`${OK_READER}void ${name};\n`), name).toContain(`reader uses ${name}`);
+    expect(checkReaderImports(`${OK_READER}const u = import.meta;\n`)).toContain("reader uses import.meta");
   });
 });
 
