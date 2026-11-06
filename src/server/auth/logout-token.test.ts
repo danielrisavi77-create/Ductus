@@ -330,4 +330,62 @@ describe("createCachedKeySource (G3, G4)", () => {
     now = 61_000;
     expect(await source.key("rsa-1", "RS256")).toBeDefined();
   });
+
+  it("stops trusting a removed key after the maximum age, without an unknown kid", async () => {
+    let now = 0;
+    let loads = 0;
+    let current: readonly unknown[] = JWKS;
+    const source = createCachedKeySource({
+      load: async () => {
+        loads++;
+        return current;
+      },
+      maxAgeSeconds: 600,
+      nowMs: () => now,
+    });
+    expect(await source.key("rsa-1", "RS256")).toBeDefined();
+    current = [jwk(otherRsa.publicKey, "rsa-2")];
+    now = 599_000;
+    expect(await source.key("rsa-1", "RS256")).toBeDefined();
+    expect(loads).toBe(1);
+    now = 600_000;
+    expect(await source.key("rsa-1", "RS256")).toBeUndefined();
+    expect(loads).toBe(2);
+  });
+
+  it("uses the replacement key under the same kid after the maximum age", async () => {
+    let now = 0;
+    let current: readonly unknown[] = [jwk(otherRsa.publicKey, "rsa-1")];
+    const source = createCachedKeySource({ load: async () => current, nowMs: () => now });
+    const old = await source.key("rsa-1", "RS256");
+    current = JWKS;
+    now = 600_000;
+    const fresh = await source.key("rsa-1", "RS256");
+    expect(fresh).toBeDefined();
+    expect(fresh!.equals(old!)).toBe(false);
+  });
+
+  it("past the maximum age a failed fetch leaves no keys instead of the stale ones", async () => {
+    let now = 0;
+    let loads = 0;
+    let down = false;
+    const source = createCachedKeySource({
+      load: async () => {
+        loads++;
+        if (down) throw new Error("provider down");
+        return JWKS;
+      },
+      nowMs: () => now,
+    });
+    expect(await source.key("rsa-1", "RS256")).toBeDefined();
+    down = true;
+    now = 600_000;
+    await expect(source.key("rsa-1", "RS256")).rejects.toThrow();
+    await expect(source.key("rsa-1", "RS256")).rejects.toThrow();
+    expect(loads).toBe(2);
+    down = false;
+    now = 661_000;
+    expect(await source.key("rsa-1", "RS256")).toBeDefined();
+    expect(loads).toBe(3);
+  });
 });

@@ -3,6 +3,9 @@
  * route is public, so a token with an unknown `kid` must not make Ductus ask
  * the provider each time (attack plan #1620 G4): the JWKS is fetched again at
  * most once per `minRefreshSeconds`, and concurrent requests share a fetch.
+ * A fetched JWKS is used for at most `maxAgeSeconds`, so a key the provider
+ * removed or replaced under the same `kid` stops being trusted even when no
+ * unknown `kid` arrives; past that age a failed fetch leaves no keys (503).
  */
 import { createPublicKey, type KeyObject } from "node:crypto";
 
@@ -10,6 +13,7 @@ import type { IdTokenAlg } from "./config";
 import type { LogoutKeySource } from "./logout-token";
 
 export const JWKS_MIN_REFRESH_SECONDS = 60;
+export const JWKS_MAX_AGE_SECONDS = 600;
 
 type Jwk = Record<string, unknown>;
 
@@ -56,14 +60,17 @@ export interface CachedKeySourceOptions {
   /** Fetches the JWKS `keys` array; throws when the provider does not answer. */
   load: () => Promise<readonly unknown[]>;
   minRefreshSeconds?: number;
+  maxAgeSeconds?: number;
   nowMs?: () => number;
 }
 
 export function createCachedKeySource(options: CachedKeySourceOptions): LogoutKeySource {
   const minRefreshMs = (options.minRefreshSeconds ?? JWKS_MIN_REFRESH_SECONDS) * 1000;
+  const maxAgeMs = (options.maxAgeSeconds ?? JWKS_MAX_AGE_SECONDS) * 1000;
   const nowMs = options.nowMs ?? Date.now;
   let keys: readonly unknown[] | undefined;
-  let loadedAt = -Infinity;
+  let fetchedAt = -Infinity;
+  let attemptedAt = -Infinity;
   let pending: Promise<readonly unknown[]> | undefined;
 
   function refresh(): Promise<readonly unknown[]> {
@@ -71,12 +78,13 @@ export function createCachedKeySource(options: CachedKeySourceOptions): LogoutKe
       .load()
       .then((fresh) => {
         keys = fresh;
+        fetchedAt = nowMs();
         return fresh;
       })
       .finally(() => {
         // A failed fetch also counts, so an unreachable provider is not
         // asked again on every request.
-        loadedAt = nowMs();
+        attemptedAt = nowMs();
         pending = undefined;
       });
     return pending;
@@ -84,12 +92,14 @@ export function createCachedKeySource(options: CachedKeySourceOptions): LogoutKe
 
   return {
     async key(kid, alg) {
-      if (keys === undefined) {
-        if (nowMs() - loadedAt < minRefreshMs && pending === undefined) throw new Error("JWKS recently unavailable");
+      if (keys === undefined || nowMs() - fetchedAt >= maxAgeMs) {
+        // No usable JWKS: none yet, or older than the maximum age. A stale
+        // one is never used in place of a failed fetch.
+        if (nowMs() - attemptedAt < minRefreshMs && pending === undefined) throw new Error("JWKS unavailable");
         await refresh();
       }
       const found = selectKey(keys ?? [], kid, alg);
-      if (found || nowMs() - loadedAt < minRefreshMs) return found;
+      if (found || nowMs() - attemptedAt < minRefreshMs) return found;
       return selectKey(await refresh(), kid, alg);
     },
   };
