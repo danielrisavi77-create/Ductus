@@ -629,3 +629,23 @@ jobs:
           --config /src/osv-scanner.toml
           --lockfile /src/pnpm-lock.yaml
           --lockfile /src/infra/fake-oidc/pnpm-lock.yaml
+          --lockfile /src/spikes/b0.2-reconstruction/package-lock.json
+          --lockfile /src/spikes/docx-provenance/package-lock.json
+
+      # Negative control for the step above: a throwaway copy of a spike lockfile
+      # with one known vulnerable package must fail the same image and config on
+      # that advisory, so a scanner that never ran or found nothing cannot pass.
+      - name: OSV-Scanner synthetic negative control
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d "$RUNNER_TEMP/ductus-osv-negative.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          mkdir "$root/scan"
+          python3 -I scripts/engineering/osv-negative-control.py build spikes/docx-provenance/package-lock.json "$root/scan/package-lock.json"
+          status=0
+          docker run --rm -v "$root/scan:/scan:ro" -v "$PWD/osv-scanner.toml:/cfg/osv-scanner.toml:ro" \
+            ghcr.io/google/osv-scanner:v2.6.0@sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa scan source \
+            --config /cfg/osv-scanner.toml --format json --lockfile /scan/package-lock.json \
+            > "$root/report.json" || status=$?
+          python3 -I scripts/engineering/osv-negative-control.py check "$status" "$root/report.json"
