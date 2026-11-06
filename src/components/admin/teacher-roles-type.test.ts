@@ -16,15 +16,15 @@ const phone = (css: string) => /@media \(max-width: 640px\) \{([\s\S]*?)\n\}/.ex
 
 /** The declarations of the first rule whose selector is exactly `selector`. */
 function rule(css: string, selector: string): Record<string, string> {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const body = new RegExp(`(?:^|[}\\s])${escaped}\\s*\\{([^}]*)\\}`).exec(css)?.[1];
-  if (body === undefined) throw new Error(`no rule ${selector}`);
+  const match = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, head]) => head!.trim() === selector);
+  if (!match) throw new Error(`no rule ${selector}`);
   return Object.fromEntries(
-    body.split(";").map((d) => d.split(":").map((part) => part.trim())).filter(([name, value]) => name && value).map(([n, v]) => [n!, v!]),
+    match[2]!.split(";").map((d) => d.split(":").map((part) => part.trim())).filter(([name, value]) => name && value).map(([n, v]) => [n!, v!]),
   );
 }
 
-const token = (name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(GLOBALS)?.[1]?.trim();
+const TOKENS = new Map([...GLOBALS.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(([, name, value]) => [name!, value!.trim()]));
+const token = (name: string) => TOKENS.get(name);
 const px = (value: string | undefined) => (value?.startsWith("var(") ? token(value.slice(4, -1)) : value);
 const top = MODULE.slice(0, MODULE.indexOf("@media"));
 
