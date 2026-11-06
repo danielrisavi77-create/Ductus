@@ -10,7 +10,7 @@
 <header class="ref-head">
   <div class="ref-tag">Referenca paketa 14 · DAN-411 · prijedlog slike · M9.UX</div>
   <h1>S31-AI — Izjava o uporabi AI u predaji</h1>
-  <p>Student prije predaje izjavljuje je li koristio Asistenta, a izjava se sastavlja iz zapisa (D-40): alat, pružatelj, model, svrha, faza i razgovor. Student bira hoće li razgovore priložiti. Tekst je činjenica o uporabi, bez postotka i ocjene (PRODUCT §5 pravila 1, 2, 3, 13). Podaci su izmišljeni.</p>
+  <p>Student prije predaje izjavljuje je li koristio Asistenta, a izjava se sastavlja iz zapisa (D-40): alat, pružatelj, model, svrha, faza i razgovor. Razgovori iz kojih je tekst prenesen u rad prilažu se uvijek, a student prije potvrde pregledava njihove točne verzije; ostale razgovore prilaže po izboru (D-41, D-263 Q22). Tekst je činjenica o uporabi, bez postotka i ocjene (PRODUCT §5 pravila 1, 2, 3, 13). Podaci su izmišljeni.</p>
 </header>
 <main class="page"><div class="variants">
 
@@ -35,13 +35,33 @@
           <tbody><tr><td>Lektura</td><td>Primjer d.o.o., Model A</td><td>Pisanje</td></tr>
           <tr><td>Traženje literature</td><td>Primjer d.o.o., Model A</td><td>Planiranje</td></tr></tbody></table>
         <p class="note">Preneseno u rad: 2 odlomka, označeno kao „iz AI pomoćnika”.</p>
-        <p>Razgovori iz kojih je tekst prenesen u rad (2) prilažu se uz izjavu; možete pregledati njihove točne verzije prije potvrde.</p>
+        <p>Razgovori iz kojih je tekst prenesen u rad (2) prilažu se uz izjavu i ne mogu se izostaviti.</p>
+        <div class="acts"><button class="btn secondary" type="button">Pregledaj točne verzije razgovora (2)</button></div>
         <fieldset class="radio"><legend>Ostali razgovori</legend>
           <label><input type="radio" name="r2" checked> Priloži ostale razgovore (1)</label>
           <label><input type="radio" name="r2"> Ne prilaži ostale razgovore</label>
         </fieldset>
         <p class="foot">Ostali razgovori su Vaši dok pišete. Nastavnik ih vidi samo ako ih priložite (D-41).</p>
         <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v2b">
+    <div class="ref-tag" id="v2b">Stanje 2b · pregled točnih verzija obveznih razgovora prije potvrde</div>
+    <div class="panel" role="dialog" aria-labelledby="t2b">
+      <div class="panel-top"><h2 id="t2b">Razgovori uz izjavu (2)</h2><span class="tag">Pregled</span></div>
+      <div class="panel-body">
+        <p class="note">Ovo su točne verzije razgovora iz kojih je tekst prenesen u rad, onakve kakve će ući uz izjavu. Ne mogu se mijenjati ni izostaviti.</p>
+        <h3>Razgovor 1 · Lektura · 2. 11. 14:05</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Možeš li lektorirati ovaj odlomak o izmišljenom primjeru?</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Predlažem blaže poredak rečenica i jednostavniji glagol u drugoj rečenici. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Preneseno u rad: odlomak 2, „iz AI pomoćnika”.</p>
+        <h3>Razgovor 2 · Lektura · 2. 11. 15:32</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Provjeri interpunkciju u ovom odlomku.</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Dodajte zarez prije veznika u trećoj rečenici. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Preneseno u rad: odlomak 5, „iz AI pomoćnika”.</p>
+        <div class="acts"><button class="btn" type="button">Natrag na izjavu</button></div>
       </div>
     </div>
   </section>
@@ -98,7 +118,7 @@
   </section>
 
 </div>
-<p class="foot">Tipkovnica: dijalog hvata fokus, Esc ga zatvara i vraća fokus na gumb Predaj; odabir razgovora je skupina izbornih gumba sa strelicama. Greška se objavljuje kao role="alert".</p>
+<p class="foot">Tipkovnica: dijalog hvata fokus, Esc ga zatvara i vraća fokus na gumb Predaj; gumb „Pregledaj točne verzije razgovora” otvara pregled, a odabir ostalih razgovora je skupina izbornih gumba sa strelicama. Greška se objavljuje kao role="alert".</p>
 </main>
 </body>
 </html>
