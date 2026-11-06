@@ -7,7 +7,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelo
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { post } from "./comment-seed";
 import { closeWork, seedWork, workDocument } from "./work-seed";
-import { clickSignOut, signIn } from "./support";
+import { clickSignOut, logoutDialogOf, signIn } from "./support";
 import { APP_ORIGIN } from "./origin";
 
 // #732 item 7 (DAN-89, contract 6396547184 §6 with 6404284308): "Kako vidi
@@ -229,4 +229,205 @@ test("a sign-out in another tab removes the text from the teacher view (D-118)",
   await expect(liveTextOf(page)).toContainText(t.liveView.connection.signedOut);
   await expect(liveTextOf(page).getByText(TEXT)).toHaveCount(0);
   await expect(liveTextOf(page).locator("[data-node-id]")).toHaveCount(0);
+});
+
+// #882 (DAN-215): while /rad shows the teacher view the tab publishes nothing
+// (BACKEND 4.12 t. 7); the state typed before waits for the return to writing.
+const TOKEN = "33333333-3333-4333-8333-333333333333";
+const isPut = (request: Request) => request.method() === "PUT" && /^\/api\/live\/[^/]+$/.test(pathOf(request));
+const writingOf = (page: Page) => modesOf(page).getByRole("link", { name: t.workspace.modeWriting });
+
+/** Every PUT to the live route with the time it left and its body. */
+function recordPuts(page: Page): { at: number; body: string }[] {
+  const puts: { at: number; body: string }[] = [];
+  page.on("request", (request) => { if (isPut(request)) puts.push({ at: Date.now(), body: request.postData() ?? "" }); });
+  return puts;
+}
+
+/**
+ * In the page and in the order they happen (review c.6684089875): "put" for
+ * every PUT the page starts to the live route, "teacher" when a commit shows
+ * the teacher view's link as current and "writing" when one no longer does.
+ * A mark comes from a MutationObserver, whose callback runs as a microtask
+ * of the commit's own task; a timer that comes due is a later task, so a PUT
+ * after a "teacher" mark was started while the page showed the teacher view.
+ * Call before the page loads; a full load starts a new record.
+ */
+async function recordOrder(page: Page): Promise<() => Promise<string[]>> {
+  await page.addInitScript(({ nav, link }) => {
+    const order: string[] = [];
+    (window as unknown as { __liveOrder: string[] }).__liveOrder = order;
+    const original = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+      if (method === "PUT" && /^\/api\/live\/[^/]+$/.test(new URL(href, location.href).pathname)) order.push("put");
+      return original(input, init);
+    };
+    let teacher = false;
+    new MutationObserver(() => {
+      const now = [...document.querySelectorAll("nav")]
+        .filter((element) => element.getAttribute("aria-label") === nav)
+        .some((element) => [...element.querySelectorAll('a[aria-current="page"]')].some((a) => a.textContent?.trim() === link));
+      if (now === teacher) return;
+      teacher = now;
+      order.push(now ? "teacher" : "writing");
+    }).observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+  }, { nav: t.workspace.viewModes, link: t.workspace.modeTeacherView });
+  return () => page.evaluate(() => [...((window as unknown as { __liveOrder?: string[] }).__liveOrder ?? [])]);
+}
+
+/** How many PUTs the page started while it showed the teacher view, and how many times it showed it. */
+function heldRecord(order: string[]): { views: number; putsWhileHeld: number } {
+  let held = false;
+  let views = 0;
+  let putsWhileHeld = 0;
+  for (const event of order) {
+    if (event === "teacher") { held = true; views += 1; }
+    else if (event === "writing") held = false;
+    else if (held) putsWhileHeld += 1;
+  }
+  return { views, putsWhileHeld };
+}
+
+/** No PUT started while the teacher view was shown, and it was shown at least `views` times. */
+function expectHeld(order: string[], views: number): void {
+  const result = heldRecord(order);
+  expect(result.putsWhileHeld).toBe(0);
+  expect(result.views).toBeGreaterThanOrEqual(views);
+}
+
+/** Into the teacher view by its link, with no wait after the commit that shows it. */
+async function toTeacherView(page: Page, assignment: string): Promise<void> {
+  await teacherSwitchOf(page).click();
+  await page.waitForURL(`**/rad?zadatak=${assignment}&prikaz=nastavnik`);
+  await expect(teacherSwitchOf(page)).toHaveAttribute("aria-current", "page");
+}
+
+async function toWriting(page: Page, assignment: string): Promise<void> {
+  await writingOf(page).click();
+  await page.waitForURL(`**/rad?zadatak=${assignment}`);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await editorOf(page).click();
+  await page.keyboard.press("Control+End");
+}
+
+const liveBody = async (page: Page, documentId: string): Promise<string> => {
+  const response = await page.request.get(`/api/live/${documentId}`, { headers: { "ductus-protocol": DUCTUS_PROTOCOL_VERSION } });
+  return response.ok() ? await response.text() : "";
+};
+
+test("a teacher view opened directly publishes nothing, and writing publishes again from the same editor", async ({ page }) => {
+  await signIn(page, "/rad");
+  const { assignment } = await writeWork(page);
+  const opens = record(page, isOpen);
+  const puts = recordPuts(page);
+  await page.goto(`/rad?zadatak=${assignment}&prikaz=nastavnik`);
+  await expect(liveTextOf(page).getByText(TEXT)).toBeVisible({ timeout: OPEN });
+  await page.reload();
+  await expect(liveTextOf(page).getByText(TEXT)).toBeVisible({ timeout: OPEN });
+  await page.waitForTimeout(3000);
+  expect(puts).toEqual([]);
+
+  const opensBefore = opens.length;
+  await toWriting(page, assignment);
+  await expect(editorOf(page)).toHaveText(TEXT);
+  expect(opens.length).toBe(opensBefore);
+  await page.keyboard.type(" Dodatak.");
+  await expect.poll(() => puts.some((put) => put.body.includes("Dodatak.")), { timeout: OPEN }).toBe(true);
+  expect(opens.length).toBe(opensBefore);
+});
+
+test("switching to the teacher view holds the waiting state, and the return to writing publishes it", async ({ page }) => {
+  await signIn(page, "/rad");
+  const order = await recordOrder(page);
+  const { assignment, documentId } = await writeWork(page);
+  const opens = record(page, isOpen);
+  const puts = recordPuts(page);
+  for (let round = 0; round < 3; round += 1) {
+    await page.keyboard.type(` piše ${round}`);
+    await expect.poll(() => puts.some((put) => put.body.includes(`piše ${round}`)), { timeout: OPEN }).toBe(true);
+    // Within a second of the last start: this state waits for the next request.
+    await page.keyboard.type(` čeka ${round}`);
+    await toTeacherView(page, assignment);
+    await page.waitForTimeout(2500);
+    expectHeld(await order(), round + 1);
+
+    await toWriting(page, assignment);
+    await expect.poll(() => liveBody(page, documentId), { timeout: OPEN }).toContain(`čeka ${round}`);
+  }
+  expect(opens).toEqual([]);
+});
+
+test("a request in flight is aborted by the switch to the teacher view and is not sent again there", async ({ page }) => {
+  // The route's answers are the test's: the request is held long enough to switch.
+  await page.route((url) => /^\/api\/live\/[^/]+$/.test(url.pathname), async (route) => {
+    if (route.request().method() !== "PUT") return route.fallback();
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    try {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ outcome: "accepted", token: TOKEN }) });
+    } catch {
+      // Aborted by the page meanwhile.
+    }
+  });
+  await signIn(page, "/rad");
+  const order = await recordOrder(page);
+  const assignment = await seedWork({ teacher: true });
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  const puts = recordPuts(page);
+  const failed: Request[] = [];
+  page.on("requestfailed", (request) => { if (isPut(request)) failed.push(request); });
+  await editorOf(page).click();
+  await page.keyboard.type(TEXT);
+  await expect.poll(() => puts.length, { timeout: OPEN }).toBeGreaterThan(0);
+
+  await toTeacherView(page, assignment);
+  await expect.poll(() => failed.length, { timeout: 8000 }).toBeGreaterThan(0);
+  await page.waitForTimeout(5000);
+  expectHeld(await order(), 1);
+});
+
+test("Odjava from the teacher view: Ostani keeps it held, and nothing goes out after the sign-out", async ({ page }) => {
+  await page.route((url) => /^\/api\/live\/[^/]+$/.test(url.pathname), (route) => route.request().method() === "PUT"
+    ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ outcome: "accepted", token: TOKEN }) })
+    : route.fallback());
+  // The evidence never gets its receipt here, so the text stays owed and "Odjava" opens the dialog.
+  await page.route("**/api/evidence/commit", (route) => route.abort());
+  await signIn(page, "/rad");
+  const order = await recordOrder(page);
+  const assignment = await seedWork({ teacher: true });
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  const puts = recordPuts(page);
+  const dialog = logoutDialogOf(page);
+  await editorOf(page).click();
+  await page.keyboard.type(TEXT);
+  await expect.poll(() => puts.length, { timeout: OPEN }).toBeGreaterThan(0);
+
+  await toTeacherView(page, assignment);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: t.auth.logoutStay }).click();
+  await expect(dialog).toBeHidden();
+  await page.waitForTimeout(2500);
+  expectHeld(await order(), 1);
+
+  await toWriting(page, assignment);
+  const back = puts.length;
+  await page.keyboard.type(" Dodatak.");
+  await expect.poll(() => puts.length, { timeout: OPEN }).toBeGreaterThan(back);
+
+  await toTeacherView(page, assignment);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  await expect(dialog).toBeVisible();
+  expectHeld(await order(), 2);
+  // Long after the commit that held it: a PUT seen from here started after it.
+  const fencedAt = Date.now();
+  await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await page.waitForURL(`${APP_ORIGIN}/`);
+  await page.waitForTimeout(2500);
+  expect(puts.filter((put) => put.at > fencedAt)).toEqual([]);
 });

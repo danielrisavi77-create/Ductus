@@ -573,11 +573,14 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await confirm.click();
     const response = await acknowledged;
     expect(response.status()).toBe(200);
-    expect(response.request().postDataJSON()).toEqual({ versionNo: current!.version });
-    const { rows } = await withAdmin((client) => client.query<{ version_no: number }>(
-      `SELECT n.version_no FROM institution.notice_acknowledgment n JOIN identity.user_account u ON u.id = n.student_id
+    // DAN-306: the browser sends the fingerprint of the notice it showed, and
+    // the row the route kept holds that same fingerprint.
+    const sent = response.request().postDataJSON() as { versionNo: number; fingerprint: string };
+    expect(sent).toEqual({ versionNo: current!.version, fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    const { rows } = await withAdmin((client) => client.query<{ version_no: number; notice_fingerprint: string }>(
+      `SELECT n.version_no, n.notice_fingerprint FROM institution.notice_acknowledgment n JOIN identity.user_account u ON u.id = n.student_id
         WHERE n.assignment_id = $1 AND u.hr_edu_person_unique_id = $2`, [id, STUDENT_ID]));
-    expect(rows).toEqual([{ version_no: current!.version }]);
+    expect(rows).toEqual([{ version_no: current!.version, notice_fingerprint: sent.fingerprint }]);
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`${APP_ORIGIN}/rad?zadatak=${id}`);
     // DAN-330: the work starts on the student's click.
@@ -624,15 +627,17 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await confirm.click();
       const response = await acknowledged;
       expect(response.status()).toBe(200);
-      expect(response.request().postDataJSON()).toEqual({ versionNo: assignment!.version });
+      const sent = response.request().postDataJSON() as { versionNo: number; fingerprint: string };
+      expect(sent).toEqual({ versionNo: assignment!.version, fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/) });
       const body = await response.json() as { acknowledgedAt: string };
-      const { rows } = await withAdmin((client) => client.query<{ version_no: number; acknowledged_at: Date }>(
-        `SELECT n.version_no, n.acknowledged_at FROM institution.notice_acknowledgment n
+      const { rows } = await withAdmin((client) => client.query<{ version_no: number; acknowledged_at: Date; notice_fingerprint: string }>(
+        `SELECT n.version_no, n.acknowledged_at, n.notice_fingerprint FROM institution.notice_acknowledgment n
          JOIN evidence.document d ON d.principal_id = n.student_id JOIN evidence.project p ON p.id = d.project_id
          WHERE d.id = $1 AND n.assignment_id = p.assignment_id`, [LOCAL_DEMO_DOCUMENT_ID]));
       expect(rows).toHaveLength(1);
       expect(rows[0]!.version_no).toBe(assignment!.version);
       expect(rows[0]!.acknowledged_at.toISOString()).toBe(body.acknowledgedAt);
+      expect(rows[0]!.notice_fingerprint).toBe(sent.fingerprint);
       expect(evidenceRequests).toEqual([]);
       await expect(page.getByRole("checkbox")).toHaveCount(0);
       await snapshot(page, "2-obavijest-potvrdena-u-bazi");

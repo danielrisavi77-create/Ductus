@@ -22,6 +22,8 @@ export interface NoticeView {
   evidenceProfile: "basic" | "extended";
   opensAt: string;
   dueAt: string;
+  /** As stored; it enters the notice fingerprint (DAN-306). */
+  aiPolicy: string;
   aiPurposes: AiPurpose[];
   wordMin: number | null;
   wordMax: number | null;
@@ -78,6 +80,7 @@ export async function readNotice(token: string | undefined, assignmentId: string
         evidenceProfile: row.evidence_profile,
         opensAt: row.opens_at.toISOString(),
         dueAt: row.due_at.toISOString(),
+        aiPolicy: row.ai_policy,
         aiPurposes: row.ai_policy === "prohibited"
           ? []
           : AI_PURPOSES.filter((p) => row.ai_purposes.includes(p)),

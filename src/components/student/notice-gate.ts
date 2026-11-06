@@ -3,8 +3,13 @@
 // of a ticked box. Until the server returns its time, `mayRecord` is false:
 // no evidence for this assignment may leave the browser before it.
 //
-// The route below is the proposal on #314 (6237117691); it does not exist
-// yet, so until Backend adds it every attempt ends as `unavailable`.
+// DAN-306 (#1502 B1): the request carries the fingerprint of the notice this
+// screen showed, computed here with the template version of this bundle. The
+// server records the acknowledgment only if its own fingerprint of the
+// stored version is the same, so a student never confirms a text they did
+// not see.
+import { NOTICE_TEMPLATE_VERSION, noticeFingerprint, type NoticeFingerprintInput } from "@/domain/notice/fingerprint";
+
 export type AckError = "stale" | "unauthorized" | "forbidden" | "invalid" | "unavailable";
 
 export type Acknowledgment = { kind: "acknowledged"; at: string } | { kind: AckError };
@@ -54,21 +59,40 @@ function isInstant(value: string): boolean {
   return ISO.test(value) && !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 19) === value.slice(0, 19);
 }
 
-/** Success only for HTTP 200 with a server time; server error bodies are ignored. */
-export async function acknowledgeNotice(
-  assignmentId: string,
-  versionNo: number,
-  send: typeof fetch = fetch,
-): Promise<Acknowledgment> {
+/** The notice as the screen shows it: the version and every field that enters its fingerprint. */
+export type ShownNotice = Omit<NoticeFingerprintInput, "templateVersion"> & { assignmentId: string; versionNo: number };
+
+/**
+ * Success only for HTTP 200 with a server time; server error bodies are
+ * ignored. Both answers 409 (another version, or the notice changed under the
+ * same version) are `stale`: either way the screen holds an old text.
+ */
+export async function acknowledgeNotice(notice: ShownNotice, send: typeof fetch = fetch): Promise<Acknowledgment> {
+  const { assignmentId, versionNo } = notice;
   if (!UUID.test(assignmentId) || !Number.isInteger(versionNo) || versionNo < 1) return { kind: "invalid" };
   try {
+    // Only the fields of the fingerprint, so that nothing else of the view
+    // can change it. Without Web Crypto it fails and nothing is sent.
+    const fingerprint = await noticeFingerprint({
+      templateVersion: NOTICE_TEMPLATE_VERSION,
+      title: notice.title,
+      instructions: notice.instructions,
+      workType: notice.workType,
+      opensAt: notice.opensAt,
+      dueAt: notice.dueAt,
+      aiPolicy: notice.aiPolicy,
+      aiPurposes: notice.aiPurposes,
+      evidenceProfile: notice.evidenceProfile,
+      wordMin: notice.wordMin,
+      wordMax: notice.wordMax,
+    });
     const response = await send(`/api/institution/assignments/${assignmentId}/acknowledgment`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
       cache: "no-store",
       redirect: "error",
-      body: JSON.stringify({ versionNo }),
+      body: JSON.stringify({ versionNo, fingerprint }),
     });
     if (response.status === 401) return { kind: "unauthorized" };
     if (response.status === 403) return { kind: "forbidden" };

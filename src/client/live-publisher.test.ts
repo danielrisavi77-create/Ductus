@@ -107,13 +107,13 @@ async function flush() {
   for (let i = 0; i < 10; i += 1) await Promise.resolve();
 }
 
-function setup(options: { current?: () => boolean; online?: boolean } = {}) {
+function setup(options: { current?: () => boolean; held?: () => boolean; online?: boolean } = {}) {
   const f = fakeFetch();
   const time = fakeTime();
   const net = fakeNetwork(options.online ?? true);
   const publisher = createLivePublisher({
     documentId: "doc-1", fetcher: f.fetcher, now: time.now, timers: time.timers, network: net.source,
-    current: options.current,
+    current: options.current, held: options.held,
   });
   return { ...f, time, net, publisher };
 }
@@ -620,5 +620,99 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     expect(s.calls.at(-1)!.init.body).toBe(canonicalizeJcs(doc("stanje 4")));
     expect(s.calls.filter((c) => !c.init.signal?.aborted)).toHaveLength(1);
     expect(s.net.listeners()).toBe(1);
+  });
+});
+
+// #882 (DAN-215, review c.6684089875): the teacher view holds the publisher
+// at the commit that shows it, so a timer that comes due before the page has
+// stopped the publisher must not start a PUT.
+describe("live publisher held by the teacher view (#882)", () => {
+  type Due = "timer" | "offer" | "online";
+  const classes: Array<[due: Due, held: boolean, sends: boolean]> = [
+    ["timer", true, false],
+    ["offer", true, false],
+    ["online", true, false],
+    ["timer", false, true],
+    ["offer", false, true],
+    ["online", false, true],
+  ];
+
+  it.each(classes)("%s due with held=%s -> PUT %s", async (due, isHeld, sends) => {
+    let held = false;
+    const s = setup({ held: () => held });
+    s.publisher.start();
+    s.publisher.offer(doc("a"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(0);
+    // Offline, the state waits for the `online` event instead of a timer.
+    if (due === "online") s.net.set(false);
+    else {
+      // Within the gap: this state waits for a timer.
+      s.publisher.offer(doc("ab"));
+      expect(s.time.pending()).toBe(1);
+    }
+    // The view changes; the page has not stopped the publisher yet.
+    held = isHeld;
+    if (due === "timer") await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    if (due === "offer") {
+      await s.time.advance(LIVE_PUBLISH_GAP_MS);
+      s.publisher.offer(doc("abc"));
+      await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    }
+    if (due === "online") {
+      s.publisher.offer(doc("ab"));
+      await s.time.advance(LIVE_PUBLISH_GAP_MS);
+      s.net.set(true);
+      await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    }
+    expect(s.calls.length > 1).toBe(sends);
+    expect(s.calls.every((c) => !c.init.signal?.aborted)).toBe(true);
+  });
+
+  it("a held state waits and is not halted; the return to writing sends only the last state", async () => {
+    let held = false;
+    const s = setup({ held: () => held });
+    s.publisher.start();
+    s.publisher.offer(doc("a"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(0);
+    s.publisher.offer(doc("ab"));
+    held = true;
+    await s.time.advance(LIVE_PUBLISH_GAP_MS * 5);
+    expect(s.calls).toHaveLength(1);
+    expect(s.publisher.halted()).toBeNull();
+
+    // As the page does at the commit: stop, then back to writing, start.
+    s.publisher.stop();
+    s.publisher.offer(doc("abc"));
+    held = false;
+    s.publisher.start();
+    await s.time.advance(0);
+    expect(s.calls).toHaveLength(2);
+    expect(s.calls[1]!.init.body).toBe(canonicalizeJcs(doc("abc")));
+    expect(s.calls[1]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
+  });
+
+  it("held does not undo a halt, and a halt is not reached while held", async () => {
+    let held = true;
+    let signedIn = false;
+    const s = setup({ held: () => held, current: () => signedIn });
+    s.publisher.start();
+    s.publisher.offer(doc("a"));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    // Held is asked first: the sign-in is not even read, so nothing is decided.
+    expect(s.calls).toHaveLength(0);
+    expect(s.publisher.halted()).toBeNull();
+    held = false;
+    s.publisher.offer(doc("ab"));
+    await s.time.advance(0);
+    expect(s.calls).toHaveLength(0);
+    expect(s.publisher.halted()).toBe("signedOut");
+    signedIn = true;
+    s.publisher.offer(doc("abc"));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(0);
   });
 });
