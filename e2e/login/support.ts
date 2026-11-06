@@ -66,7 +66,8 @@ export async function appCookie(context: BrowserContext, name: string) {
 export const ROLE_HOME = new RegExp(`^${APP_ORIGIN_PATTERN}\\/(rad|nastavnik)$`);
 
 /** A button on the provider's "Demo prijava" page (infra/fake-oidc). */
-export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik" | "Demo nastavnica";
+export type DemoAccount =
+  | "Demo studentica" | "Demo student 2" | "Demo nastavnik" | "Demo nastavnica" | "Ustanova B: nastavnica";
 
 /**
  * Signs in as a demo account (the student unless named) and returns the callback URL the provider sent.
