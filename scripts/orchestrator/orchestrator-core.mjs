@@ -1,6 +1,8 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
-import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
+import {
+  commentTime, commentVerdictIdentity, isDeclaredAgent, isDeclaredRisk, trustedAuthor,
+} from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, isD97Path, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
@@ -58,14 +60,37 @@ export function overlapPairs(prs) {
   return pairs;
 }
 
-/** Text lines of the overlap map; at most `max` shared files are listed per pair. */
-export function renderOverlap(prs, pairs, max = 10) {
-  const tag = (n) => `#${n}${prs.find((p) => p.number === n)?.isDraft ? " DRAFT" : ""}`;
+const PATH_CAP = 200;
+// Control and format characters (line breaks, escapes, bidi overrides) and the
+// Unicode line and paragraph separators.
+const UNPRINTABLE_RE = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+
+/**
+ * F-027: a file name from any PR as one inert line: unprintable characters as
+ * \uXXXX, at most PATH_CAP characters of the printed form, "?" for a non-string.
+ */
+export function safePath(value) {
+  if (typeof value !== "string") return "?";
+  const shown = value.replace(UNPRINTABLE_RE, (ch) => `\\u${ch.codePointAt(0).toString(16).padStart(4, "0")}`);
+  return shown.length > PATH_CAP ? `${shown.slice(0, PATH_CAP)}…` : shown;
+}
+
+/**
+ * Text lines of the overlap map; at most `max` shared files are listed per pair.
+ * With `repository` given (pr-overlap), a PR whose head is not exactly in it,
+ * or is unknown, is marked VANJSKI (F-027); an empty name marks every PR.
+ */
+export function renderOverlap(prs, pairs, max = 10, repository = undefined) {
+  const outside = (pr) => repository !== undefined && (!repository || pr?.headRepo !== repository);
+  const tag = (n) => {
+    const pr = prs.find((p) => p.number === n);
+    return `#${n}${pr?.isDraft ? " DRAFT" : ""}${outside(pr) ? " VANJSKI" : ""}`;
+  };
   const lines = [];
   for (const p of pairs) {
     const dirs = p.dirs.length ? `; same directory: ${p.dirs.join(", ")}` : "";
     lines.push(`${tag(p.a)} x ${tag(p.b)}: ${p.count} shared file${p.count === 1 ? "" : "s"}${dirs}`);
-    for (const f of p.files.slice(0, max)) lines.push(`  ${f}`);
+    for (const f of p.files.slice(0, max)) lines.push(`  ${safePath(f)}`);
     if (p.count > max) lines.push(`  ... and ${p.count - max} more`);
   }
   const unread = prs.filter((p) => !Array.isArray(p.paths)).map((p) => `#${p.number}`);
@@ -99,6 +124,9 @@ export function parseVerdicts(comments, kind) {
     .map((c, index) => ({ c, index }))
     .filter(({ c }) => trustedAuthor(c) && canonicalBlock(c?.body, k.agent))
     .map(({ c, index }) => ({
+      // F-015: true only when the gate could count this comment (App or the
+      // owner's CLI channel matching the declared runtime).
+      verified: commentVerdictIdentity(c, field(c.body, k.agent)) !== null,
       agent: field(c.body, k.agent),
       head: field(c.body, k.head),
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
@@ -134,7 +162,10 @@ export function latestVerdict(comments, kind, headSha) {
   const isCurrent = (e) => Boolean(
     e.head && SHA_RE.test(e.head) && headSha && e.head.toLowerCase() === headSha.toLowerCase(),
   );
-  const all = parseVerdicts(comments, kind).filter((e) => GATE_VERDICTS.has(e.verdict));
+  // F-015: a PASS the gate could not count is not shown; a FAIL or BLOCK is
+  // shown whatever its channel, so the table never reads better than the gate.
+  const all = parseVerdicts(comments, kind)
+    .filter((e) => GATE_VERDICTS.has(e.verdict) && (e.verified || e.verdict !== "PASS"));
   const latest = new Map();
   for (const e of all.filter(isCurrent)) latest.set(identityKey(e), e);
   const cur = [...latest.values()];
@@ -249,7 +280,7 @@ export function evaluateReady(d) {
   // {error}: the read failed, which is not evidence that the commit has no status.
   if (gate?.error) add("FAIL", "gate", `gate could not be read on ${d.head.slice(0, 8)} (read error, not a missing status; retry): ${gate.error}`);
   else add(gate?.state === "success" ? "PASS" : "FAIL", "gate",
-    `gate ${gate?.state ?? "missing"} on ${d.head.slice(0, 8)}${gate?.description ? `: ${gate.description}` : ""}`);
+    `gate ${gate?.state ?? "missing"} on ${d.head.slice(0, 8)}${gate?.description ? `: ${safePath(gate.description)}` : ""}`);
   const ck = evaluateChecks(d.rollup);
   if (ck.total === 0) add("FAIL", "ci", "no CI checks reported");
   else if (ck.bad.length) add("FAIL", "ci", `CI not green: ${ck.bad.map((b) => `${b.name}=${b.state}`).join(", ")}`);
@@ -259,7 +290,7 @@ export function evaluateReady(d) {
   add(d.base === "main" ? "PASS" : "FAIL", "base", `base ${d.base}`);
   add(d.mergeable === "MERGEABLE" ? "PASS" : "FAIL", "mergeable", `mergeable ${d.mergeable}`);
   if (d.overlap == null) add("FAIL", "overlap", "main-vs-PR file overlap could not be determined");
-  else if (d.overlap.length) add("FAIL", "overlap", `main changed files this PR touches: ${d.overlap.join(", ")}`);
+  else if (d.overlap.length) add("FAIL", "overlap", `main changed files this PR touches: ${d.overlap.map(safePath).join(", ")}`);
   else add("PASS", "overlap", "no overlap with files changed on main since merge base");
   if (d.threads == null) add("FAIL", "threads", "review threads could not be read");
   else if (d.threads.count) add("FAIL", "threads", `${d.threads.count} unresolved threads (${d.threads.authors.join(", ")})`);
@@ -268,10 +299,11 @@ export function evaluateReady(d) {
   // An unread file list is not "no D-97 paths".
   if (!Array.isArray(d.files)) add("FAIL", "files", "changed files could not be read; D-97 paths unknown");
   const d97 = d97Matches(d.files);
-  add("INFO", "d97", d97.length ? `touches D-97 paths, ask for Daniel's command: ${d97.join(", ")}` : "no D-97 paths");
+  add("INFO", "d97", d97.length ? `touches D-97 paths, ask for Daniel's command: ${d97.map(safePath).join(", ")}` : "no D-97 paths");
   const manual = d97ManualMatches(d.files);
-  if (manual.length) add("INFO", "d97-manual", `check D-97 by content: ${manual.join(", ")}`);
-  const agent = d.agent ?? null;
+  if (manual.length) add("INFO", "d97-manual", `check D-97 by content: ${manual.map(safePath).join(", ")}`);
+  // F-015: only the shape the gate accepts is printed (displayAgentRisk).
+  const agent = d.agent == null ? null : isDeclaredAgent(d.agent) ? d.agent : "invalid";
   add("INFO", "agent", `Agent ${agent ?? "missing"}${agent?.startsWith("claude:a:") ? " (slot claude:a: orchestrator or subagent PR)" : ""}`);
   add("INFO", "draft", d.draft ? "draft" : "not draft");
   return out;
@@ -357,6 +389,20 @@ export function pushVerdict(pushOk, localSha, remoteSha) {
 
 export function parseAgentRisk(body) {
   return { agent: field(body, "Agent"), risk: field(body, "Risk") };
+}
+
+/**
+ * F-015: Agent and Risk as the status tools print them: the value when it has
+ * the shape the gate accepts (Risk in lower case), null when the line is
+ * missing, else "invalid". Body text never reaches the table verbatim.
+ */
+export function displayAgentRisk(body) {
+  if (typeof body !== "string") return { agent: null, risk: null };
+  const { agent, risk } = parseAgentRisk(body);
+  return {
+    agent: agent == null ? null : isDeclaredAgent(agent) ? agent : "invalid",
+    risk: risk == null ? null : isDeclaredRisk(risk) ? risk.toLowerCase() : "invalid",
+  };
 }
 
 /**

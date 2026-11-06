@@ -150,6 +150,20 @@ function commentAppSlug(item, ownerLogin) {
   return CLI_CHANNELS.get(cliChannel(item, ownerLogin))?.app ?? null;
 }
 
+/**
+ * F-015: the identity the gate would give one raw comment declaring `agent`,
+ * or null. For the orchestrator scripts, so they show a PASS only when the
+ * gate could count it. GitHub reports OWNER only for the owner's account.
+ */
+export function commentVerdictIdentity(item, agent) {
+  const ownerLogin = item?.author_association === "OWNER" ? item?.user?.login ?? null : null;
+  return verifiedCommentIdentity({ appSlug: commentAppSlug(item, ownerLogin) }, agent);
+}
+
+/** F-015: whether a body's Agent and Risk values have the shape the gate accepts. */
+export const isDeclaredAgent = (value) => isAgent(value);
+export const isDeclaredRisk = (value) => typeof value === "string" && RISK_VALUES.has(value.toLowerCase());
+
 // A verdict is a person's comment posted through an App.
 function trustedComments(items, logins, ownerLogin = null) {
   return (items ?? [])
@@ -1142,6 +1156,12 @@ export function evaluateMergeAuthorization({
 }
 
 export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, quotaReviews, reviewComments, ownerLogin, carriedHeads }) {
+  // F-010: only a head in this repository is judged. A fork, a deleted fork or
+  // an unreadable repository name fails closed before any verdict is read, so
+  // no status can turn green for it, also when the runner is changed.
+  if (!sameRepositoryHead(pr)) {
+    return { result: { state: "failure", description: "PR head is not in this repository; the owner must adopt it (F-010)." } };
+  }
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {

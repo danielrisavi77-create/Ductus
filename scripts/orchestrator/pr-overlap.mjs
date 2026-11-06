@@ -4,7 +4,7 @@
 //   --plan adds advice per PR (plan-core.mjs); the work contract defaults to
 //   $DUCTUS_WORK_CONTRACT; --independent records the orchestrator's own check that
 //   two writers' PRs share no contract. Exit 1 when some PR's files could not be read.
-import { openPrsWithPaths } from "./gh.mjs";
+import { openPrsWithPaths, repoId } from "./gh.mjs";
 import { overlapPairs, renderOverlap } from "./orchestrator-core.mjs";
 import { parseArgs, planParallel, renderPlan } from "./plan-core.mjs";
 import { readContract } from "./work-guard.mjs";
@@ -25,7 +25,9 @@ try {
       ...(plan ? { plan } : {}),
     }, null, 2));
   } else {
-    for (const line of renderOverlap(prs, pairs)) console.log(line);
+    // F-027: a PR whose head is not in this repository is marked VANJSKI.
+    const { owner, repo } = await repoId();
+    for (const line of renderOverlap(prs, pairs, 10, `${owner}/${repo}`)) console.log(line);
     if (plan) for (const line of ["", ...renderPlan(plan)]) console.log(line);
   }
   process.exitCode = prs.some((p) => !p.paths) ? 1 : 0;

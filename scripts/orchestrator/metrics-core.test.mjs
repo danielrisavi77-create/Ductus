@@ -8,14 +8,17 @@ import {
 
 const SHA = (c) => c.repeat(40);
 const body = (risk, task) => `Agent: claude:a:x\nRisk: ${risk}\nTask: ${task}\n`;
-const review = (head, verdict, at, agent = "claude:reviewX") => ({
+// F-015: a PASS counts only through the App of its runtime.
+const review = (head, verdict, at, agent = "claude:x:reviewer") => ({
   author_association: "OWNER",
+  performed_via_github_app: { slug: "claude" },
   user: { login: "u" },
   created_at: at,
   body: `Agent-Review: ${agent}\nReview-Head: ${head}\nReview-Verdict: ${verdict}\n`,
 });
-const qa = (head, verdict, at, agent = "claude:qaX") => ({
+const qa = (head, verdict, at, agent = "claude:x:qa") => ({
   author_association: "OWNER",
+  performed_via_github_app: { slug: "claude" },
   user: { login: "u" },
   created_at: at,
   body: `QA-Agent: ${agent}\nQA-Head: ${head}\nQA-Verdict: ${verdict}\n`,
@@ -57,9 +60,9 @@ test("prMetrics: a round is one distinct head per kind; gate rules decide its ou
     review(SHA("a"), "PASS", "2026-10-01T10:00:00Z"),
     qa(SHA("a"), "PASS", "2026-10-01T11:00:00Z"),
     qa(SHA("a"), "PASS", "2026-10-01T11:30:00Z"), // repeat on the same head
-    qa(SHA("a"), "FAIL", "2026-10-01T11:40:00Z", "claude:qaY"), // other identity, same head: FAIL wins
+    qa(SHA("a"), "FAIL", "2026-10-01T11:40:00Z", "claude:y:qa"), // other identity, same head: FAIL wins
     qa(SHA("b"), "PASS", "2026-10-02T11:00:00Z"),
-    qa(SHA("b"), "PASS", "2026-10-02T11:10:00Z", "claude:qaY"), // two identities passing the same head
+    qa(SHA("b"), "PASS", "2026-10-02T11:10:00Z", "claude:y:qa"), // two identities passing the same head
     { ...qa(SHA("c"), "FAIL", "2026-10-02T12:00:00Z"), author_association: "NONE" },
   ];
   const m = prMetrics(merged({ title: "feat: model (B-7, 1/2)" }), comments, demoTaskIds(plan));

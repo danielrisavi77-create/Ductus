@@ -1,7 +1,7 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
 import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
 import {
-  evaluateChecks, externalReason, formatStatusRow, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
+  evaluateChecks, externalReason, formatStatusRow, formatVerdict, displayAgentRisk, latestVerdict, overlapPairs, overlapsOf,
 } from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
@@ -18,7 +18,8 @@ async function row(pr, origin) {
     prComments(pr.number).catch(() => undefined),
     checkRollup(pr.headRefOid).catch(() => undefined),
   ]);
-  const { agent, risk } = parseAgentRisk(pr.body);
+  // F-015: Agent and Risk only in the shape the gate accepts.
+  const { agent, risk } = displayAgentRisk(pr.body);
   const review = comments ? latestVerdict(comments, "review", pr.headRefOid) : undefined;
   const qa = comments ? latestVerdict(comments, "qa", pr.headRefOid) : undefined;
   return {

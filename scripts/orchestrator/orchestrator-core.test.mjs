@@ -16,8 +16,12 @@ const c = (body, over = {}) => ({
   created_at: "2026-10-10T10:00:00Z",
   ...over,
 });
+// F-015: a PASS is shown only through the App of its runtime.
 const review = (head, verdict, at) =>
-  c(`Agent-Review: claude:b:reviewer\nReview-Head: ${head}\nReview-Verdict: ${verdict}`, { created_at: at });
+  c(`Agent-Review: claude:b:reviewer\nReview-Head: ${head}\nReview-Verdict: ${verdict}`, {
+    created_at: at,
+    performed_via_github_app: { slug: "claude" },
+  });
 
 test("latest review verdict is bound to head and flagged stale otherwise", () => {
   const comments = [

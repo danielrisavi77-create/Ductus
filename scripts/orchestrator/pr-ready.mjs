@@ -2,7 +2,7 @@
 // Usage: node pr-ready.mjs <number>   (exit 0 only if all required checks pass)
 import { checkRollup, ghJson, prPaths, prView, readGate, repoId, reviewThreads } from "./gh.mjs";
 import {
-  allRequiredPass, evaluateReady, intersectFiles, parseAgentRisk, summarizeThreads,
+  allRequiredPass, displayAgentRisk, evaluateReady, intersectFiles, summarizeThreads,
 } from "./orchestrator-core.mjs";
 
 const n = Number(process.argv[2]);
@@ -48,7 +48,7 @@ try {
     threads: threadNodes ? summarizeThreads(threadNodes) : null,
     autoMerge: Boolean(pr.autoMergeRequest),
     files,
-    agent: parseAgentRisk(pr.body).agent,
+    agent: displayAgentRisk(pr.body).agent,
     draft: pr.isDraft,
   });
   console.log(`PR #${n} head ${pr.headRefOid.slice(0, 8)}`);
