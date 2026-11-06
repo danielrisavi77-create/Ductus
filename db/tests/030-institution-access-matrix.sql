@@ -165,6 +165,8 @@ SELECT bag_eq(
     'teachers_without_affiliation() definer app',
     'institution_overview() definer app',
     'teacher_roles() definer app',
+    'institution_courses(p_academic_year text) definer app',
+    'institution_academic_years() definer app',
     'ai_policy_rank(p_ai_policy text)',
     'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean)',
     'refuse_change()',
