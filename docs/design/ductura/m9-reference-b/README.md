@@ -7,7 +7,7 @@ Paket 14 iz `docs/design/EKRANI.md` §4. Smjer je „papir i grafit” (D-188, `
 | Stranica | Stanja | Izvori |
 |---|---|---|
 | `s31-ai.html` | nema uporabe, izjavljeno s razgovorima, izjavljeno bez ostalih razgovora, učitavanje, greška (predaja ostaje moguća), Asistent nije dopušten (izjava ostaje) | D-40, D-41, PRODUCT §5 pravila 1, 2, 3, 13 |
-| `n-ai-att.html` | popunjeno, razgovori nisu priloženi, nema uporabe, učitavanje, greška, prazno | D-41, D-58, PRODUCT §5 pravila 1, 2, 3, 12, 13 |
+| `n-ai-att.html` | popunjeno, obvezni razgovor priložen i ostali nisu, nema uporabe, učitavanje, greška, prazno | D-41, D-58, PRODUCT §5 pravila 1, 2, 3, 12, 13 |
 | `a-ai-pol.html` | pregled i uređivanje, pružatelji samo za čitanje, objava nove verzije, neispravan unos, trošak nije podešen, učitavanje i greška | D-267 O5, D-270 O11 |
 
 Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`: Playwrightov Chromium, cijela stranica, DPR 1, nakon `document.fonts.ready`, bez vodoravnog pomicanja. Svijetla ljuska je `data-theme="light"`. Kontrolni zbrojevi su u `SHA256SUMS`.
