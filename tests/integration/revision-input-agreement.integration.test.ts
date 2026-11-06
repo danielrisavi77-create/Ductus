@@ -64,6 +64,11 @@ describe("isRevisionText agrees with collaboration.is_revision_text", () => {
     expect(isRevisionText("a\u0000b")).toBe(false);
   });
 
+  it("agrees on each C0 and C1 control inside text", async () => {
+    const codes = [...Array.from({ length: 0x1f }, (_, i) => i + 1), ...Array.from({ length: 0x21 }, (_, i) => 0x7f + i)];
+    for (const code of codes) expect(await agrees(`a${String.fromCharCode(code)}b`), code.toString(16)).toBe(true);
+  });
+
   it("agrees on 500 mixed samples", async () => {
     const parts = fc.array(fc.constantFrom(...POOL), { minLength: 0, maxLength: 12 });
     await fc.assert(fc.asyncProperty(parts, async (chosen) => agrees(chosen.join(""))), { numRuns: 500 });

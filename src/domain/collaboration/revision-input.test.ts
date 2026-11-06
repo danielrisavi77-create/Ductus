@@ -48,6 +48,12 @@ describe("isRevisionText (class 8)", () => {
     }));
   });
 
+  it("refuses every C0 and C1 control inside text except newline and tab", () => {
+    const control = fc.oneof(fc.integer({ min: 0, max: 0x1f }), fc.integer({ min: 0x7f, max: 0x9f }));
+    fc.assert(fc.property(control, (code) =>
+      isRevisionText(`a${String.fromCharCode(code)}b`) === (code === 0x09 || code === 0x0a)));
+  });
+
   it("counts code points, not UTF-16 units", () => {
     fc.assert(fc.property(fc.integer({ min: 1, max: REVISION_TEXT_MAX + 5 }), (n) =>
       isRevisionText("\u{1D11E}".repeat(n)) === (n <= REVISION_TEXT_MAX)));
