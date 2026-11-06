@@ -2,7 +2,7 @@
 // M8.8-P01 (DAN-435), attack plan #1597: the reviewed dependency set of
 // spikes/docx-provenance. Static checks over the manifest, the npm lockfile
 // and the offline generator; nothing here installs or runs the spike.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
@@ -45,9 +45,10 @@ describe("real spike files (A18)", () => {
     for (const l of ALLOWED_LICENSES) expect(allowed).toContain(l);
     for (const p of REVIEWED) expect(ALLOWED_LICENSES).toContain(p.license);
   });
-  it("runs without the spike installed: policy imports nothing, no spike node_modules", () => {
+  it("does not need the spike installed: policy imports nothing, this test no spike package", () => {
     expect(readFileSync(`${DIR}/policy.ts`, "utf8")).not.toMatch(/^\s*(?:import|export)\b[^\n]*\bfrom\b|^\s*import\s*["']/m);
-    expect(existsSync(`${DIR}/node_modules`)).toBe(false);
+    const own = [...readFileSync(new URL(import.meta.url), "utf8").matchAll(/^import[^"']*["']([^"']+)["']/gm)].map((m) => m[1]);
+    expect(own.sort()).toEqual(["../../../spikes/docx-provenance/policy", "fast-check", "node:fs", "vitest"]);
   });
   it("gen.mjs is the only script in the spike and may not import a local file (A13)", () => {
     expect(readdirSync(DIR).filter((f) => /\.[cm]?[jt]sx?$/.test(f)).sort()).toEqual(["gen.mjs", "policy.ts"]);
