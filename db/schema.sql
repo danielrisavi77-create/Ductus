@@ -2565,7 +2565,11 @@ CREATE FUNCTION collaboration.works_started_last(p_institution_id uuid, p_assign
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
-  SELECT max(p.created_at) FROM evidence.project p
+  SELECT max(CASE WHEN p.created_at = now()
+                   AND p.xmin IS DISTINCT FROM pg_catalog.pg_current_xact_id_if_assigned()::xid
+                  THEN p.created_at + interval '1 microsecond'
+                  ELSE p.created_at END)
+    FROM evidence.project p
    WHERE p.institution_id = p_institution_id AND p.assignment_id = ANY (p_assignment_ids)
      AND p.principal_id = ANY (p_student_ids)
 $$;
@@ -10338,4 +10342,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261105110000'),
     ('20261106120000'),
     ('20261106150000'),
-    ('20261106160000');
+    ('20261106160000'),
+    ('20261106180000');
