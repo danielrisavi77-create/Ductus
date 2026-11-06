@@ -3,11 +3,13 @@ import type { WithActor } from "@/server/db/with-actor";
 /**
  * DAN-590 (M2.12-P03, screen A-04; contract on #1091, c.6695058963): the
  * faculty rule versions of the administrator's own institution, read only.
- * One withActor transaction: first institution.actor_has_role('admin'), so
- * an institution without versions is told apart from a caller who may not
- * see them (notFound, as for a route that does not exist); then the versions
- * through the faculty_rule_version_read policy (DAN-315). The institution
- * comes only from the session. Any row the table's CHECKs would refuse, or a
+ * One statement in a withActor transaction: institution.actor_has_role('admin'),
+ * so an institution without versions is told apart from a caller who may not
+ * see them (notFound, as for a route that does not exist), joined with the
+ * versions read through the faculty_rule_version_read policy (DAN-315). One
+ * statement is one snapshot under READ COMMITTED (the functions are STABLE),
+ * so a role revoked between two statements cannot read as an empty list. The
+ * institution comes only from the session. Any row the table's CHECKs would refuse, or a
  * chain that is not 1..n per work type, makes the read unavailable, never a
  * partial list.
  */
@@ -47,10 +49,12 @@ export type FacultyRulesRead =
 
 type Row = Record<string, unknown>;
 
-const ROLE_QUERY = "SELECT institution.actor_has_role('admin') AS admin";
-const QUERY = `SELECT work_type, version_no, ai_policy, ai_purposes, evidence_profile, import_allowed, origin, published_at
-  FROM institution.faculty_rule_version
-  ORDER BY work_type, version_no`;
+// The role row always comes back; versions join it only when it is true.
+const QUERY = `SELECT r.admin, v.work_type, v.version_no, v.ai_policy, v.ai_purposes, v.evidence_profile,
+    v.import_allowed, v.origin, v.published_at
+  FROM (SELECT institution.actor_has_role('admin') AS admin) r
+  LEFT JOIN institution.faculty_rule_version v ON r.admin IS TRUE
+  ORDER BY v.work_type, v.version_no`;
 
 const oneOf = <T extends string>(list: readonly T[], value: unknown): value is T =>
   typeof value === "string" && (list as readonly string[]).includes(value);
@@ -88,6 +92,12 @@ export function facultyRulesOf(rows: readonly Row[]): FacultyRules | null {
   return rules;
 }
 
+/** The administrator's rows: one row without a version when none is published. */
+function versionsOf(rows: readonly Row[]): FacultyRules | null {
+  if (rows.length === 1 && rows[0]!.work_type === null) return facultyRulesOf([]);
+  return facultyRulesOf(rows);
+}
+
 function codeOf(error: unknown): string | undefined {
   const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
   return typeof code === "string" ? code : undefined;
@@ -98,14 +108,9 @@ export async function readFacultyRules(
   withActor: WithActor,
 ): Promise<FacultyRulesRead> {
   if (sessionToken === undefined || !TOKEN.test(sessionToken)) return { kind: "unauthorized" };
-  let answer: { admin: unknown; rows: Row[] };
+  let rows: Row[];
   try {
-    answer = await withActor(sessionToken, async (tx) => {
-      const role = (await tx.query<Row>(ROLE_QUERY)).rows;
-      const admin = role.length === 1 ? role[0]!.admin : undefined;
-      // Only a confirmed administrator's transaction reads the versions.
-      return { admin, rows: admin === true ? (await tx.query<Row>(QUERY)).rows : [] };
-    });
+    rows = await withActor(sessionToken, async (tx) => (await tx.query<Row>(QUERY)).rows);
   } catch (error) {
     const code = codeOf(error);
     if (code === "ZD401") return { kind: "unauthorized" };
@@ -113,8 +118,9 @@ export async function readFacultyRules(
     console.error("faculty rules read failed", code !== undefined && SQLSTATE.test(code) ? code : "unknown");
     return { kind: "unavailable" };
   }
-  if (answer.admin === false) return { kind: "notFound" };
-  const rules = answer.admin === true ? facultyRulesOf(answer.rows) : null;
+  const admin = rows.length > 0 ? rows[0]!.admin : undefined;
+  if (admin === false && rows.length === 1) return { kind: "notFound" };
+  const rules = admin === true && rows.every((row) => row.admin === true) ? versionsOf(rows) : null;
   if (rules === null) {
     console.error("faculty rules read failed", "row_malformed");
     return { kind: "unavailable" };

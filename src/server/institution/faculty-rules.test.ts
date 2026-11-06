@@ -25,16 +25,22 @@ function version(extra: Row = {}): Row {
   };
 }
 
-function database(answer: { admin?: unknown; adminRows?: Row[]; rows?: Row[]; code?: string }) {
+const EMPTY: Row = { work_type: null, version_no: null, ai_policy: null, ai_purposes: null, evidence_profile: null,
+  import_allowed: null, origin: null, published_at: null };
+
+// The single statement: the role column on every row, versions only when it is true,
+// one row without a version otherwise. `raw` replaces the answer as given.
+function database(answer: { admin?: unknown; rows?: Row[]; raw?: Row[]; code?: string }) {
   const calls: string[] = [];
+  const admin = "admin" in answer ? answer.admin : true;
   const withActor = vi.fn(async (_token: string | null | undefined, fn: (tx: ActorTransaction) => Promise<unknown>) =>
     fn({
       async query(text: string) {
         calls.push(text);
         if (answer.code) throw Object.assign(new Error(`do not leak ${CANARY}`), { code: answer.code });
-        const rows = text.includes("actor_has_role")
-          ? answer.adminRows ?? [{ admin: "admin" in answer ? answer.admin : true }]
-          : answer.rows ?? [];
+        const versions = admin === true ? answer.rows ?? [] : [];
+        const rows = answer.raw
+          ?? (versions.length > 0 ? versions.map((row) => ({ admin, ...row })) : [{ admin, ...EMPTY }]);
         return { rows, rowCount: rows.length };
       },
     } as unknown as ActorTransaction)) as unknown as WithActor;
@@ -119,30 +125,41 @@ describe("readFacultyRules", () => {
     expect(db.withActor).not.toHaveBeenCalled();
   });
 
-  it("checks the role, then reads the versions, in one transaction and with no parameter", async () => {
+  it("checks the role and reads the versions in one statement, in one transaction and with no parameter", async () => {
     const db = database({ rows: [version()] });
     const read = await readFacultyRules(TOKEN, db.withActor);
     expect(read.kind).toBe("ok");
     expect(db.withActor).toHaveBeenCalledTimes(1);
     expect(db.withActor).toHaveBeenCalledWith(TOKEN, expect.any(Function));
-    expect(db.calls).toHaveLength(2);
-    expect(db.calls[0]).toMatch(/institution\.actor_has_role\('admin'\)/);
-    expect(db.calls[1]).toMatch(/FROM institution\.faculty_rule_version\s+ORDER BY work_type, version_no\s*$/);
-    expect(db.calls.join(" ")).not.toMatch(/\$1|institution_id/);
+    // One statement is one snapshot: a role revoked mid-read cannot pass the check and then see no rows.
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0]).toMatch(/FROM \(SELECT institution\.actor_has_role\('admin'\) AS admin\) r/);
+    expect(db.calls[0]).toMatch(/LEFT JOIN institution\.faculty_rule_version v ON r\.admin IS TRUE/);
+    expect(db.calls[0]).toMatch(/ORDER BY v\.work_type, v\.version_no\s*$/);
+    expect(db.calls[0]).not.toMatch(/\$1|institution_id/);
   });
 
-  it("answers notFound to anyone who is not an administrator, without reading the versions", async () => {
+  it("gives every work type without versions to an administrator of an institution without any", async () => {
+    const read = await readFacultyRules(TOKEN, database({ rows: [] }).withActor);
+    expect(read).toEqual({ kind: "ok", rules: facultyRulesOf([]) });
+  });
+
+  it("answers notFound to anyone who is not an administrator, never an empty list", async () => {
+    // QA on #1649 (c.6696173192): the role revoked as the versions are read is notFound, not ok with no rows.
     const db = database({ admin: false, rows: [version()] });
     expect(await readFacultyRules(TOKEN, db.withActor)).toEqual({ kind: "notFound" });
     expect(db.calls).toHaveLength(1);
   });
 
   it.each([
-    ["no row", { adminRows: [] }],
-    ["two rows", { adminRows: [{ admin: true }, { admin: true }] }],
+    ["no row", { raw: [] }],
+    ["false with versions", { raw: [{ admin: false, ...version() }, { admin: false, ...EMPTY }] }],
+    ["true then false", { raw: [{ admin: true, ...version() }, { admin: false, ...version({ version_no: 2 }) }] }],
+    ["false then true", { raw: [{ admin: false, ...EMPTY }, { admin: true, ...version() }] }],
+    ["two rows without a version", { raw: [{ admin: true, ...EMPTY }, { admin: true, ...EMPTY }] }],
     ["a null", { admin: null }],
     ["a string", { admin: "t" }],
-  ])("is unavailable when the role check returns %s", async (_name, answer) => {
+  ])("is unavailable when the role column holds %s", async (_name, answer) => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await readFacultyRules(TOKEN, database(answer).withActor)).toEqual({ kind: "unavailable" });
   });
