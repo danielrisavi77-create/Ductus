@@ -2020,6 +2020,47 @@ $$;
 
 
 --
+-- Name: accept_revision_request(uuid, bigint, bigint, text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR NOT collaboration.is_revision_number(p_accepted_revision)
+     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state <> 'responded' THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_accepted_revision < (SELECT s.response_revision FROM collaboration.revision_response s
+                             WHERE s.request_id = r.request_id AND s.version = r.version) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'accepted', closed_by = r.actor_id, closed_at = now(),
+         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  UPDATE collaboration.revision_request q SET state = 'accepted', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'accepted'::text;
+END
+$_$;
+
+
+--
 -- Name: actor_role(uuid, uuid, uuid); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2178,6 +2219,26 @@ CREATE FUNCTION collaboration.is_comment_body(p_body text) RETURNS boolean
     AND translate(p_body, E'\n\t', '') !~ '[[:cntrl:]]'
     AND p_body !~ E'[\u202A-\u202E\u2066-\u2069]'
 $$;
+
+
+--
+-- Name: is_revision_number(bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.is_revision_number(p_revision bigint) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$ SELECT p_revision IS NOT NULL AND p_revision BETWEEN 0 AND 9007199254740991 $$;
+
+
+--
+-- Name: is_revision_seq(bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.is_revision_seq(p_seq bigint) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$ SELECT p_seq IS NOT NULL AND p_seq BETWEEN 1 AND 9007199254740991 $$;
 
 
 --
@@ -2438,6 +2499,52 @@ $_$;
 
 
 --
+-- Name: reopen_revision_request(uuid, bigint, text, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.reopen_revision_request(p_request_id uuid, p_expected_seq bigint, p_instruction text, p_requested_revision bigint) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR NOT coalesce(collaboration.is_revision_text(p_instruction), false)
+     OR NOT collaboration.is_revision_number(p_requested_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state NOT IN ('open', 'reopened', 'responded', 'accepted') OR r.version >= 1000 THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_requested_revision < (
+    SELECT greatest(max(v.requested_revision), max(v.accepted_revision),
+             (SELECT max(s.response_revision) FROM collaboration.revision_response s WHERE s.request_id = r.request_id))
+      FROM collaboration.revision_request_version v WHERE v.request_id = r.request_id) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'reopened', closed_by = r.actor_id, closed_at = now()
+   WHERE v.request_id = r.request_id AND v.version = r.version AND v.closed_as IS NULL;
+  INSERT INTO collaboration.revision_request_version
+    (request_id, institution_id, version, instruction, requested_revision, opened_by)
+  VALUES (r.request_id, r.institution_id, r.version + 1, p_instruction, p_requested_revision, r.actor_id);
+  UPDATE collaboration.revision_request q SET state = 'reopened', version = r.version + 1, row_seq = v_seq
+   WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version + 1, 'reopened'::text;
+END
+$$;
+
+
+--
 -- Name: reopen_thread(uuid); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2495,6 +2602,79 @@ CREATE FUNCTION collaboration.resolve_thread(p_thread_id uuid) RETURNS void
 
 
 --
+-- Name: respond_revision_request(uuid, bigint, text, text, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.respond_revision_request(p_request_id uuid, p_expected_seq bigint, p_kind text, p_explanation text, p_response_revision bigint) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'student');
+  -- Checked before the table constraints, whose errors would quote the row.
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR p_kind IS NULL OR p_kind NOT IN ('done', 'declined')
+     OR NOT coalesce(collaboration.is_revision_text(p_explanation), false)
+     OR NOT collaboration.is_revision_number(p_response_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state NOT IN ('open', 'reopened') THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_response_revision < (SELECT v.requested_revision FROM collaboration.revision_request_version v
+                             WHERE v.request_id = r.request_id AND v.version = r.version) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  INSERT INTO collaboration.revision_response
+    (request_id, institution_id, version, kind, explanation, response_revision, author_id)
+  VALUES (r.request_id, r.institution_id, r.version, p_kind, p_explanation, p_response_revision, r.actor_id);
+  UPDATE collaboration.revision_request q SET state = 'responded', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'responded'::text;
+END
+$$;
+
+
+--
+-- Name: revision_request_for_write(uuid, text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.revision_request_for_write(p_request_id uuid, p_role text, OUT request_id uuid, OUT institution_id uuid, OUT state text, OUT version integer, OUT row_seq bigint, OUT actor_id uuid) RETURNS record
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  r record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT q.id, q.institution_id, q.assignment_id, q.owner_id, q.document_id INTO r
+    FROM collaboration.revision_request q WHERE q.id = p_request_id AND q.institution_id = actor.institution_id;
+  IF r.id IS NULL OR collaboration.actor_role(r.institution_id, r.assignment_id, r.owner_id) IS DISTINCT FROM p_role THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  SELECT q.state, q.version, q.row_seq INTO state, version, row_seq
+    FROM collaboration.revision_request q WHERE q.id = r.id FOR UPDATE;
+  PERFORM collaboration.lock_document_for_write(r.document_id);
+  IF app.document_submitted(r.document_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  request_id := r.id;
+  institution_id := r.institution_id;
+  actor_id := actor.user_id;
+END
+$$;
+
+
+--
 -- Name: set_thread_state(uuid, text); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2540,6 +2720,40 @@ BEGIN
   END IF;
   thread_id := t.id;
   state := t.state;
+END
+$$;
+
+
+--
+-- Name: withdraw_revision_request(uuid, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.withdraw_revision_request(p_request_id uuid, p_expected_seq bigint) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state NOT IN ('open', 'reopened', 'responded') THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'withdrawn', closed_by = r.actor_id, closed_at = now()
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  UPDATE collaboration.revision_request q SET state = 'withdrawn', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'withdrawn'::text;
 END
 $$;
 
@@ -10375,4 +10589,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106150000'),
     ('20261106160000'),
     ('20261106170000'),
-    ('20261106180000');
+    ('20261106180000'),
+    ('20261106190000');
