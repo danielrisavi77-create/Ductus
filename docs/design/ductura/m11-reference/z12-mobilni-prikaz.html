@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Z-12 — Mobilni prikaz (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 18 · DAN-584 · prijedlog slike · M11.UX-R</div>
+  <h1>Z-12 — Mobilni prikaz (sustavno)</h1>
+  <p>Pravila uske širine za sve ekrane, složena po retku Z-12 iz <code>docs/design/EKRANI.md</code> i po uskim prikazima iz ranijih paketa. Tri okvira od 360 px: popis radova, rad s trakom spremanja i obrazac. Isprekidani obrub pokazuje polje dodira od najmanje 44 px. Podaci su izmišljeni.</p>
+</header>
+<main class="page">
+<div class="phones">
+
+  <section aria-labelledby="p1" class="phone" data-state="popis">
+    <div class="bar"><b>Ductura</b><button class="btn secondary small target" type="button" aria-expanded="false">Izbornik</button></div>
+    <div class="body">
+      <h2 id="p1">Moji radovi</h2>
+      <ul class="list">
+        <li class="item"><span class="title">Završni rad · Javne politike</span><span class="meta">Rok predaje 15. 6. · mentor je komentirao</span><a class="target" href="#p1">Otvori rad</a></li>
+        <li class="item"><span class="title">Seminarski rad · Europske studije</span><span class="meta">Predano 2. 3.</span><a class="target" href="#p1">Otvori rad</a></li>
+      </ul>
+      <p class="meta">Tablica postaje popis: jedan rad, jedan okvir, radnja na dnu okvira.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="p2" class="phone" data-state="rad">
+    <div class="bar"><b>Završni rad</b><button class="btn secondary small target" type="button" aria-expanded="false">Izbornik</button></div>
+    <div class="body">
+      <h2 id="p2" class="meta">2.2 Primjer iz prakse</h2>
+      <div class="sheet"><p>Lokalna samouprava u primjeru odlučuje o proračunu kroz javno savjetovanje koje traje trideset dana.</p></div>
+      <div class="statusbar" role="status"><span><span class="dot"></span>Spremljeno na poslužitelju · 14:21</span></div>
+      <p class="meta">Traka spremanja uvijek je vidljiva, i kad je izbornik zatvoren. Komentari se otvaraju preko cijelog zaslona.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="p3" class="phone" data-state="obrazac">
+    <div class="bar"><b>Prijavi problem</b><button class="btn secondary small target" type="button">Zatvori</button></div>
+    <div class="body">
+      <h2 id="p3" class="meta">O čemu se radi?</h2>
+      <label class="opt target"><input type="radio" name="m" checked> Ductura ne radi kako treba</label>
+      <label class="opt target"><input type="radio" name="m"> Ne mogu se prijaviti sustavom AAI@EduHr</label>
+      <div class="field"><label for="m-opis">Opis</label><textarea class="input target" id="m-opis" rows="3"></textarea></div>
+      <button class="btn target" type="button">Pošalji prijavu</button>
+      <p class="meta">Gumbi su pune širine; nijedan cilj dodira nije niži od 44 px.</p>
+    </div>
+  </section>
+
+</div>
+<section aria-labelledby="pravila" class="panel" data-state="pravila">
+  <div class="panel-top"><h2 id="pravila">Pravila uske širine</h2></div>
+  <div class="panel-body">
+    <ul class="list">
+      <li class="comp"><span>Polje dodira</span><b>najmanje 44 × 44 px</b></li>
+      <li class="comp"><span>Vodoravno pomicanje stranice</span><b>nikad</b></li>
+      <li class="comp"><span>Tablica</span><b>popis okvira</b></li>
+      <li class="comp"><span>Glavna radnja</span><b>gumb pune širine</b></li>
+      <li class="comp"><span>Traka spremanja</span><b>uvijek vidljiva</b></li>
+    </ul>
+  </div>
+</section>
+<p class="meta">Tipkovnica (EQ6): u svakom okviru 1. Izbornik ili Zatvori, 2. naslov, 3. sadržaj redom, 4. glavna radnja.</p>
+</main>
+</body>
+</html>
