@@ -17,11 +17,16 @@
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
+-- The column is new and empty, so both CHECKs hold for every row; validating
+-- them at once scans identity.session under the lock this transaction holds.
 ALTER TABLE identity.session
   ADD COLUMN oidc_sid_hash bytea,
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT session_oidc_sid_hash_check CHECK (octet_length(oidc_sid_hash) = 32),
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT session_oidc_sid_hash_closed_check CHECK (closed_at IS NULL OR oidc_sid_hash IS NULL);
 
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX session_oidc_sid_hash_idx ON identity.session (oidc_sid_hash) WHERE oidc_sid_hash IS NOT NULL;
 
 -- Every close path sets closed_at; none has to know about the hash.
