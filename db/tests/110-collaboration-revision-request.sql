@@ -216,8 +216,10 @@ FROM (VALUES
   (NULL::bigint, 'ZD422: invalid input', 'that is missing is refused'),
   (-1, 'ZD422: invalid input', 'of -1 is refused'),
   (9007199254740992, 'ZD422: invalid input', 'of 2^53 is refused'),
+  (1, 'ZD422: invalid input', 'of 1, above the current revision 0 of the document, is refused (#1091 c.6696580072)'),
+  (9007199254740991, 'ZD422: invalid input', 'of 2^53 - 1, above the current revision of the document, is refused'),
   (0, 'open|1', 'of 0 is accepted'),
-  (9007199254740991, 'open|1', 'of 2^53 - 1 is accepted')
+  (0, 'open|1', 'equal to the current revision 0 of the document is accepted')
 ) AS r (revision, outcome, what);
 SELECT is((SELECT count(*) FROM collaboration.revision_request WHERE document_id = 'doc-a'), 9::bigint,
   'only the accepted inputs wrote a request');
@@ -352,6 +354,8 @@ WHERE course_id = pg_temp.id('k3') AND user_id = pg_temp.id('petra') AND member_
 SELECT is(pg_temp.ask('petra', $$ SELECT count(*) FROM collaboration.list_revision_requests('doc-b') $$), 'ZD403: forbidden',
   'a removed teacher can no longer read');
 SELECT is(pg_temp.create_as('petra', 'doc-b', 'Tekst.', 0, '{anchor_b}'), 'ZD403: forbidden', 'a removed teacher can no longer create');
+SELECT is(pg_temp.create_as('petra', 'doc-b', 'Tekst.', 1, '{anchor_b}'), 'ZD403: forbidden',
+  'a removed teacher asking for a revision above the document gets the forbidden answer, not invalid input');
 SELECT is(pg_temp.ask('tomo', $$ SELECT count(*) FROM collaboration.list_revision_requests('doc-b') $$), '1',
   'the student still reads the request of the removed teacher');
 
@@ -362,11 +366,15 @@ SELECT is(pg_temp.call('ana', 'pkg-a', 'request-1', pg_temp.descriptor(), 0, rep
 SELECT is(pg_temp.ask('ana', $$ SELECT outcome FROM app.request_submission('doc-a', 1) $$), 'requested',
   'fixture: Ana requests revision 1');
 SELECT is(pg_temp.create_as('vesna', 'doc-a', 'Prije upisa predaje.', 1), 'open|1', 'a requested but unrecorded submission does not stop creating');
+SELECT is(pg_temp.create_as('vesna', 'doc-a', 'Iznad revizije.', 2), 'ZD422: invalid input',
+  'after the commit of revision 1 a request for revision 2 is still above the document and refused');
 SELECT is(pg_temp.ask('ana', format('SELECT outcome FROM app.record_submission(%L::uuid, %L)',
     (SELECT id FROM evidence.submission_request WHERE document_id = 'doc-a'), pg_temp.h('d'))), 'recorded',
   'fixture: the submission of revision 1 is recorded');
 CREATE TEMP TABLE rows_submitted AS SELECT pg_temp.rows('doc-a') AS n;
 SELECT is(pg_temp.create_as('vesna', 'doc-a', 'Nakon predaje.', 1), 'ZD403: forbidden', 'the teacher cannot create on a submitted document (B8)');
+SELECT is(pg_temp.create_as('vesna', 'doc-a', 'Nakon predaje.', 2), 'ZD403: forbidden',
+  'a revision above the document on a submitted document still gets the forbidden answer');
 SELECT is(pg_temp.create_as('vesna', 'doc-a', '', NULL, 'NULL'), 'ZD403: forbidden',
   'a malformed create on a submitted document still gets the forbidden answer');
 SELECT is(pg_temp.rows('doc-a'), (SELECT n FROM rows_submitted), 'creating on a submitted document wrote nothing');
