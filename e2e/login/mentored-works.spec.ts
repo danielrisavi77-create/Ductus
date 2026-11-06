@@ -57,7 +57,7 @@ async function teacherRole(account: "demo-teacher" | "demo-teacher-2"): Promise<
   const id = account === "demo-teacher" ? TEACHER : TEACHER_2;
   const active = await admin(async (client) =>
     (await client.query(`SELECT 1 ${ACTIVE_ROLE} AND r.confirmed_at IS NOT NULL`, [id])).rowCount === 1);
-  await run("node", ["scripts/demo/provision-teacher.mjs", ...(account === "demo-teacher" ? [] : [account])], { cwd: ROOT });
+  await run("node", ["scripts/local/provision-teacher.mjs", ...(account === "demo-teacher" ? [] : [account])], { cwd: ROOT });
   if (!active) granted.push(id);
 }
 

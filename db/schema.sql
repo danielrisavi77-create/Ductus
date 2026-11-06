@@ -1930,6 +1930,22 @@ $_$;
 
 
 --
+-- Name: worker_pending_backlog(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.worker_pending_backlog() RETURNS TABLE(evidence_domain_id uuid, pending_count bigint, oldest_created_at timestamp with time zone)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT r.evidence_domain_id, count(*), min(r.created_at)
+    FROM evidence.receipt r
+   WHERE r.status = 'pending_signature'
+   GROUP BY r.evidence_domain_id
+   ORDER BY r.evidence_domain_id
+$$;
+
+
+--
 -- Name: worker_pending_receipts(uuid, integer); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -9727,4 +9743,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261104100000'),
     ('20261104110000'),
     ('20261104120000'),
-    ('20261104130000');
+    ('20261104130000'),
+    ('20261105110000');

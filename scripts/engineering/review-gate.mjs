@@ -125,9 +125,11 @@ async function main() {
   // marks all three statuses pending.
   if (cutoff === Infinity) throw new Error("A base change has no readable time; the gate cannot tell which verdicts count.");
   const comments = sinceBaseChange(allComments, cutoff, "created_at", { codexEdits: true });
-  // PR reviews stay unfiltered, as before F-013: a review of the exhausted App
-  // without a readable time must still void quota evidence (QA c.6561448849).
-  // Filtering them by base change is a separate ticket.
+  // DAN-452: a Codex PR review judged the diff against the base of its time, so
+  // only reviews submitted after the last base change are Codex evidence. Quota
+  // evidence is still voided from the full list: a review of the exhausted App
+  // without a readable time must void it (QA c.6561448849).
+  const codexReviews = sinceBaseChange(reviews, cutoff, "submitted_at");
   if (!targetsDefaultBranch(pr)) {
     // F-014, F-040: another open PR on this head may own its statuses, and
     // while the head is shared none of them may stay green (Codex review
@@ -150,7 +152,8 @@ async function main() {
     files: changedFiles,
     comments,
     historyComments: allComments,
-    prReviews: reviews,
+    prReviews: codexReviews,
+    quotaReviews: reviews,
     reviewComments,
     ownerLogin: owner,
     carriedHeads: await carriedHeads(api, owner, repo, pr, comments),

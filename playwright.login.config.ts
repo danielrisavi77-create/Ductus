@@ -1,7 +1,7 @@
 import { defineConfig, devices, type ReporterDescription } from "@playwright/test";
 
-import { evidenceServerEnvironment } from "./scripts/demo/login-e2e-evidence.mjs";
-import { LOGIN_PORT, loginOrigin } from "./scripts/demo/login-e2e-https.mjs";
+import { evidenceServerEnvironment } from "./scripts/local/login-e2e-evidence.mjs";
+import { LOGIN_PORT, loginOrigin } from "./scripts/local/login-e2e-https.mjs";
 import webkitSpecs from "./scripts/engineering/login-webkit-specs.json" with { type: "json" };
 import { playwrightConsoleReporter } from "./test-output";
 
@@ -9,8 +9,8 @@ import { playwrightConsoleReporter } from "./test-output";
 // is fixed. Our own dev server runs over https at 127.0.0.1, not localhost: an
 // IP address is never kept as an HSTS host, so WebKit does not upgrade the
 // redirect to the http-only fake provider on localhost:8090 (see
-// scripts/demo/login-e2e-https.mjs); against a server reused with
-// E2E_REUSE_SERVER=1 the origin stays http, as `pnpm demo:up` starts it.
+// scripts/local/login-e2e-https.mjs); against a server reused with
+// E2E_REUSE_SERVER=1 the origin stays http, as `pnpm local:up` starts it.
 const BASE_URL = loginOrigin(process.env);
 const SECURE = BASE_URL.startsWith("https:");
 
@@ -63,7 +63,7 @@ export default defineConfig({
     // `next dev` over https with a certificate made for this run. With
     // E2E_REUSE_SERVER=1 the origin is http and, when no server answers, the
     // plain dev server starts as it did before.
-    command: SECURE ? "node scripts/demo/login-e2e-https.mjs" : `pnpm dev --port ${LOGIN_PORT}`,
+    command: SECURE ? "node scripts/local/login-e2e-https.mjs" : `pnpm dev --port ${LOGIN_PORT}`,
     url: BASE_URL,
     ignoreHTTPSErrors: SECURE,
     // Playwright stops the server group with SIGKILL unless told otherwise, and
@@ -80,7 +80,7 @@ export default defineConfig({
       OIDC_REDIRECT_URI: `${BASE_URL}/api/auth/callback`,
       OIDC_CLIENT_ID: "ductus-local",
       OIDC_CLIENT_SECRET: "ductus-local-only",
-      // The evidence signer and the storage domain `pnpm demo:up` gives the app (Z5).
+      // The evidence signer and the storage domain `pnpm local:up` gives the app (Z5).
       ...evidenceServerEnvironment(),
     },
     reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",

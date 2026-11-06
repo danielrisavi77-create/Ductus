@@ -23,12 +23,21 @@ const reply = (status, body) => ({
 });
 let statusCount = 0;
 let pullListReads = 0;
+// A failing write stays down for its retries (DAN-664): the log keeps one line
+// per write, and each retry of the same write is counted in FAKE_LOG.retries.
+let downWrite = null;
 globalThis.fetch = async (url, options = {}) => {
   const path = new URL(url).pathname;
   if ((options.method ?? "GET") === "POST" && path.includes("/statuses/")) {
+    const write = path + options.body;
+    if (write === downWrite) {
+      appendFileSync(process.env.FAKE_LOG + ".retries", "1\\n");
+      return reply(500, { message: "down" });
+    }
     appendFileSync(process.env.FAKE_LOG, JSON.stringify({ path, body: JSON.parse(options.body) }) + "\\n");
     statusCount++;
-    return plan.statusFails || statusCount === plan.failPostNumber ? reply(500, { message: "down" }) : reply(201, {});
+    downWrite = plan.statusFails || statusCount === plan.failPostNumber ? write : null;
+    return downWrite ? reply(500, { message: "down" }) : reply(201, {});
   }
   if (plan.fail.some((p) => path.endsWith(p))) throw new TypeError("fetch failed");
   if (/\\/pulls\\/\\d+$/.test(path)) {
@@ -39,7 +48,14 @@ globalThis.fetch = async (url, options = {}) => {
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
   if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
   if (path.endsWith("/issues/7/events")) return reply(200, plan.timeline ?? []);
-  if (path.endsWith("/pulls/7/reviews")) return reply(200, plan.reviews ?? []);
+  if (path.endsWith("/pulls/7/reviews")) {
+    if (!Array.isArray(plan.reviews)) return reply(200, plan.reviews ?? []);
+    const query = new URL(url).searchParams;
+    const per = Number(query.get("per_page")) || 30;
+    const page = Number(query.get("page")) || 1;
+    return reply(200, plan.reviews.slice((page - 1) * per, page * per));
+  }
+  if (path.endsWith("/pulls/7/comments")) return reply(200, plan.reviewComments ?? []);
   if (path.endsWith("/pulls")) {
     pullListReads++;
     if (pullListReads > 1 && plan.failListReread) throw new TypeError("fetch failed");
@@ -51,7 +67,7 @@ globalThis.fetch = async (url, options = {}) => {
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline, reviews, reviewComments, openPullsReread, failListReread } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -66,12 +82,13 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews, openPullsReread, failListReread }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline, reviews, reviewComments, openPullsReread, failListReread }),
       FAKE_LOG: log,
     },
   });
   const posts = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
-  return { code: result.status, posts, stderr: result.stderr };
+  const retries = existsSync(`${log}.retries`) ? readFileSync(`${log}.retries`, "utf8").trim().split("\n").length : 0;
+  return { code: result.status, posts, retries, stderr: result.stderr };
 }
 
 const comment = { issue: { number: 7, pull_request: {} } };
@@ -110,9 +127,11 @@ test("a failed PR read marks the event head pending when the event names one", (
 });
 
 test("a failing status post still ends the run with exit 1 and no crash", () => {
-  const { code, posts, stderr } = run(comment, { fail: ["/issues/7/comments"], statusFails: true });
+  const { code, posts, retries, stderr } = run(comment, { fail: ["/issues/7/comments"], statusFails: true });
   assert.equal(code, 1);
   assert.equal(posts.length, 1);
+  // DAN-664: the write was tried three times in all before the run gave up.
+  assert.equal(retries, 2);
   assert.match(stderr, /Could not mark the head pending/);
 });
 
@@ -536,4 +555,118 @@ test("a failed status write of a side-base PR leaves no green status on the shar
     }
     assert.ok(failed.posts.every((p) => p.body.state === "pending"), `POST ${failPostNumber}`);
   }
+});
+
+// DAN-452 (F-013 continued): a Codex PR review judged the diff against the base
+// of its time, so after the last base change it is no D-139 Codex evidence,
+// also when it names the same head. One table over every input class; the
+// D-139 path (Claude review, second Claude session QA) is the only one where a
+// PR review turns the gate green.
+const secondSessionComments = (at) => [
+  byOwnerAt(`Agent-Review: claude:b:reviewer\nReview-Head: ${HEAD}\nReview-Verdict: PASS\n`, at),
+  byOwnerAt(
+    `QA-Agent: claude:c:qa\nQA-Head: ${HEAD}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\nProvider-Fallback: claude-second-session — Codex review na headu ${HEAD}\n`,
+    at,
+  ),
+];
+const codexOnHead = (submittedAt, extra = {}) => ({
+  user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, state: "COMMENTED", commit_id: HEAD,
+  body: "Codex Review", ...(submittedAt === undefined ? {} : { submitted_at: submittedAt }), ...extra,
+});
+const CHANGE = "2026-10-31T11:00:00Z";
+const reviewClasses = [
+  ["control: no base change", [], [codexOnHead("2026-10-31T10:00:00Z")], "success"],
+  ["submitted before the change", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z")], "pending"],
+  ["submitted in the same second as the change", [baseChange(CHANGE)], [codexOnHead(CHANGE)], "pending"],
+  ["submitted between two changes", [baseChange("2026-10-31T10:00:00Z"), baseChange(CHANGE)], [codexOnHead("2026-10-31T10:30:00Z")], "pending"],
+  ["submitted after the last change", [baseChange(CHANGE)], [codexOnHead("2026-10-31T11:00:01Z")], "success"],
+  ["submitted_at null", [baseChange(CHANGE)], [codexOnHead(null)], "pending"],
+  ["submitted_at missing", [baseChange(CHANGE)], [codexOnHead(undefined)], "pending"],
+  ["submitted_at unreadable", [baseChange(CHANGE)], [codexOnHead("garbage")], "pending"],
+  ["before an automatic change", [autoChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z")], "pending"],
+  ["after an automatic change", [autoChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z")], "success"],
+  ["a failed automatic change is no boundary", [{ event: "automatic_base_change_failed", created_at: CHANGE }], [codexOnHead("2026-10-31T10:00:00Z")], "success"],
+  ["an old and a new review", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z"), codexOnHead("2026-10-31T12:00:00Z")], "success"],
+  ["the new review names another head", [baseChange(CHANGE)], [codexOnHead("2026-10-31T10:00:00Z"), codexOnHead("2026-10-31T12:00:00Z", { commit_id: BASE })], "pending"],
+  // #1500 A6: GitHub sends ISO strings; Date.parse would read 2027 as a year.
+  ["submitted_at a number read as a later year", [baseChange(CHANGE)], [codexOnHead(2027)], "pending"],
+  ["submitted_at a large number", [baseChange(CHANGE)], [codexOnHead(12345)], "pending"],
+  ["submitted_at an array", [baseChange(CHANGE)], [codexOnHead(["2026-10-31T12:00:00Z"])], "pending"],
+  // #1500 A8: after the change only the Codex bot account counts.
+  ["after the change, type User", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { user: { login: "chatgpt-codex-connector[bot]", type: "User" } })], "pending"],
+  ["after the change, login without [bot]", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { user: { login: "chatgpt-codex-connector", type: "Bot" } })], "pending"],
+  ["after the change, another bot", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { user: { login: "grok-by-xai[bot]", type: "Bot" } })], "pending"],
+  // #1500 A9: only a submitted review state counts.
+  ["after the change, PENDING", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { state: "PENDING" })], "pending"],
+  ["after the change, DISMISSED", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { state: "DISMISSED" })], "pending"],
+  ["after the change, APPROVED", [baseChange(CHANGE)], [codexOnHead("2026-10-31T12:00:00Z", { state: "APPROVED" })], "success"],
+  // #1500 C4: malformed items are skipped without a crash.
+  ["a null item and one without a user", [baseChange(CHANGE)], [null, { state: "COMMENTED", commit_id: HEAD, submitted_at: "2026-10-31T12:00:00Z" }], "pending"],
+];
+
+test("a Codex PR review counts as D-139 evidence only after the last base change (DAN-452)", () => {
+  for (const [name, timeline, reviews, expected] of reviewClasses) {
+    const out = run(comment, { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline, reviews });
+    assert.equal(out.code, 0, name);
+    assert.equal(gateState(out), expected, name);
+  }
+});
+
+// The filter must not weaken quota evidence: a review of the exhausted App
+// still voids it from the full list, also when the review is no Codex evidence.
+test("a Codex PR review dropped by the base change filter still voids quota evidence (DAN-452)", () => {
+  const input = { pr: fallbackPr, files: srcFile, openPulls: [fallbackPr], comments: quotaFallback, timeline: [baseChange(CHANGE)] };
+  assert.equal(gateState(run(comment, input)), "success");
+  for (const submittedAt of [null, undefined, "garbage", "2026-10-31T12:05:00Z"]) {
+    const out = run(comment, { ...input, reviews: [codexOnHead(submittedAt)] });
+    assert.equal(gateState(out), "pending", String(submittedAt));
+  }
+});
+
+// #1500 A6 on the quota side: a review time that is no string is unreadable,
+// so a review of the exhausted App voids the evidence (fail closed).
+test("a Codex PR review with a numeric time voids quota evidence (DAN-452)", () => {
+  const input = { pr: fallbackPr, files: srcFile, openPulls: [fallbackPr], comments: quotaFallback };
+  for (const timeline of [[], [baseChange(CHANGE)]]) {
+    for (const submittedAt of [0, 2027]) {
+      assert.equal(gateState(run(comment, { ...input, timeline, reviews: [codexOnHead(submittedAt)] })), "pending", `${timeline.length} ${submittedAt}`);
+    }
+  }
+});
+
+// #1500 C1: an unread or malformed review list stops the run; the failure path
+// leaves all three statuses pending, never an older green one.
+test("an unread or malformed review list fails the run with every status pending (DAN-452)", () => {
+  const input = { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline: [baseChange(CHANGE)] };
+  for (const [name, extra] of [["read fails", { fail: ["/pulls/7/reviews"] }], ["object", { reviews: {} }], ["string", { reviews: "x" }]]) {
+    const out = run(comment, { ...input, ...extra });
+    assert.equal(out.code, 1, name);
+    assert.deepEqual(states(out.posts), ALL.map((c) => [c, "pending"]), name);
+  }
+});
+
+// #1500 C3: the list is read across pages, so a review past the first 100
+// still counts, and an old one on the second page still does not.
+test("Codex PR reviews past the first page are read and filtered alike (DAN-452)", () => {
+  const filler = Array.from({ length: 100 }, () => ({ user: { login: "someone", type: "User" }, state: "COMMENTED", commit_id: HEAD, submitted_at: "2026-10-31T12:00:00Z" }));
+  const input = { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline: [baseChange(CHANGE)] };
+  assert.equal(gateState(run(comment, { ...input, reviews: [...filler, codexOnHead("2026-10-31T12:00:00Z")] })), "success");
+  assert.equal(gateState(run(comment, { ...input, reviews: [...filler, codexOnHead("2026-10-31T10:00:00Z")] })), "pending");
+});
+
+// #1500 B5: the base change filter covers PR reviews only; an unanswered Codex
+// thread from before the change still blocks the D-139 path.
+test("an unanswered Codex thread from before the base change still blocks (DAN-452)", () => {
+  const thread = { id: 41, user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, body: "P1", created_at: "2026-10-31T10:00:00Z" };
+  const reply = { id: 42, in_reply_to_id: 41, user: { login: "danielrisavi77-create", type: "User" }, author_association: "OWNER", body: "Fixed.", created_at: "2026-10-31T10:10:00Z" };
+  const input = { pr: eligible, files: srcFile, openPulls: [eligible], comments: secondSessionComments("2026-10-31T12:30:00Z"), timeline: [baseChange(CHANGE)], reviews: [codexOnHead("2026-10-31T12:00:00Z")] };
+  assert.equal(gateState(run(comment, { ...input, reviewComments: [thread] })), "pending");
+  assert.equal(gateState(run(comment, { ...input, reviewComments: [thread, reply] })), "success", "control: an answered thread");
+});
+
+// #1500 D2: a Codex APPROVED review alone is no Claude review and no QA.
+test("a Codex APPROVED review without canonical verdicts is no success (DAN-452)", () => {
+  const out = run(comment, { pr: eligible, files: srcFile, openPulls: [eligible], comments: [], reviews: [codexOnHead("2026-10-31T12:00:00Z", { state: "APPROVED" })] });
+  assert.equal(gateState(out), "pending");
+  assert.equal(mergeState(out), "pending");
 });

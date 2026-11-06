@@ -31,7 +31,7 @@ import { localAdminUrl } from "./local-db-url";
 import { caretAtEnd as caretAtEndOf } from "../support/caret";
 import { demoLaunchOptions } from "./launch-options";
 import { APP_ORIGIN } from "./origin";
-import { loginPagePaths, warmLoginPages } from "../../scripts/demo/login-e2e-https.mjs";
+import { loginPagePaths, warmLoginPages } from "../../scripts/local/login-e2e-https.mjs";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -422,9 +422,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(page.getByRole("heading", { level: 1, name: t.access.deniedTitle })).toBeVisible();
       await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
     }
-    // DAN-346: against `pnpm demo:up:native` the same command uses the native
+    // DAN-346: against `pnpm local:up:native` the same command uses the native
     // runner's socket instead of the Compose container.
-    await run("node", ["scripts/demo/provision-teacher.mjs", ...NATIVE_PROVISION], { cwd: ROOT });
+    await run("node", ["scripts/local/provision-teacher.mjs", ...NATIVE_PROVISION], { cwd: ROOT });
     await page.goto("/nastavnik/zadatak/novi");
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
 
@@ -499,6 +499,16 @@ test("demo walk-through", async ({ browser, page, context }) => {
       const path = new URL(request.url()).pathname;
       if (/^\/api\/(evidence|live|submission)(\/|$)/.test(path)) evidenceRequests.push(path);
     };
+    // DAN-570 (#1541): a script the page policy refuses on /upis left hydration waiting
+    // forever, and "Upiši" stayed disabled (run 42019087345). The listener is there before
+    // any markup runs; a refused script here fails the step even when the race is won.
+    await page.addInitScript(() => {
+      const refused: string[] = [];
+      (window as unknown as { __refusedScripts: string[] }).__refusedScripts = refused;
+      document.addEventListener("securitypolicyviolation", (event) => {
+        if (event.effectiveDirective.startsWith("script-src")) refused.push(`${event.effectiveDirective} ${event.blockedURI}`);
+      });
+    });
     await page.goto("/upis");
     page.on("request", observe);
     try {
@@ -509,6 +519,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
         await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
         await expect(submitButton).toBeEnabled({ timeout: 1_000 });
       }).toPass({ timeout: 30_000 });
+      await page.waitForLoadState("load");
+      expect(await page.evaluate(() => (window as unknown as { __refusedScripts: string[] }).__refusedScripts)).toEqual([]);
       const response = page.waitForResponse((r) =>
         new URL(r.url()).pathname === "/api/institution/enrollments" && r.request().method() === "POST");
       await submitButton.click();

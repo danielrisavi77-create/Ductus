@@ -217,7 +217,9 @@ function quotaEvidence(items, reviews = [], activityItems = items) {
     .map((review) => {
       const slug = [...QUOTA_EXHAUSTED_PATTERNS.keys()].find((name) => review?.user?.login === `${name}[bot]`);
       if (!slug || review?.user?.type !== "Bot") return null;
-      return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
+      // A time that is no string is unreadable and counts as latest: fail closed.
+      const at = typeof review?.submitted_at === "string" ? Date.parse(review.submitted_at) : NaN;
+      return { appSlug: slug, createdAt: at || Infinity, exhausted: false };
     })
     .filter(Boolean);
   const activity = [...appActivity, ...appReviews];
@@ -538,6 +540,10 @@ function evaluateGateCore({
   // D-139 rule that a QA session never reviewed this PR. Defaults to comments.
   historyComments = null,
   prReviews = [],
+  // DAN-452: every PR review, also from before the last base change, for the
+  // activity that voids quota evidence. `prReviews` holds only reviews after
+  // that change (Codex evidence). Defaults to prReviews.
+  quotaReviews = null,
   reviewComments = null,
   authorLogin = null,
   carriedHeads = new Set(),
@@ -672,8 +678,12 @@ function evaluateGateCore({
       // D-196 (c.6549357009 t. 2): a review PASS without QA, because QA is not
       // required for this file list; Merge authorization reads it like qaPass.
       // F-173: only a review posted through an App counts, never an
-      // owner-account CLI comment (D-162, D-193).
-      ...(passingReviews.some((review) => !review.cli) ? { qaExemptPass: true } : {}),
+      // owner-account CLI comment (D-162, D-193). F-180: and only from an App
+      // other than the one the declared author runs on, as F-173 asks of QA on
+      // the non-exempt path; a same-App review keeps the owner's command.
+      ...(passingReviews.some((review) => !review.cli && !APP_RUNTIMES.get(review.identity.appSlug)?.has(authorRuntime))
+        ? { qaExemptPass: true }
+        : {}),
       description: `Independently authenticated review is valid for current head (critical, ${qaExempt} only: QA not required).${carriedNote(passingReviews, headSha)}`,
     };
   }
@@ -686,7 +696,7 @@ function evaluateGateCore({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments, prReviews, historyComments ?? comments);
+    const evidence = quotaEvidence(comments, quotaReviews ?? prReviews, historyComments ?? comments);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
@@ -880,6 +890,12 @@ function changeKey(file) {
     file?.previous_filename ?? null,
     file?.status ?? null,
     file?.patch,
+    // F-046: the whole tree entry (mode and type) at the compared head and at
+    // that compare's merge base, which the compare does not show; attached by
+    // `carriedHeads`. A base merge that changed only the entry under a PR file
+    // changes what the PR does to the base.
+    file?.entry,
+    file?.baseEntry,
   ]);
 }
 
@@ -887,13 +903,15 @@ function changeKey(file) {
  * `current` and `earlier` are GET compare/{base}...{head} for the current and
  * the earlier head: the PR's own diff must be identical, file by file. A
  * file without a patch (binary, too large) shows only its head side, so the
- * PR's effect on the base cannot be compared and nothing carries.
+ * PR's effect on the base cannot be compared and nothing carries. Without its
+ * tree entries (`entry`, `baseEntry`, F-046) nothing carries either.
  */
 export function sameChange(current, earlier) {
   const a = current?.files ?? [];
   const b = earlier?.files ?? [];
   if (a.length === 0 || a.length !== b.length || a.length >= COMPARE_FILE_CAP) return false;
-  if ([...a, ...b].some((file) => typeof file?.patch !== "string")) return false;
+  const whole = (file) => typeof file?.patch === "string" && typeof file?.entry === "string" && typeof file?.baseEntry === "string";
+  if (![...a, ...b].every(whole)) return false;
   const keys = (files) => files.map(changeKey).sort();
   const left = keys(a);
   const right = keys(b);
@@ -1021,8 +1039,10 @@ export function lastBaseChange(events) {
 export function sinceBaseChange(items, cutoff, stamp = "created_at", { codexEdits = false } = {}) {
   const list = Array.isArray(items) ? items : [];
   if (cutoff === -Infinity) return list;
+  // GitHub sends times as ISO strings; Date.parse reads a number such as 2027
+  // as a year, so any other type is unreadable (DAN-452, plan #1500 A6).
   const after = (value) => {
-    const at = Date.parse(value ?? "");
+    const at = typeof value === "string" ? Date.parse(value) : NaN;
     return Number.isFinite(at) && at > cutoff;
   };
   return list.filter(
@@ -1091,7 +1111,8 @@ export function evaluateMergeAuthorization({
   // D-196 (trial to 14 Nov 2026): a critical PR with no D-97 path needs no owner
   // command when the gate passed by counting verdicts: a separate QA PASS
   // (`qaPass`), or a review PASS on a PR that is QA-exempt by its file list (only
-  // tests or only documents, `qaExemptPass`; owner, #87 c.6549357009 t. 2). A gate
+  // tests or only documents, `qaExemptPass`, set only for a review from another App
+  // than the author's, F-180; owner, #87 c.6549357009 t. 2). A gate
   // that passed by an Owner Override keeps the command. F-173: every file must be
   // on the D-196 allowlist (ownerFreeCritical: application code, migrations,
   // tests, low-doc documents); any other file keeps the command, D-97 or not.
@@ -1120,7 +1141,7 @@ export function evaluateMergeAuthorization({
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
 
-export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, quotaReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -1147,6 +1168,7 @@ export function evaluatePullRequest({ pr, files, comments, historyComments, prRe
     comments,
     historyComments,
     prReviews,
+    quotaReviews,
     reviewComments,
     authorLogin: pr.user?.login ?? null,
     carriedHeads,

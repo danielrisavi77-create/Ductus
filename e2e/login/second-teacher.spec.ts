@@ -15,7 +15,7 @@ import { localAdminUrl, localAppUrl } from "./local-db-url";
 // role still comes from the explicit local operator command, and only for the
 // two fixed demo teachers (D-09 untouched: local and CI only).
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const PROVISION_SCRIPT = fileURLToPath(new URL("../../scripts/demo/provision-teacher.mjs", import.meta.url));
+const PROVISION_SCRIPT = fileURLToPath(new URL("../../scripts/local/provision-teacher.mjs", import.meta.url));
 const PROVISION_SQL = fileURLToPath(new URL("../../db/local/provision-demo-teacher.sql", import.meta.url));
 const SECOND_TEACHER = "demo-teacher-2@demo.ductus.test";
 

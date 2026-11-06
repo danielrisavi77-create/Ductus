@@ -127,6 +127,19 @@ test("A: a summary created before a base change and edited after the quota messa
   assert.equal(run(undefined).state, "success", "control: without the history the summary is not seen");
 });
 
+// DAN-452: after a base change `prReviews` holds only later reviews (Codex
+// evidence); the activity that voids quota evidence is read from
+// `quotaReviews`, every PR review. Without it the gate falls back to prReviews.
+test("A: a PR review left out of prReviews still voids the evidence through quotaReviews (DAN-452)", () => {
+  const comments = [codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)];
+  const run = (quotaReviews) =>
+    evaluateGate({ body: "Agent: chatgpt:a:backend\nRisk: critical\nTask: B-1\n", headSha: head, ownerLogin, comments, prReviews: [], quotaReviews });
+  assert.equal(run([codexReview(5 * MIN)]).state, "pending");
+  assert.equal(run([{ ...codexReview(0), submitted_at: null }]).state, "pending");
+  assert.equal(run(undefined).state, "success", "control: with no review anywhere the evidence holds");
+  assert.equal(run([codexReview(-5 * MIN)]).state, "success", "control: a review before the quota message voids nothing");
+});
+
 test("control: a summary edited before the quota message keeps the evidence (#128)", () => {
   const summary = codex("### Codex Review Summary\n\nCompleted.", -10 * MIN, { updated_at: iso(-5 * MIN) });
   assert.equal(evaluate([summary, codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)]).state, "success");

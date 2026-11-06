@@ -20,7 +20,7 @@ Naredba podiže lokalni Docker Compose stog, primjenjuje migracije, učitava sin
 
 Na stranici „Demo prijava” dostupni su računi `Demo nastavnik`, `Demo nastavnica`, `Demo studentica` i `Demo student 2`. `Demo nastavnica` je druga nastavnica iste ustanove za korak K-4d (#655); nakon promjene računa lokalno ponovno izgradi sliku s `docker compose build oidc`. Svi su izmišljeni i služe isključivo lokalnom razvoju i CI-ju. Zaustavi Compose usluge s `docker compose stop`; time se baza ne briše.
 
-Runner postavlja DB, S3, Mailpit i OIDC na lokalne Compose adrese. Odbija DB URL izvan lokalnog Composea, generira privremenu auth-lozinku ako nije zadana i ne ispisuje je niti zapisuje u datoteku. Ako sam zadaš `DUCTUS_AUTH_LOCAL_PASSWORD` ili lozinku u `AUTH_DATABASE_URL`, ona ne smije sadržavati znak `%`; runner je odbija prije postava. Nemoj postavljati lažni OIDC pružatelj za produkciju.
+Runner postavlja DB, S3, Mailpit i OIDC na lokalne Compose adrese. Odbija DB URL izvan lokalnog Composea, generira privremenu auth-lozinku i lozinku prijave workera (`DUCTUS_WORKER_LOCAL_PASSWORD`) ako nisu zadane i ne ispisuje ih niti zapisuje u datoteku. Ako sam zadaš `DUCTUS_AUTH_LOCAL_PASSWORD` ili lozinku u `AUTH_DATABASE_URL`, ona ne smije sadržavati znak `%`; runner je odbija prije postava. Nemoj postavljati lažni OIDC pružatelj za produkciju.
 
 ## Evidencija (prijem odsječaka)
 

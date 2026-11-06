@@ -24,7 +24,7 @@ test("anything a test could reach other than through imports runs the whole suit
     "docs/DECISIONS.md",
     ".github/CODEOWNERS",
     "lefthook.yml",
-    "scripts/demo/up.mjs",
+    "scripts/local/up.mjs",
     "infra/fake-oidc/server.mjs",
     "db/migrations/1.sql",
     "tests/integration/a.integration.test.ts",
