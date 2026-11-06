@@ -23,7 +23,10 @@ async function control(page: Page, name: string): Promise<{ target: Locator; on:
   if (await button.isVisible()) return { target: button, on: "aria-pressed" };
   const more = toolbarOf(page).getByRole("button", { name: "Više" });
   if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
-  const item = page.getByRole("menu", { name: "Više alata" }).getByRole("menuitemcheckbox", { name, exact: true });
+  const menu = page.getByRole("menu", { name: "Više alata" });
+  // A state is a menuitemcheckbox; Ponovi (DAN-211), a command, a plain menuitem.
+  const item = menu.getByRole("menuitemcheckbox", { name, exact: true })
+    .or(menu.getByRole("menuitem", { name, exact: true }));
   return { target: item, on: "aria-checked" };
 }
 async function applyTool(page: Page, name: string): Promise<void> {
@@ -98,7 +101,8 @@ test.describe("editor shell", () => {
 
     await tool(page, "Poništi").click();
     await expect(editorOf(page).locator("em")).toHaveCount(0);
-    await tool(page, "Ponovi").click();
+    // On a phone (the mobile project, 412 px) Ponovi is in "Više".
+    await applyTool(page, "Ponovi");
     await expect(editorOf(page).locator("em")).toHaveText("Okvir rada");
   });
 
@@ -147,11 +151,12 @@ test.describe("editor shell", () => {
     // The last stop is "Prikaz" (FE-D5); the tools before it are unchanged.
     await expect(toolbarOf(page).getByRole("button", { name: "Prikaz" })).toBeFocused();
     await page.keyboard.press("ArrowLeft");
-    // Ponovi, or "Više" when a narrow toolbar has one.
-    await expect(toolbarOf(page).locator(":focus")).toHaveAttribute("data-roving", /^(redo|more)$/);
+    // Blok-citat, or "Više" when a narrow toolbar has one.
+    await expect(toolbarOf(page).locator(":focus")).toHaveAttribute("data-roving", /^(quote|more)$/);
     await page.keyboard.press("End");
     await page.keyboard.press("ArrowRight");
-    await expect(tool(page, "Odlomak")).toBeFocused();
+    // The first stop is Poništi (DAN-211: the reference order starts with the history).
+    await expect(tool(page, "Poništi")).toBeFocused();
     await expect(toolbarOf(page).locator('button[tabindex="0"]')).toHaveCount(1);
   });
 
