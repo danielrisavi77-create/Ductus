@@ -42,6 +42,8 @@ test("V2 and A1: the editor on /rad matches its baseline; the toolbar keeps its 
   await settle(page);
   await expect(page.getByRole("toolbar", { name: "Oblikovanje teksta" })).toMatchAriaSnapshot(`
     - toolbar "Oblikovanje teksta":
+      - button "Poništi" [disabled]
+      - button "Ponovi" [disabled]
       - button "Odlomak" [pressed]
       - button "Naslov 1"
       - button "Naslov 2"
@@ -50,8 +52,6 @@ test("V2 and A1: the editor on /rad matches its baseline; the toolbar keeps its 
       - button "Kurziv"
       - button "Popis"
       - button "Blok-citat"
-      - button "Poništi" [disabled]
-      - button "Ponovi" [disabled]
       - button "Prikaz"
   `);
   if (testInfo.project.name === PIXELS_IN) await expect(page.getByRole("main")).toHaveScreenshot("rad-editor.png");

@@ -3,7 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 /**
  * The toolbar menus of /rad (FE-D5, design editor-v11): "Više ▾" holds the
- * headings a narrow toolbar cannot show, "Prikaz ▾" the sheet theme. Both
+ * tools a narrow toolbar cannot show (the headings, the list, the block quote
+ * and, DAN-211, "Ponovi"), "Prikaz ▾" the sheet theme. Both
  * follow the WAI-ARIA menu button pattern, by mouse and by keyboard, wide
  * (1440 px) and on a phone (390 px). Only made-up text is typed.
  */
@@ -18,6 +19,7 @@ const viewButton = (page: Page) => toolbarOf(page).getByRole("button", { name: "
 const moreMenu = (page: Page) => page.getByRole("menu", { name: "Više alata" });
 const viewMenu = (page: Page) => page.getByRole("menu", { name: "Prikaz" });
 const heading = (page: Page, name: string) => moreMenu(page).getByRole("menuitemcheckbox", { name, exact: true });
+const redoItem = (page: Page) => moreMenu(page).getByRole("menuitem", { name: "Ponovi", exact: true });
 const theme = (page: Page, name: string) => viewMenu(page).getByRole("menuitemradio", { name });
 const sheetOf = (page: Page) => page.locator("article.sheet");
 
@@ -30,7 +32,7 @@ async function openEditor(page: Page, width: number): Promise<void> {
 test.describe("toolbar menus, wide (1440 px)", () => {
   test("every tool fits, so there is no Više; Prikaz is a menu button", async ({ page }) => {
     await openEditor(page, 1440);
-    for (const name of ["Odlomak", "Naslov 1", "Naslov 2", "Naslov 3", "Podebljano", "Kurziv", "Popis", "Blok-citat", "Poništi", "Ponovi"]) {
+    for (const name of ["Poništi", "Ponovi", "Odlomak", "Naslov 1", "Naslov 2", "Naslov 3", "Podebljano", "Kurziv", "Popis", "Blok-citat"]) {
       await expect(tool(page, name)).toBeVisible();
     }
     await expect(moreButton(page)).toHaveCount(0);
@@ -108,10 +110,10 @@ test.describe("toolbar menus, wide (1440 px)", () => {
 });
 
 test.describe("toolbar menus, phone (390 px)", () => {
-  test("the headings, then the block quote and the list (E1), move into Više, in toolbar order; the other tools stay", async ({ page }) => {
+  test("the headings, the block quote, the list (E1) and Ponovi (DAN-211) move into Više, in toolbar order; the other tools stay", async ({ page }) => {
     await openEditor(page, 390);
-    for (const name of ["Naslov 1", "Naslov 2", "Naslov 3", "Popis", "Blok-citat"]) await expect(tool(page, name)).toHaveCount(0);
-    for (const name of ["Odlomak", "Podebljano", "Kurziv", "Poništi", "Ponovi"]) await expect(tool(page, name)).toBeVisible();
+    for (const name of ["Ponovi", "Naslov 1", "Naslov 2", "Naslov 3", "Popis", "Blok-citat"]) await expect(tool(page, name)).toHaveCount(0);
+    for (const name of ["Poništi", "Odlomak", "Podebljano", "Kurziv"]) await expect(tool(page, name)).toBeVisible();
     // One row: the toolbar no longer wraps.
     const tops = await toolbarOf(page).locator("[data-roving]").evaluateAll(
       (buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
@@ -121,6 +123,23 @@ test.describe("toolbar menus, phone (390 px)", () => {
     await expect(moreButton(page)).toHaveAttribute("aria-haspopup", "menu");
     await moreButton(page).click();
     await expect(moreMenu(page).getByRole("menuitemcheckbox")).toHaveText([/Naslov 1/, /Naslov 2/, /Naslov 3/, /Popis/, /Blok-citat/]);
+    // Ponovi is a command, not a state: a plain menuitem with no checked state, first in toolbar order.
+    await expect(moreMenu(page).locator('[role^="menuitem"]')).toHaveText([/Ponovi/, /Naslov 1/, /Naslov 2/, /Naslov 3/, /Popis/, /Blok-citat/]);
+    await expect(redoItem(page)).not.toHaveAttribute("aria-checked", /.*/);
+    await expect(redoItem(page)).toHaveAttribute("aria-disabled", "true");
+  });
+
+  test("Ponovi from Više redoes what Poništi undid", async ({ page }) => {
+    await openEditor(page, 390);
+    await editorOf(page).click();
+    await page.keyboard.type("Izmišljena rečenica");
+    await tool(page, "Poništi").click();
+    await expect(editorOf(page)).not.toContainText("Izmišljena rečenica");
+    await moreButton(page).click();
+    await expect(redoItem(page)).not.toHaveAttribute("aria-disabled", "true");
+    await redoItem(page).click();
+    await expect(editorOf(page)).toContainText("Izmišljena rečenica");
+    await expect(moreMenu(page)).toHaveCount(0);
   });
 
   test("Više by mouse runs the same command as the button: a heading, listed and checked", async ({ page }) => {
@@ -144,7 +163,10 @@ test.describe("toolbar menus, phone (390 px)", () => {
     await page.keyboard.type("Uvod");
     await moreButton(page).focus();
     await page.keyboard.press("ArrowDown");
+    await expect(redoItem(page)).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(heading(page, "Naslov 1")).toBeFocused();
+    await page.keyboard.press("Home");
     await page.keyboard.press("ArrowUp");
     // The last item: the block quote, after the headings and the list (E1).
     await expect(heading(page, "Blok-citat")).toBeFocused();
@@ -153,6 +175,8 @@ test.describe("toolbar menus, phone (390 px)", () => {
     await expect(moreButton(page)).toBeFocused();
 
     await page.keyboard.press("Enter");
+    await expect(redoItem(page)).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(heading(page, "Naslov 1")).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(editorOf(page).locator("h1")).toHaveText("Uvod");
@@ -198,7 +222,7 @@ test.describe("toolbar menus, phone (390 px)", () => {
   test("a new width closes an open Više for good: focus goes to the toolbar, never back into the menu (review524)", async ({ page }) => {
     await openEditor(page, 390);
     await moreButton(page).click();
-    await expect(heading(page, "Naslov 1")).toBeFocused();
+    await expect(redoItem(page)).toBeFocused();
 
     // Wider: the headings return to the toolbar, the menu is gone and focus
     // is on the toolbar, not on the page body.
