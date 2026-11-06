@@ -149,6 +149,11 @@ jobs:
       # F-152: the node tests of skill scripts (both skill copies).
       - name: Skill script tests
         run: pnpm test:skills
+      # M8.8-P02 (DAN-435): the DOCX reader tests of the standalone spike package
+      # (its own reviewed lockfile, no install scripts; not part of the app build).
+      - name: DOCX provenance spike tests
+        working-directory: spikes/docx-provenance
+        run: npm ci --ignore-scripts && node --test read.test.mjs
       - name: Build
         if: needs.scope.outputs.profile == 'full'
         run: pnpm build
