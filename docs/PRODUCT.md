@@ -312,12 +312,12 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 - **Fakultet:** samo FPZG. [ODLUČENO D-15]
 - **Kontakt:** prodekan Višeslav Raos. [ODLUČENO D-14]
 - **Cijena:** pilot je besplatan; kupac nakon pilota je fakultet. [ODLUČENO D-13]
-- **Početak:** ljetni semestar akademske godine 2026./2027. [ODLUČENO D-26]
+- **Početak:** nastava u ljetnom semestru akademske godine 2026./2027. (faza B, oko 22. 3. 2027. ili kasnije); tehnička proba počinje ranije (vidi Etape). [ODLUČENO D-26, D-203 E3]
 - **Obveznost:** FPZG odlučuje je li korištenje obvezno ili dobrovoljno. Ako je dobrovoljno, studenti koji ne sudjeluju imaju ravnopravnu alternativu.
 - **Jezik:** sučelje na hrvatskom i engleskom od vala 1 [ODLUČENO D-70]; jezik rada bira se po zadatku (F-06).
 - **Podrška:** model iz D-69; rokovi u pilotu radnim danom u podne.
 - **Povlačenje studenta:** već predani radovi ostaju po pravilima fakulteta, sve ostalo se briše. [ODLUČENO D-12]
-- **Etape:** A tehnička proba sa sintetičkim radovima prije početka semestra; B nastava; C evaluacija.
+- **Etape** (D-203 E3): **A** tehnička proba sa sintetičkim radovima od 22. 2. 2027., traje 4 puna tjedna i ne skraćuje se; **B** nastava oko 22. 3. 2027. ili kasnije, nakon izlaza A i suglasnosti FPZG-a; **C** evaluacija nakon 4. 6. 2027.
 - Nijedan tehnički pokazatelj sam ne dovodi do ocjene ni posljedice.
 
 **Mjerila uspjeha:**
