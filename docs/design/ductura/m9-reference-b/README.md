@@ -25,6 +25,7 @@ Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`: Playwrightov Ch
 - Popis oblika pomoći uzet je iz postojećeg kataloga sučelja (formatiranje, lektoriranje i jezična provjera, pronalaženje literature, transkribiranje, prevođenje); konačan popis određuje konfiguracija fakulteta.
 - A-AI-POL nije imao redak u `EKRANI.md`; dodan je uz ovaj paket.
 - S31-AI: N-AI-ATT (nastavnički pregled) slijedi u idućem PR-u. Prag podudaranja (osam riječi) i izuzeće citata uzeti su iz D-58; način mjerenja nije dio slike. Nazivi razgovora, vremena i odlomci su izmišljeni.
+- S31-AI: oznaka „podudara se s odgovorom AI pomoćnika” prikazana je kako je napisana u D-58 (potvrda ugovora na #1091). D-268 O6 drži tu oznaku isključenom do rješenja U-4 (M9.6-P04, nakon pilota); dok je isključena, obvezni su samo razgovori s poznatim prijenosom teksta. Nesklad ostaje otvoren.
 
 ## Provjera rječnika
 
