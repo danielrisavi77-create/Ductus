@@ -6,6 +6,9 @@ import { catalogueGaps } from "./parity";
 
 const none = { missing: [], extra: [], placeholders: [] };
 
+/** A list of `length` slots whose first slots hold `values` and the rest are holes (`["A", ,]` is `sparse(["A"], 2)`). */
+const sparse = (values: readonly string[], length: number) => Object.assign(new Array<string>(length), values);
+
 describe("catalogueGaps", () => {
   it.each([
     ["the same keys", { a: "A", b: { c: "C" } }, { a: "X", b: { c: "Y" } }, none],
@@ -16,6 +19,15 @@ describe("catalogueGaps", () => {
     ["a section where a text stands", { s: "S" }, { s: { a: "A" } }, { ...none, missing: ["s"], extra: ["s.a"] }],
     ["a shorter list", { l: ["one", "two"] }, { l: ["one"] }, { ...none, missing: ["l.1"] }],
     ["a longer list", { l: ["one"] }, { l: ["one", "two"] }, { ...none, extra: ["l.1"] }],
+    // A hole has no value, so a list that ends in one is longer than its values: its last slot is reported as a stray value.
+    ["a hole at the end of the other list", { l: ["A"] }, { l: sparse(["A"], 2) }, { ...none, extra: ["l.1"] }],
+    ["a hole at the end of the reference list", { l: sparse(["A"], 2) }, { l: ["A"] }, { ...none, missing: ["l.1"] }],
+    ["holes that make the other list longer", { l: ["A"] }, { l: sparse(["A"], 3) }, { ...none, extra: ["l.2"] }],
+    ["holes that make the reference list longer", { l: sparse(["A"], 3) }, { l: ["A"] }, { ...none, missing: ["l.2"] }],
+    ["a hole where the other list has a text", { l: sparse(["A"], 2) }, { l: ["A", "B"] }, { ...none, missing: ["l.1"], extra: ["l.1"] }],
+    ["the same hole in both lists", { l: sparse(["A"], 2) }, { l: sparse(["A"], 2) }, none],
+    ["a list of one hole against an empty list", { s: [] }, { s: sparse([], 1) }, { ...none, missing: ["s"], extra: ["s.0"] }],
+    ["an empty list against a list of one hole", { s: sparse([], 1) }, { s: [] }, { ...none, missing: ["s.0"], extra: ["s"] }],
     ["an empty section against a full one", { s: { a: "A" } }, { s: {} }, { ...none, missing: ["s.a"], extra: ["s"] }],
     ["two empty sections", { s: {} }, { s: [] }, none],
     ["a value that is not text", { a: "A" }, { a: 1 }, { ...none, missing: ["a"], extra: ["a"] }],

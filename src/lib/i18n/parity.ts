@@ -25,7 +25,8 @@ function placeholdersOf(text: string): string {
 function leafOf(node: unknown): Leaf | null {
   if (typeof node === "string") return { kind: "text", placeholders: placeholdersOf(node) };
   if (typeof node !== "object" || node === null) return { kind: "other" };
-  return Object.keys(node).length === 0 ? { kind: "empty" } : null;
+  // A list is empty by its length: holes give `[ , ]` no keys, yet it holds a slot.
+  return (Array.isArray(node) ? node.length : Object.keys(node).length) === 0 ? { kind: "empty" } : null;
 }
 
 /**
@@ -50,6 +51,12 @@ function leaves(node: unknown, segments: readonly string[] = [], into = new Map<
     return into;
   }
   for (const [key, value] of Object.entries(node as object)) leaves(value, [...segments, key], into);
+  // `Object.entries` skips holes, so a list that ends in one would read as shorter than it is.
+  // Its last slot stands for the length: reported as a stray value, the way a list of other length is.
+  if (Array.isArray(node) && !Object.hasOwn(node, node.length - 1)) {
+    const segmentsOfLast = [...segments, String(node.length - 1)];
+    into.set(JSON.stringify(segmentsOfLast), { path: shownPath(segmentsOfLast), leaf: { kind: "other" } });
+  }
   return into;
 }
 
