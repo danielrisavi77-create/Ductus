@@ -55,6 +55,14 @@ test("F-027: renderOverlap prints every shared file on one line", () => {
   assert.ok(lines.includes("  x\\u000afake line"));
 });
 
+test("F-027: a directory name with a control or bidi character prints as one inert line", () => {
+  const prs = prsOf(REPO);
+  const pair = { a: 1, b: 2, count: 0, files: [], dirs: ["src/x\nINJECTED", "db\u202emigrations", "a\u001b[2J"] };
+  const lines = renderOverlap(prs, [pair], 10, REPO);
+  for (const line of lines) assert.ok(!/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e]/.test(line), JSON.stringify(line));
+  assert.match(lines[0], /same directory: src\/x\\u000aINJECTED, db\\u202emigrations, a\\u001b\[2J$/);
+});
+
 const prClasses = [
   ["head in this repository", REPO, false],
   ["fork", "outsider/repo1", true],

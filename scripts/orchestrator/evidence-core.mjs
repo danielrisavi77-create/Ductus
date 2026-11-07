@@ -41,9 +41,9 @@ function prose(value) {
 
 const shown = (s) => (SAFE_NAME.test(String(s ?? "")) ? String(s) : "<not printed>");
 
-function verdictOf(comments, kind, head) {
+function verdictOf(comments, kind, head, authorAgent) {
   if (!comments) return null;
-  const v = latestVerdict(comments, kind, head);
+  const v = latestVerdict(comments, kind, head, { authorAgent });
   if (!v) return { verdict: "none" };
   return { verdict: v.verdict, head: SHA_RE.test(String(v.head ?? "")) ? String(v.head).slice(0, 8).toLowerCase() : "<not printed>", agent: shown(v.agent), current: v.current };
 }
@@ -84,8 +84,8 @@ export function buildEvidence({ pr, comments, rollup, gate }) {
     open: lines(OPEN_LABELS),
     checks: checksOf(rollup),
     gate: gateOf(gate),
-    review: verdictOf(comments, "review", head),
-    qa: verdictOf(comments, "qa", head),
+    review: verdictOf(comments, "review", head, field(pr.body, "Agent") ?? null),
+    qa: verdictOf(comments, "qa", head, field(pr.body, "Agent") ?? null),
   };
 }
 

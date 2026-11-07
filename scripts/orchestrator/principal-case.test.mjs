@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { headVerdicts } from "../engineering/review-gate-core.mjs";
 import { checkQueue, queueItems } from "./health-core.mjs";
 import { latestVerdict } from "./orchestrator-core.mjs";
 
@@ -18,10 +19,18 @@ const comment = (body, over = {}) => ({
   ...over,
 });
 
-test("latestVerdict: claude:b and claude:B are one identity, so the newer verdict counts (#130)", () => {
+// F-023: within one principal a later PASS on the same head no longer clears a
+// FAIL, so the shared identity is checked through the gate's per-principal list.
+test("latestVerdict: claude:b and claude:B are one identity, as in the gate (#130)", () => {
   const rv = (slot, verdict, min) =>
     comment(`Agent-Review: claude:${slot}:reviewer\nReview-Head: ${H}\nReview-Verdict: ${verdict}`, { created_at: at(min) });
-  assert.equal(latestVerdict([rv("b", "FAIL", 60), rv("B", "PASS", 30)], "review", H).verdict, "PASS");
+  const one = headVerdicts([rv("b", "PASS", 60), rv("B", "PASS", 30)], "review", H);
+  assert.equal(one.length, 1);
+  assert.equal(one[0].principal, "claude:b");
+  const two = headVerdicts([rv("b", "PASS", 60), rv("c", "PASS", 30)], "review", H);
+  assert.equal(two.length, 2);
+  assert.equal(latestVerdict([rv("b", "FAIL", 60), rv("B", "PASS", 30)], "review", H).verdict, "FAIL");
+  assert.equal(latestVerdict([rv("b", "PASS", 60), rv("B", "PASS", 30)], "review", H).verdict, "PASS");
 });
 
 test("queue: a verdict clears the item whatever the letter case of its slot (#130)", () => {

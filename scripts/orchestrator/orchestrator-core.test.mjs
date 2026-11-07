@@ -24,14 +24,17 @@ const review = (head, verdict, at) =>
   });
 
 test("latest review verdict is bound to head and flagged stale otherwise", () => {
-  const comments = [
-    review(H1, "FAIL", "2026-10-10T10:00:00Z"),
-    review(H1, "PASS", "2026-10-10T11:00:00Z"),
-  ];
+  const comments = [review(H1, "PASS", "2026-10-10T11:00:00Z")];
   assert.deepEqual(latestVerdict(comments, "review", H1)?.current, true);
   assert.equal(latestVerdict(comments, "review", H1)?.verdict, "PASS");
   assert.equal(latestVerdict(comments, "review", H2)?.current, false);
+  assert.equal(latestVerdict(comments, "review", H2)?.verdict, "PASS");
   assert.equal(latestVerdict(comments, "qa", H1), null);
+  // F-023: as in the gate, a later PASS of the same principal on the same head
+  // does not clear its FAIL.
+  const held = [review(H1, "FAIL", "2026-10-10T10:00:00Z"), ...comments];
+  assert.equal(latestVerdict(held, "review", H1)?.verdict, "FAIL");
+  assert.equal(latestVerdict(held, "review", H2)?.verdict, "FAIL");
 });
 
 test("verdicts in code fences, non-first lines and untrusted authors are ignored", () => {
@@ -121,8 +124,10 @@ test("verdict summary is per identity: any FAIL/BLOCK on current head wins", () 
   });
   const comments = [rv("reviewB", H1, "FAIL", "2026-10-10T10:00:00Z"), rv("review1", H1, "PASS", "2026-10-10T11:00:00Z")];
   assert.equal(latestVerdict(comments, "review", H1).verdict, "FAIL");
+  // F-023: the same principal's later PASS on the same head does not clear its FAIL.
   const fixed = [...comments, rv("reviewB", H1, "PASS", "2026-10-10T12:00:00Z")];
-  assert.equal(latestVerdict(fixed, "review", H1).verdict, "PASS");
+  assert.equal(latestVerdict(fixed, "review", H1).verdict, "FAIL");
+  assert.equal(latestVerdict([comments[1]], "review", H1).verdict, "PASS");
   assert.equal(latestVerdict([...fixed, rv("r3", H1, "BLOCK", "2026-10-10T13:00:00Z")], "review", H1).verdict, "BLOCK");
   const mixed = latestVerdict([rv("r3", H2, "FAIL", "2026-10-10T13:00:00Z"), rv("r1", H1, "PASS", "2026-10-10T10:00:00Z")], "review", H1);
   assert.equal(mixed.verdict, "PASS");

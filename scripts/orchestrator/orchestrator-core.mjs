@@ -1,7 +1,7 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
 import {
-  commentTime, commentVerdictIdentity, isDeclaredAgent, isDeclaredRisk, trustedAuthor,
+  commentTime, headNegatives, headVerdicts, isDeclaredAgent, isDeclaredRisk, trustedAuthor,
 } from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, isD97Path, matchesPath, normalizePath,
@@ -88,7 +88,7 @@ export function renderOverlap(prs, pairs, max = 10, repository = undefined) {
   };
   const lines = [];
   for (const p of pairs) {
-    const dirs = p.dirs.length ? `; same directory: ${p.dirs.join(", ")}` : "";
+    const dirs = p.dirs.length ? `; same directory: ${p.dirs.map(safePath).join(", ")}` : "";
     lines.push(`${tag(p.a)} x ${tag(p.b)}: ${p.count} shared file${p.count === 1 ? "" : "s"}${dirs}`);
     for (const f of p.files.slice(0, max)) lines.push(`  ${safePath(f)}`);
     if (p.count > max) lines.push(`  ... and ${p.count - max} more`);
@@ -124,9 +124,6 @@ export function parseVerdicts(comments, kind) {
     .map((c, index) => ({ c, index }))
     .filter(({ c }) => trustedAuthor(c) && canonicalBlock(c?.body, k.agent))
     .map(({ c, index }) => ({
-      // F-015: true only when the gate could count this comment (App or the
-      // owner's CLI channel matching the declared runtime).
-      verified: commentVerdictIdentity(c, field(c.body, k.agent)) !== null,
       agent: field(c.body, k.agent),
       head: field(c.body, k.head),
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
@@ -142,37 +139,30 @@ export function countCanonical(comments) {
   return parseVerdicts(comments, "review").length + parseVerdicts(comments, "qa").length;
 }
 
-/** Latest verdict of a kind; `current` = bound to headSha. null if none. */
-const GATE_VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
-
-// Identity as the gate keys it (ENGINEERING_SYSTEM §6): App slug + runtime:slot,
-// with codex and chatgpt normalised to openai and the slot without letter case (#130).
-function identityKey(entry) {
-  const [runtime = "", slot = ""] = (entry.agent ?? "").split(":");
-  const rt = runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
-  return `${entry.appSlug ?? ""}|${rt}:${slot.toLowerCase()}`;
-}
-
 /**
- * Verdict of a kind per gate rules: per identity only the newest verdict on the
- * current head counts; any FAIL/BLOCK wins, else PASS, else null when none are
- * current. Without current verdicts, falls back to the newest one marked stale.
+ * Verdict of a kind as the gate reads it on `headSha` (F-015): the verdicts
+ * `headVerdicts` counts there, one per principal, and every canonical FAIL or
+ * BLOCK on that head, counted or not. The newest FAIL/BLOCK wins, else PASS, else
+ * EDITED (F-012). `authorAgent` is the body's Agent; a PASS of the author's
+ * principal does not count. Without any, the newest verdict comment naming
+ * another full head is read the same way on that head and marked stale.
  */
-export function latestVerdict(comments, kind, headSha) {
-  const isCurrent = (e) => Boolean(
-    e.head && SHA_RE.test(e.head) && headSha && e.head.toLowerCase() === headSha.toLowerCase(),
-  );
-  // F-015: a PASS the gate could not count is not shown; a FAIL or BLOCK is
-  // shown whatever its channel, so the table never reads better than the gate.
-  const all = parseVerdicts(comments, kind)
-    .filter((e) => GATE_VERDICTS.has(e.verdict) && (e.verified || e.verdict !== "PASS"));
-  const latest = new Map();
-  for (const e of all.filter(isCurrent)) latest.set(identityKey(e), e);
-  const cur = [...latest.values()];
-  const pick = cur.find((e) => e.verdict !== "PASS") ?? cur[0];
-  if (pick) return { verdict: pick.verdict, head: pick.head, agent: pick.agent, current: true };
-  const last = all.at(-1);
-  return last ? { verdict: last.verdict, head: last.head, agent: last.agent, current: false } : null;
+export function latestVerdict(comments, kind, headSha, { authorAgent } = {}) {
+  const on = (head) => {
+    const counted = headVerdicts(comments, kind, head, { authorAgent });
+    const pick = headNegatives(comments, kind, head).at(-1)
+      ?? counted.find((v) => v.verdict === "FAIL" || v.verdict === "BLOCK")
+      ?? counted.find((v) => v.verdict === "PASS")
+      ?? counted[0];
+    return pick ? { verdict: pick.verdict, head: pick.head, agent: pick.agent } : null;
+  };
+  const current = on(headSha);
+  if (current) return { ...current, current: true };
+  const other = parseVerdicts(comments, kind)
+    .filter((e) => e.head && SHA_RE.test(e.head) && e.head.toLowerCase() !== String(headSha ?? "").toLowerCase())
+    .at(-1);
+  const stale = other ? on(other.head) : null;
+  return stale ? { ...stale, current: false } : null;
 }
 
 export function formatVerdict(v) {

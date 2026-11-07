@@ -150,30 +150,22 @@ function commentAppSlug(item, ownerLogin) {
   return CLI_CHANNELS.get(cliChannel(item, ownerLogin))?.app ?? null;
 }
 
-/**
- * F-015: the identity the gate would give one raw comment declaring `agent`,
- * or null. For the orchestrator scripts, so they show a PASS only when the
- * gate could count it. GitHub reports OWNER only for the owner's account.
- */
-export function commentVerdictIdentity(item, agent) {
-  const ownerLogin = item?.author_association === "OWNER" ? item?.user?.login ?? null : null;
-  return verifiedCommentIdentity({ appSlug: commentAppSlug(item, ownerLogin) }, agent);
-}
-
 /** F-015: whether a body's Agent and Risk values have the shape the gate accepts. */
 export const isDeclaredAgent = (value) => isAgent(value);
 export const isDeclaredRisk = (value) => typeof value === "string" && RISK_VALUES.has(value.toLowerCase());
 
-// A verdict is a person's comment posted through an App.
+// A verdict is a person's comment posted through an App. `ownerLogin` is the
+// repository owner's login, or a function giving it per comment (headVerdicts).
 function trustedComments(items, logins, ownerLogin = null) {
+  const ownerOf = typeof ownerLogin === "function" ? ownerLogin : () => ownerLogin;
   return (items ?? [])
     .filter((item) => trustedAuthor(item, logins))
     .map((item, index) => ({
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
-      appSlug: commentAppSlug(item, ownerLogin),
-      cliChannel: cliChannel(item, ownerLogin),
+      appSlug: commentAppSlug(item, ownerOf(item)),
+      cliChannel: cliChannel(item, ownerOf(item)),
       createdAt: commentTime(item) || index,
       edited: wasEdited(item),
       index,
@@ -520,6 +512,51 @@ function currentNegative(verdicts) {
   return null;
 }
 
+// The canonical fields of each verdict kind, for the gate and headVerdicts.
+export const VERDICT_KINDS = Object.freeze({
+  review: Object.freeze({ agentField: "Agent-Review", headField: "Review-Head", verdictField: "Review-Verdict", role: "reviewer" }),
+  qa: Object.freeze({ agentField: "QA-Agent", headField: "QA-Head", verdictField: "QA-Verdict", role: "qa", extraField: "QA-Scope" }),
+});
+
+/**
+ * F-015: the verdicts of one kind ("review" | "qa") that the gate counts on
+ * `headSha`, one per principal, from the same entries and the same
+ * `latestVerdicts` as the gate: identity, role, edit (F-012), QA-Scope,
+ * negatives in any form (F-027) and the F-023 hold. For the orchestrator
+ * scripts, so they show and count what the gate counts. GitHub reports OWNER
+ * only for the owner's account, so the owner's login is read per comment.
+ * With `authorAgent` (the body's Agent), a PASS of the author's principal is
+ * dropped, and with an invalid Agent every PASS, since the gate counts neither.
+ * Carried heads (D-101) are not known here, so only `headSha` counts.
+ */
+export function headVerdicts(comments, kind, headSha, { authorAgent } = {}) {
+  const spec = VERDICT_KINDS[kind];
+  if (!spec || !SHA_RE.test(headSha ?? "")) return [];
+  const ownerOf = (item) => (item?.author_association === "OWNER" ? item?.user?.login ?? null : null);
+  const entries = trustedComments(comments, TRUSTED_VERDICT_LOGINS, ownerOf);
+  const author = authorAgent === undefined ? undefined : declaredPrincipal(authorAgent);
+  return [...latestVerdicts(entries, { ...spec, headSha, carriedHeads: new Set() }).values()]
+    .filter((result) => result.current)
+    .filter((result) => result.verdict !== "PASS" || author === undefined || (author && result.identity.principal !== author))
+    .map(({ agent, head, verdict, identity, order }) => ({ agent, head, verdict, principal: identity.principal, order }));
+}
+
+/**
+ * F-015: every canonical FAIL or BLOCK of a trusted author on `headSha` (also
+ * with a short or missing head, as the gate reads it, F-027), whether the gate
+ * counts it or not (for example without an App). The status tools show such a
+ * negative too, so a table never reads better than the gate.
+ */
+export function headNegatives(comments, kind, headSha) {
+  const spec = VERDICT_KINDS[kind];
+  if (!spec || !SHA_RE.test(headSha ?? "")) return [];
+  return (comments ?? [])
+    .filter((item) => trustedAuthor(item) && canonicalBlock(item?.body, spec.agentField))
+    .map((item) => ({ item, word: negativeWord(item.body, spec.verdictField) }))
+    .filter(({ item, word }) => word && negativeHead(field(item.body, spec.headField), headSha, new Set())?.current)
+    .map(({ item, word }) => ({ agent: field(item.body, spec.agentField), head: headSha.toLowerCase(), verdict: word === "FAIL" ? "FAIL" : "BLOCK" }));
+}
+
 /**
  * Whether the head branch lives in this repository (#971 review). Only an
  * account with write access can push there; a fork, or a head whose repository
@@ -605,35 +642,17 @@ function evaluateGateCore({
     const overrideOrder = carriedOverrides
       .map((entry) => [entry.createdAt, entry.index])
       .reduce((a, b) => (compareOrder(a, b) >= 0 ? a : b));
-    const voids = (agentField, headField, verdictField, role, extraField) =>
-      [...latestVerdicts(trusted, { agentField, headField, verdictField, role, headSha, extraField, carriedHeads }).values()]
+    const voids = (kind) =>
+      [...latestVerdicts(trusted, { ...kind, headSha, carriedHeads }).values()]
         .some((result) => NEGATIVE.has(result.verdict) && (result.current || compareOrder(result.order, overrideOrder) > 0));
-    const negative =
-      voids("Agent-Review", "Review-Head", "Review-Verdict", "reviewer") ||
-      voids("QA-Agent", "QA-Head", "QA-Verdict", "qa", "QA-Scope");
+    const negative = voids(VERDICT_KINDS.review) || voids(VERDICT_KINDS.qa);
     if (!negative) {
       return { state: "success", description: `Owner override carried for ${risk} risk.` };
     }
   }
 
-  const reviews = latestVerdicts(trusted, {
-    agentField: "Agent-Review",
-    headField: "Review-Head",
-    verdictField: "Review-Verdict",
-    role: "reviewer",
-    headSha,
-    carriedHeads,
-  });
-
-  const qa = latestVerdicts(trusted, {
-    agentField: "QA-Agent",
-    headField: "QA-Head",
-    verdictField: "QA-Verdict",
-    role: "qa",
-    headSha,
-    extraField: "QA-Scope",
-    carriedHeads,
-  });
+  const reviews = latestVerdicts(trusted, { ...VERDICT_KINDS.review, headSha, carriedHeads });
+  const qa = latestVerdicts(trusted, { ...VERDICT_KINDS.qa, headSha, carriedHeads });
 
   // A current FAIL or BLOCK holds the gate whatever the PR body declares. The
   // body is written by the party under review, so the declared author and the

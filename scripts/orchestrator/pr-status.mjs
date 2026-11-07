@@ -1,4 +1,5 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
+import { field } from "../engineering/metadata-parser.mjs";
 import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
 import {
   evaluateChecks, externalReason, formatStatusRow, formatVerdict, displayAgentRisk, latestVerdict, overlapPairs, overlapsOf,
@@ -20,8 +21,9 @@ async function row(pr, origin) {
   ]);
   // F-015: Agent and Risk only in the shape the gate accepts.
   const { agent, risk } = displayAgentRisk(pr.body);
-  const review = comments ? latestVerdict(comments, "review", pr.headRefOid) : undefined;
-  const qa = comments ? latestVerdict(comments, "qa", pr.headRefOid) : undefined;
+  const authorAgent = field(pr.body, "Agent") ?? null;
+  const review = comments ? latestVerdict(comments, "review", pr.headRefOid, { authorAgent }) : undefined;
+  const qa = comments ? latestVerdict(comments, "qa", pr.headRefOid, { authorAgent }) : undefined;
   return {
     number: pr.number,
     head: pr.headRefOid.slice(0, 8),

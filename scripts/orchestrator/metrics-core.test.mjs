@@ -7,7 +7,7 @@ import {
 } from "./metrics-core.mjs";
 
 const SHA = (c) => c.repeat(40);
-const body = (risk, task) => `Agent: claude:a:x\nRisk: ${risk}\nTask: ${task}\n`;
+const body = (risk, task) => `Agent: claude:a:platforma\nRisk: ${risk}\nTask: ${task}\n`;
 // F-015: a PASS counts only through the App of its runtime.
 const review = (head, verdict, at, agent = "claude:x:reviewer") => ({
   author_association: "OWNER",
@@ -21,7 +21,7 @@ const qa = (head, verdict, at, agent = "claude:x:qa") => ({
   performed_via_github_app: { slug: "claude" },
   user: { login: "u" },
   created_at: at,
-  body: `QA-Agent: ${agent}\nQA-Head: ${head}\nQA-Verdict: ${verdict}\n`,
+  body: `QA-Agent: ${agent}\nQA-Head: ${head}\nQA-Verdict: ${verdict}\nQA-Scope: synthetic\n`,
 });
 const plan = "| ID | Zadatak |\n| --- | --- |\n| B-5 | uloge |\n| B-7 | model |\n| B-8 | evidencija |\n| P-6 | rječnik |\n| D-3 | proba |\nB-99 nije redak\n";
 const merged = (over = {}) => ({

@@ -58,22 +58,26 @@ export function demoWorkLabels(rows) {
 }
 
 /**
- * Rounds of one kind: one per distinct full-SHA head, outcome by gate rules
- * (any FAIL/BLOCK wins, else PASS) via latestVerdict. Other heads are ignored.
+ * Rounds of one kind: one per distinct full-SHA head with a verdict the gate
+ * reads there (F-015), outcome by latestVerdict on that head (any FAIL/BLOCK
+ * wins, else PASS). A head with only a PASS the gate could not count, or an
+ * EDITED one, is no round. `authorAgent` is the body's Agent.
  */
-export function rounds(comments, kind) {
-  // F-015: the same verdicts latestVerdict shows (no PASS the gate could not
-  // count), and only the outcome on that head, never a stale one from another.
-  const heads = new Set(
+export function rounds(comments, kind, { authorAgent } = {}) {
+  const named = new Set(
     parseVerdicts(comments, kind)
-      .filter((e) => COUNTED.has(e.verdict) && (e.verified || e.verdict !== "PASS") && e.head && FULL_SHA.test(e.head))
+      .filter((e) => e.head && FULL_SHA.test(e.head))
       .map((e) => e.head.toLowerCase()),
   );
-  const list = [...heads].map((head) => {
-    const v = latestVerdict(comments, kind, head);
-    return v?.current ? v.verdict : null;
-  });
-  return { heads, total: list.length, pass: list.filter((v) => v === "PASS").length };
+  const heads = new Set();
+  let pass = 0;
+  for (const head of named) {
+    const v = latestVerdict(comments, kind, head, { authorAgent });
+    if (!v?.current || !COUNTED.has(v.verdict)) continue;
+    heads.add(head);
+    if (v.verdict === "PASS") pass += 1;
+  }
+  return { heads, total: heads.size, pass };
 }
 
 /**
@@ -84,8 +88,9 @@ export function rounds(comments, kind) {
 export function prMetrics(pr, comments, demoIds) {
   const created = Date.parse(pr.createdAt);
   const merged = Date.parse(pr.mergedAt);
-  const rev = rounds(comments, "review");
-  const qa = rounds(comments, "qa");
+  const authorAgent = field(pr.body, "Agent") ?? null;
+  const rev = rounds(comments, "review", { authorAgent });
+  const qa = rounds(comments, "qa", { authorAgent });
   const heads = new Set([...rev.heads, ...qa.heads]);
   if (pr.headRefOid && FULL_SHA.test(pr.headRefOid)) heads.add(pr.headRefOid.toLowerCase());
   const task = field(pr.body, "Task") ?? null;

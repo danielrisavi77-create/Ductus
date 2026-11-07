@@ -29,7 +29,7 @@ const verdict = (kind, head, v, text = "") => ({
   created_at: "2026-10-24T10:00:00Z",
   body: kind === "review"
     ? `Agent-Review: claude:r:reviewer\nReview-Head: ${head}\nReview-Verdict: ${v}\n\n${text}`
-    : `QA-Agent: claude:q:qa\nQA-Head: ${head}\nQA-Verdict: ${v}\n\n${text}`,
+    : `QA-Agent: claude:q:qa\nQA-Head: ${head}\nQA-Verdict: ${v}\nQA-Scope: synthetic\n\n${text}`,
 });
 const ROLLUP = [{ name: "Lint", status: "COMPLETED", conclusion: "SUCCESS", workflowName: "1" }];
 
@@ -109,13 +109,19 @@ test("a job named __proto__ is kept", () => {
   assert.equal(buildEvidence({ pr: pr(), rollup }).checks.bad[0].name, "__proto__");
 });
 
+// F-015: a head that is not a SHA is read as the gate reads it. A PASS on it is
+// no verdict; a FAIL on it holds this head. The head text is never printed.
 test("a verdict head that is not a SHA is not printed", () => {
   const evil = `${String.fromCharCode(27)}[2J${String.fromCharCode(0x202e)}evil`;
-  const stale = { ...verdict("qa", H1, "PASS"), body: `QA-Agent: claude:q:qa\nQA-Head: ${evil}\nQA-Verdict: PASS\n` };
-  const e = buildEvidence({ pr: pr(), comments: [stale] });
-  assert.equal(e.qa.head, "<not printed>");
-  for (const out of [JSON.stringify(e), renderEvidence(e).join("\n")]) {
-    assert.ok(!out.includes("evil"));
-    assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e]/.test(out));
+  const on = (v) => ({ ...verdict("qa", H1, v), body: `QA-Agent: claude:q:qa\nQA-Head: ${evil}\nQA-Verdict: ${v}\nQA-Scope: synthetic\n` });
+  const pass = buildEvidence({ pr: pr(), comments: [on("PASS")] });
+  assert.deepEqual(pass.qa, { verdict: "none" });
+  const fail = buildEvidence({ pr: pr(), comments: [on("FAIL")] });
+  assert.deepEqual(fail.qa, { verdict: "FAIL", head: "aaaaaaaa", agent: "claude:q:qa", current: true });
+  for (const e of [pass, fail]) {
+    for (const out of [JSON.stringify(e), renderEvidence(e).join("\n")]) {
+      assert.ok(!out.includes("evil"));
+      assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e]/.test(out));
+    }
   }
 });
