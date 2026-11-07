@@ -30,16 +30,24 @@ function isInterfaceLocale(value: string): value is InterfaceLocale {
 }
 
 /**
+ * The language of one tag ("hr", "HR", "hr-HR" give "hr"), in lower case, or
+ * undefined. The region and script are dropped. Anything that is not one tag
+ * (another type, padding, a list such as an Accept-Language header, look-alike
+ * letters) gives undefined; nothing is normalised first, so only ASCII letters
+ * match. Whether the language has a catalogue is not checked here.
+ */
+export function languageOfTag(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > MAX_TAG_LENGTH) return undefined;
+  return TAG.exec(value)?.[1]?.toLowerCase();
+}
+
+/**
  * The interface language a stored or requested value names, or the default.
- *
- * Reads one tag ("hr", "HR", "hr-HR"); the region and script are dropped. It
- * never throws: anything else (another type, padding, a list such as an
- * Accept-Language header, look-alike letters, a language without a catalogue)
- * gives the default. Nothing is normalised first, so only ASCII letters match.
+ * It never throws: a value that is not one tag, or names a language without a
+ * catalogue, gives the default.
  */
 export function parseInterfaceLocale(value: unknown): InterfaceLocale {
-  if (typeof value !== "string" || value.length > MAX_TAG_LENGTH) return DEFAULT_INTERFACE_LOCALE;
-  const language = TAG.exec(value)?.[1]?.toLowerCase();
+  const language = languageOfTag(value);
   return language !== undefined && isInterfaceLocale(language) ? language : DEFAULT_INTERFACE_LOCALE;
 }
 

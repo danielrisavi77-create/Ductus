@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { messagesHr } from "./messages.hr";
-import { DEFAULT_INTERFACE_LOCALE, INTERFACE_LOCALES, messagesFor, parseInterfaceLocale } from "./locale";
+import { DEFAULT_INTERFACE_LOCALE, INTERFACE_LOCALES, languageOfTag, messagesFor, parseInterfaceLocale } from "./locale";
 
 // Classes of input the parser covers (DAN-427 contract on #1091). Every class
 // that is not a registered language tag gives the default, never an error.
@@ -22,13 +22,26 @@ describe("parseInterfaceLocale", () => {
     ["hr-hr", "hr"],
     ["HR-Latn-HR", "hr"],
   ])("reads %j as %s", (value, locale) => {
+    expect(languageOfTag(value)).toBe(locale);
     expect(parseInterfaceLocale(value)).toBe(locale);
   });
 
+  // 4. A well-formed tag of a language without a catalogue: the tag is read, the
+  // default is chosen only because nothing is registered for it.
   it.each([
-    // 4. A known language without a catalogue.
-    ["de"],
-    ["sr-Latn"],
+    ["de", "de"],
+    ["sr-Latn", "sr"],
+    // A letter next to "hr" makes another three-letter language, not "hr".
+    ["hrx", "hrx"],
+    ["xhr", "xhr"],
+  ])("reads the language of %j as %s and gives the default", (value, language) => {
+    expect(languageOfTag(value)).toBe(language);
+    expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
+  });
+
+  // Classes 5 to 10 are not one tag at all. With only "hr" registered the default
+  // and a match look the same, so the tag reading is checked on its own.
+  it.each([
     // 5. Empty or blank.
     [""],
     ["   "],
@@ -50,8 +63,6 @@ describe("parseInterfaceLocale", () => {
     ["hr\n"],
     ["hr\u0000"],
     ["hr_HR"],
-    ["hrx"],
-    ["xhr"],
     ["hr-"],
     ["-hr"],
     ["hr--HR"],
@@ -69,7 +80,8 @@ describe("parseInterfaceLocale", () => {
     ["h​r"],
     // 10. Overlong input.
     [`hr-${"a".repeat(8)}`.repeat(20)],
-  ])("reads %j as the default", (value) => {
+  ])("reads %j as no tag and gives the default", (value) => {
+    expect(languageOfTag(value)).toBeUndefined();
     expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
   });
 });

@@ -1,7 +1,7 @@
 import { fc, test } from "@fast-check/vitest";
 import { expect } from "vitest";
 
-import { DEFAULT_INTERFACE_LOCALE, INTERFACE_LOCALES, parseInterfaceLocale } from "../../src/lib/i18n/locale";
+import { DEFAULT_INTERFACE_LOCALE, INTERFACE_LOCALES, languageOfTag, parseInterfaceLocale } from "../../src/lib/i18n/locale";
 
 // The classes of input of the DAN-427 contract (#1091), generated rather than listed.
 const registered = fc.constantFrom(...INTERFACE_LOCALES);
@@ -25,17 +25,24 @@ test.prop([registered, flips, fc.array(subtag, { maxLength: 3 })])(
   "a registered tag in any case and with any subtags reads as itself",
   (locale, upper, subtags) => {
     const cased = [...locale].map((char) => (upper.next().value ? char.toUpperCase() : char)).join("");
-    expect(parseInterfaceLocale([cased, ...subtags].join("-"))).toBe(locale);
+    const value = [cased, ...subtags].join("-");
+    expect(languageOfTag(value)).toBe(locale);
+    expect(parseInterfaceLocale(value)).toBe(locale);
   },
 );
 
 test.prop([registered, noise, fc.boolean()])("a registered tag with anything around it reads as the default", (locale, around, before) => {
-  expect(parseInterfaceLocale(before ? around + locale : locale + around)).toBe(DEFAULT_INTERFACE_LOCALE);
+  const value = before ? around + locale : locale + around;
+  // Checked on the reading, since the default is also a registered locale: the noise
+  // either breaks the tag or makes another language ("hrx"), never the locale itself.
+  expect(languageOfTag(value)).not.toBe(locale);
+  expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
 });
 
 test.prop([fc.stringMatching(/^[a-z]{2,3}$/).filter((tag) => !(INTERFACE_LOCALES as readonly string[]).includes(tag))])(
   "a language without a catalogue reads as the default",
   (tag) => {
+    expect(languageOfTag(tag)).toBe(tag);
     expect(parseInterfaceLocale(tag)).toBe(DEFAULT_INTERFACE_LOCALE);
   },
 );
@@ -43,5 +50,6 @@ test.prop([fc.stringMatching(/^[a-z]{2,3}$/).filter((tag) => !(INTERFACE_LOCALES
 test.prop([registered, fc.array(subtag, { minLength: 8, maxLength: 12 })])("an overlong tag reads as the default", (locale, subtags) => {
   const value = [locale, ...subtags].join("-");
   fc.pre(value.length > 35);
+  expect(languageOfTag(value)).toBeUndefined();
   expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
 });

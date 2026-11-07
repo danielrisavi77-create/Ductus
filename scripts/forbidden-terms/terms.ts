@@ -253,7 +253,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     entry: "AI-detected, flagged as AI",
     instead: "(ništa; podrijetlo teksta ne procjenjuje se, pravilo 13)",
     lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:ai detect|(?:detect|flag)\p{L}* (?:as |by )?(?:ai|artificial)(?![\p{L}\p{N}]))/u,
+    pattern: /(?<![\p{L}\p{N}])(?:(?:ai|a i) detect|(?:detect\p{L}*|flag(?:s|ged|ging)?) (?:as |by )?(?:ai|a i|artificial)(?![\p{L}\p{N}]))/u,
   },
   // Every form of the verb, and the noun where it marks a student or a work ("Flag this student", "red flag").
   {
