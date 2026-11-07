@@ -262,5 +262,89 @@ SELECT is(pg_temp.walk('ana', 'doc-a', s.size), 'n1 n2 e5 e4 e3 e2 e1',
   'walking pages of ' || s.size || ' after it gives every row once')
 FROM unnest(ARRAY[1, 2, 3, 100]) AS s (size);
 
+-- Istodobnost, two transactions across an interval boundary (QA
+-- c.6711877913; the owner's clarification of #1700 point 11, #87
+-- c.6711953923): a late committed opening with an older opened_at may show
+-- in its place by time, in a continuation too; no row comes twice and none
+-- is skipped; one newer than the cursor shows only on a fresh first page.
+-- Transaction A (Vesna) runs at 10:05:00 and commits; B (Marko) began at
+-- 10:04:59 and commits only after the owner has read page 1 (or 2). Both bin now() as audit.record_work_opening does. pgTAP
+-- runs in one transaction, so the moment of a commit is the moment of the
+-- insert; each walk runs in a subtransaction that is undone afterwards.
+INSERT INTO ref VALUES ('l1', '00000000-0000-4000-8000-0000000000ec'), ('l2', '00000000-0000-4000-8000-0000000000ed');
+CREATE FUNCTION pg_temp.opening(p_entry text, p_reader text, p_now timestamptz) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  SET LOCAL ROLE ductus_identity;
+  INSERT INTO audit.access_log (id, institution_id, document_id, assignment_id, owner_id, reader_id, reader_role, surface, opened_at)
+  VALUES (pg_temp.id(p_entry), pg_temp.id('fak_a'), 'doc-a', pg_temp.id('z1'), pg_temp.id('ana'), pg_temp.id(p_reader),
+          'teacher', 'live_view', date_bin('5 minutes', p_now, timestamptz '2000-01-01 00:00:00+00'));
+  RESET ROLE;
+END
+$$;
+-- Walks Ana's pages of p_size, with B committing after page p_after. Gives
+-- the entries the walk returned, ' / ', and a fresh first page of 2 after
+-- the walk; then undoes B and A, so each call starts from the same log.
+CREATE FUNCTION pg_temp.walk_late(p_size integer, p_after integer) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE
+  v_at text;
+  v_id text;
+  v_page text;
+  v_all text[] := '{}';
+  v_item text;
+  v_pages integer := 0;
+  v_result text;
+BEGIN
+  BEGIN
+    PERFORM pg_temp.opening('l1', 'vesna', '2026-10-22 10:05:00+00');
+    LOOP
+      v_page := pg_temp.ask('ana', format($q$
+        SELECT string_agg(coalesce(r.name, l.entry_id::text) || '|' || l.opened_at::text || '|' || l.entry_id::text,
+                          ';' ORDER BY l.ordinality)
+          FROM app.read_my_access_log('doc-a', %s, %L::timestamptz, %L::uuid) WITH ORDINALITY l
+          LEFT JOIN ref r ON r.val = l.entry_id::text $q$, p_size, v_at, v_id));
+      EXIT WHEN v_page IS NULL;
+      IF v_page ~ '^[0-9A-Z]{5}: ' THEN
+        v_all := ARRAY[v_page];
+        EXIT;
+      END IF;
+      FOREACH v_item IN ARRAY string_to_array(v_page, ';') LOOP
+        v_all := v_all || split_part(v_item, '|', 1);
+        v_at := split_part(v_item, '|', 2);
+        v_id := split_part(v_item, '|', 3);
+      END LOOP;
+      v_pages := v_pages + 1;
+      IF v_pages = p_after THEN
+        PERFORM pg_temp.opening('l2', 'marko', '2026-10-22 10:04:59+00');
+      END IF;
+      IF v_pages > 20 THEN
+        v_all := ARRAY['more than 20 pages'];
+        EXIT;
+      END IF;
+    END LOOP;
+    v_result := array_to_string(v_all, ' ') || ' / ' || pg_temp.log('ana', $q$ 'doc-a', 2, NULL, NULL $q$);
+    RAISE EXCEPTION USING ERRCODE = 'ZT001';
+  EXCEPTION WHEN SQLSTATE 'ZT001' THEN
+    RETURN v_result;
+  END;
+END
+$$;
+SELECT is(date_bin('5 minutes', timestamptz '2026-10-22 10:04:59+00', timestamptz '2000-01-01 00:00:00+00')
+          || ' ' || date_bin('5 minutes', timestamptz '2026-10-22 10:05:00+00', timestamptz '2000-01-01 00:00:00+00'),
+  (timestamptz '2026-10-22 10:00:00+00')::text || ' ' || (timestamptz '2026-10-22 10:05:00+00')::text,
+  'B began in the interval before A''s, which is the newest');
+SELECT is(pg_temp.walk_late(1, 1),
+  'l1 l2 n1 n2 e5 e4 e3 e2 e1 / l1 10-22 10:05 live_view teacher Vesna Primjerić; l2 10-22 10:00 live_view teacher - -',
+  'pages of 1: B''s opening, older than the cursor, comes in the continuation in its place, once; nothing repeats');
+SELECT is(pg_temp.walk_late(s.size, 1),
+  'l1 n1 n2 e5 e4 e3 e2 e1 / l1 10-22 10:05 live_view teacher Vesna Primjerić; l2 10-22 10:00 live_view teacher - -',
+  'pages of ' || s.size || ': B''s opening is newer than the cursor, so only a fresh first page shows it; nothing repeats or is skipped')
+FROM unnest(ARRAY[2, 3, 100]) AS s (size);
+SELECT is(pg_temp.walk_late(1, 2),
+  'l1 n1 n2 e5 e4 e3 e2 e1 / l1 10-22 10:05 live_view teacher Vesna Primjerić; l2 10-22 10:00 live_view teacher - -',
+  'pages of 1, B committing after page 2: newer than the cursor, only on a fresh first page');
+SELECT is(pg_temp.walk('ana', 'doc-a', s.size), 'n1 n2 e5 e4 e3 e2 e1',
+  'each walk above is undone: pages of ' || s.size || ' give the log as before')
+FROM unnest(ARRAY[1, 100]) AS s (size);
+
 SELECT * FROM finish();
 ROLLBACK;
