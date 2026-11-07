@@ -334,3 +334,15 @@ test("the application has no Server Actions and no draft mode", () => {
     assert.doesNotMatch(text, /\bdraftMode\b/, `${file}: draft mode needs infra/docker/image-gitleaks.toml reviewed`);
   }
 });
+
+// Known limit: `docker build --build-arg` could override the pinned base. No
+// workflow passes one, and CI builds the web image with exactly this command.
+test("no workflow passes --build-arg and CI builds the web image without one", () => {
+  const workflows = resolve(root, ".github/workflows");
+  for (const name of readdirSync(workflows).filter((file) => /\.ya?ml$/.test(file))) {
+    assert.doesNotMatch(readFileSync(join(workflows, name), "utf8"), /--build-arg/, `${name} passes --build-arg`);
+  }
+  const ci = readFileSync(join(workflows, "ci.yml"), "utf8");
+  const builds = ci.split("\n").filter((line) => line.includes("web.Dockerfile") && /docker\s+(?:buildx\s+)?build/.test(line));
+  assert.deepEqual(builds.map((line) => line.trim()), ["run: docker build -f infra/docker/web.Dockerfile -t ductus-web:ci ."]);
+});
