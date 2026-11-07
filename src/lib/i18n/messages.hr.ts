@@ -47,6 +47,8 @@ export const hr = {
       institution: "Pregled ustanove",
       // DAN-581 (A-02): the institution's teachers and their roles, /ustanova/korisnici.
       users: "Korisnici",
+      // DAN-591 (A-03): the institution's courses, teams and groups, /ustanova/kolegiji.
+      institutionCourses: "Kolegiji",
       // DAN-590 (A-04): the faculty rule versions, /ustanova/pravila.
       facultyRules: "Pravila fakulteta",
     },
@@ -1372,12 +1374,37 @@ export const hr = {
       institution: "pregled svoje ustanove",
       users: "korisnike svoje ustanove",
       facultyRules: "pravila svoje ustanove",
+      institutionCourses: "kolegije svoje ustanove",
     },
     deniedTitle: "Nemate pristup ovom prikazu",
     deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
     deniedPending: "Ulogu nastavnika potvrđuje administrator fakulteta. Dok se ne potvrdi, ovaj prikaz nije dostupan.",
     deniedNext: "Javite se koordinatoru na svojoj ustanovi.",
     backToOwn: "Natrag na moj prostor",
+  },
+  // DAN-591 (M2.11-P03, A-03): the institution's courses by academic year,
+  // read only, as docs/design/ductura/m2-reference/a03-kolegiji-tim-i-grupe.html
+  // writes them. Students are only counted, never named.
+  institutionCourses: {
+    title: "Kolegiji i akademske godine",
+    lead: "Kolegiji vaše ustanove po akademskoj godini, s nastavnim timom i seminarskim grupama. Radovi studenata i njihov sadržaj ovdje se ne prikazuju.",
+    yearHeading: "Akademska godina {year}",
+    yearsLabel: "Akademske godine",
+    enrolled: { one: "upisan student", few: "upisana studenta", many: "upisanih studenata" },
+    students: { one: "student", few: "studenta", many: "studenata" },
+    holder: "Nositelj",
+    team: "Nastavni tim",
+    noHolder: "Nije upisan",
+    noTeam: "Nema članova",
+    noGroups: "Kolegij nema seminarskih grupa.",
+    groupTeacher: { one: "Nastavnik", many: "Nastavnici" },
+    noTeacher: "Bez nastavnika",
+    noTeacherNote: "Studenti grupe vide kolegij i zadatke.",
+    emptyYear: "Za ovu akademsku godinu ustanova nema kolegija.",
+    noCourses: "Ustanova još nema kolegija.",
+    emptyNote: "Kolegij stvara nastavnik s potvrđenom ulogom; potvrda je u „Korisnici i uloge”.",
+    unavailable: "Kolegiji trenutačno nisu dostupni. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
   },
   // DAN-590 (M2.12-P03, A-04): the faculty rule versions of DAN-315, read
   // only. The package of form rules (facultyRules below, M4) has no data yet
