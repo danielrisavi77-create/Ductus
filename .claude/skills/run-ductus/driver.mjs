@@ -42,7 +42,7 @@ const server = spawn(serverPlan.command, serverPlan.args, {
   shell: false,
   detached: !windows,
   windowsHide: true,
-  env: { ...process.env, DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "local" },
+  env: { ...process.env, DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "local", DUCTUS_LOCAL_DEMO_INSTITUTION: "demo-fakultet" },
 });
 let exited = false;
 server.on("exit", () => {

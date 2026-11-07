@@ -9,12 +9,13 @@ import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import { AtomicDexieJournal } from "./atomic-dexie-journal";
 import {
   LOCAL_DEMO_DOCUMENT_ID, LOCAL_DEMO_SCOPE_HASH, LOCAL_DEMO_SCOPE_LABEL,
-  LOCAL_DEMO_DEPLOYMENTS, LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
-  type LocalScopeConfig,
+  LOCAL_DEMO_DEPLOYMENTS, LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalDemoInstitution,
+  resolveLocalScope, type LocalScopeConfig,
 } from "./local-scope";
 
 const ENV_KEYS = [
   "DUCTUS_LOCAL_DEMO_JOURNAL", "DUCTUS_DEPLOYMENT", "NEXT_PUBLIC_DUCTUS_LOCAL_DEMO_JOURNAL",
+  "DUCTUS_LOCAL_DEMO_INSTITUTION",
 ] as const;
 const saved = ENV_KEYS.map((key) => process.env[key]);
 
@@ -62,6 +63,7 @@ describe("local demo journal scope (#197 attack 12)", () => {
   });
 
   it("reads the runtime server variables", () => {
+    delete process.env.DUCTUS_LOCAL_DEMO_INSTITUTION;
     process.env.DUCTUS_LOCAL_DEMO_JOURNAL = "1";
     process.env.DUCTUS_DEPLOYMENT = "production";
     expect(localScopeConfigFromEnv()).toEqual({ localDemoJournal: "1", deployment: "production" });
@@ -92,5 +94,47 @@ describe("local demo journal scope (#197 attack 12)", () => {
       journal.close();
       await indexedDB.deleteDatabase(`ductus-journal-v1-${LOCAL_DEMO_SCOPE_HASH}`);
     }
+  });
+});
+
+// M2.12-P02, plan #1689 D4 and D5: the demo journal names an institution only
+// through its own flag, only where the demo scope runs, and never by default.
+describe("local demo institution (M2.12-P02)", () => {
+  it("is the configured slug where the demo scope runs", () => {
+    for (const deployment of LOCAL_DEMO_DEPLOYMENTS) {
+      expect(resolveLocalDemoInstitution({ localDemoJournal: "1", deployment, localDemoInstitution: "demo-fakultet" }))
+        .toBe("demo-fakultet");
+    }
+  });
+
+  it("is null when unset or empty: no institution is assumed in code", () => {
+    expect(resolveLocalDemoInstitution({ localDemoJournal: "1", deployment: "ci" })).toBeNull();
+    expect(resolveLocalDemoInstitution({ localDemoJournal: "1", deployment: "ci", localDemoInstitution: "" })).toBeNull();
+  });
+
+  it("is null when the demo journal is off, whatever the slug", () => {
+    expect(resolveLocalDemoInstitution({ localDemoInstitution: "demo-fakultet" })).toBeNull();
+    expect(resolveLocalDemoInstitution({ localDemoJournal: "", deployment: "ci", localDemoInstitution: "fpzg" })).toBeNull();
+  });
+
+  it("refuses with the demo scope in a deployment outside the allow-list", () => {
+    expect(() => resolveLocalDemoInstitution({ localDemoJournal: "1", deployment: "production", localDemoInstitution: "fpzg" }))
+      .toThrow(LocalScopeConfigError);
+  });
+
+  it("ignores an inherited slug", () => {
+    const inherited = Object.assign(Object.create({ localDemoInstitution: "fpzg" }) as LocalScopeConfig, {
+      localDemoJournal: "1", deployment: "local",
+    });
+    expect(resolveLocalDemoInstitution(inherited)).toBeNull();
+  });
+
+  it("reads its own server variable", () => {
+    process.env.DUCTUS_LOCAL_DEMO_JOURNAL = "1";
+    process.env.DUCTUS_DEPLOYMENT = "local";
+    process.env.DUCTUS_LOCAL_DEMO_INSTITUTION = "demo-fakultet-b";
+    expect(resolveLocalDemoInstitution(localScopeConfigFromEnv())).toBe("demo-fakultet-b");
+    delete process.env.DUCTUS_LOCAL_DEMO_INSTITUTION;
+    expect(resolveLocalDemoInstitution(localScopeConfigFromEnv())).toBeNull();
   });
 });

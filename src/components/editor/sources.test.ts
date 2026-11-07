@@ -2,7 +2,8 @@
 import { Editor } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
-import { formatBibliographyEntry, formatInText, fpzgCitationStyle } from "@/domain/citation";
+import { formatBibliographyEntry, formatInText, type BookSource, type ArticleSource } from "@/domain/citation";
+import { resolveCitationStyle } from "@/domain/institution-config";
 import { createEditorExtensions } from "@/editor/schema";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
@@ -10,9 +11,16 @@ import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import {
-  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
+  bibliographyPlan, citationText as citationIn, EMPTY_FIELDS, entryText as entryIn, FIELD_MAX, formErrors, PAGE_MAX, pageFits, sourceFromFields, storable, writeSource,
   type SourceField, type SourceFields,
 } from "./sources";
+
+// M2.12-P02: the style is the record of an institution, never a default of sources.ts.
+const style = resolveCitationStyle("demo-fakultet");
+if (style === null) throw new Error("demo-fakultet has no record");
+const fpzgCitationStyle = style;
+const citationText = (source: BookSource | ArticleSource, page: string) => citationIn(source, page, style);
+const entryText = (source: BookSource | ArticleSource) => entryIn(source, style);
 
 // DAN-343: invented authors and titles only.
 const BOOK: SourceFields = {
