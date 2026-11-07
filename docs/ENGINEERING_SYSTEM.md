@@ -14,7 +14,7 @@ Ductus nije tvornica koda. Sustav optimizira za:
 4. male, reverzibilne promjene;
 5. brzinu tek nakon prva četiri uvjeta.
 
-Normalno rade **tri stalna writera**: Backend, Frontend i Platforma. Četvrti writer dopušten je privremeno samo za potpuno neovisan zadatak. Više od četiri istodobna writera nije dopušteno.
+Normalno rade **tri writera**: Backend i Frontend stalno, a Platforma na poziv (§13). Četvrti writer dopušten je privremeno samo za potpuno neovisan zadatak. Više od četiri istodobna writera nije dopušteno.
 
 ## 2. Stalne uloge
 
@@ -333,6 +333,10 @@ Normalno najviše:
 - 3 PR-a u gateu (review, QA ili čekanje spajanja), uključujući D-97 PR koji čeka vlasnika, ako se međusobno ne preklapaju po `pnpm orch:overlap` (D-161, §15);
 - 1 PR alata u radu (§16).
 
+**Tvrdi WIP (vlasnik, 7. 11. 2026., #87 [c.6706748222](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6706748222) t. 19).** Kad su izvan nacrta više od 3 PR-a, nema nove dodjele. Broj se čita iz `pnpm orch:status`. To je governance pravilo orkestratora: nijedan alat dodjelu ne blokira.
+
+**Platforma na poziv (isti izvor, t. 20).** Platforma radi na poziv, a ne kao trajni pisac, s najviše jednim PR-om alata odjednom (§16).
+
 Četvrti writer dopušten je samo ako ne dijeli datoteke, migracije, ugovore ni redoslijed s ostala tri.
 
 **Zavisni PR (D-163).** Ugniježđeni (stacked) PR-ovi se ne uvode: spajanje je samo squash, pa PR s bazom na grani roditelja nakon spajanja roditelja ima dupli diff i konflikt. Posao koji ovisi o PR-u u gateu može se pripremiti na vlastitoj grani, a PR se otvara tek kad roditelj uđe u `main`; nezavisni dijelovi idu kao zasebni PR-ovi iz aktualnog `main` (do tri u gateu, D-161 (a)).
@@ -341,7 +345,7 @@ Cilj nije maksimalan broj paralelnih agenata nego minimalno vrijeme od zadatka d
 
 ## 14. Pravila rada za critical PR (D-106)
 
-Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Izvor je vlasnikova odluka od 11. 10. 2026. (D-106). Kartice u `.claude/uloge/`, pravila u `.claude/rules/` i skillovi upućuju na ovaj odjeljak, ne na komentare na issueima.
+Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Točka 6 (najviše dva kruga) vrijedi za PR svake razine rizika (vlasnik, 7. 11. 2026., #87 [c.6706748222](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6706748222) t. 22). Izvor je vlasnikova odluka od 11. 10. 2026. (D-106). Kartice u `.claude/uloge/`, pravila u `.claude/rules/` i skillovi upućuju na ovaj odjeljak, ne na komentare na issueima.
 
 1. **Ugovor prije koda.** Prije pisanja, u planu napada ili opisu PR-a stoje ova polja:
    - **Invarijanta:** jedna rečenica.

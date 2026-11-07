@@ -75,7 +75,7 @@ Datoteke su namjerno kratke. Claude Code ih može pronaći rekurzivno u podmapam
 | Architecture / Performance | ne | granice sustava, pouzdanost, skaliranje i performance audit |
 | Scout | ne; samo Read/Grep/Glob | jeftino lociranje koda i odjeljaka dokumenata (Haiku), bez prosudbe |
 
-Ovo nije signal da svih 13 uloga treba raditi istodobno. WIP limit iz `docs/ENGINEERING_SYSTEM.md` ostaje nadređen: normalno tri stalna writera, kontrolne i auditorske uloge po potrebi.
+Ovo nije signal da svih 13 uloga treba raditi istodobno. WIP limit iz `docs/ENGINEERING_SYSTEM.md` ostaje nadređen: normalno tri writera (Backend i Frontend stalno, Platforma na poziv), kontrolne i auditorske uloge po potrebi.
 
 ## 5. Agent nije isto što i skill
 

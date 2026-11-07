@@ -8,7 +8,7 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
 
 | Uloga | Posao | Vlasnik mapa | Model i napor |
 | --- | --- | --- | --- |
-| **Orkestrator** | Plan, `STATE.md`, dodjela zadataka, dnevnik, Owner queue, praćenje tokena. Ne piše kod. | `STATE.md`, `docs/` (osim ARCHITECTURE kad ga drži druga sesija), `.claude/skills/` i `.agents/skills/` (`ORKESTRATOR.md` §4) | Opus, high |
+| **Orkestrator** | Plan, `STATE.md`, dodjela zadataka, dnevnik, Owner queue, praćenje tokena. Ne piše kod. | `STATE.md`, `docs/` (osim ARCHITECTURE kad ga drži druga sesija), `.claude/skills/` i `.agents/skills/` (`ORKESTRATOR.md` §4) | Opus, medium (`ORKESTRATOR.md` §7) |
 | **Platforma** | Kostur projekta, CI, `docker compose`, lefthook, skeneri, migracijski alat, kasnije OpenTofu i operacije | korijenske konfiguracije (`package.json`, `tsconfig*`, `eslint*`, `vitest*`, `playwright*`), `.github/`, `compose.yaml`, `lefthook.yml`, `scripts/`, `infra/` | Opus (profil), medium; Sonnet za rutinu |
 | **Backend** | Baza, uloge, RLS, pgTAP, RPC-i, evidencija, OIDC i sesije, worker, rekonstrukcija, potpisi | `src/domain/`, `src/application/`, `src/adapters/`, `src/server/`, `db/`, `app/api/`, `tests/` za te mape | Opus, high (evidencija, ovlasti, prijava); Sonnet za rutinu |
 | **Frontend** | Editor (Tiptap), journal i sinkronizacija u pregledniku (Dexie), ekrani, hr/en, pristupačnost, zabranjene riječi | `app/` (osim `app/api/`), `src/components/`, `src/editor/`, `src/client/`, `src/lib/i18n/`, `e2e/` | Opus (profil), medium; Sonnet za rutinu izvan sinkronizacije |
@@ -32,7 +32,7 @@ Pravila vlasništva:
 - `e2e/` je feature-vlasništvo Frontenda. QA ga smije mijenjati samo u zasebnom QA zadatku i branchu koji je Orkestrator eksplicitno dodijelio; QA i Frontend nikad ne pišu u isti branch.
 - `STATE.md` mijenja samo orkestrator.
 
-Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dopušten samo za potpuno neovisan zadatak. WIP limit, risk razine i kontrolne uloge definirani su u `docs/ENGINEERING_SYSTEM.md`.
+Normalno rade tri writera: Backend i Frontend stalno, a Platforma na poziv, ne kao trajni pisac, s najviše jednim PR-om alata odjednom (`docs/ENGINEERING_SYSTEM.md` §13). Četvrti je dopušten samo za potpuno neovisan zadatak. WIP limit, risk razine i kontrolne uloge definirani su u `docs/ENGINEERING_SYSTEM.md`.
 
 ## 2. Tijek jednog zadatka
 
