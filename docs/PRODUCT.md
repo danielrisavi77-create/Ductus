@@ -143,6 +143,19 @@ Dopuštene radnje (ne krše Rječnik):
 
 Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslovni citat pravilnika izuzima se samo u izričito označenom polju za citat, nikad cijela datoteka.
 
+### Dodatni engleski popis (D-276, NQ12)
+
+Uz engleski stupac gore (D-90 t. 3) i unose `lang: "en"` u `scripts/forbidden-terms/terms.ts`, za sučelje na engleskom (D-70) vrijede i ovi dodatni izrazi. Popis je aditivan: navodi samo izraze kojih još nema u tablici gore (za „suspicious”, „suspicion” i „plagiarism” vrijedi redak tablice, bez uvjeta i za sve oblike), a hrvatski popis i pravila 1 do 17 ne mijenjaju se. Isti uvjeti kao za hrvatske retke vrijede za složenice istog korijena i za „Dopuštene radnje”. Uključuje ga korak M11.5-P01a u skener.
+
+| Ne koristiti nikad (engleski) | Koristiti umjesto toga |
+| --- | --- |
+| risk score, trust score, attention score, suspicion score | (ništa; nema zbroja ni ocjene) / nothing: no score or rating |
+| cheating, dishonest, misconduct (o radu ili studentu) | (ništa; opis činjenice bez ocjene) / nothing: describe the fact without judgement |
+| AI-detected, flagged as AI | (ništa; podrijetlo teksta ne procjenjuje se, pravilo 13) / nothing: the origin of text is not assessed |
+| flagged, flagged for review (o studentu ili radu) | (ništa; činjenica bez ocjene) / nothing: state the fact without rating |
+
+Tekst koji dolazi iz ugrađenog AI pomoćnika i dalje se prikazuje kao „iz AI pomoćnika (model, vrijeme)” / "from the AI assistant (model, time)" (redak „napisao AI” / „written by AI” gore, pravilo 8). Ovaj popis ne propisuje zamjensku tvrdnju o načinu nastanka teksta.
+
 ---
 
 ## 6. Tokovi
@@ -228,7 +241,7 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 8. AI pomoćnik
 
-> **U pilotu (D-194, 31. 10. 2026.; mijenja D-77).** AI pomoćnik ulazi u pilot (početak 1. 3. 2027.) sa svim namjenama iz kataloga D-64, uključujući transkripciju i alate pružatelja. Student i dalje smije koristiti vanjski alat i uz izjavu priložiti ispis razgovora (izjavljeno). Prije stvarnih studenata moraju postojati ugovor o obradi, popis podizvršitelja, DPIA i pravno mišljenje koji pokrivaju asistenta (D-194 t. 4 i 5; GO uvjeti u `docs/PROGRAM.md`).
+> **U pilotu (D-194, 31. 10. 2026.; mijenja D-77).** AI pomoćnik ulazi u pilot (nastava od oko 22. 3. 2027. ili kasnije, D-203 E3) sa svim namjenama iz kataloga D-64, uključujući transkripciju i alate pružatelja. Student i dalje smije koristiti vanjski alat i uz izjavu priložiti ispis razgovora (izjavljeno). Prije stvarnih studenata moraju postojati ugovor o obradi, popis podizvršitelja, DPIA i pravno mišljenje koji pokrivaju asistenta (D-194 t. 4 i 5; GO uvjeti u `docs/PROGRAM.md`).
 
 - **Račun kod pružatelja i trošak.** Tko drži račune kod pružatelja i plaća je **OTVORENO**. [PRIJEDLOG D-194 t. 6: račune drži pravna osoba operatera, pružatelji su podizvršitelji s odobrenim popisom, trošak je u cijeni usluge i student ne plaća ništa; čeka pravno mišljenje.] Raniji prijedlog (OpenRouter, student plaća svoj račun, D-20) više nije polazište. Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana.
 - **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23] Nikad nisu dopušteni: pružatelj s kineskim sjedištem, model koji je razvila kineska tvrtka (ni kad ga poslužuje europski pružatelj) i obrada na kineskim serverima; fakultet to ne može uključiti. [ODLUČENO D-194 t. 2]
@@ -286,7 +299,7 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 
 **Nikad (Ustav):** postotak AI-ja ili ljudskosti, ocjena rizika ili sumnje, tvrdnja o autorstvu, nadzor računala, kamere i zaslona, biometrija tipkanja, automatske sankcije, rangiranje studenata, treniranje modela na radovima. Prikaz uživo dokumenta u Ducturi nije nadzor zaslona: Ductura ne vidi ništa izvan svog editora (Ustav v1.4, D-142, D-144).
 
-**Kasnije:** drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT".
+**Kasnije:** drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT", provjera podudarnosti s izvorima u valu 2 (D-260). Iznimka D-260 od pravila 2 vrijedi tek kad vlasnik upiše tekst Ustava v1.6; dotad pravila iz §5 vrijede bez izmjene.
 
 **Odlučeno, Ustav v1.4 dopunjen 18. 10. 2026. (C-3, C-14, C-19, popis „Nikad”; uz izmjene od 17. 10. niže):** prikaz uživo i reprodukcija znak po znak (D-142, D-143). Pilot sa stvarnim studentima čeka pravno mišljenje (D-55) i DPIA.
 
@@ -299,12 +312,12 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 - **Fakultet:** samo FPZG. [ODLUČENO D-15]
 - **Kontakt:** prodekan Višeslav Raos. [ODLUČENO D-14]
 - **Cijena:** pilot je besplatan; kupac nakon pilota je fakultet. [ODLUČENO D-13]
-- **Početak:** ljetni semestar akademske godine 2026./2027. [ODLUČENO D-26]
+- **Početak:** nastava u ljetnom semestru akademske godine 2026./2027. (faza B, oko 22. 3. 2027. ili kasnije); tehnička proba počinje ranije (vidi Etape). [ODLUČENO D-26, D-203 E3]
 - **Obveznost:** FPZG odlučuje je li korištenje obvezno ili dobrovoljno. Ako je dobrovoljno, studenti koji ne sudjeluju imaju ravnopravnu alternativu.
 - **Jezik:** sučelje na hrvatskom i engleskom od vala 1 [ODLUČENO D-70]; jezik rada bira se po zadatku (F-06).
 - **Podrška:** model iz D-69; rokovi u pilotu radnim danom u podne.
 - **Povlačenje studenta:** već predani radovi ostaju po pravilima fakulteta, sve ostalo se briše. [ODLUČENO D-12]
-- **Etape:** A tehnička proba sa sintetičkim radovima prije početka semestra; B nastava; C evaluacija.
+- **Etape** (D-203 E3): **A** tehnička proba sa sintetičkim radovima od 22. 2. 2027., traje 4 puna tjedna i ne skraćuje se; **B** nastava oko 22. 3. 2027. ili kasnije, nakon izlaza A i suglasnosti FPZG-a; **C** evaluacija nakon 4. 6. 2027. (točan datum potvrditi s FPZG-om)
 - Nijedan tehnički pokazatelj sam ne dovodi do ocjene ni posljedice.
 
 **Mjerila uspjeha:**

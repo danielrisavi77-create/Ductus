@@ -122,7 +122,7 @@ test("unrecognized paths, metadata, statuses and mixed changes never get the exc
     "scripts/engineering/playwright-install.sh", "scripts/engineering/a.js", "scripts/engineering/a.cjs", "scripts/engineering/a.ts", "scripts/engineering/a.json",
     "scripts/engineering/a.yml", "scripts/engineering/a.mjs.orig", "scripts/engineering/a.mjs~", "scripts/engineering/a", "scripts/engineering/a.sql", "scripts/engineering/a.md",
     // A-06: neighbours
-    "scripts/engineering-staro/a.mjs", "scripts/orchestrator2/a.mjs", "scripts/hooks/a.mjs", "scripts/demo/a.mjs", "scripts/db/a.mjs",
+    "scripts/engineering-staro/a.mjs", "scripts/orchestrator2/a.mjs", "scripts/hooks/a.mjs", "scripts/local/a.mjs", "scripts/db/a.mjs",
     // A-10, I-06, I-07: other documents
     "docs/AGENT_SYSTEM_V2.md", "docs/FREE-AI-PR-REVIEW.md", "docs/ISTRAZIVANJE-ALATA-2026-10-25.md", "docs/engineering/PLAN-TOKOVI-2026-10-25.md", "docs/new-unknown.md",
     "plugins/ductura-engineering/references/source-map.md", ".github/ISSUE_TEMPLATE/agent-task.md",
@@ -701,8 +701,8 @@ test("A-10, I-07: every test that reaches a rule document is in the set those do
 
 test("J-04, L-02: no node test outside the two tool directories touches a listed path", () => {
   const packageScripts = JSON.parse(readFileSync(join(repository, "package.json"), "utf8")).scripts;
-  const named = `${packageScripts["test:demo"]} ${packageScripts["test:fake-oidc"]}`.match(/\S+\.test\.mjs/g);
-  assert.ok(named.length >= 7, "test:demo and test:fake-oidc are still the skipped steps");
+  const named = `${packageScripts["test:local"]} ${packageScripts["test:fake-oidc"]}`.match(/\S+\.test\.mjs/g);
+  assert.ok(named.length >= 7, "test:local and test:fake-oidc are still the skipped steps");
   const outside = [...new Set([...named, ...testFilesUnder("scripts").filter((file) => !/^scripts\/(?:engineering|orchestrator)\/[^/]+$/.test(file)), ...testFilesUnder("db"), ...testFilesUnder("infra")])];
   const toolPaths = [/scripts\/(?:engineering|orchestrator)\//, /\.\.\/(?:engineering|orchestrator)\//];
   // A listed document as a whole path: a quote or a slash before it, a quote after it.

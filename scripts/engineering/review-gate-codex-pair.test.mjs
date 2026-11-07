@@ -194,7 +194,7 @@ test("A13: a Codex pair needs no quota and bogus quota cannot rescue a colliding
 
 const files = [{ filename: "scripts/engineering/review-gate-core.mjs", status: "modified" }];
 const whole = (patch = {}) => evaluatePullRequest({
-  pr: { body, head: { sha: H }, changed_files: 1, user: { login: ownerLogin } },
+  pr: { body, head: { sha: H, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1, user: { login: ownerLogin } },
   files, ownerLogin, comments: pair(), ...patch,
 }).result;
 
@@ -206,14 +206,14 @@ test("A14-A15: production entry validates metadata, risk, complete files and D-9
     body.replace("critical", "nonsense"),
     body.replace("critical", "low"),
   ]) {
-    assert.equal(whole({ pr: { body: badBody, head: { sha: H }, changed_files: 1 } }).state, "failure");
+    assert.equal(whole({ pr: { body: badBody, head: { sha: H, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1 } }).state, "failure");
   }
   assert.equal(whole({ files: [] }).state, "failure");
-  const result = whole({ pr: { body, head: { sha: H }, changed_files: 1, auto_merge: {} } });
+  const result = whole({ pr: { body, head: { sha: H, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1, auto_merge: {} } });
   assert.equal(result.state, "pending");
   assert.match(result.description, /D-97/);
   // A body declaration cannot grant the file-derived QA exemption.
-  assert.equal(whole({ pr: { body: `${body}\nQA-Exempt: docs`, head: { sha: H }, changed_files: 1 }, comments: [review()] }).state, "pending");
+  assert.equal(whole({ pr: { body: `${body}\nQA-Exempt: docs`, head: { sha: H, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1 }, comments: [review()] }).state, "pending");
 });
 
 test("A16: new pair confers no owner override or command authority", () => {

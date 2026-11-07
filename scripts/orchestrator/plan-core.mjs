@@ -4,6 +4,7 @@
 // ends as NEPROVJERENO, never as PARALELNO.
 import { field } from "../engineering/metadata-parser.mjs";
 import { matchesPath, normalizePath } from "../engineering/protected-paths.mjs";
+import { headOrigin } from "./orchestrator-core.mjs";
 import { contractState } from "./work-guard-core.mjs";
 
 export const VERDICTS = ["NEPROVJERENO", "PREKLAPANJE", "ČEKA OVISNOST", "PARALELNO"];
@@ -63,9 +64,11 @@ export function declaredDependencies(body, openNumbers) {
  * One row per open PR: {number, draft, lane, task, kind, verdict, reasons}.
  * prs: [{number, isDraft, baseRefName, body, paths: string[] | null}];
  * pairs: overlapPairs(prs); contract: work-guard contract or null;
- * independent: [[a, b]] pairs the orchestrator has confirmed share no contract.
+ * independent: [[a, b]] pairs the orchestrator has confirmed share no contract;
+ * repository: this repository as read by repoId() ("owner/name"), or null when unread.
+ * F-010: a head the gate's predicate does not place in it is NEPROVJERENO and takes no slot.
  */
-export function planParallel({ prs, pairs, contract = null, now = Date.now(), slots = GATE_SLOTS, independent = [] }) {
+export function planParallel({ prs, pairs, contract = null, now = Date.now(), slots = GATE_SLOTS, independent = [], repository = null }) {
   const list = [...(prs ?? [])].sort((a, b) => a.number - b.number);
   const open = new Set(list.map((p) => p.number));
   const state = contract === null ? "MISSING" : contractState(contract, now);
@@ -78,6 +81,8 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
     const writer = writerOf(pr.body);
     const task = taskOf(pr.body);
     const reasons = { NEPROVJERENO: [], PREKLAPANJE: [], "ČEKA OVISNOST": [] };
+    const origin = headOrigin(pr, repository);
+    if (!origin.ok) reasons.NEPROVJERENO.push(`head origin: ${origin.text}`);
     if (!paths) reasons.NEPROVJERENO.push("files could not be read");
     else if (!paths.length) reasons.NEPROVJERENO.push("no changed files listed");
     if (!lane) reasons.NEPROVJERENO.push("no writer: Agent line names no backend, frontend or platforma role");
@@ -106,7 +111,7 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
     else if (pr.baseRefName !== "main") reasons["ČEKA OVISNOST"].push(`based on ${pr.baseRefName}, not main`);
     const deps = declaredDependencies(pr.body, open).filter((n) => n !== pr.number);
     if (deps.length) reasons["ČEKA OVISNOST"].push(`declared dependency on ${deps.map((n) => `#${n}`).join(", ")}`);
-    return { number: pr.number, draft: Boolean(pr.isDraft), lane, writer, task, paths,
+    return { number: pr.number, draft: Boolean(pr.isDraft), sameRepo: origin.ok, lane, writer, task, paths,
       kind: paths ? (isTooling(paths) ? "tooling" : "demo") : null, reasons };
   });
 
@@ -132,10 +137,11 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
     }
   }
 
-  const inGate = rows.filter((r) => !r.draft).length;
+  // A head outside this repository never holds a gate slot (F-010).
+  const inGate = rows.filter((r) => !r.draft && r.sameRepo).length;
   // Over capacity no PR in the gate is advice-ready: the orchestrator picks which leave.
   if (inGate > slots) {
-    for (const r of rows) if (!r.draft) r.reasons["ČEKA OVISNOST"].push(`gate over capacity (${inGate} out of draft, ${slots} slots)`);
+    for (const r of rows) if (!r.draft && r.sameRepo) r.reasons["ČEKA OVISNOST"].push(`gate over capacity (${inGate} out of draft, ${slots} slots)`);
   }
   let free = Math.max(0, slots - inGate);
   const clean = (r) => VERDICTS.slice(0, 3).every((v) => !r.reasons[v].length);

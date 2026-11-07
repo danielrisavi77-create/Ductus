@@ -116,8 +116,9 @@ SELECT bag_eq(
   ],
   'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
--- A version is immutable by its triggers, and one of a mentorship's assignment
--- stays within the faculty's rule; losing one must change this list.
+-- A version is immutable by its triggers, one of a mentorship's assignment
+-- stays within the faculty's rule, and an administrator comes and goes only
+-- through the operator procedure (DAN-525); losing one must change this list.
 SELECT bag_eq(
   $$ SELECT c.relname || ': ' || t.tgname || ' ' || t.tgtype::text || ' ' || t.tgenabled::text
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
@@ -128,8 +129,12 @@ SELECT bag_eq(
         'course_enrollment_code: course_enrollment_code_institution_fill 7 O',
         'faculty_rule_version: faculty_rule_version_immutable 27 O', 'faculty_rule_version: faculty_rule_version_no_truncate 34 O',
         'faculty_rule_version: faculty_rule_version_has_event 5 O',
-        'notice_acknowledgment: notice_acknowledgment_fingerprint_immutable 19 O'],
-  'triggers: immutable versions and fingerprints, mentorship validation, transactional notification and the institution of the parent, all enabled'
+        'institution_role: institution_role_admin_appointed 5 O', 'institution_role: institution_role_admin_reappointed 17 O',
+        'institution_role: institution_role_keeps_admin 17 O',
+        'notice_acknowledgment: notice_acknowledgment_fingerprint_immutable 19 O',
+        'notice_acknowledgment: notice_acknowledgment_binding_fill 7 O',
+        'notice_acknowledgment: notice_acknowledgment_binding_immutable 19 O'],
+  'triggers: immutable versions, fingerprints and bindings, the binding derived on insert, mentorship validation, transactional notification, the institution of the parent and the operator''s administrators, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -159,6 +164,9 @@ SELECT bag_eq(
     'revoke_teacher_role(p_teacher_id uuid) definer app',
     'teachers_without_affiliation() definer app',
     'institution_overview() definer app',
+    'teacher_roles() definer app',
+    'institution_courses(p_academic_year text) definer app',
+    'institution_academic_years() definer app',
     'ai_policy_rank(p_ai_policy text)',
     'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean)',
     'refuse_change()',
@@ -170,6 +178,7 @@ SELECT bag_eq(
     'acknowledge_notice(p_assignment_id uuid, p_version_no integer, p_template_version integer) definer app',
     'notice_fingerprint(p_template_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_word_min integer, p_word_max integer)',
     'refuse_acknowledgment_change()',
+    'notice_acknowledgment_binding_fill()',
     'has_acknowledged_current(p_assignment_id uuid) definer app',
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',
@@ -205,7 +214,12 @@ SELECT bag_eq(
     'approve_mentorship_request(p_request_id uuid) definer app',
     'refuse_rule_version_change()',
     'check_rule_version_event() definer',
-    'publish_faculty_rule_version(p_work_type text, p_expected_version integer, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean) definer app'
+    'publish_faculty_rule_version(p_work_type text, p_expected_version integer, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean) definer app',
+    'require_admin_request(p_user_id uuid, p_request_ref text)',
+    'appoint_institution_admin(p_user_id uuid, p_request_ref text)',
+    'revoke_institution_admin(p_user_id uuid, p_request_ref text)',
+    'check_admin_appointment() definer',
+    'check_last_admin() definer'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );

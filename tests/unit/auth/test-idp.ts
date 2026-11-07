@@ -216,6 +216,23 @@ export function createTestIdp(
       signing.published.push(kid);
       signing.kid = kid;
     },
+    /**
+     * A back-channel logout token (DAN-474) with exactly these claims, signed
+     * like the ID token: RS256 with the current key, or as `state.next.signing`
+     * and `signingKid` say. The header carries `typ` "logout+jwt" unless
+     * `header` replaces it.
+     */
+    logoutToken(claims: Record<string, unknown>, header: Record<string, unknown> = { typ: "logout+jwt" }): string {
+      const how = state.next.signing;
+      const alg = how === "none" ? "none" : how === "HS256" ? "HS256" : "RS256";
+      const own = state.next.signingKid ?? signing.kid;
+      const kid = how === "unknown-kid" ? "other-kid" : own;
+      const input = `${b64(state.next.noKid ? { alg, ...header } : { alg, kid, ...header })}.${b64(claims)}`;
+      if (alg === "none") return `${input}.`;
+      if (alg === "HS256") return `${input}.${createHmac("sha256", CLIENT_SECRET).update(input).digest("base64url")}`;
+      const signer = how === "foreign-key" ? foreign.privateKey : keys.get(own)!.privateKey;
+      return `${input}.${sign("sha256", Buffer.from(input), signer).toString("base64url")}`;
+    },
     /** The provider stops publishing `kid`; tokens it signed no longer verify. */
     retire(kid: string) {
       signing.published = signing.published.filter((k) => k !== kid);

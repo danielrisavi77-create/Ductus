@@ -1,0 +1,4031 @@
+{
+ "recordedOn": "d54b88b9",
+ "t1": {
+  "S1/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/ready": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/ready": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateOkNoAuth": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/gateOkNoAuth": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gateOkNoAuth": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/gateOkNoAuth": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S2/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S3/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S3u/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S1/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/docsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/docsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/testsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/testsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/d97": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/d97": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  }
+ },
+ "t2": {
+  "S1/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S2/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S3/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S3u/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S1/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S2/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S3/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S3u/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S1/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S2/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S3/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S3u/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S1/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S2/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S3/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S3u/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S1/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S2/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S3/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S3u/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S1/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S2/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S3/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S3u/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S1/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  }
+ },
+ "t3": {
+  "ready": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "gateOkNoAuth": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet",
+    "#42 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet",
+    "#43 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet",
+    "#44 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "gatePending": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review.",
+    "#42 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review.",
+    "#43 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review.",
+    "#44 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "gateFailure": {
+   "exit": 0,
+   "lines": [
+    "#41 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head.",
+    "#42 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head.",
+    "#43 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head.",
+    "#44 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "gateNone": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet",
+    "#42 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet",
+    "#43 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet",
+    "#44 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "gateError": {
+   "exit": 2,
+   "lines": [
+    "#41 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "#42 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "#43 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "#44 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "needsOwner": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "#42 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 42\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "#43 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 43\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "#44 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 44\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "autoMerge": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "docsOnly": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "testsOnly": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "d97": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "filesError": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  }
+ },
+ "recordedOnB2": "58d5e338",
+ "t4": {
+  "S1/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/riskStandard": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/riskStandard": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/riskStandard": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/riskStandard": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/expectHead": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head cccccccc as expected",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/expectHead": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head cccccccc as expected",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/expectHead": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head cccccccc as expected",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/expectHead": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head cccccccc as expected",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/headMoved": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head is cccccccc, expected eeeeeeee: the head moved",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S2/headMoved": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head is cccccccc, expected eeeeeeee: the head moved",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3/headMoved": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head is cccccccc, expected eeeeeeee: the head moved",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3u/headMoved": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head is cccccccc, expected eeeeeeee: the head moved",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S1/behind": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/behind": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/behind": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/behind": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/behindShared": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd; main changed 1 file(s) of this PR, without a conflict (src/domain/example.ts)",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/behindShared": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd; main changed 1 file(s) of this PR, without a conflict (src/domain/example.ts)",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/behindShared": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd; main changed 1 file(s) of this PR, without a conflict (src/domain/example.ts)",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/behindShared": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd; main changed 1 file(s) of this PR, without a conflict (src/domain/example.ts)",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/behindConflict": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head lacks 2 commit(s) of main dddddddd and conflicts with main: merge main first",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S2/behindConflict": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head lacks 2 commit(s) of main dddddddd and conflicts with main: merge main first",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3/behindConflict": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head lacks 2 commit(s) of main dddddddd and conflicts with main: merge main first",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3u/behindConflict": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head lacks 2 commit(s) of main dddddddd and conflicts with main: merge main first",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S1/behindFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (PR file list)"
+   ]
+  },
+  "S2/behindFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (PR file list)"
+   ]
+  },
+  "S3/behindFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (PR file list)"
+   ]
+  },
+  "S3u/behindFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (PR file list)"
+   ]
+  },
+  "S1/behindMainFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (main file list)"
+   ]
+  },
+  "S2/behindMainFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (main file list)"
+   ]
+  },
+  "S3/behindMainFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (main file list)"
+   ]
+  },
+  "S3u/behindMainFilesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, without a conflict",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": [
+    "preflight note: not read, informational only (main file list)"
+   ]
+  },
+  "S1/draft": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "FAIL PR is a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S2/draft": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "FAIL PR is a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3/draft": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "FAIL PR is a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3u/draft": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "FAIL PR is a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S1/baseOther": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "FAIL base release",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S2/baseOther": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "FAIL base release",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3/baseOther": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "FAIL base release",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3u/baseOther": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "FAIL base release",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S1/ciRed": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI not green: Lint, typecheck, test and build=FAILURE",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S2/ciRed": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI not green: Lint, typecheck, test and build=FAILURE",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3/ciRed": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI not green: Lint, typecheck, test and build=FAILURE",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3u/ciRed": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI not green: Lint, typecheck, test and build=FAILURE",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S1/ciRunning": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI not red (4 required, 1 of 4 checks still running)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/ciRunning": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI not red (4 required, 1 of 4 checks still running)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/ciRunning": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI not red (4 required, 1 of 4 checks still running)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/ciRunning": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI not red (4 required, 1 of 4 checks still running)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/gatePending": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/gatePending": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/gatePending": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/gatePending": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/noTask": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "FAIL description lacks a filled `Task:` line",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S2/noTask": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "FAIL description lacks a filled `Task:` line",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3/noTask": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "FAIL description lacks a filled `Task:` line",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S3u/noTask": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "FAIL description lacks a filled `Task:` line",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": []
+  },
+  "S1/mainUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main ?",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL main head could not be read",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL required checks of main could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main branch)"
+   ]
+  },
+  "S2/mainUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main ?",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL main head could not be read",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL required checks of main could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main branch)"
+   ]
+  },
+  "S3/mainUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main ?",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL main head could not be read",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL required checks of main could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main branch)"
+   ]
+  },
+  "S3u/mainUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main ?",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL main head could not be read",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL required checks of main could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main branch)"
+   ]
+  },
+  "S1/compareUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head vs main dddddddd could not be compared",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main comparison)"
+   ]
+  },
+  "S2/compareUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head vs main dddddddd could not be compared",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main comparison)"
+   ]
+  },
+  "S3/compareUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head vs main dddddddd could not be compared",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main comparison)"
+   ]
+  },
+  "S3u/compareUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "FAIL head vs main dddddddd could not be compared",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (main comparison)"
+   ]
+  },
+  "S1/checksUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI checks could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (head checks)"
+   ]
+  },
+  "S2/checksUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI checks could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (head checks)"
+   ]
+  },
+  "S3/checksUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI checks could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (head checks)"
+   ]
+  },
+  "S3u/checksUnread": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head contains main dddddddd",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "FAIL CI checks could not be read",
+    "PREFLIGHT FAIL: do not start review or QA"
+   ],
+   "stderr": [
+    "PREFLIGHT READ ERROR: retry GitHub reads (head checks)"
+   ]
+  },
+  "S1/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S1/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S2/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  },
+  "S3u/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc main dddddddd",
+    "PASS state OPEN",
+    "PASS not a draft",
+    "PASS base main",
+    "PASS head lacks 2 commit(s) of main dddddddd, but none of its 1 changed file(s) is in this PR",
+    "PASS `Task:` filled",
+    "PASS \"Stvarni pozivatelj\" present",
+    "PASS \"Poznate granice\" present",
+    "PASS \"Što bi ovaj PR moglo oboriti na QA-i?\" present",
+    "PASS \"Invarijanta\" present",
+    "PASS \"Mjesta\" present",
+    "PASS CI green (4 required, 4 checks)",
+    "PREFLIGHT PASS: review or QA may start"
+   ],
+   "stderr": []
+  }
+ },
+ "t5": {
+  "S1/single": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/single": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/single": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/single": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/draftSubject": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/draftSubject": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/draftSubject": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/draftSubject": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/withDraft": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, DRAFT)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/withDraft": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, DRAFT)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/withDraft": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, DRAFT)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/withDraft": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, DRAFT)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/slotsTight": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "#43 PARALELNO (platforma, DAN-43, demo, in gate)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, DRAFT)",
+    "  gate full (3 slots)",
+    "Contract: VALID. Gate: 3/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/slotsTight": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "#43 PARALELNO (platforma, DAN-43, demo, in gate)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, DRAFT)",
+    "  gate full (3 slots)",
+    "Contract: VALID. Gate: 3/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/slotsTight": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "#43 PARALELNO (platforma, DAN-43, demo, in gate)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, DRAFT)",
+    "  gate full (3 slots)",
+    "Contract: VALID. Gate: 3/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/slotsTight": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "#43 PARALELNO (platforma, DAN-43, demo, in gate)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, DRAFT)",
+    "  gate full (3 slots)",
+    "Contract: VALID. Gate: 3/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/overCapacity": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#42 ČEKA OVISNOST (platforma, DAN-42, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#43 ČEKA OVISNOST (platforma, DAN-43, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "WARNING: 4 PRs out of draft, more than the 3 gate slots",
+    "Contract: VALID. Gate: 4/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/overCapacity": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#42 ČEKA OVISNOST (platforma, DAN-42, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#43 ČEKA OVISNOST (platforma, DAN-43, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "WARNING: 4 PRs out of draft, more than the 3 gate slots",
+    "Contract: VALID. Gate: 4/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/overCapacity": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#42 ČEKA OVISNOST (platforma, DAN-42, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#43 ČEKA OVISNOST (platforma, DAN-43, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "WARNING: 4 PRs out of draft, more than the 3 gate slots",
+    "Contract: VALID. Gate: 4/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/overCapacity": {
+   "exit": 0,
+   "lines": [
+    "4 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#42 ČEKA OVISNOST (platforma, DAN-42, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#43 ČEKA OVISNOST (platforma, DAN-43, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "#44 ČEKA OVISNOST (platforma, DAN-44, demo, in gate)",
+    "  gate over capacity (4 out of draft, 3 slots)",
+    "WARNING: 4 PRs out of draft, more than the 3 gate slots",
+    "Contract: VALID. Gate: 4/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/noContract": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "#42 NEPROVJERENO (platforma, DAN-42, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "Contract: MISSING. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/noContract": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "#42 NEPROVJERENO (platforma, DAN-42, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "Contract: MISSING. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/noContract": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "#42 NEPROVJERENO (platforma, DAN-42, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "Contract: MISSING. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/noContract": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "#42 NEPROVJERENO (platforma, DAN-42, demo, in gate)",
+    "  assignment not checked: no work contract",
+    "Contract: MISSING. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/filesError": {
+   "exit": 1,
+   "lines": [
+    "UNKNOWN: files could not be read for #41; their overlaps are not shown",
+    "1 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, ?, in gate)",
+    "  files could not be read",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/filesError": {
+   "exit": 1,
+   "lines": [
+    "UNKNOWN: files could not be read for #41; their overlaps are not shown",
+    "1 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, ?, in gate)",
+    "  files could not be read",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/filesError": {
+   "exit": 1,
+   "lines": [
+    "UNKNOWN: files could not be read for #41; their overlaps are not shown",
+    "1 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, ?, in gate)",
+    "  files could not be read",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/filesError": {
+   "exit": 1,
+   "lines": [
+    "UNKNOWN: files could not be read for #41; their overlaps are not shown",
+    "1 open PRs, 0 overlapping pairs",
+    "#41 NEPROVJERENO (platforma, DAN-41, ?, in gate)",
+    "  files could not be read",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, tooling, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, tooling, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, tooling, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, tooling, DRAFT)",
+    "Contract: VALID. Gate: 0/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "1 open PRs, 0 overlapping pairs",
+    "#41 PARALELNO (platforma, DAN-41, demo, in gate)",
+    "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S1/dependsOn": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  declared dependency on #42",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "Contract: VALID. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S2/dependsOn": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  declared dependency on #42",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "Contract: VALID. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3/dependsOn": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  declared dependency on #42",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "Contract: VALID. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  },
+  "S3u/dependsOn": {
+   "exit": 0,
+   "lines": [
+    "2 open PRs, 0 overlapping pairs",
+    "#41 ČEKA OVISNOST (platforma, DAN-41, demo, in gate)",
+    "  declared dependency on #42",
+    "#42 PARALELNO (platforma, DAN-42, demo, in gate)",
+    "Contract: VALID. Gate: 2/3. Advice only: the orchestrator decides."
+   ],
+   "stderr": []
+  }
+ },
+ "recordedOnB3": "ccabd332",
+ "t6": {
+  "S1/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S2/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S3/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S3u/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S1/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S2/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S3/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S3u/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S1/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  },
+  "S2/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  },
+  "S3/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  },
+  "S3u/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  }
+ },
+ "n10": {
+  "S1/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S1/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": null,",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S1/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  },
+  "S2/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main VANJSKI (author helper1 is not the owner) | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S2/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": \"author helper1 is not the owner\",",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S2/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  },
+  "S3/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S3/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": null,",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S3/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  },
+  "S3u/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main VANJSKI (author mergify[bot] is not the owner) | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S3u/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": \"author mergify[bot] is not the owner\",",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S3u/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  }
+ }
+}

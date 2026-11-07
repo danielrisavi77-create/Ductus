@@ -1,0 +1,120 @@
+/* DAN-590 (A-04): the rules on the paper sheet (D-188), after docs/design/ductura/m4-reference/reference.css. */
+.section {
+  display: grid;
+  gap: 12px;
+}
+
+.section h2 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.note {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-lg);
+}
+
+.cardHead {
+  display: grid;
+  gap: 2px;
+}
+
+.cardHead h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.meta {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--ink-3);
+}
+
+.kv dd {
+  margin: 0;
+}
+
+.history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.history th,
+.history td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule-2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.history th {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.history tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 18px 12px 34px;
+  background: var(--card);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-lg);
+}
+
+.readOnly {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+@media (max-width: 640px) {
+  .section h2 {
+    font-size: 21px;
+  }
+
+  .kv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .kv dd {
+    margin-bottom: 8px;
+  }
+
+  .history th,
+  .history td {
+    padding: 8px 6px;
+  }
+}

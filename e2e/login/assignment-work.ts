@@ -2,11 +2,9 @@ import { expect, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
-import { NOTICE_TEMPLATE_VERSION } from "../../src/domain/notice/fingerprint";
+import { NOTICE_TEMPLATE_VERSION, noticeFingerprint } from "../../src/domain/notice/fingerprint";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { createWithActor } from "../../src/server/db/with-actor";
-import { appCookie, SESSION_COOKIE } from "./support";
-import { localAdminUrl, localAppUrl } from "./local-db-url";
+import { localAdminUrl } from "./local-db-url";
 import { APP_ORIGIN } from "./origin";
 
 // #711 step E (decision B): the specs that reach a work through the API use
@@ -80,16 +78,35 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
     return { assignmentId: assignment!.id, studentId: ids.student };
   });
 
-  // The student confirms the notice under her own session, as the notice screen does.
-  const token = (await appCookie(student.context(), SESSION_COOKIE))?.value;
-  if (!token) throw new Error("the student page must be signed in");
-  const pool = new pg.Pool({ connectionString: localAppUrl(), max: 1 });
-  try {
-    await createWithActor(pool)(token, (tx) =>
-      tx.query("SELECT institution.acknowledge_notice($1, $2, $3)", [assignmentId, 1, NOTICE_TEMPLATE_VERSION]));
-  } finally {
-    await pool.end();
-  }
+  // The student confirms the notice through the real route under her own
+  // session, with the fingerprint of the text the notice screen shows
+  // (DAN-306, #1502 F2). Times enter it at millisecond precision, as the
+  // screen receives them.
+  const version = await admin(async (client) => (await client.query<{
+    title: string; instructions: string; work_type: string; opens_at: Date; due_at: Date; ai_policy: string;
+    ai_purposes: string[]; evidence_profile: string; word_min: number | null; word_max: number | null;
+  }>(
+    `SELECT title, instructions, work_type, date_trunc('milliseconds', opens_at) AS opens_at,
+            date_trunc('milliseconds', due_at) AS due_at, ai_policy, ai_purposes, evidence_profile, word_min, word_max
+       FROM institution.assignment_version WHERE assignment_id = $1 AND version_no = 1`, [assignmentId])).rows[0]);
+  if (!version) throw new Error("the seeded version is missing");
+  const fingerprint = await noticeFingerprint({
+    templateVersion: NOTICE_TEMPLATE_VERSION,
+    title: version.title,
+    instructions: version.instructions,
+    workType: version.work_type,
+    opensAt: version.opens_at.toISOString(),
+    dueAt: version.due_at.toISOString(),
+    aiPolicy: version.ai_policy,
+    aiPurposes: version.ai_purposes,
+    evidenceProfile: version.evidence_profile,
+    wordMin: version.word_min,
+    wordMax: version.word_max,
+  });
+  const acknowledged = await student.request.post(`/api/institution/assignments/${assignmentId}/acknowledgment`, {
+    headers: { origin: ORIGIN }, data: { versionNo: 1, fingerprint },
+  });
+  expect(acknowledged.status()).toBe(200);
 
   // The real open route makes the work, as the click on "Započni rad" does (DAN-330).
   const response = await student.request.post("/api/evidence/open", {

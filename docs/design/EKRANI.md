@@ -43,7 +43,7 @@ Jedan paket je jedan docs PR u docs/design/ductura/<mapa>/ (HTML, PNG snimke, RE
 | # | Paket (mapa) | Ekrani | Posebna stanja | Faza | EQ1 |
 |---|---|---|---|---|---|
 | 0 | Mapa ekrana (ovaj dokument) | svi | — | M0 | ne ovisi |
-| 1 | Zajednička stanja (z-stanja-reference) | Z-03, Z-04, Z-05, Z-06, Z-08, list „fokus i tipkovnica” | istekla sesija, odjava u drugoj kartici, bez mreže; 404, greška poslužitelja; nema ovlasti; kostur, dugo učitavanje, smanjeno kretanje; potvrda, opasna radnja, fokus u dijalogu | M0–M1 | ne ovisi |
+| 1 | Zajednička stanja (zajednicko-reference) | Z-03, Z-04, Z-05, Z-06, Z-08, list „fokus i tipkovnica” | istekla sesija, odjava u drugoj kartici, bez mreže; 404, greška poslužitelja; nema ovlasti; kostur, dugo učitavanje, smanjeno kretanje; slanje na pregled, konačna predaja, opasna radnja, fokus u dijalogu | M0–M1 | ne ovisi |
 | 2 | Radni prostor (m0-rad-reference) | Z-01, S-10, Z-13, Z-11, Z-02 | prazan rad, spremanje, bez mreže, sukob, predano, oporavak, odjava s nesinkroniziranim, prekidač teme | M0.5c, M3, M5 | ovisi |
 | 3 | Početak toka, student (m2-student-reference) | S-01, S-02, S-03, S-04, S-05 | AAI nedostupan, odbijena prijava, svijetla prijava (EQ10); nema kolegija, rok blizu; neispravan ili istekao kod | M1–M2 | ovisi |
 | 4 | Početak toka, nastavnik (m2-nastavnik-reference) | N-01, N-02, N-03, N-04, N-16 | valjanost obrasca, koraci čarobnjaka, dopuštena uporaba alata | M2 | djelomično |
@@ -76,7 +76,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | Z-01 | Ljuska i navigacija | M0 | DJELOMIČNO | 2 | prazno, učitavanje, greška, fokus tipkovnica |
 | Z-04 | Greška i 404 | M0 | NEMA | 1 | 404, greška poslužitelja, mobitel |
 | Z-06 | Stanje učitavanja (uzorak) | M0 | NEMA | 1 | kostur, dugo učitavanje, smanjeno kretanje |
-| Z-08 | Dijalozi | M0 | NEMA | 1 | potvrda, opasna radnja, fokus u dijalogu, mobitel |
+| Z-08 | Dijalozi | M0 | NEMA | 1 | slanje na pregled, konačna predaja, opasna radnja, dijalog s poljem, fokus u dijalogu, mobitel |
 | Z-13 | Tema (svijetla/tamna, bijeli/tamni list) | M0 | DJELOMIČNO | 2 | list bijeli/tamni, prekidač |
 | S-01 | Prijava (AAI@EduHr) | M1 | DJELOMIČNO | 3 | prazno, učitavanje, greška, AAI nedostupan, odbijena prijava, nova osoba bez uloge |
 | Z-03 | Sesija istekla | M1 | NEMA | 1 | istekla, odjavljen u drugoj kartici, bez mreže, mobitel |
@@ -142,7 +142,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | S-20 | Izvoz (A4 pregled) | M8 | DJELOMIČNO | 12 | popunjeno, prazno, učitavanje, greška, mobitel, izvoz .docx/PDF |
 | N-18 | Izvoz predanog rada i paket za Merlin | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel |
 | S-09 | PDF izvori u bilježnici (isticanje, citat) | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel, citat nije pronađen |
-| S-16 | Panel Asistent (12 stanja) | M9 | NEMA | 13 | 12 stanja, bez mreže, proračun (S16-BUD), mobitel |
+| S-16 | Panel Asistent (12 stanja) | M9 | PRIJEDLOG (DAN-411, m9-reference-a) | 13 | 12 stanja, bez mreže, proračun (S16-BUD), mobitel |
 | S31-AI | Izjava o uporabi AI u predaji | M9 | NEMA | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
 | N-AI-ATT | Nastavnik: pregled AI-atribucije | M9 | NEMA | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
 | N-19 | AI pomoć nastavniku | M9 | NEMA | — | — |

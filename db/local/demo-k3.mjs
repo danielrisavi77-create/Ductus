@@ -1,5 +1,5 @@
 // K-3b2 / DAN-88 (#635): loads the invented K-3 course, assignment and
-// enrolment (demo-k3.sql) into the local compose database. `pnpm demo:up`
+// enrolment (demo-k3.sql) into the local compose database. `pnpm local:up`
 // runs it after the seed and before the app; it can also run alone:
 //
 //   node db/local/demo-k3.mjs        (after pnpm db:seed)

@@ -23,9 +23,11 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // both must commit, not deadlock. A Codex thread adds a student removed from
 // the course after an assignment of a group teacher began: the place of the
 // new teacher still starts after the work the student started before the
-// removal. Loopback only; one random
-// login and random synthetic rows, removed afterwards. Vesna, Marko, Nina,
-// Ana, Boris, Cvita and Daria are invented.
+// removal. #1629 pins the same races to the tie that made them flaky: the
+// work starts in the very microsecond the course teacher's transaction began.
+// Loopback only; one random login and random synthetic rows, removed
+// afterwards. Vesna, Marko, Nina, Ana, Boris, Cvita, Daria, Ema and Frane are
+// invented.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The group move race test runs only against a loopback database (DATABASE_URL).");
@@ -42,6 +44,8 @@ const people = {
   boris: randomUUID(),
   cvita: randomUUID(),
   daria: randomUUID(),
+  ema: randomUUID(),
+  frane: randomUUID(),
 };
 type Person = keyof typeof people;
 const tokens = Object.fromEntries(
@@ -51,9 +55,11 @@ const courseId = randomUUID();
 const moveAssignmentId = randomUUID();
 const handoverAssignmentId = randomUUID();
 const returnAssignmentId = randomUUID();
-const assignments = [moveAssignmentId, handoverAssignmentId, returnAssignmentId];
+const tieMoveAssignmentId = randomUUID();
+const tieHandoverAssignmentId = randomUUID();
+const assignments = [moveAssignmentId, handoverAssignmentId, returnAssignmentId, tieMoveAssignmentId, tieHandoverAssignmentId];
 const domainId = randomUUID();
-const groups = { g1: "", g2: "", g3: "", g4: "" };
+const groups = { g1: "", g2: "", g3: "", g4: "", g5: "", g6: "" };
 let enrollmentCode = "";
 
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
@@ -126,6 +132,8 @@ async function insertFixture() {
       ["boris", "student"],
       ["cvita", "student"],
       ["daria", "student"],
+      ["ema", "student"],
+      ["frane", "student"],
     ] as const) {
       await client.query(
         "INSERT INTO institution.course_member (course_id, institution_id, user_id, role) VALUES ($1, $2, $3, $4)",
@@ -147,7 +155,7 @@ async function insertFixture() {
                  ARRAY[]::text[], 'basic', false, $2)`,
         [id, people.vesna],
       );
-      for (const student of [people.ana, people.boris, people.cvita, people.daria]) {
+      for (const student of [people.ana, people.boris, people.cvita, people.daria, people.ema, people.frane]) {
         await client.query(
           `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
            VALUES ($1, 1, $2, $3)`,
@@ -280,7 +288,9 @@ beforeAll(async () => {
   // open on two while the third asks.
   appPool = new pg.Pool({ connectionString: applicationUrl(), max: 3 });
   withActor = createWithActor(appPool);
-  for (const [key, name] of [["g1", "Grupa 1"], ["g2", "Grupa 2"], ["g3", "Grupa 3"], ["g4", "Grupa 4"]] as const) {
+  for (const [key, name] of [
+    ["g1", "Grupa 1"], ["g2", "Grupa 2"], ["g3", "Grupa 3"], ["g4", "Grupa 4"], ["g5", "Grupa 5"], ["g6", "Grupa 6"],
+  ] as const) {
     groups[key] = (await asVesna("SELECT institution.create_seminar_group($1, $2) AS id", [courseId, name])).id;
   }
   for (const [fn, group, person] of [
@@ -289,6 +299,10 @@ beforeAll(async () => {
     ["assign_group_student", groups.g1, people.ana],
     ["assign_group_student", groups.g1, people.boris],
     ["assign_group_student", groups.g3, people.cvita],
+    ["assign_group_teacher", groups.g5, people.marko],
+    ["assign_group_teacher", groups.g6, people.nina],
+    ["assign_group_student", groups.g5, people.ema],
+    ["assign_group_student", groups.g5, people.frane],
   ] as const) {
     await asVesna(`SELECT institution.${fn}($1, $2)`, [group, person]);
   }
@@ -566,5 +580,112 @@ describe("a student removed after an assignment of a group teacher began (DAN-35
       vesna: await can("vesna", documentId),
       boris: await can("boris", documentId),
     }).toStrictEqual({ marko: false, nina: true, vesna: true, boris: true });
+  });
+});
+
+// The tie of #1629 (run 42229299335): now() is the start of the transaction
+// in microseconds, so the course teacher's transaction can begin in the very
+// microsecond in which another transaction starts a work. The race above hit
+// it only by chance; here the teacher's transaction reads its now(), the
+// student starts a work and commits it, and the work's start is then set to
+// exactly that now() before the group change runs. Returns the work's
+// document. Ema and Frane are in group 5 (Marko) only; Nina teaches group 6.
+async function changeAtTie(student: Person, assignmentId: string, change: Array<[string, unknown[]]>) {
+  let begun!: () => void;
+  let releaseChange!: () => void;
+  const teacherBegun = new Promise<void>((resolve) => { begun = resolve; });
+  const holdChange = new Promise<void>((resolve) => { releaseChange = resolve; });
+  let teacherNow = "";
+  const teacherRun = withActor(tokens.vesna, async (tx) => {
+    teacherNow = (await tx.query<{ at: string }>("SELECT now()::text AS at")).rows[0].at;
+    begun();
+    await holdChange;
+    for (const [sql, values] of change) await tx.query(sql, values);
+  });
+  let documentId = "";
+  try {
+    await Promise.race([teacherBegun, teacherRun]);
+    const work = await withActor(tokens[student], async (tx) => (
+      await tx.query<{ outcome: string; document_id: string }>(
+        "SELECT outcome, document_id FROM app.open_student_work($1)",
+        [assignmentId],
+      )
+    ).rows[0]);
+    expect(work.outcome).toBe("opened");
+    documentId = work.document_id;
+    const client = await admin.connect();
+    try {
+      await client.query("BEGIN");
+      // Synthetic row only: the start is written once by the server, so the
+      // tie is set with the append-only triggers off for this transaction.
+      await client.query("SET LOCAL session_replication_role = replica");
+      const tied = await client.query(
+        `UPDATE evidence.project SET created_at = $1::timestamptz
+          WHERE institution_id = $2 AND assignment_id = $3 AND principal_id = $4`,
+        [teacherNow, institutionId, assignmentId, people[student]],
+      );
+      expect(tied.rowCount).toBe(1);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } finally {
+    begun();
+    releaseChange();
+    await Promise.allSettled([teacherRun]);
+  }
+  await teacherRun;
+  const start = await admin.query<{ tied: boolean }>(
+    "SELECT p.created_at = $4::timestamptz AS tied FROM evidence.project p WHERE p.institution_id = $1 AND p.assignment_id = $2 AND p.principal_id = $3",
+    [institutionId, assignmentId, people[student], teacherNow],
+  );
+  expect(start.rows).toEqual([{ tied: true }]);
+  return documentId;
+}
+
+describe("a group change in the microsecond a work started (DAN-351, #1629)", () => {
+  it("a move places the student after the tied work, and the new group teacher does not reach it", async () => {
+    const documentId = await changeAtTie("ema", tieMoveAssignmentId, [
+      ["SELECT institution.end_group_assignment($1, $2)", [groups.g5, people.ema]],
+      ["SELECT institution.assign_group_student($1, $2)", [groups.g6, people.ema]],
+    ]);
+    const order = await admin.query<{ after: boolean }>(
+      `SELECT g.valid_from > p.created_at AS after
+         FROM institution.seminar_group_member g, evidence.project p
+        WHERE g.group_id = $1 AND g.user_id = $2 AND g.valid_to IS NULL
+          AND p.assignment_id = $3 AND p.principal_id = $2`,
+      [groups.g6, people.ema, tieMoveAssignmentId],
+    );
+    expect(order.rows).toEqual([{ after: true }]);
+    expect({
+      nina: await can("nina", documentId),
+      marko: await can("marko", documentId),
+      vesna: await can("vesna", documentId),
+      ema: await can("ema", documentId),
+    }).toStrictEqual({ nina: false, marko: false, vesna: true, ema: true });
+  });
+
+  it("a handover places the new teacher after the tied work, and she does not reach it", async () => {
+    const documentId = await changeAtTie("frane", tieHandoverAssignmentId, [
+      ["SELECT institution.end_group_assignment($1, $2)", [groups.g5, people.marko]],
+      ["SELECT institution.assign_group_teacher($1, $2)", [groups.g5, people.nina]],
+    ]);
+    const order = await admin.query<{ after: boolean }>(
+      `SELECT t.valid_from > p.created_at AS after
+         FROM institution.seminar_group_teacher t, evidence.project p
+        WHERE t.group_id = $1 AND t.user_id = $2 AND t.valid_to IS NULL
+          AND p.assignment_id = $3 AND p.principal_id = $4`,
+      [groups.g5, people.nina, tieHandoverAssignmentId, people.frane],
+    );
+    expect(order.rows).toEqual([{ after: true }]);
+    expect({
+      nina: await can("nina", documentId),
+      marko: await can("marko", documentId),
+      vesna: await can("vesna", documentId),
+      frane: await can("frane", documentId),
+    }).toStrictEqual({ nina: false, marko: false, vesna: true, frane: true });
   });
 });

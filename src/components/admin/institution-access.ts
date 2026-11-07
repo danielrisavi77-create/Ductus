@@ -1,6 +1,8 @@
 import { closedSessionKind } from "@/components/auth/access-kind";
 import type { SessionPrincipal } from "@/server/auth/principal";
 import type { InstitutionOverviewRead } from "@/server/institution/institution-overview";
+import type { FacultyRulesRead } from "@/server/institution/faculty-rules";
+import type { TeacherRolesRead } from "@/server/institution/teacher-roles";
 
 export type InstitutionScreen = "allowed" | "unavailable" | "notFound" | "expired" | "signedOut";
 
@@ -13,10 +15,12 @@ export type InstitutionScreen = "allowed" | "unavailable" | "notFound" | "expire
  * refused beside a closed principal means the session closed between them:
  * the page shows Z-03, never the counts and never a 404 (#1316
  * c.6584772547). A principal that could not be read is "unavailable", as in
- * `teacherPageAccess`.
+ * `teacherPageAccess`. DAN-581 (A-02): /ustanova/korisnici takes the same
+ * screen from the teacher roles' read, whose kinds are the same, and so does
+ * /ustanova/pravila (DAN-590, A-04) from the faculty rules' read.
  */
 export function institutionScreen(
-  read: InstitutionOverviewRead["kind"] | null, principal: SessionPrincipal["kind"], token: string | undefined,
+  read: InstitutionOverviewRead["kind"] | TeacherRolesRead["kind"] | FacultyRulesRead["kind"] | null, principal: SessionPrincipal["kind"], token: string | undefined,
 ): InstitutionScreen {
   if (read === null || read === "unauthorized") return closedSessionKind(token);
   if (read === "unavailable") return read;

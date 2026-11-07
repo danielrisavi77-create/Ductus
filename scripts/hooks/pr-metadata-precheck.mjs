@@ -11,9 +11,10 @@ const command = input.tool_input?.command ?? "";
 if (!mayConcernPr(command)) process.exit(0);
 const action = prAction(command);
 if (!action) process.exit(0);
-const { evaluateMetadata } = await import("../engineering/pr-metadata-core.mjs");
 
 try {
+  // Inside the try: rules that fail to load block the PR command (DAN-432).
+  const { evaluateMetadata } = await import("../engineering/pr-metadata-core.mjs");
   const cwd = input.cwd ?? process.cwd();
   const body = extractBody(command, cwd);
   // `gh pr edit` without a body leaves the description alone; a body file that

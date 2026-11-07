@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateGate, evaluatePullRequest } from "./review-gate-core.mjs";
+import { evaluateGate, evaluatePullRequest, sinceBaseChange } from "./review-gate-core.mjs";
 
 // D-139 (issue #87, comment 6241681114): a critical QA PASS may come from a
 // second Claude session when the reviewer is Claude too, but only with a
@@ -141,6 +141,19 @@ test("a carried QA PASS also counts with the Codex review on the current head", 
   assert.equal(result.state, "success");
 });
 
+// DAN-452 (#1500 A7): the runner filters PR reviews by time before core sees
+// them, whatever head they name, so a Codex review of a carried head from
+// before the last base change no longer opens the carried D-139 path.
+test("a Codex review of a carried head from before the base change does not count (DAN-452)", () => {
+  const comments = [reviewPass(), qa({ sha: other, fallback: line(other) })];
+  const cutoff = Date.parse(iso(MIN));
+  const before = codexReview(other, { submitted_at: iso(0) });
+  const after = codexReview(other, { submitted_at: iso(2 * MIN) });
+  assert.deepEqual(sinceBaseChange([before, after], cutoff, "submitted_at"), [after]);
+  assert.equal(carriedFrom({ comments, prReviews: sinceBaseChange([before], cutoff, "submitted_at") }).state, "pending");
+  assert.equal(carriedFrom({ comments, prReviews: sinceBaseChange([after], cutoff, "submitted_at") }).state, "success");
+});
+
 test("a QA PASS on a head that is not carried does not count", () => {
   const result = carriedFrom({
     comments: [reviewPass(), qa({ sha: other, fallback: line(other) })],
@@ -179,7 +192,7 @@ test("non-critical risk is unaffected by the declaration", () => {
 });
 
 test("evaluatePullRequest passes the review comments through to the gate", () => {
-  const pr = { body: AUTHOR, head: { sha: head }, changed_files: 1 };
+  const pr = { body: AUTHOR, head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1 };
   const files = [{ filename: "scripts/engineering/review-gate-core.mjs", status: "modified", patch: "x" }];
   const run = (reviewComments) =>
     evaluatePullRequest({ pr, files, comments: ok, prReviews: [codexReview()], reviewComments, ownerLogin }).result;

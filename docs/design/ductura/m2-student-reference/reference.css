@@ -1,0 +1,98 @@
+/* Referenca paketa 3 (DAN-566): tokeni i dijelovi iz m5-reference, ovdje samo početak toka studenta. Nije produktni kod. */
+@import url("../m5-reference/reference.css");
+
+:root { --error: #f0a08f; --warn: #e9c58b; }
+:root[data-theme="light"] { --error: #9c3f33; --warn: #7a5420; }
+.page.wide, .ref-head { max-width: 1400px; }
+.variants.two { grid-template-columns: repeat(2, 1fr); }
+.ref-note { color: var(--ink-2); font-size: 12.5px; max-width: 70ch; }
+.btn, .input { min-height: 44px; }
+.input.code { font: 15px var(--ff-mono); letter-spacing: 0.08em; text-transform: uppercase; text-align: center; min-width: 0; width: 0; flex: 1; }
+.input[aria-invalid="true"] { border-color: var(--error); }
+.err { color: var(--error); font-size: 12.5px; }
+.ok { color: var(--synced); font-size: 12.5px; }
+.tag.near { border-color: var(--warn); color: var(--ink); }
+
+/* Ljuska Z-01, studentska navigacija */
+.app { border: 1px solid var(--rule-2); border-radius: 10px; overflow: clip; background: var(--ground); }
+.brand { font: 600 19px var(--ff-display); margin-right: 8px; }
+/* Ljuska izvan uređivača: uska bočna traka od 64 px (D-202 t. 1), isti raspored
+   kao m2-reference; ikone iz paketa se ne koriste (D-203 t. 8), stavke nose tekst. */
+.shell { display: grid; grid-template-columns: 64px minmax(0, 1fr); }
+.side { background: var(--chrome); border-right: 1px solid var(--rule-2); padding: 14px 4px; display: flex; flex-direction: column; gap: 14px; }
+.side .brand { display: grid; place-items: center; min-height: 44px; margin: 0; color: var(--ink); text-decoration: none; font: 500 24px/1 var(--ff-display); }
+.side .brand .word { display: none; }
+.side nav { display: grid; gap: 4px; }
+.side nav a { display: grid; place-items: center; text-align: center; min-height: 44px; padding: 6px 2px; border-radius: 5px; color: var(--ink-2); text-decoration: none; font-size: 11px; line-height: 1.2; }
+.side nav a[aria-current="page"] { background: var(--well); color: var(--ink); font-weight: 600; }
+.side-foot { margin-top: auto; display: grid; gap: 6px; }
+.side-foot .btn { width: 100%; padding: 0 2px; font-size: 11px; min-height: 44px; }
+.menu { display: none; }
+@media (max-width: 800px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .side { flex-direction: row; justify-content: space-between; align-items: center; border-right: 0; border-bottom: 1px solid var(--rule-2); padding: 8px 16px; }
+  .side nav, .side-foot { display: none; }
+  .side .brand .mark { display: none; }
+  .side .brand .word { display: inline; font-size: 19px; }
+  .menu { display: inline-flex; align-items: center; min-height: 44px; }
+}
+.main { max-width: 880px; margin: 0 auto; padding: 32px 24px 40px; display: grid; gap: 24px; }
+.main.narrow { max-width: 640px; text-align: center; justify-items: center; }
+.lede { color: var(--ink-2); }
+.eyebrow { color: var(--ink-3); font-size: 12.5px; }
+.hero { display: grid; gap: 6px; text-align: center; }
+.hero h1 { font-size: 40px; font-weight: 400; }
+.hero h1 em, .login h1 em { font-style: italic; color: var(--accent); }
+.continue { background: var(--card); border: 1px solid var(--rule-2); border-radius: 10px; padding: 20px 24px; display: grid; gap: 8px; justify-items: center; text-align: center; }
+.continue b { font: 600 21px/1.3 var(--ff-display); }
+.task { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; }
+.task .when { display: flex; gap: 6px 12px; flex-wrap: wrap; align-items: center; color: var(--ink-2); font-size: 12.5px; }
+.code-row { display: flex; gap: 8px; width: 100%; max-width: 440px; }
+.course { background: var(--chrome); border: 1px solid var(--rule-2); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+.course h2 { font-size: 20px; }
+.card { background: var(--card); border: 1px solid var(--rule-2); border-radius: 10px; padding: 24px; display: grid; gap: 12px; width: 100%; text-align: left; }
+.card.center { text-align: center; justify-items: center; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: left; width: 100%; }
+.variants .steps { grid-template-columns: 1fr; }
+.continue .btn, .card.center .btn, .main.narrow > .btn { justify-self: center; }
+.facts.ok-list { list-style: none; padding: 0; }
+.facts.ok-list li::before { content: "✓ "; color: var(--synced); }
+.facts.no-list { list-style: none; padding: 0; }
+.facts.no-list li::before { content: "× "; color: var(--ink-3); }
+.notice-cols { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; border-top: 1px solid var(--rule-2); padding-top: 12px; }
+.notice-cols h3, .card h3 { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; }
+.card h4 { font: 600 13px/1.4 var(--ff-ui); letter-spacing: 0; margin: 8px 0 0; }
+
+/* S-01 Prijava: raspored iz prijava-v5.dc.html, tekst iz kataloga /prijava */
+.login { display: grid; grid-template-columns: 1fr 430px; gap: 64px; align-items: center; max-width: 1180px; margin: 0 auto; padding: 40px 24px; }
+.login h1 { font-size: 64px; font-weight: 400; line-height: 1; }
+.login .left { display: grid; gap: 18px; }
+.paper { --ink: #242422; --ink-2: #55534d; --accent: #806529; background: #fcfbf8; color: var(--ink); border: 1px solid #cfccc4; border-radius: 6px; padding: 20px 24px; display: grid; gap: 6px; font-family: var(--ff-display); max-width: 460px; }
+.paper .meta { font-family: var(--ff-ui); color: #5c5a54; }
+.paper b { font-size: 26px; font-weight: 500; }
+.paper em { color: var(--accent); }
+.login-card { background: var(--raised); border: 1px solid var(--rule); border-radius: 12px; padding: 28px; display: grid; gap: 16px; text-align: center; }
+.login-card h2 { font-size: 26px; }
+.login-card .btn { justify-self: stretch; }
+.login-card details { text-align: left; border-top: 1px solid var(--rule-2); padding-top: 10px; }
+.login-card summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.bar { height: 3px; border-radius: 2px; background: var(--well); overflow: clip; }
+.bar span { display: block; width: 40%; height: 100%; background: var(--accent); }
+.login-foot { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 0 24px 24px; }
+.login-top { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; }
+
+@media (max-width: 1050px) { .variants.two, .steps, .notice-cols { grid-template-columns: 1fr; } .login { grid-template-columns: 1fr; gap: 32px; } }
+@media (max-width: 640px) {
+  .main { padding: 20px 16px 32px; }
+  .hero h1 { font-size: 30px; }
+  .login { padding: 16px; } .login h1 { font-size: 40px; } .login-card { padding: 20px; }
+  .task { grid-template-columns: 1fr; }
+  .card { padding: 16px; }
+}
+.card details { border-top: 1px solid var(--rule-2); padding-top: 6px; }
+.card summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+
+/* Tekstualne poveznice u paketu: cilj dodira najmanje 44 px (DESIGN-SYSTEM, kao .panel a u m5-reference). */
+.login-top a, .login-card > a, .login-card .row a, .main > a, .card > a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+.login-card > a, .main.narrow > a, .card.center > a { justify-self: center; }
+.login-card .row a, .main:not(.narrow) > a, .card:not(.center) > a { justify-self: start; }

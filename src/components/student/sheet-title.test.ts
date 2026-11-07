@@ -19,6 +19,7 @@ function ready(title: string): WorkContextRead {
       evidenceProfile: "basic",
       opensAt: "2026-10-01T08:00:00.000Z",
       dueAt: "2026-11-01T08:00:00.000Z",
+      aiPolicy: "prohibited",
       aiPurposes: [],
       wordMin: null,
       wordMax: null,

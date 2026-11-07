@@ -143,12 +143,17 @@ jobs:
       - name: Property tests
         if: needs.scope.outputs.profile == 'full'
         run: pnpm test:property
-      - name: Demo launcher and fake OIDC account tests
+      - name: Local launcher and fake OIDC account tests
         if: needs.scope.outputs.profile == 'full'
-        run: pnpm test:demo && pnpm test:fake-oidc
+        run: pnpm test:local && pnpm test:fake-oidc
       # F-152: the node tests of skill scripts (both skill copies).
       - name: Skill script tests
         run: pnpm test:skills
+      # M8.8-P02 (DAN-435): the DOCX reader tests of the standalone spike package
+      # (its own reviewed lockfile, no install scripts; not part of the app build).
+      - name: DOCX provenance spike tests
+        working-directory: spikes/docx-provenance
+        run: npm ci --ignore-scripts && node --test read.test.mjs
       - name: Build
         if: needs.scope.outputs.profile == 'full'
         run: pnpm build
@@ -173,8 +178,8 @@ jobs:
         run: |
           case "$SCOPE_RESULT/$PROFILE/$E2E_RESULT/$LOGIN_RESULT/$EVIDENCE_RESULT/$LOGIN_EVIDENCE_RESULT" in
             success/full/success/success/success/success) echo 'Both isolated application stack and browser checks passed.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB, browser, property, local and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB, browser, property, local and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
             *) echo 'Missing, unsuccessful or unexpected CI scope/stack result.' >&2; exit 1 ;;
           esac
       - name: Reject cancelled stack
@@ -228,18 +233,27 @@ jobs:
           key: stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-      # Browser binaries only; "Install browsers" below still runs and installs
-      # the system packages (--with-deps), it skips the download on a hit.
+      # DAN-663: browser binaries and the downloaded .deb files, keyed by the
+      # playwright-core version in pnpm-lock.yaml (it pins the browser builds)
+      # and the runner image. "Install browsers" below still runs: on a hit it
+      # skips the browser download and apt takes the packages from the cache.
+      - name: Playwright version
+        id: playwright
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: node scripts/engineering/playwright-version.mjs
       - name: Restore Playwright browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-all
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/ductus-apt
+          key: pw-${{ runner.os }}-${{ steps.playwright.outputs.image }}-${{ steps.playwright.outputs.version }}-all
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      # The login-callback login (db/local/auth-login.sql) gets a random
-      # password per run; none lives in the repo.
+      # The login-callback login (db/local/auth-login.sql) and the worker
+      # login (db/local/worker-login.sql) each get a random password per run;
+      # none lives in the repo.
       - name: Local auth login password
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: |
@@ -247,6 +261,9 @@ jobs:
           echo "::add-mask::${password}"
           echo "DUCTUS_AUTH_LOCAL_PASSWORD=${password}" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
+          worker_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${worker_password}"
+          echo "DUCTUS_WORKER_LOCAL_PASSWORD=${worker_password}" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       # D-91 (4): db:migrate built a fresh database with dbmate --no-dump-schema
@@ -269,7 +286,7 @@ jobs:
         run: pnpm test:db
       # Exercise the P7 setup path after pgTAP's isolated fixtures; it seeds
       # only the local institutions before integration and E2E tests.
-      - run: pnpm demo:prepare
+      - run: pnpm local:prepare
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - run: pnpm test:integration
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -280,8 +297,13 @@ jobs:
       # part of the required Local stack status. No retries, no filter.
       # Firefox and WebKit need the system packages, so this is always the
       # --with-deps path (the Chromium-only shortcut does not apply).
+      # DAN-663: the script caps every attempt and its whole run (10 min);
+      # timeout-minutes is the backstop, so a stuck apt fails the job early.
       - name: Install browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        timeout-minutes: 15
+        env:
+          PLAYWRIGHT_APT_CACHE_DIR: ~/.cache/ductus-apt
         run: bash scripts/engineering/playwright-install.sh chromium firefox webkit
       - name: UI pilot expected test inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -412,12 +434,18 @@ jobs:
           key: stack-login-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             stack-login-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Playwright version
+        id: playwright
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: node scripts/engineering/playwright-version.mjs
       - name: Restore Playwright browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-webkit
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/ductus-apt
+          key: pw-${{ runner.os }}-${{ steps.playwright.outputs.image }}-${{ steps.playwright.outputs.version }}-chromium-webkit
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Local auth login password
@@ -427,26 +455,34 @@ jobs:
           echo "::add-mask::${password}"
           echo "DUCTUS_AUTH_LOCAL_PASSWORD=${password}" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
+          worker_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${worker_password}"
+          echo "DUCTUS_WORKER_LOCAL_PASSWORD=${worker_password}" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      - run: pnpm demo:prepare
+      - run: pnpm local:prepare
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Install login browser
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        timeout-minutes: 15
         env:
           PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
+          PLAYWRIGHT_APT_CACHE_DIR: ~/.cache/ductus-apt
         run: bash scripts/engineering/playwright-install.sh chromium
       # DAN-232: the login E2E runs over https and the sign-in and demo walk-through
       # specs also run in WebKit (playwright.login.config.ts, #1223). WebKit needs
       # its system packages, so this step has no no-deps shortcut.
       - name: Install login WebKit
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        timeout-minutes: 15
+        env:
+          PLAYWRIGHT_APT_CACHE_DIR: ~/.cache/ductus-apt
         run: bash scripts/engineering/playwright-install.sh webkit
       # F-152: the demo account bootstrap's guards drive a real Chromium, which
       # only this job installs; each shard runs them (a few seconds).
-      - name: Demo account bootstrap tests
+      - name: Test account bootstrap tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-        run: pnpm test:demo:browser
+        run: pnpm test:local:browser
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in production); Chromium for every spec and WebKit for the
       # sign-in and full demo-flow specs, over https (#87 c.6588895809).
@@ -598,3 +634,23 @@ jobs:
           --config /src/osv-scanner.toml
           --lockfile /src/pnpm-lock.yaml
           --lockfile /src/infra/fake-oidc/pnpm-lock.yaml
+          --lockfile /src/spikes/b0.2-reconstruction/package-lock.json
+          --lockfile /src/spikes/docx-provenance/package-lock.json
+
+      # Negative control for the step above: a throwaway copy of a spike lockfile
+      # with one known vulnerable package must fail the same image and config on
+      # that advisory, so a scanner that never ran or found nothing cannot pass.
+      - name: OSV-Scanner synthetic negative control
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d "$RUNNER_TEMP/ductus-osv-negative.XXXXXX")"
+          trap 'rm -rf "$root"' EXIT
+          mkdir "$root/scan"
+          python3 -I scripts/engineering/osv-negative-control.py build spikes/docx-provenance/package-lock.json "$root/scan/package-lock.json"
+          status=0
+          docker run --rm -v "$root/scan:/scan:ro" -v "$PWD/osv-scanner.toml:/cfg/osv-scanner.toml:ro" \
+            ghcr.io/google/osv-scanner:v2.6.0@sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa scan source \
+            --config /cfg/osv-scanner.toml --format json --lockfile /scan/package-lock.json \
+            > "$root/report.json" || status=$?
+          python3 -I scripts/engineering/osv-negative-control.py check "$status" "$root/report.json"

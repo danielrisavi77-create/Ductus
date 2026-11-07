@@ -8,6 +8,8 @@
 
 import { MAX_MERGE_STEPS, carriedByCompare, carriedHeadCandidates, foundCarryHeads, namedCarryHeads } from "./review-gate-core.mjs";
 
+const SHA_RE = /^[0-9a-f]{40}$/;
+
 export const API_CALL_TIMEOUT_MS = 15_000;
 export const CARRY_BUDGET_MS = 60_000;
 
@@ -31,39 +33,95 @@ function untilAborted(work, signal) {
   });
 }
 
+// DAN-664 (#1551): at most three attempts for a transient failure, a 5xx or a
+// network error (fetch rejects with TypeError, per the Fetch spec), with a short
+// backoff. Every attempt and every wait stays inside the same per-call limit and
+// outer signal. A 4xx, an abort, a timeout or a broken 2xx body is final.
+export const MAX_ATTEMPTS = 3;
+export const RETRY_DELAY_MS = 250;
+const MAX_ERROR_BODY = 500;
+
+// Only reads, and a commit status write: GitHub keeps the latest status per
+// context, so the same body posted again leaves the same outcome. Any other
+// write could duplicate (a comment, a review) and is never retried.
+const retryable = (method, path) =>
+  method === "GET" || method === "HEAD" || (method === "POST" && /^\/repos\/[^/]+\/[^/]+\/statuses\/[^/?]+$/.test(path));
+
+class TransientError extends Error {}
+
+// Resolves after `ms`, or rejects as soon as `signal` aborts. The timer stays
+// referenced (an unref'd wait let the runner exit mid-backoff) and is cleared
+// on abort, so it never holds the process past the limit.
+const pause = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
 /**
  * Returns `api(path, options)`. Each call aborts after `timeoutMs`, or earlier
  * when `options.signal` aborts (used for the carry-over budget). The limit also
- * covers reading the body.
+ * covers reading the body and every retry with its backoff. Errors name the
+ * method and path, never the token or headers.
  */
 export function createApi({
   fetchImpl = globalThis.fetch,
   baseUrl = "https://api.github.com",
   token,
   timeoutMs = API_CALL_TIMEOUT_MS,
+  retryDelayMs = RETRY_DELAY_MS,
 } = {}) {
   return async function api(path, options = {}) {
     const { signal: outer, ...rest } = options;
     const limit = AbortSignal.timeout(timeoutMs);
     const signal = outer ? AbortSignal.any([limit, outer]) : limit;
-    return untilAborted(call(path, rest, signal), signal);
+    return untilAborted(attempts(path, rest, signal), signal);
   };
 
-  async function call(path, rest, signal) {
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      ...rest,
-      signal,
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        ...(rest.headers ?? {}),
-      },
-    });
+  async function attempts(path, rest, signal) {
+    const method = String(rest.method ?? "GET").toUpperCase();
+    const tries = retryable(method, path) ? MAX_ATTEMPTS : 1;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await call(path, rest, signal, method);
+      } catch (error) {
+        if (!(error instanceof TransientError) || attempt >= tries || signal.aborted) throw error;
+        await pause(retryDelayMs * 2 ** (attempt - 1), signal);
+      }
+    }
+  }
+
+  async function call(path, rest, signal, method) {
+    const name = `GitHub API ${method} ${path}`;
+    let response;
+    try {
+      response = await fetchImpl(`${baseUrl}${path}`, {
+        ...rest,
+        signal,
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...(rest.headers ?? {}),
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof TypeError) || signal.aborted) throw error;
+      throw new TransientError(`${name} failed: ${error.message}`);
+    }
 
     if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`GitHub API ${response.status}: ${body}`);
+      const body = String(await response.text()).slice(0, MAX_ERROR_BODY);
+      const message = `${name} ${response.status}: ${body}`;
+      throw response.status >= 500 && response.status <= 599 ? new TransientError(message) : new Error(message);
     }
     if (response.status === 204) return null;
     return response.json();
@@ -113,17 +171,54 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
 // PASS, an override or a command: only `negativeHead` reads them.
 const holdNegatives = (carried, heads) => Object.defineProperty(carried, "heldNegatives", { value: new Set(heads) });
 
+const wholeEntry = (item) => ["path", "mode", "type"].every((key) => typeof item?.[key] === "string" && item[key] !== "");
+
 // D-101: earlier heads whose verdicts still hold because only base merges
 // followed and the PR diff is unchanged. Any API error, a timed-out call or an
 // exhausted budget carries nothing, except that a negative on a head already
 // found stays (`holdNegatives`).
 export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = CARRY_BUDGET_MS, log = console.log } = {}) {
   const signal = AbortSignal.timeout(budgetMs);
-  const compare = (range) => api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`, { signal });
+  // F-046: each compared file gets its whole tree entry (mode and type) on both
+  // sides of that compare: at the compared head and at the compare's own merge
+  // base, read at the base-side path (the old path of a rename). "absent" when
+  // the path is not in that tree. A compare without a readable merge base, or a
+  // tree that is not whole, throws, so nothing carries. Each tree is read once.
+  const trees = new Map();
+  const treeEntries = (sha) => {
+    if (!trees.has(sha)) {
+      trees.set(sha, api(`/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`, { signal }).then((tree) => {
+        if (tree?.truncated !== false || !Array.isArray(tree?.tree)) throw new Error(`the tree of ${sha} could not be read whole`);
+        // QA c.6657595775: an entry without `path`, `mode` and `type` as
+        // non-empty strings would build a key like "undefined undefined" that
+        // matches on both sides, so it throws and nothing carries.
+        if (!tree.tree.every(wholeEntry)) throw new Error(`the tree of ${sha} has an entry without path, mode and type`);
+        return new Map(tree.tree.map((item) => [item.path, `${item.mode} ${item.type}`]));
+      }));
+    }
+    return trees.get(sha);
+  };
+  const compare = async (range) => {
+    const result = await api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`, { signal });
+    const head = range.split("...")[1];
+    const mergeBase = String(result?.merge_base_commit?.sha ?? "").toLowerCase();
+    if (!SHA_RE.test(mergeBase)) throw new Error(`the compare ${range} has no merge base`);
+    const atHead = await treeEntries(head);
+    const atBase = await treeEntries(mergeBase);
+    const files = Array.isArray(result?.files)
+      ? result.files.map((file) => ({
+          ...file,
+          entry: atHead.get(file?.filename) ?? "absent",
+          baseEntry: atBase.get(file?.previous_filename ?? file?.filename) ?? "absent",
+        }))
+      : result?.files;
+    return { ...result, files };
+  };
   const path = [];
   const found = () => foundCarryHeads(comments, pr.head.sha, path);
   let candidates;
   let current;
+  let base;
   try {
     // No trusted verdict, override or command names an earlier head: nothing
     // could carry, so the walk and its API calls are skipped (F-148).
@@ -137,14 +232,22 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
     }
     candidates = heads;
     if (candidates.length === 0) return new Set();
-    current = await compare(`${pr.base.sha}...${pr.head.sha}`);
+    // F-046: every compare is anchored on the live tip of the base branch, read
+    // once, not on `pr.base.sha`, which GitHub may leave on an older commit.
+    // Against the live tip a merge that kept the PR's side of a file main has
+    // since changed shows main's change reverted, so the diffs differ.
+    if (typeof pr.base?.ref !== "string" || pr.base.ref === "") throw new Error("the PR has no base branch name");
+    const tip = await api(`/repos/${owner}/${repo}/branches/${encodeURIComponent(pr.base.ref)}`, { signal });
+    base = String(tip?.commit?.sha ?? "").toLowerCase();
+    if (!SHA_RE.test(base)) throw new Error("the base branch tip could not be read");
+    current = await compare(`${base}...${pr.head.sha}`);
   } catch (error) {
     log(`Carry-over check failed closed: ${error.message}`);
     return holdNegatives(new Set(), found());
   }
-  log(`Carry-over compares ${pr.base.sha}...<head> with ${pr.base.sha}...${pr.head.sha}.`);
+  log(`Carry-over compares ${base}...<head> with ${base}...${pr.head.sha} (live tip of ${pr.base.ref}).`);
   let failed = false;
-  const compareHead = (sha) => compare(`${pr.base.sha}...${sha}`).catch((error) => {
+  const compareHead = (sha) => compare(`${base}...${sha}`).catch((error) => {
     failed = true;
     throw error;
   });

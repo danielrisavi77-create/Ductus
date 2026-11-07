@@ -22,7 +22,7 @@
  * click sends nothing and the sheet offers to sign in again.
  */
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { openWork, type OpenOutcome } from "@/client/evidence-ingest";
@@ -35,6 +35,8 @@ import { OpenWorkView, type OpenWorkPhase } from "./OpenWorkView";
 
 /** The existing sign-in-again phase: the page's session has ended. */
 const SESSION_ENDED: OpenWorkPhase = { kind: "unavailable", signIn: true };
+/** Nothing to subscribe to: only the server and browser snapshots differ. */
+const never = () => () => {};
 
 export default function OpenWork({ assignmentId, session }: { assignmentId: string; session: SessionMark | null }) {
   const router = useRouter();
@@ -104,9 +106,9 @@ export default function OpenWork({ assignmentId, session }: { assignmentId: stri
   const start = useCallback(() => { void attempt(); }, [attempt]);
 
   // The server render offers "Započni rad" disabled; it turns on once the
-  // click can reach `start` (a click before hydration was lost, DAN-330).
-  const [ready, setReady] = useState(false);
-  useEffect(() => { setReady(true); }, []);
+  // click can reach `start` (a click before hydration was lost, DAN-330):
+  // the server snapshot holds through hydration, the browser's comes after it.
+  const ready = useSyncExternalStore(never, () => true, () => false);
 
   const retry = useCallback(() => {
     // A new attempt by hand may refresh once again; nothing repeats by itself.

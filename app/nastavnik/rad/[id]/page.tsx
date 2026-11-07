@@ -1,11 +1,12 @@
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
 import LiveWorkView from "@/components/teacher/LiveWorkView";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { isDocumentId } from "@/domain/collaboration";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
-import { sessionPrincipal, sessionTag } from "@/server/auth/principal";
+import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -22,9 +23,9 @@ export const metadata = { title: `${t.liveView.context} · ${t.app.name}` };
  */
 export default async function LiveWorkPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const at = Date.now();
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const tag = sessionTag(token);
+  // The cookie digest and the server time of this render (D-118).
+  const { tag, at } = shellSession(token);
   const principal = await sessionPrincipal(token, withActor);
   const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
   const returnTo = `/nastavnik/rad/${encodeURIComponent(id)}`;

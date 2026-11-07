@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { createBackchannelLogout } from "@/server/db/backchannel-logout";
 import { createOpenSession } from "@/server/db/open-session";
 
 // openSession against the compose stack (pnpm stack:up, pnpm db:migrate),
@@ -62,6 +63,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.end()));
+  await admin.query("DELETE FROM identity.logout_token_jti WHERE oidc_issuer = $1", [issuer]);
   await admin.query("DELETE FROM identity.person_name WHERE institution_id = $1", [institution]);
   await admin.query("DELETE FROM identity.teacher_eligibility WHERE institution_id = $1", [institution]);
   await admin.query(
@@ -135,6 +137,23 @@ describe("openSession over a ductus_auth login", () => {
     expect(await nameOf()).toEqual([]);
   });
 
+  // DAN-474 (#1620 E1, E5): only the SHA-256 of the provider's sid is kept,
+  // on the session it opened; one the database finds invalid is left out and
+  // the login stands.
+  it("keeps only the hash of a plain sid and opens the session without an invalid one", async () => {
+    const openSession = createOpenSession(loginPool(AUTH_LOGIN));
+    const sidHash = async (hash: Buffer) =>
+      (await admin.query<{ h: Buffer | null }>("SELECT oidc_sid_hash AS h FROM identity.session WHERE token_hash = $1", [hash])).rows;
+    const plain = input({ sid: `sid-${suffix}` });
+    expect((await openSession(plain)).ok).toBe(true);
+    expect(await sidHash(plain.tokenHash)).toEqual([{ h: createHash("sha256").update(`sid-${suffix}`).digest() }]);
+    for (const sid of ["", "s".repeat(256), "sid\u0007bell"]) {
+      const other = input({ sid });
+      expect((await openSession(other)).ok).toBe(true);
+      expect(await sidHash(other.tokenHash)).toEqual([{ h: null }]);
+    }
+  });
+
   // DAN-304 (#1181, item 14): logins of one account at the same time, some
   // with the right and some without, all open their sessions, none fails on
   // a duplicate key, and one row at most is left.
@@ -165,5 +184,37 @@ describe("openSession over a ductus_auth login", () => {
   it("does not run over a ductus_app login or the admin login", async () => {
     await expect(createOpenSession(loginPool(APP_LOGIN))(input())).rejects.toThrow();
     await expect(createOpenSession(admin)(input())).rejects.toThrow(/not a ductus_auth login/);
+  });
+});
+
+// DAN-474: the adapter the back-channel route calls, over the same login.
+describe("backchannelLogout over a ductus_auth login", () => {
+  const jti = () => `jti-${randomBytes(8).toString("hex")}`;
+
+  it("closes the session the sid names, then reports the same jti as replayed", async () => {
+    const sid = `sid-bc-${suffix}`;
+    const opened = input({ subject: "sub-it-bc-1", uniqueId: `lea@${homeOrg}`, sid });
+    expect((await createOpenSession(loginPool(AUTH_LOGIN))(opened)).ok).toBe(true);
+    const logout = createBackchannelLogout(loginPool(AUTH_LOGIN));
+    const once = jti();
+    expect(await logout({ issuer, subject: null, sid, jti: once })).toEqual({ ok: true, closed: 1 });
+    const { rows } = await admin.query("SELECT closed_at IS NOT NULL AS closed FROM identity.session WHERE token_hash = $1", [
+      opened.tokenHash,
+    ]);
+    expect(rows).toEqual([{ closed: true }]);
+    expect(await logout({ issuer, subject: null, sid, jti: once })).toEqual({ ok: false, reason: "replayed" });
+    expect(await logout({ issuer, subject: "sub-it-bc-none", sid: null, jti: jti() })).toEqual({ ok: true, closed: 0 });
+  });
+
+  it("reports input the database refuses as invalid", async () => {
+    const logout = createBackchannelLogout(loginPool(AUTH_LOGIN));
+    expect(await logout({ issuer, subject: "sub-it-bc-2", sid: null, jti: "" })).toEqual({ ok: false, reason: "invalid" });
+  });
+
+  it("does not run over a ductus_app login or the admin login", async () => {
+    const args = { issuer, subject: "sub-it-bc-3", sid: null, jti: jti() };
+    // ductus_app holds no EXECUTE: refused when the query is planned.
+    await expect(createBackchannelLogout(loginPool(APP_LOGIN))(args)).rejects.toThrow(/permission denied/);
+    await expect(createBackchannelLogout(admin)(args)).rejects.toThrow(/not a ductus_auth login/);
   });
 });

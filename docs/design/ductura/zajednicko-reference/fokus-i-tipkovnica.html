@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fokus i tipkovnica (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<main class="page" id="glavno">
+<header>
+  <div class="ref-tag">Referenca paketa 1 · DAN-565 · prijedlog slike · EQ6</div>
+  <h1>Fokus i tipkovnica</h1>
+  <p>Jedno pravilo za cijelu aplikaciju: prsten fokusa 3 px u boji naglaska uz razmak od 4 px, na svakoj podlozi. Podaci su izmišljeni.</p>
+</header>
+
+<section aria-labelledby="k1">
+  <div class="ref-tag">Stanje 1 · prsten fokusa</div>
+  <h2 id="k1">Prsten 3 px, razmak 4 px</h2>
+  <div class="grid">
+    <div class="frame"><h3>Gumbi</h3><div class="row"><button class="btn ring" type="button">Spremi</button><button class="btn secondary" type="button">Odustani</button></div><p class="meta">Prsten se crta izvana i ne mijenja veličinu gumba.</p></div>
+    <div class="frame"><h3>Polje i poveznica</h3><label for="p1">Naziv</label><input class="field ring" id="p1" value="Seminar iz metoda"><a href="#" class="ring">Pravila fakulteta</a></div>
+    <div class="frame"><h3>Redak popisa</h3><div class="list"><div class="item ring"><span class="who">Ana Primjer</span><span class="facts">Mentorica · Seminar</span></div></div></div>
+  </div>
+</section>
+
+<section aria-labelledby="k2">
+  <div class="ref-tag">Stanje 2 · preskok na sadržaj</div>
+  <h2 id="k2">Poveznica &bdquo;Preskoči na sadržaj&rdquo;</h2>
+  <div class="frame">
+    <p>Prvi element na stranici. Izvan fokusa nije vidljiva, a kad dobije fokus pojavi se u gornjem lijevom kutu i vodi na glavni sadržaj.</p>
+    <div class="row"><a class="skip ring" href="#glavno">Preskoči na sadržaj</a></div>
+  </div>
+</section>
+
+<section aria-labelledby="k3">
+  <div class="ref-tag">Stanje 3 · fokus nije zaklonjen (WCAG 2.2, 2.4.11)</div>
+  <h2 id="k3">Fokus nije zaklonjen</h2>
+  <div class="grid">
+    <div class="frame">
+      <div class="sticky"><span>Lijepljeno zaglavlje, visina 56 px</span></div>
+      <p>Element u fokusu pri pomicanju stranice ostaje barem 64 px ispod gornjeg ruba (visina zaglavlja i razmak), pa ga zaglavlje nikad ne pokriva.</p>
+      <div class="row"><button class="btn ring" type="button">Element u fokusu</button></div>
+    </div>
+    <div class="frame">
+      <h3>Isto na mobitelu</h3>
+      <p>Donja traka i tipkovnica ne smiju prekriti element u fokusu; stranica se pomakne tako da je polje vidljivo iznad njih.</p>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="k4">
+  <div class="ref-tag">Stanje 4 · fokus u dijalogu</div>
+  <h2 id="k4">Fokus u dijalogu</h2>
+  <div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dk">
+    <h3 id="dk">Odjaviti se?</h3>
+    <p><span class="order">1</span>Fokus pri otvaranju ide na prvu radnju. <span class="order">2</span>Tab kruži unutar dijaloga. <span class="order">3</span>Esc zatvara i vraća fokus na gumb koji ga je otvorio.</p>
+    <div class="buttons"><button class="btn secondary ring" type="button">Odustani</button><button class="btn" type="button">Odjavi me</button></div>
+  </div></div>
+</section>
+
+<section aria-labelledby="k5">
+  <div class="ref-tag">Stanje 5 · redoslijed tipkovnice</div>
+  <h2 id="k5">Redoslijed tipkovnice</h2>
+  <ol class="frame">
+    <li><span class="order">1</span>Preskoči na sadržaj</li>
+    <li><span class="order">2</span>Izbornik (traka sa strane ili gumb &bdquo;Izbornik&rdquo; na mobitelu)</li>
+    <li><span class="order">3</span>Naslov stranice i glavna radnja</li>
+    <li><span class="order">4</span>Sadržaj, redom kako je prikazan</li>
+    <li><span class="order">5</span>Poruke stanja i obavijesti, bez preuzimanja fokusa</li>
+  </ol>
+</section>
+</main>
+</body>
+</html>

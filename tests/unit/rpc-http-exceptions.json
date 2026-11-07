@@ -20,6 +20,11 @@
     "reason": "Brisanje po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
   },
   {
+    "function": "collaboration.delete_revision_requests",
+    "status": "bez rute",
+    "reason": "Brisanje zahtjeva za doradu jednog dokumenta po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
+  },
+  {
     "function": "collaboration.set_thread_state",
     "status": "bez rute",
     "reason": "Interni korak bez EXECUTE za aplikacijske uloge; zovu ga collaboration.resolve_thread i reopen_thread, koje imaju rutu."
@@ -45,6 +50,11 @@
     "status": "ruta dolazi",
     "reason": "Bilježi aktivnost sesije (D-200 P2); poziva ga poslužitelj na zahtjevima koji se broje kao aktivnost, a taj poziv još nije spojen.",
     "ticket": "DAN-296"
+  },
+  {
+    "function": "institution.appoint_institution_admin",
+    "status": "bez rute",
+    "reason": "Operatersko imenovanje administratora ustanove na pisani zahtjev fakulteta (D-262 Q04, DAN-525); nijedna aplikacijska uloga ni PUBLIC je ne smije pozvati."
   },
   {
     "function": "institution.approve_mentorship_request",
@@ -105,6 +115,11 @@
     "status": "ruta dolazi",
     "reason": "Student traži od potvrđenog nastavnika svoje ustanove mentorstvo za jedan rad (M2.6-P03, D-204); RPC postoji za ductus_app, ruta još nije spojena.",
     "ticket": "DAN-515"
+  },
+  {
+    "function": "institution.revoke_institution_admin",
+    "status": "bez rute",
+    "reason": "Operaterski opoziv administratora ustanove na pisani zahtjev fakulteta (D-262 Q04, DAN-525); nijedna aplikacijska uloga ni PUBLIC je ne smije pozvati."
   },
   {
     "function": "institution.revoke_work_access",
