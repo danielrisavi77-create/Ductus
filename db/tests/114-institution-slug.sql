@@ -1,9 +1,10 @@
 -- app.current_institution_slug() (DAN-443, M2.12-P02; plan of attack #1689,
--- C1 to C7; contract on #1091): the slug of the session's own institution,
--- whose configuration record gives the citation style. It takes no
--- parameter, so no request can name another institution; without an open,
--- unexpired session it returns NULL. ductus_app still reads no
--- identity.institution row and learns no other institution's slug.
+-- C1 to C6, with C7 in principal.test.ts; contract on #1091): the slug of
+-- the session's own institution, whose configuration record gives the
+-- citation style. It takes no parameter, so no request can name another
+-- institution; without an open, unexpired session it returns NULL.
+-- ductus_app still reads no identity.institution row and learns no other
+-- institution's slug.
 -- Synthetic fixtures only: every person, name and organisation is invented.
 BEGIN;
 \ir fixtures/institution.inc
@@ -12,7 +13,7 @@ SET LOCAL lc_messages TO 'C';
 SELECT plan(19);
 
 -- Every person of the fixture reads the slug of their own institution, and
--- nothing else, through the web role (C1, C2).
+-- nothing else, through the web role (C1).
 SELECT is_empty(
   $$ SELECT p.name FROM person p
      WHERE pg_temp.ask(p.name, 'SELECT app.current_institution_slug()') IS DISTINCT FROM p.faculty $$,
@@ -23,12 +24,12 @@ SELECT is(pg_temp.ask('lea', 'SELECT app.current_institution_slug()'), 'fak-b', 
 SELECT is(pg_temp.ask('tomo', 'SELECT app.current_institution_slug()'), 'fak-b', 'a student of fak-b reads fak-b');
 
 -- No session, an expired, a closed and an unknown session: NULL, never a
--- slug of some institution (C3, C4).
+-- slug of some institution (C2).
 SELECT is(pg_temp.ask(t, 'SELECT coalesce(app.current_institution_slug(), ''-'')'), '-',
   'session "' || t || '" reads no slug')
 FROM unnest(ARRAY['anon', 'expired', 'closed', 'unknown']) AS t;
 
--- Person and slug in one statement agree (C5): the slug is the one of the
+-- Person and slug in one statement agree (C6): the slug is the one of the
 -- institution current_actor() names.
 SELECT is_empty(
   $$ SELECT p.name FROM person p
@@ -38,11 +39,11 @@ SELECT is_empty(
   'current_actor() and the slug read in one statement name the same institution'
 );
 
--- The table itself stays closed to the web role (C6).
+-- The table itself stays closed to the web role (C5).
 SELECT matches(pg_temp.ask('vesna', 'SELECT count(*)::text FROM identity.institution'), '^42501:',
   'ductus_app still cannot read identity.institution');
 
--- Other roles: denied (C7).
+-- Other roles: denied (C4).
 SELECT matches(pg_temp.ask_as('ductus_worker', 'vesna', 'SELECT app.current_institution_slug()'), '^42501:',
   'ductus_worker may not call current_institution_slug');
 SELECT matches(pg_temp.ask_as('ductus_test_stranger', 'vesna', 'SELECT app.current_institution_slug()'), '^42501:',
@@ -58,7 +59,7 @@ SELECT is_empty(
 SELECT ok(has_function_privilege('ductus_app', 'app.current_institution_slug()', 'EXECUTE'),
   'ductus_app may execute current_institution_slug');
 
--- Shape of the function.
+-- Shape of the function: no parameter, so no request names an institution (C3).
 SELECT ok(p.prosecdef, 'current_institution_slug is SECURITY DEFINER')
 FROM pg_proc p WHERE p.oid = 'app.current_institution_slug()'::regprocedure;
 SELECT is(pg_get_userbyid(p.proowner)::text, 'ductus_identity', 'current_institution_slug belongs to ductus_identity')
