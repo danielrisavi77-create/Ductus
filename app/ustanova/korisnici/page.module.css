@@ -18,7 +18,7 @@
 
 :global(.page) .heading h1 {
   font-size: var(--fs-h2);
-  letter-spacing: -0.025em;
+  letter-spacing: var(--heading-tracking);
   line-height: 1.08;
   font-weight: 500;
 }
@@ -33,7 +33,7 @@
   gap: 8px;
   padding: 10px 14px;
   border-left: 3px solid var(--error);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
   background: var(--error-soft);
 }
 

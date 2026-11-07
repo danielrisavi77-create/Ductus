@@ -31,7 +31,7 @@
   font-family: var(--ff-display);
   font-weight: 500;
   line-height: 1.08;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--heading-tracking);
   overflow-wrap: anywhere;
 }
 
@@ -112,7 +112,7 @@
   font-size: 32px;
   font-weight: 500;
   line-height: 1.1;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--heading-tracking);
   overflow-wrap: anywhere;
 }
 

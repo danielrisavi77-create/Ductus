@@ -78,7 +78,7 @@
   margin: 0;
   font-family: var(--ff-display);
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--heading-tracking);
   text-wrap: balance;
 }
 
@@ -93,7 +93,7 @@
   font-size: clamp(48px, 7vw, 88px);
   font-weight: 300;
   line-height: 0.96;
-  letter-spacing: -0.04em;
+  letter-spacing: var(--heading-tracking);
 }
 
 .sectionTitle {
@@ -260,7 +260,7 @@
   margin-bottom: 24px;
   background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 13px;
 }
 
@@ -481,7 +481,7 @@
   font-size: clamp(36px, 5vw, 60px);
   font-weight: 300;
   line-height: 1;
-  letter-spacing: -0.035em;
+  letter-spacing: var(--heading-tracking);
 }
 
 .footer {

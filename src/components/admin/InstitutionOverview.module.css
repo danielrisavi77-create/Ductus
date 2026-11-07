@@ -3,7 +3,6 @@
   background: var(--sheet);
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
   padding: 24px;
 }
 

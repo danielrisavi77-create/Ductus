@@ -72,7 +72,7 @@
   font-size: 39px;
   font-weight: 500;
   line-height: 1.08;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--heading-tracking);
   overflow-wrap: anywhere;
 }
 

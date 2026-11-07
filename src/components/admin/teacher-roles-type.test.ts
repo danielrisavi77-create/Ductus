@@ -37,12 +37,14 @@ describe("TeacherRoles type scale (A-02)", () => {
     expect(rule(phone(MODULE), ".heading")["font-size"]).toBe("21px");
   });
 
-  it("gives the headings and the dialog title the reference weight and tracking", () => {
+  it("gives the headings and the dialog title the reference weight and the heading tracking token", () => {
     const display = rule(REFERENCE, "h1, h2, h3");
     expect(display["font-weight"]).toBe("500");
     for (const selector of [".heading", ".title"]) {
       expect(rule(top, selector)["font-weight"]).toBe(display["font-weight"]);
-      expect(rule(top, selector)["letter-spacing"]).toBe(display["letter-spacing"]);
+      // DAN-670: one heading token everywhere (owner decision of 7 Nov 2026), so the
+      // tracking is the token (-0.025em), not the reference's -0.015em.
+      expect(rule(top, selector)["letter-spacing"]).toBe("var(--heading-tracking)");
     }
     expect(rule(top, ".title")["font-size"]).toBe(rule(REFERENCE, ".dialog h3")["font-size"]);
   });

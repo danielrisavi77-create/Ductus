@@ -29,7 +29,7 @@
   font-size: clamp(34px, 5.4vw, 52px);
   font-weight: 300;
   line-height: 1.05;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--heading-tracking);
 }
 
 .cards {
@@ -52,7 +52,6 @@
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: var(--sheet);
-  box-shadow: var(--lift);
 }
 
 .card h2 {

@@ -34,7 +34,7 @@
   font-size: 45px;
   font-weight: 500;
   line-height: 1.08;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--heading-tracking);
 }
 
 .body {
@@ -55,7 +55,7 @@
   font-size: 36px;
   font-weight: 500;
   line-height: 1.1;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--heading-tracking);
 }
 
 .next {
