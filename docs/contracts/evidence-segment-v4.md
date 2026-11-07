@@ -106,17 +106,21 @@ Pravilo iz `docs/backend/evidencija.md` §4.1 (odluka vlasnika 17. 10. 2026.) os
 | Zapis `import` ili `ai-transfer` postoji za istog principala i isti dokument, i njegov hash je jednak veznom hashu | RPC koji radi commit i `reserve`, u istoj transakciji | `invalid`. Tuđi i nepostojeći id daju isti odgovor (C7). |
 | Jedan zapis uvoza ili prijenosa veže najviše jedan događaj u lancu dokumenta | Isti RPC, jedinstveno ograničenje | `invalid`. Ponovno slanje istog odsječka nakon prekida je idempotentno i nije drugi događaj. |
 | Umetnuti sadržaj `import` odgovara `contentSha256`; tekst `ai-transfer` odgovara `textSha256` zapisa | Replay pri rekonstrukciji | `mismatch`, kao `removedSha256` (B-12) |
-| `pasteOrigin`: hash zalijepljenog teksta iz replaya jednak je `textSha256`; odgovor ili stavka `refId` postoji za istog principala i isti dokument; zalijepljeni tekst je neprekinut, točan podniz teksta tog odgovora ili stavke (bez normalizacije, K14) | Projekcija nakon uspješnog replaya, na poslužitelju, dok sadržaj izvora postoji | Lijepljenje se prikazuje kao `origin: "not_observed"`, kao danas. Nikad se ne prikazuje kao poznato podrijetlo, a cijela rekonstrukcija ne pada. |
+| Presuda o `pasteOrigin` (`known` ili `not_observed`): tekst događaja izračunan iz koraka primljenog odsječka ima hash jednak `textSha256`; odgovor ili stavka `refId` postoji za istog principala i isti dokument; tekst događaja je neprekinut, točan podniz trenutnog teksta tog odgovora ili stavke (bajtno, bez normalizacije i kolacije, K14) | RPC koji radi commit i `reserve`, u istoj transakciji, pod bravom retka izvora uzetom nakon brave dokumenta. Tekst događaja izračunava web proces iz koraka samog odsječka, bez stanja dokumenta | Presuda `not_observed`. Prihvat ne pada i odsječak se ne odbija (D2, D3). |
+| Prikaz poznatog podrijetla | Projekcija nakon uspješnog replaya, na poslužitelju; čita samo presudu, nikad izvor | Bez presude `known` ili uz hash teksta događaja iz replaya različit od `textSha256` lijepljenje se prikazuje kao `origin: "not_observed"`, kao danas. Cijela rekonstrukcija ne pada. |
 
-Dva tumačenja traže potvrdu reviewa i vlasnika:
+Tri tumačenja traže potvrdu reviewa i vlasnika:
 - C6 u #1659 kaže da se nepodudaranje teksta „odbija”. Ovdje se otkriva rekonstrukcijom (`mismatch`), jer prihvat prema odluci od 17. 10. ne radi replay.
 - D2 i D3 u #1659 dopuštaju odbijanje ili prikaz bez podrijetla. Ugovor bira prikaz bez podrijetla. Razlog: brisanje odgovora ili stavke u drugoj kartici (E5) inače bi zaustavilo sinkronizaciju.
+- Presuda o `pasteOrigin` donosi se pri prihvatu. Odluka od 17. 10. zabranjuje replay pri prihvatu, jer replay traži stanje dokumenta na poslužitelju i jer bi odbijanje zaustavilo sinkronizaciju. Presuda ne treba ni jedno ni drugo: tekst događaja dolazi iz umetnutih raspona koraka samog odsječka, a neuspjela provjera daje `not_observed`, nikad odbijanje. Ugovor zato presudu ne smatra replayem. Ako review ili vlasnik to ne prihvate, nema prikaza poznatog podrijetla dok se ne odluči drugačije; povratak na provjeru u projekciji ponovno bi otvorio E5.
 
-Djelomično lijepljenje (D-58: kopiran dio odgovora ili stavke) je poznato podrijetlo jednako kao cijelo, jer se provjerava podniz, a ne jednakost hasha cijelog izvora. Hash izvora zato nije dovoljan i poslužitelj ga ne čuva kao zamjenu za sadržaj. Poznate granice:
-- nakon brisanja sadržaja odgovora ili stavke podrijetlo se više ne može provjeriti i prikazuje se kao `not_observed`;
+Djelomično lijepljenje (D-58: kopiran dio odgovora ili stavke) je poznato podrijetlo jednako kao cijelo, jer se provjerava podniz, a ne jednakost hasha cijelog izvora. Hash izvora zato nije dovoljan i poslužitelj ga ne čuva kao zamjenu za sadržaj.
+
+**Presuda i brisanje izvora (E5, D-268 O3).** Presuda se donosi jednom, pri prihvatu, i trajno se zapisuje uz tvrdnju (`kind`, `refId`, `textSha256`, segment i redni broj događaja). Nakon toga se ne mijenja. Kasnije brisanje odgovora ili razgovora i izmjena ili brisanje stavke bilježnice ne diraju presudu, pa poznato podrijetlo već primljenog lijepljenja ostaje poznato. Veza na razgovor (`refId`) također ostaje, pa razgovor ostaje obvezan za izjavu i kad je izvor obrisan. Zapis presude ne nosi tekst izvora, položaj podniza ni hash izvora, pa ne čuva sadržaj izvora nakon brisanja i ne gradi na D-30. Ponovno slanje istog odsječka nakon prekida vraća postojeću presudu i ne donosi novu. Poznate granice:
+- tvrdnja koju poslužitelj primi tek nakon brisanja ili izmjene izvora (npr. lijepljenje izvan mreže, a brisanje u drugoj kartici prije sinkronizacije) dobiva `not_observed`. To nije već primljen odsječak, pa E5 vrijedi; ishod je lažno negativan;
 - razlika koju unese međuspremnik (razmaci, prijelomi redaka, NFC/NFD) daje `not_observed`. Ugovor bira lažno negativan ishod, nikad lažno pozitivan.
 
-Ishod projekcije nosi samo vrstu i oznaku poznatog podrijetla, nikad tekst izvora ni položaj podniza (D9).
+Ishod projekcije nosi samo vrstu i oznaku poznatog podrijetla, nikad tekst izvora ni položaj podniza (D9). Isto vrijedi za odgovor RPC-a prihvata: presuda se ne vraća klijentu kao tekst ili položaj, a tuđi i nepostojeći `refId` daju istu presudu (C7).
 
 Sažetak procesa (`process-summary.ts`) prikazuje stavke ovako:
 - `import` je vrsta `imported` („uvezeno, tvrdnja iz datoteke”), nikad `observed` (B1, B8).
@@ -159,7 +163,7 @@ Za pojedine scenarije:
 - E2: tijekom postupnog uvođenja poslužitelj koji još ne zna v4 odbije odsječak; odsječak ostaje u dnevniku i šalje se ponovno, a nijedan poslužitelj ga ne prihvati djelomično.
 - E1: dvije kartice, stara (v2/v3) i nova (v4), idu postojećim putem spajanja ili sukoba (F-3/F-8), bez SYNCED-a bez potpisane potvrde.
 - E4: oporavak već zapisanog prijenosa iz dnevnika prolazi i uz opoziv; nova primjena traži živu provjeru na poslužitelju (D-268 O4).
-- E5: brisanje odgovora ili razgovora ne poništava vezu već primljenog odsječka.
+- E5: brisanje odgovora ili razgovora ne poništava vezu već primljenog odsječka. Prihvat zaključava dokument pa redak izvora (`FOR SHARE`); brisanje i izmjena izvora zaključavaju redak izvora (`FOR UPDATE`) i ne uzimaju bravu dokumenta nakon brave izvora (ako trebaju obje, redoslijed je dokument pa izvor). Prihvat koji dobije bravu prije brisanja donosi presudu nad postojećim tekstom (`known` za valjan podniz) i ta presuda preživi brisanje. Prihvat nakon brisanja daje `not_observed`, a nakon izmjene se presuđuje nad novim tekstom. Svaka tvrdnja ima točno jednu presudu.
 - E6: odjava usred uvoza ne zapisuje ništa pod isteklim identitetom.
 
 ## Popis testova (prije koda)
@@ -177,10 +181,11 @@ Testovi se pišu prije implementacije i padaju dok implementacija ne postoji. Sv
 | Zapis prijenosa | Tablični test: obvezna polja, oblik, katalog svrha, isključeni pružatelj | C1 do C5, C11 |
 | Tekst događaja | Test s poznatim odgovorom za definiciju hasha teksta, uključujući NFC i NFD | C6, D1, K14 |
 | Rekonstrukcija | Kriv `contentSha256` ili `textSha256` daje `mismatch`; neprovjerljiv `pasteOrigin` daje `not_observed` bez pada | B4, C6, D3 |
-| Djelomično lijepljenje | Dio odgovora i dio stavke bilježnice daju poznato podrijetlo; tekst koji nije neprekinut podniz, podniz tuđeg odgovora, izmijenjen razmak i NFD umjesto NFC daju `not_observed`; izbrisan sadržaj izvora daje `not_observed`; ishod ne sadrži bajtove teksta izvora | D1 do D3, D9, K14 |
+| Djelomično lijepljenje | Dio odgovora i dio stavke bilježnice daju poznato podrijetlo; tekst koji nije neprekinut podniz, podniz tuđeg odgovora, izmijenjen razmak i NFD umjesto NFC daju `not_observed`; ishod ne sadrži bajtove teksta izvora | D1 do D3, D9, K14 |
+| Brisanje izvora | Primljeno lijepljenje s presudom `known`, zatim brisanje odgovora ili razgovora, odnosno izmjena ili brisanje stavke: projekcija i dalje daje poznato podrijetlo, a veza `refId` ostaje; tvrdnja primljena nakon brisanja daje `not_observed`; ponovno slanje istog odsječka ne mijenja presudu; zapis presude ne sadrži bajtove teksta izvora ni hash izvora | D1 do D3, D9, E5 |
 | Projekcija | `import` je `imported`; isti bajtovi za studenta i nastavnika; nema zbrojeva | B1, B8, G1, G3, G4 |
-| pgTAP | Tuđi i nepostojeći id daju isti ishod; RLS i matrica pristupa za nove tablice; jedinstvenost veze | C7, C10, C12, D2 |
-| Istodobnost | Dvije transakcije uvoza istog dokumenta; opoziv prije i poslije primjene; stari i novi klijent nad istim radom | E1 do E6 |
+| pgTAP | Tuđi i nepostojeći id daju isti ishod; RLS i matrica pristupa za nove tablice; jedinstvenost veze; tablica tvrdnji i presuda: piše je samo RPC prihvata, jedna presuda po događaju, `UPDATE` i `DELETE` odbijeni osim kroz funkciju retentiona | C7, C10, C12, D2, E5 |
+| Istodobnost | Dvije transakcije uvoza istog dokumenta; opoziv prije i poslije primjene; stari i novi klijent nad istim radom; prihvat lijepljenja i brisanje izvora istodobno, u oba redoslijeda, bez potpunog zastoja i s točno jednom presudom | E1 do E6 |
 | Tekst sučelja | Skener zabranjenih izraza nad novim oznakama, kad UI postoji | G2 |
 
 ## Obvezni zasebni implementacijski koraci
@@ -189,7 +194,7 @@ Svaki je zaseban PR s rizikom `critical`, reviewom i QA-om:
 
 1. vektori v4 i parser u `src/domain/forensics/`;
 2. migracija descriptora i rezervacije s pgTAP-om;
-3. tablice i RPC za manifest i zapis prijenosa;
+3. tablice i RPC za manifest i zapis prijenosa, tablica tvrdnji i presuda o `pasteOrigin` te presuda u RPC-u prihvata;
 4. replay i projekcija;
 5. bilježenje na klijentu.
 
