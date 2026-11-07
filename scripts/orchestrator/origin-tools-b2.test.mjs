@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import fc from "fast-check";
 
-import { evaluatePullRequest, sameRepositoryHead } from "../engineering/review-gate-core.mjs";
+import { sameRepositoryHead } from "../engineering/review-gate-core.mjs";
 import { checkRollup, mainPathsSince, openPrsWithPaths, prPaths, prView } from "./gh.mjs";
 import { overlapPairs, renderOverlap } from "./orchestrator-core.mjs";
 import {
-  AUTHORS, contractFor, HEAD, io, NUMBER, OUTSIDE, PLAN_SCENARIOS, planPulls, PREFLIGHT_SCENARIOS, R,
-  READABLE_OUTSIDE, REPO, rawPull, routesFor, runTool,
+  AUTHORS, baseArb, contractFor, gateOutside, HEAD, headArb, io, NUMBER, OUTSIDE, PLAN_SCENARIOS, planPulls,
+  PREFLIGHT_SCENARIOS, R, rawPull, READABLE_OUTSIDE, REPO, repoArb, repositoryOf, repoShape, routesFor, runTool,
+  segment, withRepo,
 } from "./origin-cases.mjs";
 import { planParallel, renderPlan, VERDICTS } from "./plan-core.mjs";
 import { evaluatePreflight, INFORMATIONAL_READS, preflightExitCode, requiredStatusChecks } from "./preflight-core.mjs";
@@ -302,23 +303,6 @@ test("C2 for T5: the list object decides, the single PR read is not used", async
 // ---------------------------------------------------------------------------
 // Properties P1-P4 for T4 and T5, 500 runs each; fast-check prints the seed on a failure.
 const RUNS = { numRuns: 500 };
-const segment = fc.stringMatching(/^[a-z0-9][a-z0-9-]{0,11}$/);
-const name = fc.oneof(
-  fc.constantFrom(REPO, "Owner1/Repo1", `${REPO} `, ` ${REPO}`, `${REPO}.git`, `${REPO}-fork`, "outsider/repo1", "owner1/renamed1", "", null, 42, {}),
-  fc.tuple(segment, segment).map(([a, b]) => `${a}/${b}`),
-  fc.string({ maxLength: 20 }),
-);
-const repoShape = fc.oneof(
-  fc.constant("drop"), fc.constant(null), fc.constant({}),
-  fc.record({ full_name: name, fork: fc.boolean() }, { requiredKeys: ["full_name"] }),
-);
-const withRepo = (part, repo) => (repo === "drop" ? part : { ...part, repo });
-const headArb = fc.oneof(fc.constant(undefined), repoShape.map((repo) => withRepo({ sha: HEAD, ref: "feature/x" }, repo)));
-const baseArb = fc.oneof(fc.constant(undefined), repoShape.map((repo) => withRepo({ ref: "main" }, repo)));
-const repoArb = fc.oneof(
-  fc.constantFrom(R.R1, R.R2, R.R3, R.R4),
-  fc.tuple(segment, segment).map(([o, n]) => ({ owner: { login: o }, name: n })),
-);
 const anyInput = fc.record({
   cls: fc.constantFrom(...S), pre: fc.constantFrom(...Object.keys(PREFLIGHT_SCENARIOS)),
   plan: fc.constantFrom(...Object.keys(PLAN_SCENARIOS)), head: headArb, base: baseArb, repo: repoArb,
@@ -339,11 +323,6 @@ async function outcomes({ cls, pre, plan, head, base, repo }) {
   const p5 = planOf(r5);
   return { raw4, raw5, r4, subject: p5.rows[NUMBER], gate: p5.gate, sc };
 }
-const gateOutside = (raw) => /head is not in this repository/i.test(
-  evaluatePullRequest({ pr: { ...raw, changed_files: 1 }, files: [{ filename: "src/domain/example.ts", status: "modified" }], comments: [], ownerLogin: "owner1" }).result.description ?? "",
-);
-const repositoryOf = (repo) => (repo.$error ? null : `${repo.owner.login}/${repo.name}`);
-
 test("P1: when the gate fails on origin, T4 does not pass and T5 neither advises nor counts the PR", async () => {
   await fc.assert(fc.asyncProperty(anyInput, async (input) => {
     const o = await outcomes(input);

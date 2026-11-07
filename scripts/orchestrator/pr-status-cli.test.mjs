@@ -12,7 +12,7 @@ const here = fileURLToPath(new URL(".", import.meta.url));
 const owner = { login: "owner1", type: "User" };
 const pull = (number, head, user) => ({
   number, title: "t", body: null, state: "open", draft: false, merged_at: null, mergeable: true,
-  head, base: { ref: "main" }, created_at: "2026-10-01T00:00:00Z", auto_merge: null, user,
+  head, base: { ref: "main", repo: { full_name: "owner1/repo1" } }, created_at: "2026-10-01T00:00:00Z", auto_merge: null, user,
 });
 const PULLS = [
   pull(1, { sha: "a".repeat(40), ref: "x", repo: { full_name: "other/repo1" } }, owner), // external: fork head

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { evaluateGate } from "../engineering/review-gate-core.mjs";
-import { overrideBlock, overrideOutput, parseOverrideArgs } from "./orchestrator-core.mjs";
+import { toPr } from "./gh.mjs";
+import { headOrigin, overrideBlock, overrideOutput, parseOverrideArgs } from "./orchestrator-core.mjs";
 
 const head = "b".repeat(40);
 const ownerLogin = "danielrisavi77-create";
@@ -35,13 +36,18 @@ test("override arguments: PR numbers, a required one-line reason", () => {
   }
 });
 
+// F-010: a PR whose head and base are this repository, judged as override-block.mjs does.
+const REPO = "o/r";
+const inRepo = (p) => ({ ...p, head: { ...p.head, repo: { full_name: REPO } }, base: { ref: "main", repo: { full_name: REPO } } });
+const output = (n, p, reason) => overrideOutput(n, inRepo(p), reason, headOrigin(toPr(inRepo(p)), REPO));
+
 test("stdout pasted whole is a comment the gate accepts; context goes to stderr", () => {
-  const out = overrideOutput(220, { state: "open", head: { sha: head } }, "demo blocker");
+  const out = output(220, { state: "open", head: { sha: head } }, "demo blocker");
   assert.equal(out.stdout, overrideBlock(head, "demo blocker"));
   assert.equal(gate(out.stdout).state, "success");
   assert.match(out.stderr, /^# PR #220 \(head bbbbbbbb\)/);
   // the context line pasted in front of the block is what the gate refuses
   assert.equal(gate(out.stderr + out.stdout).state, "pending");
-  assert.throws(() => overrideOutput(1, { state: "closed", merged_at: "x", head: { sha: head } }, "r"), /merged/);
-  assert.throws(() => overrideOutput(1, { state: "closed", head: { sha: head } }, "r"), /closed/);
+  assert.throws(() => output(1, { state: "closed", merged_at: "x", head: { sha: head } }, "r"), /merged/);
+  assert.throws(() => output(1, { state: "closed", head: { sha: head } }, "r"), /closed/);
 });

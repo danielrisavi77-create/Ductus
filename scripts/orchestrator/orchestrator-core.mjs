@@ -259,6 +259,14 @@ export function headOrigin(pr, repository) {
   return { ok: false, readable: true, text: `base ${base} is not this repository ${repository} (F-010)` };
 }
 
+// A double space means a name with leading or trailing blanks, which would read as the same name.
+const SAFE_ORIGIN = /^(?!.* {2})[\w .,()/:-]{1,240}$/;
+/** headOrigin(...).text for a terminal; a name outside the allow-list is not printed. */
+export function originText(origin) {
+  return SAFE_ORIGIN.test(origin?.text ?? "") ? origin.text
+    : "head is not proven to be in this repository (F-010); names not printed";
+}
+
 /** Returns [{level: PASS|FAIL|INFO, id, text}]. */
 export function evaluateReady(d) {
   const out = [];
@@ -407,8 +415,11 @@ export function overrideBlock(head, reason) {
  * What `orch:override` prints for one PR read from GitHub: stdout is only the
  * block, so pasting all of it is a valid comment (the gate requires
  * `Owner-Override:` as the first non-empty line); the context goes to stderr.
+ * `origin` is headOrigin(toPr(pr), repoId) over the same REST object `pr`.
  */
-export function overrideOutput(n, pr, reason) {
+export function overrideOutput(n, pr, reason, origin) {
+  // F-010 (plan #1671 T6): the gate reads no override on a head outside this repository.
+  if (origin?.ok !== true) throw new Error(`head origin: ${originText(origin)}; no block printed`);
   if (pr?.state !== "open") throw new Error(`PR is ${pr?.merged_at ? "merged" : pr?.state}`);
   return {
     stdout: overrideBlock(pr.head?.sha, reason),

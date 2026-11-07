@@ -21,7 +21,11 @@ const BODY = [
   "",
   "- Neizvedeno: Node 24 lokalno.",
 ].join("\n");
-const pr = (over = {}) => ({ number: 5, state: "OPEN", isDraft: false, headRefOid: H1, body: BODY, ...over });
+// F-010: head and base in this repository, as toPr() reads them; REPO is what repoId() answered.
+const REPO = "o/r";
+const pr = (over = {}) => ({
+  number: 5, state: "OPEN", isDraft: false, headRefOid: H1, body: BODY, headRepo: REPO, baseRepo: REPO, sameRepository: true, ...over,
+});
 const verdict = (kind, head, v, text = "") => ({
   user: { login: "owner", type: "User" },
   author_association: "OWNER",
@@ -42,11 +46,12 @@ test("arguments are strict", () => {
 });
 
 test("a head that is not a SHA is refused", () => {
-  assert.throws(() => buildEvidence({ pr: pr({ headRefOid: "main" }) }), /SHA/);
+  assert.throws(() => buildEvidence({ repository: REPO, pr: pr({ headRefOid: "main" }) }), /SHA/);
 });
 
 test("facts of a PR with a current review and QA", () => {
   const e = buildEvidence({
+    repository: REPO,
     pr: pr(),
     comments: [verdict("review", H1, "PASS"), verdict("qa", H1, "PASS")],
     rollup: ROLLUP,
@@ -64,13 +69,13 @@ test("facts of a PR with a current review and QA", () => {
 });
 
 test("a verdict for an older head is marked as not this head", () => {
-  const e = buildEvidence({ pr: pr({ headRefOid: H2 }), comments: [verdict("review", H1, "PASS")] });
+  const e = buildEvidence({ repository: REPO, pr: pr({ headRefOid: H2 }), comments: [verdict("review", H1, "PASS")] });
   assert.equal(e.review.current, false);
   assert.match(renderEvidence(e).join("\n"), /PASS by claude:r:reviewer on aaaaaaaa \(not this head\)/);
 });
 
 test("unread data is shown as unread, never as fine", () => {
-  const text = renderEvidence(buildEvidence({ pr: pr(), gate: { error: "boom" } })).join("\n");
+  const text = renderEvidence(buildEvidence({ repository: REPO, pr: pr(), gate: { error: "boom" } })).join("\n");
   assert.match(text, /CI checks: unread/);
   assert.match(text, /Gate status: unread/);
   assert.match(text, /Review verdict on this head: unread/);
@@ -79,7 +84,7 @@ test("unread data is shown as unread, never as fine", () => {
 
 test("failing checks are named", () => {
   const rollup = [{ name: "E2E", status: "COMPLETED", conclusion: "FAILURE", workflowName: "1" }, ...ROLLUP];
-  const text = renderEvidence(buildEvidence({ pr: pr(), rollup })).join("\n");
+  const text = renderEvidence(buildEvidence({ repository: REPO, pr: pr(), rollup })).join("\n");
   assert.match(text, /1\/2 not green: E2E=/);
 });
 
@@ -87,6 +92,7 @@ test("output carries no review text and no control characters", () => {
   const secret = "ZZFINDING-text-of-the-review";
   const body = `${BODY}\nPoznate granice: dobro\u001b[31m\u202e skriveno\n`;
   const e = buildEvidence({
+    repository: REPO,
     pr: pr({ body }),
     comments: [verdict("review", H1, "FAIL", secret), verdict("qa", H1, "PASS", secret)],
     rollup: ROLLUP,
@@ -100,19 +106,19 @@ test("output carries no review text and no control characters", () => {
 });
 
 test("names outside the allowed shape are not printed", () => {
-  const e = buildEvidence({ pr: pr({ body: BODY.replace("claude:x:platforma", "evil$(id)") }) });
+  const e = buildEvidence({ repository: REPO, pr: pr({ body: BODY.replace("claude:x:platforma", "evil$(id)") }) });
   assert.equal(e.agent, "<not printed>");
 });
 
 test("a job named __proto__ is kept", () => {
   const rollup = [{ name: "__proto__", status: "COMPLETED", conclusion: "FAILURE", workflowName: "1" }];
-  assert.equal(buildEvidence({ pr: pr(), rollup }).checks.bad[0].name, "__proto__");
+  assert.equal(buildEvidence({ repository: REPO, pr: pr(), rollup }).checks.bad[0].name, "__proto__");
 });
 
 test("a verdict head that is not a SHA is not printed", () => {
   const evil = `${String.fromCharCode(27)}[2J${String.fromCharCode(0x202e)}evil`;
   const stale = { ...verdict("qa", H1, "PASS"), body: `QA-Agent: claude:q:qa\nQA-Head: ${evil}\nQA-Verdict: PASS\n` };
-  const e = buildEvidence({ pr: pr(), comments: [stale] });
+  const e = buildEvidence({ repository: REPO, pr: pr(), comments: [stale] });
   assert.equal(e.qa.head, "<not printed>");
   for (const out of [JSON.stringify(e), renderEvidence(e).join("\n")]) {
     assert.ok(!out.includes("evil"));

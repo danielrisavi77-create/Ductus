@@ -8,7 +8,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import fc from "fast-check";
 
+import { evaluatePullRequest } from "../engineering/review-gate-core.mjs";
 import { ghJson, ghList } from "./gh.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -198,6 +200,32 @@ export function verdictComment(kind, verdict, head = HEAD) {
 }
 // N10: review and QA PASS on the head, the input under which a display tool could say PASS.
 export const PASS_COMMENTS = [verdictComment("review", "PASS"), verdictComment("qa", "PASS")];
+
+// ---------------------------------------------------------------------------
+// fast-check arbitraries over the head and base shapes and the R axis (P1-P4 of B2, P1-P2 of B3).
+export const segment = fc.stringMatching(/^[a-z0-9][a-z0-9-]{0,11}$/);
+const nameArb = fc.oneof(
+  fc.constantFrom(REPO, "Owner1/Repo1", `${REPO} `, ` ${REPO}`, `${REPO}.git`, `${REPO}-fork`, "outsider/repo1", "owner1/renamed1", "", null, 42, {}),
+  fc.tuple(segment, segment).map(([a, b]) => `${a}/${b}`),
+  fc.string({ maxLength: 20 }),
+);
+export const repoShape = fc.oneof(
+  fc.constant("drop"), fc.constant(null), fc.constant({}),
+  fc.record({ full_name: nameArb, fork: fc.boolean() }, { requiredKeys: ["full_name"] }),
+);
+export const withRepo = (part, repo) => (repo === "drop" ? part : { ...part, repo });
+export const headArb = fc.oneof(fc.constant(undefined), repoShape.map((repo) => withRepo({ sha: HEAD, ref: "feature/x" }, repo)));
+export const baseArb = fc.oneof(fc.constant(undefined), repoShape.map((repo) => withRepo({ ref: "main" }, repo)));
+export const repoArb = fc.oneof(
+  fc.constantFrom(R.R1, R.R2, R.R3, R.R4),
+  fc.tuple(segment, segment).map(([o, n]) => ({ owner: { login: o }, name: n })),
+);
+/** Whether the real gate fails `raw` because its head is not in this repository. */
+export const gateOutside = (raw) => /head is not in this repository/i.test(
+  evaluatePullRequest({ pr: { ...raw, changed_files: 1 }, files: [{ filename: "src/domain/example.ts", status: "modified" }], comments: [], ownerLogin: OWNER }).result.description ?? "",
+);
+/** The "owner/name" an R value answers, or null for a failed read. */
+export const repositoryOf = (repo) => (repo.$error ? null : `${repo.owner.login}/${repo.name}`);
 
 /** A work contract valid at `now` that assigns every PR of `numbers` to its writer. */
 export function contractFor(numbers, now = Date.now()) {
