@@ -18,11 +18,6 @@
  */
 export type Language = "hr" | "en";
 
-/** What a dictionary row is matched with: folded text in, whether the row occurs out. */
-export interface Matcher {
-  test(folded: string): boolean;
-}
-
 export interface ForbiddenTerm {
   /** Entry from the dictionary table, as written in PRODUCT.md. */
   readonly entry: string;
@@ -34,8 +29,7 @@ export interface ForbiddenTerm {
    * SQL statement and log line is in English.
    */
   readonly lang: Language;
-  /** A RegExp literal, or a matcher of roots inside tokens (the D-276 rows). Only `test` is called. */
-  readonly pattern: Matcher;
+  readonly pattern: RegExp;
   /**
    * Set when the pattern allows the word in front of certain words
    * ("spremljeno na uređaju"), so whether it matches depends on what follows.
@@ -78,60 +72,6 @@ const AI_ORIGIN = "iz AI pomoćnika (model, vrijeme)";
 const INTACT = "zapis je cjelovit i neizmijenjen od primitka";
 const PASTED = "zalijepljeno (izvor nije opažen)";
 const GAP = "praznina u zapisu";
-
-// The additional English list (D-276, NQ12) is read by root, not by phrase (owner decision of
-// 7. 11. 2026., "Promijeni pristup"). The text arrives folded (`foldText`): lower case, NFKC, no
-// invisible characters, and every hyphen, underscore, slash or other mark between letters made a
-// space; its tokens are what stands between the spaces. A token that contains a root holds it,
-// whatever prefix, suffix or compound is around it, so "reflagged", "uncheatable" and an
-// identifier in camelCase ("trustScored", one token once folded) are caught. A row that needs two
-// roots ("trust" and "score") finds them anywhere in the same reading, whatever words or numbers
-// stand between. The rows fail closed: the switch "feature flag" is the only exception, and a lone
-// "Flag" or "Flagship" is reported. "risk score" and "suspicion score" stay the rows "risk" and
-// "suspicious", so they are reported once. The condition "about the work or the student"
-// cannot be read from a string. A root is also read across the tokens, with the spaces left out,
-// so a mark or a space inside a root ("dis-honest", "fl ag") does not hide it, and a Cyrillic or
-// Greek letter that looks Latin ("flаg" with a Cyrillic "а") is read as that Latin letter
-// (contract confirmation c.6711708837).
-const FEATURE_FLAG = /(?<![\p{L}\p{N}])feature ?flags?(?![\p{L}\p{N}])/gu;
-const SPELLED_AI = /(?<![\p{L}\p{N}])a i(?![\p{L}\p{N}])/gu;
-
-// Cyrillic and Greek letters that look like a Latin one, in lower case and without diacritics.
-const LOOKALIKE: Readonly<Record<string, string>> = {
-  ...Object.fromEntries([..."авеіјкорсѕухһԁԛԝ"].map((char, at) => [char, "abeijkopcsyxhdqw"[at]!])),
-  ...Object.fromEntries([..."αβεικνορτυχ"].map((char, at) => [char, "abeiknoptux"[at]!])),
-};
-
-/** The tokens of a folded text, the switch "feature flag" left out and "a i" read as "ai". */
-function tokensOf(folded: string): string[] {
-  const latin = folded.replace(/[\u0370-\u03FF\u0400-\u052F]/gu, (char) => LOOKALIKE[char] ?? char);
-  return latin.replace(FEATURE_FLAG, " ").replace(SPELLED_AI, "ai").split(/[^\p{L}\p{N}]+/u);
-}
-
-/** Whether a root of `roots` stands in the tokens read together, with nothing between them. */
-const holds = (tokens: readonly string[], roots: readonly string[]) => {
-  const joined = tokens.join("");
-  return roots.some((root) => joined.includes(root));
-};
-
-/** Matches folded text in which a root of every group stands, inside a token or across tokens. */
-function rootsInTokens(...groups: readonly (readonly string[])[]): Matcher {
-  return {
-    test: (folded) => {
-      const tokens = tokensOf(folded);
-      return groups.every((roots) => holds(tokens, roots));
-    },
-  };
-}
-
-/** "AI" is a whole token (inside a word it is "said", "detail"), or run together with the verb ("aiDetected", "AI de-tected"). */
-const AI_DETECTED: Matcher = {
-  test: (folded) => {
-    const tokens = tokensOf(folded);
-    const ai = tokens.some((token) => token === "ai" || token.includes("artificial"));
-    return (ai && holds(tokens, ["detect", "flag"])) || holds(tokens, ["aidetect", "aiflag"]);
-  },
-};
 
 export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   { entry: "sumnjivo", instead: NOTHING, lang: "hr", pattern: /sumnj/u },
@@ -293,11 +233,6 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
       /(?<!\p{L})saved(?!\p{L})(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
     contextual: { word: /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])/u },
   },
-  // The additional English list (D-276, NQ12), read by root inside tokens: see `rootsInTokens`.
-  { entry: "trust score, attention score", instead: "(ništa; nema zbroja ni ocjene)", lang: "en", pattern: rootsInTokens(["trust", "attention"], ["scor"]) },
-  { entry: "cheating, dishonest, misconduct", instead: "(ništa; opis činjenice bez ocjene)", lang: "en", pattern: rootsInTokens(["cheat", "dishonest", "misconduct"]) },
-  { entry: "AI-detected, flagged as AI", instead: "(ništa; podrijetlo teksta ne procjenjuje se, pravilo 13)", lang: "en", pattern: AI_DETECTED },
-  { entry: "flagged, flagged for review", instead: "(ništa; činjenica bez ocjene)", lang: "en", pattern: rootsInTokens(["flag"]) },
 ];
 
 /**
