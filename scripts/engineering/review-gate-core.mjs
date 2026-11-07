@@ -1141,7 +1141,19 @@ export function evaluateMergeAuthorization({
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
 
+// F-010, F-027: the gate judges only a head in this repository.
+const OUTSIDE_HEAD = "PR head is not in this repository; the owner adopts it into a branch here (F-010).";
+
 export function evaluatePullRequest({ pr, files, comments, historyComments, prReviews, quotaReviews, reviewComments, ownerLogin, carriedHeads }) {
+  // A fork, a deleted fork or an unreadable repository name fails closed before
+  // any verdict, override, command or D-189 exemption is read.
+  if (!sameRepositoryHead(pr)) {
+    return {
+      result: { state: "failure", description: OUTSIDE_HEAD },
+      mergeAuthorization: { state: "pending", description: OUTSIDE_HEAD },
+      autoMergeEligible: { state: "pending", description: OUTSIDE_HEAD },
+    };
+  }
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {

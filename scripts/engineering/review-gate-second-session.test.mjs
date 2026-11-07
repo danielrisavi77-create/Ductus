@@ -192,7 +192,7 @@ test("non-critical risk is unaffected by the declaration", () => {
 });
 
 test("evaluatePullRequest passes the review comments through to the gate", () => {
-  const pr = { body: AUTHOR, head: { sha: head }, changed_files: 1 };
+  const pr = { body: AUTHOR, head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1 };
   const files = [{ filename: "scripts/engineering/review-gate-core.mjs", status: "modified", patch: "x" }];
   const run = (reviewComments) =>
     evaluatePullRequest({ pr, files, comments: ok, prReviews: [codexReview()], reviewComments, ownerLogin }).result;
