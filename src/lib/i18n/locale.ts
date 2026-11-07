@@ -5,13 +5,15 @@
  * written in is a separate value of the work (F-06, model in M2); neither is
  * read from the other, and nothing here maps one to the other.
  *
- * Croatian is the default. A catalogue is registered here once it fills every
- * key of the Croatian one (`parity.ts`), and only then can a stored value pick
- * it. Text checks: `scripts/forbidden-terms/` reads every file in this folder.
+ * Croatian is the default; English (`messages.en.ts`) is the second. A
+ * catalogue is registered here once it fills every key of the Croatian one
+ * (`parity.ts`), and only then can a stored value pick it. Text checks:
+ * `scripts/forbidden-terms/` reads every file in this folder.
  */
+import { messagesEn } from "./messages.en";
 import { messagesHr, type Messages } from "./messages.hr";
 
-const CATALOGUES = { hr: messagesHr } as const satisfies Readonly<Record<string, Messages>>;
+const CATALOGUES = { hr: messagesHr, en: messagesEn } as const satisfies Readonly<Record<string, Messages>>;
 
 export type InterfaceLocale = keyof typeof CATALOGUES;
 
