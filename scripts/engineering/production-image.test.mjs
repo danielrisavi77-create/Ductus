@@ -82,6 +82,10 @@ const DOCKERFILE_CASES = [
   ["heredoc in COPY", valid({ copy: "COPY <<-'X' /app/a\nx\nX" }), ["heredoc"]],
   ["ONBUILD", valid({ buildBody: "ONBUILD RUN true" }), ["onbuild"]],
   ["escape parser directive", `# escape=\`\n${valid()}`, ["escape-directive"]],
+  ["syntax parser directive", `# syntax=docker/dockerfile:1\n${valid()}`, ["syntax-directive"]],
+  ["RUN bind mount from an unpinned image", valid({ buildBody: "RUN --mount=type=bind,from=alpine:latest,target=/x true" }), ["unpinned-image"]],
+  ["RUN cache mount from an earlier stage", valid({ copy: "RUN --mount=type=cache,target=/c,from=build true" }), []],
+  ["RUN mount from a pinned image", valid({ buildBody: `RUN --network=none --mount=type=bind,from=${PINNED},target=/x true` }), []],
   ["unknown instruction", valid({ buildBody: "FETCH x" }), ["unknown-instruction"]],
   ["instruction before the first FROM", `WORKDIR /x\n${valid()}`, ["before-from"]],
   ["no FROM at all", "ARG X=1\n", ["no-from"]],
@@ -120,7 +124,7 @@ for (const [name, text, expected] of DOCKERIGNORE_CASES) {
 
 // Case and spacing never change a verdict (input class 13).
 test("Dockerfile verdicts do not depend on instruction case or spacing", () => {
-  const rows = DOCKERFILE_CASES.filter(([name]) => !name.includes("escape"));
+  const rows = DOCKERFILE_CASES.filter(([name]) => !name.includes("directive"));
   fc.assert(
     fc.property(fc.constantFrom(...rows), fc.array(fc.boolean(), { minLength: 40, maxLength: 40 }), fc.integer({ min: 1, max: 4 }), ([, text, expected], cases, spaces) => {
       let index = 0;

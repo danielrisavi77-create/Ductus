@@ -74,7 +74,8 @@ function resolveImage(reference, globalArgs) {
 }
 
 export function checkDockerfile(text) {
-  if (/^\s*#\s*escape\s*=/im.test(text)) return [finding("escape-directive", 1, "parser directive escape")];
+  const directive = text.match(/^\s*#\s*(escape|syntax)\s*=/im);
+  if (directive) return [finding(`${directive[1].toLowerCase()}-directive`, 1, `parser directive ${directive[1]}`)];
   const parsed = instructions(text);
   const heredoc = parsed.find((step) => HEREDOC.test(step.args));
   if (heredoc) return [finding("heredoc", heredoc.line, "heredocs are not checked")];
@@ -120,6 +121,17 @@ export function checkDockerfile(text) {
         break;
       case "USER":
         stage.user = step.args;
+        break;
+      case "RUN":
+        // A bind or cache mount can read from another image: same pin rule as COPY --from.
+        for (const word of step.args.split(/\s+/)) {
+          if (!word.startsWith("--")) break;
+          const mount = word.match(/^--mount=(.*)$/i)?.[1];
+          const from = mount?.split(",").find((option) => /^from=/i.test(option))?.slice(5);
+          if (from !== undefined && !/^\d+$/.test(from) && !stages.some((s) => s.name === from.toLowerCase())) {
+            imageFinding(from, step.line);
+          }
+        }
         break;
       case "ARG":
       case "ENV":
