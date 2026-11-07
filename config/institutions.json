@@ -1,0 +1,8 @@
+{
+  "format": "ductus-institutions-v1",
+  "institutions": [
+    { "slug": "fpzg", "citationStyle": "fpzg" },
+    { "slug": "demo-fakultet", "citationStyle": "fpzg" },
+    { "slug": "demo-fakultet-b", "citationStyle": "fpzg" }
+  ]
+}

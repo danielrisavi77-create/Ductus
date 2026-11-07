@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { formatInText, fpzgCitationStyle, type BookSource } from "@/domain/citation";
+import { formatInText, parseCitationStyle, type BookSource } from "@/domain/citation";
+
+import fpzgConfig from "../../../config/faculties/fpzg/citation.json";
 
 import {
   compareProtectedContent,
@@ -9,9 +11,12 @@ import {
   type ProtectedKind,
 } from "./protected-content";
 
+// The style is required (M2.12-P02); these tests read marks of the FPZG record.
+const fpzgCitationStyle = parseCitationStyle(fpzgConfig);
+
 // All texts are invented; no real person, work or student text.
 function findings(source: string, proposed: string): readonly ProtectedFinding[] {
-  const check = compareProtectedContent(source, proposed);
+  const check = compareProtectedContent(source, proposed, fpzgCitationStyle);
   if (!check.ok) throw new Error(`unexpected ${check.reason}`);
   return check.findings;
 }
@@ -188,14 +193,14 @@ describe("compareProtectedContent", () => {
 
   it("checks texts up to the limit and refuses longer ones", () => {
     const max = "a".repeat(MAX_PROTECTED_TEXT_LENGTH);
-    expect(compareProtectedContent(max, max)).toEqual({ ok: true, findings: [] });
-    expect(compareProtectedContent(`${max}a`, max)).toEqual({ ok: false, reason: "too-long" });
-    expect(compareProtectedContent(max, `${max}a`)).toEqual({ ok: false, reason: "too-long" });
+    expect(compareProtectedContent(max, max, fpzgCitationStyle)).toEqual({ ok: true, findings: [] });
+    expect(compareProtectedContent(`${max}a`, max, fpzgCitationStyle)).toEqual({ ok: false, reason: "too-long" });
+    expect(compareProtectedContent(max, `${max}a`, fpzgCitationStyle)).toEqual({ ok: false, reason: "too-long" });
   });
 
   it("refuses values that are not text", () => {
-    expect(compareProtectedContent(5 as unknown as string, "5")).toEqual({ ok: false, reason: "not-text" });
-    expect(compareProtectedContent("5", null as unknown as string)).toEqual({ ok: false, reason: "not-text" });
+    expect(compareProtectedContent(5 as unknown as string, "5", fpzgCitationStyle)).toEqual({ ok: false, reason: "not-text" });
+    expect(compareProtectedContent("5", null as unknown as string, fpzgCitationStyle)).toEqual({ ok: false, reason: "not-text" });
   });
 
   it("reads a formatInText mark for an organisation with parentheses", () => {
@@ -249,7 +254,7 @@ describe("compareProtectedContent", () => {
     ["long source mark candidates", `(${"Horvat, ".repeat(37)}x)`.repeat(MAX_PROTECTED_TEXT_LENGTH / 300)],
   ])("stays fast on hostile input: %s", (_label, text) => {
     const started = performance.now();
-    const check = compareProtectedContent(text, text);
+    const check = compareProtectedContent(text, text, fpzgCitationStyle);
     expect(check).toEqual({ ok: true, findings: [] });
     expect(performance.now() - started).toBeLessThan(2_000);
   });

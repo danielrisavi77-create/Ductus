@@ -20,9 +20,9 @@ const webServerCommand =
 type LocalJournal = "on" | "off" | "refused";
 
 const LOCAL_JOURNAL_ENV: Record<LocalJournal, Record<string, string>> = {
-  on: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "ci" },
+  on: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "ci", DUCTUS_LOCAL_DEMO_INSTITUTION: "demo-fakultet" },
   off: {},
-  refused: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "production" },
+  refused: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "production", DUCTUS_LOCAL_DEMO_INSTITUTION: "demo-fakultet" },
 };
 
 /**

@@ -6,16 +6,17 @@ import { CITATION_FORM_META } from "@/editor/source";
 import { storableText } from "@/editor/storable-text";
 
 import {
-  formatBibliographyEntry, formatInText, fpzgCitationStyle,
-  type ArticleSource, type BookSource, type Person,
+  formatBibliographyEntry, formatInText,
+  type ArticleSource, type BookSource, type CitationStyle, type Person,
 } from "@/domain/citation";
 
 /**
  * DAN-343: citations and the bibliography from the "Literatura" tab. The
  * text is plain text in the document (no new node or mark, D-98 addition),
- * and only `formatInText` / `formatBibliographyEntry` with the FPZG style
- * write it. Inserting goes through editor commands, like a toolbar button,
- * and nothing is written while the editor may not be written in.
+ * and only `formatInText` / `formatBibliographyEntry` write it, with the
+ * style of the institution the page resolved (M2.12-P02; no default style).
+ * Inserting goes through editor commands, like a toolbar button, and nothing
+ * is written while the editor may not be written in.
  */
 
 export type SourceKind = "book" | "article";
@@ -142,13 +143,13 @@ export function formErrors(check: SourceCheck, page: string, tried: boolean): Fo
 }
 
 /** The in-text citation, with the page only when one is given. */
-export function citationText(source: BookSource | ArticleSource, page: string): string {
+export function citationText(source: BookSource | ArticleSource, page: string, style: CitationStyle): string {
   const trimmed = page.trim();
-  return formatInText(source, fpzgCitationStyle, trimmed === "" ? undefined : trimmed);
+  return formatInText(source, style, trimmed === "" ? undefined : trimmed);
 }
 
-export function entryText(source: BookSource | ArticleSource): string {
-  return formatBibliographyEntry(source, fpzgCitationStyle);
+export function entryText(source: BookSource | ArticleSource, style: CitationStyle): string {
+  return formatBibliographyEntry(source, style);
 }
 
 export type Block = { type: string; text: string };
