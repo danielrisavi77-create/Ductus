@@ -31,10 +31,11 @@ async function shoot(page: Page, name: string): Promise<void> {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
-    expect(axe.violations).toEqual([]);
     for (const width of [1440, 400]) {
       await page.setViewportSize({ width, height: 900 });
+      // axe at each width: the 400 px layout is its own page for contrast and reflow.
+      const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+      expect(axe.violations).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await test.info().attach(`${name}-${theme}-${width}`, {
         body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png",
