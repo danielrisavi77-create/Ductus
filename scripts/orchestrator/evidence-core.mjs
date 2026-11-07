@@ -3,7 +3,7 @@
 // Review and QA verdicts are shown as agent, head and PASS/FAIL only, never their text, so the
 // output is safe to hand to a QA session (QA must not have seen review findings).
 import { field } from "../engineering/metadata-parser.mjs";
-import { evaluateChecks, latestVerdict, parseAgentRisk } from "./orchestrator-core.mjs";
+import { evaluateChecks, latestVerdict, parseAgentRisk, verdictInputs } from "./orchestrator-core.mjs";
 import { contractText } from "./preflight-core.mjs";
 
 const SHA_RE = /^[0-9a-f]{40}$/i;
@@ -41,9 +41,9 @@ function prose(value) {
 
 const shown = (s) => (SAFE_NAME.test(String(s ?? "")) ? String(s) : "<not printed>");
 
-function verdictOf(comments, kind, head, authorAgent) {
-  if (!comments) return null;
-  const v = latestVerdict(comments, kind, head, { authorAgent });
+function verdictOf(inputs, kind, head, options) {
+  if (!inputs) return null;
+  const v = latestVerdict(inputs.comments, kind, head, { ...inputs, ...options });
   if (!v) return { verdict: "none" };
   return { verdict: v.verdict, head: SHA_RE.test(String(v.head ?? "")) ? String(v.head).slice(0, 8).toLowerCase() : "<not printed>", agent: shown(v.agent), current: v.current };
 }
@@ -60,13 +60,16 @@ function gateOf(gate) {
 }
 
 /**
- * Evidence for one PR. `pr` is toPr() shaped; `comments`, `rollup` and `gate` are what gh.mjs
- * returns for its head, or undefined when they could not be read (shown as unread, never as ok).
+ * Evidence for one PR. `pr` is toPr() shaped; `comments`, `events`, `reviews`, `reviewComments`,
+ * `rollup` and `gate` are what gh.mjs returns, or undefined when they could not be read (shown as
+ * unread, never as ok). Verdicts are read as the gate reads them (F-015, verdictInputs).
  */
-export function buildEvidence({ pr, comments, rollup, gate }) {
+export function buildEvidence({ pr, comments, events, reviews, reviewComments, rollup, gate }) {
   const head = String(pr?.headRefOid ?? "");
   if (!SHA_RE.test(head)) throw new Error("PR head is not a 40-character SHA");
   const { agent, risk } = parseAgentRisk(pr.body);
+  const inputs = verdictInputs({ comments, events, reviews, reviewComments });
+  const verdictOptions = { authorAgent: field(pr.body, "Agent") ?? null, authorLogin: pr.author?.login ?? null };
   const lines = (labels) =>
     labels.map((label) => {
       const text = contractText(pr.body, label);
@@ -84,8 +87,8 @@ export function buildEvidence({ pr, comments, rollup, gate }) {
     open: lines(OPEN_LABELS),
     checks: checksOf(rollup),
     gate: gateOf(gate),
-    review: verdictOf(comments, "review", head, field(pr.body, "Agent") ?? null),
-    qa: verdictOf(comments, "qa", head, field(pr.body, "Agent") ?? null),
+    review: verdictOf(inputs, "review", head, verdictOptions),
+    qa: verdictOf(inputs, "qa", head, verdictOptions),
   };
 }
 

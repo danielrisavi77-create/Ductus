@@ -55,9 +55,17 @@ test("plan ids are found in Task or title, with letter suffix, not in Linear ids
   assert.deepEqual(demoTasksOf([], ids), []);
 });
 
+// F-015 (cxcr1657): a critical QA PASS counts only on a gate path, so the
+// review comes from another App (owner CLI) than the Claude QA.
+const cliReview = (head, verdict, at) => {
+  const rest = review(head, verdict, at, "codex:x:reviewer");
+  delete rest.performed_via_github_app;
+  return { ...rest, body: `${rest.body}Review-Channel: codex-cli\n` };
+};
+
 test("prMetrics: a round is one distinct head per kind; gate rules decide its outcome", () => {
   const comments = [
-    review(SHA("a"), "PASS", "2026-10-01T10:00:00Z"),
+    cliReview(SHA("a"), "PASS", "2026-10-01T10:00:00Z"),
     qa(SHA("a"), "PASS", "2026-10-01T11:00:00Z"),
     qa(SHA("a"), "PASS", "2026-10-01T11:30:00Z"), // repeat on the same head
     qa(SHA("a"), "FAIL", "2026-10-01T11:40:00Z", "claude:y:qa"), // other identity, same head: FAIL wins
@@ -70,6 +78,14 @@ test("prMetrics: a round is one distinct head per kind; gate rules decide its ou
     number: 7, risk: "critical", task: "DAN-1", demoTasks: [{ id: "B-7", part: "1/2" }], leadHours: 36,
     reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2,
   });
+});
+
+test("F-015: a QA PASS of the reviewer's principal on the reviewer's App is no QA pass", () => {
+  const comments = [review(SHA("b"), "PASS", "2026-10-01T10:00:00Z"), qa(SHA("b"), "PASS", "2026-10-01T11:00:00Z")];
+  const m = prMetrics(merged(), comments, new Set());
+  assert.equal(m.reviewPass, 1);
+  assert.equal(m.qaPass, 0);
+  assert.equal(m.qaRounds, 0);
 });
 
 test("two verdicts on the same head are one round", () => {

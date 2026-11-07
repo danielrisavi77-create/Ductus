@@ -41,6 +41,10 @@ export async function ghList(path, exec = sh, { key } = {}) {
 }
 
 export const prComments = (n) => ghList(`repos/{owner}/{repo}/issues/${n}/comments?per_page=100`);
+// F-015: the other reads of review-gate.mjs, for verdictInputs.
+export const prEvents = (n) => ghList(`repos/{owner}/{repo}/issues/${n}/events?per_page=100`);
+export const prReviews = (n) => ghList(`repos/{owner}/{repo}/pulls/${n}/reviews?per_page=100`);
+export const prReviewComments = (n) => ghList(`repos/{owner}/{repo}/pulls/${n}/comments?per_page=100`);
 
 const FILES_CAP = 3000; // GitHub lists at most 3000 files of a pull request
 

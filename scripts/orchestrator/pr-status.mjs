@@ -1,8 +1,10 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
 import { field } from "../engineering/metadata-parser.mjs";
-import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
 import {
-  evaluateChecks, externalReason, formatStatusRow, formatVerdict, displayAgentRisk, latestVerdict, overlapPairs, overlapsOf,
+  checkRollup, openPrsWithPaths, prComments, prEvents, prReviewComments, prReviews, readGate, repoId,
+} from "./gh.mjs";
+import {
+  evaluateChecks, externalReason, formatStatusRow, formatVerdict, displayAgentRisk, latestVerdict, overlapPairs, overlapsOf, verdictInputs,
 } from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
@@ -14,16 +16,23 @@ function formatChecks({ total, bad }) {
 }
 
 async function row(pr, origin) {
-  const [gate, comments, rollup] = await Promise.all([
+  const unread = () => undefined;
+  const [gate, comments, events, reviews, reviewComments, rollup] = await Promise.all([
     readGate(pr.headRefOid).then((g) => (g?.error ? undefined : g)),
-    prComments(pr.number).catch(() => undefined),
-    checkRollup(pr.headRefOid).catch(() => undefined),
+    prComments(pr.number).catch(unread),
+    prEvents(pr.number).catch(unread),
+    prReviews(pr.number).catch(unread),
+    prReviewComments(pr.number).catch(unread),
+    checkRollup(pr.headRefOid).catch(unread),
   ]);
+  // F-015: the gate's inputs and base-change cutoff; null (unread) shows "?".
+  const inputs = verdictInputs({ comments, events, reviews, reviewComments });
   // F-015: Agent and Risk only in the shape the gate accepts.
   const { agent, risk } = displayAgentRisk(pr.body);
   const authorAgent = field(pr.body, "Agent") ?? null;
-  const review = comments ? latestVerdict(comments, "review", pr.headRefOid, { authorAgent }) : undefined;
-  const qa = comments ? latestVerdict(comments, "qa", pr.headRefOid, { authorAgent }) : undefined;
+  const options = { ...inputs, authorAgent, authorLogin: pr.author?.login ?? null };
+  const review = inputs ? latestVerdict(inputs.comments, "review", pr.headRefOid, options) : undefined;
+  const qa = inputs ? latestVerdict(inputs.comments, "qa", pr.headRefOid, options) : undefined;
   return {
     number: pr.number,
     head: pr.headRefOid.slice(0, 8),
@@ -35,8 +44,8 @@ async function row(pr, origin) {
     risk,
     ci: rollup ? formatChecks(evaluateChecks(rollup)) : "?",
     gate: gate === undefined ? "?" : gate ? `${gate.state}: ${(gate.description ?? "").slice(0, 60)}` : "none",
-    review: comments ? formatVerdict(review) : "?",
-    qa: comments ? formatVerdict(qa) : "?",
+    review: inputs ? formatVerdict(review) : "?",
+    qa: inputs ? formatVerdict(qa) : "?",
   };
 }
 

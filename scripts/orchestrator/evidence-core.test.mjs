@@ -45,16 +45,24 @@ test("a head that is not a SHA is refused", () => {
   assert.throws(() => buildEvidence({ pr: pr({ headRefOid: "main" }) }), /SHA/);
 });
 
+// F-015: a critical QA PASS counts only on a gate path, so the review here comes
+// from the owner's Codex CLI and the QA from the Claude App.
+const cliReview = (head, v) => {
+  const rest = verdict("review", head, v);
+  delete rest.performed_via_github_app;
+  return { ...rest, body: rest.body.replace("claude:r:reviewer", "codex:r:reviewer").replace("\n\n", "\nReview-Channel: codex-cli\n\n") };
+};
+
 test("facts of a PR with a current review and QA", () => {
   const e = buildEvidence({
     pr: pr(),
-    comments: [verdict("review", H1, "PASS"), verdict("qa", H1, "PASS")],
+    events: [], comments: [cliReview(H1, "PASS"), verdict("qa", H1, "PASS")],
     rollup: ROLLUP,
     gate: { state: "success", description: "Carried from 630f1db" },
   });
   assert.equal(e.risk, "critical");
   assert.equal(e.task, "DAN-1");
-  assert.deepEqual(e.review, { verdict: "PASS", head: "aaaaaaaa", agent: "claude:r:reviewer", current: true });
+  assert.deepEqual(e.review, { verdict: "PASS", head: "aaaaaaaa", agent: "codex:r:reviewer", current: true });
   assert.equal(e.qa.verdict, "PASS");
   assert.deepEqual(e.checks, { total: 1, bad: [] });
   assert.equal(e.gate.description, "Carried from 630f1db");
@@ -64,7 +72,7 @@ test("facts of a PR with a current review and QA", () => {
 });
 
 test("a verdict for an older head is marked as not this head", () => {
-  const e = buildEvidence({ pr: pr({ headRefOid: H2 }), comments: [verdict("review", H1, "PASS")] });
+  const e = buildEvidence({ pr: pr({ headRefOid: H2 }), events: [], comments: [verdict("review", H1, "PASS")] });
   assert.equal(e.review.current, false);
   assert.match(renderEvidence(e).join("\n"), /PASS by claude:r:reviewer on aaaaaaaa \(not this head\)/);
 });
@@ -88,7 +96,7 @@ test("output carries no review text and no control characters", () => {
   const body = `${BODY}\nPoznate granice: dobro\u001b[31m\u202e skriveno\n`;
   const e = buildEvidence({
     pr: pr({ body }),
-    comments: [verdict("review", H1, "FAIL", secret), verdict("qa", H1, "PASS", secret)],
+    events: [], comments: [verdict("review", H1, "FAIL", secret), verdict("qa", H1, "PASS", secret)],
     rollup: ROLLUP,
     gate: { state: "failure", description: `Needs\nreview${"x".repeat(500)}` },
   });
@@ -114,9 +122,9 @@ test("a job named __proto__ is kept", () => {
 test("a verdict head that is not a SHA is not printed", () => {
   const evil = `${String.fromCharCode(27)}[2J${String.fromCharCode(0x202e)}evil`;
   const on = (v) => ({ ...verdict("qa", H1, v), body: `QA-Agent: claude:q:qa\nQA-Head: ${evil}\nQA-Verdict: ${v}\nQA-Scope: synthetic\n` });
-  const pass = buildEvidence({ pr: pr(), comments: [on("PASS")] });
+  const pass = buildEvidence({ pr: pr(), events: [], comments: [on("PASS")] });
   assert.deepEqual(pass.qa, { verdict: "none" });
-  const fail = buildEvidence({ pr: pr(), comments: [on("FAIL")] });
+  const fail = buildEvidence({ pr: pr(), events: [], comments: [on("FAIL")] });
   assert.deepEqual(fail.qa, { verdict: "FAIL", head: "aaaaaaaa", agent: "claude:q:qa", current: true });
   for (const e of [pass, fail]) {
     for (const out of [JSON.stringify(e), renderEvidence(e).join("\n")]) {
@@ -124,4 +132,21 @@ test("a verdict head that is not a SHA is not printed", () => {
       assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e]/.test(out));
     }
   }
+});
+
+// F-015 (cxcr1657): the pack shows what the gate counts.
+test("a QA PASS of the reviewer's principal on the same App is not shown as PASS", () => {
+  const same = { ...verdict("qa", H1, "PASS"), body: verdict("qa", H1, "PASS").body.replace("claude:q:qa", "claude:r:qa") };
+  const e = buildEvidence({ pr: pr(), events: [], comments: [verdict("review", H1, "PASS"), same] });
+  assert.equal(e.review.verdict, "PASS");
+  assert.deepEqual(e.qa, { verdict: "none" });
+});
+
+test("verdicts before the last base change are not shown; unread events are unread", () => {
+  const events = [{ event: "base_ref_changed", created_at: "2026-10-24T11:00:00Z" }];
+  const comments = [cliReview(H1, "PASS"), verdict("qa", H1, "PASS")];
+  const after = buildEvidence({ pr: pr(), events, comments });
+  assert.deepEqual([after.review, after.qa], [{ verdict: "none" }, { verdict: "none" }]);
+  const unread = buildEvidence({ pr: pr(), comments });
+  assert.deepEqual([unread.review, unread.qa], [null, null]);
 });

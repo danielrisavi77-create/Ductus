@@ -1,7 +1,7 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
 import {
-  commentTime, headNegatives, headVerdicts, isDeclaredAgent, isDeclaredRisk, trustedAuthor,
+  commentTime, headNegatives, headVerdicts, isDeclaredAgent, isDeclaredRisk, lastBaseChange, sinceBaseChange, trustedAuthor,
 } from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, isD97Path, matchesPath, normalizePath,
@@ -146,10 +146,12 @@ export function countCanonical(comments) {
  * EDITED (F-012). `authorAgent` is the body's Agent; a PASS of the author's
  * principal does not count. Without any, the newest verdict comment naming
  * another full head is read the same way on that head and marked stale.
+ * Other options (verdictInputs, `authorLogin`) go to `headVerdicts` for the
+ * critical QA paths.
  */
-export function latestVerdict(comments, kind, headSha, { authorAgent } = {}) {
+export function latestVerdict(comments, kind, headSha, options = {}) {
   const on = (head) => {
-    const counted = headVerdicts(comments, kind, head, { authorAgent });
+    const counted = headVerdicts(comments, kind, head, options);
     const pick = headNegatives(comments, kind, head).at(-1)
       ?? counted.find((v) => v.verdict === "FAIL" || v.verdict === "BLOCK")
       ?? counted.find((v) => v.verdict === "PASS")
@@ -163,6 +165,27 @@ export function latestVerdict(comments, kind, headSha, { authorAgent } = {}) {
     .at(-1);
   const stale = other ? on(other.head) : null;
   return stale ? { ...stale, current: false } : null;
+}
+
+/**
+ * F-015: what the gate's runner reads (review-gate.mjs), from the PR's issue
+ * comments, issue events, PR reviews and review comments as gh.mjs returns
+ * them. Verdicts count only after the last base change; unread comments or
+ * events, or a base change without a readable time, give null (shown as
+ * unread, never as a PASS). Unread reviews or review comments stay undefined
+ * and close the critical QA paths that need them.
+ */
+export function verdictInputs({ comments, events, reviews, reviewComments }) {
+  if (!Array.isArray(comments)) return null;
+  const cutoff = lastBaseChange(events);
+  if (cutoff === Infinity) return null;
+  return {
+    comments: sinceBaseChange(comments, cutoff, "created_at", { codexEdits: true }),
+    historyComments: comments,
+    prReviews: Array.isArray(reviews) ? sinceBaseChange(reviews, cutoff, "submitted_at") : undefined,
+    quotaReviews: Array.isArray(reviews) ? reviews : undefined,
+    reviewComments: Array.isArray(reviewComments) ? reviewComments : undefined,
+  };
 }
 
 export function formatVerdict(v) {

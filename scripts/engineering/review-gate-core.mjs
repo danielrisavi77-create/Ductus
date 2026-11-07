@@ -512,6 +512,53 @@ function currentNegative(verdicts) {
   return null;
 }
 
+// F-015: the paths on which a critical PR counts a QA PASS, shared by the gate
+// and headVerdicts. `reviews` are the review PASSes that exclude a QA (the gate
+// passes its passing reviews; headVerdicts a superset), `pairReviews` those a
+// Codex pair may use. Paths in the gate's order; null when none holds.
+function criticalQaContext({ reviews, pairReviews = reviews, comments, prReviews, evidence, everReviewers, threadsAnswered }) {
+  return {
+    apps: new Set(reviews.map((review) => review.identity.appSlug)),
+    principals: new Set(reviews.map((review) => review.identity.principal)),
+    codexReview: pairReviews.find((review) => review.identity.appSlug === CODEX_APP_SLUG) ?? null,
+    codexOn: (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha),
+    evidence,
+    everReviewers,
+    threadsAnswered,
+  };
+}
+
+function criticalQaPath(result, ctx, headSha) {
+  const { appSlug, principal } = result.identity;
+  if (!ctx.apps.has(appSlug)) return "separate";
+  if (ctx.principals.has(principal)) return null;
+  // Quota fallback: while another registered App proves on this PR that its
+  // quota is exhausted, QA may come from the reviewer's App.
+  if (
+    result.fallback &&
+    result.fallback !== appSlug &&
+    ctx.evidence.some(
+      (item) =>
+        item.appSlug === result.fallback &&
+        item.createdAt <= result.order[0] &&
+        result.order[0] - item.createdAt <= QUOTA_FALLBACK_WINDOW_MS,
+    )
+  ) return "fallback";
+  // D-139: second Claude session. The declaration names the head the QA
+  // tested, a Codex review is on that head or the current one, the session
+  // never reviewed this PR and every Codex thread is answered.
+  if (
+    appSlug === "claude" &&
+    !ctx.everReviewers.has(principal) &&
+    sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], result.head) &&
+    (ctx.codexOn(result.head) || ctx.codexOn(headSha)) &&
+    ctx.threadsAnswered
+  ) return "secondSession";
+  // D-161: the Codex pair.
+  if (appSlug === CODEX_APP_SLUG && ctx.codexReview) return "codexPair";
+  return null;
+}
+
 // The canonical fields of each verdict kind, for headVerdicts and headNegatives
 // (the same fields the gate passes to latestVerdicts).
 export const VERDICT_KINDS = Object.freeze({
@@ -529,16 +576,45 @@ export const VERDICT_KINDS = Object.freeze({
  * With `authorAgent` (the body's Agent), a PASS of the author's principal is
  * dropped, and with an invalid Agent every PASS, since the gate counts neither.
  * Carried heads (D-101) are not known here, so only `headSha` counts.
+ * A QA PASS counts only on a critical QA path of the gate (criticalQaPath),
+ * excluded by every non-negative, unedited review PASS on any head, a superset
+ * of the reviews the gate counts. The rest is what the gate's runner passes
+ * (`historyComments`, `prReviews`, `quotaReviews`, `reviewComments`,
+ * `authorLogin`); an input that was not read closes the paths that need it.
  */
-export function headVerdicts(comments, kind, headSha, { authorAgent } = {}) {
+export function headVerdicts(comments, kind, headSha, {
+  authorAgent, authorLogin = null, historyComments = null, prReviews, quotaReviews, reviewComments,
+} = {}) {
   const spec = VERDICT_KINDS[kind];
   if (!spec || !SHA_RE.test(headSha ?? "")) return [];
   const ownerOf = (item) => (item?.author_association === "OWNER" ? item?.user?.login ?? null : null);
   const entries = trustedComments(comments, TRUSTED_VERDICT_LOGINS, ownerOf);
   const author = authorAgent === undefined ? undefined : declaredPrincipal(authorAgent);
+  const notAuthor = (principal) => author === undefined || (author && principal !== author);
+  let qaPath = () => true;
+  if (kind === "qa") {
+    const reviews = entries
+      .filter((entry) => canonicalBlock(entry.body, "Agent-Review") && !entry.edited && !negativeWord(entry.body, "Review-Verdict")
+        && field(entry.body, "Review-Verdict")?.toUpperCase() === "PASS" && isAgent(field(entry.body, "Agent-Review"), "reviewer"))
+      .map((entry) => ({ identity: verifiedCommentIdentity(entry, field(entry.body, "Agent-Review")) }))
+      .filter(({ identity }) => identity?.principal && notAuthor(identity.principal));
+    const pairReviews = [...latestVerdicts(entries, { ...VERDICT_KINDS.review, headSha, carriedHeads: new Set() }).values()]
+      .filter((result) => result.current && result.verdict === "PASS" && author && result.identity.principal !== author);
+    const readReviews = Array.isArray(quotaReviews) ? quotaReviews : Array.isArray(prReviews) ? prReviews : null;
+    const ctx = criticalQaContext({
+      reviews,
+      pairReviews,
+      comments,
+      prReviews: prReviews ?? [],
+      evidence: readReviews ? quotaEvidence(comments, readReviews, historyComments ?? comments) : [],
+      everReviewers: reviewerPrincipals(historyComments ? trustedComments(historyComments, TRUSTED_VERDICT_LOGINS, ownerOf) : entries),
+      threadsAnswered: codexThreadsAnswered(reviewComments, authorLogin),
+    });
+    qaPath = (result) => criticalQaPath(result, ctx, headSha) !== null;
+  }
   return [...latestVerdicts(entries, { ...spec, headSha, carriedHeads: new Set() }).values()]
     .filter((result) => result.current)
-    .filter((result) => result.verdict !== "PASS" || author === undefined || (author && result.identity.principal !== author))
+    .filter((result) => result.verdict !== "PASS" || (notAuthor(result.identity.principal) && qaPath(result)))
     .map(({ agent, head, verdict, identity, order }) => ({ agent, head, verdict, principal: identity.principal, order }));
 }
 
@@ -741,31 +817,20 @@ function evaluateGateCore({
   }
 
   if (risk === "critical") {
-    const separateAppPass = qaPasses.some(
-      (result) => !passingReviewerApps.has(result.identity.appSlug),
-    );
-
-    // Quota fallback: while another registered App proves on this PR that its
-    // quota is exhausted, QA may come from the reviewer's App, but only from a
-    // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments, quotaReviews ?? prReviews, historyComments ?? comments);
-    const passingReviewerPrincipals = new Set(
-      passingReviews.map((review) => review.identity.principal),
-    );
-    const fallbackPass = separateAppPass
-      ? null
-      : qaPasses.find(
-          (result) =>
-            result.fallback &&
-            result.fallback !== result.identity.appSlug &&
-            !passingReviewerPrincipals.has(result.identity.principal) &&
-            evidence.some(
-              (item) =>
-                item.appSlug === result.fallback &&
-                item.createdAt <= result.order[0] &&
-                result.order[0] - item.createdAt <= QUOTA_FALLBACK_WINDOW_MS,
-            ),
-        );
+    // F-013: quota evidence counts after the last base change, voided by the
+    // full history; D-139 reads every reviewer of the PR from the history.
+    const ctx = criticalQaContext({
+      reviews: passingReviews,
+      comments,
+      prReviews,
+      evidence: quotaEvidence(comments, quotaReviews ?? prReviews, historyComments ?? comments),
+      everReviewers: reviewerPrincipals(historyComments ? trustedComments(historyComments, trustedLogins, ownerLogin) : trusted),
+      threadsAnswered: codexThreadsAnswered(reviewComments, authorLogin),
+    });
+    const paths = qaPasses.map((result) => ({ result, path: criticalQaPath(result, ctx, headSha) }));
+    const by = (path) => paths.find((entry) => entry.path === path)?.result ?? null;
+    const separateAppPass = by("separate") !== null;
+    const fallbackPass = separateAppPass ? null : by("fallback");
 
     if (fallbackPass) {
       return {
@@ -774,25 +839,11 @@ function evaluateGateCore({
       };
     }
 
-    // D-139: second Claude session. Needs its own slot (not author, not a
-    // passing reviewer), the declaration naming the head the QA tested, a
-    // Codex review on that head or the current one and every Codex thread
-    // answered. The QA head is the current head or one carried through clean
-    // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
-    // does not void it.
-    const everReviewers = reviewerPrincipals(historyComments ? trustedComments(historyComments, trustedLogins, ownerLogin) : trusted);
-    const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
-    const secondSession = separateAppPass || fallbackPass
-      ? null
-      : qaPasses.find(
-          (result) =>
-            result.identity.appSlug === "claude" &&
-            !passingReviewerPrincipals.has(result.identity.principal) &&
-            !everReviewers.has(result.identity.principal) &&
-            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], result.head) &&
-            (codexOn(result.head) || codexOn(headSha)),
-        );
-    if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
+    // The QA head is the current head or one carried through clean base
+    // merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge does
+    // not void it.
+    const secondSession = separateAppPass ? null : by("secondSession");
+    if (secondSession) {
       return {
         state: "success",
         description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, secondSession], headSha)}`,
@@ -805,14 +856,8 @@ function evaluateGateCore({
       // merges with an identical PR diff. PASS filtering and negative
       // dominance above still apply. Declared slots are not cryptographic
       // proof of independent sessions.
-      const codexReview = passingReviews.find(
-        (review) => review.identity.appSlug === "chatgpt-codex-connector",
-      );
-      const codexQa = qaPasses.find(
-        (result) =>
-          result.identity.appSlug === "chatgpt-codex-connector" &&
-          !passingReviewerPrincipals.has(result.identity.principal),
-      );
+      const codexReview = ctx.codexReview;
+      const codexQa = by("codexPair");
       if (codexReview && codexQa) {
         const note = carriedNote([codexReview, codexQa], headSha);
         return {
