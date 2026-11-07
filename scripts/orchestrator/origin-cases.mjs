@@ -29,7 +29,8 @@ export const AUTHORS = {
   S3u: { login: "mergify[bot]", type: "User" },
 };
 
-// Head and base shapes per class; `undefined` drops that part of the REST object.
+// Head and base shapes per class; `undefined` drops that part of the REST object,
+// and `null` (O6) makes the whole REST pull object `null`.
 const headWith = (repo) => ({ head: { sha: HEAD, ref: "feature/x", repo } });
 export const OUTSIDE = {
   O1: headWith({ full_name: "outsider/repo1-fork", fork: true }),
@@ -37,6 +38,7 @@ export const OUTSIDE = {
   O3: headWith(null),
   O4: { head: { sha: HEAD, ref: "feature/x" } },
   O5: { head: undefined },
+  O6: null,
   O7n: headWith({ full_name: 42 }),
   O7o: headWith({ full_name: { toString: () => REPO } }),
   O8: headWith({ full_name: "Owner1/Repo1" }),
@@ -66,6 +68,7 @@ export const R = {
 
 /** Raw REST pull object for class `cls` (S1..S3u or O*), with `over` merged last. */
 export function rawPull(cls, over = {}) {
+  if (OUTSIDE[cls] === null) return null;
   const base = {
     number: NUMBER, title: "fix: example", body: "Agent: claude:w1:platforma\nRisk: standard\nTask: DAN-1\n",
     state: "open", draft: false, merged_at: null, mergeable: true, mergeable_state: "clean",
@@ -138,7 +141,9 @@ export function routesFor({ pulls, scenario = {}, repo = R.R1 }) {
     }];
     if (real) routes[`repos/${real}/compare/${sha}...main`] = [{ files: [] }];
   }
-  routes["repos/{owner}/{repo}/pulls?state=open&per_page=100&page=1"] = [pulls.map((p) => p.listed ?? p.raw)];
+  // O6: the list still shows the PR by number; only the read of that PR answers `null`.
+  const listed = (p) => p.listed ?? (p.raw === null ? rawPull("S1", { number: p.n }) : p.raw);
+  routes["repos/{owner}/{repo}/pulls?state=open&per_page=100&page=1"] = [pulls.map(listed)];
   return routes;
 }
 

@@ -393,6 +393,32 @@ test("C4: a 502 repeated by withRetry, then a shape without head.repo: UNREAD", 
   assert.equal(r3.exit, 2);
 });
 
+test("O6: the REST pull object is null: T1 stops at the state, T2 and T3 UNREAD on origin, T3 keeps the number", async () => {
+  const jobs = Object.entries(SCENARIOS).map(([name, sc]) => async () => {
+    const routes = single("O6", sc);
+    const all = routesFor({ pulls: allPulls(["O6"], sc), scenario: sc });
+    return { name, routes, all, r1: await t1(routes), r2: await t2(routes), r3: await t3(all) };
+  });
+  for (const { name, routes, all, r1, r2, r3 } of await pool(jobs)) {
+    // pr-ready reads the PR as not open and stops there; it neither passes nor crashes.
+    assert.equal(r1.exit, 2, `t1 ${name}`);
+    assert.deepEqual(r1.lines, [], `t1 ${name}`);
+    assert.deepEqual(r1.stderr, [`PR #${NUMBER} is `], `t1 ${name}`);
+    // merge-ready <n>: UNREAD on the origin row, never READY, WAITS_OWNER or WAITING.
+    assert.equal(stateOf(r2), "UNREAD", `t2 ${name}: ${r2.lines} ${r2.stderr}`);
+    assert.equal(r2.exit, EXIT_CODES.UNREAD, `t2 ${name}`);
+    assert.equal(r2.lines.length, 3, `t2 ${name}: ${r2.lines}`);
+    assert.match(r2.lines[1], /^UNREAD .*\(F-010\)$/, `t2 ${name}`);
+    // merge-ready --all: the row keeps the listed number and is UNREAD for origin, not a crash text.
+    assert.deepEqual(rowStates(r3), { [NUMBER]: "UNREAD" }, `t3 ${name}: ${r3.lines}`);
+    assert.ok(r3.lines.some((l) => /\(F-010\)/.test(l)), `t3 ${name}: ${r3.lines}`);
+    assert.equal(r3.exit, 2, `t3 ${name}`);
+    assert.deepEqual(await mirrorT1(routes), r1, `mirror t1 ${name}`);
+    assert.deepEqual(await mirrorT2(routes), r2, `mirror t2 ${name}`);
+    assert.deepEqual(await mirrorT3(all), r3, `mirror t3 ${name}`);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Properties P1-P4, 500 runs each; fast-check prints the seed and path on a failure.
 const RUNS = { numRuns: 500 };
@@ -477,7 +503,9 @@ test("P3: S inputs with any valid repository name under its own repoId equal the
 });
 
 test("P4: changing only head.repo of an S input never raises any tool's outcome", async () => {
-  const arb = fc.record({ cls: clsArb, sc: scArb, repo: repoShape, o: fc.constantFrom(...Object.keys(OUTSIDE)), useO: fc.boolean() });
+  // O6 replaces the whole REST object, not head.repo; the O6 test above covers it.
+  const heads = Object.keys(OUTSIDE).filter((k) => OUTSIDE[k] !== null);
+  const arb = fc.record({ cls: clsArb, sc: scArb, repo: repoShape, o: fc.constantFrom(...heads), useO: fc.boolean() });
   await fc.assert(fc.asyncProperty(arb, async ({ cls, sc, repo, o, useO }) => {
     const scenario = SCENARIOS[sc];
     const before = rawPull(cls, scenario.pull);
