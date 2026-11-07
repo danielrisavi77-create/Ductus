@@ -255,13 +255,15 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     lang: "en",
     pattern: /(?<![\p{L}\p{N}])(?:(?:ai|a i) detect|(?:detect\p{L}*|flag(?:s|ged|ging)?) (?:as |by )?(?:ai|a i|artificial)(?![\p{L}\p{N}]))/u,
   },
-  // Every form of the verb, and the noun where it marks a student or a work ("Flag this student", "red flag").
+  // Every form of the verb, with or without a prefix ("reflagged", "unflag"), and the noun where it marks a
+  // student or a work ("Flag this student", "Flag selected submission", "red flag"). Up to three words may
+  // stand between the verb and the work; "Feature flags" and a lone "flag" stay allowed.
   {
     entry: "flagged, flagged for review",
     instead: "(ništa; činjenica bez ocjene)",
     lang: "en",
     pattern:
-      /(?<![\p{L}\p{N}])(?:(?:un)?flagg(?:ed|ing)|red flags?|flags? (?:for|as|(?:(?:this|the|a|an|these|that|those) )?(?:student|work|submission|thesis|paper|text|document)s?))(?![\p{L}\p{N}])/u,
+      /(?<![\p{L}\p{N}])(?:\p{L}*flagg(?:ed|ing)|\p{L}+flags?|red flags?|flags? (?:for|as|(?:\p{L}+ ){0,3}(?:student|work|submission|thesis|paper|text|document)s?))(?![\p{L}\p{N}])/u,
   },
 ];
 

@@ -49,6 +49,17 @@ describe("additional English list (D-276)", () => {
     ["Flags for the work", FLAGGED],
     ["Red flag", FLAGGED],
     ["Red flags in the text", FLAGGED],
+    // Review and QA on 8c4bb3b8: a prefix on the verb, and words between the verb and the work.
+    ["Reflagged submission", FLAGGED],
+    ["Reflagged for review", FLAGGED],
+    ["Reflagging", FLAGGED],
+    ["Unflag this student", FLAGGED],
+    ["Reflag", FLAGGED],
+    ["Auto-flagged", FLAGGED],
+    ["Flag selected submission for review", FLAGGED],
+    ["Flag the selected submissions", FLAGGED],
+    ["Flag all late student works", FLAGGED],
+    ["Flags their paper", FLAGGED],
   ])("flags %j as %s", (text, entry) => {
     expect(entries(text)).toContain(entry);
     expect(english(text)).toContain(entry);
@@ -72,6 +83,8 @@ describe("additional English list (D-276)", () => {
     "Flag",
     "Language flag icon",
     "Feature flags",
+    "Flag colours of the course",
+    "Language flag next to the title",
     "Flagship course",
     "Flagship AI course",
     "Honest feedback",

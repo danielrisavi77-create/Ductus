@@ -24,8 +24,24 @@ export const INTERFACE_LOCALES = Object.freeze(Object.keys(CATALOGUES) as Interf
 /** Longest value read as a tag; a stored preference is a short tag, not a header. */
 const MAX_TAG_LENGTH = 35;
 
-/** A BCP 47 language tag in ASCII: language, then subtags of up to eight letters or digits. */
-const TAG = /^([A-Za-z]{2,3})(?:-[A-Za-z0-9]{1,8})*$/;
+/**
+ * A well-formed BCP 47 language tag in ASCII (RFC 5646 2.1, `langtag`) whose
+ * language has two or three letters: extended language, script, region,
+ * variants, extensions and private use, each in its place and of its length. A
+ * singleton ("u", "x") needs at least one subtag after it. Duplicate variants
+ * or singletons are not looked for (that is validity, 2.2.9, not form).
+ */
+const TAG = new RegExp(
+  [
+    "^([A-Za-z]{2,3})",
+    "(?:-[A-Za-z]{3}){0,3}",
+    "(?:-[A-Za-z]{4})?",
+    "(?:-(?:[A-Za-z]{2}|[0-9]{3}))?",
+    "(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*",
+    "(?:-[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+)*",
+    "(?:-[Xx](?:-[A-Za-z0-9]{1,8})+)?$",
+  ].join(""),
+);
 
 function isInterfaceLocale(value: string): value is InterfaceLocale {
   return Object.hasOwn(CATALOGUES, value);

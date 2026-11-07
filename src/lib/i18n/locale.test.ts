@@ -21,6 +21,12 @@ describe("parseInterfaceLocale", () => {
     ["hr-HR", "hr"],
     ["hr-hr", "hr"],
     ["HR-Latn-HR", "hr"],
+    // Variants, extensions and private use, each well formed (RFC 5646 2.1).
+    ["hr-HR-1994", "hr"],
+    ["hr-HR-u-ca-gregory", "hr"],
+    ["hr-x-private", "hr"],
+    ["hr-x-a", "hr"],
+    ["Hr-419", "hr"],
   ])("reads %j as %s", (value, locale) => {
     expect(languageOfTag(value)).toBe(locale);
     expect(parseInterfaceLocale(value)).toBe(locale);
@@ -68,6 +74,20 @@ describe("parseInterfaceLocale", () => {
     ["hr--HR"],
     ["hr,en;q=0.8"],
     ["hr-HR-toolongsubtag"],
+    // Not well formed (RFC 5646 2.1): a singleton without its subtags, a subtag in the
+    // wrong place or of a length no subtag has there.
+    ["hr-u"],
+    ["hr-x"],
+    ["hr-HR-u"],
+    ["hr-u-a"],
+    ["hr-a-b-c"],
+    ["hr-x-"],
+    ["hr-HR-abc"],
+    ["hr-Latn-Latn"],
+    ["hr-HR-HR"],
+    ["hr-1"],
+    ["hr-12"],
+    ["hr-1234567890"],
     // 8. Keys of Object.prototype.
     ["__proto__"],
     ["constructor"],
