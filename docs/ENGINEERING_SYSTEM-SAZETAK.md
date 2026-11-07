@@ -4,13 +4,13 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 ## Uloge i identitet
 
-- Obično tri writera: Backend, Frontend i Platforma. Četvrti samo za neovisan zadatak, peti nikad (§1, §13).
+- Obično tri writera: Backend i Frontend stalno, Platforma na poziv. Četvrti samo za neovisan posao, peti nikad. Iznad 3 PR-a izvan nacrta nema nove dodjele (§1, §13).
 - Autor PR-a nije njegov neovisni reviewer. Orkestrator ne piše proizvodni kod. Platforma ne potvrđuje sama da njezin sigurnosni gate hvata kvar; QA ga pokušava srušiti (§3).
 - Identitet agenta je `<runtime>:<slot>:<role>` (§4).
 
 ## Risk razine
 
-- `low`: dokumentacija, copy bez promjene značenja, jednostavna konfiguracija. PR koji dira D-97 nije `low` (§5).
+- `low`: dokumentacija, copy bez promjene značenja, jednostavna konfiguracija (§5).
 - `standard`: frontend ponašanje, editor, adapteri, CI promjene, refaktori (§5).
 - `critical`, među ostalim: identity, authz, RLS, pgTAP matrica, evidence, potpisi, KMS, session, submission, retention, backup/restore, migracije koje mijenjaju ovlasti, `PRODUCT.md` §5 ili druga trust granica (§5).
 - Automatski risk floor računa najmanju razinu po putanjama; npr. svaki workflow i svaka putanja iz D-97 su najmanje `critical`. Agent ne spušta risk (§5).
@@ -36,7 +36,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 - Novi push poništava review, QA i Owner Override (§6, §9).
 - Iznimka D-101: čisto spajanje osnovne grane bez promjene diffa PR-a prenosi verdikt i override, i za Codex par (D-161; §6, §15).
-- Prije reviewa provjeriti overlap; ažurnost provjerava izvorni head ili aktivirani DAN-263 Mergify carrier (§9, §10).
+- Prije reviewa provjeriti overlap; ažurnost provjerava izvorni head ili Mergify carrier (DAN-263; §9, §10).
 
 ## Owner Override
 
@@ -45,10 +45,10 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 ## Critical PR (D-106)
 
 - Ugovor prije koda: Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice i "Što bi ovaj PR moglo oboriti na QA-i?:" (§14).
-- Najviše oko 400 redaka koda, veći uz obrazloženje; `critical` i oko 300 redaka produkcijskog koda, veći se dijeli ili ga vlasnik izuzme (§14).
+- Najviše oko 400 redaka koda, veći uz obrazloženje; za `critical` i oko 300 produkcijskog, veći se dijeli ili ga vlasnik izuzme (§14).
 - QA FAIL samo za kvar koda; za PR sučelja i neobrazloženi izgled (D-183). Nalaz ima "Dohvatljivo kroz"; manji nosi "blokira" ili "ne blokira"; u produkcijskom kodu zatvara se novim headom prije spajanja (§14).
-- Najviše dva kruga; drugi FAIL iste klase zaustavlja ispravke. Izuzeće od gatea je popis dozvoljenog (§14, D-190).
-- U gateu najviše tri PR-a bez preklapanja (D-161); review i QA kreću odmah, za `critical` istodobno na istom headu, i s QA-om Codex ili Grok (D-155). QA ne čita review prije svog verdikta (§13, §15).
+- Najviše dva kruga za svaki risk; drugi FAIL iste klase zaustavlja ispravke. Izuzeće od gatea je popis dozvoljenog (§14, D-190).
+- U gateu najviše tri PR-a bez preklapanja (D-161); review i QA kreću odmah, za `critical` istodobno, i s QA-om Codex ili Grok (D-155). QA ne čita review prije verdikta (§13, §15).
 
 ## Kad stati i pitati vlasnika
 
