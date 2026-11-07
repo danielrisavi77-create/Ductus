@@ -32,6 +32,7 @@ EQ1: raspored se preuzima iz starih `.dc.html` prototipa, a boje ne. **Ekrani be
 - N-16 ne prikazuje vrijeme zadnje izmjene ni oznaku da student trenutačno piše: postojeći čitač N-16 te podatke ne daje (D-202).
 - Popis studenata je abecedan, bez mjera, bez sortiranja po brojevima i bez oznaka koje procjenjuju radove. Stanje rada je u prvoj rečenici retka (PRODUCT §4 t. 4).
 - Uporaba alata: pravilo kolegija polazi od pravila fakulteta i nastavnik ga smije pooštriti i ublažiti (D-175); pravilo zadatka smije samo suziti pravilo kolegija (D-52); fiksni popis zabranjenog ne mijenja se. Tekst stavki je sažetak, u aplikaciji ide doslovno iz Pravilnika.
+- Upisni kod se ne prikazuje u popisu kolegija (N-01) ni u praznom stanju N-04: poslužitelj čuva samo njegov hash. Postojeći kolegij nudi radnju „Izdaj novi kod”, koja novi kod prikazuje jednom, pri izdavanju; dosadašnji kod tada prestaje vrijediti.
 - Greška čitanja nikad se ne prikazuje kao prazan popis ni kao nule. Prekinuta veza nakon objave zadatka je „ishod nije poznat” s radnjom „Provjeri stanje”.
 - Učitavanje i greška su zajednički uzorak iz paketa 1 (Z-06), primijenjen na svaki ekran. Posebno je prikazan ishod prekinute objave jer samo ondje ishod može biti nepoznat.
 
@@ -58,4 +59,4 @@ Snimljeno Playwrightovim Chromiumom, cijela stranica, `deviceScaleFactor` 1. Svi
 
 - Ljuska je uska bočna traka od 64 px (D-202 t. 1) sa stavkama „Kolegiji” i „Mentorstva”. Ikone nisu korištene (D-203 t. 8). Ispod 800 px traka je izbornik iza gumba „Izbornik”.
 - Uloga komentora, povjerenstva (N-08, N-09) i ostalih nastavničkih ekrana nisu u ovom paketu.
-- Svi su podaci izmišljeni: osobe, kolegiji, kodovi, datumi i brojevi.
+- Svi su podaci izmišljeni: osobe, kolegiji, datumi i brojevi.
