@@ -25,6 +25,36 @@ describe("catalogueGaps", () => {
     ["placeholders in another order", { a: "{step} of {last}" }, { a: "{last}: {step}" }, none],
     ["a placeholder used twice", { a: "{n}" }, { a: "{n} ({n})" }, none],
     ["a key named like a prototype member", { constructor: "A" }, {}, { ...none, missing: ["constructor"] }],
+    // A key may hold a dot, so "a.b" and a → b are two paths; a path with such a key is written as its segments in JSON.
+    ["a dotted key alone", { "a.b": "A" }, { "a.b": "X" }, none],
+    ["a dotted key that is missing", { "a.b": "A" }, {}, { ...none, missing: ['["a.b"]'] }],
+    ["a dotted key inside a section", { s: { "x.y": "A" } }, { s: { "x.y": "X" }, t: "T" }, { ...none, extra: ["t"] }],
+    [
+      "a missing leaf whose dotted path equals a dotted key",
+      { a: { b: "{n}" }, "a.b": "{m}" },
+      { "a.b": "{m}" },
+      { ...none, missing: ["a.b"] },
+    ],
+    [
+      "a missing dotted key whose path equals a nested leaf",
+      { a: { b: "{n}" }, "a.b": "{m}" },
+      { a: { b: "{n}" } },
+      { ...none, missing: ['["a.b"]'] },
+    ],
+    [
+      "other placeholders beside a nested leaf with the same dotted path",
+      { "a.b": "{n}", a: { b: "B" } },
+      { "a.b": "{m}", a: { b: "B" } },
+      { ...none, placeholders: ['["a.b"]'] },
+    ],
+    [
+      "other placeholders in a nested leaf beside a dotted key",
+      { a: { b: "{n}" }, "a.b": "B" },
+      { a: { b: "{m}" }, "a.b": "B" },
+      { ...none, placeholders: ["a.b"] },
+    ],
+    ["a key that starts like a written path", { "[x": { y: "A" } }, {}, { ...none, missing: ['["[x","y"]'] }],
+    ["an extra dotted key beside a nested leaf", { a: { b: "B" } }, { a: { b: "B" }, "a.b": "X" }, { ...none, extra: ['["a.b"]'] }],
   ])("reports %s", (_, reference, other, gaps) => {
     expect(catalogueGaps(reference, other)).toEqual(gaps);
   });
