@@ -11,13 +11,19 @@ import { syncBuiltinESMExports } from "node:module";
 const routes = JSON.parse(readFileSync(process.env.FAKE_GH_ROUTES, "utf8"));
 const calls = new Map();
 
+function failed(text) {
+  const e = new Error(text);
+  e.stderr = text;
+  return e;
+}
+
 function answer(path) {
   const list = routes[path];
-  if (!Array.isArray(list) || list.length === 0) throw Object.assign(new Error(`fake gh: unexpected path ${path}`), { stderr: `fake gh: unexpected path ${path}` });
+  if (!Array.isArray(list) || list.length === 0) throw failed(`fake gh: unexpected path ${path}`);
   const i = calls.get(path) ?? 0;
   calls.set(path, i + 1);
   const a = list[Math.min(i, list.length - 1)];
-  if (a && typeof a === "object" && "$error" in a) throw Object.assign(new Error(a.$error), { stderr: a.$error });
+  if (a && typeof a === "object" && "$error" in a) throw failed(String(a.$error));
   return a;
 }
 

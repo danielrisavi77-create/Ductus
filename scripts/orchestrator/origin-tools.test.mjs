@@ -52,16 +52,21 @@ const t3 = async (routes) => rec(await runTool("merge-ready.mjs", ["--all"], rou
 // (500+ runs each would take minutes as processes). It calls the same exported
 // reads and the same pure evaluators in the CLIs' order; the tests below prove
 // it prints what the real CLIs print, on every S and O class and scenario.
+function failed(text) {
+  const e = new Error(text);
+  e.stderr = text;
+  return e;
+}
 function fakeExec(routes) {
   const calls = new Map();
   return async (cmd, args) => {
     const path = args[1] === "graphql" ? "graphql" : args[1];
     const list = routes[path];
-    if (cmd !== "gh" || !Array.isArray(list) || list.length === 0) throw Object.assign(new Error(`fake gh: unexpected path ${path}`), { stderr: `fake gh: unexpected path ${path}` });
+    if (cmd !== "gh" || !Array.isArray(list) || list.length === 0) throw failed(`fake gh: unexpected path ${path}`);
     const i = calls.get(path) ?? 0;
     calls.set(path, i + 1);
     const a = list[Math.min(i, list.length - 1)];
-    if (a && typeof a === "object" && "$error" in a) throw Object.assign(new Error(a.$error), { stderr: a.$error });
+    if (a && typeof a === "object" && "$error" in a) throw failed(String(a.$error));
     return JSON.stringify(a);
   };
 }
