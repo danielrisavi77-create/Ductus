@@ -1,12 +1,15 @@
 // Records the S outcomes of the orchestrator tools (plan #1671 §5 P3) by running
 // the real CLIs under the routes fake, before their F-010 change. T1-T3 were
-// recorded on main d54b88b9 (B1), T4-T5 on main 58d5e338 (B2); the origin tests
+// recorded on main d54b88b9 (B1), T4-T5 on main 58d5e338 (B2), T6 and the N10 display
+// tools (pr-status, evidence) on main ccabd332 (B3); the origin tests
 // compare the changed tools against it.
 // Usage: node scripts/orchestrator/origin-snapshot-record.mjs > origin-snapshot.json   (t1-t3)
 //        node scripts/orchestrator/origin-snapshot-record.mjs t4 t5   (adds t4, t5 to the file in place)
+//        node scripts/orchestrator/origin-snapshot-record.mjs t6 n10  (adds t6, n10 the same way)
 import { readFileSync, writeFileSync } from "node:fs";
 import {
-  AUTHORS, contractFor, NUMBER, PLAN_SCENARIOS, planPulls, PREFLIGHT_SCENARIOS, rawPull, routesFor, runTool, SCENARIOS,
+  AUTHORS, contractFor, NUMBER, OVERRIDE_REASON, OVERRIDE_SCENARIOS, PASS_COMMENTS, PLAN_SCENARIOS, planPulls,
+  PREFLIGHT_SCENARIOS, rawPull, routesFor, runTool, SCENARIOS,
 } from "./origin-cases.mjs";
 
 const lines = (s) => s.split(/\r?\n/).filter(Boolean);
@@ -32,7 +35,27 @@ if (!tools.length) {
   const file = new URL("./origin-snapshot.json", import.meta.url);
   const out = JSON.parse(readFileSync(file, "utf8"));
   if (tools.includes("t4") || tools.includes("t5")) out.recordedOnB2 = process.env.SNAPSHOT_COMMIT ?? "unknown";
+  if (tools.includes("t6") || tools.includes("n10")) out.recordedOnB3 = process.env.SNAPSHOT_COMMIT ?? "unknown";
   const s = Object.keys(AUTHORS).filter((cls) => cls.startsWith("S"));
+  if (tools.includes("t6")) {
+    out.t6 = {};
+    for (const [name, sc] of Object.entries(OVERRIDE_SCENARIOS)) {
+      for (const cls of s) {
+        const routes = routesFor({ pulls: [{ n: NUMBER, raw: rawPull(cls, sc.pull) }], scenario: sc });
+        out.t6[`${cls}/${name}`] = rec(await runTool("override-block.mjs", [String(NUMBER), "--reason", OVERRIDE_REASON], routes));
+      }
+    }
+  }
+  if (tools.includes("n10")) {
+    // N10: what the display tools show for an S PR with review and QA PASS on its head.
+    out.n10 = {};
+    for (const cls of s) {
+      const routes = routesFor({ pulls: [{ n: NUMBER, raw: rawPull(cls), comments: PASS_COMMENTS }] });
+      out.n10[`${cls}/pr-status`] = rec(await runTool("pr-status.mjs", [], routes));
+      out.n10[`${cls}/pr-status-json`] = rec(await runTool("pr-status.mjs", ["--json"], routes));
+      out.n10[`${cls}/evidence`] = rec(await runTool("evidence.mjs", ["--pr", String(NUMBER)], routes));
+    }
+  }
   if (tools.includes("t4")) {
     out.t4 = {};
     for (const [name, sc] of Object.entries(PREFLIGHT_SCENARIOS)) {

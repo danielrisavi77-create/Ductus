@@ -1,7 +1,7 @@
 // P1-1: the checks the orchestrator runs before it starts review or QA
 // (docs/ORKESTRATOR.md, "prije pokretanja reviewa ili QA-e"). Pure: no gh/git.
 import { closesFence, fenceInfo, field } from "../engineering/metadata-parser.mjs";
-import { evaluateChecks, GATE_CONTEXT, headOrigin, latestChecks } from "./orchestrator-core.mjs";
+import { evaluateChecks, GATE_CONTEXT, headOrigin, latestChecks, originText } from "./orchestrator-core.mjs";
 
 // ENGINEERING_SYSTEM §14 lines the orchestrator requires besides `Task:`.
 export const CONTRACT_LINES = [
@@ -16,8 +16,6 @@ const PLACEHOLDER_RE = /^<[^>]*>$/;
 // Same allow-list as health-core: anything else is author- or app-controlled
 // text that is not echoed to the terminal.
 const SAFE_NAME = /^[\w .,()/:-]{1,80}$/;
-// A double space means a name with leading or trailing blanks, which would read as the same name.
-const SAFE_ORIGIN = /^(?!.* {2})[\w .,()/:-]{1,240}$/;
 const shown = (s) => (SAFE_NAME.test(String(s ?? "")) ? String(s) : "<not printed>");
 const names = (list) => list.map(shown).join(", ");
 
@@ -258,10 +256,7 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
   add(pr.state === "OPEN", "open", `state ${shown(pr.state)}`);
   // F-010 (plan #1671): the gate's own predicate over the REST object the head SHA came from.
   const origin = headOrigin(pr, repository);
-  if (!origin.ok) {
-    add(false, "origin", SAFE_ORIGIN.test(origin.text) ? `head origin: ${origin.text}`
-      : "head origin: head is not proven to be in this repository (F-010); names not printed");
-  }
+  if (!origin.ok) add(false, "origin", `head origin: ${originText(origin)}`);
   add(!pr.isDraft, "draft", pr.isDraft ? "PR is a draft" : "not a draft");
   add(pr.baseRefName === "main", "base", `base ${shown(pr.baseRefName)}`);
   if (expectHead != null) {

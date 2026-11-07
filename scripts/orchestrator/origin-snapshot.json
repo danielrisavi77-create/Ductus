@@ -3718,5 +3718,314 @@
    ],
    "stderr": []
   }
+ },
+ "recordedOnB3": "ccabd332",
+ "t6": {
+  "S1/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S2/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S3/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S3u/open": {
+   "exit": 0,
+   "lines": [
+    "Owner-Override: PASS",
+    "Override-Head: cccccccccccccccccccccccccccccccccccccccc",
+    "Override-Reason: demo blocker, review quota exhausted"
+   ],
+   "stderr": [
+    "# PR #41 (head cccccccc); a new push makes this block stale"
+   ]
+  },
+  "S1/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S2/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S3/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S3u/closed": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is closed"
+   ]
+  },
+  "S1/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  },
+  "S2/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  },
+  "S3/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  },
+  "S3u/merged": {
+   "exit": 1,
+   "lines": [],
+   "stderr": [
+    "#41: PR is merged"
+   ]
+  }
+ },
+ "n10": {
+  "S1/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S1/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": null,",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S1/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  },
+  "S2/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main VANJSKI (author helper1 is not the owner) | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S2/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": \"author helper1 is not the owner\",",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S2/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  },
+  "S3/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S3/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": null,",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S3/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  },
+  "S3u/pr-status": {
+   "exit": 0,
+   "lines": [
+    "#41 cccccccc main VANJSKI (author mergify[bot] is not the owner) | claude:w1:platforma | standard | ci green 5 | gate success: Review PASS on this head. | review PASS | qa PASS | preklapa: -"
+   ],
+   "stderr": []
+  },
+  "S3u/pr-status-json": {
+   "exit": 0,
+   "lines": [
+    "[",
+    "  {",
+    "    \"number\": 41,",
+    "    \"head\": \"cccccccc\",",
+    "    \"base\": \"main\",",
+    "    \"draft\": false,",
+    "    \"external\": \"author mergify[bot] is not the owner\",",
+    "    \"agent\": \"claude:w1:platforma\",",
+    "    \"risk\": \"standard\",",
+    "    \"ci\": \"green 5\",",
+    "    \"gate\": \"success: Review PASS on this head.\",",
+    "    \"review\": \"PASS\",",
+    "    \"qa\": \"PASS\",",
+    "    \"overlaps\": []",
+    "  }",
+    "]"
+   ],
+   "stderr": []
+  },
+  "S3u/evidence": {
+   "exit": 0,
+   "lines": [
+    "PR #41 OPEN head cccccccccccccccccccccccccccccccccccccccc",
+    "Agent: claude:w1:platforma | Risk: standard | Task: DAN-1",
+    "CI checks: 5 reported, none failing or pending",
+    "Gate status: success - Review PASS on this head.",
+    "Review verdict on this head: PASS by claude:r1:reviewer on cccccccc",
+    "QA verdict on this head: PASS by claude:q1:qa on cccccccc",
+    "From the PR description:",
+    "- Invarijanta: (missing)",
+    "- Mjesta: (missing)",
+    "- Stvarni pozivatelj: (missing)",
+    "- Poznate granice: (missing)",
+    "- Što bi ovaj PR moglo oboriti na QA-i?: (missing)",
+    "- Neizvedeno: (missing)",
+    "- Otvoreno ili blokira: (missing)",
+    "- Treba Daniel: (missing)",
+    "Facts only: no PASS, no advice, no review text."
+   ],
+   "stderr": []
+  }
  }
 }

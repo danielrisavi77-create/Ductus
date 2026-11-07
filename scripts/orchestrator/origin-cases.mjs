@@ -1,6 +1,6 @@
 // Test helper for F-010 in the orchestrator tools (DAN-574, plan #1671): the
 // head-origin classes of #1091 c.6702002871, the R axis (what repoId() answers),
-// the scenarios of plan §4 for T1-T3 (B1) and T4-T5 (B2), the gh routes that
+// the scenarios of plan §4 for T1-T3 (B1), T4-T5 (B2) and T6 (B3), the gh routes that
 // answer them, a runner for the real CLIs under fake-gh-routes-preload.mjs and
 // the in-process gh reads the mirrors use. Repository names and logins are invented.
 import { execFile } from "node:child_process";
@@ -8,7 +8,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import fc from "fast-check";
 
+import { evaluatePullRequest } from "../engineering/review-gate-core.mjs";
 import { ghJson, ghList } from "./gh.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -178,6 +180,53 @@ export function planPulls(cls, sc) {
   return pulls;
 }
 
+// T6 (override-block): the state of the PR read by number; every other input as for an open S1.
+export const OVERRIDE_REASON = "demo blocker, review quota exhausted";
+export const OVERRIDE_SCENARIOS = {
+  open: {},
+  closed: { pull: { state: "closed" } },
+  merged: { pull: { state: "closed", merged_at: "2026-11-02T00:00:00Z" } },
+};
+
+/** A canonical review or QA verdict comment for `head` (N10), posted as the owner through the claude app. */
+export function verdictComment(kind, verdict, head = HEAD) {
+  return {
+    user: { login: OWNER, type: "User" }, author_association: "OWNER", performed_via_github_app: { slug: "claude" },
+    created_at: "2026-11-01T11:00:00Z",
+    body: kind === "review"
+      ? `Agent-Review: claude:r1:reviewer\nReview-Head: ${head}\nReview-Verdict: ${verdict}\n`
+      : `QA-Agent: claude:q1:qa\nQA-Head: ${head}\nQA-Verdict: ${verdict}\n`,
+  };
+}
+// N10: review and QA PASS on the head, the input under which a display tool could say PASS.
+export const PASS_COMMENTS = [verdictComment("review", "PASS"), verdictComment("qa", "PASS")];
+
+// ---------------------------------------------------------------------------
+// fast-check arbitraries over the head and base shapes and the R axis (P1-P4 of B2, P1-P2 of B3).
+export const segment = fc.stringMatching(/^[a-z0-9][a-z0-9-]{0,11}$/);
+const nameArb = fc.oneof(
+  fc.constantFrom(REPO, "Owner1/Repo1", `${REPO} `, ` ${REPO}`, `${REPO}.git`, `${REPO}-fork`, "outsider/repo1", "owner1/renamed1", "", null, 42, {}),
+  fc.tuple(segment, segment).map(([a, b]) => `${a}/${b}`),
+  fc.string({ maxLength: 20 }),
+);
+export const repoShape = fc.oneof(
+  fc.constant("drop"), fc.constant(null), fc.constant({}),
+  fc.record({ full_name: nameArb, fork: fc.boolean() }, { requiredKeys: ["full_name"] }),
+);
+export const withRepo = (part, repo) => (repo === "drop" ? part : { ...part, repo });
+export const headArb = fc.oneof(fc.constant(undefined), repoShape.map((repo) => withRepo({ sha: HEAD, ref: "feature/x" }, repo)));
+export const baseArb = fc.oneof(fc.constant(undefined), repoShape.map((repo) => withRepo({ ref: "main" }, repo)));
+export const repoArb = fc.oneof(
+  fc.constantFrom(R.R1, R.R2, R.R3, R.R4),
+  fc.tuple(segment, segment).map(([o, n]) => ({ owner: { login: o }, name: n })),
+);
+/** Whether the real gate fails `raw` because its head is not in this repository. */
+export const gateOutside = (raw) => /head is not in this repository/i.test(
+  evaluatePullRequest({ pr: { ...raw, changed_files: 1 }, files: [{ filename: "src/domain/example.ts", status: "modified" }], comments: [], ownerLogin: OWNER }).result.description ?? "",
+);
+/** The "owner/name" an R value answers, or null for a failed read. */
+export const repositoryOf = (repo) => (repo.$error ? null : `${repo.owner.login}/${repo.name}`);
+
 /** A work contract valid at `now` that assigns every PR of `numbers` to its writer. */
 export function contractFor(numbers, now = Date.now()) {
   return {
@@ -211,6 +260,7 @@ export function routesFor({ pulls, scenario = {}, repo = R.R1 }) {
       ? [{ $error: "HTTP 500: files unreadable" }]
       : [files.map((filename) => ({ filename, status: "modified" }))];
     routes[`repos/{owner}/{repo}/pulls/${n}/ccr/review_threads`] = [[]];
+    routes[`repos/{owner}/{repo}/issues/${n}/comments?per_page=100&page=1`] = [entry.comments ?? sc.comments ?? []];
     const statuses = [];
     const gate = sc.gate === undefined ? ["success", DESCRIPTIONS.gateOk] : sc.gate;
     const auth = sc.auth === undefined ? ["success", DESCRIPTIONS.authOk] : sc.auth;
