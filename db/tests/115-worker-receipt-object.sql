@@ -100,6 +100,11 @@ SELECT is(pg_temp.ask('ana', format('SELECT count(*) FROM app.worker_receipt_obj
   '42501: permission denied for function worker_receipt_object', 'the web role cannot read the object');
 SELECT is((SELECT status FROM evidence.receipt WHERE client_request_id = 'request-1'), 'pending_signature',
   'the read leaves the receipt pending');
+-- A10: the worker reads the segment and the receipt only through the RPC.
+SELECT matches(pg_temp.worker('SELECT count(*) FROM evidence.segment'), '^42501: ',
+  'the worker cannot read evidence.segment directly');
+SELECT matches(pg_temp.worker('SELECT count(*) FROM evidence.receipt'), '^42501: ',
+  'the worker cannot read evidence.receipt directly');
 
 SELECT * FROM finish();
 ROLLBACK;
