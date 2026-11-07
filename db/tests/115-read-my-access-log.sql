@@ -20,7 +20,7 @@ INSERT INTO ref VALUES
   ('e5', '00000000-0000-4000-8000-0000000000e5'), ('e6', '00000000-0000-4000-8000-0000000000e6'),
   ('m1', '00000000-0000-4000-8000-0000000000e7'), ('o1', '00000000-0000-4000-8000-0000000000e8'),
   ('d1', '00000000-0000-4000-8000-0000000000e9'), ('t1', '00000000-0000-4000-8000-0000000000ea'),
-  ('n1', '00000000-0000-4000-8000-0000000000eb');
+  ('n1', '00000000-0000-4000-8000-0000000000eb'), ('n2', '00000000-0000-4000-8000-0000000000df');
 SET CONSTRAINTS ALL DEFERRED;
 SET LOCAL ROLE ductus_evidence;
 INSERT INTO evidence.project (id, institution_id, assignment_id, principal_id) VALUES
@@ -179,9 +179,14 @@ SELECT is(pg_temp.log('ana', $$ 'doc-a', 1, NULL, NULL $$), 'e5 10-20 08:15 repl
 SELECT is(pg_temp.log('ana', $$ 'doc-a', 2, '2026-10-19 12:05:00+00', {e3} $$),
   'e2 10-19 12:00 process_summary teacher Vesna Primjerić; e1 10-19 12:00 live_view teacher Vesna Primjerić',
   'a cursor gives the rows strictly after it');
-SELECT is(pg_temp.log('ana', $$ 'doc-a', 2, '2026-10-19 12:00:00+00', {e2} $$),
-  'e1 10-19 12:00 live_view teacher Vesna Primjerić',
-  'a cursor between two rows of the same time gives only the later one');
+SELECT is(pg_temp.log('ana', $$ 'doc-a', 2, '2026-10-19 12:05:00+00', {e3} $$),
+  'e2 10-19 12:00 process_summary teacher Vesna Primjerić; e1 10-19 12:00 live_view teacher Vesna Primjerić',
+  'a page ends on an interval: the second row of 12:00 comes with the first, not on the next page');
+SELECT is(pg_temp.log('ana', $$ 'doc-a', 1, '2026-10-19 12:05:00+00', {e3} $$),
+  'e2 10-19 12:00 process_summary teacher Vesna Primjerić; e1 10-19 12:00 live_view teacher Vesna Primjerić',
+  'so a page may hold more rows than its size, for the rest of its last interval');
+SELECT is(pg_temp.log('ana', $$ 'doc-a', 2, '2026-10-19 12:00:00+00', {e2} $$), '',
+  'the cursor time is the end of an interval: no row of that time comes after it');
 SELECT is(pg_temp.log('ana', $$ 'doc-a', 10, '2026-10-19 12:30:00+00', {t1} $$),
   'e4 10-19 12:10 fast_path teacher - -; e3 10-19 12:05 live_view teacher Vesna Primjerić; '
   'e2 10-19 12:00 process_summary teacher Vesna Primjerić; e1 10-19 12:00 live_view teacher Vesna Primjerić',
@@ -230,9 +235,32 @@ VALUES (pg_temp.id('n1'), pg_temp.id('fak_a'), 'doc-a', pg_temp.id('z1'), pg_tem
         'teacher', 'live_view', '2026-10-21 09:00:00+00');
 RESET ROLE;
 SELECT is(pg_temp.log('ana', $$ 'doc-a', 2, '2026-10-19 12:10:00+00', {e4} $$),
-  'e3 10-19 12:05 live_view teacher Vesna Primjerić; e2 10-19 12:00 process_summary teacher Vesna Primjerić',
-  'page 2 after the new opening continues where page 1 ended');
+  'e3 10-19 12:05 live_view teacher Vesna Primjerić; e2 10-19 12:00 process_summary teacher Vesna Primjerić; '
+  'e1 10-19 12:00 live_view teacher Vesna Primjerić',
+  'page 2 after the new opening continues where page 1 ended, to the end of the 12:00 interval');
 SELECT is(pg_temp.walk('ana', 'doc-a', 2), 'n1 e5 e4 e3 e2 e1', 'a fresh walk starts with the new opening and repeats nothing');
+
+-- Istodobnost, the same interval (QA c.6711590695): a page of 1 ends on the
+-- newest interval; another opening is then written in that same interval
+-- with a smaller entry. The next page must not take it: it shows only on a
+-- fresh first page, which holds the whole interval.
+SELECT is(pg_temp.log('ana', $$ 'doc-a', 1, NULL, NULL $$), 'n1 10-21 09:00 live_view teacher Vesna Primjerić',
+  'page 1 of size 1 before the second opening in its interval');
+SET LOCAL ROLE ductus_identity;
+INSERT INTO audit.access_log (id, institution_id, document_id, assignment_id, owner_id, reader_id, reader_role, surface, opened_at)
+VALUES (pg_temp.id('n2'), pg_temp.id('fak_a'), 'doc-a', pg_temp.id('z1'), pg_temp.id('ana'), pg_temp.id('marko'),
+        'teacher', 'live_view', '2026-10-21 09:00:00+00');
+RESET ROLE;
+SELECT ok(pg_temp.id('n2') < pg_temp.id('n1'), 'the new opening has the same time and a smaller entry');
+SELECT is(pg_temp.log('ana', $$ 'doc-a', 1, '2026-10-21 09:00:00+00', {n1} $$),
+  'e5 10-20 08:15 replay teacher Vesna Primjerić',
+  'the next page does not take an opening written later in the interval of the cursor');
+SELECT is(pg_temp.log('ana', $$ 'doc-a', 1, NULL, NULL $$),
+  'n1 10-21 09:00 live_view teacher Vesna Primjerić; n2 10-21 09:00 live_view teacher - -',
+  'a fresh first page shows it, with the whole interval');
+SELECT is(pg_temp.walk('ana', 'doc-a', s.size), 'n1 n2 e5 e4 e3 e2 e1',
+  'walking pages of ' || s.size || ' after it gives every row once')
+FROM unnest(ARRAY[1, 2, 3, 100]) AS s (size);
 
 SELECT * FROM finish();
 ROLLBACK;
