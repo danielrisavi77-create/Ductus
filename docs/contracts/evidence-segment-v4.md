@@ -88,7 +88,7 @@ Manifest ne nosi autora, `lastModifiedBy`, `lastModifyingUser`, `w:date`, `w:aut
 | `providerId` | `^[a-z0-9][a-z0-9-]{0,63}$`. |
 | `modelId` | `^[a-z0-9][a-z0-9._-]{0,127}$`. |
 | `purposeCatalogVersion` | Cijeli broj od 1 do 2^31 − 1. |
-| `purposeId`, `phaseId` | `^[a-z0-9][a-z0-9-]{0,63}$`. |
+| `purposeId`, `phaseId` | `^[a-z0-9][a-z0-9_-]{0,63}$`. |
 | `textSha256` | Hash prenesenog teksta po definiciji „tekst događaja”. |
 | `transferredAt` | Cijela UTC minuta iz DB sata poslužitelja, nikad s klijenta. |
 
