@@ -13,9 +13,10 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 ## Rok
 
 - Ljetni semestar 2026./2027.: prema okvirnom kalendaru Sveučilišta u Zagrebu nastava počinje 22. 3. 2027. FPZG ima vlastiti kalendar; točan datum potvrditi s fakultetom (akademski kalendar je u paketu zahtjeva FPZG-u, D-264 Q09).
-- Tehnička proba (faza A) traje oko 4 tjedna prije početka nastave, pa kod za prvi val mora biti spreman **oko 22. 2. 2027.**
+- Tehnička proba (faza A) počinje kad je kod vala 1 spreman, **22. 2. 2027.**, i traje 4 puna tjedna. Nastava (faza B) počinje oko 22. 3. 2027. ili kasnije.
 - Od 3. 10. 2026. do 22. 2. 2027. ima oko 20 tjedana.
 - **D-203 E3:** 22. 2. 2027. ostaje cilj spremnosti koda vala 1. Puna tehnička proba se ne skraćuje radi datuma, a nastavna aktivacija čeka uspješan prihvat i suglasnost FPZG-a.
+- **Tri faze pilota (D-203 E3, D-266 t. 8; M12):** **A** tehnička proba sa sintetičkim radovima od 22. 2. 2027., traje 4 puna tjedna i ne skraćuje se radi datuma. **B** nastava oko 22. 3. 2027. ili kasnije, tek nakon uspješnog izlaza A i suglasnosti FPZG-a. **C** evaluacija nakon 4. 6. 2027. (točan datum potvrditi s FPZG-om). Datum 1. 3. 2027. je samo trag.
 
 ## Faze
 
@@ -178,6 +179,19 @@ Uz puno radno vrijeme do tada mora biti gotov cijeli val 1 osim M11 (69 do 93 no
 Ranije dogovoreno vrijedi i dalje: izravne izmjene u valu 2, uvoz PDF-a u valu 3, doktorski radovi nakon pilota. Rezovi se upisuju u `DECISIONS.md` kao nova odluka.
 
 Nije izabrano (10. 10. 2026.): varijanta po kojoj bi se rezovi 1 do 4 primijenili odmah i vratili u val 1 ako provjera 15. 12. pokaže da ima mjesta. Rezovi se primjenjuju samo po okidaču gore.
+
+## Pilot M12: prijedlozi odgovora [PRIJEDLOG, nije odluka]
+
+Prijedlozi orkestratora po vlasnikovoj delegaciji (#87 c.6623105181, c.6623445808). Nijedan nije odluka niti ulazi u `DECISIONS.md` dok je ne donese osoba navedena uz stavku. Faze A, B i C su iz D-203 E3 (odjeljak „Rok”).
+
+- **O01, faza B:** u B samo pisani zadaci zadani nakon izlaza A (najranije oko 22. 3.) s rokom prije 4. 6.; bez završnih i diplomskih radova (D-265 Q21). Drugi prolaz kolegija je seminarska grupa. Popis kolegija i zadataka daje FPZG. Odlučuje: FPZG.
+- **O02, početak A:** A počinje kad je M11.Z1 zelen i ugovor o obradi potpisan; cilj je 22. 2. Prag: ako izlaz A nije gotov do 19. 4. 2027., vlasnik i FPZG odlučuju o B u zimskom semestru 2027./28. Stavka ide u Owner queue. Odlučuju: vlasnik i FPZG.
+- **O03, obveznost:** obvezno ili dobrovoljno odlučuje FPZG (D-04). Preporuka: dobrovoljno, sa zamjenskim postupkom predaje i povlačenjem bez posljedica (D-12). Odlučuje: FPZG.
+- **O04, pragovi:** pragove korisnosti i razumijevanja (`docs/PRODUCT.md` §12) postavljaju FPZG i evaluator. Upisuju se u `DECISIONS.md` prije A, kao GO uvjet. Plan ih ne izmišlja. Odlučuju: FPZG i evaluator.
+- **O05, zaustavljanje pilota:** zaustaviti pilot može svaki od dvoje sam, koordinator FPZG-a ili operater. Ponovno pokretanje traži oboje i zapis incidenta. Ulogu imenuje FPZG. Odlučuje: FPZG (imenuje ulogu).
+- **O06, evaluacija:** preporuka je anonimna anketa u alatu FPZG-a, gdje je FPZG voditelj obrade (C-22). Vlastita pohrana evaluacije gradi se samo ako FPZG to odbije. Odlučuju: FPZG i DPO.
+- **O07, nakon pilota:** o nastavku nakon pilota odlučuju FPZG i vlasnik nakon C, na temelju završnog izvješća. Nema automatskog M13. Odlučuju: FPZG i vlasnik.
+- **O08, Linear milestone „M12 Pilot”:** ništa se ne upisuje ovdje; milestone upisuje orkestrator nakon vlasnikove potvrde.
 
 ## GO uvjeti za stvarne studente
 

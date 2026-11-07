@@ -241,7 +241,7 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 8. AI pomoćnik
 
-> **U pilotu (D-194, 31. 10. 2026.; mijenja D-77).** AI pomoćnik ulazi u pilot (početak 1. 3. 2027.) sa svim namjenama iz kataloga D-64, uključujući transkripciju i alate pružatelja. Student i dalje smije koristiti vanjski alat i uz izjavu priložiti ispis razgovora (izjavljeno). Prije stvarnih studenata moraju postojati ugovor o obradi, popis podizvršitelja, DPIA i pravno mišljenje koji pokrivaju asistenta (D-194 t. 4 i 5; GO uvjeti u `docs/PROGRAM.md`).
+> **U pilotu (D-194, 31. 10. 2026.; mijenja D-77).** AI pomoćnik ulazi u pilot (nastava od oko 22. 3. 2027. ili kasnije, D-203 E3) sa svim namjenama iz kataloga D-64, uključujući transkripciju i alate pružatelja. Student i dalje smije koristiti vanjski alat i uz izjavu priložiti ispis razgovora (izjavljeno). Prije stvarnih studenata moraju postojati ugovor o obradi, popis podizvršitelja, DPIA i pravno mišljenje koji pokrivaju asistenta (D-194 t. 4 i 5; GO uvjeti u `docs/PROGRAM.md`).
 
 - **Račun kod pružatelja i trošak.** Tko drži račune kod pružatelja i plaća je **OTVORENO**. [PRIJEDLOG D-194 t. 6: račune drži pravna osoba operatera, pružatelji su podizvršitelji s odobrenim popisom, trošak je u cijeni usluge i student ne plaća ništa; čeka pravno mišljenje.] Raniji prijedlog (OpenRouter, student plaća svoj račun, D-20) više nije polazište. Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana.
 - **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23] Nikad nisu dopušteni: pružatelj s kineskim sjedištem, model koji je razvila kineska tvrtka (ni kad ga poslužuje europski pružatelj) i obrada na kineskim serverima; fakultet to ne može uključiti. [ODLUČENO D-194 t. 2]
@@ -312,12 +312,12 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 - **Fakultet:** samo FPZG. [ODLUČENO D-15]
 - **Kontakt:** prodekan Višeslav Raos. [ODLUČENO D-14]
 - **Cijena:** pilot je besplatan; kupac nakon pilota je fakultet. [ODLUČENO D-13]
-- **Početak:** ljetni semestar akademske godine 2026./2027. [ODLUČENO D-26]
+- **Početak:** nastava u ljetnom semestru akademske godine 2026./2027. (faza B, oko 22. 3. 2027. ili kasnije); tehnička proba počinje ranije (vidi Etape). [ODLUČENO D-26, D-203 E3]
 - **Obveznost:** FPZG odlučuje je li korištenje obvezno ili dobrovoljno. Ako je dobrovoljno, studenti koji ne sudjeluju imaju ravnopravnu alternativu.
 - **Jezik:** sučelje na hrvatskom i engleskom od vala 1 [ODLUČENO D-70]; jezik rada bira se po zadatku (F-06).
 - **Podrška:** model iz D-69; rokovi u pilotu radnim danom u podne.
 - **Povlačenje studenta:** već predani radovi ostaju po pravilima fakulteta, sve ostalo se briše. [ODLUČENO D-12]
-- **Etape:** A tehnička proba sa sintetičkim radovima prije početka semestra; B nastava; C evaluacija.
+- **Etape** (D-203 E3): **A** tehnička proba sa sintetičkim radovima od 22. 2. 2027., traje 4 puna tjedna i ne skraćuje se; **B** nastava oko 22. 3. 2027. ili kasnije, nakon izlaza A i suglasnosti FPZG-a; **C** evaluacija nakon 4. 6. 2027. (točan datum potvrditi s FPZG-om)
 - Nijedan tehnički pokazatelj sam ne dovodi do ocjene ni posljedice.
 
 **Mjerila uspjeha:**
