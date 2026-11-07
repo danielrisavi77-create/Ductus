@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S16-BUD — Ograničenje uporabe Asistenta (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 13 · DAN-411 · prijedlog slike · M9.UX</div>
+  <h1>S16-BUD — Ograničenje uporabe Asistenta</h1>
+  <p>Student nikad ne plaća da bi izvršio obvezu (PRODUCT §5 pravilo 15), pa se ne prikazuje novac. Prikazuje se samo koliko je današnje granice iskorišteno, bez broja preostalih zahtjeva jer je granica vezana uz trošak poziva, ne uz njihov broj (BACKEND §4.5). Iznose granica odlučuje vlasnik nakon mjerenja (D-267 O5), a troše se na poslužitelju po računu.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="b1">
+    <div class="ref-tag" id="b1">Stanje B1 · dovoljno</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <p class="kv" style="display:flex;justify-content:space-between"><span>Danas na ovom zadatku</span><b class="count">Manji dio granice</b></p>
+        <div class="bar" role="img" aria-label="Iskorišten manji dio današnje granice"><span style="width:20%"></span></div>
+        <p class="meta">Brojač se vraća na nulu sutra. Odnosi se samo na Vas i ovaj zadatak.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="b2">
+    <div class="ref-tag" id="b2">Stanje B2 · blizu granice</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <p style="display:flex;justify-content:space-between"><span>Danas na ovom zadatku</span><b class="count">Veći dio granice</b></p>
+        <div class="bar" role="img" aria-label="Iskorišten veći dio današnje granice"><span style="width:90%"></span></div>
+        <p class="note" role="status">Većina današnje granice je iskorištena. Sljedeći zahtjev može biti odbijen, ovisno o njegovoj duljini.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="b3">
+    <div class="ref-tag" id="b3">Stanje B3 · granica po zadatku dosegnuta</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <div class="bar full" role="img" aria-label="Današnja granica je iskorištena"><span style="width:100%"></span></div>
+        <p class="note" role="alert">Za ovaj zadatak danas ste iskoristili granicu. Sutra se brojač vraća na nulu. Pisanje i predaja rade bez ograničenja.</p>
+        <button class="btn" type="button" aria-disabled="true">Pošalji Asistentu</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="b4">
+    <div class="ref-tag" id="b4">Stanje B4 · dnevna granica za sve zadatke</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <p style="display:flex;justify-content:space-between"><span>Danas na svim zadacima</span><b class="count">Granica iskorištena</b></p>
+        <p class="note" role="alert">Danas ste iskoristili granicu na svim zadacima. Dnevna granica se sutra obnavlja; dostupnost Asistenta ovisi i o drugim granicama.</p>
+        <button class="btn" type="button" aria-disabled="true">Pošalji Asistentu</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="b5">
+    <div class="ref-tag" id="b5">Stanje B5 · granica usluge dosegnuta</div>
+    <div class="panel" role="complementary" aria-label="Asistent">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Asistent je trenutačno privremeno nedostupan svima. Nije do Vas i ništa se ne naplaćuje. Pokušajte kasnije.</p>
+        <button class="btn" type="button" aria-disabled="true">Pošalji Asistentu</button>
+        <p class="meta">Granica usluge ne otkriva se kao Vaša potrošnja. Pisanje i predaja ne ovise o Asistentu (D-267 O5).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="b6">
+    <div class="ref-tag" id="b6">Stanje B6 · učitavanje brojača</div>
+    <div class="panel" role="complementary" aria-label="Asistent" aria-busy="true">
+      <div class="panel-top"><h2>Asistent</h2></div>
+      <div class="panel-body">
+        <div class="skel w60"></div><div class="skel" style="height:8px"></div>
+        <p class="meta" role="status">Brojač se učitava. Slanje se provjerava na poslužitelju.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): brojač nije u redoslijedu fokusa, a promjena se objavljuje role="status" ili role="alert". Granica se uvijek provjerava na poslužitelju; prikaz na slici je samo obavijest.</p>
+</main>
+</body>
+</html>
