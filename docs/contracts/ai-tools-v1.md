@@ -101,19 +101,20 @@ Zatvoren skup u kodu u ovoj verziji ima jedan alat, `web_search`. Shema mu je za
 | --- | --- | --- |
 | `request_id` | `uuid` NOT NULL FK na `assistant.request` | L1 |
 | `step_no` | `integer` 1 do `TOOL_STEP_MAX`; PK `(request_id, step_no)` | L1 |
-| `tool_name` | `text`, točno ime koje je model tražio, do 64 znaka | L1 |
+| `tool_name` | `text` NULL; CHECK: samo ime iz zatvorenog skupa u kodu; NULL kad traženo ime nije u njemu | L1 |
+| `requested_name_sha256` | `text` NOT NULL, 64 heks znaka, SHA-256 točnih bajtova imena koje je model tražio | L1 |
 | `outcome` | `text`, `allowed`, `denied_not_in_set`, `denied_schema`, `denied_revoked`, `failed`, `done` | L1 |
 | `args_sha256`, `result_sha256` | `text`, 64 heks znaka; argumenti i rezultat se ne spremaju | L1 |
 | `result_bytes`, `truncated` | `integer`, `boolean` | L1 |
 | `created_at`, `finished_at` | `timestamptz`, sat baze | L1 |
 
-Redak ne nosi upit, rezultat, adresu ni odlomak ([OC-5]).
+Redak ne nosi upit, rezultat, adresu ni odlomak ([OC-5]). Ime alata koje je model tražio je izlaz modela i može nositi dio odlomka. Zato se sprema samo ime iz zatvorenog skupa, a za svako drugo ime samo njegov sažetak.
 
 ### Izračun i provjera po koraku
 
 - Dopušteni skup za korak je `CODE_TOOLS ∩ switch.tools ∩ assignment_tool_setting.tools ∩ ready`. `ready` za `web_search` znači neprazan popis odredišta. Uz to vrijedi i politika iz `ai-request-v1.md` („Politika”).
 - Postavka zadatka čita se za verziju koja vrijedi u trenutku koraka, ne za zapamćenu na početku zahtjeva. Opoziv tako samo sužava skup.
-- Ime iz zahtjeva modela uspoređuje se s imenom iz skupa točno, po bajtovima. Bez promjene veličine slova, rezanja razmaka i Unicode normalizacije (S3-D3).
+- Ime iz zahtjeva modela uspoređuje se s imenom iz skupa točno, po bajtovima. Bez promjene veličine slova, rezanja razmaka i Unicode normalizacije (S3-D3). Ruta tako ime preslikava u člana `CODE_TOOLS` ili u NULL. NULL daje `denied_not_in_set`.
 - Argumenti se provjeravaju zatvorenom shemom prije izvršavanja (S3-D4). Odbijaju se nepoznat ključ, krivi tip, nedostajuće polje, predug niz i ugniježđen objekt. Odbijen korak se ne izvršava i nema odlazne veze. Modelu ide kao dio `tool_denied`.
 - Poziv pružatelja nudi točno dopušteni skup u tom trenutku. Prazan skup znači da poziv ne nudi nijedan alat (S3-D2).
 
@@ -144,7 +145,19 @@ Redak ne nosi upit, rezultat, adresu ni odlomak ([OC-5]).
 
 ## Trošak petlje alata
 
-Ovo je dopuna odjeljka „RPC-ovi” iz `ai-request-v1.md`, ne izmjena tablica. Zahtjev s nepraznim dopuštenim skupom u `begin_request` rezervira `reserve_micro × (1 + TOOL_STEP_MAX)` u istom retku knjige i istim uvjetnim `UPDATE` naredbama. Svaki poziv pružatelja u petlji je tako pod rezervacijom (S3-I2, #1662 T7). Svođenje (`complete_request`, `fail_request`) prima zbroj stvarnih troškova svih poziva tog zahtjeva. Zahtjev s praznim skupom rezervira kao u S2.
+Ovo je dopuna odjeljka „RPC-ovi” iz `ai-request-v1.md`. Tablice iz S2 se ne mijenjaju. Zahtjev s nepraznim dopuštenim skupom u `begin_request` rezervira `reserve_micro × (1 + TOOL_STEP_MAX)` u istom retku knjige i istim uvjetnim `UPDATE` naredbama. Svaki poziv pružatelja u petlji je tako pod rezervacijom (S3-I2, #1662 T7). Svođenje (`complete_request`, `fail_request`) prima zbroj stvarnih troškova svih poziva tog zahtjeva. Zahtjev s praznim skupom rezervira kao u S2.
+
+Rezervaciju petlje bilježi nova tablica `assistant.tool_loop_reservation`:
+
+| Stupac | Oblik | Klasa |
+| --- | --- | --- |
+| `request_id` | `uuid` PK, FK na `assistant.request` | L1 |
+| `steps_reserved` | `integer` NOT NULL, `TOOL_STEP_MAX` u trenutku rezervacije | L1 |
+| `reserved_at` | `timestamptz`, sat baze | L1 |
+
+- Redak upisuje samo `begin_request`, u istoj transakciji kao rezervaciju, i samo kad je dopušteni skup neprazan. Tablica ima `ENABLE` i `FORCE ROW LEVEL SECURITY`, retke u pgTAP matrici i okidač koji odbija `UPDATE`, `DELETE` i `TRUNCATE`.
+- `begin_tool_step` traži taj redak i `step_no ≤ steps_reserved`. I odbijen korak troši `step_no`, pa je petlja omeđena i kad model traži samo alate izvan skupa.
+- Zahtjev bez retka nema petlju: dopušteni skup mu je prazan cijelo vrijeme, a alat uključen usred zahtjeva vrijedi od idućeg zahtjeva. Izlaz s `tool_calls` takav zahtjev završava s `fail_request` i razlogom `tool_step_limit`, bez novog poziva pružatelja.
 
 ## RPC-ovi
 
@@ -154,7 +167,7 @@ Svi su `SECURITY DEFINER` sa `search_path = ''`, a akter dolazi iz `require_acto
 | --- | --- | --- |
 | `assistant.set_assignment_tools(assignment_id, expected_version, tools)` | nastavnik kolegija tog zadatka | Nova verzija postavke i redak revizijskog traga u istoj naredbi (#1662 M6). Drugačiji `expected_version` daje `version_conflict`. Alat izvan zatvorenog skupa daje `invalid_request`. |
 | `assistant.read_assignment_tools(assignment_id)` | nastavnik kolegija, student upisan na zadatak | Važeća verzija postavke. Student vidi koje je alate nastavnik uključio (PRODUCT §8). |
-| `assistant.begin_tool_step(request_id, step_no, tool_name, args_sha256)` | ruta AI-ja | Pod bravom zahtjeva provjerava stanje `sent`, `step_no` = zadnji + 1 ≤ `TOOL_STEP_MAX`, politiku i dopušteni skup u trenutku poziva. Upisuje redak `allowed` ili `denied_*` i vraća dopušteni skup za idući poziv pružatelja. |
+| `assistant.begin_tool_step(request_id, step_no, tool_name, requested_name_sha256, args_sha256)` | ruta AI-ja | `tool_name` je član `CODE_TOOLS` ili NULL. Pod bravom zahtjeva provjerava stanje `sent`, redak rezervacije petlje, `step_no` = zadnji + 1 ≤ `steps_reserved`, politiku i dopušteni skup u trenutku poziva. Upisuje redak `allowed` ili `denied_*` i vraća dopušteni skup za idući poziv pružatelja. |
 | `assistant.finish_tool_step(request_id, step_no, outcome, result_sha256, result_bytes, truncated)` | ruta AI-ja | `allowed` → `done` ili `failed`. Svaki drugi prijelaz se odbija. |
 
 Ako ponovna provjera politike u `begin_tool_step` ne prođe, ruta više ne zove pružatelja. Zahtjev zatvara s `fail_request` i razlogom `request_revoked`, uz zbroj troška dotad poslanih poziva. Slanje pružatelju ide tek nakon commita koraka, kao `mark_sent` (#1662 I3).
@@ -217,20 +230,21 @@ Prije koda postoje tablični test nad svim redcima i fast-check svojstvo sa svih
 
 Upis je uvijek samo kroz RPC. Svaka ćelija „ne” je pgTAP test koji odbija.
 
-| Akter | `assignment_tool_setting` | `tool_step` |
-| --- | --- | --- |
-| nastavnik kolegija zadatka | čita i postavlja kroz RPC | ne |
-| student upisan na zadatak | čita važeću verziju kroz RPC | ne (S2 `request` ostaje njegov pogled) |
-| drugi student, nastavnik drugog kolegija ili ustanove | ne, isti ishod kao nepostojeći zadatak | ne |
-| administrator ustanove | ne | ne |
-| ruta AI-ja (uloga weba) | čita kroz `begin_tool_step` | upisuje samo kroz RPC |
-| worker, operater, podrška | ne | ne |
+| Akter | `assignment_tool_setting` | `tool_step` | `tool_loop_reservation` |
+| --- | --- | --- | --- |
+| nastavnik kolegija zadatka | čita i postavlja kroz RPC | ne | ne |
+| student upisan na zadatak | čita važeću verziju kroz RPC | ne (S2 `request` ostaje njegov pogled) | ne |
+| drugi student, nastavnik drugog kolegija ili ustanove | ne, isti ishod kao nepostojeći zadatak | ne | ne |
+| administrator ustanove | ne | ne | ne |
+| ruta AI-ja (uloga weba) | čita kroz `begin_tool_step` | upisuje samo kroz RPC | upisuje samo kroz `begin_request`, čita kroz `begin_tool_step` |
+| worker, operater, podrška | ne | ne | ne |
 
 Istodobnost: dopušteni skup računa `begin_tool_step` u transakciji pod bravom retka zahtjeva, iz stanja baze u tom trenutku. Postavku štiti `expected_version` i PK bez rupa, a korake PK `(request_id, step_no)`. Negativni testovi idu kroz zasebne stvarne veze na bazu, ne serijski u jednoj transakciji:
 - S3-Z1: nakon koraka 1 nastavnik na drugoj vezi isključi `web_search`. Korak 2 je `denied_revoked`, nema odlazne veze, idući poziv pružatelja ne nudi alat, a zahtjev završava određenim ishodom;
 - isto s pravilom kolegija promijenjenim u `prohibited` između koraka: nema novog poziva pružatelja, `request_revoked`, trošak sveden na poslane pozive (#1662 I3, D-268 O4, D-263 Q03);
 - dva istodobna `set_assignment_tools` s istim `expected_version`: jedan uspije, drugi dobiva `version_conflict`, verzije su bez rupa;
 - dva istodobna `begin_tool_step` za isti zahtjev i isti `step_no` (ponovljena ruta): jedan redak i najviše jedno izvršavanje;
+- zahtjev započet s praznim skupom, a nastavnik na drugoj vezi uključi `web_search` prije odgovora pružatelja: nema retka rezervacije petlje, `begin_tool_step` se odbija, nema drugog poziva pružatelja, a izlaz s `tool_calls` daje `tool_step_limit`;
 - isključenje zastavice `tools` između koraka testira se jedinično sa sintetičkim izvorom, jer do [OC-1] prekidač nije u bazi.
 
 ## Testovi prije koda
@@ -238,7 +252,7 @@ Istodobnost: dopušteni skup računa `begin_tool_step` u transakciji pod bravom 
 | Sloj | Što | Plan |
 | --- | --- | --- |
 | jedinica i svojstva | `composeInstructions` bajtovno stabilan; povratni put `encodeDataParts`; izračun skupa nad svim kombinacijama; točna usporedba imena; zatvorene sheme; sve četiri granice na granici i granici + 1; nejednakost konstanti; tablica S3-K1 i fast-check S3-K2 | S3-U1, S3-U3, S3-O2, S3-O5, S3-D1 do S3-D4, S3-I1 do S3-I3, S3-K |
-| pgTAP | RLS i matrica za obje tablice; nema izravnog upisa; okidači nepromjenjivosti; revizijski trag uz `set_assignment_tools`; tuđi i nepostojeći zadatak isti ishod; uloga rute AI-ja ne piše pravila, postavku ni prekidač | S3-D5, S3-U5 |
+| pgTAP | RLS i matrica za sve tri tablice; CHECK imena alata i oblik sažetka; nema izravnog upisa; okidači nepromjenjivosti; revizijski trag uz `set_assignment_tools`; tuđi i nepostojeći zadatak isti ishod; uloga rute AI-ja ne piše pravila, postavku ni prekidač | S3-D5, S3-U5 |
 | integracija s bazom | retci iz „Istodobnost:”; rezervacija petlje i svođenje zbroja | S3-Z1, S3-I2 |
 | čuvar dohvata | presretanje mreže koje ruši test na svaku vezu izvan popisa; sve klase adrese iz S3-N2; preusmjerenje; razriješena privatna adresa; prazan produkcijski popis znači da alat nije ponuđen | S3-N1 do S3-N4 |
 | ruta kroz sintetički adapter | stvarni pozivatelj: ruta zove `begin_tool_step`, čuvar i port; snimljeni pozivi nemaju podatak u `instructions`; svaka grana S3-S1; odgovor-naredba ništa ne izvršava; S3-O3 od uvoza kad su M8.2 i M8.3 spojeni | S3-U2, S3-U4, S3-O1, S3-O3, S3-I4, S3-S1, S3-S3 |
@@ -251,7 +265,7 @@ Svi odlomci, datoteke, upiti, odredišta, imena i ustanove u testovima su izmiš
 Svaki korak je zaseban critical PR s planom #1664. Svi idu nakon koraka 1 do 4 iz `ai-request-v1.md`:
 1. `composeInstructions`, `encodeDataParts`, izračun skupa, sheme i granice u `src/domain/assistant`, bez baze;
 2. verzija 2 porta i grane sintetičkog adaptera;
-3. migracija s obje tablice, RPC-ovima, okidačima i pgTAP matricom;
+3. migracija sa sve tri tablice, dopunom `begin_request`, RPC-ovima, okidačima i pgTAP matricom;
 4. čuvar dohvata s praznim produkcijskim popisom i testom zatvorene mreže;
 5. petlja alata u ruti AI-ja kao stvarni pozivatelj, s testovima istodobnosti;
 6. prikaz odgovora kao teksta i postavka alata za nastavnika u sučelju (frontend).
