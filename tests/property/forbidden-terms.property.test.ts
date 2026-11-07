@@ -51,6 +51,16 @@ const SAMPLES = [
   "dokaz o autorstvu",
   "AI-generated",
   "percentage of artificial intelligence",
+  // The additional English list (D-276).
+  "trust score",
+  "attention score",
+  "cheating",
+  "dishonesty",
+  "misconduct",
+  "AI-detected",
+  "flagged as AI",
+  "flagged for review",
+  "red flag",
 ];
 
 const filler = fc.string({ unit: fc.constantFrom(..."abcčćdđ ,.!?-()0123456789") });

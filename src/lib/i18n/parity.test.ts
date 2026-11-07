@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vitest";
+
+import { messagesHr } from "./messages.hr";
+import { INTERFACE_LOCALES, messagesFor } from "./locale";
+import { catalogueGaps } from "./parity";
+
+const none = { missing: [], extra: [], placeholders: [] };
+
+describe("catalogueGaps", () => {
+  it.each([
+    ["the same keys", { a: "A", b: { c: "C" } }, { a: "X", b: { c: "Y" } }, none],
+    ["a missing key", { a: "A", b: "B" }, { a: "A" }, { ...none, missing: ["b"] }],
+    ["an extra key", { a: "A" }, { a: "A", z: "Z" }, { ...none, extra: ["z"] }],
+    ["a missing nested key", { s: { a: "A", b: "B" } }, { s: { a: "A" } }, { ...none, missing: ["s.b"] }],
+    ["a text where a section stands", { s: { a: "A" } }, { s: "S" }, { ...none, missing: ["s.a"], extra: ["s"] }],
+    ["a section where a text stands", { s: "S" }, { s: { a: "A" } }, { ...none, missing: ["s"], extra: ["s.a"] }],
+    ["a shorter list", { l: ["one", "two"] }, { l: ["one"] }, { ...none, missing: ["l.1"] }],
+    ["a longer list", { l: ["one"] }, { l: ["one", "two"] }, { ...none, extra: ["l.1"] }],
+    ["an empty section against a full one", { s: { a: "A" } }, { s: {} }, { ...none, missing: ["s.a"], extra: ["s"] }],
+    ["two empty sections", { s: {} }, { s: [] }, none],
+    ["a value that is not text", { a: "A" }, { a: 1 }, { ...none, missing: ["a"], extra: ["a"] }],
+    ["a missing placeholder", { a: "{n} words" }, { a: "words" }, { ...none, placeholders: ["a"] }],
+    ["a renamed placeholder", { a: "{n} of {m}" }, { a: "{n} of {total}" }, { ...none, placeholders: ["a"] }],
+    ["an extra placeholder", { a: "step" }, { a: "step {n}" }, { ...none, placeholders: ["a"] }],
+    ["placeholders in another order", { a: "{step} of {last}" }, { a: "{last}: {step}" }, none],
+    ["a placeholder used twice", { a: "{n}" }, { a: "{n} ({n})" }, none],
+    ["a key named like a prototype member", { constructor: "A" }, {}, { ...none, missing: ["constructor"] }],
+  ])("reports %s", (_, reference, other, gaps) => {
+    expect(catalogueGaps(reference, other)).toEqual(gaps);
+  });
+});
+
+// Every catalogue of the interface has every key of the Croatian one, and only
+// those (D-70, F-06): a key missing in one language is text that never shows.
+describe("interface catalogues", () => {
+  it.each(INTERFACE_LOCALES)("%s has the keys and placeholders of the Croatian catalogue", (locale) => {
+    expect(catalogueGaps(messagesHr, messagesFor(locale))).toEqual(none);
+  });
+});
