@@ -15,18 +15,6 @@
     "reason": "Interni zapis revizijskog traga bez EXECUTE za aplikacijske uloge; zovu ga RPC-ovi koji imaju rutu."
   },
   {
-    "function": "collaboration.accept_revision_request",
-    "status": "ruta dolazi",
-    "reason": "Nastavnik prihvaća odgovor na zahtjev za doradu (§4.14, D-45); RPC s očekivanim brojačem postoji za ductus_app, ruta je korak 3 iz §4.14.",
-    "ticket": "DAN-314"
-  },
-  {
-    "function": "collaboration.create_revision_request",
-    "status": "ruta dolazi",
-    "reason": "Nastavnik otvara zahtjev za doradu na odlomku (§4.14, D-45); RPC postoji za ductus_app, ruta je korak 3 iz §4.14.",
-    "ticket": "DAN-314"
-  },
-  {
     "function": "collaboration.delete_live_state",
     "status": "bez rute",
     "reason": "Brisanje po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
@@ -37,27 +25,9 @@
     "reason": "Brisanje zahtjeva za doradu jednog dokumenta po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
   },
   {
-    "function": "collaboration.reopen_revision_request",
-    "status": "ruta dolazi",
-    "reason": "Nastavnik ponovno otvara zahtjev za doradu kao novu verziju (§4.14, D-45); RPC s očekivanim brojačem postoji za ductus_app, ruta je korak 3 iz §4.14.",
-    "ticket": "DAN-314"
-  },
-  {
-    "function": "collaboration.respond_revision_request",
-    "status": "ruta dolazi",
-    "reason": "Student odgovara na otvorenu verziju zahtjeva za doradu (§4.14, D-45); RPC s očekivanim brojačem postoji za ductus_app, ruta je korak 3 iz §4.14.",
-    "ticket": "DAN-314"
-  },
-  {
     "function": "collaboration.set_thread_state",
     "status": "bez rute",
     "reason": "Interni korak bez EXECUTE za aplikacijske uloge; zovu ga collaboration.resolve_thread i reopen_thread, koje imaju rutu."
-  },
-  {
-    "function": "collaboration.withdraw_revision_request",
-    "status": "ruta dolazi",
-    "reason": "Nastavnik povlači zahtjev za doradu (§4.14, D-45); RPC s očekivanim brojačem postoji za ductus_app, ruta je korak 3 iz §4.14.",
-    "ticket": "DAN-314"
   },
   {
     "function": "identity.close_all_sessions_for_identity",
