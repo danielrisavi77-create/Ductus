@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  demoTaskIds, demoTasksOf, mapLimit, median, parseMetricsArgs, percentile, prMetrics, renderMetrics, summarize,
+  demoTaskIds, demoTasksOf, mapLimit, median, parseMetricsArgs, percentile, prMetrics, renderMetrics, rounds, summarize,
 } from "./metrics-core.mjs";
 
 const SHA = (c) => c.repeat(40);
@@ -86,6 +86,19 @@ test("a short head is not counted as a head or a round", () => {
   assert.equal(m.heads, 1);
   assert.equal(m.qaRounds, 1);
   assert.equal(prMetrics(merged({ headRefOid: "abc123" }), [], new Set()).heads, 0);
+});
+
+// F-015 (Codex on #1657): a round counts only a verdict the status tools show,
+// and only the outcome on that same head.
+test("rounds: a PASS the gate could not count is no round, also beside a counted PASS elsewhere", () => {
+  const plainQa = qa(SHA("a"), "PASS", "2026-10-01T11:00:00Z");
+  delete plainQa.performed_via_github_app;
+  const alone = rounds([plainQa], "qa");
+  assert.deepEqual({ total: alone.total, pass: alone.pass, heads: [...alone.heads] }, { total: 0, pass: 0, heads: [] });
+  const both = rounds([plainQa, qa(SHA("b"), "PASS", "2026-10-02T11:00:00Z")], "qa");
+  assert.deepEqual({ total: both.total, pass: both.pass, heads: [...both.heads] }, { total: 1, pass: 1, heads: [SHA("b")] });
+  const negative = rounds([{ ...plainQa, body: plainQa.body.replace("PASS", "FAIL") }], "qa");
+  assert.deepEqual({ total: negative.total, pass: negative.pass }, { total: 1, pass: 0 });
 });
 
 test("a PR without verdicts or a parsable date still yields a row", () => {

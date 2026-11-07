@@ -62,12 +62,17 @@ export function demoWorkLabels(rows) {
  * (any FAIL/BLOCK wins, else PASS) via latestVerdict. Other heads are ignored.
  */
 export function rounds(comments, kind) {
+  // F-015: the same verdicts latestVerdict shows (no PASS the gate could not
+  // count), and only the outcome on that head, never a stale one from another.
   const heads = new Set(
     parseVerdicts(comments, kind)
-      .filter((e) => COUNTED.has(e.verdict) && e.head && FULL_SHA.test(e.head))
+      .filter((e) => COUNTED.has(e.verdict) && (e.verified || e.verdict !== "PASS") && e.head && FULL_SHA.test(e.head))
       .map((e) => e.head.toLowerCase()),
   );
-  const list = [...heads].map((head) => latestVerdict(comments, kind, head)?.verdict);
+  const list = [...heads].map((head) => {
+    const v = latestVerdict(comments, kind, head);
+    return v?.current ? v.verdict : null;
+  });
   return { heads, total: list.length, pass: list.filter((v) => v === "PASS").length };
 }
 
