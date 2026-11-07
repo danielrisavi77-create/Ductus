@@ -241,20 +241,41 @@ export function externalReason(pr, repository, ownerLogin) {
   return null;
 }
 
+const named = (v) => typeof v === "string" && v !== "";
+/**
+ * F-010 (plan #1671 I1-I4): whether `pr` (toPr shape) is a PR whose head lives in
+ * `repository` as read by repoId(). ok only when the gate's predicate holds
+ * (pr.sameRepository, head and base from one REST object) and the base is that
+ * repository. `readable` is true when all three names were read, so the
+ * head is plainly not in it; when a name is missing the answer is unread.
+ */
+export function headOrigin(pr, repository) {
+  const head = pr?.headRepo;
+  const base = pr?.baseRepo;
+  if (pr?.sameRepository === true && named(repository) && base === repository) return { ok: true, readable: true, text: null };
+  if (named(head) && named(base) && head !== base) return { ok: false, readable: true, text: `head ${head} is outside base ${base} (F-010)` };
+  if (!named(repository)) return { ok: false, readable: false, text: "this repository could not be read (F-010)" };
+  if (!named(head) || !named(base)) return { ok: false, readable: false, text: `head or base repository could not be read (head ${named(head) ? head : "unknown"}, base ${named(base) ? base : "unknown"}) (F-010)` };
+  return { ok: false, readable: true, text: `base ${base} is not this repository ${repository} (F-010)` };
+}
+
 /** Returns [{level: PASS|FAIL|INFO, id, text}]. */
 export function evaluateReady(d) {
   const out = [];
   const add = (level, id, text) => out.push({ level, id, text });
   const gate = d.gate;
+  const short = String(d.head ?? "?").slice(0, 8);
   // {error}: the read failed, which is not evidence that the commit has no status.
-  if (gate?.error) add("FAIL", "gate", `gate could not be read on ${d.head.slice(0, 8)} (read error, not a missing status; retry): ${gate.error}`);
+  if (gate?.error) add("FAIL", "gate", `gate could not be read on ${short} (read error, not a missing status; retry): ${gate.error}`);
   else add(gate?.state === "success" ? "PASS" : "FAIL", "gate",
-    `gate ${gate?.state ?? "missing"} on ${d.head.slice(0, 8)}${gate?.description ? `: ${gate.description}` : ""}`);
+    `gate ${gate?.state ?? "missing"} on ${short}${gate?.description ? `: ${gate.description}` : ""}`);
   const ck = evaluateChecks(d.rollup);
   if (ck.total === 0) add("FAIL", "ci", "no CI checks reported");
   else if (ck.bad.length) add("FAIL", "ci", `CI not green: ${ck.bad.map((b) => `${b.name}=${b.state}`).join(", ")}`);
   else add("PASS", "ci", `CI green (${ck.total} checks)`);
-  const external = externalReason(d.pr, d.repository, d.ownerLogin);
+  // F-010: the head's origin first (the gate's predicate), then the owner rules as before.
+  const origin = headOrigin(d.pr, d.repository);
+  const external = origin.ok ? externalReason(d.pr, d.repository, d.ownerLogin) : origin.text;
   add(external ? "FAIL" : "PASS", "origin", external ? `external PR, owner must adopt: ${external}` : "owner's PR from this repository");
   add(d.base === "main" ? "PASS" : "FAIL", "base", `base ${d.base}`);
   add(d.mergeable === "MERGEABLE" ? "PASS" : "FAIL", "mergeable", `mergeable ${d.mergeable}`);

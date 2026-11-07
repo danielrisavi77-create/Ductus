@@ -5,7 +5,9 @@ import { evaluateGate } from "../engineering/review-gate-core.mjs";
 import { EXIT_CODES, evaluateMergeReady, pickStatus, STATES } from "./merge-ready-core.mjs";
 
 const HEAD = "23db58e9709afc5fcb3c77194aacd52def04b9ce";
-const pr = (over = {}) => ({ number: 1041, state: "OPEN", isDraft: false, headRefOid: HEAD, baseRefName: "main", mergeable: "MERGEABLE", ...over });
+// F-010: a head in this repository (toPr shape); the origin cases are in origin-tools.test.mjs.
+const REPO = "owner1/repo1";
+const pr = (over = {}) => ({ number: 1041, state: "OPEN", isDraft: false, headRefOid: HEAD, baseRefName: "main", mergeable: "MERGEABLE", headRepo: REPO, baseRepo: REPO, sameRepository: true, ...over });
 // The required contexts of main's branch protection as GitHub returns them (1. 11. 2026.).
 const ACTIONS = 15368;
 const REQUIRED_NAMES = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"];
@@ -16,7 +18,7 @@ const green = REQUIRED_NAMES.map((name) => run(name));
 const GATE_CARRIED = { state: "success", description: "Review PASS and QA PASS (carried from 61f205dd, D-101)." };
 const NEEDS_OWNER = { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 const OWNER_OK = { state: "success", description: "Owner merge command names this head." };
-const ready = (over = {}) => ({ pr: pr(), mergeState: "CLEAN", gate: GATE_CARRIED, authorization: OWNER_OK, rollup: green, required: REQUIRED, threads: { count: 0, authors: [] }, ...over });
+const ready = (over = {}) => ({ pr: pr(), mergeState: "CLEAN", gate: GATE_CARRIED, authorization: OWNER_OK, rollup: green, required: REQUIRED, threads: { count: 0, authors: [] }, repository: REPO, ...over });
 const level = (r, id) => r.checks.find((c) => c.id === id)?.level;
 
 test("a carried gate pass (D-101) with no QA verdict on the head is ready: the gate decides, not a recount", () => {
