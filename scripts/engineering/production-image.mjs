@@ -22,7 +22,7 @@ const HEREDOC = /<<-?\s*["']?[A-Za-z_]\w*["']?/;
 
 const finding = (code, line, detail) => ({ code, line, detail });
 
-/** Logical instructions: comments dropped, continuation lines joined. */
+/** Logical instructions: comments dropped, continuation lines joined as BuildKit does, with nothing inserted. */
 function instructions(text) {
   const result = [];
   let pending = null;
@@ -30,7 +30,7 @@ function instructions(text) {
     if (/^\s*#/.test(raw) || raw.trim() === "") return;
     const continued = /\\\s*$/.test(raw);
     const part = continued ? raw.replace(/\\\s*$/, "") : raw;
-    pending = pending === null ? { line: index + 1, text: part } : { ...pending, text: `${pending.text} ${part.trim()}` };
+    pending = pending === null ? { line: index + 1, text: part } : { ...pending, text: pending.text + part };
     if (!continued) {
       result.push(pending);
       pending = null;
@@ -43,12 +43,20 @@ function instructions(text) {
   });
 }
 
+/** Leading --flag words and the words after them. */
+function leadingFlags(args) {
+  const words = args.split(/\s+/).filter(Boolean);
+  const flags = [];
+  while (words.length > 0 && words[0].startsWith("--")) flags.push(words.shift());
+  return { flags, words };
+}
+
 /** Splits leading --flags off; returns them as a map and the rest as words. */
 function flagsAndWords(args) {
-  const words = args.split(/\s+/).filter(Boolean);
+  const { flags: list, words } = leadingFlags(args);
   const flags = new Map();
-  while (words.length > 0 && words[0].startsWith("--")) {
-    const [name, ...value] = words.shift().slice(2).split("=");
+  for (const flag of list) {
+    const [name, ...value] = flag.slice(2).split("=");
     flags.set(name.toLowerCase(), value.join("="));
   }
   return { flags, words };
@@ -145,6 +153,12 @@ export function checkDockerfile(text) {
       findings.push(finding("unknown-instruction", step.line, step.keyword));
       continue;
     }
+    // BuildKit strips quotes and escapes in every leading flag; the guard reads none of them.
+    const quoted = leadingFlags(step.args).flags.filter((flag) => /["'\\]/.test(flag));
+    if (quoted.length > 0) {
+      findings.push(...quoted.map((flag) => finding("quoted-flag", step.line, flag)));
+      continue;
+    }
     if (step.keyword === "FROM") {
       const { words } = flagsAndWords(step.args);
       const [reference = "", as, name] = words;
@@ -174,10 +188,15 @@ export function checkDockerfile(text) {
         break;
       case "RUN":
         // A bind or cache mount can read from another image: same pin rule as COPY --from.
-        for (const word of step.args.split(/\s+/)) {
-          if (!word.startsWith("--")) break;
-          const mount = word.match(/^--mount=(.*)$/i)?.[1];
-          const from = mount?.split(",").find((option) => /^from=/i.test(option))?.slice(5);
+        // BuildKit keeps the last of a repeated key, so a repeated key fails closed.
+        for (const flag of leadingFlags(step.args).flags) {
+          const options = flag.match(/^--mount=(.*)$/i)?.[1].split(",") ?? [];
+          const keys = options.map((option) => option.split("=")[0].toLowerCase());
+          if (new Set(keys).size !== keys.length) {
+            findings.push(finding("repeated-mount-key", step.line, flag));
+            continue;
+          }
+          const from = options.find((option) => /^from=/i.test(option))?.slice(5);
           if (from !== undefined && !/^\d+$/.test(from) && !stages.some((s) => s.name === from.toLowerCase())) {
             imageFinding(from, step.line);
           }
