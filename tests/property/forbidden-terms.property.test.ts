@@ -178,3 +178,49 @@ test.prop([fc.constantFrom(...PHRASES), gap, fc.boolean()])("an element boundary
   const spaced = inside ? ` ${word}${between} ${place}` : `${word} ${between}${place} `;
   expect(findForbiddenTermsInMarkup(joined, spaced).length).toBe(ends ? 1 : 0);
 });
+
+// D-276, owner decision of 7. 11. 2026. ("Promijeni pristup"): a root is found inside any token,
+// whatever prefix, suffix or compound it stands in and whatever words or numbers stand around it.
+const FLAGGED = "flagged, flagged for review";
+const JUDGEMENT = "cheating, dishonest, misconduct";
+const SCORE = "trust score, attention score";
+const DETECTED = "AI-detected, flagged as AI";
+const affix = fc.string({ unit: fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz"), maxLength: 6 });
+const joiner = fc.constantFrom("", "-", "_", " ", ".", "/", "camel");
+const apart = fc.constantFrom("-", "_", " ", ".", "/", ": ");
+const words = fc.array(fc.oneof(fc.constantFrom("the", "selected", "all", "late", "student", "your", "of", "Submissions"), fc.nat({ max: 999 }).map(String)), {
+  maxLength: 4,
+});
+const glue = (left: string, how: string, right: string) =>
+  how === "camel" ? left + right.charAt(0).toUpperCase() + right.slice(1) : left + how + right;
+const inToken = (before: string, how: string, root: string, after: string) => glue(glue(before, how, root), how, after);
+const sentence = (parts: readonly string[], how: string) => parts.filter((part) => part !== "").join(how);
+// The one exception ("feature flag") is kept out of the generated text, not out of the scanner.
+const FEATURE_FLAG = /feature[\W_]*flags?(?![a-z])/i;
+
+test.prop([fc.constantFrom(["flag", FLAGGED], ["flagged", FLAGGED], ["flagging", FLAGGED], ["cheat", JUDGEMENT], ["dishonest", JUDGEMENT], ["misconduct", JUDGEMENT]), affix, joiner, affix, words, words, apart, fc.boolean()])(
+  "a D-276 root is found inside any token and among any words",
+  ([root, entry], before, how, after, lead, tail, between, upper) => {
+    const token = inToken(before, how, upper ? root.toUpperCase() : root, after);
+    const text = sentence([...lead, token, ...tail], between);
+    fc.pre(!FEATURE_FLAG.test(text));
+    expect(findForbiddenTerms(text, "en").map((term) => term.entry)).toContain(entry);
+  },
+);
+
+test.prop([fc.constantFrom("trust", "attention"), fc.constantFrom("score", "scores", "scored", "scoring"), affix, affix, joiner, words, apart, fc.boolean()])(
+  "a score next to trust or attention is found with any words or numbers between them",
+  (first, score, before, after, how, middle, between, reversed) => {
+    const pair = reversed ? [inToken(before, how, score, ""), inToken("", how, first, after)] : [inToken(before, how, first, ""), inToken("", how, score, after)];
+    const text = middle.length === 0 && how !== " " ? glue(pair[0]!, how, pair[1]!) : sentence([pair[0]!, ...middle, pair[1]!], between);
+    expect(findForbiddenTerms(text, "en").map((term) => term.entry)).toContain(SCORE);
+  },
+);
+
+test.prop([fc.constantFrom("AI", "A.I.", "ai", "artificial intelligence"), fc.constantFrom("detected", "detection", "detector", "detects", "flagged", "flag"), affix, words, apart, fc.boolean()])(
+  "a detection or a flag next to AI is found with any words or numbers between them",
+  (ai, verb, after, middle, between, reversed) => {
+    const parts = reversed ? [verb + after, ...middle, ai] : [ai, ...middle, verb + after];
+    expect(findForbiddenTerms(sentence(parts, between), "en").map((term) => term.entry)).toContain(DETECTED);
+  },
+);

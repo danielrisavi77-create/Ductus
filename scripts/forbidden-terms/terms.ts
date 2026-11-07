@@ -18,6 +18,11 @@
  */
 export type Language = "hr" | "en";
 
+/** What a dictionary row is matched with: folded text in, whether the row occurs out. */
+export interface Matcher {
+  test(folded: string): boolean;
+}
+
 export interface ForbiddenTerm {
   /** Entry from the dictionary table, as written in PRODUCT.md. */
   readonly entry: string;
@@ -29,7 +34,8 @@ export interface ForbiddenTerm {
    * SQL statement and log line is in English.
    */
   readonly lang: Language;
-  readonly pattern: RegExp;
+  /** A RegExp literal, or a matcher of roots inside tokens (the D-276 rows). Only `test` is called. */
+  readonly pattern: Matcher;
   /**
    * Set when the pattern allows the word in front of certain words
    * ("spremljeno na uređaju"), so whether it matches depends on what follows.
@@ -72,6 +78,46 @@ const AI_ORIGIN = "iz AI pomoćnika (model, vrijeme)";
 const INTACT = "zapis je cjelovit i neizmijenjen od primitka";
 const PASTED = "zalijepljeno (izvor nije opažen)";
 const GAP = "praznina u zapisu";
+
+// The additional English list (D-276, NQ12) is read by root, not by phrase (owner decision of
+// 7. 11. 2026., "Promijeni pristup"). The text arrives folded (`foldText`): lower case, NFKC, no
+// invisible characters, and every hyphen, underscore, slash or other mark between letters made a
+// space; its tokens are what stands between the spaces. A token that contains a root holds it,
+// whatever prefix, suffix or compound is around it, so "reflagged", "uncheatable" and an
+// identifier in camelCase ("trustScored", one token once folded) are caught. A row that needs two
+// roots ("trust" and "score") finds them anywhere in the same reading, whatever words or numbers
+// stand between. The rows fail closed: the switch "feature flag" is the only exception, and a lone
+// "Flag" or "Flagship" is reported. "risk score" and "suspicion score" stay the rows "risk" and
+// "suspicious", so they are reported once. The condition "about the work or the student"
+// cannot be read from a string. Known limits: a letter of another script that looks Latin (a Cyrillic
+// "а" in "flаg") and a mark inside a root ("dis-honest") do not read as the root.
+const FEATURE_FLAG = /(?<![\p{L}\p{N}])feature ?flags?(?![\p{L}\p{N}])/gu;
+const SPELLED_AI = /(?<![\p{L}\p{N}])a i(?![\p{L}\p{N}])/gu;
+
+function tokensOf(folded: string): string[] {
+  return folded.replace(FEATURE_FLAG, " ").replace(SPELLED_AI, "ai").split(/[^\p{L}\p{N}]+/u);
+}
+
+const holds = (tokens: readonly string[], roots: readonly string[]) => tokens.some((token) => roots.some((root) => token.includes(root)));
+
+/** Matches folded text in which some token holds a root of every group. */
+function rootsInTokens(...groups: readonly (readonly string[])[]): Matcher {
+  return {
+    test: (folded) => {
+      const tokens = tokensOf(folded);
+      return groups.every((roots) => holds(tokens, roots));
+    },
+  };
+}
+
+/** "AI" is a whole token (inside a word it is "said", "detail"), or written into one token with the verb ("aiDetected"). */
+const AI_DETECTED: Matcher = {
+  test: (folded) => {
+    const tokens = tokensOf(folded);
+    const ai = tokens.some((token) => token === "ai" || token.includes("artificial"));
+    return (ai && holds(tokens, ["detect", "flag"])) || holds(tokens, ["aidetect", "aiflag"]);
+  },
+};
 
 export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   { entry: "sumnjivo", instead: NOTHING, lang: "hr", pattern: /sumnj/u },
@@ -233,38 +279,11 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
       /(?<!\p{L})saved(?!\p{L})(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
     contextual: { word: /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])/u },
   },
-  // The additional English list (D-276, NQ12). "risk score" and "suspicion score" stay the rows "risk" and "suspicious",
-  // so they are reported once; the words "score", "trust", "attention", "detected" and the noun "flag" stay allowed alone.
-  // The condition "about the work or the student" cannot be read from a string, so every row holds in all
-  // interface text, as "rizik" does.
-  {
-    entry: "trust score, attention score",
-    instead: "(ništa; nema zbroja ni ocjene)",
-    lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:trust|attention) scor(?:e|es|ing)(?![\p{L}\p{N}])/u,
-  },
-  {
-    entry: "cheating, dishonest, misconduct",
-    instead: "(ništa; opis činjenice bez ocjene)",
-    lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:cheat|dishonest|misconduct)/u,
-  },
-  {
-    entry: "AI-detected, flagged as AI",
-    instead: "(ništa; podrijetlo teksta ne procjenjuje se, pravilo 13)",
-    lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:(?:ai|a i) detect|(?:detect\p{L}*|flag(?:s|ged|ging)?) (?:as |by )?(?:ai|a i|artificial)(?![\p{L}\p{N}]))/u,
-  },
-  // Every form of the verb, with or without a prefix ("reflagged", "unflag"), and the noun where it marks a
-  // student or a work ("Flag this student", "Flag selected submission", "red flag"). Up to three words may
-  // stand between the verb and the work; "Feature flags" and a lone "flag" stay allowed.
-  {
-    entry: "flagged, flagged for review",
-    instead: "(ništa; činjenica bez ocjene)",
-    lang: "en",
-    pattern:
-      /(?<![\p{L}\p{N}])(?:\p{L}*flagg(?:ed|ing)|\p{L}+flags?|red flags?|flags? (?:for|as|(?:\p{L}+ ){0,3}(?:student|work|submission|thesis|paper|text|document)s?))(?![\p{L}\p{N}])/u,
-  },
+  // The additional English list (D-276, NQ12), read by root inside tokens: see `rootsInTokens`.
+  { entry: "trust score, attention score", instead: "(ništa; nema zbroja ni ocjene)", lang: "en", pattern: rootsInTokens(["trust", "attention"], ["scor"]) },
+  { entry: "cheating, dishonest, misconduct", instead: "(ništa; opis činjenice bez ocjene)", lang: "en", pattern: rootsInTokens(["cheat", "dishonest", "misconduct"]) },
+  { entry: "AI-detected, flagged as AI", instead: "(ništa; podrijetlo teksta ne procjenjuje se, pravilo 13)", lang: "en", pattern: AI_DETECTED },
+  { entry: "flagged, flagged for review", instead: "(ništa; činjenica bez ocjene)", lang: "en", pattern: rootsInTokens(["flag"]) },
 ];
 
 /**
