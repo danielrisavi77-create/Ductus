@@ -512,7 +512,8 @@ function currentNegative(verdicts) {
   return null;
 }
 
-// The canonical fields of each verdict kind, for the gate and headVerdicts.
+// The canonical fields of each verdict kind, for headVerdicts and headNegatives
+// (the same fields the gate passes to latestVerdicts).
 export const VERDICT_KINDS = Object.freeze({
   review: Object.freeze({ agentField: "Agent-Review", headField: "Review-Head", verdictField: "Review-Verdict", role: "reviewer" }),
   qa: Object.freeze({ agentField: "QA-Agent", headField: "QA-Head", verdictField: "QA-Verdict", role: "qa", extraField: "QA-Scope" }),
@@ -642,17 +643,35 @@ function evaluateGateCore({
     const overrideOrder = carriedOverrides
       .map((entry) => [entry.createdAt, entry.index])
       .reduce((a, b) => (compareOrder(a, b) >= 0 ? a : b));
-    const voids = (kind) =>
-      [...latestVerdicts(trusted, { ...kind, headSha, carriedHeads }).values()]
+    const voids = (agentField, headField, verdictField, role, extraField) =>
+      [...latestVerdicts(trusted, { agentField, headField, verdictField, role, headSha, extraField, carriedHeads }).values()]
         .some((result) => NEGATIVE.has(result.verdict) && (result.current || compareOrder(result.order, overrideOrder) > 0));
-    const negative = voids(VERDICT_KINDS.review) || voids(VERDICT_KINDS.qa);
+    const negative =
+      voids("Agent-Review", "Review-Head", "Review-Verdict", "reviewer") ||
+      voids("QA-Agent", "QA-Head", "QA-Verdict", "qa", "QA-Scope");
     if (!negative) {
       return { state: "success", description: `Owner override carried for ${risk} risk.` };
     }
   }
 
-  const reviews = latestVerdicts(trusted, { ...VERDICT_KINDS.review, headSha, carriedHeads });
-  const qa = latestVerdicts(trusted, { ...VERDICT_KINDS.qa, headSha, carriedHeads });
+  const reviews = latestVerdicts(trusted, {
+    agentField: "Agent-Review",
+    headField: "Review-Head",
+    verdictField: "Review-Verdict",
+    role: "reviewer",
+    headSha,
+    carriedHeads,
+  });
+
+  const qa = latestVerdicts(trusted, {
+    agentField: "QA-Agent",
+    headField: "QA-Head",
+    verdictField: "QA-Verdict",
+    role: "qa",
+    headSha,
+    extraField: "QA-Scope",
+    carriedHeads,
+  });
 
   // A current FAIL or BLOCK holds the gate whatever the PR body declares. The
   // body is written by the party under review, so the declared author and the
