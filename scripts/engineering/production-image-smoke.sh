@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Checks a built production web image (DAN-298, attack plan #1687) without
-# pushing it: numeric non-root user, no local-only or secret files, no secret
-# in its files, history or config (gitleaks, with a planted canary as negative
-# control), and at run time the local login refused (D-09) while the process
+# pushing it: numeric non-root user, built on the pinned base, no local-only or
+# secret file and no secret (gitleaks) in any layer the build adds, its history
+# or config, with planted canaries and a copied-then-deleted secret as negative
+# controls, and at run time the local login refused (D-09) while the process
 # serves /api/health. Usage: production-image-smoke.sh <image>
 set -euo pipefail
 
@@ -11,8 +12,10 @@ gitleaks_image="ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb7900
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 work="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ductus-image.XXXXXX")"
 container=""
+negative="ductus-image-negative:$$"
 cleanup() {
   if [ -n "$container" ]; then docker rm -f "$container" >/dev/null 2>&1 || true; fi
+  docker image rm "$negative" >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -23,42 +26,97 @@ user="$(docker image inspect --format '{{.Config.User}}' "$image")"
 [[ "$user" =~ ^[1-9][0-9]*(:[1-9][0-9]*)?$ ]] || fail "image user is '$user', not a numeric non-root user"
 echo "user: $user"
 
-# 2. Files: nothing local-only, secret or from the repository's tooling.
-created="$(docker create "$image")"
-mkdir "$work/files"
-docker export "$created" | tar -x -C "$work/files" app
-docker rm "$created" >/dev/null
-forbidden="$(cd "$work/files" && find app \( -name '.env*' -o -name '.git' -o -name '.npmrc' -o -path '*fake-oidc*' -o -path 'app/infra*' -o -name '*.test.*' -o -name '*.fixture.*' \) -print)"
-[ -z "$forbidden" ] || fail "forbidden files in image: $forbidden"
-[ -f "$work/files/app/server.js" ] || fail "app/server.js missing: the export found no application"
-echo "files: $(find "$work/files/app" -type f | wc -l) under /app, none forbidden"
-
-# 3. Secrets: files, layer history and config, then a canary that must be found.
-docker history --no-trunc --format '{{.CreatedBy}}' "$image" > "$work/files/history.txt"
-docker image inspect "$image" > "$work/files/inspect.json"
+# 2. Layers. The image must start with exactly the layers of the pinned base
+# (its digest is in the Dockerfile); every layer the build adds is unpacked on
+# its own, so a file deleted by a later layer is still read.
+base="$(sed -n 's/^ARG WEB_BASE_IMAGE=//p' "$repo/infra/docker/web.Dockerfile")"
+[ -n "$base" ] || fail "no WEB_BASE_IMAGE in web.Dockerfile"
+docker image inspect "$base" >/dev/null 2>&1 || docker pull -q "$base" >/dev/null
+# Unpacks the layers <image> adds on top of <parent> into <dir>/<index>.
+unpack() {
+  local archive="$work/save" count
+  rm -rf "$archive" && mkdir -p "$archive" "$3"
+  docker image save "$1" | tar -x -C "$archive"
+  docker image inspect --format '{{json .RootFS.Layers}}' "$2" > "$archive/parent.json"
+  docker image inspect --format '{{json .RootFS.Layers}}' "$1" > "$archive/image.json"
+  count="$(python3 -I - "$archive" <<'PY2'
+import json, sys
+root = sys.argv[1]
+parent = json.load(open(f"{root}/parent.json"))
+layers = json.load(open(f"{root}/image.json"))
+blobs = json.load(open(f"{root}/manifest.json"))[0]["Layers"]
+if len(blobs) != len(layers) or layers[: len(parent)] != parent:
+    sys.exit("the image does not start with the layers of its parent")
+with open(f"{root}/added.txt", "w") as out:
+    out.writelines(f"{blob}\n" for blob in blobs[len(parent):])
+print(len(blobs) - len(parent))
+PY2
+)" || fail "$1 is not built on $2"
+  local index=0
+  while read -r blob; do
+    mkdir "$3/$index" && tar -x -f "$archive/$blob" -C "$3/$index"
+    index=$((index + 1))
+  done < "$archive/added.txt"
+  chmod -R u+rwX "$3" && rm -rf "$archive"
+  echo "$count"
+}
+# Paths that must not be in any layer, anywhere in the file system.
+forbidden() {
+  (cd "$1" && find . \( -name '.env*' -o -name '.git' -o -name '.npmrc' -o -path '*fake-oidc*' \
+    -o -path './*/app/infra*' -o -name '*.test.*' -o -name '*.fixture.*' \) -print)
+}
 scan() {
-  docker run --rm --user "$(id -u):$(id -g)" -v "$work/files:/scan:ro" -v "$work:/out" \
+  docker run --rm --user "$(id -u):$(id -g)" -v "$1:/scan:ro" -v "$work:/out" \
     -v "$repo/infra/docker/image-gitleaks.toml:/gitleaks.toml:ro" "$gitleaks_image" \
     dir --config /gitleaks.toml --redact --no-banner --exit-code 3 \
-    --report-format json --report-path "/out/$1.json" /scan
+    --report-format json --report-path "/out/$2.json" /scan
 }
-status=0; scan clean || status=$?
-[ "$status" -eq 0 ] || fail "gitleaks found secrets in the image or did not run (exit $status)"
-manifest="$work/files/app/.next/server/middleware-manifest.json"
-[ -f "$manifest" ] || fail "middleware manifest missing: the allowlisted path no longer exists"
-# Two canaries in a manifest the exception covers: another key name, and a
-# Next.js key name with a value of the wrong form. Both must be reported.
+layers="$work/layers"
+added="$(unpack "$image" "$base" "$layers")"
+echo "layers: built on $base, $added added layers unpacked"
+
+# 3. Files and secrets in every added layer, its history and its config.
+found="$(forbidden "$layers")"
+[ -z "$found" ] || fail "forbidden files in image layers: $found"
+manifest="$(cd "$layers" && find . -path './*/app/.next/server/middleware-manifest.json' -print -quit)"
+[ -n "$(cd "$layers" && find . -path './*/app/server.js' -print -quit)" ] && [ -n "$manifest" ] \
+  || fail "app/server.js or the middleware manifest missing: the layers hold no application"
+mkdir "$layers/meta"
+docker history --no-trunc --format '{{.CreatedBy}}' "$image" > "$layers/meta/history.txt"
+docker image inspect "$image" > "$layers/meta/inspect.json"
+status=0; scan "$layers" clean || status=$?
+[ "$status" -eq 0 ] || fail "gitleaks found secrets in the image layers or did not run (exit $status)"
+echo "files and secrets: none in $(find "$layers" -type f | wc -l) files of the added layers"
+
+# Negative controls. Two canaries in a manifest the exception covers: another
+# key name, and a Next.js key name with a value of the wrong form.
 canary="$(od -An -N20 -tx1 /dev/urandom | tr -d ' \n')"
-printf '\n"DUCTUS_CANARY_API_KEY": "%s"\n"__NEXT_PREVIEW_MODE_SIGNING_KEY": "%s"\n' "$canary" "$canary" >> "$manifest"
-status=0; scan canary || status=$?
+printf '\n"DUCTUS_CANARY_API_KEY": "%s"\n"__NEXT_PREVIEW_MODE_SIGNING_KEY": "%s"\n' "$canary" "$canary" >> "$layers/$manifest"
+status=0; scan "$layers" canary || status=$?
 [ "$status" -eq 3 ] || fail "gitleaks missed the canaries (exit $status)"
-python3 -I - "$work/canary.json" <<'PY' || fail "canary findings not reported as expected"
+# A secret and an .env file copied, then deleted by a later layer: invisible
+# in the running image, but each must still be found in its layer.
+mkdir "$work/negative"
+printf '"DUCTUS_CANARY_API_KEY": "%s"\n' "$canary" > "$work/negative/leak.txt"
+printf '%s\n' "FROM $image" "USER 0:0" "COPY leak.txt /opt/ductus-leak/key.txt" "COPY leak.txt /app/.env.leak" \
+  "RUN rm -rf /opt/ductus-leak /app/.env.leak" "USER $user" > "$work/negative/Dockerfile"
+docker build -q -t "$negative" "$work/negative" >/dev/null
+unpack "$negative" "$image" "$work/deleted" >/dev/null
+[ -n "$(cd "$work/deleted" && find . -name '.wh.ductus-leak' -print -quit)" ] || fail "the negative control deleted nothing"
+forbidden "$work/deleted" | grep -q '/app/\.env\.leak$' || fail "a deleted .env file was not found in its layer"
+status=0; scan "$work/deleted" deleted || status=$?
+[ "$status" -eq 3 ] || fail "gitleaks missed the deleted secret (exit $status)"
+python3 -I - "$work/canary.json" "$work/deleted.json" <<'PY2' || fail "canary findings not reported as expected"
 import json, sys
-findings = json.load(open(sys.argv[1], encoding="utf-8"))
-lines = sorted(f["StartLine"] for f in findings if f["File"].endswith("middleware-manifest.json"))
-sys.exit(0 if len(findings) == 2 and len(lines) == 2 else f"unexpected findings: {len(findings)}")
-PY
-echo "secrets: none; both canaries next to the allowed keys found"
+canary = json.load(open(sys.argv[1], encoding="utf-8"))
+deleted = json.load(open(sys.argv[2], encoding="utf-8"))
+ok = (
+    len(canary) == 2 and all(f["File"].endswith("middleware-manifest.json") for f in canary)
+    and sorted(f["File"].split("/", 3)[-1] for f in deleted) == ["app/.env.leak", "opt/ductus-leak/key.txt"]
+)
+sys.exit(0 if ok else f"unexpected findings: {len(canary)} canary, {len(deleted)} deleted")
+PY2
+echo "negative controls: both manifest canaries and the copied-then-deleted secret and .env found"
 
 # 4. Run time. Without a database URL the image has no default and stops.
 status=0; docker run --rm --read-only "$image" > "$work/bare.log" 2>&1 || status=$?
