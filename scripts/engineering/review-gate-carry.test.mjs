@@ -223,7 +223,7 @@ test("a success that counts a carried verdict names the earlier head", () => {
 });
 
 test("evaluatePullRequest passes carried heads to the gate", () => {
-  const pr = { body: body(), head: { sha: head }, changed_files: 1, auto_merge: null };
+  const pr = { body: body(), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1, auto_merge: null };
   const files = [{ filename: "apps/web/a.ts", status: "modified" }];
   const comments = [review(earlier)];
   const carried = evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHeads: new Set([earlier]) });

@@ -27,7 +27,7 @@ const qa = (sha, verdict = "PASS") =>
 
 const pullRequest = (filenames, comments, extra = {}) => {
   const files = filenames.map((filename) => ({ filename, status: "modified" }));
-  const pr = { body: body(), head: { sha: head }, changed_files: files.length, auto_merge: null };
+  const pr = { body: body(), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: files.length, auto_merge: null };
   return evaluatePullRequest({ pr, files, comments, ownerLogin, ...extra }).result;
 };
 
@@ -150,7 +150,7 @@ test("through the gate, a rename from code or gate code into a test or document 
     ["docs/A.md", "scripts/engineering/review-gate-core.mjs"],
   ]) {
     const files = [{ filename, previous_filename, status: "renamed" }];
-    const pr = { body: body(), head: { sha: head }, changed_files: 1, auto_merge: null };
+    const pr = { body: body(), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1, auto_merge: null };
     const { result } = evaluatePullRequest({ pr, files, comments: [review(head)], ownerLogin });
     assert.equal(result.state, "pending", filename);
     assert.match(result.description, /waiting for separately authenticated QA PASS/, filename);
@@ -159,7 +159,7 @@ test("through the gate, a rename from code or gate code into a test or document 
 
 test("the exemption note is only for critical PRs", () => {
   for (const risk of ["low", "standard"]) {
-    const pr = { body: body(risk), head: { sha: head }, changed_files: 1, auto_merge: null };
+    const pr = { body: body(risk), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1, auto_merge: null };
     const files = [{ filename: "docs/A.md", status: "modified" }];
     const { result } = evaluatePullRequest({ pr, files, comments: [review(head)], ownerLogin });
     assert.equal(result.state, "success", risk);

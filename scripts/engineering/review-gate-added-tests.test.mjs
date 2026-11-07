@@ -231,15 +231,16 @@ test("a PR from a fork gets no D-189 exemption", () => {
     for (const headRepo of [fork, null]) {
       const label = `${risk} ${file.filename} ${headRepo?.full_name ?? "deleted fork"}`;
       const out = evaluate(risk, [file], { headRepo });
-      assert.equal(out.result.state, "pending", label);
-      assert.match(out.result.description, /Waiting for independently authenticated review/, label);
+      // F-010: such a head now fails closed before any exemption or verdict is read.
+      assert.equal(out.result.state, "failure", label);
+      assert.match(out.result.description, /head is not in this repository/i, label);
       assert.equal(out.mergeAuthorization.state, "pending", label);
       assert.equal(out.autoMergeEligible.state, "pending", label);
     }
   }
 });
 
-test("a reviewed fork PR that only adds tests is still not auto-merge eligible and needs the owner command", () => {
+test("a reviewed fork PR that only adds tests still fails closed (F-010)", () => {
   const review = {
     body: `Agent-Review: claude:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`,
     user: { login: ownerLogin },
@@ -248,7 +249,8 @@ test("a reviewed fork PR that only adds tests is still not auto-merge eligible a
     created_at: new Date(1_700_000_000_000).toISOString(),
   };
   const out = run([{ filename: "tests/unit/y.test.ts", status: "added" }], { headRepo: fork, comments: [review] });
-  assert.equal(out.result.state, "success");
+  assert.equal(out.result.state, "failure");
+  assert.match(out.result.description, /head is not in this repository/i);
   assert.equal(out.mergeAuthorization.state, "pending");
   assert.equal(out.autoMergeEligible.state, "pending");
 });
