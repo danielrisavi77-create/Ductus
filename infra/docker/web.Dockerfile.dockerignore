@@ -1,0 +1,21 @@
+# Allowlist for infra/docker/web.Dockerfile (DAN-298): nothing enters the
+# build context unless named here. scripts/engineering/production-image.mjs
+# checks the form of this file.
+*
+!package.json
+!pnpm-lock.yaml
+!next.config.ts
+!tsconfig.json
+!eslint.config.mjs
+!middleware.ts
+!instrumentation.ts
+!app
+!src
+!config
+!public
+# Tests and their fixtures import from outside the context.
+**/*.test.ts
+**/*.test.tsx
+**/*.fixture.ts
+# Last, so that no re-include above brings a local secret back.
+**/.env*
