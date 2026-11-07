@@ -224,3 +224,32 @@ test.prop([fc.constantFrom("AI", "A.I.", "ai", "artificial intelligence"), fc.co
     expect(findForbiddenTerms(sentence(parts, between), "en").map((term) => term.entry)).toContain(DETECTED);
   },
 );
+
+// Contract confirmation c.6711708837: a root broken by marks or spaces, or written with letters of
+// another script that look Latin, is still read as the root.
+const LOOKS_LATIN: Readonly<Record<string, readonly string[]>> = {
+  a: ["а", "α"],
+  c: ["с"],
+  e: ["е", "ε"],
+  i: ["і", "ι"],
+  o: ["о", "ο"],
+  s: ["ѕ"],
+  t: ["τ"],
+};
+const brokenRoot = fc
+  .tuple(
+    fc.constantFrom(["flag", FLAGGED], ["cheat", JUDGEMENT], ["dishonest", JUDGEMENT], ["misconduct", JUDGEMENT]),
+    fc.infiniteStream(fc.constantFrom("", "", "-", " ", "_", ".", "/")),
+    fc.infiniteStream(fc.nat({ max: 2 })),
+  )
+  .map(([[root, entry], marks, scripts]) => {
+    const letters = [...root].map((char) => {
+      const pick = scripts.next().value;
+      return pick === 0 ? char : (LOOKS_LATIN[char]?.[pick - 1] ?? char);
+    });
+    return { entry, text: letters.map((char) => char + marks.next().value).join("") };
+  });
+
+test.prop([brokenRoot, words, words, apart])("a D-276 root broken by marks or written with lookalike letters is found", ({ entry, text }, lead, tail, between) => {
+  expect(findForbiddenTerms(sentence([...lead, text, ...tail], between), "en").map((term) => term.entry)).toContain(entry);
+});

@@ -73,6 +73,20 @@ describe("additional English list (D-276)", () => {
     ["Flagship course", FLAGGED],
     ["Feature flags flagged this work", FLAGGED],
     ["Feature flagship", FLAGGED],
+    // Contract confirmation c.6711708837, 1: a root broken by a mark or a space is read across the tokens.
+    ["Dis-honest work", JUDGEMENT],
+    ["Fl ag this submission", FLAGGED],
+    ["che_at", JUDGEMENT],
+    ["mis/conduct", JUDGEMENT],
+    ["Tr ust sc ore", SCORE],
+    ["A I de-tected", DETECTED],
+    // Contract confirmation c.6711708837, 2: a letter of another script that looks Latin.
+    ["Flаg this submission", FLAGGED],
+    ["Сheating", JUDGEMENT],
+    ["Truѕt scоre", SCORE],
+    ["АI detected", DETECTED],
+    ["Flαgged", FLAGGED],
+    ["miscοnduct", JUDGEMENT],
   ])("reports %j as %s", (text, entry) => {
     expect(entries(text)).toContain(entry);
     expect(english(text)).toContain(entry);

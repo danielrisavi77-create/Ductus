@@ -89,18 +89,32 @@ const GAP = "praznina u zapisu";
 // stand between. The rows fail closed: the switch "feature flag" is the only exception, and a lone
 // "Flag" or "Flagship" is reported. "risk score" and "suspicion score" stay the rows "risk" and
 // "suspicious", so they are reported once. The condition "about the work or the student"
-// cannot be read from a string. Known limits: a letter of another script that looks Latin (a Cyrillic
-// "а" in "flаg") and a mark inside a root ("dis-honest") do not read as the root.
+// cannot be read from a string. A root is also read across the tokens, with the spaces left out,
+// so a mark or a space inside a root ("dis-honest", "fl ag") does not hide it, and a Cyrillic or
+// Greek letter that looks Latin ("flаg" with a Cyrillic "а") is read as that Latin letter
+// (contract confirmation c.6711708837).
 const FEATURE_FLAG = /(?<![\p{L}\p{N}])feature ?flags?(?![\p{L}\p{N}])/gu;
 const SPELLED_AI = /(?<![\p{L}\p{N}])a i(?![\p{L}\p{N}])/gu;
 
+// Cyrillic and Greek letters that look like a Latin one, in lower case and without diacritics.
+const LOOKALIKE: Readonly<Record<string, string>> = {
+  ...Object.fromEntries([..."авеіјкорсѕухһԁԛԝ"].map((char, at) => [char, "abeijkopcsyxhdqw"[at]!])),
+  ...Object.fromEntries([..."αβεικνορτυχ"].map((char, at) => [char, "abeiknoptux"[at]!])),
+};
+
+/** The tokens of a folded text, the switch "feature flag" left out and "a i" read as "ai". */
 function tokensOf(folded: string): string[] {
-  return folded.replace(FEATURE_FLAG, " ").replace(SPELLED_AI, "ai").split(/[^\p{L}\p{N}]+/u);
+  const latin = folded.replace(/[\u0370-\u03FF\u0400-\u052F]/gu, (char) => LOOKALIKE[char] ?? char);
+  return latin.replace(FEATURE_FLAG, " ").replace(SPELLED_AI, "ai").split(/[^\p{L}\p{N}]+/u);
 }
 
-const holds = (tokens: readonly string[], roots: readonly string[]) => tokens.some((token) => roots.some((root) => token.includes(root)));
+/** Whether a root of `roots` stands in the tokens read together, with nothing between them. */
+const holds = (tokens: readonly string[], roots: readonly string[]) => {
+  const joined = tokens.join("");
+  return roots.some((root) => joined.includes(root));
+};
 
-/** Matches folded text in which some token holds a root of every group. */
+/** Matches folded text in which a root of every group stands, inside a token or across tokens. */
 function rootsInTokens(...groups: readonly (readonly string[])[]): Matcher {
   return {
     test: (folded) => {
@@ -110,7 +124,7 @@ function rootsInTokens(...groups: readonly (readonly string[])[]): Matcher {
   };
 }
 
-/** "AI" is a whole token (inside a word it is "said", "detail"), or written into one token with the verb ("aiDetected"). */
+/** "AI" is a whole token (inside a word it is "said", "detail"), or run together with the verb ("aiDetected", "AI de-tected"). */
 const AI_DETECTED: Matcher = {
   test: (folded) => {
     const tokens = tokensOf(folded);
