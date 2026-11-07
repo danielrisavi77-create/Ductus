@@ -1,19 +1,22 @@
 // Test helper for F-010 in the orchestrator tools (DAN-574, plan #1671): the
 // head-origin classes of #1091 c.6702002871, the R axis (what repoId() answers),
-// the scenarios of plan §4 for T1-T3, the gh routes that answer them, and a
-// runner for the real CLIs under fake-gh-routes-preload.mjs. Repository names
-// and logins are invented.
+// the scenarios of plan §4 for T1-T3 (B1) and T4-T5 (B2), the gh routes that
+// answer them, a runner for the real CLIs under fake-gh-routes-preload.mjs and
+// the in-process gh reads the mirrors use. Repository names and logins are invented.
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { ghJson, ghList } from "./gh.mjs";
+
 const here = fileURLToPath(new URL(".", import.meta.url));
 
 export const REPO = "owner1/repo1";
 export const OWNER = "owner1";
 export const HEAD = "c".repeat(40);
+export const MAIN = "d".repeat(40);
 export const NUMBER = 41;
 export const ACTIONS = 15368;
 export const REQUIRED_NAMES = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"];
@@ -105,13 +108,93 @@ export const SCENARIOS = {
   filesError: { files: "error" }, // X9
 };
 
+// T4 (preflight): a critical description with Task and every contract line (X11).
+export const PREFLIGHT_BODY = [
+  "Agent: claude:w1:platforma", "Risk: critical", "Task: DAN-1", "",
+  "- **Invarijanta:** example invariant", "- **Mjesta:** scripts/example.mjs",
+  "- **Stvarni pozivatelj:** pnpm orch:example", "- **Poznate granice:** none known",
+  "- **Što bi ovaj PR moglo oboriti na QA-i?:** a missed path", "",
+].join("\n");
+const pre = (pull = {}, rest = {}) => ({ ...rest, pull: { body: PREFLIGHT_BODY, ...pull } });
+const BEHIND = { status: "diverged", behind_by: 2, ahead_by: 1 };
+// Scenarios of plan §4 for T4; `args` follow the PR number on the command line.
+export const PREFLIGHT_SCENARIOS = {
+  ready: pre(),
+  riskStandard: pre({ body: PREFLIGHT_BODY.replace("Risk: critical", "Risk: standard") }),
+  expectHead: pre({}, { args: ["--head", HEAD] }), // X11
+  headMoved: pre({}, { args: ["--head", "e".repeat(40)] }),
+  behind: pre({}, { compare: BEHIND }),
+  behindShared: pre({}, { compare: BEHIND, mainFiles: ["src/domain/example.ts", "docs/BACKEND.md"] }),
+  behindConflict: pre({ mergeable: false, mergeable_state: "dirty" }, { compare: BEHIND }),
+  behindFilesError: pre({}, { compare: BEHIND, files: "error" }), // X9
+  behindMainFilesError: pre({}, { compare: BEHIND, mainFiles: "error" }),
+  draft: pre({ draft: true }),
+  baseOther: pre({ base: { ref: "release", repo: { full_name: REPO } } }),
+  ciRed: pre({}, { ci: "failure" }),
+  ciRunning: pre({}, { ci: "in_progress" }),
+  gatePending: pre({}, { gate: ["pending", "Waiting for an independent review."], auth: null }),
+  noTask: pre({ body: PREFLIGHT_BODY.replace("Task: DAN-1\n", "") }),
+  mainUnread: pre({}, { main: "error" }),
+  compareUnread: pre({}, { compare: "error" }),
+  checksUnread: pre({}, { statuses: "error" }),
+  docsOnly: pre({}, { compare: BEHIND, files: ["docs/BACKEND.md"] }), // X8
+  testsOnly: pre({}, { compare: BEHIND, files: ["tests/unit/new.test.ts"] }),
+};
+
+// T5 (pr-overlap --plan): the subject PR (NUMBER) next to companions in this
+// repository. Every PR has its own writer, task and files, and the contract
+// assigns each one (X10). `others` are [number offset, draft]; `subject` overrides
+// the subject's pull fields.
+export const PLAN_SCENARIOS = {
+  single: { others: [] },
+  draftSubject: { subject: { draft: true }, others: [] },
+  withDraft: { others: [[1, true]] }, // a free slot for the companion draft
+  slotsTight: { others: [[1, false], [2, false], [3, true]] }, // N12: the draft waits unless a slot is free
+  overCapacity: { others: [[1, false], [2, false], [3, false]] }, // 4 out of draft, 3 slots
+  noContract: { others: [[1, false]], contract: false },
+  filesError: { files: "error", others: [] }, // X9
+  docsOnly: { files: ["docs/BACKEND.md"], subject: { draft: true }, others: [] }, // X8
+  testsOnly: { files: ["tests/unit/new.test.ts"], others: [] },
+  dependsOn: { subject: { body: planBody(NUMBER, "ovisi o #42\n") }, others: [[1, false]] },
+};
+
+/** Description of a T5 PR: its own writer and task. */
+export function planBody(n, extra = "") {
+  return `Agent: claude:w${n}:platforma\nRisk: standard\nTask: DAN-${n}\n${extra}`;
+}
+
+/** Pull entries of a T5 scenario: the subject (class `cls`) first, then the companions. */
+export function planPulls(cls, sc) {
+  const subject = rawPull(cls, { body: planBody(NUMBER), ...sc.subject });
+  const pulls = [{ n: NUMBER, raw: subject, listed: subject }];
+  for (const [i, draft] of sc.others) {
+    const n = NUMBER + i;
+    const raw = rawPull("S1", { number: n, draft, body: planBody(n), head: { sha: `${i}`.repeat(40), ref: `lane/${n}`, repo: { full_name: REPO } } });
+    pulls.push({ n, raw, listed: raw, files: [`tests/unit/c${n}.test.ts`] });
+  }
+  return pulls;
+}
+
+/** A work contract valid at `now` that assigns every PR of `numbers` to its writer. */
+export function contractFor(numbers, now = Date.now()) {
+  return {
+    schema: 1, repository: "danielrisavi77-create/Ductus",
+    issuedAt: new Date(now - 60_000).toISOString(), expiresAt: new Date(now + 10 * 60_000).toISOString(),
+    assignments: numbers.map((n) => ({
+      task: `DAN-${n}`, agent: `claude:w${n}:platforma`, branch: `lane/${n}`, baseSha: "a".repeat(40),
+      paths: ["scripts/"], pr: n, failures: [], regressions: 0, blockers: [],
+    })),
+  };
+}
+
 /** gh routes for one PR (`n`, raw pull) in scenario `sc`; `repo` is an R value. */
 export function routesFor({ pulls, scenario = {}, repo = R.R1 }) {
   const sc = scenario;
   const routes = { "repos/{owner}/{repo}": [repo], graphql: [{ $error: "HTTP 403: graphql refused" }] };
   const real = repo.$error ? null : `${repo.owner.login}/${repo.name}`;
   if (real) {
-    routes[`repos/${real}/branches/main`] = [{
+    routes[`repos/${real}/branches/main`] = sc.main === "error" ? [{ $error: "HTTP 502: main unreadable" }] : [{
+      commit: { sha: MAIN },
       protection: { required_status_checks: { checks: [...REQUIRED_NAMES, GATE].map((context) => ({ context, app_id: ACTIONS })) } },
     }];
   }
@@ -120,7 +203,7 @@ export function routesFor({ pulls, scenario = {}, repo = R.R1 }) {
     const answers = entry.answers ?? [raw];
     const sha = raw?.head?.sha ?? "undefined";
     routes[`repos/{owner}/{repo}/pulls/${n}`] = answers;
-    const files = sc.files ?? ["src/domain/example.ts"];
+    const files = entry.files ?? sc.files ?? ["src/domain/example.ts"];
     routes[`repos/{owner}/{repo}/pulls/${n}/files?per_page=100&page=1`] = files === "error"
       ? [{ $error: "HTTP 500: files unreadable" }]
       : [files.map((filename) => ({ filename, status: "modified" }))];
@@ -133,28 +216,50 @@ export function routesFor({ pulls, scenario = {}, repo = R.R1 }) {
     routes[`repos/{owner}/{repo}/commits/${sha}/statuses?per_page=100&page=1`] = sc.statuses === "error"
       ? [{ $error: "HTTP 404: statuses unreadable" }]
       : [statuses];
+    // sc.ci changes the first required run: "failure" or "in_progress" (T4).
+    const run = (name, i) => (i === 0 && sc.ci === "failure" ? { status: "completed", conclusion: "failure" }
+      : i === 0 && sc.ci === "in_progress" ? { status: "in_progress", conclusion: null, completed_at: null }
+        : { status: "completed", conclusion: "success" });
     routes[`repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100&page=1`] = [{
       check_runs: REQUIRED_NAMES.map((name, i) => ({
-        name, status: "completed", conclusion: "success", app: { id: ACTIONS, slug: "github-actions" },
-        check_suite: { id: 100 + i }, started_at: at(10 + i), completed_at: at(20 + i),
+        name, app: { id: ACTIONS, slug: "github-actions" },
+        check_suite: { id: 100 + i }, started_at: at(10 + i), completed_at: at(20 + i), ...run(name, i),
       })),
     }];
-    if (real) routes[`repos/${real}/compare/${sha}...main`] = [{ files: [] }];
+    if (real) {
+      routes[`repos/${real}/compare/${sha}...main`] = [{ files: [] }];
+      // T4: main...head (behind_by), and head...main for the files main changed since.
+      const compare = sc.compare ?? { status: "ahead", behind_by: 0, ahead_by: 1 };
+      routes[`repos/${real}/compare/${MAIN}...${sha}`] = [compare === "error" ? { $error: "HTTP 502: compare unreadable" } : compare];
+    }
+    const mainFiles = sc.mainFiles ?? ["src/other.ts"];
+    routes[`repos/{owner}/{repo}/compare/${sha}...${MAIN}`] = [mainFiles === "error"
+      ? { $error: "HTTP 502: compare unreadable" }
+      : { files: mainFiles.map((filename) => ({ filename, status: "modified" })) }];
   }
   // O6: the list still shows the PR by number; only the read of that PR answers `null`.
-  const listed = (p) => p.listed ?? (p.raw === null ? rawPull("S1", { number: p.n }) : p.raw);
+  // An entry may set `listed` (T5 reads the list object, null included).
+  const listed = (p) => ("listed" in p ? p.listed : p.raw === null ? rawPull("S1", { number: p.n }) : p.raw);
   routes["repos/{owner}/{repo}/pulls?state=open&per_page=100&page=1"] = [pulls.map(listed)];
   return routes;
 }
 
-/** Runs a real orchestrator CLI under the routes fake; resolves {code, stdout, stderr}. */
-export function runTool(script, args, routes) {
+/**
+ * Runs a real orchestrator CLI under the routes fake; resolves {code, stdout, stderr}.
+ * `contract` is written to a file passed as `--contract <file>` (T5).
+ */
+export function runTool(script, args, routes, { contract } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "origin-cases-"));
   const file = join(dir, "routes.json");
   writeFileSync(file, JSON.stringify(routes));
+  const extra = [];
+  if (contract) {
+    writeFileSync(join(dir, "contract.json"), JSON.stringify(contract));
+    extra.push("--contract", join(dir, "contract.json"));
+  }
   return new Promise((resolve) => {
-    execFile(process.execPath, ["--import", pathToFileURL(join(here, "fake-gh-routes-preload.mjs")).href, join(here, script), ...args], {
-      env: { ...process.env, FAKE_GH_ROUTES: file }, encoding: "utf8", windowsHide: true, timeout: 60_000,
+    execFile(process.execPath, ["--import", pathToFileURL(join(here, "fake-gh-routes-preload.mjs")).href, join(here, script), ...args, ...extra], {
+      env: { ...process.env, FAKE_GH_ROUTES: file, DUCTUS_WORK_CONTRACT: "" }, encoding: "utf8", windowsHide: true, timeout: 60_000,
     }, (error, stdout, stderr) => {
       rmSync(dir, { recursive: true, force: true });
       resolve({ code: error ? (typeof error.code === "number" ? error.code : -1) : 0, stdout, stderr });
@@ -169,3 +274,49 @@ export const parsePrReady = ({ code, stdout }) => ({
 });
 /** T2 single output -> {exit, lines}. */
 export const parseMergeReady = parsePrReady;
+
+// ---------------------------------------------------------------------------
+// In-process gh over the same routes, for the mirrors of the CLIs (B1 and B2).
+export function failed(text) {
+  const e = new Error(text);
+  e.stderr = text;
+  return e;
+}
+export function fakeExec(routes) {
+  const calls = new Map();
+  return async (cmd, args) => {
+    const path = args[1] === "graphql" ? "graphql" : args[1];
+    const list = routes[path];
+    if (cmd !== "gh" || !Array.isArray(list) || list.length === 0) throw failed(`fake gh: unexpected path ${path}`);
+    const i = calls.get(path) ?? 0;
+    calls.set(path, i + 1);
+    const a = list[Math.min(i, list.length - 1)];
+    if (a && typeof a === "object" && "$error" in a) throw failed(String(a.$error));
+    return JSON.stringify(a);
+  };
+}
+export const io = (routes) => {
+  const exec = fakeExec(routes);
+  const json = (args) => ghJson(args, exec);
+  const list = (path, _exec, opts) => ghList(path, exec, opts);
+  const repo = async () => {
+    const r = await json(["api", "repos/{owner}/{repo}"]);
+    return { owner: r.owner.login, repo: r.name };
+  };
+  return { exec, json, list, repo };
+};
+export const why = (e) => String(e?.stderr || e?.message || e).trim().split("\n")[0];
+export const tryRead = async (fn) => {
+  try {
+    return await fn();
+  } catch (e) {
+    return { error: why(e) };
+  }
+};
+export const quiet = async (fn) => {
+  try {
+    return await fn();
+  } catch {
+    return null;
+  }
+};
