@@ -123,7 +123,7 @@ async function call(action: Action, value: unknown, options: Parameters<typeof p
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("DAN-314 2d revision request API: success", () => {
+describe("DAN-314 2f revision request API: success", () => {
   it("creates through one parameterized RPC; the anchor goes as jsonb, no identity", async () => {
     const { res, json, withActor, query } = await call("create", VALID.create);
     expect(res.status).toBe(200);
@@ -178,7 +178,7 @@ describe("DAN-314 2d revision request API: success", () => {
   });
 });
 
-describe("DAN-314 2d: conflict is an outcome, not_allowed an error", () => {
+describe("DAN-314 2f: conflict is an outcome, not_allowed an error", () => {
   it.each(["respond", "accept", "reopen", "withdraw"] as const)("%s: a stale counter is 409 with the current row", async (action) => {
     const { res, json } = await call(action, VALID[action], {
       rows: [{ outcome: "conflict", row_seq: "9", version: 2, state: "reopened" }],
@@ -194,7 +194,7 @@ describe("DAN-314 2d: conflict is an outcome, not_allowed an error", () => {
   });
 });
 
-describe("DAN-314 2d: RPC codes (classes 1 to 5 and 11)", () => {
+describe("DAN-314 2f: RPC codes (classes 1 to 5 and 11)", () => {
   it.each([
     ["ZD401", 401, { error: "unauthorized" }],
     ["ZD403", 403, { error: "forbidden" }],
@@ -223,7 +223,7 @@ describe("DAN-314 2d: RPC codes (classes 1 to 5 and 11)", () => {
   });
 });
 
-describe("DAN-314 2d: refusals before the database", () => {
+describe("DAN-314 2f: refusals before the database", () => {
   async function refused(action: Action, value: unknown, status: number, error: string) {
     const { res, json, withActor } = await call(action, value);
     expect(res.status, JSON.stringify(value)).toBe(status);
@@ -369,7 +369,7 @@ describe("DAN-314 2d: refusals before the database", () => {
   });
 });
 
-describe("DAN-314 2d: rows of the wrong shape are 503", () => {
+describe("DAN-314 2f: rows of the wrong shape are 503", () => {
   it.each([
     ["no row", []],
     ["two rows", [TRANSITION_ROW, TRANSITION_ROW]],
@@ -423,7 +423,7 @@ describe("DAN-314 2d: rows of the wrong shape are 503", () => {
   });
 });
 
-describe("DAN-314 2d: H3 nothing of the request reaches a log or a body", () => {
+describe("DAN-314 2f: H3 nothing of the request reaches a log or a body", () => {
   it("canary text, anchor and ids stay out of console.error and every response", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -456,7 +456,7 @@ describe("DAN-314 2d: H3 nothing of the request reaches a log or a body", () => 
   });
 });
 
-describe("DAN-314 2d: B5/D4/D6 the boundary does not know the old status model", () => {
+describe("DAN-314 2f: B5/D4/D6 the boundary does not know the old status model", () => {
   it("no import of the collaboration index, revision-request or conditional-validity", () => {
     for (const file of ["./revision-requests.ts", "../../domain/collaboration/revision-input.ts"]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
