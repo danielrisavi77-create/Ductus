@@ -6,7 +6,7 @@ Paket 14 iz `docs/design/EKRANI.md` §4. Smjer je „papir i grafit” (D-188, `
 
 | Stranica | Stanja | Izvori |
 |---|---|---|
-| `s31-ai.html` | nema uporabe, izjavljeno s obveznim razgovorima i putem do pregleda, pregled točnih verzija svih razgovora koji se prilažu (2b), potvrda dostupna tek nakon pregleda, učitavanje, greška (predaja ostaje moguća), Asistent nije dopušten (izjava ostaje) | D-40, D-41, PRODUCT §5 pravila 1, 2, 3, 13 |
+| `s31-ai.html` | nema uporabe, izjavljeno s obveznim razgovorima i putem do pregleda, pregled točnih verzija svih razgovora koji se prilažu (2b), potvrda dostupna tek nakon pregleda, učitavanje, greška (predaja ostaje moguća), Asistent nije dopušten (izjava ostaje), unos i pregled vanjskog razgovora kao izjavljeno (7) | D-40, D-41, D-77, PRODUCT §5 pravila 1, 2, 3, 13 |
 | `n-ai-att.html` | popunjeno, obvezni razgovor priložen a ostali nisu, nema uporabe, učitavanje, greška, prazno | D-41, D-58, PRODUCT §5 pravila 1, 2, 3, 12, 13 |
 | `a-ai-pol.html` | pregled i uređivanje, pružatelji samo za čitanje, objava nove verzije, neispravan unos, trošak nije podešen, učitavanje i greška | D-267 O5, D-270 O11 |
 

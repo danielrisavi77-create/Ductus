@@ -118,7 +118,30 @@
           <label><input type="radio" name="r6" checked> Nisam koristio/koristila AI alate</label>
           <label><input type="radio" name="r6"> Koristio/koristila sam vanjski alat (dopuna)</label>
         </fieldset>
-        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button></div>
+        <p class="foot" id="pr6">Ako ste odabrali vanjski alat, razgovor prilažete i pregledavate u sljedećem koraku; potvrda je dostupna tek nakon pregleda.</p>
+        <div class="acts"><button class="btn secondary" type="button">Dodaj vanjski razgovor</button><button class="btn" type="button">Potvrdi izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v7">
+    <div class="ref-tag" id="v7">Stanje 7 · vanjski razgovor, unos i pregled prije potvrde (izjavljeno)</div>
+    <div class="panel" role="dialog" aria-labelledby="t7">
+      <div class="panel-top"><h2 id="t7">Vanjski razgovor uz izjavu</h2><span class="tag">Izjavljeno</span></div>
+      <div class="panel-body">
+        <p class="note">Ovaj razgovor vodili ste izvan Ductusa. Ductus ga ne može provjeriti, pa se uz izjavu prikazuje kao „izjavljeno”, ne kao zabilježeno (D-41, D-77).</p>
+        <fieldset class="radio"><legend>Kako ga prilažete</legend>
+          <label><input type="radio" name="r7" checked> Zalijepljen tekst razgovora</label>
+          <label><input type="radio" name="r7"> Poveznica za dijeljenje</label>
+          <label><input type="radio" name="r7"> Izvezena datoteka</label>
+        </fieldset>
+        <label class="foot" for="f7">Naziv alata (npr. izmišljeni „Alat B”)</label>
+        <input id="f7" type="text" value="Alat B">
+        <h3>Pregled onoga što se prilaže · izjavljeno</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Izmišljeno pitanje o strukturi uvoda.</span></div>
+        <div class="turn"><span class="who">Vanjski alat · Alat B</span><span>Izmišljen primjer odgovora vanjskog alata.</span></div>
+        <p class="foot" id="pr7">Prilaže se cijeli razgovor, točno kako je unesen. Potvrda je dostupna nakon što otvorite ovaj pregled; ako promijenite unos, pregled se ponovno traži.</p>
+        <div class="acts"><button class="btn" type="button">Gotov pregled, natrag na izjavu</button><button class="btn secondary" type="button">Odustani, bez priloga</button></div>
       </div>
     </div>
   </section>
