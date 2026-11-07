@@ -1,7 +1,3 @@
-import fpzgCitationConfig from "../../../config/faculties/fpzg/citation.json";
-
-import { parseCitationStyle, type CitationStyle } from "./style";
-
 export {
   assignYearSuffixes,
   formatBibliographyEntry,
@@ -12,5 +8,5 @@ export {
 export { CitationStyleError, parseCitationStyle, type CitationStyle } from "./style";
 export * from "./types";
 
-/** FPZG style copied from Lekta for the demo (D-83); replaced by the Lekta package in M4. */
-export const fpzgCitationStyle: CitationStyle = parseCitationStyle(fpzgCitationConfig);
+// A style comes from the record of an institution (src/domain/institution-config,
+// M2.12-P02), never from a default here.

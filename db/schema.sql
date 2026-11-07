@@ -582,6 +582,20 @@ CREATE FUNCTION app.current_institution_id() RETURNS uuid
 
 
 --
+-- Name: current_institution_slug(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.current_institution_slug() RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT i.slug
+    FROM app.current_actor() a
+    JOIN identity.institution i ON i.id = a.institution_id
+$$;
+
+
+--
 -- Name: current_user_id(); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -10753,4 +10767,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106200000'),
     ('20261106210000'),
     ('20261106220000'),
-    ('20261107110000');
+    ('20261107110000'),
+    ('20261107160000');

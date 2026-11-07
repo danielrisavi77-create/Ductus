@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
 import {
-  PRINCIPAL_SCOPE_LABEL, principalScope, SESSION_TAG_LABEL, sessionPrincipal, sessionTag,
+  PRINCIPAL_SCOPE_LABEL, principalScope, SESSION_TAG_LABEL, sessionPrincipal, sessionPrincipalWithInstitution, sessionTag,
 } from "./principal";
 
 // F-5, plan #376 rows 1 and 7: the journal scope comes from the session the
@@ -66,6 +66,68 @@ describe("sessionPrincipal", () => {
       throw Object.assign(new Error(`connection refused for ${TOKEN}`), { name: "DatabaseError" });
     };
     expect(await sessionPrincipal(TOKEN, failing)).toEqual({ kind: "unverified" });
+    expect(log).toHaveBeenCalledWith("session check failed", "DatabaseError");
+    expect(JSON.stringify(log.mock.calls)).not.toContain(TOKEN);
+    log.mockRestore();
+  });
+});
+
+// M2.12-P02, plan #1689 C1 to C7: the institution comes from the same
+// statement as the person, never from the request.
+describe("sessionPrincipalWithInstitution", () => {
+  const STATEMENT =
+    "SELECT user_id, institution_id, app.current_institution_slug() AS institution_slug FROM app.current_actor()";
+
+  it("names the scope and the slug of the session's institution in one statement", async () => {
+    const db = fakeWithActor({ user_id: USER_A, institution_id: INSTITUTION, institution_slug: "fak-a" });
+    expect(await sessionPrincipalWithInstitution(TOKEN, db.withActor)).toEqual({
+      kind: "signed-in", scope: principalScope(USER_A, INSTITUTION), institution: "fak-a",
+    });
+    expect(db.tokens).toEqual([TOKEN]);
+    expect(db.queries).toEqual([STATEMENT]);
+  });
+
+  it("keeps the same scope as sessionPrincipal, so no journal moves", async () => {
+    const row = { user_id: USER_B, institution_id: INSTITUTION, institution_slug: "fak-b" };
+    const plain = await sessionPrincipal(TOKEN, fakeWithActor(row).withActor);
+    const withSlug = await sessionPrincipalWithInstitution(TOKEN, fakeWithActor(row).withActor);
+    expect(plain.kind === "signed-in" && withSlug.kind === "signed-in" && plain.scope === withSlug.scope).toBe(true);
+  });
+
+  it.each([
+    ["a missing slug", null],
+    ["no slug column", undefined],
+    ["a slug that is not text", 7],
+  ])("is signed in without an institution for %s", async (_name, slug) => {
+    const db = fakeWithActor({ user_id: USER_A, institution_id: INSTITUTION, institution_slug: slug });
+    expect(await sessionPrincipalWithInstitution(TOKEN, db.withActor)).toEqual({
+      kind: "signed-in", scope: principalScope(USER_A, INSTITUTION), institution: null,
+    });
+  });
+
+  it.each([
+    ["no cookie", undefined],
+    ["a malformed cookie", `${"A".repeat(42)}=`],
+  ])("is signed out without asking the database for %s", async (_name, token) => {
+    const db = fakeWithActor({ user_id: USER_A, institution_id: INSTITUTION, institution_slug: "fak-a" });
+    expect(await sessionPrincipalWithInstitution(token, db.withActor)).toEqual({ kind: "signed-out" });
+    expect(db.tokens).toEqual([]);
+  });
+
+  it.each([
+    ["a closed or expired session", { user_id: null, institution_id: null, institution_slug: null }],
+    ["no row at all", undefined],
+    ["a slug without a person", { user_id: null, institution_id: null, institution_slug: "fak-a" }],
+  ])("is signed out, with no slug, for %s", async (_name, row) => {
+    expect(await sessionPrincipalWithInstitution(TOKEN, fakeWithActor(row).withActor)).toEqual({ kind: "signed-out" });
+  });
+
+  it("is unverified when the database cannot answer, and logs only the error name", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failing: WithActor = async () => {
+      throw Object.assign(new Error(`function missing for ${TOKEN}`), { name: "DatabaseError" });
+    };
+    expect(await sessionPrincipalWithInstitution(TOKEN, failing)).toEqual({ kind: "unverified" });
     expect(log).toHaveBeenCalledWith("session check failed", "DatabaseError");
     expect(JSON.stringify(log.mock.calls)).not.toContain(TOKEN);
     log.mockRestore();
