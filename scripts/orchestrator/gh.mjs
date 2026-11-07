@@ -2,6 +2,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import { sameRepositoryHead } from "../engineering/review-gate-core.mjs";
 import { changedPaths, pickGate } from "./orchestrator-core.mjs";
 
 const run = promisify(execFile);
@@ -81,7 +82,8 @@ export async function mainPathsSince(head, mainSha, exec = sh) {
  * REST pull object -> the gh-CLI field names the scripts use. gh pr list/view
  * go through GraphQL, which cloud sessions cannot reach (HTTP 403).
  */
-export function toPr(p) {
+export function toPr(raw) {
+  const p = raw && typeof raw === "object" ? raw : {};
   const state = p.merged_at ? "MERGED" : String(p.state ?? "").toUpperCase();
   const mergeable = p.mergeable === true ? "MERGEABLE" : p.mergeable === false ? "CONFLICTING" : "UNKNOWN";
   return {
@@ -94,6 +96,9 @@ export function toPr(p) {
     headRefName: p.head?.ref,
     // F-010: where the head lives; null for a deleted fork.
     headRepo: p.head?.repo?.full_name ?? null,
+    baseRepo: p.base?.repo?.full_name ?? null,
+    // F-010: the gate's own predicate over this same REST object (I3); unreadable names are false.
+    sameRepository: sameRepositoryHead(p),
     // The PR author as GitHub reports it; a branch name is chosen by whoever pushes it.
     author: { login: p.user?.login ?? null, type: p.user?.type ?? null },
     baseRefName: p.base?.ref,

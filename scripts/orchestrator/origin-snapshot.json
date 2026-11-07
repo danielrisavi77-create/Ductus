@@ -1,0 +1,1717 @@
+{
+ "recordedOn": "d54b88b9",
+ "t1": {
+  "S1/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/ready": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/ready": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateOkNoAuth": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/gateOkNoAuth": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gateOkNoAuth": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/gateOkNoAuth": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/gatePending": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate pending on cccccccc: Waiting for an independent review.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate failure on cccccccc: Independent review fail on current head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/gateNone": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "FAIL gate missing on cccccccc",
+    "PASS CI green (4 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S2/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S3/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S3u/gateError": {
+   "exit": 2,
+   "lines": [],
+   "stderr": [
+    "pr-ready failed: HTTP 404: statuses unreadable"
+   ]
+  },
+  "S1/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/needsOwner": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "FAIL CI not green: Merge authorization=PENDING",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/autoMerge": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "FAIL auto-merge enabled",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/docsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/docsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/testsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/testsOnly": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S2/d97": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "READY: all required checks pass"
+   ],
+   "stderr": []
+  },
+  "S3u/d97": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "PASS no overlap with files changed on main since merge base",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "INFO touches D-97 paths, ask for Daniel's command: scripts/engineering/review-gate-core.mjs",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S1/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S2/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author helper1 is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "PASS owner's PR from this repository",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  },
+  "S3u/filesError": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS gate success on cccccccc: Review PASS on this head.",
+    "PASS CI green (5 checks)",
+    "FAIL external PR, owner must adopt: author mergify[bot] is not the owner",
+    "PASS base main",
+    "PASS mergeable MERGEABLE",
+    "FAIL main-vs-PR file overlap could not be determined",
+    "PASS no unresolved threads",
+    "PASS auto-merge off",
+    "FAIL changed files could not be read; D-97 paths unknown",
+    "INFO no D-97 paths",
+    "INFO Agent claude:w1:platforma",
+    "INFO not draft",
+    "NOT READY"
+   ],
+   "stderr": []
+  }
+ },
+ "t2": {
+  "S1/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/ready": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S2/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S3/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S3u/gateOkNoAuth": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "S1/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S2/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S3/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S3u/gatePending": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate pending on cccccccc: Waiting for an independent review.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "S1/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S2/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S3/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S3u/gateFailure": {
+   "exit": 1,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "FAIL   gate failure on cccccccc: Independent review fail on current head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY BLOCKED: gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "S1/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S2/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S3/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S3u/gateNone": {
+   "exit": 3,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "WAIT   gate has not reported on cccccccc yet",
+    "WAIT   Merge authorization has not reported yet",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITING: gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "S1/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S2/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S3/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S3u/gateError": {
+   "exit": 2,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "UNREAD gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "UNREAD Merge authorization could not be read (HTTP 404: statuses unreadable)",
+    "UNREAD CI checks could not be read (HTTP 404: statuses unreadable)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY UNREAD: gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "S1/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S2/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S3/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S3u/needsOwner": {
+   "exit": 4,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "OWNER  waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY WAITS_OWNER: waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "S1/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/autoMerge": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/docsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/testsOnly": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/d97": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S1/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S2/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "S3u/filesError": {
+   "exit": 0,
+   "lines": [
+    "PR #41 head cccccccc",
+    "PASS   state OPEN",
+    "PASS   gate success on cccccccc: Review PASS on this head.",
+    "PASS   Merge authorization success: Owner merge command names this head.",
+    "PASS   CI green (4 checks)",
+    "PASS   no unresolved review threads",
+    "INFO   GitHub merge state CLEAN",
+    "MERGE-READY READY: gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  }
+ },
+ "t3": {
+  "ready": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "gateOkNoAuth": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet",
+    "#42 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet",
+    "#43 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet",
+    "#44 WAITING cccccccc | fix: example",
+    "    Merge authorization has not reported yet"
+   ],
+   "stderr": []
+  },
+  "gatePending": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review.",
+    "#42 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review.",
+    "#43 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review.",
+    "#44 WAITING cccccccc | fix: example",
+    "    gate pending on cccccccc: Waiting for an independent review."
+   ],
+   "stderr": []
+  },
+  "gateFailure": {
+   "exit": 0,
+   "lines": [
+    "#41 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head.",
+    "#42 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head.",
+    "#43 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head.",
+    "#44 BLOCKED cccccccc | fix: example",
+    "    gate failure on cccccccc: Independent review fail on current head."
+   ],
+   "stderr": []
+  },
+  "gateNone": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet",
+    "#42 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet",
+    "#43 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet",
+    "#44 WAITING cccccccc | fix: example",
+    "    gate has not reported on cccccccc yet"
+   ],
+   "stderr": []
+  },
+  "gateError": {
+   "exit": 2,
+   "lines": [
+    "#41 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "#42 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "#43 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)",
+    "#44 UNREAD cccccccc | fix: example",
+    "    gate could not be read on cccccccc (HTTP 404: statuses unreadable)"
+   ],
+   "stderr": []
+  },
+  "needsOwner": {
+   "exit": 0,
+   "lines": [
+    "#41 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 41\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "#42 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 42\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "#43 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 43\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical).",
+    "#44 WAITS_OWNER cccccccc | fix: example",
+    "    waits for the owner's \"Spoji 44\" on cccccccc: Needs the owner's merge command for this head (D-97 or critical)."
+   ],
+   "stderr": []
+  },
+  "autoMerge": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "docsOnly": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "testsOnly": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "d97": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  },
+  "filesError": {
+   "exit": 0,
+   "lines": [
+    "#41 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#42 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#43 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc",
+    "#44 READY cccccccc | fix: example",
+    "    gate, Merge authorization, CI and threads pass on cccccccc"
+   ],
+   "stderr": []
+  }
+ }
+}
