@@ -2778,3 +2778,175 @@ describe("readImmutable: the read side (B-8i, read for reconstruction and B-13)"
     expect(s3.calls.map((c) => c.path)).toEqual([keyOf(PACKAGE, HASH_A)]);
   });
 });
+
+describe("headImmutable: the object a pending receipt names (DAN-301)", () => {
+  const A = payload("a");
+  const HASH_A = hashOf(A);
+  const BYTES_A = Buffer.byteLength(A);
+  const CHECKSUM_A = createHash("sha256").update(A).digest("base64");
+  const ids = { institutionId: INSTITUTION, evidencePackageId: PACKAGE, segmentHash: HASH_A, payloadBytes: BYTES_A };
+  const head = async (store: S3EvidencePayloadStore, input = ids) => {
+    const outcome = await store.headImmutable(input);
+    await logged();
+    return outcome;
+  };
+  const unavailable = (reason: string) => ({ status: "unavailable", reason });
+  /** A HEAD answer as S3 gives it with checksum mode on: headers, no body. */
+  const answer = (status: number, headers: Record<string, string> = {}) => () =>
+    Promise.resolve(new Response(null, { status, headers }));
+  const exact = { "content-length": String(BYTES_A), "x-amz-checksum-sha256": CHECKSUM_A };
+  const withHead = (respond: () => Promise<Response>) =>
+    fakeS3((call) => (call.method === "HEAD" ? respond() : null));
+
+  it("B1 answers present for the exact length and checksum, with one signed HEAD under the key", async () => {
+    const s3 = withHead(answer(200, exact));
+    const { store, warn } = storeWith(s3.fetch);
+    await expect(head(store)).resolves.toEqual({ status: "present" });
+    expect(s3.calls.map((c) => [c.method, c.path])).toEqual([["HEAD", keyOf(PACKAGE, HASH_A)]]);
+    expect(s3.calls[0]!.headers.get("x-amz-checksum-mode")).toBe("ENABLED");
+    expect(signedHeadersOf(s3.calls[0]!)?.split(";")).toContain("x-amz-checksum-mode");
+    expect(signedHeadersOf(s3.calls[0]!)).not.toMatch(/if-none-match|x-amz-checksum-sha256/);
+    expect(s3.fetch.mock.calls[0]![1]?.redirect).toBe("error");
+    expect(s3.fetch.mock.calls[0]![1]?.body ?? null).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("B1 finds the object putImmutable stored, and another institution's key is asked as its own", async () => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call) => {
+      if (call.method !== "HEAD") return null;
+      const found = s3.objects.get(call.path);
+      return Promise.resolve(
+        found
+          ? new Response(null, {
+              status: 200,
+              headers: {
+                "content-length": String(found.byteLength),
+                "x-amz-checksum-sha256": createHash("sha256").update(found).digest("base64"),
+              },
+            })
+          : new Response(null, { status: 404 }),
+      );
+    });
+    const { store } = storeWith(s3.fetch);
+    await put(store, "a");
+    s3.calls.length = 0;
+    await expect(head(store)).resolves.toEqual({ status: "present" });
+    await expect(head(store, { ...ids, institutionId: OTHER_INSTITUTION })).resolves.toEqual({ status: "absent" });
+    expect(s3.calls.map((c) => c.path)).toEqual([
+      keyOf(PACKAGE, HASH_A),
+      keyOf(PACKAGE, HASH_A, OTHER_INSTITUTION),
+    ]);
+  });
+
+  it.each<[string, Record<string, string>]>([
+    ["one byte more", { ...exact, "content-length": String(BYTES_A + 1) }],
+    ["one byte less", { ...exact, "content-length": String(BYTES_A - 1) }],
+    ["the checksum of other bytes", { ...exact, "x-amz-checksum-sha256": createHash("sha256").update(payload("b")).digest("base64") }],
+  ])("B2 answers mismatch for %s and logs ids only", async (_, headers) => {
+    const { store, warn } = storeWith(withHead(answer(200, headers)).fetch);
+    await expect(head(store)).resolves.toEqual({ status: "mismatch" });
+    expect(warn.mock.calls).toEqual([
+      ["evidence payload head mismatch", { institutionId: INSTITUTION, evidencePackageId: PACKAGE, segmentHash: HASH_A }],
+    ]);
+  });
+
+  it.each<[string, Record<string, string>, string]>([
+    ["no checksum", { "content-length": String(BYTES_A) }, "storage_checksum_missing"],
+    ["a hex checksum", { ...exact, "x-amz-checksum-sha256": HASH_A }, "storage_checksum_unreadable"],
+    ["a composite checksum", { ...exact, "x-amz-checksum-sha256": `${CHECKSUM_A}-2` }, "storage_checksum_unreadable"],
+    ["a checksum with an inner space", { ...exact, "x-amz-checksum-sha256": `${CHECKSUM_A.slice(0, 10)} ${CHECKSUM_A.slice(11)}` }, "storage_checksum_unreadable"],
+    ["a checksum without its padding", { ...exact, "x-amz-checksum-sha256": CHECKSUM_A.replace(/=+$/, "") }, "storage_checksum_unreadable"],
+    ["no length", { "x-amz-checksum-sha256": CHECKSUM_A }, "storage_head_length_unreadable"],
+    ["a negative length", { ...exact, "content-length": "-1" }, "storage_head_length_unreadable"],
+    ["a length with a sign", { ...exact, "content-length": `+${BYTES_A}` }, "storage_head_length_unreadable"],
+    ["a length with a leading zero", { ...exact, "content-length": `0${BYTES_A}` }, "storage_head_length_unreadable"],
+    ["a fractional length", { ...exact, "content-length": `${BYTES_A}.0` }, "storage_head_length_unreadable"],
+    ["a length over 16 digits", { ...exact, "content-length": "1".repeat(17) }, "storage_head_length_unreadable"],
+  ])("B3 answers %s as unavailable, never present", async (_, headers, reason) => {
+    const { store, warn } = storeWith(withHead(answer(200, headers)).fetch);
+    await expect(head(store)).resolves.toEqual(unavailable(reason));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, () => Promise<Response>, string]>([
+    ["a server error", answer(500), "storage_head_status_500"],
+    ["a busy store", answer(503), "storage_head_status_503"],
+    ["a 403 without a code (HEAD has no body)", answer(403), "storage_head_status_403"],
+    ["a 400 without a code", answer(400), "storage_head_status_400"],
+    ["a refused signature", () => s3Error(403, "SignatureDoesNotMatch"), "storage_signature_rejected"],
+    ["a skewed clock", () => s3Error(403, "RequestTimeTooSkewed"), "storage_clock_skew"],
+    ["a 304", answer(304, exact), "storage_head_status_304"],
+    ["a 206", answer(206, exact), "storage_head_status_206"],
+    ["a redirect refused by fetch", () => Promise.reject(new TypeError("unexpected redirect")), "storage_request_failed"],
+    ["a failed request", () => Promise.reject(new TypeError("fetch failed")), "storage_request_failed"],
+  ])("B4 answers %s as unavailable after one request, with no retry", async (_, respond, reason) => {
+    const s3 = withHead(respond);
+    await expect(head(storeWith(s3.fetch).store)).resolves.toEqual(unavailable(reason));
+    expect(s3.calls).toHaveLength(1);
+  });
+
+  it("B5 answers absent only for a 404", async () => {
+    const { store } = storeWith(withHead(answer(404)).fetch);
+    await expect(head(store)).resolves.toEqual({ status: "absent" });
+  });
+
+  it("B6 ends a HEAD that never answers at the deadline", async () => {
+    const s3 = fakeS3((call, signal) => (call.method === "HEAD" ? hang(signal) : null));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    await expect(head(store)).resolves.toEqual(unavailable("storage_timeout"));
+    expect(s3.fetch.mock.calls[0]![1]?.signal?.aborted).toBe(true);
+  });
+
+  it("B6 answers storage_timeout when fetch ignores the abort signal", async () => {
+    const s3 = fakeS3(() => new Promise<Response>(() => {}));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    await expect(head(store)).resolves.toEqual(unavailable("storage_timeout"));
+  });
+
+  it("B6 does not count a present answer that arrives past the deadline", async () => {
+    const block = (ms: number) => {
+      const end = performance.now() + ms;
+      while (performance.now() < end) {
+        // busy on purpose
+      }
+    };
+    const s3 = fakeS3(() => (block(60), answer(200, exact)()));
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    await expect(head(store)).resolves.toEqual(unavailable("storage_timeout"));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, Partial<typeof ids>]>([
+    ["an institution id in capitals", { institutionId: INSTITUTION.toUpperCase() }],
+    ["a package id with a slash", { evidencePackageId: "paket/../drugi" }],
+    ["a hash in capitals", { segmentHash: HASH_A.toUpperCase() }],
+    ["zero bytes", { payloadBytes: 0 }],
+    ["bytes over the segment limit", { payloadBytes: MAX_EVIDENCE_SEGMENT_BYTES + 1 }],
+    ["fractional bytes", { payloadBytes: 1.5 }],
+    ["bytes as a string", { payloadBytes: String(BYTES_A) as never }],
+  ])("B7 answers %s as unavailable before any request", async (_, change) => {
+    const s3 = fakeS3();
+    await expect(head(storeWith(s3.fetch).store, { ...ids, ...change })).resolves.toEqual(
+      unavailable("storage_request_invalid"),
+    );
+    expect(s3.calls).toHaveLength(0);
+  });
+
+  it("B8 reads each input field once, so a getter cannot move the HEAD to another key", async () => {
+    const s3 = withHead(answer(200, exact));
+    const { store } = storeWith(s3.fetch);
+    let reads = 0;
+    const shifting = {
+      get institutionId() {
+        reads += 1;
+        return reads === 1 ? INSTITUTION : OTHER_INSTITUTION;
+      },
+      evidencePackageId: PACKAGE,
+      segmentHash: HASH_A,
+      payloadBytes: BYTES_A,
+    };
+    await expect(head(store, shifting)).resolves.toEqual({ status: "present" });
+    expect(reads).toBe(1);
+    expect(s3.calls.map((c) => c.path)).toEqual([keyOf(PACKAGE, HASH_A)]);
+  });
+});

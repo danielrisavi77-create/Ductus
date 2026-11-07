@@ -4,6 +4,10 @@ import type {
   PendingReceiptStore,
 } from "@/application/ports/pending-receipt-signing";
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
+import type {
+  PendingReceiptHold,
+  PendingReceiptObjectCheck,
+} from "./check-pending-receipt-object";
 import {
   digestEvidenceReceiptPayloadV2,
   EVIDENCE_RECEIPT_SCHEMA_V1,
@@ -39,20 +43,43 @@ export type SignPendingReceiptOutcome =
   | { status: "signed"; signedReceipt: SignedEvidenceReceiptV2 }
   | { status: "already_signed"; signedReceipt: SignedEvidenceReceiptV2 }
   | { status: "refused"; reason: PendingReceiptRefusal }
+  /**
+   * The segment object is not confirmed in the payload store (DAN-301):
+   * nothing is signed or stored and the receipt stays pending (P-13).
+   */
+  | { status: "held"; reason: PendingReceiptHold }
   /** The signature did not pass the domain's key registry; nothing stored. */
   | { status: "signer_rejected"; reason: string }
   /** Nothing is known of the receipt; the worker may try it again later. */
   | {
       status: "unavailable";
-      stage: "hash" | "keys" | "signing" | "verification" | "store";
+      stage: "hash" | "keys" | "object" | "signing" | "verification" | "store";
       reason: string;
     };
 
 export type SignPendingReceiptDeps = {
   signer: SigningKeyProvider;
   store: PendingReceiptStore;
+  /**
+   * `createCheckPendingReceiptObject`. Required: no receipt is signed
+   * before its segment object is confirmed in the store.
+   */
+  checkObject: (payload: EvidenceReceiptPayloadV2) => Promise<PendingReceiptObjectCheck>;
   signTimeoutMs: number;
 };
+
+const HOLDS: ReadonlySet<unknown> = new Set<PendingReceiptHold>([
+  "not_pending",
+  "locator_mismatch",
+  "object_absent",
+  "object_mismatch",
+]);
+const UNAVAILABLE: ReadonlySet<unknown> = new Set([
+  "locator_unavailable",
+  "locator_malformed",
+  "storage_ref_unavailable",
+  "presence_unavailable",
+]);
 
 type Parsed =
   | { ok: true; payload: EvidenceReceiptPayloadV2 }
@@ -134,14 +161,18 @@ function sameSignature(stored: unknown, sent: SignatureEnvelope): boolean {
 
 /**
  * Signs one pending receipt v2 through the signing port (D-92) and stores
- * the signature through the worker's store. The signature is stored only
+ * the signature through the worker's store, only once the segment object it
+ * names is confirmed in the payload store (DAN-301). The signature is stored only
  * after it passes the verifier with a receipt key of the payload's own
  * domain from the registry, never with the signer's word for its key.
  * Of two concurrent calls the store keeps one signature, and the other call
  * answers with that stored signature, never with its own.
  */
 export function createSignPendingReceipt(deps: SignPendingReceiptDeps) {
-  const { signer, store, signTimeoutMs } = deps;
+  const { signer, store, checkObject, signTimeoutMs } = deps;
+  if (typeof checkObject !== "function") {
+    throw new TypeError("signPendingReceipt: checkObject is required");
+  }
   if (
     !Number.isSafeInteger(signTimeoutMs) ||
     signTimeoutMs <= 0 ||
@@ -242,6 +273,24 @@ export function createSignPendingReceipt(deps: SignPendingReceiptDeps) {
       keys = read.keys;
     } catch {
       return { status: "unavailable", stage: "keys", reason: "keys_unavailable" };
+    }
+
+    // Last step before the signer: the object the receipt names is there.
+    let object: PendingReceiptObjectCheck;
+    try {
+      object = await checkObject(payload);
+    } catch {
+      return { status: "unavailable", stage: "object", reason: "presence_unavailable" };
+    }
+    if (!isPlainObject(object) || object.status !== "present") {
+      if (isPlainObject(object) && object.status === "held" && HOLDS.has(object.reason)) {
+        return { status: "held", reason: object.reason };
+      }
+      const reason =
+        isPlainObject(object) && object.status === "unavailable" && UNAVAILABLE.has(object.reason)
+          ? object.reason
+          : "presence_unavailable";
+      return { status: "unavailable", stage: "object", reason };
     }
 
     const signed = await signWithin(signer, digest.signingInput, signTimeoutMs);
