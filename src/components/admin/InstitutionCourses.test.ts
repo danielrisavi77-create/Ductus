@@ -119,7 +119,7 @@ describe("InstitutionCourses", () => {
       groups: [group(1, { name: "<img src=x>" })],
     });
     const html = render({ years: ["2026/2027"], year: "2026/2027", courses: [c] });
-    expect(html).not.toMatch(/<script|<b>|<img/);
+    for (const tag of ["<script", "<b>", "<img"]) expect(html.toLowerCase()).not.toContain(tag);
     expect(html).toContain("&lt;script&gt;x&lt;/script&gt; &amp; &quot;A&quot;");
     expect(html).toContain("&lt;b&gt; &amp;amp;");
   });
