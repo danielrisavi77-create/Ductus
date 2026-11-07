@@ -269,7 +269,7 @@ const decide = ({ risk, names, autoMerge = false, changed, list }) =>
   evaluatePullRequest({
     pr: {
       body: body(risk),
-      head: { sha: head },
+      head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } },
       auto_merge: autoMerge ? { merge_method: "squash" } : null,
       changed_files: changed ?? names.length,
     },
@@ -321,7 +321,7 @@ test("an incomplete or unconfirmed file list fails closed", () => {
     assert.equal(decide({ risk: "low", names, changed }).state, "failure", String(changed));
   }
   const unknown = evaluatePullRequest({
-    pr: { body: body("low"), head: { sha: head }, auto_merge: null },
+    pr: { body: body("low"), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, auto_merge: null },
     files: files(...names),
     comments: passes(),
     ownerLogin,
