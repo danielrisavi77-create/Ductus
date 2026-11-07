@@ -555,6 +555,27 @@ jobs:
       - name: Verify complete login E2E inventory
         run: node scripts/engineering/login-shards.mjs
 
+  # DAN-298 (attack plan #1687): the production web image is built here and
+  # never pushed. The guard reads the Dockerfile and ignore file; the smoke
+  # script checks the built image (user, files, gitleaks, run time, D-09).
+  production-image:
+    name: Production image
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Production image guard
+        run: node scripts/engineering/production-image.mjs
+      - name: Build web image (no push)
+        run: docker build -f infra/docker/web.Dockerfile -t ductus-web:ci .
+      - name: Smoke test web image
+        run: scripts/engineering/production-image-smoke.sh ductus-web:ci
+
   security:
     name: Security scanners
     runs-on: ubuntu-latest
