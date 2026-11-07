@@ -123,6 +123,52 @@
     </div>
   </section>
 
+  <section class="variant" aria-labelledby="v6b">
+    <div class="ref-tag" id="v6b">Stanje 6b · vanjski alat: prilaganje vanjskog razgovora kao izjavljeno (D-41, D-77)</div>
+    <div class="panel" role="dialog" aria-labelledby="t6b">
+      <div class="panel-top"><h2 id="t6b">Izjava o uporabi Asistenta</h2></div>
+      <div class="panel-body">
+        <fieldset class="radio"><legend>Izjava o uporabi alata</legend>
+          <label><input type="radio" name="r6b"> Nisam koristio/koristila AI alate</label>
+          <label><input type="radio" name="r6b" checked> Koristio/koristila sam vanjski alat (dopuna)</label>
+        </fieldset>
+        <div class="field"><label for="a6b">Alat i svrha</label><input class="input" id="a6b" value="Vanjski alat B, traženje literature"></div>
+        <fieldset class="radio"><legend>Kako prilažete vanjski razgovor</legend>
+          <label><input type="radio" name="m6b"> Poveznica za dijeljenje</label>
+          <label><input type="radio" name="m6b"> Datoteka izvoza</label>
+          <label><input type="radio" name="m6b" checked> Zalijepljen tekst</label>
+        </fieldset>
+        <div class="field"><label for="z6b">Tekst razgovora</label><textarea class="input" id="z6b" rows="3" placeholder="Zalijepite tekst razgovora iz vanjskog alata"></textarea></div>
+        <div class="acts"><button class="btn secondary" type="button">Dodaj vanjski razgovor</button></div>
+        <ul class="list" aria-label="Dodani vanjski razgovori">
+          <li class="item"><span class="title">Vanjski razgovor 1 · poveznica za dijeljenje</span><span class="acts"><span class="tag">izjavljeno</span><button class="btn ghost small" type="button" aria-label="Ukloni vanjski razgovor 1">Ukloni</button></span></li>
+          <li class="item"><span class="title">Vanjski razgovor 2 · zalijepljen tekst</span><span class="acts"><span class="tag">izjavljeno</span><button class="btn ghost small" type="button" aria-label="Ukloni vanjski razgovor 2">Ukloni</button></span></li>
+        </ul>
+        <p class="foot">Vanjski razgovor prilažete Vi i nastavnik ga vidi označenog kao „izjavljeno”, odvojeno od zapisa u radu.</p>
+        <p class="foot" id="pr6b">Potvrda je dostupna nakon što otvorite pregled svega što prilažete. Ako dodate ili uklonite vanjski razgovor, pregled se ponovno traži.</p>
+        <div class="acts"><button class="btn secondary" type="button">Pregledaj što se prilaže (2)</button><button class="btn" type="button" aria-disabled="true" aria-describedby="pr6b">Potvrdi izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v6c">
+    <div class="ref-tag" id="v6c">Stanje 6c · pregled vanjskih razgovora prije potvrde</div>
+    <div class="panel" role="dialog" aria-labelledby="t6c">
+      <div class="panel-top"><h2 id="t6c">Vanjski razgovori uz izjavu (2)</h2><span class="tag">Pregled</span></div>
+      <div class="panel-body">
+        <p class="note">Ovo je točno ono što prilažete, onako kako će ga nastavnik vidjeti. Oba razgovora su označena kao „izjavljeno”.</p>
+        <p>Izjava: vanjski alat, Vanjski alat B, traženje literature.</p>
+        <h3>Vanjski razgovor 1 · poveznica za dijeljenje <span class="tag">izjavljeno</span></h3>
+        <p><a href="#v6c">razgovor.primjer.invalid/podijeljeno/abc123</a></p>
+        <p class="foot">Prilaže se samo poveznica. Nastavnik je otvara sam.</p>
+        <h3>Vanjski razgovor 2 · zalijepljen tekst <span class="tag">izjavljeno</span></h3>
+        <div class="turn you"><span class="who">Vi</span><span>Koje vrste izvora bih mogao potražiti za izmišljenu temu?</span></div>
+        <div class="turn"><span class="who">Vanjski alat B</span><span>Pregledne radove i izvješća. Izmišljen primjer odgovora.</span></div>
+        <div class="acts"><button class="btn" type="button">Gotov pregled, natrag na izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
 </div>
 <p class="foot">Tipkovnica: dijalog hvata fokus, Esc ga zatvara i vraća fokus na gumb Predaj; gumb „Pregledaj točne verzije razgovora” otvara pregled, a odabir ostalih razgovora je skupina izbornih gumba sa strelicama. Greška se objavljuje kao role="alert".</p>
 </main>
