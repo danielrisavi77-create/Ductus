@@ -71,7 +71,7 @@ Oba zapisa imaju zatvoren skup ključeva, kanonski JCS i bez vremena finijeg od 
 | `rawSha256` | SHA-256 točnih bajtova datoteke. |
 | `rawByteLength` | Cijeli broj ≥ 1; gornja granica je O-7. |
 | `contentSha256` | SHA-256(JCS(sadržaj kao dokument Ductusa)). |
-| `traces` | Samo uz `fileFormat` `docx`: niz od najviše tri objekta `{traceKind, count}`. `traceKind` je iz zatvorenog skupa `insertion`, `deletion`, `comment`, svaki najviše jednom; `count` je cijeli broj ≥ 1. Uz `pdf` ključa nema; prazan niz ili ključ uz `pdf` odbija se. |
+| `traces` | Uz `fileFormat` `docx` ključ je obvezan: niz od nula do tri objekta `{traceKind, count}`. DOCX bez revizijskih tragova nosi `traces: []` (M8.2); izostanak ključa uz `docx` odbija se, pa svaki manifest ima jedan kanonski JCS oblik. `traceKind` je iz zatvorenog skupa `insertion`, `deletion`, `comment`, svaki najviše jednom; `count` je cijeli broj ≥ 1, vrsta bez tragova se ne upisuje. Uz `pdf` ključa nema; ključ uz `pdf`, i prazan, odbija se. |
 | `savedAt` (neobvezno) | Samo uz `cloud-version`: cijela UTC minuta u obliku iz D-24, ili ključa nema. |
 
 `manifestSha256` = SHA-256(JCS(manifest)). Sprema se uz manifest, nikad u njemu. Poslužitelj sva tri hasha ponovno izračuna iz bajtova datoteke, a nepodudaranje bilo kojeg odbija cijeli uvoz (B3).
@@ -173,7 +173,7 @@ Testovi se pišu prije implementacije i padaju dok implementacija ne postoji. Sv
 | Stari formati | Postojeći vektori v2/v3 i potvrde daju iste bajtove; test nad izvezenim konstantama drži točno jedan novi identifikator formata odsječka | A1, A2, A4 |
 | Odabir sheme | `evidenceSchemaForEvents` za svaku kombinaciju izvora | A6 |
 | Lanac | Miješani lanac v2+v3+v4 prolazi provjeru, a sažetak je isti kao bez v4 za isti sadržaj | A7, K15 |
-| Manifest | Tablični test: tri hasha, zabranjeni ključevi B5, `savedAt` sa sekundama, pretraga bajtova za „Lorem Autor”; valjan PDF manifest bez `traces`, odbijen PDF s `traces` (i praznim) i odbijen spoj `cloud-version` + `pdf` | B3 do B7, B10 |
+| Manifest | Tablični test: tri hasha, zabranjeni ključevi B5, `savedAt` sa sekundama, pretraga bajtova za „Lorem Autor”; valjan DOCX manifest s `traces: []`, odbijen DOCX bez ključa `traces`, odbijen trag s `count` 0; valjan PDF manifest bez `traces`, odbijen PDF s `traces` (i praznim) i odbijen spoj `cloud-version` + `pdf` | B3 do B7, B10 |
 | Zapis prijenosa | Tablični test: obvezna polja, oblik, katalog svrha, isključeni pružatelj | C1 do C5, C11 |
 | Tekst događaja | Test s poznatim odgovorom za definiciju hasha teksta, uključujući NFC i NFD | C6, D1, K14 |
 | Rekonstrukcija | Kriv `contentSha256` ili `textSha256` daje `mismatch`; neprovjerljiv `pasteOrigin` daje `not_observed` bez pada | B4, C6, D3 |
