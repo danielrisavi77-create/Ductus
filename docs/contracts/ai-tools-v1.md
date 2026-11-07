@@ -114,8 +114,8 @@ Redak ne nosi upit, rezultat, adresu ni odlomak ([OC-5]). Ime alata koje je mode
 
 - Dopušteni skup za korak je `CODE_TOOLS ∩ switch.tools ∩ assignment_tool_setting.tools ∩ ready`. `ready` za `web_search` znači neprazan popis odredišta. Uz to vrijedi i politika iz `ai-request-v1.md` („Politika”).
 - Postavka zadatka čita se za verziju koja vrijedi u trenutku koraka, ne za zapamćenu na početku zahtjeva. Opoziv tako samo sužava skup.
-- Ime iz zahtjeva modela uspoređuje se s imenom iz skupa točno, po bajtovima. Bez promjene veličine slova, rezanja razmaka i Unicode normalizacije (S3-D3). Ruta tako ime preslikava u člana `CODE_TOOLS` ili u NULL. NULL daje `denied_not_in_set`.
-- Argumenti se provjeravaju zatvorenom shemom prije izvršavanja (S3-D4). Odbijaju se nepoznat ključ, krivi tip, nedostajuće polje, predug niz i ugniježđen objekt. Odbijen korak se ne izvršava i nema odlazne veze. Modelu ide kao dio `tool_denied`. Ruta provjeru radi prije `begin_tool_step` i predaje mu samo zatvoren rezultat `args_valid`. Vrijednost `false` daje redak `denied_schema` koji troši `step_no`; argumenti se ni tada ne spremaju, samo `args_sha256`.
+- Ime iz zahtjeva modela uspoređuje se s imenom iz skupa točno, po bajtovima. Bez promjene veličine slova, rezanja razmaka i Unicode normalizacije (S3-D3). Ruta tako ime preslikava u člana `CODE_TOOLS` ili u NULL. NULL daje `denied_not_in_set`, osim nakon opoziva, kad je ishod `denied_revoked` (red ishoda u „RPC-ovi”).
+- Argumenti se provjeravaju zatvorenom shemom prije izvršavanja (S3-D4). Odbijaju se nepoznat ključ, krivi tip, nedostajuće polje, predug niz i ugniježđen objekt. Odbijen korak se ne izvršava i nema odlazne veze. Modelu ide kao dio `tool_denied`. Ruta provjeru radi prije `begin_tool_step` i predaje mu samo zatvoren rezultat `args_valid`. Vrijednost `false` bez opoziva daje redak `denied_schema` koji troši `step_no`; argumenti se ni tada ne spremaju, samo `args_sha256`.
 - Poziv pružatelja nudi točno dopušteni skup u tom trenutku. Prazan skup znači da poziv ne nudi nijedan alat (S3-D2).
 
 ## Odlazni dohvat
@@ -153,6 +153,7 @@ Rezervaciju petlje bilježi nova tablica `assistant.tool_loop_reservation`:
 | --- | --- | --- |
 | `request_id` | `uuid` PK, FK na `assistant.request` | L1 |
 | `steps_reserved` | `integer` NOT NULL, `TOOL_STEP_MAX` u trenutku rezervacije | L1 |
+| `tools_reserved` | `text[]` NOT NULL, neprazan, ⊆ `CODE_TOOLS`; dopušteni skup u trenutku rezervacije | L1 |
 | `reserved_at` | `timestamptz`, sat baze | L1 |
 
 - Redak upisuje samo `begin_request`, u istoj transakciji kao rezervaciju, i samo kad je dopušteni skup neprazan. Tablica ima `ENABLE` i `FORCE ROW LEVEL SECURITY`, retke u pgTAP matrici i okidač koji odbija `UPDATE`, `DELETE` i `TRUNCATE`.
@@ -167,10 +168,10 @@ Svi su `SECURITY DEFINER` sa `search_path = ''`, a akter dolazi iz `require_acto
 | --- | --- | --- |
 | `assistant.set_assignment_tools(assignment_id, expected_version, tools)` | nastavnik kolegija tog zadatka | Nova verzija postavke i redak revizijskog traga u istoj naredbi (#1662 M6). Drugačiji `expected_version` daje `version_conflict`. Alat izvan zatvorenog skupa daje `invalid_request`. |
 | `assistant.read_assignment_tools(assignment_id)` | nastavnik kolegija, student upisan na zadatak | Važeća verzija postavke. Student vidi koje je alate nastavnik uključio (PRODUCT §8). |
-| `assistant.begin_tool_step(request_id, step_no, tool_name, requested_name_sha256, args_sha256, args_valid)` | ruta AI-ja | `tool_name` je član `CODE_TOOLS` ili NULL; `args_valid` je `boolean` NOT NULL, rezultat provjere zatvorenom shemom u ruti. Pod bravom zahtjeva provjerava stanje `sent`, redak rezervacije petlje, `step_no` = zadnji + 1 ≤ `steps_reserved`, politiku i dopušteni skup u trenutku poziva. Ishod bira ovim redom: `tool_name` NULL daje `denied_not_in_set`; član `CODE_TOOLS` koji nije u dopuštenom skupu u trenutku poziva daje `denied_revoked`; `args_valid = false` daje `denied_schema`; inače `allowed`. Upisuje taj redak. Uz `denied_revoked` ruta prekida zahtjev (ispod tablice), a inače vraća dopušteni skup za idući poziv pružatelja. |
+| `assistant.begin_tool_step(request_id, step_no, tool_name, requested_name_sha256, args_sha256, args_valid)` | ruta AI-ja | `tool_name` je član `CODE_TOOLS` ili NULL; `args_valid` je `boolean` NOT NULL, rezultat provjere zatvorenom shemom u ruti. Pod bravom zahtjeva provjerava stanje `sent`, redak rezervacije petlje, `step_no` = zadnji + 1 ≤ `steps_reserved`, politiku i dopušteni skup u trenutku poziva. Ishod bira ovim redom, a odlučuje prvi uvjet koji vrijedi: (1) opoziv, neovisno o `tool_name` i `args_valid`: ako politika više ne dopušta zahtjev ili ijedan član `tools_reserved` nije u dopuštenom skupu u trenutku poziva, ishod je `denied_revoked`; (2) `tool_name` NULL ili član `CODE_TOOLS` izvan dopuštenog skupa daje `denied_not_in_set`; (3) `args_valid = false` daje `denied_schema`; (4) inače `allowed`. Upisuje taj redak. Uz `denied_revoked` ruta prekida zahtjev (ispod tablice), a inače vraća dopušteni skup za idući poziv pružatelja. |
 | `assistant.finish_tool_step(request_id, step_no, outcome, result_sha256, result_bytes, truncated)` | ruta AI-ja | `allowed` → `done` ili `failed`. Svaki drugi prijelaz se odbija. |
 
-Svaki opoziv, nastavnika ili politike, prekida zahtjev. Ako `begin_tool_step` vrati `denied_revoked` ili ponovna provjera politike ne prođe, ruta više ne zove pružatelja. Zahtjev zatvara s `fail_request` i razlogom `request_revoked`, uz zbroj troška dotad poslanih poziva. Slanje pružatelju ide tek nakon commita koraka, kao `mark_sent` (#1662 I3).
+Svaki opoziv, nastavnika ili politike, prekida zahtjev. Opoziv se prepoznaje usporedbom s `tools_reserved`, pa ga traženo ime ne skriva. Ako `begin_tool_step` vrati `denied_revoked` ili ponovna provjera politike ne prođe, ruta više ne zove pružatelja. Zahtjev zatvara s `fail_request` i razlogom `request_revoked`, uz zbroj troška dotad poslanih poziva. Slanje pružatelju ide tek nakon commita koraka, kao `mark_sent` (#1662 I3).
 
 ## Ishodi
 
@@ -179,7 +180,7 @@ Ugovor dodaje tri koda zatvorenom skupu iz `ai-request-v1.md`. Svi vrijede kao r
 - `response_too_large`;
 - `request_revoked`.
 
-Za `set_assignment_tools` dodaje `version_conflict`. Korak `denied_not_in_set` ili `denied_schema` nije ishod zahtjeva, nego podatak modelu. Korak `denied_revoked` zatvara zahtjev s `request_revoked`. Tekst sučelja nije dio ugovora i prolazi `ductus-ui-copy`.
+Za `set_assignment_tools` dodaje `version_conflict`. Korak `denied_not_in_set` ili `denied_schema` nije ishod zahtjeva, nego podatak modelu. Nakon opoziva ta dva ishoda ne nastaju, jer opoziv ima prednost. Korak `denied_revoked` zatvara zahtjev s `request_revoked`. Tekst sučelja nije dio ugovora i prolazi `ductus-ui-copy`.
 
 ## Port i sintetički adapter
 
@@ -241,6 +242,7 @@ Upis je uvijek samo kroz RPC. Svaka ćelija „ne” je pgTAP test koji odbija.
 
 Istodobnost: dopušteni skup računa `begin_tool_step` u transakciji pod bravom retka zahtjeva, iz stanja baze u tom trenutku. Postavku štiti `expected_version` i PK bez rupa, a korake PK `(request_id, step_no)`. Negativni testovi idu kroz zasebne stvarne veze na bazu, ne serijski u jednoj transakciji:
 - S3-Z1: nakon koraka 1 nastavnik na drugoj vezi isključi `web_search`. Korak 2 je `denied_revoked`, nema odlazne veze ni novog poziva pružatelja, a zahtjev završava s `request_revoked` uz trošak sveden na poslane pozive;
+- kombinirani slučaj S3-Z1: nakon opoziva model u koraku 2 traži ime izvan `CODE_TOOLS` (NULL), ime koje se od `web_search` razlikuje samo veličinom slova ili argument izvan sheme. Ishod je i tada `denied_revoked`, a ne `denied_not_in_set` ili `denied_schema`, bez novog poziva pružatelja i s `request_revoked`;
 - isto s pravilom kolegija promijenjenim u `prohibited` između koraka: nema novog poziva pružatelja, `request_revoked`, trošak sveden na poslane pozive (#1662 I3, D-268 O4, D-263 Q03);
 - dva istodobna `set_assignment_tools` s istim `expected_version`: jedan uspije, drugi dobiva `version_conflict`, verzije su bez rupa;
 - dva istodobna `begin_tool_step` za isti zahtjev i isti `step_no` (ponovljena ruta): jedan redak i najviše jedno izvršavanje;
