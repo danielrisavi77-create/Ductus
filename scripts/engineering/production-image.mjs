@@ -54,16 +54,66 @@ function flagsAndWords(args) {
   return { flags, words };
 }
 
-/** Names and values of ENV or ARG: `K=V K2=V2`, legacy `K V`, or `K`. */
-function assignments(keyword, args) {
-  const first = args.split(/\s+/)[0] ?? "";
-  if (keyword === "ENV" && !first.includes("=")) {
-    return [{ name: first, value: args.slice(first.length).trim() }];
+/** Words split on unquoted whitespace, quotes and escapes kept (Docker's parseWords). */
+function shellWords(text) {
+  const words = [];
+  let word = "";
+  let quote = null;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quote === null && /\s/.test(ch)) {
+      if (word !== "") words.push(word);
+      word = "";
+      continue;
+    }
+    word += ch;
+    if (ch === "\\" && quote !== "'" && i + 1 < text.length) word += text[(i += 1)];
+    else if (ch === quote) quote = null;
+    else if (quote === null && (ch === '"' || ch === "'")) quote = ch;
   }
-  return [...args.matchAll(/(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)(?:=("[^"]*"|'[^']*'|\S*))?/g)].map((m) => ({
-    name: m[1],
-    value: m[2] === undefined ? undefined : m[2].replace(/^(["'])(.*)\1$/s, "$2"),
-  }));
+  if (word !== "") words.push(word);
+  return words;
+}
+
+/** A word with quotes and escapes removed, as Docker expands it; null if a quote is open. */
+function unquote(word) {
+  let out = "";
+  let quote = null;
+  for (let i = 0; i < word.length; i += 1) {
+    const ch = word[i];
+    if (quote === "'") {
+      if (ch === "'") quote = null;
+      else out += ch;
+    } else if (ch === "\\" && i + 1 < word.length) out += word[(i += 1)];
+    else if (ch === '"') quote = quote === '"' ? null : '"';
+    else if (ch === "'") quote = "'";
+    else out += ch;
+  }
+  return quote === null ? out : null;
+}
+
+/**
+ * Names and values of ENV or ARG: `K=V K2=V2`, legacy `K V`, or `K`. Docker
+ * expands names too, so a quoted or escaped name is read unquoted; `name` is
+ * null when it is not a plain identifier after that (a variable, an open quote).
+ */
+function assignments(keyword, args) {
+  const words = shellWords(args);
+  const pairs =
+    keyword === "ENV" && words.length > 0 && !words[0].includes("=")
+      ? [[words[0], args.slice(words[0].length).trim()]]
+      : words.map((word) => {
+          const at = word.indexOf("=");
+          return at === -1 ? [word, undefined] : [word.slice(0, at), word.slice(at + 1)];
+        });
+  return pairs.map(([raw, value]) => {
+    const name = unquote(raw);
+    return {
+      raw,
+      name: name !== null && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : null,
+      value: value === undefined ? undefined : unquote(value),
+    };
+  });
 }
 
 /** An image reference resolved against the global ARG defaults, or null. */
@@ -135,7 +185,11 @@ export function checkDockerfile(text) {
         break;
       case "ARG":
       case "ENV":
-        for (const { name, value } of assignments(step.keyword, step.args)) {
+        for (const { raw, name, value } of assignments(step.keyword, step.args)) {
+          if (name === null) {
+            findings.push(finding("unparsed-name", step.line, raw));
+            continue;
+          }
           if (SECRET_NAME.test(name)) findings.push(finding("secret-name", step.line, name));
           if (LOCAL_ONLY_NAME.test(name)) findings.push(finding("local-only-env", step.line, name));
           if (name === "NODE_ENV" && step.keyword === "ENV") {
