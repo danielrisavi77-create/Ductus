@@ -10,7 +10,7 @@
 <header class="ref-head">
   <div class="ref-tag">Referenca paketa 14 · DAN-411 · prijedlog slike · M9.UX</div>
   <h1>A-AI-POL — Administrator: pravilo o uporabi AI</h1>
-  <p>Administrator ustanove mijenja samo pravilo o uporabi AI i pragove. Pružatelji dolaze iz verzionirane konfiguracije <code>config/faculties</code> koju je potvrdio FPZG i ovdje se samo čitaju (D-270 O11). Prazna konfiguracija troška znači da je Asistent isključen (D-267 O5). Podaci su izmišljeni.</p>
+  <p>Administrator ustanove mijenja samo polazno pravilo AI-ja fakulteta, dopuštene oblike pomoći i pragove (D-117, D-265 Q18). Pravilo i oblici pomoći su odvojeni od dostupnosti Asistenta i granica troška. Pružatelji dolaze iz verzionirane konfiguracije <code>config/faculties</code> koju je potvrdio FPZG i ovdje se samo čitaju (D-270 O11). Prazna konfiguracija troška znači da je Asistent isključen (D-267 O5). Podaci su izmišljeni.</p>
 </header>
 <main class="page"><div class="variants">
 
@@ -19,11 +19,31 @@
     <div class="panel" aria-label="Pravilo o uporabi AI">
       <div class="panel-top"><h2>Pravilo o uporabi AI</h2><span class="tag">Verzija 3</span></div>
       <div class="panel-body">
+        <fieldset class="grp" aria-describedby="p1-n">
+          <legend>Polazno pravilo AI-ja fakulteta</legend>
+          <label class="opt"><input type="radio" name="pravilo" value="zabrana"> Nije dopuštena</label>
+          <label class="opt"><input type="radio" name="pravilo" value="djelomicno" checked> Djelomično dopuštena</label>
+          <label class="opt"><input type="radio" name="pravilo" value="poticanje"> Potiče se</label>
+          <p class="meta" id="p1-n">Novi kolegiji ga dobivaju kao zadanu vrijednost. Nastavnik ga na kolegiju smije pooštriti ili ublažiti, a zadatak ga smije samo suziti (D-52, D-175).</p>
+        </fieldset>
+        <fieldset class="grp" aria-describedby="p1-o">
+          <legend>Dopušteni oblici pomoći</legend>
+          <label class="opt"><input type="checkbox" checked> formatiranje</label>
+          <label class="opt"><input type="checkbox" checked> lektoriranje i jezična provjera</label>
+          <label class="opt"><input type="checkbox"> pronalaženje literature</label>
+          <label class="opt"><input type="checkbox"> transkribiranje</label>
+          <label class="opt"><input type="checkbox"> prevođenje</label>
+          <p class="meta" id="p1-o">Popis vrijedi uz pravilo „Djelomično dopuštena”; uz „Nije dopuštena” je nedostupan, a uz „Potiče se” označava što se potiče.</p>
+        </fieldset>
+        <div class="sep"></div>
+        <h3>Asistent i granice troška</h3>
+        <p class="meta">Odvojeno od pravila: pravilo određuje što je dopušteno, a ovdje se uključuje ugrađeni Asistent i određuje koliko ga smije koristiti svaki student.</p>
         <div class="field"><label><input type="checkbox" checked> Asistent je uključen na razini ustanove</label></div>
-        <div class="field"><label for="g1">Dnevna granica po studentu i zadatku</label><input class="input" id="g1" value="20" inputmode="numeric"></div>
-        <div class="field"><label for="g2">Dnevna granica po studentu</label><input class="input" id="g2" value="40" inputmode="numeric"></div>
+        <div class="field"><label for="g1">Dnevna granica po studentu i zadatku (EUR)</label><input class="input" id="g1" value="20" inputmode="numeric" aria-describedby="gh1"></div>
+        <div class="field"><label for="g2">Dnevna granica po studentu (EUR)</label><input class="input" id="g2" value="40" inputmode="numeric" aria-describedby="gh1"></div>
+        <p class="meta" id="gh1">Gornja granica operatera je 50 EUR dnevno; granice ustanove ne smiju je prijeći.</p>
         <div class="acts"><button class="btn" type="button">Spremi pravilo</button><button class="btn secondary" type="button">Odbaci izmjene</button></div>
-        <p class="foot">Iznose granica određuje vlasnik nakon mjerenja (D-267 O5). Brojke su primjer.</p>
+        <p class="foot">Iznose granica određuje vlasnik nakon mjerenja (D-267 O5). Brojke i jedinica (EUR dnevno) su primjer.</p>
       </div>
     </div>
   </section>
@@ -44,8 +64,8 @@
     <div class="panel" aria-label="Pravilo o uporabi AI">
       <div class="panel-top"><h2>Pravilo o uporabi AI</h2></div>
       <div class="panel-body">
-        <div class="toast" role="status">Verzija 4 pravila je zapisana. Vrijedi za nove zadatke.</div>
-        <p class="note">Zadaci koji su već objavljeni zadržavaju svoje pravilo.</p>
+        <div class="toast" role="status">Verzija 4 pravila je zapisana. Vrijedi kao polazno pravilo za nove kolegije.</div>
+        <p class="note">Kolegiji koji već imaju svoje pravilo i zadaci čija su pravila studenti potvrdili ostaju kakvi jesu; nova verzija ih ne proširuje (pravilo 14).</p>
       </div>
     </div>
   </section>
@@ -55,9 +75,17 @@
     <div class="panel" aria-label="Pravilo o uporabi AI">
       <div class="panel-top"><h2>Pravilo o uporabi AI</h2></div>
       <div class="panel-body">
-        <div class="field"><label for="g4">Dnevna granica po studentu</label><input class="input" id="g4" value="abc" aria-invalid="true" aria-describedby="e4"><p id="e4" role="alert">Upišite cijeli broj veći od 0.</p></div>
-        <div class="field"><label for="g5">Dnevna granica po studentu i zadatku</label><input class="input" id="g5" value="60" aria-invalid="true" aria-describedby="e5"><p id="e5" role="alert">Granica po zadatku ne smije biti veća od dnevne granice po studentu.</p></div>
+        <div class="field"><label for="g4">Dnevna granica po studentu (EUR)</label><input class="input" id="g4" value="abc" aria-invalid="true" aria-describedby="e4"><p id="e4" role="alert">Upišite cijeli broj veći od 0.</p></div>
+        <div class="field"><label for="g5">Dnevna granica po studentu i zadatku (EUR)</label><input class="input" id="g5" value="60" aria-invalid="true" aria-describedby="e5"><p id="e5" role="alert">Granica po zadatku ne smije biti veća od dnevne granice po studentu.</p></div>
         <div class="acts"><button class="btn" type="button" aria-disabled="true">Spremi pravilo</button></div>
+      </div>
+    </div>
+    <div class="panel" aria-label="Pravilo o uporabi AI, granica iznad operaterove">
+      <div class="panel-top"><h2>Iznad gornje granice operatera</h2></div>
+      <div class="panel-body">
+        <div class="field"><label for="g6">Dnevna granica po studentu (EUR)</label><input class="input" id="g6" value="120" inputmode="numeric" aria-invalid="true" aria-describedby="e6"><p id="e6" role="alert">Granica ne smije biti veća od gornje granice operatera (50 EUR dnevno). Upišite 50 ili manje.</p></div>
+        <div class="acts"><button class="btn" type="button" aria-disabled="true">Spremi pravilo</button></div>
+        <p class="meta">Ništa nije zapisano; prethodna verzija ostaje na snazi.</p>
       </div>
     </div>
   </section>

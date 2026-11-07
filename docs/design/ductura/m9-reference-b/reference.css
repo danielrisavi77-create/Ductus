@@ -5,3 +5,10 @@
 .ro dt { color: var(--ink-3); font-size: 12.5px; }
 .ro dd { margin: 0 0 6px; }
 .panel .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+fieldset.grp { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 2px; }
+fieldset.grp legend { padding: 0; margin-bottom: 4px; font-size: 12.5px; color: var(--ink-3); }
+.opt { display: flex; align-items: center; min-height: 44px; }
+input[type="radio"] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0 8px 0 0; }
+.panel-body h3 { font-size: 15px; }
+.panel-body .sep { border-top: 1px solid var(--rule-2); }
