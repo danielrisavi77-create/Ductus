@@ -18,3 +18,4 @@
 .panel .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .panel-body h3 { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; margin: 6px 0 0; }
 .panel-body input[type="text"] { min-height: 44px; padding: 8px 10px; border: 1px solid var(--rule-2); border-radius: 6px; background: var(--card); color: var(--ink-1, inherit); font: inherit; width: 100%; box-sizing: border-box; }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; }
