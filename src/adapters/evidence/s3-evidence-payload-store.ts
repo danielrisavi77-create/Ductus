@@ -828,13 +828,10 @@ export class S3EvidencePayloadStore
         redirect: "error",
         signal,
       });
-      if (response.status === 400 || response.status === 403) {
-        const reason = await errorReason(response, signal);
-        if (reason) return { ok: false, reason };
-        return { ok: true, status: response.status, body: null, checksum: null };
-      }
       if (method === "HEAD") {
-        // A HEAD has no body to read; only its status and headers count.
+        // A HEAD has no body to read, an error one included: only its status
+        // and headers count, so a 400 or 403 is its status, not an S3 code.
+        // Not awaited: a cancel that never settles must not outlast the deadline.
         void response.body?.cancel().catch(() => undefined);
         return {
           ok: true,
@@ -843,6 +840,11 @@ export class S3EvidencePayloadStore
           checksum: response.headers.get("x-amz-checksum-sha256"),
           length: response.headers.get("content-length"),
         };
+      }
+      if (response.status === 400 || response.status === 403) {
+        const reason = await errorReason(response, signal);
+        if (reason) return { ok: false, reason };
+        return { ok: true, status: response.status, body: null, checksum: null };
       }
       if (method === "GET" && response.status === 404 && read.notFoundCode) {
         const code = await errorCode(response, signal);

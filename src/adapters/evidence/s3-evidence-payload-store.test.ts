@@ -2873,8 +2873,9 @@ describe("headImmutable: the object a pending receipt names (DAN-301)", () => {
     ["a busy store", answer(503), "storage_head_status_503"],
     ["a 403 without a code (HEAD has no body)", answer(403), "storage_head_status_403"],
     ["a 400 without a code", answer(400), "storage_head_status_400"],
-    ["a refused signature", () => s3Error(403, "SignatureDoesNotMatch"), "storage_signature_rejected"],
-    ["a skewed clock", () => s3Error(403, "RequestTimeTooSkewed"), "storage_clock_skew"],
+    // B7: a HEAD error body is never read, so an S3 code in one is not seen.
+    ["a refused signature with an error body", () => s3Error(403, "SignatureDoesNotMatch"), "storage_head_status_403"],
+    ["a skewed clock with an error body", () => s3Error(403, "RequestTimeTooSkewed"), "storage_head_status_403"],
     ["a 304", answer(304, exact), "storage_head_status_304"],
     ["a 206", answer(206, exact), "storage_head_status_206"],
     ["a redirect refused by fetch", () => Promise.reject(new TypeError("unexpected redirect")), "storage_request_failed"],
@@ -2882,6 +2883,24 @@ describe("headImmutable: the object a pending receipt names (DAN-301)", () => {
   ])("B4 answers %s as unavailable after one request, with no retry", async (_, respond, reason) => {
     const s3 = withHead(respond);
     await expect(head(storeWith(s3.fetch).store)).resolves.toEqual(unavailable(reason));
+    expect(s3.calls).toHaveLength(1);
+  });
+
+  it.each([400, 403])("B7 never reads the body of a HEAD answered %i, even one that never ends", async (status) => {
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull() {
+          pulls += 1;
+          return new Promise<void>(() => {});
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const s3 = withHead(() => Promise.resolve(new Response(body, { status })));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 200 });
+    await expect(head(store)).resolves.toEqual(unavailable(`storage_head_status_${status}`));
+    expect(pulls).toBe(0);
     expect(s3.calls).toHaveLength(1);
   });
 
