@@ -51,7 +51,9 @@ Ovi tekstovi su prijedlog i ulaze u `messages.hr.ts` tek s izvedbom, uz provjeru
 - S-02 do S-05: „Izbornik” (gumb kojim se bočna traka ispod 800 px otvara kao ladica, isti kao u `m2-reference`).
 - S-05: „Nastavnik (mentor) zadatka moći će usporediti dvije poslane verzije rada, poslane na pregled ili predane. Usporedba pokazuje samo razliku između njih. Istu usporedbu svog rada vidjet ćete i Vi.” (PRODUCT §5 pravilo 7, D-202; katalog ima samo `teacherExtended` za prošireni profil).
 - S-05: naslovi „Dopušteno pravilom fakulteta” i „Nije dopušteno pravilom fakulteta” u rasklopivom pravilu fakulteta (katalog ima naslove samo za pravilo zadatka; isti naslov dvaput na ekranu govorio bi da je ista stavka i dopuštena i nedopuštena).
-- S-05: „Pravilo je postavio nastavnik kolegija (Nastavnik A). Razlikuje se od pravila fakulteta.” i rasklopivo „Pravilo fakulteta (FPZG čl. 8)” (D-175); kad se pravila ne razlikuju, ostaje samo prva rečenica.
+- S-05: „Pravilo je postavio nastavnik kolegija (Nastavnik B). Razlikuje se od pravila fakulteta.” i rasklopivo „Pravilo fakulteta (FPZG čl. 8)” (D-175); kad se pravila ne razlikuju, ostaje samo prva rečenica.
+- S-05: rečenica o čuvanju („Zapis se čuva uz rad do isteka roka koji propisuje fakultet.”) je doslovan katalog (`messages.hr.ts`) i ne obećava razdoblje: razdoblje čuvanja je konfiguracija fakulteta (PRODUCT §5 pravilo 12). D-30 (razdoblja) je PRIJEDLOG (Q-16), pa izvedba ništa ne gradi na njemu.
+- S-05: datumi su usklađeni sa S-02 i S-03: zadano stanje prikazuje zadatak „Javna rasprava o školskom kurikulu” (Kolegij B, rok 15. 1. 2027., 23:59) koji je na S-02 označen „Prvo pročitajte obavijest”. Varijanta „zadatak se još ne otvara” i varijanta „rok je prošao” prikazuju zasebne izmišljene zadatke, pa se datumi ne sukobljavaju s ostalim stranicama.
 
 ## Tipkovnica (EQ6)
 
