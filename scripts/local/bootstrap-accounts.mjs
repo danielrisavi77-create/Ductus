@@ -19,7 +19,7 @@ const ACCOUNTS = [
 ];
 // The chooser also offers the accounts of "Demo fakultet B" (DAN-483); this
 // script signs in and grants only the accounts above.
-const OTHER_CHOOSER_NAMES = ["Ustanova B: nastavnica", "Ustanova B: student"];
+const OTHER_CHOOSER_NAMES = ["Ustanova B: nastavnica", "Ustanova B: asistent", "Ustanova B: student"];
 // Both teachers get the explicit operator grant; the students never do.
 const TEACHERS = ["demo-teacher", "demo-teacher-2"];
 const SESSION_COOKIE = "__Host-ductus_session";
