@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 
+import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import { withActor as appWithActor } from "@/server/db";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
 // B5/D4/D6: loading the old status model anywhere under this boundary fails the import.
@@ -12,8 +14,10 @@ vi.mock("@/domain/collaboration/conditional-validity", () => {
 vi.mock("@/domain/collaboration/revision-request", () => {
   throw new Error("revision boundary loaded revision-request");
 });
+vi.mock("@/server/db", () => ({ withActor: vi.fn() }));
 
 const { MAX_REVISION_BODY_BYTES, REVISION_ACTIONS, handleRevisionRequest } = await import("./revision-requests");
+const { POST } = await import("../../../app/api/revision-requests/[action]/route");
 type Action = (typeof REVISION_ACTIONS)[number];
 
 const ORIGIN = "http://localhost:3000";
@@ -121,7 +125,10 @@ async function call(action: Action, value: unknown, options: Parameters<typeof p
   return { res, json: await res.json() as Record<string, unknown>, ...p };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe("DAN-314 2f revision request API: success", () => {
   it("creates through one parameterized RPC; the anchor goes as jsonb, no identity", async () => {
@@ -465,5 +472,80 @@ describe("DAN-314 2f: B5/D4/D6 the boundary does not know the old status model",
       expect(source).not.toMatch(/from\s+["']@\/domain\/collaboration["']/);
       expect(source).not.toMatch(/from\s+["']\.\.?\/?(index)?["']/);
     }
+  });
+});
+
+describe("DAN-314 2f: the real POST route wires action, configured origin and cookie", () => {
+  const CALLBACK = `${ORIGIN}/api/auth/callback`;
+  const routeRequest = (value: unknown, headers: Record<string, string> = {}) => new NextRequest(request(value, {
+    cookie: `__Host-ductus_session=${TOKEN}`,
+    host: "evil.example",
+    "x-forwarded-host": "evil.example",
+    ...headers,
+  }));
+  const context = (action: string) => ({ params: Promise.resolve({ action }) });
+  const wire = () => {
+    const p = port({ rows: rowsFor("list") });
+    vi.mocked(appWithActor).mockImplementation(p.withActor);
+    return p;
+  };
+
+  it("an unknown action is 404 before the origin, the body or the database", async () => {
+    const { withActor } = wire();
+    vi.stubEnv("OIDC_REDIRECT_URI", CALLBACK);
+    for (const action of ["nepoznato", "List", "list ", "__proto__", "constructor", ""]) {
+      const req = routeRequest(VALID.list);
+      const res = await POST(req, context(action));
+      expect(res.status).toBe(404);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(await res.json()).toEqual({ error: "not_found" });
+      expect(req.bodyUsed).toBe(false);
+    }
+    expect(withActor).not.toHaveBeenCalled();
+  });
+
+  it("without a configured callback origin every action is 503 and nothing is read", async () => {
+    const { withActor } = wire();
+    for (const callback of ["", "invalid", "file:///tmp/callback"]) {
+      vi.stubEnv("OIDC_REDIRECT_URI", callback);
+      for (const action of REVISION_ACTIONS) {
+        const req = routeRequest(VALID[action]);
+        const res = await POST(req, context(action));
+        expect(res.status).toBe(503);
+        expect(res.headers.get("cache-control")).toBe("no-store");
+        expect(await res.json()).toEqual({ error: "unavailable" });
+        expect(req.bodyUsed).toBe(false);
+      }
+    }
+    expect(withActor).not.toHaveBeenCalled();
+  });
+
+  it("uses the callback origin, not Host, and passes the session cookie to withActor", async () => {
+    const { withActor, query } = wire();
+    vi.stubEnv("OIDC_REDIRECT_URI", CALLBACK);
+    const res = await POST(routeRequest(VALID.list), context("list"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(withActor).toHaveBeenCalledTimes(1);
+    expect(withActor).toHaveBeenCalledWith(TOKEN, expect.any(Function));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("list_revision_requests"), [DOC]);
+
+    const forged = routeRequest(VALID.list, { origin: "https://evil.example" });
+    expect((await POST(forged, context("list"))).status).toBe(403);
+    expect(forged.bodyUsed).toBe(false);
+
+    vi.stubEnv("OIDC_REDIRECT_URI", "http://localhost:4000/api/auth/callback");
+    const moved = routeRequest(VALID.list);
+    expect((await POST(moved, context("list"))).status).toBe(403);
+    expect(moved.bodyUsed).toBe(false);
+    expect(withActor).toHaveBeenCalledTimes(1);
+  });
+
+  it("only the __Host- session cookie is the token", async () => {
+    const { withActor } = wire();
+    vi.stubEnv("OIDC_REDIRECT_URI", CALLBACK);
+    const res = await POST(routeRequest(VALID.list, { cookie: `ductus_session=${TOKEN}` }), context("list"));
+    expect(res.status).toBe(401);
+    expect(withActor).not.toHaveBeenCalled();
   });
 });
