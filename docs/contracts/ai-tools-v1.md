@@ -167,10 +167,10 @@ Svi su `SECURITY DEFINER` sa `search_path = ''`, a akter dolazi iz `require_acto
 | --- | --- | --- |
 | `assistant.set_assignment_tools(assignment_id, expected_version, tools)` | nastavnik kolegija tog zadatka | Nova verzija postavke i redak revizijskog traga u istoj naredbi (#1662 M6). Drugačiji `expected_version` daje `version_conflict`. Alat izvan zatvorenog skupa daje `invalid_request`. |
 | `assistant.read_assignment_tools(assignment_id)` | nastavnik kolegija, student upisan na zadatak | Važeća verzija postavke. Student vidi koje je alate nastavnik uključio (PRODUCT §8). |
-| `assistant.begin_tool_step(request_id, step_no, tool_name, requested_name_sha256, args_sha256, args_valid)` | ruta AI-ja | `tool_name` je član `CODE_TOOLS` ili NULL; `args_valid` je `boolean` NOT NULL, rezultat provjere zatvorenom shemom u ruti. Pod bravom zahtjeva provjerava stanje `sent`, redak rezervacije petlje, `step_no` = zadnji + 1 ≤ `steps_reserved`, politiku i dopušteni skup u trenutku poziva. Ishod bira ovim redom: `tool_name` NULL daje `denied_not_in_set`; član `CODE_TOOLS` koji nije u dopuštenom skupu u trenutku poziva daje `denied_revoked`; `args_valid = false` daje `denied_schema`; inače `allowed`. Upisuje taj redak i vraća dopušteni skup za idući poziv pružatelja. |
+| `assistant.begin_tool_step(request_id, step_no, tool_name, requested_name_sha256, args_sha256, args_valid)` | ruta AI-ja | `tool_name` je član `CODE_TOOLS` ili NULL; `args_valid` je `boolean` NOT NULL, rezultat provjere zatvorenom shemom u ruti. Pod bravom zahtjeva provjerava stanje `sent`, redak rezervacije petlje, `step_no` = zadnji + 1 ≤ `steps_reserved`, politiku i dopušteni skup u trenutku poziva. Ishod bira ovim redom: `tool_name` NULL daje `denied_not_in_set`; član `CODE_TOOLS` koji nije u dopuštenom skupu u trenutku poziva daje `denied_revoked`; `args_valid = false` daje `denied_schema`; inače `allowed`. Upisuje taj redak. Uz `denied_revoked` ruta prekida zahtjev (ispod tablice), a inače vraća dopušteni skup za idući poziv pružatelja. |
 | `assistant.finish_tool_step(request_id, step_no, outcome, result_sha256, result_bytes, truncated)` | ruta AI-ja | `allowed` → `done` ili `failed`. Svaki drugi prijelaz se odbija. |
 
-Ako ponovna provjera politike u `begin_tool_step` ne prođe, ruta više ne zove pružatelja. Zahtjev zatvara s `fail_request` i razlogom `request_revoked`, uz zbroj troška dotad poslanih poziva. Slanje pružatelju ide tek nakon commita koraka, kao `mark_sent` (#1662 I3).
+Svaki opoziv, nastavnika ili politike, prekida zahtjev. Ako `begin_tool_step` vrati `denied_revoked` ili ponovna provjera politike ne prođe, ruta više ne zove pružatelja. Zahtjev zatvara s `fail_request` i razlogom `request_revoked`, uz zbroj troška dotad poslanih poziva. Slanje pružatelju ide tek nakon commita koraka, kao `mark_sent` (#1662 I3).
 
 ## Ishodi
 
@@ -179,7 +179,7 @@ Ugovor dodaje tri koda zatvorenom skupu iz `ai-request-v1.md`. Svi vrijede kao r
 - `response_too_large`;
 - `request_revoked`.
 
-Za `set_assignment_tools` dodaje `version_conflict`. Odbijen korak alata nije ishod zahtjeva, nego podatak modelu. Tekst sučelja nije dio ugovora i prolazi `ductus-ui-copy`.
+Za `set_assignment_tools` dodaje `version_conflict`. Korak `denied_not_in_set` ili `denied_schema` nije ishod zahtjeva, nego podatak modelu. Korak `denied_revoked` zatvara zahtjev s `request_revoked`. Tekst sučelja nije dio ugovora i prolazi `ductus-ui-copy`.
 
 ## Port i sintetički adapter
 
@@ -240,7 +240,7 @@ Upis je uvijek samo kroz RPC. Svaka ćelija „ne” je pgTAP test koji odbija.
 | worker, operater, podrška | ne | ne | ne |
 
 Istodobnost: dopušteni skup računa `begin_tool_step` u transakciji pod bravom retka zahtjeva, iz stanja baze u tom trenutku. Postavku štiti `expected_version` i PK bez rupa, a korake PK `(request_id, step_no)`. Negativni testovi idu kroz zasebne stvarne veze na bazu, ne serijski u jednoj transakciji:
-- S3-Z1: nakon koraka 1 nastavnik na drugoj vezi isključi `web_search`. Korak 2 je `denied_revoked`, nema odlazne veze, idući poziv pružatelja ne nudi alat, a zahtjev završava određenim ishodom;
+- S3-Z1: nakon koraka 1 nastavnik na drugoj vezi isključi `web_search`. Korak 2 je `denied_revoked`, nema odlazne veze ni novog poziva pružatelja, a zahtjev završava s `request_revoked` uz trošak sveden na poslane pozive;
 - isto s pravilom kolegija promijenjenim u `prohibited` između koraka: nema novog poziva pružatelja, `request_revoked`, trošak sveden na poslane pozive (#1662 I3, D-268 O4, D-263 Q03);
 - dva istodobna `set_assignment_tools` s istim `expected_version`: jedan uspije, drugi dobiva `version_conflict`, verzije su bez rupa;
 - dva istodobna `begin_tool_step` za isti zahtjev i isti `step_no` (ponovljena ruta): jedan redak i najviše jedno izvršavanje;
