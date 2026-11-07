@@ -210,6 +210,25 @@ describe("signS3Request: input it refuses (plan S1 to S10)", () => {
     );
   });
 
+  it("refuses a HEAD with a body (DAN-301)", () => {
+    expect(() => sign({ method: "HEAD", body: new Uint8Array([1]) })).toThrow(
+      "S3 HEAD must not have a body",
+    );
+  });
+
+  it("signs a HEAD with its own method, no write condition and the checksum mode it is given (DAN-301)", () => {
+    const empty = new Uint8Array();
+    const head = sign({ method: "HEAD", body: empty, headers: { "x-amz-checksum-mode": "ENABLED" } });
+    const get = sign({ method: "GET", body: empty, headers: { "x-amz-checksum-mode": "ENABLED" } });
+    expect(head.headers["if-none-match"]).toBeUndefined();
+    expect(head.headers["x-amz-checksum-sha256"]).toBeUndefined();
+    expect(head.headers["x-amz-checksum-mode"]).toBe("ENABLED");
+    expect(head.headers.authorization).toContain("x-amz-checksum-mode");
+    expect(head.headers.authorization).not.toBe(get.headers.authorization);
+    const plain = sign({ method: "HEAD", body: empty });
+    expect(plain.headers.authorization).not.toBe(head.headers.authorization);
+  });
+
   it.each(["", "eu/central-1", "eu central", "eu-central-1\n", "EU-CENTRAL-1"])(
     "refuses the region %j (S10)",
     (region) => {
