@@ -26,7 +26,7 @@ Rokovi čuvanja po klasi podataka nisu dio ugovora (D-30 PRIJEDLOG, Q-16, OA-3).
 | --- | --- | --- |
 | Prazna konfiguracija troška znači isključeno | Bez objavljene verzije konfiguracije za uslugu i ustanovu, ili s ijednom granicom bez vrijednosti, svaki zahtjev se odbija s `ai_disabled` prije rezervacije. | P1, Z13 |
 | Odbijen zahtjev ne doseže port | Port se zove samo za redak u stanju `sent`, nakon commita. | R2 |
-| Pravila samo sužavaju | Učinkovita politika je presjek fakulteta, kolegija i zadatka; zahtjev je nikad ne proširuje. | P2, P3 |
+| Pravila samo sužavaju | Učinkovita politika je pravilo kolegija (zadano iz pravila fakulteta, nastavnik ga smije ublažiti, D-175) suženo zadatkom; zahtjev je nikad ne proširuje. | P2, P3 |
 | Brojanje po računu iz sesije | Akter dolazi iz `require_actor()`; ID studenta, iznos, granica, pružatelj, model ni alat ne dolaze iz zahtjeva. | T3, M5, Z4 |
 | Pružatelju ide samo odlomak i upute | Ulaz porta nema polje za korisnika, rad ni ustanovu. | G8, S3, C-37 |
 | Za vrijeme pisanja čita samo student | Nastavnik čita samo razgovor pridružen izjavi, nakon predaje, u zamrznutoj verziji. | G1, G2, G4 |
@@ -91,13 +91,13 @@ Redak ne nosi odlomak, odgovor ni iznos (L1 nikad ne nosi L2 ni L3).
 | `request_id` | `uuid` PK i FK: najviše jedan redak troška po zahtjevu | L3 |
 | `institution_id`, `student_id`, `assignment_id` | `uuid` NOT NULL, prepisano iz zahtjeva | L3 |
 | `budget_day` | `date` NOT NULL, dan rezervacije u Europe/Zagreb | L3 |
-| `cap_period_start` | `date` NOT NULL, početak razdoblja stropa operatera u kojem je rezervacija | L3 |
+| `institution_cap_period_start`, `service_cap_period_start` | `date` NOT NULL, početak razdoblja stropa ustanove i stropa usluge u kojem je rezervacija, svaki prema svom `cap_period` u trenutku rezervacije | L3 |
 | `reserved_micro` | `bigint` NOT NULL, > 0 | L3 |
 | `actual_micro` | `bigint` NULL, ≥ 0; NULL dok nije svedeno | L3 |
 | `state` | `text`, `reserved`, `settled` ili `released` | L3 |
 | `reserved_at`, `settled_at` | `timestamptz`, sat baze | L3 |
 
-Svedeni i oslobođeni redak se ne mijenja (M7). Svođenje upisuje trošak u dan i razdoblje rezervacije, i kad se dogodi poslije ponoći (T6).
+Svedeni i oslobođeni redak se ne mijenja (M7). Svođenje i oslobađanje pomiču točno one brojače čiji su ključevi zapisani u retku (`budget_day`, `institution_cap_period_start`, `service_cap_period_start`), i kad se dogode poslije ponoći ili nakon objave nove konfiguracije s drugim razdobljem (T6). Ključevi se ne računaju ponovno iz trenutačne konfiguracije.
 
 ### `assistant.budget_counter`
 
@@ -133,11 +133,10 @@ Veza razgovora s izjavom gradi se u M9.5 nakon M7.5. Ovaj ugovor određuje samo 
 ## Politika
 
 Učinkovite svrhe za zahtjev računaju se na poslužitelju u transakciji rezervacije, iz:
-1. trenutačne `faculty_rule_version` za vrstu rada zadatka (do odluke OA-6 vrijedi trenutačna, kao stroža);
-2. `course.ai_policy`;
-3. verzije zadatka koja vrijedi u trenutku zahtjeva (`ai_policy`, `ai_purposes`, verzija kataloga).
+1. `course.ai_policy`: pravilo kolegija. Novi kolegij dobiva pravilo fakulteta kao zadanu vrijednost, a nastavnik ga smije i pooštriti i ublažiti (D-175, pravilo 12);
+2. verzije zadatka koja vrijedi u trenutku zahtjeva (`ai_policy`, `ai_purposes`, verzija kataloga); zadatak pravilo kolegija smije samo suziti (D-52).
 
-Zahtjev prolazi samo ako je politika na svakoj razini različita od `prohibited` i ako je `purpose_key` u `ai_purposes` i fakulteta i zadatka te postoji u verziji kataloga zadatka (`parsePurpose`). Svrha razine 2 prolazi samo ako ju je nastavnik izričito uključio na zadatku (D-64, D-268 O2, P5). Do M9.3 baza dopušta samo pet svrha verzije 1; verzija kataloga na zadatku i svrhe razine 2 dolaze s DAN-402. Transkripcija i alati prolaze samo uz uključen prekidač ustanove iz #1664 (P9, D-267 O10). Ovaj ugovor alate ne otvara: port u ovoj verziji nema polje za alat.
+Pravilo fakulteta (`faculty_rule_version`) nije zasebna obvezna razina provjere. Ulazi kao zadana vrijednost kolegija i u obavijest studentu, ali ne odbija zahtjev koji je nastavnik izričito dopustio. Od fakulteta je obvezan samo popis dopuštenih pružatelja (D-23), kroz konfiguraciju ispod. Zahtjev prolazi samo ako je politika kolegija i zadatka različita od `prohibited` i ako je `purpose_key` u `ai_purposes` zadatka te postoji u verziji kataloga zadatka (`parsePurpose`). Svrha razine 2 prolazi samo ako ju je nastavnik izričito uključio na zadatku (D-64, D-268 O2, P5). Do M9.3 baza dopušta samo pet svrha verzije 1; verzija kataloga na zadatku i svrhe razine 2 dolaze s DAN-402. Transkripcija i alati prolaze samo uz uključen prekidač ustanove iz #1664 (P9, D-267 O10). Ovaj ugovor alate ne otvara: port u ovoj verziji nema polje za alat.
 Pružatelj i model biraju se iz verzionirane konfiguracije u `config/faculties` (D-270 O11), nikad iz zahtjeva. Nema prelaska na drugog pružatelja ili model nakon greške (P7). Zabrana pružatelja i modela iz D-194 t. 2 je u kodu: konfiguracija koja je krši se ne učitava (P8; zatvoren skup vrijednosti je #1659 O-1).
 Ništa u politici ne smije zahtijevati AI (pravilo 15, P6).
 
@@ -175,7 +174,7 @@ Svi su `SECURITY DEFINER` sa `search_path = ''`, akter iz `require_actor()` ili 
 | `assistant.publish_cost_config(...)` | operater, administrator ustanove | nova verzija konfiguracije uz revizijski trag. |
 
 `begin_request` u jednoj transakciji: provjeri ključ, politiku i konfiguraciju; pod `INSERT ... ON CONFLICT DO NOTHING` stvori redak zahtjeva; zatim za svaki opseg redom `service_cap`, `institution_cap`, `student_day`, `student_assignment_day` upiše brojač ako ga nema i napravi uvjetni `UPDATE ... SET used_micro = used_micro + r WHERE used_micro + r <= granica`. Ako ijedan ne uspije, transakcija upisuje `rejected` s `budget_exceeded` i nijedan brojač se ne mijenja. Stalan redoslijed opsega sprječava zastoj (deadlock).
-Svođenje pomiče brojače za razliku `actual_micro − reserved_micro` bez uvjeta granice: veći stvarni trošak se broji (R6) i sljedeći zahtjev iznad granice se odbija.
+Svođenje pomiče brojače za razliku `actual_micro − reserved_micro` bez uvjeta granice: veći stvarni trošak se broji (R6) i sljedeći zahtjev iznad granice se odbija. Prekoračenje zato nije ograničeno na jedan zahtjev. Svaki zahtjev rezerviran dok je brojač bio ispod granice može ga povećati za svoju razliku, pa najveće prekoračenje opsega iznosi zbroj razlika svih zahtjeva tog opsega koji su bili `reserved` ili `sent` kad je brojač došao do granice.
 
 ## Ishodi
 
@@ -225,15 +224,16 @@ Istodobnost: brojači se mijenjaju samo uvjetnim `UPDATE` u transakciji rezervac
 - ponovljeni zahtjev s istim ključem nakon `completed`: isti odgovor, bez druge rezervacije i poruke (R4);
 - opoziv politike između `begin_request` i `mark_sent`: poziv se ne šalje, trošak `released` (I3);
 - svođenje `outcome_unknown` usporedno s novim zahtjevom na rubu: zbroj nikad ne prelazi granicu (I4);
-- dvije kartice istog studenta u istom razgovoru: `seq` bez rupa i bez duplikata, bez dvostrukog troška (I6).
+- dvije kartice istog studenta u istom razgovoru: `seq` bez rupa i bez duplikata, bez dvostrukog troška (I6);
+- k istodobnih zahtjeva rezervira točno do granice, a sintetički adapter za svaki vrati trošak veći od rezervacije: brojači su jednaki knjizi, prekoračenje je točno zbroj razlika, a sljedeći zahtjev dobiva `budget_exceeded` (R6).
 
 ## Testovi prije koda
 
 | Sloj | Što | Plan |
 | --- | --- | --- |
-| jedinica i svojstva | parser zahtjeva nad Z1 do Z13; fast-check za zatvoren skup ključeva; tablica prijelaza (svaki par izvan tablice odbijen); izračun učinkovite politike; zabrana pružatelja iz D-194 t. 2 u kodu | Z1 do Z13, R1, P2 do P5, P8 |
+| jedinica i svojstva | parser zahtjeva nad Z1 do Z13; fast-check za zatvoren skup ključeva; tablica prijelaza (svaki par izvan tablice odbijen); izračun učinkovite politike, uključujući oba smjera D-175 (fakultet `prohibited` a kolegij izričito dopušta: prolazi; fakultet dopušta a kolegij `prohibited`: odbijeno); zabrana pružatelja iz D-194 t. 2 u kodu | Z1 do Z13, R1, P2 do P5, P8 |
 | pgTAP | RLS i matrica pristupa za svaku tablicu i ćeliju; nema izravnog upisa uloge weba; okidači nepromjenjivosti; revizijski trag uz objavu konfiguracije; tuđi i nepostojeći ID isti ishod | M1 do M7, G1, G2 |
-| integracija s bazom | sve iz retka „Istodobnost:”; tri granice i strop svaka posebno; izolacija studenata; strop odbija sve; granica dana preko ponoći; prazna konfiguracija; veći stvarni trošak; dvostruko svođenje | T1 do T7, I1 do I6, R3 do R7 |
+| integracija s bazom | sve iz retka „Istodobnost:”; tri granice i strop svaka posebno; izolacija studenata; strop odbija sve; granica dana preko ponoći; mjesečni strop usluge uz dnevni strop ustanove i svođenje nakon objave drugog razdoblja; prazna konfiguracija; veći stvarni trošak; dvostruko svođenje | T1 do T7, I1 do I6, R3 do R7 |
 | ruta kroz sintetički adapter | stvarni pozivatelj: ruta zove RPC-ove i port; snimljeni ulaz porta ne nosi identitet ni ostatak rada; nema prelaska na drugog pružatelja; nema mrežne veze | S1 do S5, G8, G9, P7 |
 
 Svi odlomci, razgovori, imena i ustanove u testovima su izmišljeni (S4).
@@ -251,11 +251,12 @@ Pridruživanje izjavi (M9.5), prijenos u rad (#1659) i prekidač s alatima (#166
 
 ## Poznate granice
 
-- Iznos rezervacije je fiksan po ustanovi (`reserve_micro`). Ako stvarni trošak redovito prelazi rezervaciju, granica se prelazi za najviše jedan zahtjev po opsegu. Ugovor to dopušta i broji (R6), a smanjuje se tek mjerenjem u M9.1-P03b.
+- Iznos rezervacije je fiksan po ustanovi (`reserve_micro`) i nije dokaziva gornja granica troška poziva. Ako stvarni trošak prelazi rezervaciju, granicu može prijeći svaki istodobno poslan zahtjev u opsegu, za zbroj njihovih razlika (odjeljak „RPC-ovi”). Ugovor to dopušta i broji (R6). Rezervacija na dokazivoj gornjoj granici (najveća duljina ulaza i odgovora i cijena modela) traži cijenu iz OA-1 i mjerenje u M9.1-P03b.
 - Svođenje `outcome_unknown` na rezervirani iznos može precijeniti trošak. Točnije svođenje traži upit pružatelju o potrošnji i čeka OA-1.
 - Brojač `service_cap` je jedno mjesto zaključavanja za sve ustanove. Za pilot je to prihvatljivo; mjerenje opterećenja nije dio ugovora.
 - Zbrojevi za administratora i operatera ne pokazuju pojedinog studenta dok OA-5 nije odlučen.
 - `purposeId` u `ductus-ai-transfer-v1` (#1677) ima uzorak bez podvlake, a ključevi kataloga (`literature_search`, `example_generation`, `data_coding`) je imaju. Ovaj ugovor zapisuje `purpose_key` kakav je u katalogu; usklađenje pripada #1677 ili njegovom reviewu i zabilježeno je na #1091.
+- P3 iz #1662 učinkovitu politiku opisuje kao presjek pravila fakulteta, kolegija i zadatka. D-175 ima prednost: ugovor pravilo fakulteta uzima kao zadanu vrijednost kolegija, a ne kao obveznu razinu, pa OA-6 ne mijenja provjeru zahtjeva. Čeka potvrdu reviewa.
 - Ugovor tumači dva retka plana koje #1662 ostavlja nositelju: R7 (zakašnjeli odgovor se odbacuje) i T2 (objava iznad stropa se odbija, a provjera svejedno uzima manju vrijednost). Oba čekaju potvrdu reviewa.
 
 ## Otvoreno za vlasnika (Q-10)
