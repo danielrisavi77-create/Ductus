@@ -26,12 +26,14 @@ const BODY = [
 const ok = (name, appId = null) => ({ name, appId, status: "COMPLETED", conclusion: "SUCCESS", completedAt: "2026-10-12T10:00:00Z" });
 const REQUIRED = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"];
 const ROLLUP = REQUIRED.map(ok);
-const PR = { state: "OPEN", isDraft: false, baseRefName: "main", headRefOid: HEAD, body: BODY };
+const PR = { state: "OPEN", isDraft: false, baseRefName: "main", headRefOid: HEAD, body: BODY,
+  headRepo: "owner1/repo1", baseRepo: "owner1/repo1", sameRepository: true };
 const input = (over = {}) => ({
   mainSha: MAIN,
   compare: { status: "ahead", behind_by: 0 },
   rollup: ROLLUP,
   required: [...REQUIRED, "Engineering review gate"],
+  repository: "owner1/repo1",
   ...over,
   pr: { ...PR, ...over.pr },
 });

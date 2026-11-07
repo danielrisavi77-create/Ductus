@@ -70,7 +70,7 @@ export const R = {
 };
 
 /** Raw REST pull object for class `cls` (S1..S3u or O*), with `over` merged last. */
-export function rawPull(cls, over = {}) {
+export function rawPull(cls, { baseRef, ...over } = {}) {
   if (OUTSIDE[cls] === null) return null;
   const base = {
     number: NUMBER, title: "fix: example", body: "Agent: claude:w1:platforma\nRisk: standard\nTask: DAN-1\n",
@@ -79,7 +79,10 @@ export function rawPull(cls, over = {}) {
     base: { ref: "main", repo: { full_name: REPO } },
     user: AUTHORS[cls] ?? AUTHORS.S1, created_at: "2026-11-01T09:00:00Z", auto_merge: null,
   };
-  return { ...base, ...(OUTSIDE[cls] ?? {}), ...over };
+  const pull = { ...base, ...(OUTSIDE[cls] ?? {}), ...over };
+  // A scenario that only moves the base branch keeps the class's base repository (O8r, O11*, O12, O13).
+  if (baseRef !== undefined && pull.base) pull.base = { ...pull.base, ref: baseRef };
+  return pull;
 }
 
 const status = (context, state, description, i) => ({ id: i, context, state, description, created_at: at(i) });
@@ -129,7 +132,7 @@ export const PREFLIGHT_SCENARIOS = {
   behindFilesError: pre({}, { compare: BEHIND, files: "error" }), // X9
   behindMainFilesError: pre({}, { compare: BEHIND, mainFiles: "error" }),
   draft: pre({ draft: true }),
-  baseOther: pre({ base: { ref: "release", repo: { full_name: REPO } } }),
+  baseOther: pre({ baseRef: "release" }),
   ciRed: pre({}, { ci: "failure" }),
   ciRunning: pre({}, { ci: "in_progress" }),
   gatePending: pre({}, { gate: ["pending", "Waiting for an independent review."], auth: null }),
