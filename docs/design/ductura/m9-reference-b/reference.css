@@ -1,0 +1,7 @@
+/* Paket 14 (DAN-411): tokeni i dijelovi iz m5-reference; ovdje samo dodaci za AI u predaji. */
+@import url("../m5-reference/reference.css");
+
+.ro { color: var(--ink-2); }
+.ro dt { color: var(--ink-3); font-size: 12.5px; }
+.ro dd { margin: 0 0 6px; }
+.panel .acts { display: flex; gap: 8px; flex-wrap: wrap; }

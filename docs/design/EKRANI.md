@@ -145,6 +145,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | S-16 | Panel Asistent (12 stanja) | M9 | PRIJEDLOG (DAN-411, m9-reference-a) | 13 | 12 stanja, bez mreže, proračun (S16-BUD), mobitel |
 | S31-AI | Izjava o uporabi AI u predaji | M9 | NEMA | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
 | N-AI-ATT | Nastavnik: pregled AI-atribucije | M9 | NEMA | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
+| A-AI-POL | Administrator: pravilo o uporabi AI | M9 | PRIJEDLOG (DAN-411, m9-reference-b) | 14 | pregled, samo za čitanje, neispravan unos, trošak nije podešen, učitavanje, greška |
 | N-19 | AI pomoć nastavniku | M9 | NEMA | — | — |
 | S-18 | Vlastita povijest rada | M10 | NEMA | U | popunjeno, prazno, učitavanje, greška, mobitel |
 | S-42 | Dnevnik pristupa (vlastiti) | M10 | NEMA | 15 | popunjeno, prazno, učitavanje, greška, mobitel, opoziv |

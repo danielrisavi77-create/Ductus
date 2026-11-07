@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-AI-POL — Administrator: pravilo o uporabi AI (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 14 · DAN-411 · prijedlog slike · M9.UX</div>
+  <h1>A-AI-POL — Administrator: pravilo o uporabi AI</h1>
+  <p>Administrator ustanove mijenja samo pravilo o uporabi AI i pragove. Pružatelji dolaze iz verzionirane konfiguracije <code>config/faculties</code> koju je potvrdio FPZG i ovdje se samo čitaju (D-270 O11). Prazna konfiguracija troška znači da je Asistent isključen (D-267 O5). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="v1">
+    <div class="ref-tag" id="v1">Stanje 1 · pregled i uređivanje</div>
+    <div class="panel" aria-label="Pravilo o uporabi AI">
+      <div class="panel-top"><h2>Pravilo o uporabi AI</h2><span class="tag">Verzija 3</span></div>
+      <div class="panel-body">
+        <div class="field"><label><input type="checkbox" checked> Asistent je uključen na razini ustanove</label></div>
+        <div class="field"><label for="g1">Dnevna granica po studentu i zadatku</label><input class="input" id="g1" value="20" inputmode="numeric"></div>
+        <div class="field"><label for="g2">Dnevna granica po studentu</label><input class="input" id="g2" value="40" inputmode="numeric"></div>
+        <div class="acts"><button class="btn" type="button">Spremi pravilo</button><button class="btn secondary" type="button">Odbaci izmjene</button></div>
+        <p class="foot">Iznose granica određuje vlasnik nakon mjerenja (D-267 O5). Brojke su primjer.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v2">
+    <div class="ref-tag" id="v2">Stanje 2 · pružatelji (samo čitanje)</div>
+    <div class="panel" aria-label="Pružatelji">
+      <div class="panel-top"><h2>Pružatelji</h2><span class="tag">Samo za čitanje</span></div>
+      <div class="panel-body">
+        <dl class="ro"><dt>Pružatelj</dt><dd>Primjer d.o.o.</dd><dt>Model</dt><dd>Model A</dd><dt>Transkripcija i alati pružatelja</dt><dd>Isključeno</dd></dl>
+        <p class="note">Popis dolazi iz potvrđene konfiguracije ustanove. Mijenja se zasebnom, pregledanom promjenom, ne u ovom obrascu.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v3">
+    <div class="ref-tag" id="v3">Stanje 3 · spremanje i potvrda</div>
+    <div class="panel" aria-label="Pravilo o uporabi AI">
+      <div class="panel-top"><h2>Pravilo o uporabi AI</h2></div>
+      <div class="panel-body">
+        <div class="toast" role="status">Verzija 4 pravila je zapisana. Vrijedi za nove zadatke.</div>
+        <p class="note">Zadaci koji su već objavljeni zadržavaju svoje pravilo.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v4">
+    <div class="ref-tag" id="v4">Stanje 4 · neispravan unos</div>
+    <div class="panel" aria-label="Pravilo o uporabi AI">
+      <div class="panel-top"><h2>Pravilo o uporabi AI</h2></div>
+      <div class="panel-body">
+        <div class="field"><label for="g4">Dnevna granica po studentu</label><input class="input" id="g4" value="abc" aria-invalid="true" aria-describedby="e4"><p id="e4" role="alert">Upišite cijeli broj veći od 0.</p></div>
+        <div class="field"><label for="g5">Dnevna granica po studentu i zadatku</label><input class="input" id="g5" value="60" aria-invalid="true" aria-describedby="e5"><p id="e5" role="alert">Granica po zadatku ne smije biti veća od dnevne granice po studentu.</p></div>
+        <div class="acts"><button class="btn" type="button" aria-disabled="true">Spremi pravilo</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v5">
+    <div class="ref-tag" id="v5">Stanje 5 · trošak nije podešen</div>
+    <div class="panel" aria-label="Pravilo o uporabi AI">
+      <div class="panel-top"><h2>Pravilo o uporabi AI</h2><span class="tag open">Isključeno</span></div>
+      <div class="panel-body">
+        <p>Konfiguracija troška je prazna, pa je Asistent isključen za sve zadatke.</p>
+        <p class="note">Studenti ne vide razlog, samo da Asistent nije dostupan.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v6">
+    <div class="ref-tag" id="v6">Stanje 6 · učitavanje i greška</div>
+    <div class="panel" aria-label="Pravilo o uporabi AI" aria-busy="true">
+      <div class="panel-top"><h2>Pravilo o uporabi AI</h2></div>
+      <div class="panel-body"><div class="skel w80"></div><div class="skel w60"></div>
+        <p role="alert">Pravilo nije bilo moguće učitati. Ništa nije promijenjeno.</p><div class="acts"><button class="btn" type="button">Pokušaj ponovno</button></div></div>
+    </div>
+  </section>
+
+</div>
+<p class="foot">Tipkovnica: polja imaju vidljive oznake; pogreške su vezane uz polje (aria-describedby); onemogućeni „Spremi” ostaje u redoslijedu fokusa (aria-disabled).</p>
+</main>
+</body>
+</html>
