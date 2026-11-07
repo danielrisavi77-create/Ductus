@@ -107,7 +107,9 @@ describe("InstitutionCourses", () => {
     const c = course(1, { students: n, groups: [group(1, { students: n })] });
     const card = text(articles(render({ years: ["2026/2027"], year: "2026/2027", courses: [c] }))[0]!);
     expect(card).toContain(`${n} ${enrolled}`);
-    expect(card).toMatch(new RegExp(`Grupa 1 .* ${n} ${students}$`));
+    const groupPart = card.slice(card.indexOf("Grupa 1 "));
+    expect(groupPart.startsWith("Grupa 1 ")).toBe(true);
+    expect(groupPart.endsWith(` ${n} ${students}`)).toBe(true);
   });
 
   it("escapes course, group and person names", () => {
