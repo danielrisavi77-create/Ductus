@@ -14,7 +14,7 @@ import type { WithActor } from "@/server/db/with-actor";
 import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-request";
 
 /**
- * DAN-314 step 2d HTTP boundary (docs/backend/suradnja.md 4.14, #1506). The
+ * DAN-314 step 2f HTTP boundary (docs/backend/suradnja.md 4.14, #1506). The
  * SECURITY DEFINER RPCs of migrations 20261106160000 and 20261106190000 decide
  * who may read or write and which transition is allowed; this only refuses
  * malformed requests before the database, in an order that needs no database

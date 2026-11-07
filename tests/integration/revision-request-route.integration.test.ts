@@ -9,7 +9,7 @@ import { createWithActor } from "@/server/db/with-actor";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 
-// DAN-314 step 2d (contract on #1091, c.6696530499; plan of attack #1506):
+// DAN-314 step 2f (contract on #1091, c.6696530499; plan of attack #1506):
 // the route handler over the real createWithActor and the real RPCs, end to
 // end. A foreign and a missing request give the same 403; a stale counter
 // gives 409 conflict with the current row_seq; two concurrent transitions with

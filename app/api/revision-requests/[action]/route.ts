@@ -21,7 +21,7 @@ function unavailable(status = 503): Response {
   });
 }
 
-// DAN-314 step 2d (docs/backend/suradnja.md 4.14). Reads are POST too, so a
+// DAN-314 step 2f (docs/backend/suradnja.md 4.14). Reads are POST too, so a
 // document or request id never lands in a URL or access log. The origin is
 // derived from the configured OIDC callback, not Request.url.
 export async function POST(
