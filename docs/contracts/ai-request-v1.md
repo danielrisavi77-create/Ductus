@@ -128,7 +128,7 @@ Verzije se samo dodaju; vrijedi najviša `version_no` po opsegu. Strop i razdobl
 
 ### Pridruživanje izjavi
 
-Veza razgovora s izjavom gradi se u M9.5 nakon M7.5. Ovaj ugovor određuje samo što ta veza mora nositi da matrica pristupa vrijedi: `submission_id`, `conversation_id`, `through_seq` (zadnja poruka u trenutku predaje), `messages_sha256` (SHA-256 JCS niza `content_sha256` do `through_seq`) i razlog (`transfer` ili `student_added`). Skup razgovora s prijenosom određuje se iz zahtjeva s `requested_at` prije predaje (I5). Prijenos obrisanog teksta i dalje čini razgovor obveznim (D-268 O3, G6).
+Veza razgovora s izjavom gradi se u M9.5 nakon M7.5. Ovaj ugovor određuje samo što ta veza mora nositi da matrica pristupa vrijedi: `submission_id`, `conversation_id`, `through_seq` (zadnja poruka verzije prikazane studentu prije potvrde izjave), `messages_sha256` (SHA-256 JCS niza `content_sha256` do `through_seq`) i razlog (`transfer` ili `student_added`). Prilaže se točna verzija koju je student pregledao i potvrdio (D-263 Q22): potvrda nosi `through_seq` i `messages_sha256` prikazane verzije, a poslužitelj ih pri predaji uspoređuje sa spremljenim porukama. Poruka dodana nakon pregleda, iz druge kartice ili iz odgovora pružatelja, ne ulazi u prilog bez nove potvrde. Ako se ne slaže hash ili je prije predaje tekst prenesen iz poruke iza `through_seq`, predaja se odbija s `attachment_stale` i traži novu potvrdu. M9.5 to testira istodobno: potvrda izjave i nastavak istog razgovora u drugoj kartici. Skup razgovora s prijenosom određuje se iz zahtjeva s `requested_at` prije predaje (I5). Prijenos obrisanog teksta i dalje čini razgovor obveznim (D-268 O3, G6).
 
 ## Politika
 
