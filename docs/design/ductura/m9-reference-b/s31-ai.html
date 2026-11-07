@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S31-AI — Izjava o uporabi AI u predaji (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 14 · DAN-411 · prijedlog slike · M9.UX</div>
+  <h1>S31-AI — Izjava o uporabi AI u predaji</h1>
+  <p>Student prije predaje potvrđuje izjavu o uporabi AI-ja, sastavljenu iz zapisa (D-40): alat, pružatelj, model, svrha, faza i razgovor. Uz izjavu se obvezno prilažu razgovori iz kojih je tekst prenesen u rad (D-41) i razgovori čiji se odgovor u 8 ili više uzastopnih riječi podudara s tekstom rada (D-58). Student prije potvrde pregledava točne verzije svega što se prilaže (D-263 Q22); ostale razgovore i vanjske razgovore prilaže po izboru, vanjske kao „izjavljeno” (D-41, D-77). Tekst je činjenica o uporabi, bez postotka i ocjene (PRODUCT §5 pravila 1, 2, 3, 13). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="v1">
+    <div class="ref-tag" id="v1">Stanje 1 · nema zabilježene uporabe Asistenta</div>
+    <div class="panel" role="dialog" aria-labelledby="t1">
+      <div class="panel-top"><h2 id="t1">Izjava o uporabi AI-ja</h2></div>
+      <div class="panel-body">
+        <p>U ovom radu nije zabilježena uporaba Asistenta. Ništa se ne prilaže automatski.</p>
+        <fieldset class="grp"><legend>Izjava o uporabi alata</legend>
+          <label class="opt"><input type="radio" name="r1" checked> Nisam koristio/koristila AI alate</label>
+          <label class="opt"><input type="radio" name="r1"> Koristio/koristila sam vanjski alat (dopuna)</label>
+        </fieldset>
+        <p class="foot">Uz vanjski alat otvara se unos vanjskog razgovora i pregled prije potvrde (stanja 6b i 6c).</p>
+        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v2">
+    <div class="ref-tag" id="v2">Stanje 2 · uporaba zapisana, obvezni razgovori priloženi, potvrda tek nakon pregleda</div>
+    <div class="panel" role="dialog" aria-labelledby="t2">
+      <div class="panel-top"><h2 id="t2">Izjava o uporabi AI-ja</h2></div>
+      <div class="panel-body">
+        <table class="cmp"><thead><tr><th>Svrha</th><th>Pružatelj i model</th><th>Faza</th></tr></thead>
+          <tbody><tr><td>Lektura</td><td>Primjer d.o.o., Model A</td><td>Pisanje</td></tr>
+          <tr><td>Prijevod</td><td>Primjer d.o.o., Model A</td><td>Pisanje</td></tr>
+          <tr><td>Traženje literature</td><td>Primjer d.o.o., Model A</td><td>Planiranje</td></tr></tbody></table>
+        <h3>Prilaže se obvezno (3)</h3>
+        <ul class="list" aria-label="Razgovori koji se obvezno prilažu">
+          <li class="item"><span class="title">Razgovor 1 · Lektura · 2. 11. 14:05</span><span class="acts"><span class="tag">priloženo</span><span>tekst prenesen u rad, odlomak 2, „iz AI pomoćnika”</span></span></li>
+          <li class="item"><span class="title">Razgovor 2 · Lektura · 2. 11. 15:32</span><span class="acts"><span class="tag">priloženo</span><span>tekst prenesen u rad, odlomak 5, „iz AI pomoćnika”</span></span></li>
+          <li class="item"><span class="title">Razgovor 4 · Prijevod · 4. 11. 10:20</span><span class="acts"><span class="tag">priloženo</span><span>odlomak 7, „podudara se s odgovorom AI pomoćnika”</span></span></li>
+        </ul>
+        <p class="note">Ovi razgovori se ne mogu izostaviti. Razgovor 4 je obvezan jer se tekst rada u 8 ili više uzastopnih riječi podudara s odgovorom Asistenta. Citati i navodi se u podudaranje ne računaju.</p>
+        <fieldset class="grp"><legend>Ostali razgovori</legend>
+          <label class="opt"><input type="radio" name="r2" checked> Priloži ostale razgovore (1)</label>
+          <label class="opt"><input type="radio" name="r2"> Ne prilaži ostale razgovore</label>
+        </fieldset>
+        <p class="foot">Ostali razgovori su Vaši dok pišete. Nastavnik ih vidi samo ako ih priložite (D-41). Vanjski razgovor dodajete kao „izjavljeno” (stanje 6b).</p>
+        <p class="foot" id="pr2">Potvrda je dostupna nakon što otvorite pregled točnih verzija svih razgovora koji se prilažu. Ako promijenite odabir ili dodate vanjski razgovor, pregled se ponovno traži.</p>
+        <div class="acts"><button class="btn secondary" type="button">Pregledaj točne verzije razgovora koji se prilažu (4)</button><button class="btn secondary" type="button">Dodaj vanjski razgovor</button></div>
+        <div class="acts"><button class="btn" type="button" aria-disabled="true" aria-describedby="pr2">Potvrdi izjavu</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v2b">
+    <div class="ref-tag" id="v2b">Stanje 2b · pregled točnih verzija svih razgovora koji se prilažu, prije potvrde</div>
+    <div class="panel" role="dialog" aria-labelledby="t2b">
+      <div class="panel-top"><h2 id="t2b">Razgovori uz izjavu (4)</h2><span class="tag">Pregled</span></div>
+      <div class="panel-body">
+        <p class="note">Ovo su točne verzije svih razgovora koji ulaze uz izjavu, onakve kakve će ih nastavnik vidjeti. Razgovori 1, 2 i 4 su obvezni; razgovor 3 prilažete svojim odabirom.</p>
+        <h3>Razgovor 1 · Lektura · 2. 11. 14:05 · obvezan</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Možeš li lektorirati ovaj odlomak o izmišljenom primjeru?</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Predlažem blaži poredak rečenica i jednostavniji glagol u drugoj rečenici. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Preneseno u rad: odlomak 2, „iz AI pomoćnika”.</p>
+        <h3>Razgovor 2 · Lektura · 2. 11. 15:32 · obvezan</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Provjeri interpunkciju u ovom odlomku.</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Dodajte zarez prije veznika u trećoj rečenici. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Preneseno u rad: odlomak 5, „iz AI pomoćnika”.</p>
+        <h3>Razgovor 4 · Prijevod · 4. 11. 10:20 · obvezan</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Kako bi glasila ova izmišljena rečenica na hrvatskom?</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Izmišljeni prijevod rečenice o primjeru koji se koristi samo za ovu referencu.</span></div>
+        <p class="foot">Odlomak 7 podudara se s ovim odgovorom u 8 ili više uzastopnih riječi: „podudara se s odgovorom AI pomoćnika”.</p>
+        <h3>Razgovor 3 · Traženje literature · 3. 11. 09:48 · po Vašem odabiru</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Koje vrste izvora bih mogao potražiti za izmišljenu temu?</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Možete potražiti pregledne radove i izvješća. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Nije preneseno u rad i nema podudaranja. Prilaže se jer ste odabrali „Priloži ostale razgovore”.</p>
+        <div class="acts"><button class="btn" type="button">Gotov pregled, natrag na izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v3">
+    <div class="ref-tag" id="v3">Stanje 3 · ostali razgovori nisu priloženi</div>
+    <div class="panel" role="dialog" aria-labelledby="t3">
+      <div class="panel-top"><h2 id="t3">Izjava o uporabi AI-ja</h2></div>
+      <div class="panel-body">
+        <p>Zapisana uporaba: Lektura, Prijevod i Traženje literature, Primjer d.o.o., Model A.</p>
+        <p class="note">Ostali razgovori nisu priloženi. Nastavnik će vidjeti izjavu i 3 obvezna razgovora: 2 iz kojih je tekst prenesen u rad i 1 s kojim se tekst rada podudara. Razgovor 3 ne vidi.</p>
+        <p class="foot" id="pr3">Potvrda je dostupna nakon što otvorite pregled točnih verzija razgovora koji se prilažu (3).</p>
+        <div class="acts"><button class="btn secondary" type="button">Pregledaj točne verzije razgovora koji se prilažu (3)</button><button class="btn secondary" type="button">Priloži ostale razgovore</button></div>
+        <div class="acts"><button class="btn" type="button" aria-disabled="true" aria-describedby="pr3">Potvrdi izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v3b">
+    <div class="ref-tag" id="v3b">Stanje 3b · pregled samo obveznih razgovora, prije potvrde</div>
+    <div class="panel" role="dialog" aria-labelledby="t3b">
+      <div class="panel-top"><h2 id="t3b">Razgovori uz izjavu (3)</h2><span class="tag">Pregled</span></div>
+      <div class="panel-body">
+        <p class="note">Ovo su točne verzije svih razgovora koji ulaze uz izjavu, onakve kakve će ih nastavnik vidjeti. Prilažu se samo obvezni razgovori; ostale niste priložili.</p>
+        <h3>Razgovor 1 · Lektura · 2. 11. 14:05 · obvezan</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Možeš li lektorirati ovaj odlomak o izmišljenom primjeru?</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Predlažem blaži poredak rečenica i jednostavniji glagol u drugoj rečenici. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Preneseno u rad: odlomak 2, „iz AI pomoćnika”.</p>
+        <h3>Razgovor 2 · Lektura · 2. 11. 15:32 · obvezan</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Provjeri interpunkciju u ovom odlomku.</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Dodajte zarez prije veznika u trećoj rečenici. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Preneseno u rad: odlomak 5, „iz AI pomoćnika”.</p>
+        <h3>Razgovor 4 · Prijevod · 4. 11. 10:20 · obvezan</h3>
+        <div class="turn you"><span class="who">Vi</span><span>Kako bi glasila ova izmišljena rečenica na hrvatskom?</span></div>
+        <div class="turn"><span class="who">Asistent · Primjer d.o.o., Model A</span><span>Izmišljeni prijevod rečenice o primjeru koji se koristi samo za ovu referencu.</span></div>
+        <p class="foot">Odlomak 7 podudara se s ovim odgovorom u 8 ili više uzastopnih riječi: „podudara se s odgovorom AI pomoćnika”.</p>
+        <div class="acts"><button class="btn" type="button">Gotov pregled, natrag na izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v4">
+    <div class="ref-tag" id="v4">Stanje 4 · učitavanje zapisa</div>
+    <div class="panel" role="dialog" aria-labelledby="t4" aria-busy="true">
+      <div class="panel-top"><h2 id="t4">Izjava o uporabi AI-ja</h2></div>
+      <div class="panel-body">
+        <p class="note">Sastavljam izjavu iz zapisa.</p>
+        <div class="skel w80"></div><div class="skel w60"></div><div class="skel w80"></div>
+        <p class="foot">Predaja nije vezana uz sastavljanje izjave.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v5">
+    <div class="ref-tag" id="v5">Stanje 5 · greška</div>
+    <div class="panel" role="dialog" aria-labelledby="t5">
+      <div class="panel-top"><h2 id="t5">Izjava o uporabi AI-ja</h2></div>
+      <div class="panel-body">
+        <p role="alert">Izjavu nije bilo moguće sastaviti. Ništa nije predano.</p>
+        <p class="note">Tehnička greška ne sprječava predaju: možete predati rad bez sastavljene izjave. Izjava se dopuni kad sastavljanje bude moguće, a nastavnik vidi da je dopuna na čekanju.</p>
+        <div class="acts"><button class="btn" type="button">Pokušaj ponovno</button><button class="btn secondary" type="button">Predaj bez izjave</button><button class="btn secondary" type="button">Natrag na rad</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v6">
+    <div class="ref-tag" id="v6">Stanje 6 · Asistent na zadatku nije dopušten</div>
+    <div class="panel" role="dialog" aria-labelledby="t6">
+      <div class="panel-top"><h2 id="t6">Izjava o uporabi AI-ja</h2></div>
+      <div class="panel-body">
+        <p>Zadatak ne dopušta ugrađenog Asistenta. Izjavu ipak potvrđujete: da niste koristili AI alate ili koje ste vanjske alate koristili.</p>
+        <fieldset class="grp"><legend>Izjava o uporabi alata</legend>
+          <label class="opt"><input type="radio" name="r6" checked> Nisam koristio/koristila AI alate</label>
+          <label class="opt"><input type="radio" name="r6"> Koristio/koristila sam vanjski alat (dopuna)</label>
+        </fieldset>
+        <div class="acts"><button class="btn" type="button">Potvrdi izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v6b">
+    <div class="ref-tag" id="v6b">Stanje 6b · vanjski alat: prilaganje vanjskog razgovora kao izjavljeno (iz stanja 1 ili 6; iz stanja 2 isti unos bez izbora uporabe)</div>
+    <div class="panel" role="dialog" aria-labelledby="t6b">
+      <div class="panel-top"><h2 id="t6b">Izjava o uporabi AI-ja</h2></div>
+      <div class="panel-body">
+        <fieldset class="grp"><legend>Izjava o uporabi alata</legend>
+          <label class="opt"><input type="radio" name="r6b"> Nisam koristio/koristila AI alate</label>
+          <label class="opt"><input type="radio" name="r6b" checked> Koristio/koristila sam vanjski alat (dopuna)</label>
+        </fieldset>
+        <div class="field"><label for="a6b">Alat i svrha</label><input class="input" id="a6b" value="Vanjski alat B, traženje literature"></div>
+        <fieldset class="grp"><legend>Kako prilažete vanjski razgovor</legend>
+          <label class="opt"><input type="radio" name="m6b"> Poveznica za dijeljenje</label>
+          <label class="opt"><input type="radio" name="m6b"> Datoteka izvoza</label>
+          <label class="opt"><input type="radio" name="m6b" checked> Zalijepljen tekst</label>
+        </fieldset>
+        <div class="field"><label for="z6b">Tekst razgovora</label><textarea class="input" id="z6b" rows="3" placeholder="Zalijepite tekst razgovora iz vanjskog alata"></textarea></div>
+        <div class="acts"><button class="btn secondary" type="button">Dodaj vanjski razgovor</button></div>
+        <ul class="list" aria-label="Dodani vanjski razgovori">
+          <li class="item"><span class="title">Vanjski razgovor 1 · poveznica za dijeljenje</span><span class="acts"><span class="tag">izjavljeno</span><button class="btn ghost small" type="button" aria-label="Ukloni vanjski razgovor 1">Ukloni</button></span></li>
+          <li class="item"><span class="title">Vanjski razgovor 2 · zalijepljen tekst</span><span class="acts"><span class="tag">izjavljeno</span><button class="btn ghost small" type="button" aria-label="Ukloni vanjski razgovor 2">Ukloni</button></span></li>
+        </ul>
+        <p class="foot">Vanjski razgovor prilažete Vi, a nastavnik ga vidi označenog kao „izjavljeno”, odvojeno od zapisa u radu. Ductura ga ne može provjeriti i s njim ne uspoređuje tekst rada.</p>
+        <p class="foot" id="pr6b">Potvrda je dostupna nakon što otvorite pregled svega što prilažete. Ako dodate ili uklonite vanjski razgovor, pregled se ponovno traži.</p>
+        <div class="acts"><button class="btn secondary" type="button">Pregledaj što se prilaže (2)</button><button class="btn" type="button" aria-disabled="true" aria-describedby="pr6b">Potvrdi izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="variant" aria-labelledby="v6c">
+    <div class="ref-tag" id="v6c">Stanje 6c · pregled vanjskih razgovora prije potvrde</div>
+    <div class="panel" role="dialog" aria-labelledby="t6c">
+      <div class="panel-top"><h2 id="t6c">Vanjski razgovori uz izjavu (2)</h2><span class="tag">Pregled</span></div>
+      <div class="panel-body">
+        <p class="note">Ovo je točno ono što prilažete, onako kako će ga nastavnik vidjeti. Oba razgovora su označena kao „izjavljeno”.</p>
+        <p>Izjava: vanjski alat, Vanjski alat B, traženje literature.</p>
+        <h3>Vanjski razgovor 1 · poveznica za dijeljenje <span class="tag">izjavljeno</span></h3>
+        <p><a href="#v6c">razgovor.primjer.invalid/podijeljeno/abc123</a></p>
+        <p class="foot">Prilaže se samo poveznica. Nastavnik je otvara sam.</p>
+        <h3>Vanjski razgovor 2 · zalijepljen tekst <span class="tag">izjavljeno</span></h3>
+        <div class="turn you"><span class="who">Vi</span><span>Koje vrste izvora bih mogao potražiti za izmišljenu temu?</span></div>
+        <div class="turn"><span class="who">Vanjski alat B</span><span>Pregledne radove i izvješća. Izmišljen primjer odgovora.</span></div>
+        <p class="foot">Prilaže se cijeli tekst, točno kako je unesen.</p>
+        <div class="acts"><button class="btn" type="button">Gotov pregled, natrag na izjavu</button></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="foot">Tipkovnica: dijalog hvata fokus, Esc ga zatvara i vraća fokus na gumb Predaj. Izbor uporabe, odabir ostalih razgovora i način prilaganja su skupine izbornih gumba sa strelicama. Gumbi za pregled otvaraju pregled; „Potvrdi izjavu” ostaje fokusabilan i najavljuje razlog dok pregled nije otvoren. Greška se objavljuje kao role="alert".</p>
+</main>
+</body>
+</html>

@@ -12,3 +12,12 @@ fieldset.grp legend { padding: 0; margin-bottom: 4px; font-size: 12.5px; color: 
 input[type="radio"] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0 8px 0 0; }
 .panel-body h3 { font-size: 15px; }
 .panel-body .sep { border-top: 1px solid var(--rule-2); }
+
+/* S31-AI: razgovori u pregledu i tablica zapisane uporabe. */
+.turn { background: var(--card); border: 1px solid var(--rule-2); border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; }
+.turn.you { background: var(--well); }
+.turn .who { font-size: 12.5px; color: var(--ink-3); }
+.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmp th, .cmp td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+.cmp th { color: var(--ink-3); font-weight: 600; }
+textarea.input { resize: vertical; }
