@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Checks a built production web image (DAN-298, attack plan #1687) without
-# pushing it: numeric non-root user, built on the pinned base, no local-only or
+# pushing it: its config (docker image inspect) read by production-image.mjs
+# --image-config, with no local-only or secret ENV name, NODE_ENV=production and a
+# numeric non-root user, and a negative image that must fail it; built on the
+# pinned base, no local-only or
 # secret file and no secret (gitleaks) in any layer the build adds, its history
 # or config, with planted canaries and a copied-then-deleted secret as negative
 # controls, and at run time the local login refused (D-09) while the process
@@ -21,10 +24,14 @@ cleanup() {
 trap cleanup EXIT
 fail() { echo "::error::$*" >&2; exit 1; }
 
-# 1. The final user is numeric and not root.
+guard="$repo/scripts/engineering/production-image.mjs"
+
+# 1. The config of the built image: no local-only or secret ENV name,
+# NODE_ENV=production, numeric non-root user. The same rules as the static check.
+docker image inspect "$image" > "$work/config.json"
+node "$guard" --image-config "$work/config.json" || fail "image config of $image failed the check"
 user="$(docker image inspect --format '{{.Config.User}}' "$image")"
-[[ "$user" =~ ^[1-9][0-9]*(:[1-9][0-9]*)?$ ]] || fail "image user is '$user', not a numeric non-root user"
-echo "user: $user"
+echo "config: user $user, no local-only or secret ENV name, NODE_ENV=production"
 
 # 2. Layers. The image must start with exactly the layers of the pinned base
 # (its digest is in the Dockerfile); every layer the build adds is unpacked on
@@ -98,9 +105,16 @@ status=0; scan "$layers" canary || status=$?
 # in the running image, but each must still be found in its layer.
 mkdir "$work/negative"
 printf '"DUCTUS_CANARY_API_KEY": "%s"\n' "$canary" > "$work/negative/leak.txt"
+# It also sets a local-only and a secret-like ENV name: its config must fail with both.
 printf '%s\n' "FROM $image" "USER 0:0" "COPY leak.txt /opt/ductus-leak/key.txt" "COPY leak.txt /app/.env.leak" \
-  "RUN rm -rf /opt/ductus-leak /app/.env.leak" "USER $user" > "$work/negative/Dockerfile"
+  "RUN rm -rf /opt/ductus-leak /app/.env.leak" "USER $user" \
+  "ENV DUCTUS_AUTH_PROVIDER=fake-oidc DUCTUS_CANARY_TOKEN=x" > "$work/negative/Dockerfile"
 docker build -q -t "$negative" "$work/negative" >/dev/null
+docker image inspect "$negative" > "$work/negative.json"
+status=0; node "$guard" --image-config "$work/negative.json" > "$work/negative.log" 2>&1 || status=$?
+[ "$status" -eq 1 ] && grep -q 'local-only-env (DUCTUS_AUTH_PROVIDER)' "$work/negative.log" \
+  && grep -q 'secret-name (DUCTUS_CANARY_TOKEN)' "$work/negative.log" \
+  || { cat "$work/negative.log" >&2; fail "the image config check passed a local-only or secret ENV name (exit $status)"; }
 unpack "$negative" "$image" "$work/deleted" >/dev/null
 [ -n "$(cd "$work/deleted" && find . -name '.wh.ductus-leak' -print -quit)" ] || fail "the negative control deleted nothing"
 forbidden "$work/deleted" | grep -q '/app/\.env\.leak$' || fail "a deleted .env file was not found in its layer"
@@ -116,7 +130,7 @@ ok = (
 )
 sys.exit(0 if ok else f"unexpected findings: {len(canary)} canary, {len(deleted)} deleted")
 PY2
-echo "negative controls: both manifest canaries and the copied-then-deleted secret and .env found"
+echo "negative controls: both manifest canaries, the copied-then-deleted secret and .env, and the local-only and secret ENV names found"
 
 # 4. Run time. Without a database URL the image has no default and stops.
 status=0; docker run --rm --read-only "$image" > "$work/bare.log" 2>&1 || status=$?
