@@ -2017,6 +2017,33 @@ $$;
 
 
 --
+-- Name: worker_receipt_object(uuid, uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.worker_receipt_object(p_evidence_domain_id uuid, p_receipt_id uuid) RETURNS TABLE(institution_id uuid, evidence_package_id text, segment_hash text, payload_bytes integer, storage_ref text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF p_evidence_domain_id IS NULL OR p_receipt_id IS NULL THEN
+    RAISE EXCEPTION 'invalid worker request' USING ERRCODE = '22023';
+  END IF;
+  RETURN QUERY
+    SELECT s.institution_id, s.evidence_package_id, s.segment_hash, s.payload_bytes, s.storage_ref
+      FROM evidence.receipt r
+      JOIN evidence.segment s
+        ON s.id = r.segment_id
+       AND s.evidence_package_id = r.evidence_package_id
+       AND s.institution_id = r.institution_id
+     WHERE r.id = p_receipt_id
+       AND r.evidence_domain_id = p_evidence_domain_id
+       AND r.status = 'pending_signature'
+       AND (r.receipt_payload::jsonb ->> 'receiptSchema') = 'ductus-evidence-receipt-v2';
+END
+$$;
+
+
+--
 -- Name: record_work_opening(uuid, text, uuid, uuid, text); Type: FUNCTION; Schema: audit; Owner: -
 --
 
@@ -10740,4 +10767,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106200000'),
     ('20261106210000'),
     ('20261106220000'),
-    ('20261107160000');
+    ('20261107160000'),
+    ('20261107170000');

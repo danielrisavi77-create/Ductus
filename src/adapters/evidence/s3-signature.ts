@@ -205,10 +205,11 @@ export function sigV4Authorization(input: {
  * create-only write: the signer adds `If-None-Match: *` and the SHA-256
  * checksum of the same bytes and signs both, so a proxy that strips either
  * breaks the signature instead of turning the write into an overwrite.
+ * GET and HEAD have no body.
  * Errors never carry credentials or header values.
  */
 export function signS3Request(input: {
-  method: "GET" | "PUT";
+  method: "GET" | "HEAD" | "PUT";
   endpoint: URL;
   path: readonly string[];
   headers: Readonly<Record<string, string>>;
@@ -240,8 +241,8 @@ export function signS3Request(input: {
   if (url.pathname !== canonicalPath || url.href !== endpoint.origin + canonicalPath) {
     throw new TypeError("S3 path segment is not allowed");
   }
-  if (input.method === "GET" && input.body.byteLength !== 0) {
-    throw new TypeError("S3 GET must not have a body");
+  if (input.method !== "PUT" && input.body.byteLength !== 0) {
+    throw new TypeError(`S3 ${input.method} must not have a body`);
   }
   if (!(input.now instanceof Date) || Number.isNaN(input.now.getTime())) {
     throw new TypeError("S3 signing time is not a valid date");

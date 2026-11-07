@@ -16,6 +16,12 @@ import {
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import type { SignatureEnvelope } from "@/domain/forensics/signature";
 
+import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
+
+import {
+  createCheckPendingReceiptObject,
+  type PendingReceiptObjectCheck,
+} from "./check-pending-receipt-object";
 import { createSignPendingReceipt, type SignPendingReceiptOutcome } from "./sign-pending-receipt";
 
 // Every value here is invented for the test.
@@ -97,9 +103,11 @@ function memoryStore(keys: () => readonly EvidenceDomainKey[], gate?: (c: Attach
   return { store, stored };
 }
 
-function setup(signer = testSigner("k1"), keys = () => [signer.key()]) {
+const present = async (): Promise<PendingReceiptObjectCheck> => ({ status: "present" });
+
+function setup(signer = testSigner("k1"), keys = () => [signer.key()], checkObject = present) {
   const { store, stored } = memoryStore(keys);
-  const run = createSignPendingReceipt({ signer: signer.provider, store, signTimeoutMs: 1000 });
+  const run = createSignPendingReceipt({ signer: signer.provider, store, signTimeoutMs: 1000, checkObject });
   return { signer, store, stored, run };
 }
 
@@ -147,7 +155,7 @@ describe("signPendingReceipt", () => {
     const second = testSigner("k2");
     const { store, stored } = memoryStore(() => [first.key(), second.key()]);
     stored.set(RECEIPT, first.envelope(new Uint8Array(Buffer.concat([Buffer.from("ductus-evidence-receipt-v2\n"), sha256(TEXT)]))));
-    const run = createSignPendingReceipt({ signer: second.provider, store, signTimeoutMs: 1000 });
+    const run = createSignPendingReceipt({ signer: second.provider, store, signTimeoutMs: 1000, checkObject: present });
     const out = await run(ROW);
     expect(out.status).toBe("already_signed");
     expect((out as { signedReceipt: { signature: SignatureEnvelope } }).signedReceipt.signature.keyId).toBe("k1");
@@ -190,7 +198,7 @@ describe("signPendingReceipt", () => {
     let late: (() => void) | undefined;
     const slow = testSigner("k1", (_, honest) => new Promise((resolve) => { late = () => resolve(honest()); }));
     const { store, stored } = memoryStore(() => [slow.key()]);
-    const run = createSignPendingReceipt({ signer: slow.provider, store, signTimeoutMs: 20 });
+    const run = createSignPendingReceipt({ signer: slow.provider, store, signTimeoutMs: 20, checkObject: present });
     expect(await run(ROW)).toEqual({ status: "unavailable", stage: "signing", reason: "sign_timeout" });
     late!();
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -249,7 +257,7 @@ describe("signPendingReceipt", () => {
   it("refuses a timeout that is not a positive bound", () => {
     const { signer, store } = setup();
     for (const ms of [0, -1, 1.5, Number.NaN, 60_001]) {
-      expect(() => createSignPendingReceipt({ signer: signer.provider, store, signTimeoutMs: ms })).toThrow(RangeError);
+      expect(() => createSignPendingReceipt({ signer: signer.provider, store, signTimeoutMs: ms, checkObject: present })).toThrow(RangeError);
     }
   });
 
@@ -288,7 +296,7 @@ describe("signPendingReceipt", () => {
         return out;
       });
       const runFor = (s: ReturnType<typeof testSigner>) =>
-        createSignPendingReceipt({ signer: s.provider, store, signTimeoutMs: 1000 })(ROW);
+        createSignPendingReceipt({ signer: s.provider, store, signTimeoutMs: 1000, checkObject: present })(ROW);
       const [a, b] = await Promise.all([runFor(k1), runFor(k2)]);
       const byId = { k1: a, k2: b } as Record<string, SignPendingReceiptOutcome>;
       expect(byId[firstId]!.status).toBe("signed");
@@ -301,4 +309,98 @@ describe("signPendingReceipt", () => {
       }
     },
   );
+  const holds = ["not_pending", "locator_mismatch", "object_absent", "object_mismatch"] as const;
+  it.each(holds)("C1 an object check held as %s signs and stores nothing", async (reason) => {
+    const { signer, store, stored, run } = setup(undefined, undefined, async () => ({ status: "held", reason }));
+    expect(await run(ROW)).toEqual({ status: "held", reason });
+    expect(signer.provider.sign).not.toHaveBeenCalled();
+    expect(store.attachSignature).not.toHaveBeenCalled();
+    expect(stored.size).toBe(0);
+  });
+
+  const objectFaults: [string, () => Promise<unknown>, string][] = [
+    ["locator unavailable", async () => ({ status: "unavailable", reason: "locator_unavailable" }), "locator_unavailable"],
+    ["locator malformed", async () => ({ status: "unavailable", reason: "locator_malformed" }), "locator_malformed"],
+    ["storage ref unavailable", async () => ({ status: "unavailable", reason: "storage_ref_unavailable" }), "storage_ref_unavailable"],
+    ["presence unavailable", async () => ({ status: "unavailable", reason: "presence_unavailable" }), "presence_unavailable"],
+    ["an unknown unavailable reason", async () => ({ status: "unavailable", reason: "x" }), "presence_unavailable"],
+    ["a held reason outside the set", async () => ({ status: "held", reason: "other" }), "presence_unavailable"],
+    ["throws", async () => { throw new Error("down"); }, "presence_unavailable"],
+    ["answers null", async () => null, "presence_unavailable"],
+    ["answers a string", async () => "present", "presence_unavailable"],
+    ["answers an unknown status", async () => ({ status: "maybe" }), "presence_unavailable"],
+  ];
+  it.each(objectFaults)("C2 an object check that %s is unavailable and signs nothing", async (_, check, reason) => {
+    const { signer, store, stored, run } = setup(undefined, undefined, check as never);
+    expect(await run(ROW)).toEqual({ status: "unavailable", stage: "object", reason });
+    expect(signer.provider.sign).not.toHaveBeenCalled();
+    expect(store.attachSignature).not.toHaveBeenCalled();
+    expect(stored.size).toBe(0);
+  });
+
+  it("C3 the object check gets the parsed payload and runs before the signer", async () => {
+    const order: string[] = [];
+    const signer = testSigner("k1", (_, honest) => { order.push("sign"); return honest(); });
+    const check = vi.fn(async (): Promise<PendingReceiptObjectCheck> => { order.push("check"); return { status: "present" }; });
+    const { run } = setup(signer, undefined, check);
+    expect((await run(ROW)).status).toBe("signed");
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(check.mock.calls[0]).toEqual([PAYLOAD]);
+    expect(order).toEqual(["check", "sign"]);
+  });
+
+  it("C4 a signer without an object check is not built", () => {
+    const { signer, store } = setup();
+    for (const checkObject of [undefined, null, {}, "present"]) {
+      expect(() =>
+        createSignPendingReceipt({ signer: signer.provider, store, signTimeoutMs: 1000, checkObject } as never),
+      ).toThrow(TypeError);
+    }
+  });
+
+  it("C5 a refused row never reaches the object check", async () => {
+    const check = vi.fn(present);
+    const { run } = setup(undefined, undefined, check);
+    for (const [, receiptId, text] of refused) {
+      await run({ receiptId, receiptPayloadText: text } as never);
+    }
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it("C5 keys that cannot be read stop the call before the object check", async () => {
+    const check = vi.fn(present);
+    const { store, run } = setup(undefined, undefined, check);
+    store.receiptKeys.mockResolvedValueOnce({ status: "unavailable", reason: "x" } as never);
+    expect((await run(ROW)).status).toBe("unavailable");
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it("Istodobnost: two concurrent calls for a receipt whose object is missing both hold and sign nothing", async () => {
+    const signer = testSigner("k1");
+    const { store, stored } = memoryStore(() => [signer.key()]);
+    const payloads = new InMemoryEvidencePayloadStore();
+    const source = {
+      receiptObject: vi.fn(async () => ({
+        status: "ok" as const,
+        object: {
+          institutionId: "00000000-0000-4000-8000-0000000000a1",
+          evidencePackageId: PAYLOAD.evidencePackageId,
+          segmentHash: PAYLOAD.segmentHash,
+          payloadBytes: PAYLOAD.payloadBytes,
+          storageRef: `memory:v2/00000000-0000-4000-8000-0000000000a1/pkg-1/${PAYLOAD.segmentHash}.json`,
+        },
+      })),
+    };
+    const checkObject = createCheckPendingReceiptObject({ source, locator: payloads, presence: payloads });
+    const run = createSignPendingReceipt({ signer: signer.provider, store, signTimeoutMs: 1000, checkObject });
+    const outs = await Promise.all([run(ROW), run(ROW)]);
+    expect(outs).toEqual([
+      { status: "held", reason: "object_absent" },
+      { status: "held", reason: "object_absent" },
+    ]);
+    expect(source.receiptObject).toHaveBeenCalledWith(DOMAIN, RECEIPT);
+    expect(signer.provider.sign).not.toHaveBeenCalled();
+    expect(store.attachSignature).not.toHaveBeenCalled();
+    expect(stored.size).toBe(0);
+  });
 });
