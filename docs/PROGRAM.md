@@ -187,7 +187,7 @@ Prijedlozi orkestratora po vlasnikovoj delegaciji (#87 c.6623105181, c.662344580
 - **O01, faza B:** u B samo pisani zadaci zadani nakon izlaza A (najranije oko 22. 3.) s rokom prije 4. 6.; bez završnih i diplomskih radova (D-265 Q21). Drugi prolaz kolegija je seminarska grupa. Popis kolegija i zadataka daje FPZG. Odlučuje: FPZG.
 - **O02, početak A:** A počinje kad je M11.Z1 zelen i ugovor o obradi potpisan; cilj je 22. 2. Prag: ako izlaz A nije gotov do 19. 4. 2027., vlasnik i FPZG odlučuju o B u zimskom semestru 2027./28. Stavka ide u Owner queue. Odlučuju: vlasnik i FPZG.
 - **O03, obveznost:** obvezno ili dobrovoljno odlučuje FPZG (D-04). Preporuka: dobrovoljno, sa zamjenskim postupkom predaje i povlačenjem bez posljedica (D-12). Odlučuje: FPZG.
-- **O04, pragovi:** pragove korisnosti i razumijevanja (`docs/PRODUCT.md` §12) postavljaju FPZG i evaluator. Upisuju se u `DECISIONS.md` prije B, kao GO uvjet. Plan ih ne izmišlja. Odlučuju: FPZG i evaluator.
+- **O04, pragovi:** pragove korisnosti i razumijevanja (`docs/PRODUCT.md` §12) postavljaju FPZG i evaluator. Upisuju se u `DECISIONS.md` prije A, kao GO uvjet. Plan ih ne izmišlja. Odlučuju: FPZG i evaluator.
 - **O05, zaustavljanje pilota:** zaustaviti pilot može svaki od dvoje sam, koordinator FPZG-a ili operater. Ponovno pokretanje traži oboje i zapis incidenta. Ulogu imenuje FPZG. Odlučuje: FPZG (imenuje ulogu).
 - **O06, evaluacija:** preporuka je anonimna anketa u alatu FPZG-a, gdje je FPZG voditelj obrade (C-22). Vlastita pohrana evaluacije gradi se samo ako FPZG to odbije. Odlučuju: FPZG i DPO.
 - **O07, nakon pilota:** o nastavku nakon pilota odlučuju FPZG i vlasnik nakon C, na temelju završnog izvješća. Nema automatskog M13. Odlučuju: FPZG i vlasnik.
