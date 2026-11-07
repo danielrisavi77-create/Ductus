@@ -77,6 +77,7 @@ test("the fake OIDC interaction offers both synthetic students", { timeout: 10_0
     assert.match(html, /Demo student 2/);
     assert.match(html, /Demo nastavnik/);
     assert.match(html, /Ustanova B: nastavnica/);
+    assert.match(html, /Ustanova B: asistent/);
     assert.match(html, /Ustanova B: student/);
   } finally {
     child.kill();
