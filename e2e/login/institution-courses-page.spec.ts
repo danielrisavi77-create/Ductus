@@ -48,6 +48,8 @@ async function shoot(page: Page, name: string): Promise<void> {
 async function expectNotFound(page: Page): Promise<void> {
   const response = await page.goto(HREF);
   expect(response?.status()).toBe(404);
+  // The tab names the missing route too, never the courses (page.tsx generateMetadata).
+  await expect(page).toHaveTitle(`${t.errorPage.notFoundTitle} · ${t.app.name}`);
   await expect(page.getByRole("heading", { level: 1, name: t.errorPage.notFoundTitle })).toBeVisible();
   await expect(page.getByRole("heading", { name: c.title })).toHaveCount(0);
   await expect(page.getByRole("link", { name: t.shell.nav.institutionCourses })).toHaveCount(0);
