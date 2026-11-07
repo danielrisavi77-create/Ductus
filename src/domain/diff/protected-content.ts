@@ -13,7 +13,7 @@
  *   the caller must not apply the proposal unchecked.
  * - Every scan is linear in the text; no pattern runs over the whole text.
  */
-import { fpzgCitationStyle, type CitationStyle } from "@/domain/citation";
+import type { CitationStyle } from "@/domain/citation";
 
 export const MAX_PROTECTED_TEXT_LENGTH = 200_000;
 const MAX_SOURCE_MARK_LENGTH = 300;
@@ -250,7 +250,7 @@ function compareKind(kind: ProtectedKind, before: Item[], after: Item[], out: Pr
 export function compareProtectedContent(
   source: string,
   proposed: string,
-  style: CitationStyle = fpzgCitationStyle,
+  style: CitationStyle,
 ): ProtectedCheck {
   if (typeof source !== "string" || typeof proposed !== "string") return { ok: false, reason: "not-text" };
   if (source.length > MAX_PROTECTED_TEXT_LENGTH || proposed.length > MAX_PROTECTED_TEXT_LENGTH) {

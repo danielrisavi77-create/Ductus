@@ -1,7 +1,15 @@
 import { fc, test } from "@fast-check/vitest";
 import { expect } from "vitest";
 
-import { compareProtectedContent, type ProtectedCheck } from "./protected-content";
+import { parseCitationStyle } from "@/domain/citation";
+
+import fpzgConfig from "../../../config/faculties/fpzg/citation.json";
+
+import { compareProtectedContent as compareIn, type ProtectedCheck } from "./protected-content";
+
+// The style is required (M2.12-P02); the properties hold for the FPZG record.
+const style = parseCitationStyle(fpzgConfig);
+const compareProtectedContent = (source: string, proposed: string) => compareIn(source, proposed, style);
 
 // Fragments that exercise every scanner; all invented.
 const fragment = fc.constantFrom(

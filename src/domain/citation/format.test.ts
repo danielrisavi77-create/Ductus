@@ -6,7 +6,6 @@ import {
   CitationStyleError,
   formatBibliographyEntry,
   formatInText,
-  fpzgCitationStyle as style,
   parseCitationStyle,
   sortBibliography,
   type BookSource,
@@ -14,6 +13,9 @@ import {
   type Source,
 } from "./index";
 import fpzgConfig from "../../../config/faculties/fpzg/citation.json";
+
+// The style comes from its file, as the institution record reads it (M2.12-P02).
+const style = parseCitationStyle(fpzgConfig);
 
 const person = (family: string, given: string): Person => ({ kind: "person", family, given });
 
