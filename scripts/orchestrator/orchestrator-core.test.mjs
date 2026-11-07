@@ -152,7 +152,7 @@ test("threads summary and CI evaluation", () => {
 });
 
 const REPO = "owner1/repo1";
-const own = (over = {}) => ({ headRepo: REPO, author: { login: "owner1", type: "User" }, ...over });
+const own = (over = {}) => ({ headRepo: REPO, baseRepo: REPO, sameRepository: true, author: { login: "owner1", type: "User" }, ...over });
 const ready = (over = {}) => ({
   head: H1,
   pr: own(),

@@ -13,7 +13,7 @@ const rest = (over = {}) => ({
 test("toPr maps REST fields to the gh-CLI names", () => {
   assert.deepEqual(toPr(rest()), {
     number: 7, title: "t", body: "", state: "OPEN", isDraft: false, headRefOid: "abc123", headRefName: "feat/x",
-    headRepo: null, author: { login: "someone", type: "User" }, baseRefName: "main",
+    headRepo: null, baseRepo: null, sameRepository: false, author: { login: "someone", type: "User" }, baseRefName: "main",
     createdAt: "2026-10-01T00:00:00Z", mergedAt: null, mergeable: "MERGEABLE", autoMergeRequest: null,
   });
   assert.deepEqual(toPr(rest({ user: undefined })).author, { login: null, type: null });

@@ -34,7 +34,7 @@ const passes = [
 ];
 const gate = (files, autoMerge) =>
   evaluatePullRequest({
-    pr: { body: body("critical"), head: { sha: head }, auto_merge: autoMerge ? { merge_method: "squash" } : null, changed_files: files.length },
+    pr: { body: body("critical"), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, auto_merge: autoMerge ? { merge_method: "squash" } : null, changed_files: files.length },
     files,
     comments: passes,
     ownerLogin: "owner-x",

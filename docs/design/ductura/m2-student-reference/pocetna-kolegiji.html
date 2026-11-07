@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Početna i kolegiji, referenca</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 3 · DAN-566 · prijedlog slike</div>
+  <h1>S-02 Studentska početna i S-03 Moji kolegiji</h1>
+  <p>Raspored iz <code>pocetna.dc.html</code> (pozdrav, kartica za nastavak, popis, upis kodom na dnu), boje iz DESIGN-SYSTEM §3. Tekst je iz <code>messages.hr.ts</code> (<code>shell</code>, <code>student.home</code>, <code>student.assignments</code>). Prikazuje se samo ono što vraća čitanje vlastitih zadataka: kolegij, naslov, rok i stanje obavijesti.</p>
+</header>
+<main class="page wide">
+  <section class="variant" aria-labelledby="z"><div class="ref-tag" id="z">S-02 zadano · popunjeno, rok blizu</div>
+    <div class="app shell">
+      <aside class="side">
+        <a class="brand" href="#" aria-label="Ductura, studentska početna"><span class="mark" aria-hidden="true">D</span><span class="word">Ductura</span></a>
+        <button class="btn small secondary menu" type="button" aria-expanded="false">Izbornik</button>
+        <nav aria-label="Glavna navigacija"><a href="#" aria-current="page">Moji zadaci</a><a href="#">Moji kolegiji</a><a href="#">Moji radovi</a><a href="#">Radni prostor</a><a href="#">Upis u kolegij</a></nav>
+        <div class="side-foot"><button class="btn small secondary" type="button" aria-label="Promijeni svijetlu ili tamnu temu">◐</button><button class="btn small secondary" type="button">Odjava</button></div>
+      </aside>
+      <div class="main">
+        <div class="hero"><span class="eyebrow">5. 11. 2026.</span><h1>Vaš studentski <em>prostor</em></h1><p class="lede">Zadaci na kolegijima.</p></div>
+        <section class="continue" aria-labelledby="n1"><span class="eyebrow">Seminarski rad · Kolegij A</span>
+          <b id="n1">Lokalni mediji i izborna kampanja</b><span class="meta">Rad je započet, nije predan · Rok: 8. 11. 2026., 23:59</span>
+          <button class="btn" type="button">Otvori rad</button></section>
+        <section aria-labelledby="h2a" style="display:grid;gap:8px"><h2 id="h2a">Moji zadaci</h2>
+          <ul class="list">
+            <li class="item task"><span><span class="eyebrow">Kolegij A</span><br><span class="title">Lokalni mediji i izborna kampanja</span><span class="when"><span>Rok: 8. 11. 2026., 23:59</span><span class="tag near">Rok za 3 dana</span></span></span><button class="btn small" type="button">Otvori zadatak</button></li>
+            <li class="item task"><span><span class="eyebrow">Kolegij B</span><br><span class="title">Javna rasprava o školskom kurikulu</span><span class="when"><span>Rok: 15. 1. 2027., 23:59</span><span class="tag open">Prvo pročitajte obavijest</span></span></span><button class="btn small secondary" type="button">Pročitaj upute</button></li>
+            <li class="item task"><span><span class="eyebrow">Kolegij C</span><br><span class="title">Esej o povjerenju u institucije</span><span class="when"><span>Predano 3. 10. 2026., 14:20</span></span></span><button class="btn small secondary" type="button">Otvori rad</button></li>
+          </ul></section>
+        <section class="card center" aria-labelledby="k1"><h3 id="k1">Imate kod novog kolegija?</h3>
+          <div class="code-row"><input class="input code" aria-label="Kod kolegija" placeholder="KOD-KOLEGIJA"><button class="btn" type="button">Upiši</button></div></section>
+      </div>
+    </div>
+    <p class="ref-note">„Rok za 3 dana” je novi tekst: dani do roka vidi samo student i ne ulaze u sažetak ni nastavnički prikaz (PRODUCT §5 pravilo 4, iznimka D-63). Oznaka se pokazuje od 7 dana prije roka; prag potvrđuje izvedba. „Poruka sebi” iz prototipa nije definirana i nije nacrtana (m0-rad-reference, KONTROLNA-LISTA).</p>
+    <p class="ref-note">Tipkovnica (EQ6), širina od 801 px: 1 Ductura (početna), 2 Moji zadaci, 3 Moji kolegiji, 4 Moji radovi, 5 Radni prostor, 6 Upis u kolegij, 7 promjena teme, 8 Odjava, 9 Otvori rad (kartica za nastavak), 10 Otvori zadatak (Kolegij A), 11 Pročitaj upute (Kolegij B), 12 Otvori rad (Kolegij C), 13 Kod kolegija (polje), 14 Upiši. Do 800 px: 1 Ductura, 2 Izbornik (aria-expanded); dok je izbornik zatvoren slijede 3 Otvori rad (kartica za nastavak) do 8 Upiši, istim redom kao 9 do 14 gornjeg popisa; otvoren, iza Izbornika slijede stavke 2 do 8 gornjeg popisa (navigacija, tema, Odjava), pa Otvori rad do Upiši. Oznake roka i stanja ne primaju fokus. U varijantama ispod brojevi vrijede unutar kartice; ljuska, kad je prikazana, ide ispred njih (1 do 8, a do 800 px 1 i 2): nema kolegija: 1 Kod kolegija (polje), 2 Upiši; kolegij bez zadatka i učitavanje nemaju elementa koji prima fokus; greška: 1 Pokušaj ponovno.</p>
+  </section>
+  <div class="variants">
+    <section class="variant" aria-labelledby="s1"><div class="ref-tag" id="s1">S-02 · nema kolegija (prvi dolazak)</div>
+      <div class="card center"><h2>Još nemate kolegija.</h2><p class="note">Ovdje će se prikazati vaši kolegiji i njihovi zadaci.</p>
+        <h3>Imate kod kolegija?</h3><div class="code-row"><input class="input code" aria-label="Kod kolegija"><button class="btn" type="button">Upiši</button></div>
+        <h3>Što slijedi nakon upisa?</h3>
+        <div class="steps"><div class="row"><h3>Odaberite zadatak</h3><span class="src">U svakom kolegiju nastavnik vam dodjeljuje zadatke.</span></div><div class="row"><h3>Pročitajte upute</h3><span class="src">Svaki zadatak dolazi s jasnim uputama i očekivanjima.</span></div><div class="row"><h3>Otvorite rad</h3><span class="src">Nakon što ste spremni, započinjete pisanje u uređivaču.</span></div></div></div></section>
+    <section class="variant" aria-labelledby="s2"><div class="ref-tag" id="s2">S-02 · prazno (kolegij bez zadatka)</div>
+      <div class="course"><span class="eyebrow">Kolegij</span><h2>Kolegij A</h2><p class="note">U ovom kolegiju zasad nema zadatka.</p></div></section>
+    <section class="variant" aria-labelledby="s3"><div class="ref-tag" id="s3">S-02, S-03 · učitavanje</div>
+      <div class="course" aria-busy="true"><div class="skel w40"></div><div class="item"><div class="skel w80"></div><div class="skel w60"></div></div><div class="item"><div class="skel w80"></div><div class="skel w40"></div></div></div>
+      <p class="ref-note">Kostur iz zajedničkog lista (paket 1, Z-06); bez treperenja kod smanjenog kretanja.</p></section>
+    <section class="variant" aria-labelledby="s4"><div class="ref-tag" id="s4">S-02, S-03 · greška</div>
+      <div class="card" role="alert"><h2>Prikaz trenutačno nije dostupan.</h2><p class="note">Podatke nije bilo moguće učitati. To ne znači da nema kolegija ili radova.</p><button class="btn" type="button">Pokušaj ponovno</button></div></section>
+  </div>
+  <section class="variant" aria-labelledby="k"><div class="ref-tag" id="k">S-03 Moji kolegiji · popunjeno, više grupa</div>
+    <div class="app shell">
+      <aside class="side">
+        <a class="brand" href="#" aria-label="Ductura, studentska početna"><span class="mark" aria-hidden="true">D</span><span class="word">Ductura</span></a>
+        <button class="btn small secondary menu" type="button" aria-expanded="false">Izbornik</button>
+        <nav aria-label="Glavna navigacija"><a href="#">Moji zadaci</a><a href="#" aria-current="page">Moji kolegiji</a><a href="#">Moji radovi</a><a href="#">Radni prostor</a><a href="#">Upis u kolegij</a></nav>
+        <div class="side-foot"><button class="btn small secondary" type="button" aria-label="Promijeni svijetlu ili tamnu temu">◐</button><button class="btn small secondary" type="button">Odjava</button></div>
+      </aside><div class="main">
+      <div><h1>Moji kolegiji</h1><p class="lede">Kolegiji na koje ste upisani i njihovi zadaci.</p></div>
+      <section class="course" aria-labelledby="c1"><span class="eyebrow">Kolegij · 2026./27.</span><h2 id="c1">Kolegij A</h2>
+        <div class="when"><span class="tag">Seminarska grupa 2</span><span class="tag">Seminarska grupa 4</span></div>
+        <ul class="list"><li class="item task"><span><span class="title">Lokalni mediji i izborna kampanja</span><span class="when"><span>Rok: 8. 11. 2026., 23:59</span><span class="tag near">Rok za 3 dana</span></span></span><button class="btn small" type="button">Otvori zadatak</button></li>
+          <li class="item task"><span><span class="title">Pregled literature, prva etapa</span><span class="when"><span>Rok: 1. 12. 2026., 23:59</span><span class="tag open">Prvo pročitajte obavijest</span></span></span><button class="btn small secondary" type="button">Pročitaj upute</button></li></ul></section>
+      <section class="course" aria-labelledby="c2"><span class="eyebrow">Kolegij · 2026./27.</span><h2 id="c2">Kolegij B</h2>
+        <ul class="list"><li class="item task"><span><span class="title">Javna rasprava o školskom kurikulu</span><span class="when"><span>Rok: 15. 1. 2027., 23:59</span></span></span><button class="btn small secondary" type="button">Pročitaj upute</button></li></ul></section>
+    </div></div>
+    <p class="ref-note">Grupe su oznake uz kolegij (M2.7); nema stranice grupe. Akademska godina je iz čitanja kolegija.</p>
+    <p class="ref-note">Tipkovnica (EQ6), širina od 801 px: 1 Ductura (početna), 2 Moji zadaci, 3 Moji kolegiji, 4 Moji radovi, 5 Radni prostor, 6 Upis u kolegij, 7 promjena teme, 8 Odjava, 9 Otvori zadatak (Kolegij A), 10 Pročitaj upute (Kolegij A), 11 Pročitaj upute (Kolegij B). Do 800 px: 1 Ductura, 2 Izbornik (aria-expanded); dok je izbornik zatvoren slijede 3 Otvori zadatak do 5 Pročitaj upute (Kolegij B), istim redom kao 9 do 11 gornjeg popisa; otvoren, iza Izbornika slijede stavke 2 do 8 gornjeg popisa (navigacija, tema, Odjava), pa radnje kolegija. Oznake grupa, roka i stanja ne primaju fokus. U varijantama ispod brojevi vrijede unutar kartice; ljuska, kad je prikazana, ide ispred njih: jedan kolegij: 1 Otvori rad; prazno: 1 Upiši kolegij kodom; prijava istekla: 1 Prijava sustavom AAI@EduHr.</p></section>
+  <div class="variants">
+    <section class="variant" aria-labelledby="t1"><div class="ref-tag" id="t1">S-03 · jedan kolegij</div>
+      <div class="course"><span class="eyebrow">Kolegij · 2026./27.</span><h2>Kolegij C</h2>
+        <ul class="list"><li class="item task"><span><span class="title">Esej o povjerenju u institucije</span><span class="when"><span>Predano 3. 10. 2026., 14:20</span></span></span><button class="btn small secondary" type="button">Otvori rad</button></li></ul></div></section>
+    <section class="variant" aria-labelledby="t2"><div class="ref-tag" id="t2">S-03 · prazno</div>
+      <div class="card center"><p class="note">Zasad niste upisani ni u jedan kolegij.</p><button class="btn" type="button">Upiši kolegij kodom</button></div></section>
+    <section class="variant" aria-labelledby="t3"><div class="ref-tag" id="t3">S-03 · prijava istekla</div>
+      <div class="card center"><p class="note">Prijava nije valjana. Prijavite se ponovno.</p><button class="btn" type="button">Prijava sustavom AAI@EduHr</button></div></section>
+  </div>
+</main>
+</body>
+</html>

@@ -2,7 +2,7 @@
 // gh/git; merge-ready.mjs does the reads. The gate's own statuses decide (they
 // already include the D-101 carry of verdicts across clean main merges), so this
 // never recounts verdicts on the head and never disagrees with the gate about them.
-import { evaluateChecks, GATE_CONTEXT, latestChecks } from "./orchestrator-core.mjs";
+import { evaluateChecks, GATE_CONTEXT, headOrigin, latestChecks } from "./orchestrator-core.mjs";
 
 export const AUTHORIZATION_CONTEXT = "Merge authorization";
 // Statuses the gate workflow posts itself; they are not CI.
@@ -55,7 +55,9 @@ const unread = (v) => v === undefined || Boolean(v?.error);
 
 /**
  * Input (a read that failed is passed as {error}, never as "nothing"):
- *   pr             toPr() shape: number, state, isDraft, headRefOid, baseRefName, mergeable
+ *   pr             toPr() shape: number, state, isDraft, headRefOid, baseRefName, mergeable,
+ *                  headRepo, baseRepo, sameRepository
+ *   repository     "owner/name" as repoId() reads it, or null when that read failed
  *   mergeState     GitHub's merge state of the PR (CLEAN, BLOCKED, BEHIND, DIRTY, UNKNOWN, ...)
  *   gate           newest "Engineering review gate" status on the head, null, or {error}
  *   authorization  newest "Merge authorization" status on the head, null, or {error}
@@ -64,10 +66,18 @@ const unread = (v) => v === undefined || Boolean(v?.error);
  *   threads        summarizeThreads() result ({count, authors}), or {error}
  * Returns {state, reason, checks: [{level: PASS|FAIL|WAIT|OWNER|UNREAD|INFO, id, text}]}.
  */
-export function evaluateMergeReady({ pr, mergeState, gate, authorization, rollup, required = null, threads }) {
+export function evaluateMergeReady({ pr, mergeState, gate, authorization, rollup, required = null, threads, repository = null }) {
   const checks = [];
   const add = (level, id, text) => checks.push({ level, id, text });
   const head = short(pr?.headRefOid);
+
+  // F-010: a head outside this repository is judged by nothing else, so no stale
+  // status or command can make it ready; an unreadable name is UNREAD (I4).
+  const origin = headOrigin(pr, repository);
+  if (!origin.ok) {
+    add(origin.readable ? "FAIL" : "UNREAD", "origin", origin.text);
+    return { state: origin.readable ? STATES.BLOCKED : STATES.UNREAD, reason: origin.text, checks };
+  }
 
   add(pr?.state === "OPEN" ? "PASS" : "FAIL", "open", `state ${pr?.state ?? "?"}`);
   if (pr?.isDraft) add("FAIL", "draft", "PR is a draft");

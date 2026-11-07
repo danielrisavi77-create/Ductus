@@ -1466,6 +1466,19 @@ BEGIN
   -- The deadline of the version the request names, not of a later version.
   v_due := app.assignment_version_due(v_request.assignment_id, v_request.assignment_version);
 
+  -- 4.14: the packages first, in id order as commit_evidence_segment takes its
+  -- one, then the document, as the collaboration writes take it (FOR SHARE in
+  -- lock_document_for_write). A revision-request write that holds the document
+  -- finishes first and stays; one that comes after waits here and then sees
+  -- the submission (ZD403). Taken before the INSERT, so the trigger
+  -- close_submitted_packages finds its rows already held.
+  PERFORM 1 FROM evidence.package k
+   WHERE k.document_id = v_request.document_id AND k.institution_id = v_request.institution_id
+   ORDER BY k.id FOR UPDATE;
+  PERFORM 1 FROM evidence.document d
+   WHERE d.id = v_request.document_id AND d.institution_id = v_request.institution_id
+     FOR UPDATE;
+
   INSERT INTO evidence.submission (
     submission_request_id, institution_id, principal_id, assignment_id, assignment_version, revision,
     artifact_hash, requested_at, due_at, recorded_at
@@ -2049,6 +2062,11 @@ BEGIN
                              WHERE s.request_id = r.request_id AND s.version = r.version) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_accepted_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
   v_seq := nextval('collaboration.revision_request_seq');
   UPDATE collaboration.revision_request_version v
      SET closed_as = 'accepted', closed_by = r.actor_id, closed_at = now(),
@@ -2140,6 +2158,9 @@ BEGIN
      OR NOT coalesce(collaboration.is_revision_text(p_instruction), false)
      OR p_requested_revision IS NULL
      OR p_requested_revision NOT BETWEEN 0 AND 9007199254740991 THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(p_document_id, scope.institution_id, p_requested_revision) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
   v_seq := nextval('collaboration.revision_request_seq');
@@ -2530,6 +2551,11 @@ BEGIN
       FROM collaboration.revision_request_version v WHERE v.request_id = r.request_id) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_requested_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
   v_seq := nextval('collaboration.revision_request_seq');
   UPDATE collaboration.revision_request_version v
      SET closed_as = 'reopened', closed_by = r.actor_id, closed_at = now()
@@ -2633,6 +2659,11 @@ BEGIN
                              WHERE v.request_id = r.request_id AND v.version = r.version) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_response_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
   v_seq := nextval('collaboration.revision_request_seq');
   INSERT INTO collaboration.revision_response
     (request_id, institution_id, version, kind, explanation, response_revision, author_id)
@@ -2640,6 +2671,19 @@ BEGIN
   UPDATE collaboration.revision_request q SET state = 'responded', row_seq = v_seq WHERE q.id = r.request_id;
   RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'responded'::text;
 END
+$$;
+
+
+--
+-- Name: revision_above_document(text, uuid, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.revision_above_document(p_document_id text, p_institution_id uuid, p_revision bigint) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT coalesce(p_revision > (SELECT d.current_revision FROM evidence.document d
+                                 WHERE d.id = p_document_id AND d.institution_id = p_institution_id), true)
 $$;
 
 
@@ -10679,4 +10723,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106170000'),
     ('20261106180000'),
     ('20261106190000'),
-    ('20261106200000');
+    ('20261106200000'),
+    ('20261106210000'),
+    ('20261106220000');

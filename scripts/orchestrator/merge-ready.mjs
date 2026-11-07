@@ -21,26 +21,33 @@ const read = async (fn) => {
   }
 };
 
-/** Everything evaluateMergeReady needs for PR n; `required` is read once by the caller. */
-export async function readiness(n, required) {
-  const raw = await withRetry(() => ghJson(["api", `repos/{owner}/{repo}/pulls/${n}`]));
+/** evaluateMergeReady over the reads of one PR; pure, so a test can feed it any REST shape. */
+export function readinessOf({ raw, statuses, rollup, threads, required, repository }) {
   const pr = toPr(raw);
-  const head = pr.headRefOid;
-  const statuses = await read(() => ghList(`repos/{owner}/{repo}/commits/${head}/statuses?per_page=100`));
-  const pick = (context) => (statuses.error ? statuses : pickStatus(statuses, context));
-  const threads = await read(async () => summarizeThreads(await reviewThreads(n)));
+  const pick = (context) => (statuses?.error ? statuses : pickStatus(statuses, context));
   return {
     pr,
     result: evaluateMergeReady({
       pr,
-      mergeState: String(raw.mergeable_state ?? "unknown").toUpperCase(),
+      mergeState: String(raw?.mergeable_state ?? "unknown").toUpperCase(),
       gate: pick(GATE_CONTEXT),
       authorization: pick(AUTHORIZATION_CONTEXT),
-      rollup: await read(() => checkRollup(head)),
+      rollup,
       required,
       threads,
+      repository,
     }),
   };
+}
+
+/** Everything evaluateMergeReady needs for PR n; `required` and `repository` are read once by the caller. */
+export async function readiness(n, required, repository = null) {
+  const raw = await withRetry(() => ghJson(["api", `repos/{owner}/{repo}/pulls/${n}`]));
+  const head = raw?.head?.sha;
+  const statuses = await read(() => ghList(`repos/{owner}/{repo}/commits/${head}/statuses?per_page=100`));
+  const threads = await read(async () => summarizeThreads(await reviewThreads(n)));
+  const rollup = await read(() => checkRollup(head));
+  return readinessOf({ raw, statuses, rollup, threads, required, repository });
 }
 
 /** Required checks of main; null (so every PR is UNREAD) when a read still fails after retries. */
@@ -58,7 +65,23 @@ export async function requiredOfMain({ repo = repoId, json = ghJson, retry = wit
   return main.error ? null : requiredStatusChecks(main?.protection?.required_status_checks);
 }
 
-const line = (pr, r) => `#${pr.number} ${r.state} ${String(pr.headRefOid).slice(0, 8)} | ${String(pr.title ?? "").slice(0, 60)}\n    ${r.reason}`;
+const line = (number, pr, r) => `#${number} ${r.state} ${String(pr.headRefOid).slice(0, 8)} | ${String(pr.title ?? "").slice(0, 60)}\n    ${r.reason}`;
+
+/** --all output of readOpenPrs items: {lines, unread}. The number is the listed one (C3, O6). */
+export function allLines(items) {
+  const lines = [];
+  let unread = false;
+  for (const item of items) {
+    if (item.error) {
+      unread = true;
+      lines.push(`#${item.number} UNREAD\n    ${item.error}`);
+    } else if (!item.value.pr.isDraft) {
+      unread ||= item.value.result.state === "UNREAD";
+      lines.push(line(item.number, item.value.pr, item.value.result));
+    }
+  }
+  return { lines, unread };
+}
 
 async function main(args) {
   if (args.length !== 1 || !(args[0] === "--all" || /^[1-9]\d*$/.test(args[0]))) {
@@ -66,24 +89,19 @@ async function main(args) {
     return 2;
   }
   const required = await requiredOfMain();
+  // F-010: this repository's name, against which the base is checked; null (UNREAD) when unread.
+  const id = await read(() => repoId());
+  const repository = id.error ? null : `${id.owner}/${id.repo}`;
   if (args[0] !== "--all") {
-    const { pr, result } = await readiness(Number(args[0]), required);
-    console.log(`PR #${pr.number} head ${String(pr.headRefOid).slice(0, 8)}`);
+    const n = Number(args[0]);
+    const { pr, result } = await readiness(n, required, repository);
+    console.log(`PR #${n} head ${String(pr.headRefOid).slice(0, 8)}`);
     for (const c of result.checks) console.log(`${c.level.padEnd(6)} ${c.text}`);
     console.log(`MERGE-READY ${result.state}: ${result.reason}`);
     return EXIT_CODES[result.state];
   }
-  const all = await readOpenPrs((n) => readiness(n, required));
-  let unread = false;
-  for (const item of all) {
-    if (item.error) {
-      unread = true;
-      console.log(`#${item.number} UNREAD\n    ${item.error}`);
-    } else if (!item.value.pr.isDraft) {
-      unread ||= item.value.result.state === "UNREAD";
-      console.log(line(item.value.pr, item.value.result));
-    }
-  }
+  const { lines, unread } = allLines(await readOpenPrs((n) => readiness(n, required, repository)));
+  for (const l of lines) console.log(l);
   return unread ? 2 : 0;
 }
 

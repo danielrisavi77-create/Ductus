@@ -55,6 +55,15 @@ export const ACCOUNTS = Object.freeze({
     affiliation: STAFF,
     homeOrg: DEMO_HOME_ORG_B,
   }),
+  // DAN-526 (M2.E2E): a second staff member of the second institution, so its
+  // administrator has someone else to confirm as a teacher.
+  "demo-b-teacher-2": Object.freeze({
+    name: "Ustanova B: asistent",
+    givenName: "Tin",
+    familyName: "Žagar",
+    affiliation: STAFF,
+    homeOrg: DEMO_HOME_ORG_B,
+  }),
   "demo-b-student": Object.freeze({
     name: "Ustanova B: student",
     givenName: "Dino",

@@ -43,7 +43,7 @@ try {
   const prPaths = behind ? await attempt("PR file list", () => readPrPaths(n)) : null;
   const mainPaths = behind ? await attempt("main file list", () => mainPathsSince(pr.headRefOid, mainSha)) : null;
   const rollup = pr.headRefOid ? await attempt("head checks", () => checkRollup(pr.headRefOid)) : null;
-  const checks = evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead, mainPaths, prPaths });
+  const checks = evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead, mainPaths, prPaths, repository: `${owner}/${repo}` });
   console.log(`PR #${n} head ${String(pr.headRefOid ?? "?").slice(0, 8)} main ${String(mainSha ?? "?").slice(0, 8)}`);
   for (const c of checks) console.log(`${c.level.padEnd(4)} ${c.text}`);
   const blocking = readErrors.filter((name) => !INFORMATIONAL_READS.has(name));

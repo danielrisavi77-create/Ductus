@@ -39,6 +39,8 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 **Uvjet završetka:** CI zelen na `main` uz obvezan E2E na Chromiumu, Firefoxu i WebKitu; zapis M0.1 postoji; mjere D-91 1, 2, 4 i 6 spojene (3, 5 i 7 su u B0.x, #87 c.6557413776); nalazi iz M0.6 zatvoreni u privatnom registru; ljuska prošla vizualnu provjeru prema D-183.
 
+**Prihvat M0 (M0.Z, DAN-575):** dokaz po stavki na `main` `b5d2b494` i nalazi su u `docs/engineering/prihvat-M0.md`; zapis ne zatvara M0 u Linearu.
+
 ## M1 Prijava preko AAI@EduHr
 
 **Cilj:** studenti i nastavnici prijavljuju se isključivo preko AAI@EduHr (D-09, D-16), a račun je vezan uz izdavatelja i `hrEduPersonUniqueID`.

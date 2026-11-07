@@ -9,9 +9,11 @@ import { contractState } from "./work-guard-core.mjs";
 
 const NOW = Date.parse("2026-10-23T22:00:00Z");
 const SHA = "a".repeat(40);
+const REPO = "owner1/repo1";
 const body = (role, task, extra = "") => `Agent: codex:s${task}:${role}\nRisk: critical\nTask: DAN-${task}\n${extra}`;
 const pr = (number, role, paths, over = {}) => ({
-  number, isDraft: false, baseRefName: "main", body: body(role, number), paths, ...over,
+  number, isDraft: false, baseRefName: "main", body: body(role, number), paths,
+  headRepo: REPO, baseRepo: REPO, sameRepository: true, ...over,
 });
 const assignment = (n, role, over = {}) => ({
   task: `DAN-${n}`, agent: `codex:s${n}:${role}`, branch: `lane/${n}`, baseSha: SHA, paths: ["src/"],
@@ -21,7 +23,7 @@ const contract = (assignments, over = {}) => ({
   schema: 1, repository: "danielrisavi77-create/Ductus",
   issuedAt: "2026-10-23T21:55:00Z", expiresAt: "2026-10-23T22:05:00Z", assignments, ...over,
 });
-const plan = (prs, c, independent) => planParallel({ prs, pairs: overlapPairs(prs), contract: c, now: NOW, independent });
+const plan = (prs, c, independent) => planParallel({ repository: REPO, prs, pairs: overlapPairs(prs), contract: c, now: NOW, independent });
 const verdicts = (p) => Object.fromEntries(p.rows.map((r) => [r.number, r.verdict]));
 
 test("three writers on separate files with active assignments run in parallel", () => {
@@ -117,7 +119,7 @@ test("a stacked base, a declared dependency or a contract blocker is ČEKA OVISN
     pr(4, "frontend", ["e2e/a.spec.ts"])];
   const c = contract([assignment(1, "backend", { blockers: ["decision"] }), assignment(2, "platforma"),
     assignment(3, "platforma"), assignment(4, "frontend")]);
-  const p = planParallel({ prs, pairs: overlapPairs(prs), contract: c, now: NOW, slots: 4 });
+  const p = planParallel({ repository: REPO, prs, pairs: overlapPairs(prs), contract: c, now: NOW, slots: 4 });
   assert.deepEqual(verdicts(p), { 1: "ČEKA OVISNOST", 2: "ČEKA OVISNOST", 3: "ČEKA OVISNOST", 4: "PARALELNO" });
   assert.deepEqual(p.rows.map((r) => r.reasons), [["contract blockers: decision"], ["based on lane/1, not main"],
     ["declared dependency on #1"], []]);
@@ -138,10 +140,10 @@ test("free gate slots go to demo drafts before tooling drafts; the rest wait", (
   const p = plan(prs, c);
   // #13 is not assigned (unproven), so 2 free slots go to demo #12, then tooling #11
   assert.deepEqual(verdicts(p), { 10: "PARALELNO", 11: "PARALELNO", 12: "PARALELNO", 13: "NEPROVJERENO" });
-  const full = planParallel({ prs, pairs: overlapPairs(prs), contract: c, now: NOW, slots: 2 });
+  const full = planParallel({ repository: REPO, prs, pairs: overlapPairs(prs), contract: c, now: NOW, slots: 2 });
   assert.deepEqual(verdicts(full), { 10: "PARALELNO", 11: "ČEKA OVISNOST", 12: "PARALELNO", 13: "NEPROVJERENO" });
   assert.deepEqual(full.rows[1].reasons, ["gate full (2 slots)"]);
-  const over = planParallel({ prs: prs.map((x) => ({ ...x, isDraft: false })), pairs: [], contract: c, now: NOW, slots: 2 });
+  const over = planParallel({ repository: REPO, prs: prs.map((x) => ({ ...x, isDraft: false })), pairs: [], contract: c, now: NOW, slots: 2 });
   assert.equal(over.overfull, true);
   assert.match(renderPlan(over).join("\n"), /WARNING: 4 PRs out of draft, more than the 2 gate slots/);
 });
@@ -195,7 +197,7 @@ test("two writers in the same role are checked for a shared contract; one writer
   const one = contract([assignment(1, "frontend", { agent: "codex:one:frontend" }),
     assignment(2, "frontend", { agent: "claude:one:frontend" })]);
   // the contract wants different principals, so check the pair rule directly on the rows
-  const rows = planParallel({ prs: same, pairs: [], contract: one, now: NOW }).rows;
+  const rows = planParallel({ repository: REPO, prs: same, pairs: [], contract: one, now: NOW }).rows;
   assert.ok(rows.every((r) => !r.reasons.some((x) => /shared contract/.test(x))));
   assert.equal(writerOf("Agent: Codex:Slot1:frontend"), "codex:slot1");
   assert.equal(writerOf("Agent: codex:slot1:reviewer"), null);
@@ -210,12 +212,12 @@ test("D-107: a tooling draft waits while any demo draft is left in the queue, un
   // after the demo the rule no longer applies (contract dates moved with the clock)
   const later = DEMO_FIRST_UNTIL + 60_000;
   const c2 = { ...c, issuedAt: new Date(later - 60_000).toISOString(), expiresAt: new Date(later + 60_000).toISOString() };
-  assert.equal(planParallel({ prs, pairs: [], contract: c2, now: later }).rows[1].verdict, "PARALELNO");
+  assert.equal(planParallel({ repository: REPO, prs, pairs: [], contract: c2, now: later }).rows[1].verdict, "PARALELNO");
   // a demo draft that got a slot does not hold tooling back; a full gate then does
   const two = [pr(1, "backend", ["src/server/a.ts"], { isDraft: true }), pr(2, "platforma", ["scripts/a.mjs"], { isDraft: true })];
   const c3 = contract([assignment(1, "backend"), assignment(2, "platforma")]);
   assert.deepEqual(verdicts(plan(two, c3)), { 1: "PARALELNO", 2: "PARALELNO" });
-  const full = planParallel({ prs: two, pairs: [], contract: c3, now: NOW, slots: 1 });
+  const full = planParallel({ repository: REPO, prs: two, pairs: [], contract: c3, now: NOW, slots: 1 });
   assert.deepEqual(verdicts(full), { 1: "PARALELNO", 2: "ČEKA OVISNOST" });
   assert.deepEqual(full.rows[1].reasons, ["gate full (1 slots)"]);
 });
