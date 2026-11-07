@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import {
   evidenceObjectKey,
@@ -14,6 +16,10 @@ import type {
   EvidencePayloadStore,
   EvidenceStorageRefResult,
 } from "@/application/ports/evidence-trust";
+import type {
+  EvidencePayloadPresence,
+  EvidencePayloadPresenceResult,
+} from "@/application/ports/pending-receipt-object";
 
 type StoredPayload = {
   storageRef: string;
@@ -21,7 +27,12 @@ type StoredPayload = {
 };
 
 export class InMemoryEvidencePayloadStore
-  implements EvidencePayloadStore, EvidencePayloadLocator, EvidencePayloadReader, InstitutionEvidencePayloadReader
+  implements
+    EvidencePayloadStore,
+    EvidencePayloadLocator,
+    EvidencePayloadPresence,
+    EvidencePayloadReader,
+    InstitutionEvidencePayloadReader
 {
   private readonly payloads = new Map<string, StoredPayload>();
   // A package row belongs to one institution, as the composite key in the
@@ -101,6 +112,30 @@ export class InMemoryEvidencePayloadStore
           bytes: new TextEncoder().encode(stored.canonicalPayload),
         }
       : { status: "not_found" };
+  }
+
+  /**
+   * The HEAD of the S3 store: `present` only for this exact key with the
+   * byte count and the SHA-256 of the hash; an invalid key is `unavailable`.
+   */
+  async headImmutable(input: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+    payloadBytes: number;
+  }): Promise<EvidencePayloadPresenceResult> {
+    if (this.unavailableReason) {
+      return { status: "unavailable", reason: this.unavailableReason };
+    }
+    const path = evidenceObjectKey(input);
+    if (!path) return { status: "unavailable", reason: "storage_request_invalid" };
+    const stored = this.payloads.get(canonicalizeJcs([...path]));
+    if (!stored) return { status: "absent" };
+    const bytes = new TextEncoder().encode(stored.canonicalPayload);
+    return bytes.byteLength === input.payloadBytes &&
+      createHash("sha256").update(bytes).digest("hex") === input.segmentHash
+      ? { status: "present" }
+      : { status: "mismatch" };
   }
 
   get(
