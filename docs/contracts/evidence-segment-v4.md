@@ -66,11 +66,12 @@ Oba zapisa imaju zatvoren skup ključeva, kanonski JCS i bez vremena finijeg od 
 | `manifestSchema` | Točno `ductus-import-manifest-v1`. |
 | `importId` | Kanonski UUID v4. |
 | `documentId` | Kao u odsječku. |
-| `importKind` | Zatvoren skup `docx-upload`, `cloud-version`; nova vrsta traži izmjenu ovog ugovora. |
+| `importKind` | Način dolaska, zatvoren skup `file-upload`, `cloud-version`; nova vrsta traži izmjenu ovog ugovora. |
+| `fileFormat` | Format datoteke, zatvoren skup `docx`, `pdf` (PDF: M8.3, DAN-397). `cloud-version` dopušta samo `docx`; drugi spoj se odbija. Novi format traži izmjenu ovog ugovora. |
 | `rawSha256` | SHA-256 točnih bajtova datoteke. |
 | `rawByteLength` | Cijeli broj ≥ 1; gornja granica je O-7. |
 | `contentSha256` | SHA-256(JCS(sadržaj kao dokument Ductusa)). |
-| `traces` | Niz od najviše tri objekta `{traceKind, count}`. `traceKind` je iz zatvorenog skupa `insertion`, `deletion`, `comment`, svaki najviše jednom; `count` je cijeli broj ≥ 1. |
+| `traces` | Samo uz `fileFormat` `docx`: niz od najviše tri objekta `{traceKind, count}`. `traceKind` je iz zatvorenog skupa `insertion`, `deletion`, `comment`, svaki najviše jednom; `count` je cijeli broj ≥ 1. Uz `pdf` ključa nema; prazan niz ili ključ uz `pdf` odbija se. |
 | `savedAt` (neobvezno) | Samo uz `cloud-version`: cijela UTC minuta u obliku iz D-24, ili ključa nema. |
 
 `manifestSha256` = SHA-256(JCS(manifest)). Sprema se uz manifest, nikad u njemu. Poslužitelj sva tri hasha ponovno izračuna iz bajtova datoteke, a nepodudaranje bilo kojeg odbija cijeli uvoz (B3).
@@ -105,13 +106,17 @@ Pravilo iz `docs/backend/evidencija.md` §4.1 (odluka vlasnika 17. 10. 2026.) os
 | Zapis `import` ili `ai-transfer` postoji za istog principala i isti dokument, i njegov hash je jednak veznom hashu | RPC koji radi commit i `reserve`, u istoj transakciji | `invalid`. Tuđi i nepostojeći id daju isti odgovor (C7). |
 | Jedan zapis uvoza ili prijenosa veže najviše jedan događaj u lancu dokumenta | Isti RPC, jedinstveno ograničenje | `invalid`. Ponovno slanje istog odsječka nakon prekida je idempotentno i nije drugi događaj. |
 | Umetnuti sadržaj `import` odgovara `contentSha256`; tekst `ai-transfer` odgovara `textSha256` zapisa | Replay pri rekonstrukciji | `mismatch`, kao `removedSha256` (B-12) |
-| `pasteOrigin`: zapis postoji za istog principala i isti dokument, hash teksta zapisa i hash zalijepljenog teksta jednaki su `textSha256` | Projekcija nakon uspješnog replaya | Lijepljenje se prikazuje kao `origin: "not_observed"`, kao danas. Nikad se ne prikazuje kao poznato podrijetlo, a cijela rekonstrukcija ne pada. |
+| `pasteOrigin`: hash zalijepljenog teksta iz replaya jednak je `textSha256`; odgovor ili stavka `refId` postoji za istog principala i isti dokument; zalijepljeni tekst je neprekinut, točan podniz teksta tog odgovora ili stavke (bez normalizacije, K14) | Projekcija nakon uspješnog replaya, na poslužitelju, dok sadržaj izvora postoji | Lijepljenje se prikazuje kao `origin: "not_observed"`, kao danas. Nikad se ne prikazuje kao poznato podrijetlo, a cijela rekonstrukcija ne pada. |
 
 Dva tumačenja traže potvrdu reviewa i vlasnika:
 - C6 u #1659 kaže da se nepodudaranje teksta „odbija”. Ovdje se otkriva rekonstrukcijom (`mismatch`), jer prihvat prema odluci od 17. 10. ne radi replay.
 - D2 i D3 u #1659 dopuštaju odbijanje ili prikaz bez podrijetla. Ugovor bira prikaz bez podrijetla. Razlog: brisanje odgovora ili stavke u drugoj kartici (E5) inače bi zaustavilo sinkronizaciju.
 
-Poslužitelj zato čuva hash teksta odgovora i stavke izvora i nakon brisanja njihova sadržaja.
+Djelomično lijepljenje (D-58: kopiran dio odgovora ili stavke) je poznato podrijetlo jednako kao cijelo, jer se provjerava podniz, a ne jednakost hasha cijelog izvora. Hash izvora zato nije dovoljan i poslužitelj ga ne čuva kao zamjenu za sadržaj. Poznate granice:
+- nakon brisanja sadržaja odgovora ili stavke podrijetlo se više ne može provjeriti i prikazuje se kao `not_observed`;
+- razlika koju unese međuspremnik (razmaci, prijelomi redaka, NFC/NFD) daje `not_observed`. Ugovor bira lažno negativan ishod, nikad lažno pozitivan.
+
+Ishod projekcije nosi samo vrstu i oznaku poznatog podrijetla, nikad tekst izvora ni položaj podniza (D9).
 
 Sažetak procesa (`process-summary.ts`) prikazuje stavke ovako:
 - `import` je vrsta `imported` („uvezeno, tvrdnja iz datoteke”), nikad `observed` (B1, B8).
@@ -168,10 +173,11 @@ Testovi se pišu prije implementacije i padaju dok implementacija ne postoji. Sv
 | Stari formati | Postojeći vektori v2/v3 i potvrde daju iste bajtove; test nad izvezenim konstantama drži točno jedan novi identifikator formata odsječka | A1, A2, A4 |
 | Odabir sheme | `evidenceSchemaForEvents` za svaku kombinaciju izvora | A6 |
 | Lanac | Miješani lanac v2+v3+v4 prolazi provjeru, a sažetak je isti kao bez v4 za isti sadržaj | A7, K15 |
-| Manifest | Tablični test: tri hasha, zabranjeni ključevi B5, `savedAt` sa sekundama, pretraga bajtova za „Lorem Autor” | B3 do B7, B10 |
+| Manifest | Tablični test: tri hasha, zabranjeni ključevi B5, `savedAt` sa sekundama, pretraga bajtova za „Lorem Autor”; valjan PDF manifest bez `traces`, odbijen PDF s `traces` (i praznim) i odbijen spoj `cloud-version` + `pdf` | B3 do B7, B10 |
 | Zapis prijenosa | Tablični test: obvezna polja, oblik, katalog svrha, isključeni pružatelj | C1 do C5, C11 |
 | Tekst događaja | Test s poznatim odgovorom za definiciju hasha teksta, uključujući NFC i NFD | C6, D1, K14 |
 | Rekonstrukcija | Kriv `contentSha256` ili `textSha256` daje `mismatch`; neprovjerljiv `pasteOrigin` daje `not_observed` bez pada | B4, C6, D3 |
+| Djelomično lijepljenje | Dio odgovora i dio stavke bilježnice daju poznato podrijetlo; tekst koji nije neprekinut podniz, podniz tuđeg odgovora, izmijenjen razmak i NFD umjesto NFC daju `not_observed`; izbrisan sadržaj izvora daje `not_observed`; ishod ne sadrži bajtove teksta izvora | D1 do D3, D9, K14 |
 | Projekcija | `import` je `imported`; isti bajtovi za studenta i nastavnika; nema zbrojeva | B1, B8, G1, G3, G4 |
 | pgTAP | Tuđi i nepostojeći id daju isti ishod; RLS i matrica pristupa za nove tablice; jedinstvenost veze | C7, C10, C12, D2 |
 | Istodobnost | Dvije transakcije uvoza istog dokumenta; opoziv prije i poslije primjene; stari i novi klijent nad istim radom | E1 do E6 |
