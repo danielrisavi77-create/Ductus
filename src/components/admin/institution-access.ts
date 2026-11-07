@@ -4,6 +4,8 @@ import type { InstitutionOverviewRead } from "@/server/institution/institution-o
 import type { FacultyRulesRead } from "@/server/institution/faculty-rules";
 import type { TeacherRolesRead } from "@/server/institution/teacher-roles";
 
+import type { CoursesPage } from "./institution-courses-view";
+
 export type InstitutionScreen = "allowed" | "unavailable" | "notFound" | "expired" | "signedOut";
 
 /**
@@ -17,10 +19,12 @@ export type InstitutionScreen = "allowed" | "unavailable" | "notFound" | "expire
  * c.6584772547). A principal that could not be read is "unavailable", as in
  * `teacherPageAccess`. DAN-581 (A-02): /ustanova/korisnici takes the same
  * screen from the teacher roles' read, whose kinds are the same, and so does
- * /ustanova/pravila (DAN-590, A-04) from the faculty rules' read.
+ * /ustanova/pravila (DAN-590, A-04) from the faculty rules' read, and
+ * /ustanova/kolegiji (DAN-591, A-03) from its two reads joined by `coursesPage`.
  */
 export function institutionScreen(
-  read: InstitutionOverviewRead["kind"] | TeacherRolesRead["kind"] | FacultyRulesRead["kind"] | null, principal: SessionPrincipal["kind"], token: string | undefined,
+  read: InstitutionOverviewRead["kind"] | TeacherRolesRead["kind"] | FacultyRulesRead["kind"] | CoursesPage["kind"] | null,
+  principal: SessionPrincipal["kind"], token: string | undefined,
 ): InstitutionScreen {
   if (read === null || read === "unauthorized") return closedSessionKind(token);
   if (read === "unavailable") return read;

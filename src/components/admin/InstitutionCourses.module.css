@@ -1,0 +1,172 @@
+/* DAN-591 (A-03): the courses on the paper sheet (D-188), after docs/design/ductura/m2-reference/reference.css. */
+.section {
+  display: grid;
+  gap: 12px;
+}
+
+.section h2 {
+  margin: 0 0 4px;
+  font-family: var(--ff-display);
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The reference's .btn and .btn.secondary, as links. */
+.year,
+.yearCurrent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  font: 600 13.5px/1 var(--ff-ui);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.yearCurrent {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.card,
+.course {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius-lg);
+}
+
+.card p {
+  margin: 0;
+}
+
+.course {
+  gap: 12px;
+}
+
+.courseHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.courseHead h3 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--well);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.meta {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--ink-3);
+}
+
+.kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule-2);
+  border-radius: 6px;
+}
+
+.group h4 {
+  margin: 0;
+  font: 600 13.5px/1.4 var(--ff-ui);
+  overflow-wrap: anywhere;
+}
+
+.group p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.flag {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  padding: 4px 0 4px 10px;
+  border-left: 3px solid var(--warn);
+}
+
+.flag strong {
+  color: var(--warn);
+  font-size: 12.5px;
+}
+
+@media (max-width: 640px) {
+  .section h2 {
+    font-size: 21px;
+  }
+
+  .meta,
+  .chip,
+  .flag strong {
+    font-size: 13px;
+  }
+
+  .kv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .kv dd {
+    margin-bottom: 8px;
+  }
+}
