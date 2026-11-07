@@ -7,6 +7,14 @@ SET LOCAL lc_messages TO 'C';
 \ir fixtures/evidence-acceptance.inc
 SELECT no_plan();
 
+-- Ana's document has revisions up to 10, so the revisions the calls below
+-- name are ones it has (2e, #1091 c.6696580072).
+SET LOCAL ROLE ductus_evidence;
+INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
+SELECT 'doc-a', pg_temp.id('fak_a'), n, n - 1, pg_temp.id('ana'), pg_temp.h('a') FROM generate_series(1, 10) AS n;
+UPDATE evidence.document SET current_revision = 10 WHERE id = 'doc-a';
+RESET ROLE;
+
 INSERT INTO ref VALUES
   ('anchor', '{"nodeId":"0f0e0d0c-0b0a-4000-8000-000000000001","quote":"prvi odlomak","prefix":"","suffix":" teksta","startHint":0,"endHint":12}'),
   ('anchor_b', '{"nodeId":"0f0e0d0c-0b0a-4000-8000-000000000002","quote":"odlomak","prefix":"","suffix":"","startHint":0,"endHint":7}');
@@ -219,8 +227,8 @@ SELECT is(pg_temp.snapshot(pg_temp.id('c5')), (SELECT val FROM ref WHERE name = 
 -- Every applied transition above changed no evidence (H1).
 SELECT is(pg_temp.evidence_print(), (SELECT v FROM print_before), 'the transitions change nothing in schema evidence (H1)');
 
-SELECT is(pg_temp.call('ana', 'pkg-a', 'request-1', pg_temp.descriptor(), 0, repeat('a', 64), repeat('d', 64),
-  repeat('b', 64)), 'reserved', 'fixture: Ana commits revision 1');
+SELECT is(pg_temp.call('ana', 'pkg-a', 'request-1', pg_temp.descriptor(), 10, repeat('a', 64), repeat('d', 64),
+  repeat('b', 64)), 'reserved', 'fixture: Ana commits revision 11');
 SELECT is(pg_temp.snapshot(pg_temp.id('c5')), (SELECT val FROM ref WHERE name = 'c5_before'),
   'committing a revision changes no request, its counter or version (D4)');
 SELECT matches(pg_temp.act('respond', pg_temp.id('c5'), pg_temp.seq(pg_temp.id('c5'))), '^applied\|[0-9]+\|1\|responded$',
@@ -282,7 +290,10 @@ FROM (VALUES
   ('done', 'Tekst.', -1, 'ZD422: invalid input|unchanged', 'with revision -1 is refused'),
   ('done', 'Tekst.', 9007199254740992, 'ZD422: invalid input|unchanged', 'with revision 2^53 is refused'),
   ('done', repeat('a', 2000), 0, 'applied|1|responded|stored', 'with 2000 code points and revision 0 is accepted'),
-  ('declined', 'Izvor je naveden u bilješci.', 9007199254740991, 'applied|1|responded|stored', 'declined with an explanation is accepted (E1)')
+  ('declined', 'Izvor je naveden u bilješci.', 11, 'applied|1|responded|stored',
+   'declined with an explanation at the current revision 11 of the document is accepted (E1)'),
+  ('done', 'Tekst.', 12, 'ZD422: invalid input|unchanged', 'with revision 12, above the current revision 11 of the document, is refused (#1091 c.6696580072)'),
+  ('done', 'Tekst.', 9007199254740991, 'ZD422: invalid input|unchanged', 'with revision 2^53 - 1, above the document, is refused')
 ) AS i (kind, explanation, revision, outcome, what);
 SELECT is(pg_temp.try('responded', 'vesna', format('accept_revision_request(:id, :seq, %L, %L)', i.revision, i.hash)), i.outcome,
   'an acceptance ' || i.what)
@@ -295,7 +306,9 @@ FROM (VALUES
   (5, repeat('g', 64), 'ZD422: invalid input|unchanged', 'with a hash that is not hex is refused'),
   (5, '', 'ZD422: invalid input|unchanged', 'with an empty hash is refused'),
   (5, NULL, 'applied|1|accepted|stored', 'without a hash is accepted'),
-  (9007199254740991, repeat('0', 64), 'applied|1|accepted|stored', 'with revision 2^53 - 1 and a hash is accepted')
+  (11, repeat('0', 64), 'applied|1|accepted|stored', 'at the current revision 11 of the document with a hash is accepted'),
+  (12, NULL, 'ZD422: invalid input|unchanged', 'with revision 12, above the current revision 11 of the document, is refused'),
+  (9007199254740991, NULL, 'ZD422: invalid input|unchanged', 'with revision 2^53 - 1, above the document, is refused')
 ) AS i (revision, hash, outcome, what);
 SELECT is(pg_temp.try('open', 'vesna', format('reopen_revision_request(:id, :seq, %L, %L)', i.instruction, i.revision)), i.outcome,
   'a reopen ' || i.what)
@@ -307,8 +320,21 @@ FROM (VALUES
   ('Tekst.', NULL, 'ZD422: invalid input|unchanged', 'without a revision is refused'),
   ('Tekst.', -1, 'ZD422: invalid input|unchanged', 'with revision -1 is refused'),
   ('Tekst.', 9007199254740992, 'ZD422: invalid input|unchanged', 'with revision 2^53 is refused'),
-  (repeat('a', 2000), 0, 'applied|2|reopened|stored', 'with 2000 code points and revision 0 is accepted')
+  (repeat('a', 2000), 0, 'applied|2|reopened|stored', 'with 2000 code points and revision 0 is accepted'),
+  ('Tekst.', 11, 'applied|2|reopened|stored', 'at the current revision 11 of the document is accepted'),
+  ('Tekst.', 12, 'ZD422: invalid input|unchanged', 'with revision 12, above the current revision 11 of the document, is refused'),
+  ('Tekst.', 9007199254740991, 'ZD422: invalid input|unchanged', 'with revision 2^53 - 1, above the document, is refused')
 ) AS i (instruction, revision, outcome, what);
+-- The ceiling comes after the counter and the transition, so a stale tab or
+-- a closed state is reported as before (#1091 c.6696580072).
+INSERT INTO ref SELECT 'ceiling1', pg_temp.make('responded');
+INSERT INTO ref SELECT 'ceiling1_before', pg_temp.snapshot(pg_temp.id('ceiling1'));
+SELECT is(pg_temp.run('vesna', 'accept_revision_request(:id, :seq, 12, NULL)', pg_temp.id('ceiling1'), pg_temp.seq(pg_temp.id('ceiling1')) - 1),
+  'conflict|' || pg_temp.seq(pg_temp.id('ceiling1')) || '|1|responded',
+  'a stale acceptance above the document is a conflict, not an input error');
+SELECT is(pg_temp.snapshot(pg_temp.id('ceiling1')), (SELECT val FROM ref WHERE name = 'ceiling1_before'), 'the stale acceptance writes nothing');
+SELECT is(pg_temp.try('open', 'vesna', 'accept_revision_request(:id, :seq, 12, NULL)'), 'ZD409: transition not allowed|unchanged',
+  'an acceptance above the document of an open request is a transition error, not an input error');
 INSERT INTO ref SELECT 'e1', pg_temp.make('open');
 SELECT matches(pg_temp.run('ana', $$ respond_revision_request(:id, :seq, 'declined', 'Izvor je naveden u bilješci.', 0) $$,
   pg_temp.id('e1'), pg_temp.seq(pg_temp.id('e1'))), '^applied\|[0-9]+\|1\|responded$', 'fixture: Ana declines');
@@ -407,12 +433,12 @@ SELECT is((SELECT closed_as FROM collaboration.revision_request_version WHERE re
 -- or not, and nothing changes (B8).
 INSERT INTO ref SELECT 'b8_open', pg_temp.make('open');
 INSERT INTO ref SELECT 'b8_responded', pg_temp.make('responded');
-SELECT is(pg_temp.ask('ana', $$ SELECT outcome FROM app.request_submission('doc-a', 1) $$), 'requested', 'fixture: Ana requests revision 1');
+SELECT is(pg_temp.ask('ana', $$ SELECT outcome FROM app.request_submission('doc-a', 11) $$), 'requested', 'fixture: Ana requests revision 11');
 SELECT matches(pg_temp.act('withdraw', pg_temp.id('b8_open'), pg_temp.seq(pg_temp.id('b8_open'))), '^applied\|[0-9]+\|1\|withdrawn$',
   'a requested but unrecorded submission does not stop a transition');
 SELECT is(pg_temp.ask('ana', format('SELECT outcome FROM app.record_submission(%L::uuid, %L)',
     (SELECT id FROM evidence.submission_request WHERE document_id = 'doc-a'), pg_temp.h('d'))), 'recorded',
-  'fixture: the submission of revision 1 is recorded');
+  'fixture: the submission of revision 11 is recorded');
 INSERT INTO ref SELECT 'b8_responded_before', pg_temp.snapshot(pg_temp.id('b8_responded'));
 SELECT is(pg_temp.act(a.name, pg_temp.id('b8_responded'), pg_temp.seq(pg_temp.id('b8_responded'))), 'ZD403: forbidden',
   a.name || ' on a submitted document is forbidden (B8)')
