@@ -22,10 +22,11 @@ function pages(dir: string): string[] {
 const hiding = pages(join(ROOT, "app")).filter((file) => /\bnotFound\(\)/.test(readFileSync(file, "utf8")));
 
 describe("a page that hides itself behind notFound() keeps the 404 title", () => {
-  it("finds /ustanova, /ustanova/korisnici (DAN-581) and /ustanova/pravila (DAN-590) among those pages", () => {
+  it("finds /ustanova, /ustanova/korisnici (DAN-581), /ustanova/kolegiji (DAN-591) and /ustanova/pravila (DAN-590) among those pages", () => {
     const found = hiding.map((file) => relative(ROOT, file).replaceAll("\\", "/"));
     expect(found).toContain("app/ustanova/page.tsx");
     expect(found).toContain("app/ustanova/korisnici/page.tsx");
+    expect(found).toContain("app/ustanova/kolegiji/page.tsx");
     expect(found).toContain("app/ustanova/pravila/page.tsx");
   });
 
