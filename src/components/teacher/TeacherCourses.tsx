@@ -44,17 +44,32 @@ function submissionHr(row: AssignmentSubmission): string {
  * no link and is not listed. No name, id, revision or time is shown: the
  * read names no name (names arrive with B-11). `null` is a failed read, said
  * as such, never as "no works" or "not submitted".
+ *
+ * DAN-380 (M2.9-P02, #1091 c.6725196643): beside a work whose student marked
+ * an approved accommodation, that it is marked, as text in the colour of the
+ * list and nothing else (D-50, D-128): no reason, kind or note exists to show.
+ * `marked` lists the students whose work is marked; `null` is a failed read,
+ * said once below the list and never drawn as "not marked".
  */
-function Works({ works }: { works: readonly AssignmentSubmission[] | null | undefined }) {
+function Works({ works, marked }: {
+  works: readonly AssignmentSubmission[] | null | undefined;
+  marked: readonly string[] | null | undefined;
+}) {
   if (works === undefined) return null;
   if (works === null) return h("p", { className: styles.works, role: "status" }, t.worksUnavailable);
   const listed = works.flatMap((row) => (row.documentId === null ? [] : [{ row, documentId: row.documentId }]));
   if (listed.length === 0) return h("p", { className: styles.works }, t.noWorks);
-  return h("ul", { className: styles.works, "aria-label": t.worksLabel },
+  const list = h("ul", { className: styles.works, "aria-label": t.worksLabel },
     listed.map(({ row, documentId }, i) =>
       h("li", { key: documentId },
         h(Link, { href: `/nastavnik/rad/${encodeURIComponent(documentId)}`, prefetch: false }, `${t.work} ${i + 1}`),
-        h("span", { className: styles.submission }, ` · ${submissionHr(row)}`))));
+        h("span", { className: styles.submission }, ` · ${submissionHr(row)}`),
+        marked?.includes(row.studentId) === true
+          ? h("span", { className: styles.accommodation }, ` · ${t.accommodation}`)
+          : null)));
+  if (marked !== null) return list;
+  return h("div", { className: styles.worksArea }, list,
+    h("p", { className: styles.worksNote, role: "status" }, t.accommodationsUnavailable));
 }
 
 /**
@@ -65,10 +80,12 @@ function Works({ works }: { works: readonly AssignmentSubmission[] | null | unde
  * Written with `createElement`, not JSX, like ProcessSummaryView: the unit
  * tests render it without the Next.js compiler (`jsx: preserve`).
  */
-export default function TeacherCourses({ courses, works = {} }: {
+export default function TeacherCourses({ courses, works = {}, accommodations = {} }: {
   courses: readonly TeacherCourse[];
   /** Per assignment id: one row per student with the work and its submission, or null when they could not be read. */
   works?: Readonly<Record<string, readonly AssignmentSubmission[] | null>>;
+  /** Per assignment id: the students whose work is marked with an accommodation, or null when that could not be read. */
+  accommodations?: Readonly<Record<string, readonly string[] | null>>;
 }) {
   if (courses.length === 0) {
     return h("section", { className: styles.empty, "aria-labelledby": "bez-kolegija" },
@@ -101,6 +118,6 @@ export default function TeacherCourses({ courses, works = {} }: {
                 // DAN-310 (M2.4-P02): the next version of this assignment.
                 h(Link, { className: styles.version, href: `/nastavnik/zadatak/${encodeURIComponent(assignment.id)}/uredi`, prefetch: false },
                   messagesHr.teacher.newVersion.link),
-                h(Works, { works: works[assignment.id] })))))),
+                h(Works, { works: works[assignment.id], marked: accommodations[assignment.id] })))))),
     h("p", { className: styles.note }, t.countNote));
 }

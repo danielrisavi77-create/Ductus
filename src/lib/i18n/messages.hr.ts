@@ -631,6 +631,9 @@ export const hr = {
       afterDeadline: "Predano nakon roka",
       none: "Nije predano",
     },
+    // DAN-380 (M2.9-P02): only that the work is marked, never why (D-50, PRODUCT §5).
+    accommodation: "Odobrena prilagodba",
+    accommodationsUnavailable: "Oznake odobrene prilagodbe trenutačno nisu dostupne. Pokušajte ponovno.",
   },
   // DAN-492 (M2.6-P02, N-16), design pregled-radova-v2: only what the read gives (D-202).
   mentoredWorks: {
