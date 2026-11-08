@@ -236,7 +236,7 @@ Svaki od ova četiri PR-a ostavlja `main` zelen, uključujući e2e. Redoslijed j
 
 Na `main` je `InlineNode` samo tekstni čvor (`src/domain/document/schema.ts:110`). Ovi potrošači čitaju `child.text` ili `child.marks` bez provjere tipa, pa bi na navodu pali ili ga tiho izostavili. Dodjela je odluka orkestratora (#1091, zadatak kruga popravka). Ishod za navod je jedan od dva:
 
-- **vidljiv prikaz:** navod se pokazuje u obliku iz `formatInText` za izvor iz istog dokumenta, a navod bez izvora kao vidljiva oznaka (odjeljak 3.3);
+- **vidljiv prikaz:** navod se pokazuje u obliku iz `formatInText` za izvor iz istog dokumenta, a navod bez izvora kao vidljiva oznaka (odjeljak 3.3). Valjan lokator koji `formatInText` odbija (samo razmaci, U+2028, U+2029; `normalizePages` baca `CitationInputError`) prikazuje se kakav je spremljen, bez normalizacije stranica i bez iznimke. Spremljeni bajtovi se ne mijenjaju. Tu prilagodbu `src/domain/citation/format.ts` radi DAN-619, s testom (odjeljak 10, klasa 31);
 - **jedna pozicija bez znakova:** u tekstu za sidra i sukobe navod ne dodaje znakove i ne pomiče pomake, a ostaje zaseban čvor, ne ispušta se iz dokumenta.
 
 Nijedan potrošač navod ne izostavlja tiho, ne pretvara u tekstni čvor i ne baca iznimku na valjanom dokumentu v2.
@@ -245,6 +245,7 @@ Nijedan potrošač navod ne izostavlja tiho, ne pretvara u tekstni čvor i ne ba
 | --- | --- | --- | --- |
 | `normalizeChildren` | `src/domain/document/normalize.ts:34` | navod ostaje zaseban čvor, bajt-jednak; susjedni tekstni čvorovi se ne spajaju preko njega | DAN-619 |
 | `childrenEqual` | `src/domain/document/equality.ts:20` | navodi su jednaki samo uz isti `sourceId` i `locator`; navod nikad nije jednak tekstu | DAN-619 |
+| `documentsEqual`, `contentEqual` (cijeli dokument) | `src/domain/document/equality.ts:44`, :64 | usporedba uključuje cijeli uređeni popis `sources`: dokumenti s jednakim blokovima, a različitim zapisom, brojem ili redoslijedom izvora nisu jednaki (pozivatelji `local-document-saver.ts:587`, `conflict.ts:208`, :335) | DAN-619 |
 | `textBlocksOf` (brzi put nastavnika) | `src/domain/document/text-blocks.ts:20` | vidljiv prikaz u tekstu bloka | DAN-619 |
 | naslov poglavlja | `src/domain/document/chapters.ts:82` | navod u naslovu je nevaljan (`CITATION_NOT_ALLOWED`, klasa 23); na valjanom v2 dokumentu naslov je nepromijenjen | DAN-619 |
 | `wordCount` (sukob) | `src/domain/sync/conflict.ts:300` | jedna pozicija bez znakova | DAN-619 |
@@ -254,7 +255,7 @@ Nijedan potrošač navod ne izostavlja tiho, ne pretvara u tekstni čvor i ne ba
 | `blockText`, `blockSegments` (sidra, D-133) | `src/components/teacher/comment-place.ts:16`, :78 | jedna pozicija bez znakova u citatu i pomacima sidra; u segmentima zaseban dio za prikaz | DAN-620 |
 | `earlierDraftText` | `src/components/editor/earlier-draft.ts:28` | vidljiv prikaz u kopiranom tekstu | DAN-620 |
 
-Svaki potrošač dobiva test na dokumentu v2 s navodom na izvor i sa siročetom: ishod iz tablice, bez iznimke. Korak baze 2 se ne spaja dok svi retci tablice nemaju spojen test (odjeljak 9, točka 4). Novi potrošač `InlineNode` dodan prije koraka baze 2 ulazi u ovu tablicu u istom PR-u.
+Svaki potrošač dobiva test na dokumentu v2 s navodom na izvor i sa siročetom: ishod iz tablice, bez iznimke. Za `documentsEqual` i `contentEqual` test još dodaje, mijenja, briše i premješta izvor bez promjene blokova; ishod je „nisu jednaki”. Korak baze 2 se ne spaja dok svi retci tablice nemaju spojen test (odjeljak 9, točka 4). Novi potrošač `InlineNode` dodan prije koraka baze 2 ulazi u ovu tablicu u istom PR-u.
 
 ## 10. Klase ulaza i obavezni testovi
 
@@ -279,6 +280,7 @@ DAN-619 ima tablični test (jedan redak po klasi i zapisan ishod, uključujući 
 | 28 | format v1 nad v2 radom i obrnuto; `transactionFormat` koji se ne slaže s revizijom nula | odbijeno, ništa upisano |
 | 29 | po jedno izostavljeno obavezno polje za svaku vrstu iz odjeljka 2.1 (npr. `book` bez `publisher`, `article` bez `journal`, `chapter` bez `editors`, `web` bez `accessed`) i za zajednička polja | `SOURCE_FIELD_MISSING` |
 | 30 | `editors` na `chapter` s 0, 1, 20 i 21 osobom | prihvat od 1 do 20; 0 i 21: `EDITORS_INVALID` |
+| 31 | prikaz navoda s lokatorom `" "`, U+2028 i U+2029 (postojeći izvor) | vidljiv prikaz s lokatorom kakav je spremljen; bez iznimke; bajtovi dokumenta nepromijenjeni |
 
 Dodatna svojstva za fast-check:
 - (e) bibliografija je deterministička i ne ovisi o redoslijedu u `sources`;
@@ -305,7 +307,7 @@ Generatori koriste samo sintetičke podatke iz #1711: „Izvor 1”, „str. 12�
 
 ## Poznate granice
 
-- Lokator od samih razmaka (`" "`) je valjan, jer odgovor Q6 ne zabranjuje razmake. Editor ga može obrezati prije umetanja, ali validator ga ne mijenja.
+- Lokator od samih razmaka (`" "`) je valjan, jer odgovor Q6 ne zabranjuje razmake. Editor ga može obrezati prije umetanja, ali validator ga ne mijenja. Prikaz ga pokazuje kakav je spremljen (odjeljak 9.1).
 - U+2028 i U+2029 nisu u skupu ZABRANJENO, jer nisu ni kontrolni znakovi ni znakovi nulte širine. Proširenje skupa promijenilo bi koji su dokumenti valjani, pa se ne radi bez odluke.
 - Izvor bez godine („b. d.”), DOI, ISBN i vrste izvan četiri postojeće nisu u v2. Dodavanje neobaveznog polja ili nove vrste ne mijenja bajtove postojećih dokumenata, ali traži izmjenu ovog ugovora.
 - Granice duljina (odjeljak 2.3) i 500 izvora su izbor ugovora prema odgovoru Q6. Nisu izmjerene na stvarnim radovima.
