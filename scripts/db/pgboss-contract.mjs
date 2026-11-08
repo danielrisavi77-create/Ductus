@@ -18,9 +18,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const PIN = Object.freeze({ version: "12.38.0", schema: 46 });
 export const SCHEMA_NAME = "pgboss";
 export const MIGRATIONS = Object.freeze({
-  owner: "20261105120000_pgboss_owner.sql",
-  schema: "20261105120100_pgboss_schema.sql",
-  access: "20261105120200_pgboss_access.sql",
+  owner: "20261108110000_pgboss_owner.sql",
+  schema: "20261108110100_pgboss_schema.sql",
+  access: "20261108110200_pgboss_access.sql",
 });
 // The owner holds DDL rights only while the plan runs: CREATE on the schema,
 // and on the database because CREATE SCHEMA IF NOT EXISTS checks that first.

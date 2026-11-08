@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -128,4 +128,38 @@ test("strayMentions finds the pgboss schema outside the three migrations, as a w
     ["20261201000100_other.sql", "CREATE TABLE app.pgbossy ();"],
   ]);
   assert.deepEqual(strayMentions(migrations), ["20261201000000_later.sql"]);
+});
+
+// Review c.6721624678, QA c.6721626288: dbmate deletes the ledger row in the
+// same transaction after the down section, and ductus_queue cannot touch
+// public.schema_migrations, so every section has to end as the migrator.
+const ROLE = /^SET LOCAL ROLE (\w+);$/gm;
+const sections = (text) => {
+  const [, rest] = text.split("-- migrate:up\n");
+  const [up, down] = rest.split("-- migrate:down\n");
+  return { up, down };
+};
+const lastRole = (section) => [...section.matchAll(ROLE)].at(-1)?.[1];
+
+test("lastRole reads the role a section ends as", () => {
+  assert.equal(lastRole("SET LOCAL ROLE ductus_queue;\nDROP TABLE x;\nSET LOCAL ROLE ductus_migrator;\n"), "ductus_migrator");
+  assert.equal(lastRole("SET LOCAL ROLE ductus_queue;\nDROP TABLE x;\n"), "ductus_queue");
+  assert.equal(lastRole("SET LOCAL ROLE ductus_migrator;\nSET LOCAL ROLE ductus_queue;\nDROP TABLE x;\n"), "ductus_queue");
+  assert.equal(lastRole("  SET LOCAL ROLE ductus_migrator; -- not a whole line\n"), undefined);
+});
+
+test("every up and down section of the three pg-boss migrations ends as ductus_migrator", () => {
+  for (const [kind, file] of Object.entries(MIGRATIONS)) {
+    const text = readFileSync(`${root}db/migrations/${file}`, "utf8");
+    for (const [part, section] of Object.entries(sections(text))) {
+      assert.equal(lastRole(section), "ductus_migrator", `${kind} ${part}`);
+    }
+  }
+});
+
+test("the three pg-boss migrations run owner, schema, access, one after another", () => {
+  const all = readdirSync(`${root}db/migrations`).filter((name) => name.endsWith(".sql")).sort();
+  const at = [MIGRATIONS.owner, MIGRATIONS.schema, MIGRATIONS.access].map((name) => all.indexOf(name));
+  assert.ok(at[0] >= 0, MIGRATIONS.owner);
+  assert.deepEqual(at, [at[0], at[0] + 1, at[0] + 2]);
 });

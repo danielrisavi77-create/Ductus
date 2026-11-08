@@ -518,3 +518,4 @@ DROP TABLE pgboss.job, pgboss.warning, pgboss.queue_stats, pgboss.job_dependency
 DROP FUNCTION pgboss.create_queue(text, jsonb), pgboss.delete_queue(text), pgboss.job_table_run_async(text, integer, text, text, text),
   pgboss.job_table_run(text, text, text), pgboss.job_table_format(text, text), pgboss.job_now();
 DROP TYPE pgboss.job_state;
+SET LOCAL ROLE ductus_migrator;
