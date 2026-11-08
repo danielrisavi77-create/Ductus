@@ -270,5 +270,27 @@ INSERT INTO step VALUES
   (1623, '12', 'db', $$ SELECT pg_temp.state() $$, 'marks z1.ana,z1.dora,z3.tomo,zm1.ana');
 SELECT * FROM pg_temp.run(1610, 1699);
 
+-- A teacher of another group of the same course is no teacher of the
+-- student's group; Ana's place in a group ends with her as a member, and
+-- Marko's with his teacher role.
+INSERT INTO ref VALUES ('g2', pg_temp.ask('vesna', $$ SELECT institution.create_seminar_group({k1}, 'Grupa 2') $$));
+INSERT INTO step VALUES
+  (1701, '12', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_teacher({g2}, {marko}) $$, 'ok'),
+  (1702, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'null'),
+  (1703, '12', 'marko', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {z1} $$, '0'),
+  (1704, '12', 'vesna', $$ SELECT 'ok' FROM institution.end_group_assignment({g1}, {ana}) $$, 'ok'),
+  (1705, '12', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g2}, {ana}) $$, 'ok'),
+  (1706, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'true'),
+  (1707, '12', 'vesna', $$ SELECT 'ok' FROM institution.end_group_assignment({g2}, {ana}) $$, 'ok'),
+  (1708, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'null'),
+  (1709, '12', 'marko', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {z1} $$, '0'),
+  (1710, '12', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g2}, {ana}) $$, 'ok'),
+  (1711, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'true'),
+  (1712, '12', 'iva', $$ SELECT institution.revoke_teacher_role({marko})::text $$, 'true'),
+  (1713, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'null'),
+  (1714, '12', 'marko', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {z1} $$, '0'),
+  (1715, '12', 'db', $$ SELECT pg_temp.state() $$, 'marks z1.ana,z1.dora,z3.tomo,zm1.ana');
+SELECT * FROM pg_temp.run(1700, 1799);
+
 SELECT * FROM finish();
 ROLLBACK;
