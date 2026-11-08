@@ -87,7 +87,7 @@ describe("GET /api/ready", () => {
       status: "ready",
       capabilities: { database: "ok", storage: "nedostupno", signing: "nedostupno", queue: "nedostupno" },
     });
-    expect(log.mock.calls).toEqual([["readiness", { storage: "STORAGE_DOMAIN", signing: "signing_key_permissions", queue: "QUEUE_WORKER" }]]);
+    expect(logged(log)).toEqual([{ event: "readiness", codes: { storage: "STORAGE_DOMAIN", signing: "signing_key_permissions", queue: "QUEUE_WORKER" } }]);
   });
 
   it("answers 503 with closed words and logs only a code when the database fails", async () => {
@@ -115,7 +115,7 @@ describe("GET /api/ready", () => {
     const response = await GET();
     expect(response.status).toBe(200);
     expect((await response.json()).capabilities.queue).toBe("nedostupno");
-    expect(log.mock.calls).toEqual([["readiness", { queue: "42501" }]]);
+    expect(logged(log)).toEqual([{ event: "readiness", codes: { queue: "42501" } }]);
   });
 
   it("never borrows more than one connection per database probe while probes hang", async () => {
@@ -162,3 +162,11 @@ describe("GET /api/ready", () => {
     expect(body.capabilities.storage).toBe("nedostupno");
   });
 });
+
+// One redacted JSON line per call (DAN-586): the event and its closed codes.
+function logged(log: { mock: { calls: unknown[][] } }): Array<{ event: unknown; codes: unknown }> {
+  return log.mock.calls.map(([line]) => {
+    const parsed = JSON.parse(String(line)) as { event: unknown; fields: { codes: unknown } };
+    return { event: parsed.event, codes: parsed.fields.codes };
+  });
+}

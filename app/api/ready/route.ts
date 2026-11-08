@@ -1,6 +1,7 @@
 import { withActor } from "@/server/db";
 import { evidenceIngestDeps } from "@/server/evidence/ingest-deps";
 import { STORAGE_NOT_CONFIGURED } from "@/server/evidence/payload-reader";
+import { logEvent } from "@/server/log/logger";
 import {
   CAPABILITY_TIMEOUT_MS,
   checkCapabilities,
@@ -104,6 +105,6 @@ function capabilities(): Capability[] {
 export async function GET(): Promise<Response> {
   const report = await checkCapabilities(capabilities());
   const body = { status: report.ready ? "ready" : "unavailable", capabilities: report.capabilities };
-  if (Object.keys(report.codes).length > 0) console.error("readiness", report.codes);
+  if (Object.keys(report.codes).length > 0) logEvent("error", "readiness", { codes: report.codes });
   return Response.json(body, { status: report.ready ? 200 : 503, headers: HEADERS });
 }

@@ -5,6 +5,7 @@ import {
 import { InstitutionRoutedPayloadStore } from "@/adapters/evidence/institution-routed-payload-store";
 import type { InstitutionEvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
 import type { EvidencePayloadLocator, EvidencePayloadStore } from "@/application/ports/evidence-trust";
+import { codesLog } from "@/server/log/logger";
 
 type Env = Readonly<Record<string, string | undefined>>;
 type Log = (message: string, code: string) => void;
@@ -45,7 +46,7 @@ export const STORAGE_NOT_CONFIGURED: ProcessEvidencePayloads = Object.freeze({
  */
 export function createEvidencePayloadReader(
   env: Env = process.env,
-  log: Log = (message, code) => console.error(message, code),
+  log: Log = codesLog,
 ): ProcessEvidencePayloads {
   try {
     return InstitutionRoutedPayloadStore.fromConfig(loadEvidenceStorageConfig(env), {
