@@ -1,6 +1,8 @@
+export { deriveBibliography, formatCitation, type Bibliography, type BibliographyEntry } from "./bibliography";
 export {
   assignYearSuffixes,
   formatBibliographyEntry,
+  formatCitationInText,
   formatInText,
   normalizePages,
   sortBibliography,
