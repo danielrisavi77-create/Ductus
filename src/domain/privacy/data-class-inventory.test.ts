@@ -142,11 +142,13 @@ function coverageErrors(live: Set<string>, inv: { classes: ClassRow[]; tables: T
     const present = wildcard ? [...live].some((t) => t.startsWith(wildcard)) : live.has(row.table);
     if (!present) errors.push(`${row.table}: not created by any migration on main`);
   }
+  // Exactly one row per live table: a wildcard and an exact row may not both claim it.
   for (const table of live) {
-    const covered = inv.tables.some((r) =>
+    const rows = inv.tables.filter((r) =>
       r.table.endsWith(".*") ? table.startsWith(r.table.slice(0, -1)) : r.table === table,
     );
-    if (!covered) errors.push(`${table}: missing from the inventory`);
+    if (rows.length === 0) errors.push(`${table}: missing from the inventory`);
+    if (rows.length > 1) errors.push(`${table}: covered by ${rows.length} rows (${rows.map((r) => r.table).join(", ")})`);
   }
   return errors;
 }
@@ -200,6 +202,7 @@ describe("coverageErrors", () => {
     ["a stale table", [...ok, "| `a.gone` | 2 | |"], "a.gone: not created by any migration on main"],
     ["a stale wildcard", [...ok, "| `z.*` | — | razlog |"], "z.*: not created by any migration on main"],
     ["a table listed twice", [...ok, "| `a.t` | 3 | |"], "a.t: listed twice"],
+    ["a table under a wildcard and its own row", [...ok, "| `q.job` | 27 | |"], "q.job: covered by 2 rows (q.*, q.job)"],
     ["an unknown class", ["| `a.t` | 31 | |", ok[1]], "a.t: unknown class 31"],
     ["no personal data without a reason", ["| `a.t` | — | |", ok[1]], "a.t: no personal data needs a reason"],
   ])("fails on %s", (_case, rows, error) => {
