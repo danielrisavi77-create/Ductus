@@ -19,16 +19,13 @@ const style = parseCitationStyle(fpzgConfig);
 const sourceId = (i: number) => `${i.toString(16).padStart(8, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`;
 const nodeId = (i: number) => `${i.toString(16).padStart(8, "0")}-1111-4111-8111-111111111111`;
 
-const unit = fc.constantFrom("a", "Z", "1", "č", "Ž", "-", " ", "\u{1F600}", " ");
+const unit = fc.constantFrom("a", "Z", "1", "č", "Ž", "-", " ", "\u{1F600}", "\u2028");
 /** A text field with no edge white space: `Izvor` plus generated content. */
 const field = fc.string({ unit, maxLength: 6 }).map((inner) => `Izvor ${inner}1`);
-/** Few names and years, so groups that need suffixes are common. */
 const person = fc.record({ kind: fc.constant("person"), family: fc.constantFrom("Prezime", "prezime", "Drugo"), given: fc.constantFrom("Ime", "ime") });
-const organization = fc.record(
-  { kind: fc.constant("organization"), name: fc.constantFrom("Organizacija", "ORG"), acronym: fc.constantFrom("ORG", "O") },
-  { requiredKeys: ["kind", "name"] },
-);
-/** Mostly one shared author, so groups that need suffixes are common. */
+const orgFields = { kind: fc.constant("organization"), name: fc.constantFrom("Organizacija", "ORG"), acronym: fc.constantFrom("ORG", "O") };
+const organization = fc.record(orgFields, { requiredKeys: ["kind", "name"] });
+/** Mostly one shared author and few years, so groups that need suffixes are common. */
 const authors = fc.oneof(
   { arbitrary: fc.constant([{ kind: "person", family: "Prezime", given: "Ime" }]), weight: 3 },
   { arbitrary: fc.array(fc.oneof(person, organization), { minLength: 1, maxLength: 2 }), weight: 1 },
@@ -49,7 +46,7 @@ const source = fc.oneof(
   fc.record({ type: fc.constant("web"), authors, year, title, url: fc.constant("https://primjer.hr/a"), accessed: fc.constant("2024-02-29") }),
 );
 
-const locator = fc.oneof(fc.constantFrom("str. 12", "9-12", " ", " ", " "), fc.string({ unit, minLength: 1, maxLength: 8 }));
+const locator = fc.oneof(fc.constantFrom("str. 12", "9-12", " ", "\u2028", "\u2029"), fc.string({ unit, minLength: 1, maxLength: 8 }));
 const citation = fc.record(
   { type: fc.constant("citation"), sourceId: fc.nat(40).map(sourceId), locator },
   { requiredKeys: ["type", "sourceId"] },

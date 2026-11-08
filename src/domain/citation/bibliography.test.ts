@@ -4,17 +4,8 @@ import fpzgConfig from "../../../config/faculties/fpzg/citation.json";
 import type { CanonicalDocumentV2, CitationNode, DocumentNodeV2, DocumentSource, NodeId, SourceId } from "../document/schema";
 import { validateVersionedDocument } from "../document/validate";
 import { canonicalizeJcs } from "../forensics/jcs";
-import {
-  assignYearSuffixes,
-  deriveBibliography,
-  formatBibliographyEntry,
-  formatCitation,
-  formatCitationInText,
-  parseCitationStyle,
-  sortBibliography,
-  type BookSource,
-  type Source,
-} from "./index";
+import { assignYearSuffixes, deriveBibliography, formatBibliographyEntry, formatCitation, formatCitationInText } from "./index";
+import { parseCitationStyle, sortBibliography, type BookSource, type Source } from "./index";
 
 /**
  * Input classes K-c1 to K-c11 of DAN-619 (c), contract
@@ -27,10 +18,8 @@ const style = parseCitationStyle(fpzgConfig);
 const id = (i: number) => `${i.toString(16).padStart(8, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa` as SourceId;
 const nodeId = (i: number) => `${i.toString(16).padStart(8, "0")}-1111-4111-8111-111111111111` as NodeId;
 const author = { kind: "person", family: "Prezime", given: "Ime" } as const;
-
 const book = (i: number, extra: Partial<DocumentSource> = {}): DocumentSource =>
   ({ id: id(i), type: "book", authors: [author], year: 2020, title: `Izvor ${i}`, place: "Mjesto", publisher: "Nakladnik", ...extra }) as DocumentSource;
-
 const cite = (i: number, locator?: string): CitationNode =>
   (locator === undefined ? { type: "citation", sourceId: id(i) } : { type: "citation", sourceId: id(i), locator });
 
@@ -72,10 +61,8 @@ describe("deriveBibliography (DAN-619 c)", () => {
   });
 
   it("K-c5: suffixes for groups of 1, 2, 26, 27 and 500 works", () => {
-    const group = (n: number) => {
-      const sources = Array.from({ length: n }, (_, i) => book(i, { title: `Izvor ${String(i).padStart(3, "0")}` }));
-      return doc(sources, sources.map((_, i) => cite(i)));
-    };
+    const titled = (n: number) => Array.from({ length: n }, (_, i) => book(i, { title: `Izvor ${String(i).padStart(3, "0")}` }));
+    const group = (n: number) => doc(titled(n), titled(n).map((_, i) => cite(i)));
     expect(suffixes(group(1))).toEqual([undefined]);
     expect(suffixes(group(2))).toEqual(["a", "b"]);
     const letters = "abcdefghijklmnopqrstuvwxyz".split("");
@@ -117,19 +104,13 @@ describe("deriveBibliography (DAN-619 c)", () => {
   });
 
   it("K-c8 (class 31): locators are shown, blank ones as stored, and the document bytes do not change", () => {
-    const locators = [undefined, "str. 12", "9-12", " ", " ", " "];
+    const locators = [undefined, "str. 12", "9-12", " ", "\u2028", "\u2029"];
     const d = doc([book(1)], locators.map((l) => cite(1, l)));
     const before = canonicalizeJcs(d);
     const bibliography = deriveBibliography(d, style);
     const shown = (d.nodes[1].children as CitationNode[]).map((c) => formatCitation(c, bibliography, style));
-    expect(shown).toEqual([
-      "(Prezime, 2020)",
-      "(Prezime, 2020: str. 12)",
-      "(Prezime, 2020: 9–12)",
-      "(Prezime, 2020:  )",
-      "(Prezime, 2020:  )",
-      "(Prezime, 2020:  )",
-    ]);
+    const blank = ["(Prezime, 2020:  )", "(Prezime, 2020: \u2028)", "(Prezime, 2020: \u2029)"];
+    expect(shown).toEqual(["(Prezime, 2020)", "(Prezime, 2020: str. 12)", "(Prezime, 2020: 9–12)", ...blank]);
     expect(formatCitation(cite(9), bibliography, style)).toBeUndefined();
     expect(canonicalizeJcs(d)).toBe(before);
   });
