@@ -137,6 +137,17 @@ function scrubTokenRun(run: string): string {
   return /[A-Za-z]/.test(run) && /\d/.test(run) ? REDACTED : run;
 }
 
+/**
+ * A sensitive key loses its value. A harmless key keeps it, but the value is
+ * scanned again, so `request: password=x` cannot hide a pair inside a pair.
+ * Each pass reads a strictly shorter text, so the work stays bounded.
+ */
+function scrubPair(_match: string, quote: string, key: string, separator: string, value: string): string {
+  if (!isSensitiveKey(key)) return `${quote}${key}${quote}${separator}${value.replace(KEY_VALUE, scrubPair)}`;
+  const valueQuote = value.startsWith('"') || value.startsWith("'") ? value[0] : "";
+  return `${quote}${key}${quote}${separator}${valueQuote}${REDACTED}${valueQuote}`;
+}
+
 /** Scans free text in a fixed order; each step only ever removes data. */
 export function redactString(text: string, max = MAX_STRING): string {
   // Scanning cost stays bounded: only the head is read, and a word cut in two
@@ -147,15 +158,12 @@ export function redactString(text: string, max = MAX_STRING): string {
     .replace(AUTH_SCHEME, (_match, scheme: string) => `${scheme} ${REDACTED}`)
     .replace(JWT, REDACTED)
     .replace(HEADER_LINE, (_match, name: string, separator: string) => `${name}${separator}${REDACTED}`)
-    .replace(KEY_VALUE, (match, quote: string, key: string, separator: string, value: string) => {
-      if (!isSensitiveKey(key)) return match;
-      const valueQuote = value.startsWith('"') || value.startsWith("'") ? value[0] : "";
-      return `${quote}${key}${quote}${separator}${valueQuote}${REDACTED}${valueQuote}`;
-    })
+    .replace(KEY_VALUE, scrubPair)
     .replace(QUOTED_WORDS, (match) => (match.startsWith("„") ? `„${REDACTED}“` : `"${REDACTED}"`))
     .replace(EMAIL, "[email]")
-    .replace(DIGIT_RUN, "[number]")
-    .replace(TOKEN_RUN, scrubTokenRun);
+    // Whole tokens first, so a digit run cannot cut a token below its shape.
+    .replace(TOKEN_RUN, scrubTokenRun)
+    .replace(DIGIT_RUN, "[number]");
   return scanned.length > max || head !== text ? `${scanned.slice(0, max)}[cut]` : scanned;
 }
 
@@ -221,8 +229,11 @@ function walkObject(value: object, depth: number, ctx: Walk): Json {
   if (value instanceof Map) return entriesObject(value.entries(), depth, ctx);
   if (value instanceof Set) return walk([...value], depth, ctx);
   if (Array.isArray(value)) {
-    const items = value.slice(0, MAX_ENTRIES).map((_item, index) => walk(read(value, index), depth + 1, ctx));
-    return value.length > MAX_ENTRIES ? [...items, `[more ${value.length - MAX_ENTRIES}]`] : items;
+    // Array.from on the plain Array builds a plain array: a subclass's species
+    // and its own toJSON never reach the line.
+    const length = value.length;
+    const items: Json[] = Array.from({ length: Math.min(length, MAX_ENTRIES) }, (_item, index) => walk(read(value, index), depth + 1, ctx));
+    return length > MAX_ENTRIES ? [...items, `[more ${length - MAX_ENTRIES}]`] : items;
   }
   return entriesObject(
     Object.keys(value).map((key) => [key, read(value, key)]),

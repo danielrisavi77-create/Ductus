@@ -99,6 +99,10 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
     ["K13 typographic quote", `naslov „Uvod u kanarinac rad” ostaje`],
     ["K13 Croatian keys", { lozinka: CANARY, Tekst: CANARY, sadrzaj: CANARY, prezime: CANARY, adresa: CANARY }],
     ["K13 token across the scan limit", `${"a ".repeat(495)}${CANARY}${CANARY}`],
+    // K14 Codex round 2: a pair inside a harmless pair, a species array, a token cut by a digit run
+    ["K14 pair inside a pair", new Error(`request: password=${CANARY}`)],
+    ["K14 text inside a pair", `request: text=kanarinac`],
+    ["K14 token with a digit run", { stage: "kanarinacABCDEFGHIJKLMN123456789" }],
   ];
 
   it.each(rows)("%s never shows the canary", (_name, value) => {
@@ -107,9 +111,26 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
 
   it("drops a short secret by its key alone, where no token shape gives it away", () => {
     const short = "zeleni";
-    for (const value of [{ password: short }, { "X-Api-Key": short }, `password=${short}`, `Cookie: ${short}`, `{"email":"${short}"}`, { lozinka: short }, { Prezime: short }, `tekst=${short}`]) {
+    for (const value of [{ password: short }, { "X-Api-Key": short }, `password=${short}`, `Cookie: ${short}`, `{"email":"${short}"}`, { lozinka: short }, { Prezime: short }, `tekst=${short}`, `request: password=${short}`, new Error(`request: text=${short}`)]) {
       expect(JSON.stringify(redact(value))).not.toContain(short);
     }
+  });
+
+  it("drops every part of a token that holds a long digit run", () => {
+    const out = JSON.stringify(redact({ stage: "kanarinacABCDEFGHIJKLMN123456789" }));
+    expect(out).not.toContain("ABCDEFGHIJKLMN");
+    expect(out).not.toContain("123456789");
+  });
+
+  it("builds a plain array, so an array subclass cannot bring back its own toJSON", () => {
+    class WorkArray extends Array {
+      toJSON() {
+        return { password: "zeleni" };
+      }
+    }
+    const out = redact({ items: WorkArray.from(["context"]) }) as { items: unknown };
+    expect(Object.getPrototypeOf(out.items)).toBe(Array.prototype);
+    expect(JSON.stringify(out)).toBe('{"items":["context"]}');
   });
 
   it("reads a bounded number of values when one object is shared many times", () => {

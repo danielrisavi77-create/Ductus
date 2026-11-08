@@ -67,6 +67,23 @@ describe("canary through every server log path", () => {
     expect(printed()).toContain("Ductus cannot start");
     expect(printed()).not.toContain("kanarinac");
   });
+
+  it("createLogger with a pair inside a pair, an array subclass and a token with a digit run", () => {
+    class WorkArray extends Array {
+      toJSON() {
+        return { text: `Uvod ${CANARY}`, password: "zeleni" };
+      }
+    }
+    const lines: string[] = [];
+    createLogger((_level, line) => lines.push(line), () => new Date(0))("error", "x", {
+      error: new Error("request: password=zeleni"),
+      note: "request: text=Uvod",
+      items: WorkArray.from(["context"]),
+      stage: "kanarinacABCDEFGHIJKLMN123456789",
+    });
+    expect(lines.join("")).toContain("context");
+    for (const part of ["zeleni", "Uvod", "kanarinac", "ABCDEFGHIJKLMN", "123456789"]) expect(lines.join("")).not.toContain(part);
+  });
 });
 
 describe("logger shape", () => {
