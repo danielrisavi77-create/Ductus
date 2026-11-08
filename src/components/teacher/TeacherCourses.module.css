@@ -126,8 +126,20 @@
 }
 
 /* DAN-332 PR 4: the state of a submission is text in the colour of the list, never a colour of its own (D-128). */
-.submission {
+.submission,
+.accommodation {
   white-space: nowrap;
+}
+
+/* DAN-380: the list and a note that the accommodation marks could not be read. */
+.worksArea {
+  grid-area: works;
+}
+
+.worksNote {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
 }
 
 .note {

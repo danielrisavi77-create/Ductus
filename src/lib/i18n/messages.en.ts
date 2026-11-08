@@ -629,6 +629,8 @@ const en = {
       afterDeadline: "Submitted after the deadline",
       none: "Not submitted",
     },
+    accommodation: "Approved accommodation",
+    accommodationsUnavailable: "Approved accommodation marks are not available right now. Please try again.",
   },
   // DAN-492 (M2.6-P02, N-16), design pregled-radova-v2: only what the read gives (D-202).
   mentoredWorks: {

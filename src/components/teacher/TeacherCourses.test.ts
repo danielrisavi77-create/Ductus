@@ -25,8 +25,11 @@ const COURSES: TeacherCourse[] = [
   { id: "00000000-0000-4000-8000-0000000000c2", name: "Kolegij B", academicYear: "2025/2026", aiPolicy: "prohibited", assignments: [] },
 ];
 
-const render = (courses: TeacherCourse[], works?: Record<string, AssignmentSubmission[] | null>) =>
-  renderToStaticMarkup(h(TeacherCourses, { courses, works }));
+const render = (
+  courses: TeacherCourse[],
+  works?: Record<string, AssignmentSubmission[] | null>,
+  accommodations?: Record<string, string[] | null>,
+) => renderToStaticMarkup(h(TeacherCourses, { courses, works, accommodations }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const MINUTE = "2026-11-02T13:32:00.000Z";
 /** A row of R1 (DAN-332): not submitted unless `afterDeadline` is given. */
@@ -149,6 +152,54 @@ describe("TeacherCourses (Z3 A)", () => {
     });
   });
 
+  describe("the accommodation mark (DAN-380 M2.9-P02, #1091 c.6725196643)", () => {
+    const A1 = "00000000-0000-4000-8000-0000000000a1";
+    const A2 = "00000000-0000-4000-8000-0000000000a2";
+    const E = (n: number) => `00000000-0000-4000-8000-0000000000e${n}`;
+    const items = (html: string) => [...html.matchAll(/<li>(.*?)<\/li>/g)].map((m) => text(m[1]!).trim());
+    const works = { [A2]: [row(E(1), "rad-1", false), row(E(2), "rad-2"), row(E(3), "rad-3", true)] };
+
+    it("M1: says beside a marked work that it is marked, after its state, and nothing beside the others", () => {
+      expect(items(render(COURSES, works, { [A2]: [E(2)] }))).toEqual([
+        `${t.work} 1 · ${t.submission.onTime}`,
+        `${t.work} 2 · ${t.submission.none} · ${t.accommodation}`,
+        `${t.work} 3 · ${t.submission.afterDeadline}`,
+      ]);
+    });
+
+    it("M2: a failed read is said once below the list and never drawn as not marked", () => {
+      const html = render(COURSES, works, { [A2]: null });
+      expect(text(html)).toContain(t.accommodationsUnavailable);
+      expect(html.split(t.accommodationsUnavailable).length - 1).toBe(1);
+      expect(html).toMatch(/<p[^>]*role="status"[^>]*>Oznake/);
+      expect(text(html)).not.toContain(` · ${t.accommodation}`);
+      expect(items(html)).toHaveLength(3);
+    });
+
+    it("M3: no read asked, no list, or works that failed: no mark and no note", () => {
+      for (const html of [
+        render(COURSES, works),
+        render(COURSES, { [A2]: [] }, { [A2]: null }),
+        render(COURSES, { [A2]: null }, { [A2]: null }),
+      ]) {
+        expect(text(html)).not.toContain(t.accommodation);
+        expect(text(html)).not.toContain(t.accommodationsUnavailable);
+      }
+    });
+
+    it("M4: a mark never moves to another assignment or to a student without a work", () => {
+      const html = render(COURSES, { [A2]: [row(E(1), "rad-a2"), row(E(2), null)], [A1]: [row(E(1), "rad-a1")] },
+        { [A1]: [E(1), E(2)], [A2]: [] });
+      expect(items(html)).toEqual([`${t.work} 1 · ${t.submission.none}`, `${t.work} 1 · ${t.submission.none} · ${t.accommodation}`]);
+    });
+
+    it("M5: shows only that the work is marked: no student id, reason, tone or colour", () => {
+      const html = render(COURSES, works, { [A2]: [E(1), E(2), E(3)] });
+      for (const hidden of [E(1), E(2), E(3), "data-tone", "style=", "color", "razlog"]) expect(html).not.toContain(hidden);
+      expect(html.split(t.accommodation).length - 1).toBe(3);
+    });
+  });
+
   // DAN-310 (M2.4-P01): every course, with or without assignments, offers a further one in itself.
   it("links each course to a new assignment in that course", () => {
     const html = render(COURSES);
@@ -164,6 +215,8 @@ describe("TeacherCourses (Z3 A)", () => {
       row("00000000-0000-4000-8000-0000000000e2", "e", false), row("00000000-0000-4000-8000-0000000000e3", "f", true)],
       "00000000-0000-4000-8000-0000000000a1": null };
     expect(findForbiddenTerms(text(render(COURSES)) + text(render([])) + text(render(COURSES, works))
-      + text(render(COURSES, { "00000000-0000-4000-8000-0000000000a1": [] })))).toEqual([]);
+      + text(render(COURSES, { "00000000-0000-4000-8000-0000000000a1": [] }))
+      + text(render(COURSES, works, { "00000000-0000-4000-8000-0000000000a2": ["00000000-0000-4000-8000-0000000000e1"] }))
+      + text(render(COURSES, works, { "00000000-0000-4000-8000-0000000000a2": null })))).toEqual([]);
   });
 });
