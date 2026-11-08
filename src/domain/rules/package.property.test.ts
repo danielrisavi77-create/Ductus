@@ -7,7 +7,9 @@ import { parseRulePackage, RULE_PACKAGE_FORMAT } from "./package";
  * Properties over the input classes of the contract (#1091): every generated
  * valid package passes unchanged (K1), and one unknown field, one missing
  * field or one mistyped value on an object of any level (root, profile, source,
- * rule; each drawn evenly) rejects the whole package (K3, K4, K5). Synthetic values only.
+ * rule; each drawn evenly) rejects the whole package (K3, K4, K5). Each run
+ * works on its own clone: fast-check reuses a generated value while shrinking.
+ * Synthetic values only.
  */
 
 type Node = Record<string, unknown>;
@@ -65,6 +67,10 @@ function level(pkg: Pkg, name: (typeof LEVELS)[number]): Node[] {
 const node = fc.constantFrom(...LEVELS);
 const objectAt = (pkg: unknown, name: (typeof LEVELS)[number], at: number): Node => pick(level(pkg as Pkg, name), at);
 
+/** Any short name, plus the keys of Object.prototype a validator may trip on. */
+const PROTO_KEYS = ["__proto__", "constructor", "prototype", "toString", "hasOwnProperty", "valueOf"] as const;
+const unknownKey = fc.oneof(fc.stringMatching(/^[a-zA-Z_]{1,12}$/), fc.constantFrom(...PROTO_KEYS));
+
 describe("parseRulePackage property", () => {
   it("K1: every generated valid package passes and comes back equal", () => {
     fc.assert(
@@ -74,20 +80,32 @@ describe("parseRulePackage property", () => {
     );
   });
 
+  /**
+   * The key is added as an own data property, as JSON.parse would: a plain
+   * `target[key] = 1` with `__proto__` only calls the inherited setter, adds no
+   * key, and the still valid package passes (#1747, seed 2027008327).
+   */
+  const k3 = fc.property(rulePackage, node, fc.nat(), unknownKey, (generated, lvl, at, key) => {
+    const pkg = structuredClone(generated);
+    const target = objectAt(pkg, lvl, at);
+    fc.pre(!Object.hasOwn(target, key));
+    Object.defineProperty(target, key, { value: 1, enumerable: true, writable: true, configurable: true });
+    expect(Object.hasOwn(target, key)).toBe(true);
+    expect(parseRulePackage(pkg)).toMatchObject({ ok: false, reason: "unknown_field" });
+  });
+
   it("K3: an unknown field on any object rejects the package", () => {
-    fc.assert(
-      fc.property(rulePackage, node, fc.nat(), fc.stringMatching(/^[a-zA-Z_]{1,12}$/), (pkg, lvl, at, key) => {
-        const target = objectAt(pkg, lvl, at);
-        fc.pre(!Object.hasOwn(target, key));
-        target[key] = 1;
-        expect(parseRulePackage(pkg)).toMatchObject({ ok: false, reason: "unknown_field" });
-      }),
-    );
+    fc.assert(k3);
+  });
+
+  it("K3: the run that found #1747 (seed 2027008327) rejects", () => {
+    fc.assert(k3, { seed: 2027008327 });
   });
 
   it("K4: removing any field of any object rejects the package", () => {
     fc.assert(
-      fc.property(rulePackage, node, fc.nat(), fc.nat(), (pkg, lvl, at, field) => {
+      fc.property(rulePackage, node, fc.nat(), fc.nat(), (generated, lvl, at, field) => {
+        const pkg = structuredClone(generated);
         const target = objectAt(pkg, lvl, at);
         delete target[pick(Object.keys(target), field)];
         expect(parseRulePackage(pkg)).toMatchObject({ ok: false, reason: "missing_field" });
@@ -97,7 +115,8 @@ describe("parseRulePackage property", () => {
 
   it("K5: a value of the wrong type in any field rejects the package", () => {
     fc.assert(
-      fc.property(rulePackage, node, fc.nat(), fc.nat(), (pkg, lvl, at, field) => {
+      fc.property(rulePackage, node, fc.nat(), fc.nat(), (generated, lvl, at, field) => {
+        const pkg = structuredClone(generated);
         const target = objectAt(pkg, lvl, at);
         const key = pick(Object.keys(target), field);
         target[key] = typeof target[key] === "boolean" ? "x" : true;

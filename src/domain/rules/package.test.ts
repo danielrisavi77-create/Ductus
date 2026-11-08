@@ -83,6 +83,61 @@ const rows: [klass: string, name: string, edit: (p: Json) => unknown, reason: Ru
   ["K13", "C1 control in part", (p) => ((rule(p, "required-parts").parts = ["Uvod\u0085"]), p), "bad_text", "package.profiles[0].rules[5].parts[0]"],
 ];
 
+/**
+ * K3 over the keys of Object.prototype (#1747): a key only counts when it is
+ * an own property. JSON.parse and defineProperty both create one, so each must
+ * reject at every level; a plain assignment of a primitive to `__proto__` hits
+ * the inherited setter and creates nothing.
+ */
+const LEVELS: [level: string, target: (p: Json) => Json][] = [
+  ["package", (p) => p],
+  ["package.profiles[0]", (p) => profile0(p)],
+  ["package.profiles[0].sources[0]", (p) => profile0(p).sources[0]],
+  ["package.profiles[0].rules[0]", (p) => profile0(p).rules[0]],
+];
+const PROTO_KEYS = ["__proto__", "constructor", "prototype"];
+
+/** Rewrites the target's JSON text with the key first, as a package file would carry it. */
+function viaJson(p: Json, target: (p: Json) => Json, key: string): Json {
+  const marker = "markerKeyForTest";
+  target(p)[marker] = 1;
+  const text = JSON.stringify(p).replace(`"${marker}":1`, `${JSON.stringify(key)}:1`);
+  return JSON.parse(text) as Json;
+}
+
+const protoRows = LEVELS.flatMap(([path, target]) =>
+  PROTO_KEYS.flatMap((key) => [
+    [path, key, "JSON.parse", (p: Json) => viaJson(p, target, key)] as const,
+    [
+      path,
+      key,
+      "defineProperty",
+      (p: Json) => (Object.defineProperty(target(p), key, { value: 1, enumerable: true, writable: true, configurable: true }), p),
+    ] as const,
+  ]),
+);
+
+describe("parseRulePackage, keys of Object.prototype", () => {
+  it.each(protoRows)("K3 %s own key %s via %s is rejected", (path, key, _how, edit) => {
+    const input = edit(base());
+    expect(Object.hasOwn(LEVELS.find(([l]) => l === path)![1](input), key)).toBe(true);
+    expect(parseRulePackage(input)).toEqual({ ok: false, reason: "unknown_field", path });
+  });
+
+  it.each(LEVELS)("K2 %s whose prototype was replaced by assigning __proto__ is rejected", (path, target) => {
+    const input = base();
+    target(input).__proto__ = {};
+    expect(parseRulePackage(input)).toEqual({ ok: false, reason: "not_object", path });
+  });
+
+  it.each(LEVELS)("K1 %s: assigning a primitive to __proto__ adds no key, so the package still passes", (_path, target) => {
+    const input = base();
+    target(input).__proto__ = 1;
+    expect(Object.hasOwn(target(input), "__proto__")).toBe(false);
+    expect(parseRulePackage(input)).toEqual({ ok: true, value: fixture });
+  });
+});
+
 describe("parseRulePackage", () => {
   it("K1: accepts the synthetic fixture and returns an equal, frozen copy", () => {
     const input = base();
