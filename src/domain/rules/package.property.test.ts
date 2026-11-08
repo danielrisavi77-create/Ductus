@@ -1,0 +1,104 @@
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+
+import { parseRulePackage, RULE_PACKAGE_FORMAT } from "./package";
+
+/**
+ * Properties over the input classes of the contract (#1091): every generated
+ * valid package passes unchanged (K1), and one unknown field, one missing
+ * field or one mistyped value on any object at any depth rejects the whole
+ * package (K3, K4, K5). Synthetic values only.
+ */
+
+type Node = Record<string, unknown>;
+
+const slug = fc.stringMatching(/^[a-z0-9][a-z0-9-]{1,20}$/);
+const label = fc.stringMatching(/^[A-Za-zčćžšđ][A-Za-zčćžšđ ]{0,30}$/);
+const source = fc.record({ title: label, url: slug.map((s) => `https://example.org/${s}`) });
+
+const rules = (sources: number) => {
+  const at = fc.nat({ max: sources - 1 });
+  const pair = (hi: number) => fc.tuple(fc.nat({ max: hi }), fc.nat({ max: hi })).map(([a, b]) => [Math.min(a, b), Math.max(a, b, 1)]);
+  const all = [
+    fc.tuple(pair(500_000), at).map(([[min, max], s]) => ({ kind: "word-range", min, max, source: s })),
+    fc.tuple(pair(2_000), at).map(([[min, max], s]) => ({ kind: "page-range", min, max, source: s })),
+    fc.tuple(fc.integer({ min: 1, max: 1_000 }), at).map(([count, s]) => ({ kind: "min-sources", count, source: s })),
+    fc.tuple(label, fc.double({ min: 6, max: 72, noNaN: true }), at).map(([family, sizePt, s]) => ({ kind: "font", family, sizePt, source: s })),
+    fc.tuple(fc.double({ min: 1, max: 3, noNaN: true }), at).map(([value, s]) => ({ kind: "line-spacing", value, source: s })),
+    fc.tuple(fc.uniqueArray(label, { minLength: 1, maxLength: 5 }), at).map(([parts, s]) => ({ kind: "required-parts", parts, source: s })),
+  ];
+  return fc.subarray(all, { minLength: 1 }).chain((picked) => fc.tuple(...picked));
+};
+
+const profile = fc.array(source, { minLength: 1, maxLength: 5 }).chain((sources) =>
+  fc.record({
+    id: slug,
+    label,
+    workTypes: fc.uniqueArray(slug, { minLength: 1, maxLength: 4 }),
+    checkedAt: fc.date({ min: new Date("2020-01-01"), max: new Date("2030-12-31"), noInvalidDate: true }).map((d) => d.toISOString().slice(0, 10)),
+    sources: fc.constant(sources),
+    rules: rules(sources.length),
+  }),
+);
+
+const rulePackage = fc.record({
+  format: fc.constant(RULE_PACKAGE_FORMAT),
+  name: slug,
+  version: fc.tuple(fc.nat(99), fc.nat(99), fc.nat(99)).map((v) => v.join(".")),
+  institution: fc.stringMatching(/^[a-z0-9-]{2,32}$/),
+  profiles: fc.uniqueArray(profile, { minLength: 1, maxLength: 4, selector: (p) => p.id }),
+});
+
+/** Every plain object in the package, the root included. */
+function objects(value: unknown, out: Node[] = []): Node[] {
+  if (Array.isArray(value)) value.forEach((v) => objects(v, out));
+  else if (typeof value === "object" && value !== null) {
+    out.push(value as Node);
+    Object.values(value).forEach((v) => objects(v, out));
+  }
+  return out;
+}
+
+const pick = <T,>(items: readonly T[], at: number): T => items[at % items.length] as T;
+
+describe("parseRulePackage property", () => {
+  it("K1: every generated valid package passes and comes back equal", () => {
+    fc.assert(
+      fc.property(rulePackage, (pkg) => {
+        expect(parseRulePackage(pkg)).toEqual({ ok: true, value: pkg });
+      }),
+    );
+  });
+
+  it("K3: an unknown field on any object rejects the package", () => {
+    fc.assert(
+      fc.property(rulePackage, fc.nat(), fc.stringMatching(/^[a-zA-Z_]{1,12}$/), (pkg, at, key) => {
+        const node = pick(objects(pkg), at);
+        fc.pre(!Object.hasOwn(node, key));
+        node[key] = 1;
+        expect(parseRulePackage(pkg)).toMatchObject({ ok: false, reason: "unknown_field" });
+      }),
+    );
+  });
+
+  it("K4: removing any field of any object rejects the package", () => {
+    fc.assert(
+      fc.property(rulePackage, fc.nat(), fc.nat(), (pkg, at, field) => {
+        const node = pick(objects(pkg), at);
+        delete node[pick(Object.keys(node), field)];
+        expect(parseRulePackage(pkg)).toMatchObject({ ok: false, reason: "missing_field" });
+      }),
+    );
+  });
+
+  it("K5: a value of the wrong type in any field rejects the package", () => {
+    fc.assert(
+      fc.property(rulePackage, fc.nat(), fc.nat(), (pkg, at, field) => {
+        const node = pick(objects(pkg), at);
+        const key = pick(Object.keys(node), field);
+        node[key] = typeof node[key] === "boolean" ? "x" : true;
+        expect(parseRulePackage(pkg).ok).toBe(false);
+      }),
+    );
+  });
+});
