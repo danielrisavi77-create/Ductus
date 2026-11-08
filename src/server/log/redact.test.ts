@@ -47,6 +47,9 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
     ["K4 key=value", `retry with token=${CANARY}&x=1`],
     ["K4 key: value", `cookie: ${CANARY}`],
     ["K4 quoted key", `{"password":"${CANARY}"}`],
+    ["K4 quoted words under a key", new Error(`{"text":"Uvod u kanarinac povijest"}`)],
+    ["K4 escaped quote in a value", `{"password":"a\\" b kanarinac"}`],
+    ["K4 cookie header line", `Cookie: a=1; b=kanarinac`],
     ["K4 email in text", `sent to kanarinac.student@example.test`],
     // Joined at run time so the secret scanner does not read an invented JWT as a real one.
     ["K4 jwt", `id ${["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiJrYW5hcmluYWMifQ", "kanarinacSig0123"].join(".")}`],
@@ -56,6 +59,7 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
     ["K5 url userinfo", `postgres://app:${CANARY}@db.example.test/ductus`],
     ["K5 url fragment", `https://example.test/a#${CANARY}`],
     ["K5 URL object", new URL(`https://example.test/a?code=${CANARY}`)],
+    ["K5 URL object path", { url: new URL(`https://example.test/${CANARY}`) }],
     // K6 headers in every container
     ["K6 Headers", new Headers({ authorization: `Bearer ${CANARY}`, cookie: `a=${CANARY}` })],
     ["K6 Map", new Map([["Cookie", CANARY]])],
@@ -106,6 +110,16 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
     for (const value of [{ password: short }, { "X-Api-Key": short }, `password=${short}`, `Cookie: ${short}`, `{"email":"${short}"}`, { lozinka: short }, { Prezime: short }, `tekst=${short}`]) {
       expect(JSON.stringify(redact(value))).not.toContain(short);
     }
+  });
+
+  it("reads a bounded number of values when one object is shared many times", () => {
+    let value: unknown = { stage: "context" };
+    for (let i = 0; i < 8; i += 1) value = Array(10).fill(value);
+    const started = performance.now();
+    const out = JSON.stringify(redact(value));
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(out).toContain("[budget]");
+    expect(out.split('"context"').length - 1).toBeLessThan(2000);
   });
 
   it("covers a cyclic object and a cyclic cause chain without throwing", () => {
