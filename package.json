@@ -20,7 +20,7 @@
     "test:e2e:login": "playwright test --config playwright.login.config.ts",
     "test:local:browser": "node --test scripts/local/bootstrap-accounts.test.mjs",
     "test:skills": "node --test .claude/skills/run-ductus/process-command.test.mjs .agents/skills/run-ductus/process-command.test.mjs",
-    "test:local": "node --test db/local/psql-target.test.mjs scripts/local/up.test.mjs scripts/local/provision-teacher.test.mjs scripts/local/login-e2e-evidence.test.mjs scripts/local/login-e2e-https.test.mjs scripts/local/login-e2e-origin.test.mjs scripts/db/provision-auth.test.mjs scripts/db/provision-worker.test.mjs scripts/local/native/native.test.mjs scripts/db/native-db.test.mjs",
+    "test:local": "node --test db/local/psql-target.test.mjs scripts/local/up.test.mjs scripts/local/provision-teacher.test.mjs scripts/local/login-e2e-evidence.test.mjs scripts/local/login-e2e-https.test.mjs scripts/local/login-e2e-origin.test.mjs scripts/db/provision-auth.test.mjs scripts/db/provision-worker.test.mjs scripts/db/pgboss-contract.test.mjs scripts/local/native/native.test.mjs scripts/db/native-db.test.mjs",
     "prepare": "lefthook install",
     "test:integration": "vitest run --project integration",
     "stack:up": "docker compose up -d --build --wait",

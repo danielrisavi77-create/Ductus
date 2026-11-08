@@ -136,6 +136,36 @@ test("D4: the exception lists are disjoint, each with a reason, and the canary r
   assert.ok(!Object.hasOwn(INLINE_RULES, FIXTURES.badRule));
 });
 
+test("DAN-517: prefer-timestamp-tz is acknowledged inline, never excluded", () => {
+  const table = "CREATE TABLE t (id bigint PRIMARY KEY, at timestamp without time zone);";
+  const ignore = "-- squawk-ignore prefer-timestamp-tz";
+  const cases = [
+    // K1: no inline line, so the lint sees the statement and squawk reports the rule.
+    { label: "K1 without the line", up: table, accepted: true },
+    // K2: the listed line acknowledges that one statement.
+    { label: "K2 with the line", up: `${ignore}\n${table}`, accepted: true },
+    { label: "K2 indented line", up: `    ${ignore}\n${table}`, accepted: true },
+    { label: "K2 with another listed rule", up: `-- squawk-ignore prefer-timestamp-tz, ban-drop-constraint\n${table}`, accepted: true },
+    // K3: a rule that is not in INLINE_RULES is still refused, alone or next to this one.
+    { label: "K3 unlisted rule", up: `-- squawk-ignore ban-drop-column\n${table}`, accepted: false },
+    { label: "K3 excluded rule inline", up: `-- squawk-ignore prefer-bigint-over-int\n${table}`, accepted: false },
+    { label: "K3 with an unlisted rule", up: `-- squawk-ignore prefer-timestamp-tz, ban-drop-column\n${table}`, accepted: false },
+    { label: "file wide", up: `-- squawk-ignore-file prefer-timestamp-tz\n${table}`, accepted: false },
+    { label: "upper case", up: `-- SQUAWK-IGNORE prefer-timestamp-tz\n${table}`, accepted: false },
+    { label: "trailing text", up: `${table} ${ignore}`, accepted: false },
+    { label: "near miss", up: `-- squawk-ignore prefer-timestamptz\n${table}`, accepted: false },
+  ];
+  for (const { label, up, accepted } of cases) {
+    if (accepted) assert.ok(upSection(migration(up)).includes(table), label);
+    else assert.throws(() => upSection(migration(up)), Error, label);
+  }
+  assert.ok(Object.hasOwn(INLINE_RULES, "prefer-timestamp-tz"));
+  // K4: the global exclusion is unchanged, so without the line squawk reports the rule.
+  assert.deepEqual(Object.keys(EXCLUDED_RULES), ["require-lock-timeout", "require-statement-timeout", "prefer-bigint-over-int"]);
+  const exclude = squawkArgs("c.toml", "x.sql").find((arg) => arg.startsWith("--exclude="));
+  assert.ok(!exclude.split("=")[1].split(",").includes("prefer-timestamp-tz"));
+});
+
 test("B1, B6: only migrations the base lacks or that differ from it are selected", () => {
   const base = files({ "20261001000000_a.sql": "a", "20261003000000_c.sql": "c" });
   const head = files({
