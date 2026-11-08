@@ -29,10 +29,14 @@ const local = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   return {
     editor: null as unknown,
-    submitted: false,
+    /** The provider's saver snapshot; the hook reads it through the real `submittedOf`. */
+    snapshot: null as null | Record<string, unknown>,
     listeners,
-    set(change: { submitted?: boolean }) {
-      if (change.submitted !== undefined) this.submitted = change.submitted;
+    set(change: { submitted?: boolean; snapshot?: Record<string, unknown> }) {
+      if (change.submitted !== undefined) {
+        this.snapshot = { state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: change.submitted ? "submission" : null, refused: false, submitted: change.submitted };
+      }
+      if (change.snapshot !== undefined) this.snapshot = change.snapshot;
       for (const listener of listeners) listener();
     },
   };
@@ -40,6 +44,7 @@ const local = vi.hoisted(() => {
 
 vi.mock("./LocalDocument", async () => {
   const { useSyncExternalStore } = await import("react");
+  const { submittedOf } = await import("./document-saver");
   const subscribe = (listener: () => void) => {
     local.listeners.add(listener);
     return () => local.listeners.delete(listener);
@@ -47,8 +52,8 @@ vi.mock("./LocalDocument", async () => {
   return {
     useLocalEditor: () => useSyncExternalStore(subscribe, () => local.editor),
     useLocalSignedOut: () => false,
-    // Stands for `snapshot.closedBy === "submission"` in the provider.
-    useLocalSubmitted: () => useSyncExternalStore(subscribe, () => local.submitted),
+    // The provider's own rule over the snapshot it holds (`useLocalSubmitted`).
+    useLocalSubmitted: () => useSyncExternalStore(subscribe, () => submittedOf(local.snapshot as never)),
   };
 });
 
@@ -214,7 +219,7 @@ beforeAll(() => { document = installDom(); });
 beforeEach(() => {
   editor = newEditor();
   local.editor = editor;
-  local.submitted = false;
+  local.snapshot = null;
   container = (document.createElement as (tag: string) => FakeElement)("div");
   // A submitted work makes no live request (O2); nothing here may reach the network.
   fetchSpy = vi.fn(() => Promise.reject(new Error("no request expected")));
@@ -255,7 +260,7 @@ describe("CommentPanel after the submission (DAN-215, K7c/K7d)", () => {
   });
 
   it("K7d: submitted, the submitted revision not known: no mark at all, every thread stays, and no live request is made", async () => {
-    local.submitted = true;
+    local.set({ submitted: true });
     const land = await answer([thread("a", 1), thread("b", 2)]);
     await mount();
     await land();
@@ -271,5 +276,30 @@ describe("CommentPanel after the submission (DAN-215, K7c/K7d)", () => {
     await land();
     expect(marked(editor).sort()).toEqual(["citatom", "prvi"]);
     expect(cards()).toEqual([{ body: "Komentar 1.", notPlaced: false }, { body: "Komentar 2.", notPlaced: false }]);
+  });
+  // Review FAIL codex:cxcr1742 on c09d3dee (c.6726896384): a work submitted
+  // elsewhere, reopened from a local record left in a sticky state. The load
+  // stops before `closedBy` is set; only the server's `submitted` says it.
+  it.each(["CONFLICT", "RECOVERY_REQUIRED"] as const)(
+    "submitted, the local record left in %s: no mark on the locally changed paragraph, the thread stays with its note",
+    async (state) => {
+      local.set({ snapshot: { state, failure: null, capacity: "ok", closedBy: null, refused: false, submitted: true } });
+      // The local paragraph differs from the submitted one, the quote still in it.
+      replaceIn(editor, 1, " ovdje.", " ovdje, lokalno.");
+      const land = await answer([thread("a", 1), thread("b", 2)]);
+      await mount();
+      await land();
+      expect(marked(editor)).toEqual([]);
+      expect(cards()).toEqual([{ body: "Komentar 1.", notPlaced: true }, { body: "Komentar 2.", notPlaced: true }]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it("the same sticky record of a work not submitted still draws its marks (the gate is not shut by the sticky state alone)", async () => {
+    local.set({ snapshot: { state: "CONFLICT", failure: null, capacity: "ok", closedBy: null, refused: false, submitted: false } });
+    const land = await answer([thread("a", 1), thread("b", 2)]);
+    await mount();
+    await land();
+    expect(marked(editor).sort()).toEqual(["citatom", "prvi"]);
   });
 });
