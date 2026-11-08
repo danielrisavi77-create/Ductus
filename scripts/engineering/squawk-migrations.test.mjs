@@ -136,7 +136,7 @@ test("D4: the exception lists are disjoint, each with a reason, and the canary r
   assert.ok(!Object.hasOwn(INLINE_RULES, FIXTURES.badRule));
 });
 
-test("DAN-517: prefer-timestamp-tz is acknowledged per statement, never excluded", () => {
+test("DAN-517: prefer-timestamp-tz is acknowledged inline, never excluded", () => {
   const table = "CREATE TABLE t (id bigint PRIMARY KEY, at timestamp without time zone);";
   const ignore = "-- squawk-ignore prefer-timestamp-tz";
   const cases = [
