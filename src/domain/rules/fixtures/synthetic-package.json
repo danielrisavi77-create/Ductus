@@ -1,0 +1,26 @@
+{
+  "format": "ductus-rule-package-v1",
+  "name": "primjer-pravila",
+  "version": "1.0.0",
+  "institution": "primjer",
+  "profiles": [
+    {
+      "id": "zavrsni-rad",
+      "label": "Izmišljeni završni rad",
+      "workTypes": ["zavrsni", "seminar"],
+      "checkedAt": "2026-11-01",
+      "sources": [
+        { "title": "Izmišljene upute za pisanje", "url": "https://example.org/upute.pdf" },
+        { "title": "Izmišljeni pravilnik", "url": "https://example.org/pravilnik" }
+      ],
+      "rules": [
+        { "kind": "word-range", "min": 6000, "max": 9000, "source": 0 },
+        { "kind": "page-range", "min": 20, "max": 30, "source": 0 },
+        { "kind": "min-sources", "count": 10, "source": 1 },
+        { "kind": "font", "family": "Primjer Serif", "sizePt": 12, "source": 0 },
+        { "kind": "line-spacing", "value": 1.5, "source": 0 },
+        { "kind": "required-parts", "parts": ["Sažetak", "Uvod", "Zaključak", "Literatura"], "source": 1 }
+      ]
+    }
+  ]
+}
