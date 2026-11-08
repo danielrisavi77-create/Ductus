@@ -29,7 +29,7 @@ const rows: [klass: string, name: string, edit: (p: Json) => unknown, reason: Ru
   ["K2", "source is null", (p) => ((profile0(p).sources[0] = null), p), "not_object", "package.profiles[0].sources[0]"],
   ["K2", "rule is a string", (p) => ((profile0(p).rules[0] = "x"), p), "not_object", "package.profiles[0].rules[0]"],
   ["K3", "unknown root field", (p) => ((p.extra = 1), p), "unknown_field", "package"],
-  ["K3", "own __proto__ key", (p) => JSON.parse(JSON.stringify(p).replace("{", '{"__proto__":{"x":1},')), "unknown_field", "package"],
+  ["K3", "own __proto__ key", (p) => JSON.parse(`{"__proto__":{"x":1},${JSON.stringify(p).slice(1)}`), "unknown_field", "package"],
   ["K3", "symbol key", (p) => ((p[Symbol("s") as never] = 1), p), "unknown_field", "package"],
   ["K3", "unknown profile field", (p) => ((profile0(p).status = "x"), p), "unknown_field", "package.profiles[0]"],
   ["K3", "unknown source field", (p) => ((profile0(p).sources[0].note = "x"), p), "unknown_field", "package.profiles[0].sources[0]"],
