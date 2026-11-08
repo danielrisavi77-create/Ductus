@@ -48,6 +48,10 @@ const FILES = [
   ["//@ reference", { body: Buffer.from("self.x=1;\n//@ sourceMappingURL=main.js.map") }, ["source-map-reference"]],
   ["CSS comment reference", { url: "/_next/static/css/a.css", body: Buffer.from("a{b:c}\n/*# sourceMappingURL=a.css.map */") }, ["source-map-reference"]],
   ["spaces and tab around =", { body: Buffer.from("//#\tsourceMappingURL \t= x.map") }, ["source-map-reference"]],
+  ["form feed after #", { body: Buffer.from("x\n//#\fsourceMappingURL=data:application/json;base64,e30=") }, ["source-map-reference"]],
+  ["vertical tab after @", { body: Buffer.from("x\n//@\vsourceMappingURL=x.map") }, ["source-map-reference"]],
+  ["UTF-8 no-break space after #", { body: Buffer.from("x\n//#\u00a0sourceMappingURL=x.map", "utf8") }, ["source-map-reference"]],
+  ["UTF-8 BOM, line separator and ideographic space", { body: Buffer.from("/*#\ufeff\u2028\u3000sourceMappingURL=x.map */", "utf8") }, ["source-map-reference"]],
   ["inline data map", { body: Buffer.from("x\n//# sourceMappingURL=data:application/json;base64,e30=") }, ["source-map-reference"]],
   ["CRLF line ends", { body: Buffer.from("x\r\n//# sourceMappingURL=x.map\r\n") }, ["source-map-reference"]],
   ["reference in the middle", { body: Buffer.from("a;//# sourceMappingURL=x.map\nb;c;") }, ["source-map-reference"]],
@@ -111,8 +115,9 @@ test("checkServedSet: an empty set or one without a chunk never passes", () => {
 
 // No "g": the alphabet cannot spell the marker word in any letter case.
 const SAFE = fc.string({ unit: fc.constantFrom(..."abcdefhijklmnopqrstuvwxyz0123456789 ;=(){}\n\t/*.\"'#@") });
-const MARK = fc.tuple(fc.constantFrom("//", "/*", ""), fc.constantFrom("#", "@"), fc.constantFrom("", " ", "\t", " \t"),
-  fc.constantFrom("", " ", "\t")).map(([open, sign, before, after]) => `${open}${sign}${before}sourceMappingURL${after}=x.map`);
+// Every ECMAScript white space and line terminator that \s covers (ECMA-426 §11.1.2.1.1).
+const SPACE = fc.string({ unit: fc.constantFrom(..."\t\n\v\f\r \u00a0\u1680\u2000\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"), maxLength: 3 });
+const MARK = fc.tuple(fc.constantFrom("//", "/*", ""), fc.constantFrom("#", "@"), SPACE, SPACE).map(([open, sign, before, after]) => `${open}${sign}${before}sourceMappingURL${after}=x.map`);
 
 test("fast-check: a body without the marker word has no finding; an inserted marker always has", () => {
   fc.assert(fc.property(SAFE, (body) => {

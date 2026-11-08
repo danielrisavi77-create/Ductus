@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url";
 // Next.js standalone serves .next/static at /_next/static and public at /.
 const ROOTS = [["/app/.next/static/", "/_next/static/"], ["/app/public/", "/"]];
 // "//# sourceMappingURL=", "//@ …", "/*# … */" and inline data: maps alike.
-const REFERENCE = /[#@][ \t]*sourceMappingURL[ \t]*=/i;
+// \s is any ECMAScript white space or line terminator, as ECMA-426 §11.1.2.1.1 allows.
+const REFERENCE = /[#@]\s*sourceMappingURL\s*=/i;
 const HEADER = /^(?:x-)?sourcemap[ \t]*:/im;
 const CHUNK = /^\/_next\/static\/chunks\/.+\.js$/;
 // A WebAssembly module names its map in a custom section (ECMA-426 §11.1.2.3).
@@ -76,10 +77,11 @@ export function checkServed({ url, status, mapStatus, body, headers }) {
   const add = (code, detail) => findings.push({ code, url, detail });
   if (status !== "200") add("served-status", `answered ${status}, not 200`);
   if (/\.map$/i.test(url)) add("source-map-file", "a source map is served");
-  // latin1 keeps every byte, so a marker inside a binary file is still seen.
+  // latin1 keeps every byte, so a marker inside a binary file is still seen;
+  // UTF-8 turns a multi-byte space (U+00A0, U+2028, U+FEFF, …) into \s.
   const bytes = Buffer.from(body);
   const text = bytes.toString("latin1");
-  if (REFERENCE.test(text)) add("source-map-reference", "sourceMappingURL in the body");
+  if (REFERENCE.test(text) || REFERENCE.test(bytes.toString("utf8"))) add("source-map-reference", "sourceMappingURL in the body");
   else if (wasmReference(bytes, text)) add("source-map-reference", "sourceMappingURL custom section in a WebAssembly module");
   if (HEADER.test(headers)) add("source-map-header", "SourceMap response header");
   if (mapStatus !== "-" && mapStatus !== "404") add("source-map-served", `${url}.map answered ${mapStatus}, not 404`);
