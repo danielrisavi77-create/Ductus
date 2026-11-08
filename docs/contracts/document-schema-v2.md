@@ -178,7 +178,8 @@ D-226 traži da zapise izvora pokrivaju hash i rekonstrukcija. Zato svaka promje
 - `captureContext.transactionFormat` odsječka mora odgovarati tom formatu. Nepodudaranje se odbija bez upisa.
 - Format v1 nad v2 radom se odbija, kao i obrnuto. Ništa se ne upisuje, a dnevnik klijenta se ne briše. Oporavak ne pretvara korake iz jednog formata u drugi.
 - `parseEditSteps` prima oba formata i za nepoznat format vraća `unsupported_format`, kao danas. Poslužitelj ne bira format prema tome što je klijent poslao, nego prema reviziji nula.
-- Validator odsječka `src/domain/forensics/evidence-segment-v2.ts` danas prima samo `ductus-edit-steps-v1` (redak 363). Mora primati oba formata, a nepoznat format i dalje odbija. Bez toga poslužitelj odbija svaki valjan odsječak v2.
+- Validator odsječka `src/domain/forensics/evidence-segment-v2.ts` danas prima samo `ductus-edit-steps-v1` (retci 81 i 363). Mora primati oba formata, a nepoznat format i dalje odbija. Bez toga poslužitelj odbija svaki valjan odsječak v2.
+- DAN-619 ne proširuje taj validator bez provjere naspram revizije nula iz sljedeće točke. Validator je dio poslužiteljskog prihvata (`verifyCanonicalEvidencePayloadV2`), pa bi sam prihvaćao odsječak v2 i za v1 rad. Zato proširenje ide u korak baze 1, u istom PR-u s tom provjerom (odjeljak 7, točka 6).
 - Provjera nepodudaranja je u poslužiteljskom prihvatu (`src/server/evidence/evidence-commit-request.ts`), prije `putImmutable`. Kontekst commita (`app.evidence_commit_context`, `readEvidenceCommitContext`) vraća verziju rada izvedenu iz revizije nula. Danas je ne vraća, a ni RPC ni descriptor ne nose format. Odbijeni odsječak ne sprema objekt i ne upisuje ništa.
 - `src/editor/capture.ts` piše `transactionFormat` prema verziji otvorenog rada, a ne konstantu.
 
@@ -203,7 +204,7 @@ Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 3. Verzija rada je `schemaVersion` u hashiranim bajtovima revizije nula. Ugovor ne uvodi zaseban stupac kao drugi izvor istine. Ako ga korak baze uvede radi upita, mora biti izveden iz revizije nula u istoj transakciji i provjeren testom.
 4. Svaka sljedeća revizija mora imati istu `schemaVersion` kao revizija nula, inače se odbija bez upisa (#1711 K5, K7). Provjera je na poslužitelju u istoj transakciji kao upis revizije i vrijedi i za v1 radove (revizija v2 za v1 rad se odbija).
 5. Postojeća pravila otvaranja ostaju: jedinstveni ključ odlučuje, a ne prethodni upit (komentar u `20261019150000_evidence_open_work.sql`); vrijede i zaključavanje i provjere iz `20261104100000_group_scope.sql`.
-6. `app.evidence_commit_context` vraća verziju rada izvedenu iz revizije nula, a `commitEvidenceRequest` prije `putImmutable` odbija odsječak čiji `transactionFormat` ne odgovara toj verziji (odjeljak 5.4). Vrijedi i za v1 radove.
+6. `app.evidence_commit_context` vraća verziju rada izvedenu iz revizije nula, a `commitEvidenceRequest` prije `putImmutable` odbija odsječak čiji `transactionFormat` ne odgovara toj verziji (odjeljak 5.4). Vrijedi i za v1 radove. U istom PR-u validator odsječka počinje primati `ductus-edit-steps-v2`.
 
 ## 8. Istodobnost
 
@@ -220,16 +221,40 @@ Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 
 ## 9. Redoslijed PR-ova koda
 
-1. **DAN-619, domena** (`src/domain/document`, `src/domain/citation`, `src/domain/forensics`, `src/adapters/evidence`, zlatni vektori): shema v2, validator, `ductus-edit-steps-v2` s replayerima (Node i preglednik), validator odsječka koji prima oba formata (odjeljak 5.4), v2 konstante revizije nula, izvođenje bibliografije. Ako prijeđe oko 400 redaka, dijeli se tim redom:
+1. **DAN-619, domena** (`src/domain/document`, `src/domain/citation`, `src/domain/forensics`, `src/adapters/evidence`, zlatni vektori): shema v2, validator, `ductus-edit-steps-v2` s replayerima (Node i preglednik), v2 konstante revizije nula, izvođenje bibliografije i domenski potrošači `InlineNode` iz odjeljka 9.1. Validator odsječka ne proširuje (odjeljak 5.4). Ako prijeđe oko 400 redaka, dijeli se tim redom:
    - (a) shema, validator i vektori;
    - (b) format koraka v2 i replay;
    - (c) bibliografija.
    Nijedan dio ne mijenja `app.open_student_work`, pa novi rad ne može postati v2 prije koraka baze 2.
-2. **Korak baze 1** (odjeljak 7, točke 1, 3, 4 i 6): v2 funkcija revizije nula, provjera iste verzije na svakoj reviziji i provjera formata u poslužiteljskom prihvatu, s pgTAP testom i integracijskim testom iz odjeljka 8 (I1). Integracijski test kroz stvarni commit put (`commitEvidenceRequest`) na v2 radu iz testnog fixturea prihvaća odsječak v2 i odbija odsječak v1, prije nego korak baze 2 uključi v2 za nove radove. v1 radovi ostaju kakvi jesu i novi radovi su i dalje v1.
-3. **DAN-620, Tiptap**: čvor navoda u editoru, snimanje koraka v2 i izvora. Editor bira format (`transactionFormat`) i oblik dokumenta prema verziji revizije nula, pa radi i na v1 i na v2 radovima. Tekstni navodi iz #866 ostaju tekst (D-226).
-4. **Korak baze 2** (odjeljak 7, točka 2): `app.open_student_work` počinje stvarati v2 radove, s integracijskim testom iz odjeljka 8 (I2). To je trenutak prihvata iz odgovora Q2.
+2. **Korak baze 1** (odjeljak 7, točke 1, 3, 4 i 6): v2 funkcija revizije nula, provjera iste verzije na svakoj reviziji, provjera formata u poslužiteljskom prihvatu i validator odsječka koji prima oba formata, s pgTAP testom i integracijskim testom iz odjeljka 8 (I1). Integracijski test kroz stvarni commit put (`commitEvidenceRequest`) na v2 radu iz testnog fixturea prihvaća odsječak v2 i odbija odsječak v1, prije nego korak baze 2 uključi v2 za nove radove. v1 radovi ostaju kakvi jesu i novi radovi su i dalje v1.
+3. **DAN-620, Tiptap i prikaz (M5.1-P05)**: čvor navoda u editoru, snimanje koraka v2 i izvora te komponente potrošači `InlineNode` iz odjeljka 9.1. Editor bira format (`transactionFormat`) i oblik dokumenta prema verziji revizije nula, pa radi i na v1 i na v2 radovima. Tekstni navodi iz #866 ostaju tekst (D-226).
+4. **Korak baze 2** (odjeljak 7, točka 2): `app.open_student_work` počinje stvarati v2 radove, s integracijskim testom iz odjeljka 8 (I2). To je trenutak prihvata iz odgovora Q2. Spaja se tek kad su svi potrošači iz odjeljka 9.1 gotovi u DAN-619 i DAN-620, svaki sa svojim testom.
 
 Svaki od ova četiri PR-a ostavlja `main` zelen, uključujući e2e. Redoslijed je odluka orkestratora na BLOK ovog ugovora (#1091 [c.6715141315](https://github.com/danielrisavi77-create/Ductus/issues/1091#issuecomment-6715141315), izbor (A)). Razlog: da korak baze uključi v2 prije DAN-620, editor bi i dalje slao `ductus-edit-steps-v1` (`src/editor/capture.ts`) i dokument bez `sources` (`src/editor/interop.ts`), pa bi poslužitelj odbio spremanje novog rada (odjeljci 5.4 i 7).
+
+### 9.1 Potrošači `InlineNode`
+
+Na `main` je `InlineNode` samo tekstni čvor (`src/domain/document/schema.ts:110`). Ovi potrošači čitaju `child.text` ili `child.marks` bez provjere tipa, pa bi na navodu pali ili ga tiho izostavili. Dodjela je odluka orkestratora (#1091, zadatak kruga popravka). Ishod za navod je jedan od dva:
+
+- **vidljiv prikaz:** navod se pokazuje u obliku iz `formatInText` za izvor iz istog dokumenta, a navod bez izvora kao vidljiva oznaka (odjeljak 3.3);
+- **jedna pozicija bez znakova:** u tekstu za sidra i sukobe navod ne dodaje znakove i ne pomiče pomake, a ostaje zaseban čvor, ne ispušta se iz dokumenta.
+
+Nijedan potrošač navod ne izostavlja tiho, ne pretvara u tekstni čvor i ne baca iznimku na valjanom dokumentu v2.
+
+| Potrošač | Mjesto na `main` | Ishod za navod | PR |
+| --- | --- | --- | --- |
+| `normalizeChildren` | `src/domain/document/normalize.ts:34` | navod ostaje zaseban čvor, bajt-jednak; susjedni tekstni čvorovi se ne spajaju preko njega | DAN-619 |
+| `childrenEqual` | `src/domain/document/equality.ts:20` | navodi su jednaki samo uz isti `sourceId` i `locator`; navod nikad nije jednak tekstu | DAN-619 |
+| `textBlocksOf` (brzi put nastavnika) | `src/domain/document/text-blocks.ts:20` | vidljiv prikaz u tekstu bloka | DAN-619 |
+| naslov poglavlja | `src/domain/document/chapters.ts:82` | navod u naslovu je nevaljan (`CITATION_NOT_ALLOWED`, klasa 23); na valjanom v2 dokumentu naslov je nepromijenjen | DAN-619 |
+| `wordCount` (sukob) | `src/domain/sync/conflict.ts:300` | jedna pozicija bez znakova | DAN-619 |
+| `wordCount` (oporavak) | `src/domain/sync/recovery.ts:143` | jedna pozicija bez znakova | DAN-619 |
+| `Block` (pregled predaje) | `src/components/student/SubmissionView.ts:54` | vidljiv prikaz | DAN-620 |
+| `Block` (živi prikaz nastavnika) | `src/components/teacher/LiveText.tsx:53` | vidljiv prikaz; za oznake komentara jedna pozicija bez znakova | DAN-620 |
+| `blockText`, `blockSegments` (sidra, D-133) | `src/components/teacher/comment-place.ts:16`, :78 | jedna pozicija bez znakova u citatu i pomacima sidra; u segmentima zaseban dio za prikaz | DAN-620 |
+| `earlierDraftText` | `src/components/editor/earlier-draft.ts:28` | vidljiv prikaz u kopiranom tekstu | DAN-620 |
+
+Svaki potrošač dobiva test na dokumentu v2 s navodom na izvor i sa siročetom: ishod iz tablice, bez iznimke. Korak baze 2 se ne spaja dok svi retci tablice nemaju spojen test (odjeljak 9, točka 4). Novi potrošač `InlineNode` dodan prije koraka baze 2 ulazi u ovu tablicu u istom PR-u.
 
 ## 10. Klase ulaza i obavezni testovi
 
@@ -252,6 +277,8 @@ DAN-619 ima tablični test (jedan redak po klasi i zapisan ishod, uključujući 
 | 26 | korak v2: raspon unutar atoma; `structure` preko navoda; `replaceAround` u `heading` s navodom | `invalid_position` ili `not_canonical` |
 | 27 | `sourceSet` novi i postojeći, sa i bez `removedSha256`; `sourceRemove` nepostojeći i s krivim hashom | prema odjeljku 5.3 |
 | 28 | format v1 nad v2 radom i obrnuto; `transactionFormat` koji se ne slaže s revizijom nula | odbijeno, ništa upisano |
+| 29 | po jedno izostavljeno obavezno polje za svaku vrstu iz odjeljka 2.1 (npr. `book` bez `publisher`, `article` bez `journal`, `chapter` bez `editors`, `web` bez `accessed`) i za zajednička polja | `SOURCE_FIELD_MISSING` |
+| 30 | `editors` na `chapter` s 0, 1, 20 i 21 osobom | prihvat od 1 do 20; 0 i 21: `EDITORS_INVALID` |
 
 Dodatna svojstva za fast-check:
 - (e) bibliografija je deterministička i ne ovisi o redoslijedu u `sources`;
@@ -263,10 +290,11 @@ Generatori koriste samo sintetičke podatke iz #1711: „Izvor 1”, „str. 12�
 ## Mjesta
 
 - Ovaj PR: samo `docs/contracts/document-schema-v2.md`.
-- DAN-619: `src/domain/document/{schema,validate,edit-step,revision-zero}.ts`, `src/domain/forensics/evidence-segment-v2.ts` (oba formata), `src/adapters/evidence/edit-steps-v1-rules.ts` i novi replayeri v2, `src/domain/citation/` (izvođenje bibliografije), `src/domain/forensics/golden-vectors/` (rezervacija i vektori v2, #1711 V3).
-- Korak baze 1: nova migracija za v2 funkciju revizije nula, provjeru verzije i verziju rada u `app.evidence_commit_context`; `src/server/evidence/{evidence-commit,evidence-commit-request}.ts` (provjera formata prije `putImmutable`); `db/tests/` i integracijski test commita.
+- DAN-619: `src/domain/document/{schema,validate,edit-step,revision-zero}.ts`, potrošači iz odjeljka 9.1 (`src/domain/document/{normalize,equality,text-blocks,chapters}.ts`, `src/domain/sync/{conflict,recovery}.ts`), `src/adapters/evidence/edit-steps-v1-rules.ts` i novi replayeri v2, `src/domain/citation/` (izvođenje bibliografije), `src/domain/forensics/golden-vectors/` (rezervacija i vektori v2, #1711 V3).
+- Korak baze 1: nova migracija za v2 funkciju revizije nula, provjeru verzije i verziju rada u `app.evidence_commit_context`; `src/server/evidence/{evidence-commit,evidence-commit-request}.ts` (provjera formata naspram revizije nula u `commitEvidenceRequest`, prije `putImmutable`; port `src/application/ports/evidence-ingest.ts` format ne nosi i ostaje bez te provjere); `src/domain/forensics/evidence-segment-v2.ts` (retci 81 i 363: prima oba formata, tek uz tu provjeru, odjeljak 5.4); `db/tests/` i integracijski test commita.
 - Korak baze 2: nova migracija za `app.open_student_work`, `db/tests/` i integracijski test.
-- DAN-620: `src/editor/` (shema, `capture.ts`), `src/components/editor/sources.ts` ostaje za v1 radove.
+- DAN-620: `src/editor/` (shema, `capture.ts`), potrošači iz odjeljka 9.1 (`src/components/student/SubmissionView.ts`, `src/components/teacher/{LiveText.tsx,comment-place.ts}`, `src/components/editor/earlier-draft.ts`); `src/components/editor/sources.ts` ostaje za v1 radove.
+- Napomena: DAN-619 ne proširuje parser odsječka (`evidence-segment-v2.ts`) bez provjere formata naspram revizije nula. Inače bi se između DAN-619 i koraka baze 1 prihvaćao odsječak v2 za v1 rad.
 
 ## Stvarni pozivatelj
 
