@@ -10,7 +10,7 @@ import { tiptapToCanonical } from "@/editor/interop";
 import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";
 import { DOC, journalKit, json } from "@/lib/sync/evidence-test-kit";
 
-import { createDocumentSaver, evidenceNotice, snapshotSpeaks, writingClosed } from "./document-saver";
+import { createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, writingClosed } from "./document-saver";
 import { EvidenceSession } from "./evidence-session";
 
 /**
@@ -125,5 +125,20 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     for (const state of ["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE", "SYNCING", "SYNCED", "ERROR"] as const) {
       expect(writingClosed({ ...base, state, closedBy: null })).toBe(false);
     }
+  });
+  // Review FAIL codex:cxcr1742 (c.6726896384): every class of snapshot.
+  it("submitted: closed by submission or confirmed by the server whatever the state; nothing else", () => {
+    const base = { failure: null, capacity: "ok" as const };
+    const cases = [
+      ["no snapshot", null, false],
+      ["the local saver (no evidence fields)", { ...base, state: "LOCAL_DURABLE" }, false],
+      ["closed by submission", { ...base, state: "LOCAL_DURABLE", closedBy: "submission", submitted: true }, true],
+      ["closed by submission, field absent", { ...base, state: "LOCAL_DURABLE", closedBy: "submission" }, true],
+      ["sticky CONFLICT, server submitted", { ...base, state: "CONFLICT", closedBy: null, submitted: true }, true],
+      ["sticky RECOVERY_REQUIRED, server submitted", { ...base, state: "RECOVERY_REQUIRED", closedBy: null, submitted: true }, true],
+      ["sticky CONFLICT, not submitted", { ...base, state: "CONFLICT", closedBy: null, submitted: false }, false],
+      ["open work", { ...base, state: "SYNCED", closedBy: null, submitted: false }, false],
+    ] as const;
+    for (const [, snapshot, expected] of cases) expect(submittedOf(snapshot)).toBe(expected);
   });
 });

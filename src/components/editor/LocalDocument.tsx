@@ -68,7 +68,7 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, evidenceNotice, snapshotSpeaks, writingClosed, type DocumentSaver, type DocumentSnapshot,
+  createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, writingClosed, type DocumentSaver, type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
@@ -163,6 +163,15 @@ export function useLocalEditor(): Editor | null {
  */
 export function useLocalSignedOut(): boolean {
   return useLocalDocument().phase === "signed-out";
+}
+
+/**
+ * True once the work in this tab is submitted (DAN-215): closed by its
+ * submission, or the server confirmed it while the load stopped in a sticky
+ * local state (review codex:cxcr1742, c.6726896384).
+ */
+export function useLocalSubmitted(): boolean {
+  return submittedOf(useLocalDocument().snapshot);
 }
 
 /**

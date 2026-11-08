@@ -89,6 +89,13 @@ export type EvidenceSnapshot = SaverSnapshot & {
    * it again.
    */
   refused: boolean;
+  /**
+   * The work is submitted (DAN-215, K7c/K7d): closed by submission here, or
+   * confirmed by the server's open answer whatever stopped the load, such as
+   * a sticky CONFLICT or RECOVERY_REQUIRED that returns before `closedBy` is
+   * set (review codex:cxcr1742, c.6726896384). It changes nothing else.
+   */
+  submitted: boolean;
 };
 
 type Candidate = { doc: CanonicalDocument; gen: number; marks: number };
@@ -160,7 +167,8 @@ export class EvidenceSession {
     // Tied to the held row, not to ERROR: a later local save writes
     // LOCAL_DURABLE while the same row is still refused (review #811 c.6419592134).
     const refused = !this.closedBy && this.owed > 0 && (this.refused || this.manualOnly);
-    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused };
+    const submitted = this.closedBy === "submission" || this.work?.submitted === true;
+    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused, submitted };
   }
 
   subscribe(listener: (snapshot: EvidenceSnapshot) => void): () => void {

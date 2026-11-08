@@ -28,7 +28,8 @@ import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./CommentPanel.module.css";
-import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
+import { createVersionGate, placementVersion } from "./comment-version";
+import { useLocalEditor, useLocalSignedOut, useLocalSubmitted } from "./LocalDocument";
 
 const t = messagesHr.comments;
 
@@ -189,14 +190,22 @@ function SessionCommentPanel({ documentId, session }: {
     return () => { if (!editor.isDestroyed) editor.unregisterPlugin(commentHighlightKey); };
   }, [editor]);
 
+  // Once the work is submitted, comments are placed on the submitted revision
+  // only (DAN-215, K7c/K7d). That revision is not known without a request,
+  // and a submitted work makes none (O2), so nothing is placed: every comment
+  // stays in the list with its note.
+  const submitted = useLocalSubmitted();
+
   const threads = !stopped && outcome?.kind === "ok" ? outcome.threads : NO_THREADS;
   // Placed again on every change of the text, so an edited paragraph never
   // keeps a stale place; a transaction that leaves the text as it was (a
   // cursor move) reuses the last places (F-093).
   const [placer] = useState(() => createAnchorPlacer((thread: CommentThread) => thread.anchor));
+  const [gate] = useState(createVersionGate);
+  const version = placementVersion(submitted);
   const places = useEditorState({
     editor,
-    selector: ({ editor: e }) => (!e || e.isDestroyed ? NO_RANGES : placer(e.state.doc, threads)),
+    selector: ({ editor: e }) => (!e || e.isDestroyed ? NO_RANGES : gate(e.state.doc, version, placer(e.state.doc, threads))),
   }) ?? NO_RANGES;
   const placed: Placed[] = threads.map((thread, i) => ({ thread, range: places[i] ?? null }));
 
