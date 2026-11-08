@@ -88,10 +88,9 @@ describe("parseInterfaceLocale", () => {
     ["hr-1"],
     ["hr-12"],
     ["hr-1234567890"],
-    // 8. Keys of Object.prototype.
+    // 8. Keys of Object.prototype ("toString" is a well-formed tag, see below).
     ["__proto__"],
     ["constructor"],
-    ["toString"],
     ["hasOwnProperty"],
     // 9. Look-alike letters, full width and combining marks; nothing is normalised.
     ["һr"],
@@ -100,6 +99,61 @@ describe("parseInterfaceLocale", () => {
     ["h​r"],
     // 10. Overlong input.
     [`hr-${"a".repeat(8)}`.repeat(20)],
+  ])("reads %j as no tag and gives the default", (value) => {
+    expect(languageOfTag(value)).toBeUndefined();
+    expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
+  });
+});
+
+// The language subtag has two to eight letters (RFC 5646 2.1: 2*3ALPHA, 4ALPHA,
+// 5*8ALPHA); an extended language subtag follows only one of two or three letters.
+describe("languageOfTag, length of the language subtag", () => {
+  it.each([
+    // Two and three letters, as before.
+    ["Hr", "hr"],
+    ["HRV", "hrv"],
+    ["hrv-HR", "hrv"],
+    ["zh-yue", "zh"],
+    // Four letters.
+    ["Abcd", "abcd"],
+    ["ABCD", "abcd"],
+    ["abcd-Latn-HR", "abcd"],
+    // Five to eight letters.
+    ["ABCDE", "abcde"],
+    ["abcdeF", "abcdef"],
+    ["AbCdEfG", "abcdefg"],
+    ["ABCDEFGH", "abcdefgh"],
+    ["abcdefgh-419-x-a", "abcdefgh"],
+    // A key of Object.prototype that is a well-formed tag has no catalogue.
+    ["toString", "tostring"],
+  ])("reads %j as %s and gives the default", (value, language) => {
+    expect(languageOfTag(value)).toBe(language);
+    expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
+  });
+
+  it.each([
+    // One letter.
+    ["h"],
+    ["H"],
+    ["h-HR"],
+    // Nine letters.
+    ["abcdefghi"],
+    ["ABCDEFGHI-HR"],
+    // Digits in or as the language.
+    ["1"],
+    ["12"],
+    ["123"],
+    ["1234"],
+    ["12345678"],
+    ["h1"],
+    ["1hr"],
+    ["abc4"],
+    ["abcdefg8"],
+    // Empty.
+    [""],
+    // An extended language after a language of four to eight letters.
+    ["abcd-abc"],
+    ["abcdefgh-abc"],
   ])("reads %j as no tag and gives the default", (value) => {
     expect(languageOfTag(value)).toBeUndefined();
     expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);

@@ -25,18 +25,38 @@ function placeholdersOf(text: string): string {
 function leafOf(node: unknown): Leaf | null {
   if (typeof node === "string") return { kind: "text", placeholders: placeholdersOf(node) };
   if (typeof node !== "object" || node === null) return { kind: "other" };
-  return Object.keys(node).length === 0 ? { kind: "empty" } : null;
+  // A list is empty by its length: holes give `[ , ]` no keys, yet it holds a slot.
+  return (Array.isArray(node) ? node.length : Object.keys(node).length) === 0 ? { kind: "empty" } : null;
 }
 
-/** Every text, empty section and stray value of a catalogue, by its dotted path. */
-function leaves(node: unknown, path = "", into = new Map<string, Leaf>()): Map<string, Leaf> {
+/**
+ * How a path is reported: segments joined with dots, as long as that reads one
+ * way only. A path with a dotted key, or one that would start like the other
+ * form, is written as its segments in JSON (`["a.b"]` is not `a.b`).
+ */
+function shownPath(segments: readonly string[]): string {
+  return segments.some((segment) => segment.includes(".")) || segments[0]?.startsWith("[") ? JSON.stringify(segments) : segments.join(".");
+}
+
+/**
+ * Every text, empty section and stray value of a catalogue. A path is told by
+ * its segments in JSON, never by a dotted join: a key may hold a dot, and
+ * `"a.b"` and a → b must not share one entry.
+ */
+function leaves(node: unknown, segments: readonly string[] = [], into = new Map<string, { path: string; leaf: Leaf }>()) {
   const leaf = leafOf(node);
   if (leaf) {
     // An empty catalogue has no leaves: a root with nothing in it is not a missing or extra key.
-    if (path !== "" || leaf.kind !== "empty") into.set(path, leaf);
+    if (segments.length > 0 || leaf.kind !== "empty") into.set(JSON.stringify(segments), { path: shownPath(segments), leaf });
     return into;
   }
-  for (const [key, value] of Object.entries(node as object)) leaves(value, path ? `${path}.${key}` : key, into);
+  for (const [key, value] of Object.entries(node as object)) leaves(value, [...segments, key], into);
+  // `Object.entries` skips holes, so a list that ends in one would read as shorter than it is.
+  // Its last slot stands for the length: reported as a stray value, the way a list of other length is.
+  if (Array.isArray(node) && !Object.hasOwn(node, node.length - 1)) {
+    const segmentsOfLast = [...segments, String(node.length - 1)];
+    into.set(JSON.stringify(segmentsOfLast), { path: shownPath(segmentsOfLast), leaf: { kind: "other" } });
+  }
   return into;
 }
 
@@ -45,11 +65,11 @@ export function catalogueGaps(reference: unknown, other: unknown): CatalogueGaps
   const want = leaves(reference);
   const have = leaves(other);
   const gaps: CatalogueGaps = { missing: [], extra: [], placeholders: [] };
-  for (const [path, leaf] of want) {
-    const found = have.get(path);
+  for (const [id, { path, leaf }] of want) {
+    const found = have.get(id)?.leaf;
     if (found?.kind !== leaf.kind) gaps.missing.push(path);
     else if (leaf.kind === "text" && found.kind === "text" && leaf.placeholders !== found.placeholders) gaps.placeholders.push(path);
   }
-  for (const [path, leaf] of have) if (want.get(path)?.kind !== leaf.kind) gaps.extra.push(path);
+  for (const [id, { path, leaf }] of have) if (want.get(id)?.leaf.kind !== leaf.kind) gaps.extra.push(path);
   return gaps;
 }

@@ -26,7 +26,8 @@ describe("messages.en", () => {
     }
   });
 
-  // docs/PRODUCT.md §5 and D-276, every entry in both languages.
+  // docs/PRODUCT.md §5, every entry in both languages. The English list of
+  // D-276 is its own task and is not in the scanner yet.
   it("uses no word from the forbidden vocabulary", () => {
     for (const [path, text] of all) {
       expect(

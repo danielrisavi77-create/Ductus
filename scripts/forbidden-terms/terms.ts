@@ -233,38 +233,6 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
       /(?<!\p{L})saved(?!\p{L})(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
     contextual: { word: /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])/u },
   },
-  // The additional English list (D-276, NQ12). "risk score" and "suspicion score" stay the rows "risk" and "suspicious",
-  // so they are reported once; the words "score", "trust", "attention", "detected" and the noun "flag" stay allowed alone.
-  // The condition "about the work or the student" cannot be read from a string, so every row holds in all
-  // interface text, as "rizik" does.
-  {
-    entry: "trust score, attention score",
-    instead: "(ništa; nema zbroja ni ocjene)",
-    lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:trust|attention) scor(?:e|es|ing)(?![\p{L}\p{N}])/u,
-  },
-  {
-    entry: "cheating, dishonest, misconduct",
-    instead: "(ništa; opis činjenice bez ocjene)",
-    lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:cheat|dishonest|misconduct)/u,
-  },
-  {
-    entry: "AI-detected, flagged as AI",
-    instead: "(ništa; podrijetlo teksta ne procjenjuje se, pravilo 13)",
-    lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:(?:ai|a i) detect|(?:detect\p{L}*|flag(?:s|ged|ging)?) (?:as |by )?(?:ai|a i|artificial)(?![\p{L}\p{N}]))/u,
-  },
-  // Every form of the verb, with or without a prefix ("reflagged", "unflag"), and the noun where it marks a
-  // student or a work ("Flag this student", "Flag selected submission", "red flag"). Up to three words may
-  // stand between the verb and the work; "Feature flags" and a lone "flag" stay allowed.
-  {
-    entry: "flagged, flagged for review",
-    instead: "(ništa; činjenica bez ocjene)",
-    lang: "en",
-    pattern:
-      /(?<![\p{L}\p{N}])(?:\p{L}*flagg(?:ed|ing)|\p{L}+flags?|red flags?|flags? (?:for|as|(?:\p{L}+ ){0,3}(?:student|work|submission|thesis|paper|text|document)s?))(?![\p{L}\p{N}])/u,
-  },
 ];
 
 /**

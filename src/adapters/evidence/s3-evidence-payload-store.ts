@@ -13,6 +13,10 @@ import type {
   EvidencePayloadPutResult,
   EvidencePayloadStore,
 } from "@/application/ports/evidence-trust";
+import type {
+  EvidencePayloadPresence,
+  EvidencePayloadPresenceResult,
+} from "@/application/ports/pending-receipt-object";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 
 import {
@@ -99,6 +103,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  */
 export const STORAGE_IDENTITY_KEY = "ductus-storage-identity.json";
 const MAX_IDENTITY_BYTES = 1_024;
+/** A `content-length` in its only plain form: no sign, no leading zero. */
+const CONTENT_LENGTH = /^(?:0|[1-9][0-9]{0,15})$/;
+/** Standard base64 of 32 bytes, as S3 writes `x-amz-checksum-sha256`. */
+const SHA256_BASE64 = /^[A-Za-z0-9+/]{43}=$/;
 /** Enough for the `<Code>` of an S3 error document; the rest is never read. */
 const MAX_ERROR_BODY_BYTES = 4_096;
 
@@ -179,6 +187,8 @@ type Fetched =
       body: Uint8Array | null;
       checksum: string | null;
       noSuchKey?: true;
+      /** The `content-length` of a HEAD, as sent. */
+      length?: string | null;
     }
   | { ok: false; reason: string };
 
@@ -194,10 +204,11 @@ type Fetched =
  * doubtful answer is `unavailable`; retrying is the client's job, so the store
  * itself never retries and never follows a redirect. Requests go only to the
  * configured endpoint; the signer builds every URL from validated parts.
- * `readImmutable` reads one object back under the same key and rules.
+ * `readImmutable` reads one object back under the same key and rules, and
+ * `headImmutable` asks for its length and checksum only.
  */
 export class S3EvidencePayloadStore
-  implements EvidencePayloadStore, InstitutionEvidencePayloadReader
+  implements EvidencePayloadStore, InstitutionEvidencePayloadReader, EvidencePayloadPresence
 {
   private readonly endpoint: URL;
   private readonly region: string;
@@ -562,6 +573,60 @@ export class S3EvidencePayloadStore
     evidencePackageId: string;
     segmentHash: string;
   }): Promise<EvidencePayloadReadResult> {
+    return this.bounded<EvidencePayloadReadResult>(
+      (phase, signal) => {
+        // Read once, after the deadline starts, as `putImmutable` reads its input.
+        const input = {
+          institutionId: given.institutionId,
+          evidencePackageId: given.evidencePackageId,
+          segmentHash: given.segmentHash,
+        };
+        return this.readPayload(input, phase, signal);
+      },
+      { status: "unavailable", reason: "storage_timeout" },
+    );
+  }
+
+  /**
+   * One HEAD for the object a pending receipt names (DAN-301), under the
+   * same deadline rule, with no retry and no redirect. `present` only for a
+   * 200 whose `content-length` is exactly `payloadBytes` and whose SHA-256
+   * checksum (asked for with `x-amz-checksum-mode: ENABLED`) is the one of
+   * `segmentHash`; `absent` only for a 404; `mismatch` for another length or
+   * checksum under the content-addressed key, which is an incident for the
+   * operator. A store that sends no checksum, and every other answer, is
+   * `unavailable`: fail closed, nothing is signed. An invalid key or byte
+   * count sends nothing.
+   */
+  async headImmutable(given: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+    payloadBytes: number;
+  }): Promise<EvidencePayloadPresenceResult> {
+    return this.bounded<EvidencePayloadPresenceResult>(
+      (phase, signal) => {
+        const input = {
+          institutionId: given.institutionId,
+          evidencePackageId: given.evidencePackageId,
+          segmentHash: given.segmentHash,
+          payloadBytes: given.payloadBytes,
+        };
+        return this.headPayload(input, phase, signal);
+      },
+      { status: "unavailable", reason: "storage_timeout" },
+    );
+  }
+
+  /**
+   * Runs one read under a fresh deadline. `run` is synchronous up to its
+   * fetch, so the timer gets only what is left from there; on expiry the
+   * phase is marked first and the request is aborted after.
+   */
+  private async bounded<T>(
+    run: (phase: WritePhase, signal: AbortSignal) => Promise<T>,
+    timeout: T,
+  ): Promise<T> {
     const phase: WritePhase = {
       deadline: Number.NEGATIVE_INFINITY,
       read: Number.NEGATIVE_INFINITY,
@@ -570,32 +635,73 @@ export class S3EvidencePayloadStore
     };
     const start = readClock(phase);
     if (start !== null) phase.deadline = start + this.requestTimeoutMs;
-    // Read once, after the deadline starts, as `putImmutable` reads its input.
-    const input = {
-      institutionId: given.institutionId,
-      evidencePackageId: given.evidencePackageId,
-      segmentHash: given.segmentHash,
-    };
     const abort = new AbortController();
-    // Synchronous up to its fetch; the timer gets only what is left from there.
-    const run = this.readPayload(input, phase, abort.signal);
+    const running = run(phase, abort.signal);
     const left = phase.deadline - phase.read;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const expired = new Promise<EvidencePayloadReadResult>((resolve) => {
+    const expired = new Promise<T>((resolve) => {
       timer = setTimeout(
         () => {
           phase.expired = true;
-          resolve({ status: "unavailable", reason: "storage_timeout" });
+          resolve(timeout);
           abort.abort();
         },
         Number.isFinite(left) ? Math.max(0, Math.ceil(left)) : 0,
       );
     });
     try {
-      return await Promise.race([run, expired]);
+      return await Promise.race([running, expired]);
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  private async headPayload(
+    input: {
+      institutionId: string;
+      evidencePackageId: string;
+      segmentHash: string;
+      payloadBytes: number;
+    },
+    phase: WritePhase,
+    signal: AbortSignal,
+  ): Promise<EvidencePayloadPresenceResult> {
+    const key = evidenceObjectKey(input);
+    if (
+      key === null ||
+      !Number.isSafeInteger(input.payloadBytes) ||
+      input.payloadBytes < 1 ||
+      input.payloadBytes > MAX_EVIDENCE_SEGMENT_BYTES
+    ) {
+      return { status: "unavailable", reason: "storage_request_invalid" };
+    }
+    const signed = this.sign("HEAD", [this.bucket, ...key], null);
+    const got = await this.send("HEAD", signed, null, phase, signal);
+    // Before every outcome: past the deadline only a timeout, and no late log.
+    if (late(phase)) return { status: "unavailable", reason: "storage_timeout" };
+    if (!got.ok) return this.unavailable(got.reason);
+    if (got.status === 404) return { status: "absent" };
+    if (got.status !== 200) {
+      return { status: "unavailable", reason: `storage_head_status_${got.status}` };
+    }
+    const length = got.length ?? null;
+    if (length === null || !CONTENT_LENGTH.test(length)) {
+      return { status: "unavailable", reason: "storage_head_length_unreadable" };
+    }
+    if (got.checksum === null) {
+      return { status: "unavailable", reason: "storage_checksum_missing" };
+    }
+    if (!SHA256_BASE64.test(got.checksum)) {
+      return { status: "unavailable", reason: "storage_checksum_unreadable" };
+    }
+    if (
+      Number(length) === input.payloadBytes &&
+      got.checksum === Buffer.from(input.segmentHash, "hex").toString("base64")
+    ) {
+      return { status: "present" };
+    }
+    this.log("evidence payload head mismatch", idsOf(input));
+    return { status: "mismatch" };
   }
 
   private async readPayload(
@@ -667,7 +773,7 @@ export class S3EvidencePayloadStore
    * right before the request leaves.
    */
   private sign(
-    method: "GET" | "PUT",
+    method: "GET" | "HEAD" | "PUT",
     path: string[],
     body: Uint8Array<ArrayBuffer> | null,
   ): SignedS3Request | null {
@@ -676,7 +782,14 @@ export class S3EvidencePayloadStore
         method,
         endpoint: this.endpoint,
         path,
-        headers: method === "PUT" ? { "content-type": "application/json" } : {},
+        headers:
+          method === "PUT"
+            ? { "content-type": "application/json" }
+            : method === "HEAD"
+              ? // Signed, so a proxy that drops it breaks the signature
+                // instead of turning the answer into one without a checksum.
+                { "x-amz-checksum-mode": "ENABLED" }
+              : {},
         body: body ?? new Uint8Array(),
         region: this.region,
         credentials: this.#credentials,
@@ -688,7 +801,7 @@ export class S3EvidencePayloadStore
   }
 
   private async send(
-    method: "GET" | "PUT",
+    method: "GET" | "HEAD" | "PUT",
     signed: SignedS3Request | null,
     body: Uint8Array<ArrayBuffer> | null,
     phase: WritePhase,
@@ -715,6 +828,19 @@ export class S3EvidencePayloadStore
         redirect: "error",
         signal,
       });
+      if (method === "HEAD") {
+        // A HEAD has no body to read, an error one included: only its status
+        // and headers count, so a 400 or 403 is its status, not an S3 code.
+        // Not awaited: a cancel that never settles must not outlast the deadline.
+        void response.body?.cancel().catch(() => undefined);
+        return {
+          ok: true,
+          status: response.status,
+          body: null,
+          checksum: response.headers.get("x-amz-checksum-sha256"),
+          length: response.headers.get("content-length"),
+        };
+      }
       if (response.status === 400 || response.status === 403) {
         const reason = await errorReason(response, signal);
         if (reason) return { ok: false, reason };

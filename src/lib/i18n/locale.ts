@@ -25,16 +25,16 @@ export const INTERFACE_LOCALES = Object.freeze(Object.keys(CATALOGUES) as Interf
 const MAX_TAG_LENGTH = 35;
 
 /**
- * A well-formed BCP 47 language tag in ASCII (RFC 5646 2.1, `langtag`) whose
- * language has two or three letters: extended language, script, region,
- * variants, extensions and private use, each in its place and of its length. A
- * singleton ("u", "x") needs at least one subtag after it. Duplicate variants
- * or singletons are not looked for (that is validity, 2.2.9, not form).
+ * A well-formed BCP 47 language tag in ASCII (RFC 5646 2.1, `langtag`): a
+ * language of two to eight letters, extended language (only after a language
+ * of two or three letters), script, region, variants, extensions and private
+ * use, each in its place and of its length. A singleton ("u", "x") needs at
+ * least one subtag after it. Duplicate variants or singletons are not looked
+ * for (that is validity, 2.2.9, not form).
  */
 const TAG = new RegExp(
   [
-    "^([A-Za-z]{2,3})",
-    "(?:-[A-Za-z]{3}){0,3}",
+    "^(?:([A-Za-z]{2,3})(?:-[A-Za-z]{3}){0,3}|([A-Za-z]{4,8}))",
     "(?:-[A-Za-z]{4})?",
     "(?:-(?:[A-Za-z]{2}|[0-9]{3}))?",
     "(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*",
@@ -56,7 +56,8 @@ function isInterfaceLocale(value: string): value is InterfaceLocale {
  */
 export function languageOfTag(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length > MAX_TAG_LENGTH) return undefined;
-  return TAG.exec(value)?.[1]?.toLowerCase();
+  const match = TAG.exec(value);
+  return (match?.[1] ?? match?.[2])?.toLowerCase();
 }
 
 /**
