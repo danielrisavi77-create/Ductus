@@ -58,7 +58,7 @@ function part(id: string, title: ReactNode, ...children: ReactNode[]): ReactNode
   return h(
     "section",
     { className: styles.part, "aria-labelledby": id },
-    h("h3", { id, className: styles.label }, title),
+    h("h2", { id, className: styles.label }, title),
     ...children,
   );
 }
