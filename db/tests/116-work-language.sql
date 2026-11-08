@@ -219,8 +219,9 @@ DECLARE
   s record;
 BEGIN
   FOR s IN SELECT * FROM step WHERE n BETWEEN p_from AND p_to ORDER BY n LOOP
-    -- 'db' reads the stored state as the superuser, without a session.
-    RETURN NEXT is(pg_temp.ask_as(CASE s.actor WHEN 'db' THEN 'postgres' ELSE 'ductus_app' END,
+    -- 'db' reads the stored state as the session (super)user, without a session
+    -- token; the role is not named, it differs between local and CI.
+    RETURN NEXT is(pg_temp.ask_as(CASE s.actor WHEN 'db' THEN session_user::text ELSE 'ductus_app' END,
                                   CASE s.actor WHEN 'db' THEN 'anon' ELSE s.actor END, s.sql),
                    s.expect, format('%s (class %s, %s): %s', s.n, s.class, s.actor, btrim(regexp_replace(s.sql, '\s+', ' ', 'g'))));
   END LOOP;
