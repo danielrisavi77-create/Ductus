@@ -12,7 +12,7 @@ SELECT plan(17);
 
 -- Application schemas: everything outside the system schemas and public.
 CREATE TEMP VIEW app_relation AS
-  SELECT c.oid, n.nspname || '.' || c.relname AS name, c.relkind, c.reloptions
+  SELECT c.oid, n.nspname || '.' || c.relname AS name, c.relkind, c.reloptions, n.nspname
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
     AND n.nspname NOT LIKE 'pg\_%' AND n.nspname NOT IN ('information_schema', 'public')
@@ -27,19 +27,23 @@ CREATE TEMP VIEW app_relation AS
 -- keeps the Ductus roles out of them. Roles that inherit ductus_app (its
 -- logins) are held by the write guard of 010 and the matrices. The
 -- has_*_privilege functions resolve groups and PUBLIC, so a right reached
--- either way shows here.
+-- either way shows here. The one exception is the pg-boss queue (DAN-517):
+-- the worker uses its tables directly and they hold identifiers only (D-74);
+-- 106 pins those rights exactly. The local worker login inherits them, and 010
+-- holds that a login has no right beyond its group.
 CREATE TEMP VIEW stray_privilege AS
   SELECT r.rolname || ': ' || p.privilege || ' on ' || a.name AS found
   FROM (SELECT rolname::text FROM pg_roles x
         WHERE NOT x.rolsuper AND x.rolname NOT LIKE 'pg\_%'
-          AND x.rolname NOT IN ('ductus_identity', 'ductus_evidence')
+          AND x.rolname NOT IN ('ductus_identity', 'ductus_evidence', 'ductus_queue')
           AND NOT pg_has_role(x.oid, 'ductus_app', 'USAGE')
         UNION ALL SELECT 'public') AS r (rolname)
   CROSS JOIN app_relation a
   CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p (privilege)
-  WHERE has_table_privilege(r.rolname, a.oid, p.privilege)
-     OR (p.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
-         AND has_any_column_privilege(r.rolname, a.oid, p.privilege));
+  WHERE (has_table_privilege(r.rolname, a.oid, p.privilege)
+         OR (p.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+             AND has_any_column_privilege(r.rolname, a.oid, p.privilege)))
+    AND NOT (r.rolname IN ('ductus_worker', 'ductus_worker_local') AND a.nspname = 'pgboss');
 
 SELECT is_empty('SELECT found FROM stray_privilege',
   'no role but the owners and ductus_app, nor PUBLIC, holds a right on an application relation');
@@ -65,6 +69,8 @@ SELECT is_empty('SELECT found FROM stray_privilege', 'the relations are clean ag
 -- row through when USING or WITH CHECK is true, and also when the expression
 -- its command needs is missing: USING for every command but INSERT, and the
 -- check for INSERT, UPDATE and ALL, where WITH CHECK falls back to USING.
+-- The pg-boss queue is the exception: its worker policy passes every row
+-- (identifiers only, D-74), and 106 pins the policies of that schema.
 CREATE TEMP VIEW open_policy AS
   SELECT schemaname || '.' || tablename || '.' || policyname AS found
   FROM pg_policies
@@ -72,7 +78,8 @@ CREATE TEMP VIEW open_policy AS
     AND (qual = 'true' OR with_check = 'true'
          OR (cmd <> 'INSERT' AND qual IS NULL)
          OR (cmd IN ('INSERT', 'UPDATE', 'ALL') AND coalesce(with_check, qual) IS NULL))
-    AND NOT roles <@ ARRAY['ductus_identity', 'ductus_evidence']::name[];
+    AND NOT roles <@ ARRAY['ductus_identity', 'ductus_evidence', 'ductus_queue']::name[]
+    AND NOT (schemaname = 'pgboss' AND roles = ARRAY['ductus_worker']::name[]);
 CREATE TEMP VIEW public_policy AS
   SELECT schemaname || '.' || tablename || '.' || policyname AS found
   FROM pg_policies
