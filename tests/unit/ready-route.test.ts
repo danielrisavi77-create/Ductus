@@ -10,6 +10,9 @@ const { NOT_CONFIGURED, deps } = vi.hoisted(() => ({
 vi.mock("@/server/evidence/payload-reader", () => ({ STORAGE_NOT_CONFIGURED: NOT_CONFIGURED }));
 vi.mock("@/server/evidence/ingest-deps", () => ({ evidenceIngestDeps: () => deps() }));
 
+const shutdownState = vi.hoisted(() => ({ value: "running" as "running" | "draining" | "stopped" }));
+vi.mock("@/server/shutdown", () => ({ processShutdown: () => ({ state: () => shutdownState.value }) }));
+
 import { GET, dynamic, runtime } from "../../app/api/ready/route";
 
 const SECRET = "postgres://user:pw@db.internal.example/ductus";
@@ -28,6 +31,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  shutdownState.value = "running";
   withActor.mockReset();
   deps.mockReset();
   vi.restoreAllMocks();
@@ -36,6 +40,17 @@ afterEach(() => {
 // DAN-299, DAN-585: /api/ready reports each capability and does not return
 // 200 without an available database.
 describe("GET /api/ready", () => {
+  it.each(["draining", "stopped"] as const)("answers 503 draining and runs no probe while %s (DAN-587)", async (state) => {
+    shutdownState.value = state;
+    database(answers("ok"));
+    const response = await GET();
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toEqual({ status: "draining" });
+    expect(withActor).not.toHaveBeenCalled();
+    expect(deps).not.toHaveBeenCalled();
+  });
+
   it("answers 200 and never caches when the database answers, other capabilities not configured", async () => {
     database(answers("nije_konfigurirano"));
     const response = await GET();
