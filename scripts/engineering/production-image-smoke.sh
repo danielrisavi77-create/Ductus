@@ -222,7 +222,8 @@ echo "served: $(wc -l < "$work/served/index.tsv") files fetched, no source map, 
 
 # Negative control: a chunk with a map reference, its map and a secret, a
 # public stylesheet with an inline map, and a public WebAssembly module whose
-# sourceMappingURL custom section holds an inline map, all on one server.
+# sourceMappingURL custom section holds an inline map, all on one server. A
+# clean module next to it (only a name section) must pass.
 mkdir "$work/served-negative"
 printf 'self.ductusCanary=1;\n"DUCTUS_CANARY_API_KEY": "%s"\n//# sourceMappingURL=ductus-canary.js.map\n' "$canary" \
   > "$work/served-negative/ductus-canary.js"
@@ -231,8 +232,9 @@ printf 'a{b:c}\n/*# sourceMappingURL=data:application/json;base64,e30= */\n' > "
 # Header and version, then section 0 (51 bytes): name (16) and the URL (33).
 printf '\0asm\1\0\0\0\0\063\020sourceMappingURL\041data:application/json;base64,e30=' \
   > "$work/served-negative/ductus-canary.wasm"
+printf '\0asm\1\0\0\0\0\010\004name\001\001\0' > "$work/served-negative/ductus-clean.wasm"
 printf '%s\n' "FROM $image" "COPY ductus-canary.js ductus-canary.js.map /app/.next/static/chunks/" \
-  "COPY ductus-canary.css ductus-canary.wasm /app/public/" > "$work/served-negative/Dockerfile"
+  "COPY ductus-canary.css ductus-canary.wasm ductus-clean.wasm /app/public/" > "$work/served-negative/Dockerfile"
 docker build -q -t "$served_negative" "$work/served-negative" >/dev/null
 negative_site="$(start "$served_negative")"
 fetch "$(tail -n1 "$work/containers")" "$negative_site" "$work/served-planted"
@@ -243,8 +245,10 @@ status=0; node "$bundle" check "$work/served-planted" > "$work/served-planted.lo
   && grep -q '^/_next/static/chunks/ductus-canary\.js\.map: source-map-file' "$work/served-planted.log" \
   && grep -q '^/ductus-canary\.css: source-map-reference' "$work/served-planted.log" \
   && grep -q '^/ductus-canary\.wasm: source-map-reference' "$work/served-planted.log" \
+  && grep -qxF "$(printf '/ductus-clean.wasm\t200\t404')" "$work/served-planted/index.tsv" \
+  && ! grep -q '^/ductus-clean\.wasm:' "$work/served-planted.log" \
   || { cat "$work/served-planted.log" >&2; fail "the served-file check missed a planted source map (exit $status)"; }
 status=0; scan "$work/served-planted/body" served-planted || status=$?
 [ "$status" -eq 3 ] || fail "gitleaks missed the canary in a served file (exit $status)"
-echo "served negative control: the planted map, all three references and the served canary found"
+echo "served negative control: the planted map, all three references and the served canary found, the clean module passes"
 echo "Production image OK: $image"
