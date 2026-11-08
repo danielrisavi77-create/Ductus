@@ -35,9 +35,9 @@ function withoutId(source: DocumentSource): Source {
  * the v2 validator accepts; the input is never mutated.
  *
  * Both helpers are stable, so ties (titles equal under collation, identical
- * records) would follow the order of `sources`. The cited sources are first
- * ordered by `id`, which is unique, so the result does not depend on that
- * order (§10 (e)).
+ * records) would follow the order of first citation. The cited sources are
+ * first ordered by `id`, which is unique, so the result depends on neither
+ * the order of citations nor that of `sources` (§10 (e)).
  */
 export function deriveBibliography(document: CanonicalDocumentV2, style: CitationStyle): Bibliography {
   const byId = new Map(document.sources.map((source) => [source.id, source]));
