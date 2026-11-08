@@ -36,8 +36,10 @@ export function checkSbom(bom, { layers, baseLayers, next }) {
   if (components.length === 0) add("sbom-empty", "no components");
   const purls = components.map((c) => (typeof c.purl === "string" ? c.purl : ""));
   if (!purls.some((p) => p.startsWith("pkg:apk/"))) add("sbom-os", "no pkg:apk/ component (OS packages)");
-  const app = new RegExp(`^pkg:npm/next@${next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:[?#]|$)`);
-  if (!purls.some((p) => app.test(p))) add("sbom-app", `no pkg:npm/next@${next} component`);
+  // The exact version, optionally followed by qualifiers or a subpath.
+  const app = `pkg:npm/next@${next}`;
+  const isApp = (p) => p === app || (p.startsWith(app) && "?#".includes(p[app.length]));
+  if (!purls.some(isApp)) add("sbom-app", `no pkg:npm/next@${next} component`);
   const known = new Set(layers);
   const prefix = baseLayers.length <= layers.length && baseLayers.every((id, i) => layers[i] === id);
   const added = new Set(prefix ? layers.slice(baseLayers.length) : []);
