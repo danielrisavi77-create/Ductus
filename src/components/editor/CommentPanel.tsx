@@ -202,8 +202,7 @@ function SessionCommentPanel({ documentId, session }: {
   // cursor move) reuses the last places (F-093).
   const [placer] = useState(() => createAnchorPlacer((thread: CommentThread) => thread.anchor));
   const [gate] = useState(createVersionGate);
-  // RED (DAN-215, QA c.6726447343): the gate bypassed in the selector.
-  const version = submitted ? placementVersion(false) : placementVersion(false);
+  const version = placementVersion(submitted);
   const places = useEditorState({
     editor,
     selector: ({ editor: e }) => (!e || e.isDestroyed ? NO_RANGES : gate(e.state.doc, version, placer(e.state.doc, threads))),
