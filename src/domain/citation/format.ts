@@ -18,8 +18,8 @@ function checkSource(source: Source): void {
   if (!Number.isInteger(source.year) || source.year < 1000 || source.year > 9999) {
     throw new CitationInputError("year must be a four-digit integer");
   }
-  if (source.yearSuffix !== undefined && !/^[a-z]$/.test(source.yearSuffix)) {
-    throw new CitationInputError("yearSuffix must be a single lowercase letter");
+  if (source.yearSuffix !== undefined && !/^[a-z]+$/.test(source.yearSuffix)) {
+    throw new CitationInputError("yearSuffix must be lowercase letters");
   }
 }
 
@@ -49,6 +49,20 @@ function yearLabel(source: Source): string {
 
 /** In-text citation, e.g. `(Becker, 2007: 9)`. Omit `page` when citing the work as a whole. */
 export function formatInText(source: Source, style: CitationStyle, page?: string): string {
+  return inText(source, style, () => (page === undefined ? undefined : normalizePages(page, style)));
+}
+
+/**
+ * In-text citation of a stored locator (contract document-schema-v2 §9.1). A
+ * locator that `normalizePages` refuses because it is only white space (`" "`,
+ * U+2028, U+2029) is valid in a document and is shown exactly as stored.
+ */
+export function formatCitationInText(source: Source, style: CitationStyle, locator?: string): string {
+  if (locator === undefined || locator.trim() !== "") return formatInText(source, style, locator);
+  return inText(source, style, () => locator);
+}
+
+function inText(source: Source, style: CitationStyle, pages: () => string | undefined): string {
   checkSource(source);
   const t = style.inText;
   const names = source.authors.map(inTextName);
@@ -56,7 +70,8 @@ export function formatInText(source: Source, style: CitationStyle, page?: string
     names.length <= t.maxNamedAuthors
       ? joinList(names, t.twoAuthorsJoiner)
       : `${names[0]}${t.manyAuthorsSuffix}`;
-  const pagePart = page === undefined ? "" : `${t.pageSeparator}${normalizePages(page, style)}`;
+  const shown = pages();
+  const pagePart = shown === undefined ? "" : `${t.pageSeparator}${shown}`;
   return `${t.open}${authors}${t.authorYearSeparator}${yearLabel(source)}${pagePart}${t.close}`;
 }
 
@@ -133,7 +148,22 @@ function compareSources(a: Source, b: Source): number {
   }
   if (a.authors.length !== b.authors.length) return a.authors.length - b.authors.length;
   if (a.year !== b.year) return a.year - b.year;
-  return (a.yearSuffix ?? "").localeCompare(b.yearSuffix ?? "");
+  return compareYearSuffixes(a.yearSuffix ?? "", b.yearSuffix ?? "");
+}
+
+/** `a` ... `z`, `aa`, `ab`, ...: shorter first, then by letter. */
+function compareYearSuffixes(a: string, b: string): number {
+  if (a.length !== b.length) return a.length - b.length;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** The suffix at `index`: 0 is `a`, 25 is `z`, 26 is `aa`, 701 is `zz`, 702 is `aaa`. */
+function yearSuffixAt(index: number): string {
+  let suffix = "";
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
+    suffix = String.fromCharCode(97 + ((n - 1) % 26)) + suffix;
+  }
+  return suffix;
 }
 
 /** Alphabetical by family name (Croatian collation), then chronological. Does not mutate the input. */
@@ -143,7 +173,9 @@ export function sortBibliography<T extends Source>(sources: readonly T[]): T[] {
 
 /**
  * Gives works with the same authors and year the suffixes a, b, ... ordered by
- * title. Suffixes already present are kept and never reused. Does not mutate the input.
+ * title, continuing after z with aa, ab, ... (contract document-schema-v2 §4),
+ * so it never throws. Suffixes already present are kept and never reused.
+ * Does not mutate the input.
  */
 export function assignYearSuffixes<T extends Source>(sources: readonly T[]): T[] {
   const groupKey = (s: Source) => `${s.authors.map(sortKey).join("|")}#${s.year}`;
@@ -156,14 +188,14 @@ export function assignYearSuffixes<T extends Source>(sources: readonly T[]): T[]
   for (const group of groups.values()) {
     if (group.length < 2) continue;
     const taken = new Set(group.flatMap((s) => (s.yearSuffix === undefined ? [] : [s.yearSuffix])));
-    const free = "abcdefghijklmnopqrstuvwxyz".split("").filter((letter) => !taken.has(letter));
     const unsuffixed = group
       .filter((s) => s.yearSuffix === undefined)
       .sort((x, y) => collator.compare(x.title, y.title));
-    if (unsuffixed.length > free.length) {
-      throw new CitationInputError("more than 26 works by the same authors in one year");
+    let next = 0;
+    for (const source of unsuffixed) {
+      while (taken.has(yearSuffixAt(next))) next++;
+      suffixes.set(source, yearSuffixAt(next++));
     }
-    unsuffixed.forEach((source, index) => suffixes.set(source, free[index]));
   }
   return sources.map((s) => (suffixes.has(s) ? { ...s, yearSuffix: suffixes.get(s) } : s));
 }
