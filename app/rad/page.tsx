@@ -199,7 +199,12 @@ export default async function WorkspacePage({
               {
                 id: "instructions",
                 label: t.workspace.tabInstructions,
-                content: <InstructionsPanel load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }} />,
+                content: (
+                  <InstructionsPanel
+                    load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }}
+                    workLanguage={work?.workLanguage ?? null}
+                  />
+                ),
               },
               {
                 id: "comments",
@@ -240,7 +245,8 @@ export default async function WorkspacePage({
             {heading}
             {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}
             {journal ? (
-              <LocalEditor />
+              // Only the student's own acknowledged assignment names a language (WCAG 3.1.2).
+              <LocalEditor lang={work?.workLanguage ?? null} />
             ) : plan.kind === "notStarted" ? (
               <OpenWork assignmentId={plan.assignmentId} session={session} />
             ) : (

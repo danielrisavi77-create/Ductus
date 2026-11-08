@@ -765,6 +765,9 @@ export const hr = {
       toolsNone: "U ovom zadatku uporaba alata generativne umjetne inteligencije nije dopuštena.",
       checks: "Provjera oblika · FPZG",
       checksNote: "Provjera pomaže; ništa ne blokira predaju.",
+      // M2.10-P02 (DAN-386): the language of the student's work, not of the interface.
+      workLanguage: "Jezik rada: {language}",
+      workLanguages: { hr: "hrvatski", en: "engleski" },
       // M4 (DAN-506): S-11 "Upute i provjera oblika", states 1a-6 of the
       // approved reference (docs/design/ductura/m4-reference). Not rendered yet.
       shape: {

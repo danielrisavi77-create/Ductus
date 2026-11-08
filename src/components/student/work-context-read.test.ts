@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
@@ -89,7 +90,7 @@ describe("/rad work context read", () => {
       expect(expected.kind).toBe("available");
       if (expected.kind !== "available") throw new Error("invalid invented notice");
       expect(await readWorkContext(TOKEN, ID, actor([row]).withActor)).toEqual({
-        kind: "ready", course: row.course_name, notice: expected.view, wordRange: null,
+        kind: "ready", course: row.course_name, notice: expected.view, wordRange: null, workLanguage: null,
       });
     }
   });
@@ -186,5 +187,74 @@ describe("/rad work context read", () => {
     const { withActor, query } = actor([{ ...notice, word_min: 2000, word_max: 2500, acknowledged_at: null }]);
     expect(await readWorkContext(TOKEN, ID, withActor)).toEqual({ kind: "noticeFirst" });
     expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  // M2.10-P02 (DAN-386): the language of the work, read in the same statement.
+  // Input classes of the column: each language of the closed set, NULL, a
+  // language outside it, another case, surrounding blanks, empty, and values
+  // of another type. Only the first class gives a language; nothing is trimmed,
+  // folded or guessed.
+  it.each([
+    ["hr", "hr"],
+    ["en", "en"],
+    ["NULL", null],
+    ["absent column", undefined],
+    ["outside the set", "de"],
+    ["another case", "HR"],
+    ["another case", "En"],
+    ["leading blank", " hr"],
+    ["trailing blank", "en "],
+    ["empty", ""],
+    ["number", 1],
+    ["object", { language: "hr" }],
+    ["array", ["hr"]],
+  ])("work language, %s: %j", async (_class, value) => {
+    const read = await readWorkContext(TOKEN, ID, actor([{ ...notice, work_language: value }]).withActor);
+    expect(read.kind).toBe("ready");
+    if (read.kind !== "ready") return;
+    expect(read.workLanguage).toBe(value === "hr" || value === "en" ? value : null);
+  });
+
+  it("gives no work language for any string outside the closed set", async () => {
+    await fc.assert(fc.asyncProperty(
+      fc.string().filter((value) => value !== "hr" && value !== "en"),
+      async (value) => {
+        const read = await readWorkContext(TOKEN, ID, actor([{ ...notice, work_language: value }]).withActor);
+        return read.kind === "ready" && read.workLanguage === null;
+      },
+    ));
+  });
+
+  it("reads the work language in the one statement of the notice, never as part of the notice", async () => {
+    const { withActor, query } = actor([{ ...notice, work_language: "en" }]);
+    const read = await readWorkContext(TOKEN, ID, withActor);
+    expect(read).toMatchObject({ kind: "ready", workLanguage: "en" });
+    expect(query).toHaveBeenCalledTimes(1);
+    const sql = (query.mock.calls as unknown as [string][])[0]![0];
+    expect(sql).toContain("institution.work_language(a.id, me.user_id) AS work_language");
+    // The acknowledged notice and its fingerprint stay as they were.
+    if (read.kind === "ready") expect(read.notice).not.toHaveProperty("workLanguage");
+  });
+
+  // Istodobnost: a teacher sets another language while the page reads. The
+  // statement snapshot gives one language; the change is seen on the next read.
+  it("keeps the language of the statement snapshot when it changes during the read", async () => {
+    let language = "hr";
+    const query = vi.fn(async () => {
+      const row = { ...notice, work_language: language };
+      language = "en";
+      return { rows: [row], rowCount: 1 };
+    });
+    const withActor = vi.fn(async (_token: string, fn: (tx: ActorTransaction) => Promise<unknown>) =>
+      fn({ query } as unknown as ActorTransaction)) as unknown as WithActor;
+    expect(await readWorkContext(TOKEN, ID, withActor)).toMatchObject({ kind: "ready", workLanguage: "hr" });
+    expect(await readWorkContext(TOKEN, ID, withActor)).toMatchObject({ kind: "ready", workLanguage: "en" });
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let a work language open the workspace before the notice is acknowledged", async () => {
+    const read = await readWorkContext(TOKEN, ID, actor([{ ...notice, work_language: "en", acknowledged_at: null }]).withActor);
+    expect(read).toEqual({ kind: "noticeFirst" });
+    expect(await readWorkContext(TOKEN, ID, actor([{ ...notice, work_language: "en", role: "teacher" }]).withActor)).toEqual(NONE);
   });
 });
