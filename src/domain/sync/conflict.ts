@@ -37,6 +37,7 @@
  */
 
 import { contentEqual, documentsEqual, type CanonicalDocument } from "../document";
+import { documentWordCount as wordCount } from "../document/word-count";
 import { CONFLICT_RESOLUTIONS, type ConflictResolution } from "./states";
 
 /**
@@ -285,26 +286,6 @@ export function resolveConflict(
  */
 function nodeCount(doc: CanonicalDocument): number {
   return doc.nodes.length;
-}
-
-/**
- * Word count over the canonical text: whitespace-separated runs, counted per
- * block so a paragraph break never fuses two words.
- *
- * A reading aid for the conflict panel, nothing more. It is never evidence
- * about authorship and never decides anything.
- */
-function wordCount(doc: CanonicalDocument): number {
-  let total = 0;
-  for (const node of doc.nodes) {
-    const text = node.children.map((child) => child.text).join("");
-    for (const word of text.split(/\s+/u)) {
-      if (word.length > 0) {
-        total += 1;
-      }
-    }
-  }
-  return total;
 }
 
 /**

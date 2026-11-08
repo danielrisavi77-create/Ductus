@@ -27,6 +27,7 @@
  */
 
 import { validateDocument, type CanonicalDocument } from "../document";
+import { documentWordCount as wordCount } from "../document/word-count";
 // `RecoveryChoice` itself lives in `states.ts`, next to the transition it
 // selects; re-exporting it here would give the barrel two paths to one name.
 import type { RecoveryChoice } from "./states";
@@ -134,20 +135,6 @@ export type RecoveryPlan = {
  */
 function nodeCount(doc: CanonicalDocument): number {
   return doc.nodes.length;
-}
-
-/** Whitespace-separated runs, counted per block. A reading aid, never evidence. */
-function wordCount(doc: CanonicalDocument): number {
-  let total = 0;
-  for (const node of doc.nodes) {
-    const text = node.children.map((child) => child.text).join("");
-    for (const word of text.split(/\s+/u)) {
-      if (word.length > 0) {
-        total += 1;
-      }
-    }
-  }
-  return total;
 }
 
 /**
