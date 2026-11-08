@@ -38,8 +38,10 @@ import { refuse, removedRangeCanonical, type RemovedRangeClaim } from "./edit-st
  *      `removedRangeCanonical` as v1, which includes `sourceId` and `locator`
  *      (§5.2); `structure` over a citation is refused;
  *   2. `addMark` and `removeMark` never mark a citation: ProseMirror marks
- *      every leaf in the range, so the marks are taken off again, and a step
- *      that then changes nothing is refused (§3.1, §5.1);
+ *      every leaf in the range, so the marks are taken off again. A step is
+ *      refused as changing nothing only if ProseMirror's own result is the
+ *      document it started from; one that marks a lone citation is accepted
+ *      and leaves the document as it was (§3.1, §5.1);
  *   3. `sourceSet` and `sourceRemove` change the list of sources. Replacing
  *      or removing a record yields a claim over the JCS of the old record, so
  *      the driver checks its hash exactly as it checks a removed range (§5.3).
