@@ -198,7 +198,8 @@ echo "run time: /api/health 200, /api/auth/login 503 with fake-oidc and NODE_ENV
 
 # 6. Served files. Every file under the two served roots is fetched from the
 # running container into <dir>: body, headers, status, and the status of
-# "<URL>.map" next to each script and stylesheet (index.tsv, served-bundle.mjs).
+# "<URL>.map" next to each script, stylesheet and WebAssembly module
+# (index.tsv, served-bundle.mjs).
 fetch() {
   local n=0 url code map
   mkdir -p "$3/body" "$3/head"
@@ -209,7 +210,7 @@ fetch() {
     n=$((n + 1))
     code="$(curl -sS --noproxy "*" -o "$3/body/$n" -D "$3/head/$n" -w '%{http_code}' "$2$url")"
     map="-"
-    case "$url" in *.js | *.mjs | *.css) map="$(curl -sS --noproxy "*" -o /dev/null -w '%{http_code}' "$2$url.map")" ;; esac
+    case "$url" in *.js | *.mjs | *.css | *.wasm) map="$(curl -sS --noproxy "*" -o /dev/null -w '%{http_code}' "$2$url.map")" ;; esac
     printf '%s\t%s\t%s\n' "$url" "$code" "$map" >> "$3/index.tsv"
   done < "$3/urls.txt"
 }
@@ -219,15 +220,19 @@ status=0; scan "$work/served/body" served || status=$?
 [ "$status" -eq 0 ] || fail "gitleaks found secrets in the served files or did not run (exit $status)"
 echo "served: $(wc -l < "$work/served/index.tsv") files fetched, no source map, reference, SourceMap header or secret"
 
-# Negative control: a chunk with a map reference, its map and a secret, and a
-# public stylesheet with an inline map, each served by the same server.
+# Negative control: a chunk with a map reference, its map and a secret, a
+# public stylesheet with an inline map, and a public WebAssembly module whose
+# sourceMappingURL custom section holds an inline map, all on one server.
 mkdir "$work/served-negative"
 printf 'self.ductusCanary=1;\n"DUCTUS_CANARY_API_KEY": "%s"\n//# sourceMappingURL=ductus-canary.js.map\n' "$canary" \
   > "$work/served-negative/ductus-canary.js"
 printf '{"version":3,"sources":[],"mappings":""}\n' > "$work/served-negative/ductus-canary.js.map"
 printf 'a{b:c}\n/*# sourceMappingURL=data:application/json;base64,e30= */\n' > "$work/served-negative/ductus-canary.css"
+# Header and version, then section 0 (51 bytes): name (16) and the URL (33).
+printf '\0asm\1\0\0\0\0\063\020sourceMappingURL\041data:application/json;base64,e30=' \
+  > "$work/served-negative/ductus-canary.wasm"
 printf '%s\n' "FROM $image" "COPY ductus-canary.js ductus-canary.js.map /app/.next/static/chunks/" \
-  "COPY ductus-canary.css /app/public/" > "$work/served-negative/Dockerfile"
+  "COPY ductus-canary.css ductus-canary.wasm /app/public/" > "$work/served-negative/Dockerfile"
 docker build -q -t "$served_negative" "$work/served-negative" >/dev/null
 negative_site="$(start "$served_negative")"
 fetch "$(tail -n1 "$work/containers")" "$negative_site" "$work/served-planted"
@@ -237,8 +242,9 @@ status=0; node "$bundle" check "$work/served-planted" > "$work/served-planted.lo
   && grep -q '^/_next/static/chunks/ductus-canary\.js: source-map-served' "$work/served-planted.log" \
   && grep -q '^/_next/static/chunks/ductus-canary\.js\.map: source-map-file' "$work/served-planted.log" \
   && grep -q '^/ductus-canary\.css: source-map-reference' "$work/served-planted.log" \
+  && grep -q '^/ductus-canary\.wasm: source-map-reference' "$work/served-planted.log" \
   || { cat "$work/served-planted.log" >&2; fail "the served-file check missed a planted source map (exit $status)"; }
 status=0; scan "$work/served-planted/body" served-planted || status=$?
 [ "$status" -eq 3 ] || fail "gitleaks missed the canary in a served file (exit $status)"
-echo "served negative control: the planted map, both references and the served canary found"
+echo "served negative control: the planted map, all three references and the served canary found"
 echo "Production image OK: $image"

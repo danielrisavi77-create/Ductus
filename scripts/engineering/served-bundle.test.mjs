@@ -8,7 +8,7 @@ import test from "node:test";
 
 import fc from "fast-check";
 
-import { checkServed, checkServedSet, servedUrl } from "./served-bundle.mjs";
+import { checkServed, checkServedSet, servedUrl, wasmCustomSections } from "./served-bundle.mjs";
 
 // DAN-185 (M11.9-P02): what the production image serves to the browser holds
 // no source map, no reference to one and no SourceMap header. Input classes of
@@ -71,6 +71,37 @@ for (const [name, overrides, expected] of FILES) {
   test(`checkServed: ${name}`, () => assert.deepEqual(codes(checkServed(entry(overrides))), expected));
 }
 
+// WebAssembly: a custom section named sourceMappingURL (ECMA-426 §11.1.2.3),
+// built byte by byte; the module bodies are invented.
+const leb = (n) => (n < 0x80 ? [n] : [(n & 0x7f) | 0x80, ...leb(n >>> 7)]);
+const vec = (bytes) => [...leb(bytes.length), ...bytes];
+const section = (id, payload) => Buffer.from([id, ...vec([...payload])]);
+const custom = (name, data) => section(0, [...vec([...Buffer.from(name)]), ...Buffer.from(data)]);
+const wasm = (...sections) => Buffer.concat([Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]), ...sections]);
+const MAP_SECTION = custom("sourceMappingURL", Buffer.from(vec([...Buffer.from("data:application/json;base64,e30=")])));
+const TYPE_SECTION = section(1, [0x01, 0x60, 0x00, 0x00]);
+const WASM = [
+  ["module with an inline map section", wasm(MAP_SECTION), ["source-map-reference"]],
+  ["map section after the type section", wasm(TYPE_SECTION, custom("name", [0x00]), custom("sourceMappingURL", vec([...Buffer.from("debug.wasm.map")]))), ["source-map-reference"]],
+  ["map section longer than 127 bytes", wasm(custom("sourceMappingURL", vec([...Buffer.from(`data:application/json;base64,${"A".repeat(200)}`)]))), ["source-map-reference"]],
+  ["empty module", wasm(), []],
+  ["only a name section", wasm(TYPE_SECTION, custom("name", [0x00, 0x01, 0x00])), []],
+  ["the word only inside a data section", wasm(section(11, [...Buffer.from("sourceMappingURL")])), []],
+  ["a section with a longer name", wasm(custom("sourceMappingURLs", [0x00])), []],
+  ["cut off module with the word", wasm(MAP_SECTION).subarray(0, 30), ["source-map-reference"]],
+  ["the word without the module header", Buffer.concat([Buffer.from([0x00, 0x61, 0x73]), MAP_SECTION]), []],
+];
+for (const [name, body, expected] of WASM) {
+  test(`checkServed WebAssembly: ${name}`, () => assert.deepEqual(codes(checkServed(entry({ url: "/debug.wasm", mapStatus: "404", body }))), expected));
+}
+
+test("wasmCustomSections: names in order; a cut off or overlong section does not parse", () => {
+  assert.deepEqual(wasmCustomSections(wasm(TYPE_SECTION, custom("name", []), MAP_SECTION)), ["name", "sourceMappingURL"]);
+  assert.equal(wasmCustomSections(wasm(MAP_SECTION).subarray(0, 12)), null);
+  assert.equal(wasmCustomSections(wasm(Buffer.from([0x00, 0x02, 0x05, 0x61]))), null);
+  assert.equal(wasmCustomSections(wasm(Buffer.from([0x00, 0x80]))), null);
+});
+
 test("checkServedSet: an empty set or one without a chunk never passes", () => {
   assert.deepEqual(codes(checkServedSet([])), ["served-empty"]);
   assert.deepEqual(codes(checkServedSet([entry({ url: "/motivi/city.webp", mapStatus: "-" })])), ["served-empty"]);
@@ -89,6 +120,15 @@ test("fast-check: a body without the marker word has no finding; an inserted mar
   }));
   fc.assert(fc.property(SAFE, MARK, SAFE, (before, mark, after) => {
     assert.deepEqual(codes(checkServed(entry({ body: Buffer.from(before + mark + after) }))), ["source-map-reference"]);
+  }));
+});
+
+test("fast-check: a module is flagged exactly when one of its custom sections is the map section", () => {
+  const sections = fc.array(fc.tuple(SAFE, SAFE).map(([name, data]) => custom(name, Buffer.from(data))), { maxLength: 5 });
+  fc.assert(fc.property(sections, fc.nat(), fc.boolean(), (list, at, withMap) => {
+    const all = withMap ? [...list.slice(0, at % (list.length + 1)), MAP_SECTION, ...list.slice(at % (list.length + 1))] : list;
+    const expected = withMap ? ["source-map-reference"] : [];
+    assert.deepEqual(codes(checkServed(entry({ url: "/debug.wasm", body: wasm(...all) }))), expected);
   }));
 });
 

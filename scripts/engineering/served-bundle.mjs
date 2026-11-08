@@ -20,6 +20,43 @@ const ROOTS = [["/app/.next/static/", "/_next/static/"], ["/app/public/", "/"]];
 const REFERENCE = /[#@][ \t]*sourceMappingURL[ \t]*=/i;
 const HEADER = /^(?:x-)?sourcemap[ \t]*:/im;
 const CHUNK = /^\/_next\/static\/chunks\/.+\.js$/;
+// A WebAssembly module names its map in a custom section (ECMA-426 §11.1.2.3).
+const WASM = Buffer.from([0x00, 0x61, 0x73, 0x6d]);
+const WASM_MAP = "sourceMappingURL";
+
+/** An unsigned LEB128 at `at`: [value, next offset], or null when cut off. */
+function leb128(bytes, at) {
+  let value = 0;
+  for (let i = at, shift = 0; i < bytes.length && shift < 35; i += 1, shift += 7) {
+    value += (bytes[i] & 0x7f) * 2 ** shift;
+    if ((bytes[i] & 0x80) === 0) return [value, i + 1];
+  }
+  return null;
+}
+
+/** The custom section names of a WebAssembly module, or null when it does not parse. */
+export function wasmCustomSections(bytes) {
+  const names = [];
+  for (let at = 8; at < bytes.length; ) {
+    const size = leb128(bytes, at + 1);
+    if (size === null || size[1] + size[0] > bytes.length) return null;
+    const end = size[1] + size[0];
+    if (bytes[at] === 0) {
+      const name = leb128(bytes, size[1]);
+      if (name === null || name[1] + name[0] > end) return null;
+      names.push(bytes.toString("utf8", name[1], name[1] + name[0]));
+    }
+    at = end;
+  }
+  return names;
+}
+
+/** A WebAssembly module that names a source map; one that does not parse is judged by the word. */
+function wasmReference(bytes, text) {
+  if (bytes.length < 8 || !bytes.subarray(0, 4).equals(WASM)) return false;
+  const names = wasmCustomSections(bytes);
+  return names === null ? text.includes(WASM_MAP) : names.includes(WASM_MAP);
+}
 
 /** The URL a container path is served at, or null outside the served roots. */
 export function servedUrl(path) {
@@ -40,7 +77,10 @@ export function checkServed({ url, status, mapStatus, body, headers }) {
   if (status !== "200") add("served-status", `answered ${status}, not 200`);
   if (/\.map$/i.test(url)) add("source-map-file", "a source map is served");
   // latin1 keeps every byte, so a marker inside a binary file is still seen.
-  if (REFERENCE.test(Buffer.from(body).toString("latin1"))) add("source-map-reference", "sourceMappingURL in the body");
+  const bytes = Buffer.from(body);
+  const text = bytes.toString("latin1");
+  if (REFERENCE.test(text)) add("source-map-reference", "sourceMappingURL in the body");
+  else if (wasmReference(bytes, text)) add("source-map-reference", "sourceMappingURL custom section in a WebAssembly module");
   if (HEADER.test(headers)) add("source-map-header", "SourceMap response header");
   if (mapStatus !== "-" && mapStatus !== "404") add("source-map-served", `${url}.map answered ${mapStatus}, not 404`);
   return findings;
