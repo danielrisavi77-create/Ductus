@@ -47,7 +47,7 @@ const source = fc.oneof(
     authors,
     year,
     title: field,
-    url: fc.constantFrom("https://primjer.hr/a", "http://primjer.hr/?q=1#x"),
+    url: fc.constantFrom("https://primjer.example/a", "http://primjer.example/?q=1#x"),
     accessed: fc.constantFrom("2026-01-05", "2024-02-29", "1999-12-31"),
   }),
 );
