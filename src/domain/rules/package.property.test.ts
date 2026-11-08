@@ -6,8 +6,8 @@ import { parseRulePackage, RULE_PACKAGE_FORMAT } from "./package";
 /**
  * Properties over the input classes of the contract (#1091): every generated
  * valid package passes unchanged (K1), and one unknown field, one missing
- * field or one mistyped value on any object at any depth rejects the whole
- * package (K3, K4, K5). Synthetic values only.
+ * field or one mistyped value on an object of any level (root, profile, source,
+ * rule; each drawn evenly) rejects the whole package (K3, K4, K5). Synthetic values only.
  */
 
 type Node = Record<string, unknown>;
@@ -49,17 +49,21 @@ const rulePackage = fc.record({
   profiles: fc.uniqueArray(profile, { minLength: 1, maxLength: 4, selector: (p) => p.id }),
 });
 
-/** Every plain object in the package, the root included. */
-function objects(value: unknown, out: Node[] = []): Node[] {
-  if (Array.isArray(value)) value.forEach((v) => objects(v, out));
-  else if (typeof value === "object" && value !== null) {
-    out.push(value as Node);
-    Object.values(value).forEach((v) => objects(v, out));
-  }
-  return out;
+const pick = <T,>(items: readonly T[], at: number): T => items[at % items.length] as T;
+
+type Pkg = Node & { profiles: (Node & { sources: Node[]; rules: Node[] })[] };
+
+/** The objects of one level: the root, the profiles, the sources or the rules. */
+const LEVELS = ["package", "profile", "source", "rule"] as const;
+function level(pkg: Pkg, name: (typeof LEVELS)[number]): Node[] {
+  if (name === "package") return [pkg];
+  if (name === "profile") return pkg.profiles;
+  return pkg.profiles.flatMap((p) => (name === "source" ? p.sources : p.rules));
 }
 
-const pick = <T,>(items: readonly T[], at: number): T => items[at % items.length] as T;
+/** Every level is drawn evenly, so the root is hit as often as a rule. */
+const node = fc.constantFrom(...LEVELS);
+const objectAt = (pkg: unknown, name: (typeof LEVELS)[number], at: number): Node => pick(level(pkg as Pkg, name), at);
 
 describe("parseRulePackage property", () => {
   it("K1: every generated valid package passes and comes back equal", () => {
@@ -72,10 +76,10 @@ describe("parseRulePackage property", () => {
 
   it("K3: an unknown field on any object rejects the package", () => {
     fc.assert(
-      fc.property(rulePackage, fc.nat(), fc.stringMatching(/^[a-zA-Z_]{1,12}$/), (pkg, at, key) => {
-        const node = pick(objects(pkg), at);
-        fc.pre(!Object.hasOwn(node, key));
-        node[key] = 1;
+      fc.property(rulePackage, node, fc.nat(), fc.stringMatching(/^[a-zA-Z_]{1,12}$/), (pkg, lvl, at, key) => {
+        const target = objectAt(pkg, lvl, at);
+        fc.pre(!Object.hasOwn(target, key));
+        target[key] = 1;
         expect(parseRulePackage(pkg)).toMatchObject({ ok: false, reason: "unknown_field" });
       }),
     );
@@ -83,9 +87,9 @@ describe("parseRulePackage property", () => {
 
   it("K4: removing any field of any object rejects the package", () => {
     fc.assert(
-      fc.property(rulePackage, fc.nat(), fc.nat(), (pkg, at, field) => {
-        const node = pick(objects(pkg), at);
-        delete node[pick(Object.keys(node), field)];
+      fc.property(rulePackage, node, fc.nat(), fc.nat(), (pkg, lvl, at, field) => {
+        const target = objectAt(pkg, lvl, at);
+        delete target[pick(Object.keys(target), field)];
         expect(parseRulePackage(pkg)).toMatchObject({ ok: false, reason: "missing_field" });
       }),
     );
@@ -93,10 +97,10 @@ describe("parseRulePackage property", () => {
 
   it("K5: a value of the wrong type in any field rejects the package", () => {
     fc.assert(
-      fc.property(rulePackage, fc.nat(), fc.nat(), (pkg, at, field) => {
-        const node = pick(objects(pkg), at);
-        const key = pick(Object.keys(node), field);
-        node[key] = typeof node[key] === "boolean" ? "x" : true;
+      fc.property(rulePackage, node, fc.nat(), fc.nat(), (pkg, lvl, at, field) => {
+        const target = objectAt(pkg, lvl, at);
+        const key = pick(Object.keys(target), field);
+        target[key] = typeof target[key] === "boolean" ? "x" : true;
         expect(parseRulePackage(pkg).ok).toBe(false);
       }),
     );
