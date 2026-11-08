@@ -88,6 +88,13 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
     ["K11 long text", `${"riječ ".repeat(60)}${CANARY}`],
     // K12 canary as a plain value under a harmless key
     ["K12 plain value", { stage: CANARY }],
+    // K13 hostile overrides and quoted work text
+    ["K13 own toISOString", Object.assign(new Date(0), { toISOString: () => CANARY })],
+    ["K13 own byteLength", Object.defineProperty(new Uint8Array(1), "byteLength", { value: CANARY })],
+    ["K13 parser error snippet", new Error(`Unexpected token 'U', "Uvod rada o ${"kanarinac"}" is not valid JSON`)],
+    ["K13 typographic quote", `naslov „Uvod u kanarinac rad” ostaje`],
+    ["K13 Croatian keys", { lozinka: CANARY, Tekst: CANARY, sadrzaj: CANARY, prezime: CANARY, adresa: CANARY }],
+    ["K13 token across the scan limit", `${"a ".repeat(495)}${CANARY}${CANARY}`],
   ];
 
   it.each(rows)("%s never shows the canary", (_name, value) => {
@@ -96,7 +103,7 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
 
   it("drops a short secret by its key alone, where no token shape gives it away", () => {
     const short = "zeleni";
-    for (const value of [{ password: short }, { "X-Api-Key": short }, `password=${short}`, `Cookie: ${short}`, `{"email":"${short}"}`]) {
+    for (const value of [{ password: short }, { "X-Api-Key": short }, `password=${short}`, `Cookie: ${short}`, `{"email":"${short}"}`, { lozinka: short }, { Prezime: short }, `tekst=${short}`]) {
       expect(JSON.stringify(redact(value))).not.toContain(short);
     }
   });
@@ -124,6 +131,12 @@ describe("redact keeps what an operator needs", () => {
       ok: true,
       document_id: id,
     });
+  });
+
+  it("keeps a quoted single word and a JSON key, and marks a scan-limited text as cut", () => {
+    expect(redact('{"stage": "context"}')).toBe('{"stage": "context"}');
+    expect(redact(`expected "context"`)).toBe(`expected "context"`);
+    expect(redact("x ".repeat(600))).toMatch(/\[cut\]$/);
   });
 
   it("keeps the path of a URL and drops only its secret parts", () => {

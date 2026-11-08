@@ -31,6 +31,7 @@ const SENSITIVE_PARTS = [
   "session",
   "password",
   "passwd",
+  "lozinka",
   "secret",
   "apikey",
   "credential",
@@ -87,6 +88,14 @@ const SENSITIVE_EXACT = new Set([
   "xrealip",
   "birthdate",
   "dateofbirth",
+  // Croatian names of the same fields.
+  "tekst",
+  "sadrzaj",
+  "naslov",
+  "ime",
+  "prezime",
+  "adresa",
+  "eposta",
 ]);
 
 export function isSensitiveKey(key: string): boolean {
@@ -101,6 +110,9 @@ const KEY_VALUE = /(["']?)([A-Za-z0-9_-]{2,40})\1(\s*[:=]\s*)(["']?)([^\s"'&,;}]
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const DIGIT_RUN = /\d{9,}/g;
 const TOKEN_RUN = /[A-Za-z0-9+/_=-]{20,}/g;
+/** Quoted free text of two or more words, as a parser error quotes a snippet. */
+const QUOTED_WORDS = /"[^"\s:,{}[\]][^"\n]*\s[^"\n]*?[^"\s:,{}[\]]"|„[^“”\n]*[“”]/g;
+const SCAN_LIMIT = 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A URL keeps its scheme, host and path; userinfo, query and fragment go. */
@@ -121,17 +133,21 @@ function scrubTokenRun(run: string): string {
 
 /** Scans free text in a fixed order; each step only ever removes data. */
 export function redactString(text: string, max = MAX_STRING): string {
-  const scanned = text
+  // Scanning cost stays bounded: only the head is read, and a word cut in two
+  // by that limit is dropped so no fragment of a token survives unscanned.
+  const head = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT).replace(/\S*$/, "") : text;
+  const scanned = head
     .replace(URL_IN_TEXT, stripUrl)
     .replace(AUTH_SCHEME, (_match, scheme: string) => `${scheme} ${REDACTED}`)
     .replace(JWT, REDACTED)
     .replace(KEY_VALUE, (match, quote: string, key: string, separator: string, valueQuote: string) =>
       isSensitiveKey(key) ? `${quote}${key}${quote}${separator}${valueQuote}${REDACTED}` : match,
     )
+    .replace(QUOTED_WORDS, (match) => (match.startsWith("„") ? `„${REDACTED}“` : `"${REDACTED}"`))
     .replace(EMAIL, "[email]")
     .replace(DIGIT_RUN, "[number]")
     .replace(TOKEN_RUN, scrubTokenRun);
-  return scanned.length > max ? `${scanned.slice(0, max)}[cut]` : scanned;
+  return scanned.length > max || head !== text ? `${scanned.slice(0, max)}[cut]` : scanned;
 }
 
 /** Reads one property without letting a getter or a proxy throw out. */
@@ -175,11 +191,19 @@ function errorObject(error: Error, depth: number, path: Set<object>): Json {
   return Object.fromEntries(out);
 }
 
+/** Only a safe integer is shown, so an own byteLength cannot carry text. */
+function byteCount(value: ArrayBufferView | ArrayBuffer): number {
+  const count = Number(value.byteLength);
+  return Number.isSafeInteger(count) && count >= 0 && count < 2 ** 32 ? count : 0;
+}
+
 function walkObject(value: object, depth: number, path: Set<object>): Json {
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  // Native methods, so an own toISOString or getTime cannot put text in the line.
+  if (value instanceof Date) {
+    return Number.isNaN(Date.prototype.getTime.call(value)) ? null : Date.prototype.toISOString.call(value);
+  }
   if (value instanceof URL) return stripUrl(value.href);
-  if (ArrayBuffer.isView(value)) return `[bytes ${value.byteLength}]`;
-  if (value instanceof ArrayBuffer) return `[bytes ${value.byteLength}]`;
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return `[bytes ${byteCount(value)}]`;
   if (value instanceof Error) return errorObject(value, depth, path);
   if (typeof Headers !== "undefined" && value instanceof Headers) return entriesObject(value.entries(), depth, path);
   if (value instanceof Map) return entriesObject(value.entries(), depth, path);

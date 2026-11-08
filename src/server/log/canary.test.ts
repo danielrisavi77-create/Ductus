@@ -81,6 +81,14 @@ describe("logger shape", () => {
     ]);
   });
 
+  it("keeps a line break in an event or field inside the one line", () => {
+    const lines: string[] = [];
+    const log = createLogger((_level, line) => lines.push(line), () => new Date(0));
+    log("warn", "a\nforged", { stage: "b\r\nc" });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toMatch(/[\r\n]/);
+  });
+
   it("never throws into the caller", () => {
     const lines: string[] = [];
     const broken = createLogger(
