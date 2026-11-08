@@ -558,6 +558,8 @@ jobs:
   # DAN-298 (attack plan #1687): the production web image is built here and
   # never pushed. The guard reads the Dockerfile and ignore file; the smoke
   # script checks the built image (user, files, gitleaks, run time, D-09).
+  # DAN-185: it also fetches every served file (no source map, no secret) and
+  # writes the image's CycloneDX SBOM, kept as the web-image-sbom artifact.
   production-image:
     name: Production image
     needs: scope
@@ -574,7 +576,14 @@ jobs:
       - name: Build web image (no push)
         run: docker build -f infra/docker/web.Dockerfile -t ductus-web:ci .
       - name: Smoke test web image
-        run: scripts/engineering/production-image-smoke.sh ductus-web:ci
+        run: scripts/engineering/production-image-smoke.sh ductus-web:ci "$RUNNER_TEMP/sbom"
+      - name: Upload web image SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-image-sbom
+          path: ${{ runner.temp }}/sbom/sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30
 
   security:
     name: Security scanners

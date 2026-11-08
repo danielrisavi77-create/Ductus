@@ -1,0 +1,89 @@
+#!/usr/bin/env node
+// DAN-185 (M11.9-P02): the files the production web image serves to the
+// browser carry no source map. The smoke script lists every file under the two
+// served roots of the running container, fetches each over HTTP and hands the
+// bodies, headers and status codes to this check (contract on #1091, w185a).
+//
+//   served-bundle.mjs urls  < container paths   prints one URL per path
+//   served-bundle.mjs check <dir>               reads <dir>/index.tsv
+//
+// index.tsv has one line per file: URL, HTTP status, and the status of
+// "<URL>.map" ("-" when not probed). Line n has its body in body/n and its
+// response headers in head/n. Exit 1 on findings, 2 on usage errors.
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Next.js standalone serves .next/static at /_next/static and public at /.
+const ROOTS = [["/app/.next/static/", "/_next/static/"], ["/app/public/", "/"]];
+// "//# sourceMappingURL=", "//@ …", "/*# … */" and inline data: maps alike.
+const REFERENCE = /[#@][ \t]*sourceMappingURL[ \t]*=/i;
+const HEADER = /^(?:x-)?sourcemap[ \t]*:/im;
+const CHUNK = /^\/_next\/static\/chunks\/.+\.js$/;
+
+/** The URL a container path is served at, or null outside the served roots. */
+export function servedUrl(path) {
+  if (/[\u0000-\u001f\u007f]/.test(path)) return null;
+  for (const [from, to] of ROOTS) {
+    if (!path.startsWith(from)) continue;
+    const parts = path.slice(from.length).split("/");
+    if (parts.some((part) => part === "" || part === "." || part === "..")) return null;
+    return to + parts.map(encodeURIComponent).join("/");
+  }
+  return null;
+}
+
+/** Findings for one served file: { url, status, mapStatus, body, headers }. */
+export function checkServed({ url, status, mapStatus, body, headers }) {
+  const findings = [];
+  const add = (code, detail) => findings.push({ code, url, detail });
+  if (status !== "200") add("served-status", `answered ${status}, not 200`);
+  if (/\.map$/i.test(url)) add("source-map-file", "a source map is served");
+  // latin1 keeps every byte, so a marker inside a binary file is still seen.
+  if (REFERENCE.test(Buffer.from(body).toString("latin1"))) add("source-map-reference", "sourceMappingURL in the body");
+  if (HEADER.test(headers)) add("source-map-header", "SourceMap response header");
+  if (mapStatus !== "-" && mapStatus !== "404") add("source-map-served", `${url}.map answered ${mapStatus}, not 404`);
+  return findings;
+}
+
+/** Findings for the whole served set; a set without a JS chunk proves nothing. */
+export function checkServedSet(entries) {
+  const findings = entries.flatMap(checkServed);
+  if (!entries.some((entry) => CHUNK.test(entry.url))) {
+    findings.push({ code: "served-empty", url: "-", detail: `${entries.length} files, none under /_next/static/chunks/*.js` });
+  }
+  return findings;
+}
+
+function readSet(dir) {
+  const lines = readFileSync(join(dir, "index.tsv"), "utf8").split("\n").filter((line) => line !== "");
+  return lines.map((line, index) => {
+    const [url, status, mapStatus] = line.split("\t");
+    const n = String(index + 1);
+    return { url, status, mapStatus, body: readFileSync(join(dir, "body", n)), headers: readFileSync(join(dir, "head", n), "latin1") };
+  });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [mode, dir] = process.argv.slice(2);
+  if (mode === "urls") {
+    let failed = false;
+    for (const path of readFileSync(0, "utf8").split("\n").filter((line) => line !== "")) {
+      const url = servedUrl(path);
+      if (url === null) {
+        console.error(`${JSON.stringify(path)}: served-path (outside the served roots)`);
+        failed = true;
+      } else console.log(url);
+    }
+    process.exit(failed ? 1 : 0);
+  }
+  if (mode !== "check" || !dir) {
+    console.error("usage: served-bundle.mjs urls < paths | served-bundle.mjs check <dir>");
+    process.exit(2);
+  }
+  const entries = readSet(dir);
+  const findings = checkServedSet(entries);
+  for (const f of findings) console.error(`${f.url}: ${f.code} (${f.detail})`);
+  if (findings.length > 0) process.exit(1);
+  console.log(`Served bundle OK: ${entries.length} files, no source map, reference or SourceMap header`);
+}
