@@ -221,14 +221,14 @@ Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 
 ## 9. Redoslijed PR-ova koda
 
-1. **DAN-619, domena** (`src/domain/document`, `src/domain/citation`, `src/domain/forensics`, `src/adapters/evidence`, zlatni vektori): shema v2, validator, `ductus-edit-steps-v2` s replayerima (Node i preglednik), v2 konstante revizije nula, izvođenje bibliografije i domenski potrošači `InlineNode` iz odjeljka 9.1. Validator odsječka ne proširuje (odjeljak 5.4). Ako prijeđe oko 400 redaka, dijeli se tim redom:
+1. **DAN-619, domena** (`src/domain/document`, `src/domain/citation`, `src/domain/forensics`, `src/adapters/evidence`, zlatni vektori): shema v2, validator, `ductus-edit-steps-v2` s replayerima (Node i preglednik), v2 konstante revizije nula, izvođenje bibliografije, domenski potrošači `InlineNode` iz odjeljka 9.1 i put predaje iz odjeljka 9.2 (aplikacijski dio). Validator odsječka ne proširuje (odjeljak 5.4). Ako prijeđe oko 400 redaka, dijeli se tim redom:
    - (a) shema, validator i vektori;
    - (b) format koraka v2 i replay;
    - (c) bibliografija.
    Nijedan dio ne mijenja `app.open_student_work`, pa novi rad ne može postati v2 prije koraka baze 2.
 2. **Korak baze 1** (odjeljak 7, točke 1, 3, 4 i 6): v2 funkcija revizije nula, provjera iste verzije na svakoj reviziji, provjera formata u poslužiteljskom prihvatu i validator odsječka koji prima oba formata, s pgTAP testom i integracijskim testom iz odjeljka 8 (I1). Integracijski test kroz stvarni commit put (`commitEvidenceRequest`) na v2 radu iz testnog fixturea prihvaća odsječak v2 i odbija odsječak v1, prije nego korak baze 2 uključi v2 za nove radove. v1 radovi ostaju kakvi jesu i novi radovi su i dalje v1.
 3. **DAN-620, Tiptap i prikaz (M5.1-P05)**: čvor navoda u editoru, snimanje koraka v2 i izvora te komponente potrošači `InlineNode` iz odjeljka 9.1. Editor bira format (`transactionFormat`) i oblik dokumenta prema verziji revizije nula, pa radi i na v1 i na v2 radovima. Tekstni navodi iz #866 ostaju tekst (D-226).
-4. **Korak baze 2** (odjeljak 7, točka 2): `app.open_student_work` počinje stvarati v2 radove, s integracijskim testom iz odjeljka 8 (I2). To je trenutak prihvata iz odgovora Q2. Spaja se tek kad su svi potrošači iz odjeljka 9.1 gotovi u DAN-619 i DAN-620, svaki sa svojim testom.
+4. **Korak baze 2** (odjeljak 7, točka 2): `app.open_student_work` počinje stvarati v2 radove, s integracijskim testom iz odjeljka 8 (I2). To je trenutak prihvata iz odgovora Q2. Spaja se tek kad su svi potrošači iz odjeljka 9.1 gotovi u DAN-619 i DAN-620, svaki sa svojim testom, i kad je put predaje iz odjeljka 9.2 gotov, uz integracijski test uspješne v2 predaje i očuvan v1 put.
 
 Svaki od ova četiri PR-a ostavlja `main` zelen, uključujući e2e. Redoslijed je odluka orkestratora na BLOK ovog ugovora (#1091 [c.6715141315](https://github.com/danielrisavi77-create/Ductus/issues/1091#issuecomment-6715141315), izbor (A)). Razlog: da korak baze uključi v2 prije DAN-620, editor bi i dalje slao `ductus-edit-steps-v1` (`src/editor/capture.ts`) i dokument bez `sources` (`src/editor/interop.ts`), pa bi poslužitelj odbio spremanje novog rada (odjeljci 5.4 i 7).
 
@@ -256,6 +256,15 @@ Nijedan potrošač navod ne izostavlja tiho, ne pretvara u tekstni čvor i ne ba
 | `earlierDraftText` | `src/components/editor/earlier-draft.ts:28` | vidljiv prikaz u kopiranom tekstu | DAN-620 |
 
 Svaki potrošač dobiva test na dokumentu v2 s navodom na izvor i sa siročetom: ishod iz tablice, bez iznimke. Za `documentsEqual` i `contentEqual` test još dodaje, mijenja, briše i premješta izvor bez promjene blokova; ishod je „nisu jednaki”. Korak baze 2 se ne spaja dok svi retci tablice nemaju spojen test (odjeljak 9, točka 4). Novi potrošač `InlineNode` dodan prije koraka baze 2 ulazi u ovu tablicu u istom PR-u.
+
+### 9.2 Put predaje
+
+Rekonstrukcija pri predaji danas uvijek radi kao v1: `src/server/evidence/submission-record.ts:156` daje `createEditStepsV1Replayer()`, a `src/application/evidence/submission-reconstruction.ts:155` polazi od v1 `REVISION_ZERO_JCS`. Predaja v2 rada bi zato završila kao nepodudaranje. Odluka orkestratora (#1712 [c.6715642249](https://github.com/danielrisavi77-create/Ductus/pull/1712#issuecomment-6715642249), izbor (a)):
+
+- oba mjesta biraju replayer i reviziju nula prema verziji rada: v1 rad replayerom `ductus-edit-steps-v1` od v1 revizije nula, v2 rad replayerom `ductus-edit-steps-v2` od v2 revizije nula (odjeljak 6). Rad nepoznate verzije daje `unavailable` sa zatvorenim kodom, nikad presudu o zapisu;
+- tu prilagodbu radi DAN-619;
+- `app.read_submission_record` danas ne vraća verziju rada. Stupac s verzijom dodaje korak baze 1, u istoj migraciji koja verziju rada daje u `app.evidence_commit_context` (odjeljak 7 i Mjesta). DAN-619 zato daje izbor po verziji kao parametar (`reconstructSubmission`), a `submission-record.ts` ga čita iz zapisa u koraku baze 1. Do tada svi radovi su v1 i ponašanje se ne mijenja;
+- korak baze 2 se ne spaja bez integracijskog testa uspješne v2 predaje (rekonstrukcija `reconstructed` i podudaranje s `content_hash`) i testa da v1 predaja daje isti ishod kao prije (odjeljak 9, točka 4).
 
 ## 10. Klase ulaza i obavezni testovi
 
@@ -292,9 +301,9 @@ Generatori koriste samo sintetičke podatke iz #1711: „Izvor 1”, „str. 12�
 ## Mjesta
 
 - Ovaj PR: samo `docs/contracts/document-schema-v2.md`.
-- DAN-619: `src/domain/document/{schema,validate,edit-step,revision-zero}.ts`, potrošači iz odjeljka 9.1 (`src/domain/document/{normalize,equality,text-blocks,chapters}.ts`, `src/domain/sync/{conflict,recovery}.ts`), `src/adapters/evidence/edit-steps-v1-rules.ts` i novi replayeri v2, `src/domain/citation/` (izvođenje bibliografije), `src/domain/forensics/golden-vectors/` (rezervacija i vektori v2, #1711 V3).
-- Korak baze 1: nova migracija za v2 funkciju revizije nula, provjeru verzije i verziju rada u `app.evidence_commit_context`; `src/server/evidence/{evidence-commit,evidence-commit-request}.ts` (provjera formata naspram revizije nula u `commitEvidenceRequest`, prije `putImmutable`; port `src/application/ports/evidence-ingest.ts` format ne nosi i ostaje bez te provjere); `src/domain/forensics/evidence-segment-v2.ts` (retci 81 i 363: prima oba formata, tek uz tu provjeru, odjeljak 5.4); `db/tests/` i integracijski test commita.
-- Korak baze 2: nova migracija za `app.open_student_work`, `db/tests/` i integracijski test.
+- DAN-619: `src/domain/document/{schema,validate,edit-step,revision-zero}.ts`, potrošači iz odjeljka 9.1 (`src/domain/document/{normalize,equality,text-blocks,chapters}.ts`, `src/domain/sync/{conflict,recovery}.ts`), `src/adapters/evidence/edit-steps-v1-rules.ts` i novi replayeri v2, `src/domain/citation/` (izvođenje bibliografije), `src/domain/forensics/golden-vectors/` (rezervacija i vektori v2, #1711 V3), `src/application/evidence/submission-reconstruction.ts` (izbor replayera i revizije nula po verziji, odjeljak 9.2).
+- Korak baze 1: nova migracija za v2 funkciju revizije nula, provjeru verzije i verziju rada u `app.evidence_commit_context`; `src/server/evidence/{evidence-commit,evidence-commit-request}.ts` (provjera formata naspram revizije nula u `commitEvidenceRequest`, prije `putImmutable`; port `src/application/ports/evidence-ingest.ts` format ne nosi i ostaje bez te provjere); `src/domain/forensics/evidence-segment-v2.ts` (retci 81 i 363: prima oba formata, tek uz tu provjeru, odjeljak 5.4); `db/tests/` i integracijski test commita; verzija rada u `app.read_submission_record` i njezino čitanje u `src/server/evidence/submission-record.ts` (odjeljak 9.2).
+- Korak baze 2: nova migracija za `app.open_student_work`, `db/tests/` i integracijski testovi (I2 te v2 i v1 predaja iz odjeljka 9.2).
 - DAN-620: `src/editor/` (shema, `capture.ts`), potrošači iz odjeljka 9.1 (`src/components/student/SubmissionView.ts`, `src/components/teacher/{LiveText.tsx,comment-place.ts}`, `src/components/editor/earlier-draft.ts`); `src/components/editor/sources.ts` ostaje za v1 radove.
 - Napomena: DAN-619 ne proširuje parser odsječka (`evidence-segment-v2.ts`) bez provjere formata naspram revizije nula. Inače bi se između DAN-619 i koraka baze 1 prihvaćao odsječak v2 za v1 rad.
 
@@ -302,7 +311,7 @@ Generatori koriste samo sintetičke podatke iz #1711: „Izvor 1”, „str. 12�
 
 - `app.open_student_work` (upis revizije nula i verzije rada).
 - Upis revizije i odsječka evidencije na poslužitelju (provjera iste verzije i formata).
-- Replay i rekonstrukcija pri predaji (`evidence-replay-v2.ts`, `projection/replay-timeline.ts`).
+- Replay i rekonstrukcija pri predaji (`evidence-replay-v2.ts`, `projection/replay-timeline.ts`, `submission-reconstruction.ts`, `submission-record.ts`; odjeljak 9.2).
 - Editor i snimanje koraka (`src/editor/capture.ts`) od DAN-620.
 
 ## Poznate granice
