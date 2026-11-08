@@ -1,4 +1,4 @@
-import type { CanonicalDocument, HeadingLevel, NodeId } from "./schema";
+import type { HeadingLevel, NodeId, VersionedDocument } from "./schema";
 
 /**
  * The one chapter projection of a document (M5.3-P01, DAN-395). Chapter scope
@@ -50,7 +50,7 @@ export type ChapterOutline = {
 
 /** Every heading of the document as a chapter, in document order. */
 export function deriveChapters(
-  document: CanonicalDocument,
+  document: VersionedDocument,
   profile: ChapterProfile = NEUTRAL_CHAPTER_PROFILE,
 ): ChapterOutline {
   const preambleBlockIds: NodeId[] = [];
