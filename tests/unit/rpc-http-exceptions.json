@@ -152,6 +152,12 @@
     "ticket": "DAN-351"
   },
   {
+    "function": "institution.set_work_accommodation",
+    "status": "ruta dolazi",
+    "reason": "Oznaka odobrene prilagodbe na vlastitom radu studenta, bez razloga i dijagnoze (D-50); RPC postoji za ductus_app i omotač u src/server/institution/work-accommodation.ts, ruta i sučelje dolaze u sljedećem koraku M2.9.",
+    "ticket": "DAN-380"
+  },
+  {
     "function": "institution.set_work_language",
     "status": "ruta dolazi",
     "reason": "Iznimka jezika za jedan rad; RPC postoji za ductus_app i omotač u src/server/institution/work-language.ts, ruta i sučelje dolaze u koraku M2.10-P02.",
