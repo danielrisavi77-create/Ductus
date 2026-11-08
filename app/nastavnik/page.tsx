@@ -6,6 +6,7 @@ import { accessShellScope, coursesAccess, teacherPageAccess } from "@/components
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import TeacherCourses from "@/components/teacher/TeacherCourses";
+import { readWorkAccommodationsMany } from "@/components/teacher/work-accommodations-read";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
@@ -41,6 +42,16 @@ export default async function TeacherHomePage() {
   const works = Object.fromEntries(
     ids.map((id) => [id, answer?.kind === "ok" ? answer.submissions.get(id.toLowerCase()) ?? [] : null]),
   );
+  // DAN-380 (M2.9-P02): which of those works carry an accommodation mark, for every work in one more read.
+  // A separate snapshot: a mark changed between the two reads shows as it is in the second (#1091 c.6725196643).
+  const pairs = answer?.kind === "ok"
+    ? [...answer.submissions].flatMap(([assignmentId, rows]) =>
+      rows.flatMap((row) => (row.documentId === null ? [] : [{ assignmentId, studentId: row.studentId }])))
+    : [];
+  const marks = pairs.length > 0 ? await readWorkAccommodationsMany(token, pairs, withActor) : null;
+  const accommodations = Object.fromEntries(
+    ids.map((id) => [id, marks === null ? [] : marks.kind === "ok" ? marks.marked[id.toLowerCase()] ?? [] : null]),
+  );
 
   const screen = teacherPageAccess(coursesAccess(read?.kind ?? null), principal.kind, token);
   const card = screen === "expired" || screen === "signedOut" || screen === "denied";
@@ -55,7 +66,7 @@ export default async function TeacherHomePage() {
       </>
     );
   } else {
-    body = <TeacherCourses courses={read?.kind === "ok" ? read.courses : []} works={works} />;
+    body = <TeacherCourses courses={read?.kind === "ok" ? read.courses : []} works={works} accommodations={accommodations} />;
   }
   const role = screen === "allowed" ? "teacher" : null;
 
