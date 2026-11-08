@@ -38,6 +38,7 @@ export const EXCLUDED_RULES = Object.freeze({
 });
 const IN_ONE_TRANSACTION = "dbmate runs the migration in one transaction, so the lock is unavoidable; acknowledge it per statement";
 const DELIBERATE_DROP = "a deliberate drop or replacement, acknowledged per statement";
+const GENERATED_PGBOSS = "pg-boss's generated schema (pgboss.job.singleton_on), held byte-exact by scripts/db/pgboss-contract.mjs; acknowledge it per statement";
 export const INLINE_RULES = Object.freeze({
   "adding-foreign-key-constraint": IN_ONE_TRANSACTION,
   "constraint-missing-not-valid": IN_ONE_TRANSACTION,
@@ -47,6 +48,7 @@ export const INLINE_RULES = Object.freeze({
   "ban-drop-constraint": DELIBERATE_DROP,
   "ban-drop-function": DELIBERATE_DROP,
   "ban-drop-not-null": DELIBERATE_DROP,
+  "prefer-timestamp-tz": GENERATED_PGBOSS,
 });
 const IGNORE_LINE = /^\s*-- squawk-ignore ([a-z-]+(?:, [a-z-]+)*)$/;
 // dbmate v2.36.0 migrationFileRegexp (pkg/dbmate/db.go): the files it applies.
