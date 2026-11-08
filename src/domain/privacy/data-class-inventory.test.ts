@@ -6,13 +6,18 @@ import { describe, expect, it } from "vitest";
 // DAN-297, M10.1-P01 (D-271 MQ01, MQ03): every table the migrations leave on
 // main sits in exactly one DATA-CLASS of docs/privacy/06-klase-podataka.md, or
 // is marked there as holding no personal data, with a reason. The document is
-// the only list; this test reads it and does not decide any retention period.
+// the only list; this test reads it and does not decide any retention period:
+// a class without a decided period must say it is open (D-30 is a proposal).
 
 const ROOT = join(__dirname, "../../..");
 const INVENTORY = "docs/privacy/06-klase-podataka.md";
 const CLASSES_HEADING = "## 2. Klase";
 const TABLES_HEADING = "## 3. Tablice po klasama";
 const NO_CLASS = "—";
+const OPEN = "otvoreno (D-30 PRIJEDLOG, Q-16)";
+// The only periods already decided: sessions 30 days, export 24 h, discarded
+// temporary objects (D-273 MQ08, D-173). Every other class stays OPEN.
+const DECIDED = ["3", "20", "23"];
 
 // The 8 C-21 categories (docs/ARCHITECTURE.md §3, D-271 MQ03).
 const CATEGORIES = [
@@ -29,6 +34,7 @@ const CATEGORIES = [
 // Class numbers fixed by decisions, not by this inventory.
 const ANCHORS: Record<number, string> = {
   1: "Identitet", // D-272 MQ05
+  4: "Nastava", // D-271 MQ01, includes seminar groups
   12: "Privatna povijest rada", // D-274 MQ09, reserved
   16: "Predani rad", // D-272 MQ06
   27: "Hashevi i potvrde", // D-272 MQ06, D-264 Q11
@@ -36,7 +42,7 @@ const ANCHORS: Record<number, string> = {
 
 type Migration = { name: string; text: string };
 type TableRow = { table: string; cls: string; note: string };
-type ClassRow = { code: string; name: string; category: string };
+type ClassRow = { code: string; name: string; category: string; retention: string };
 
 const IDENT = String.raw`("?[A-Za-z_][A-Za-z0-9_$]*"?)\s*\.\s*("?[A-Za-z_][A-Za-z0-9_$]*"?)`;
 const CREATE_RE = new RegExp(String.raw`\bCREATE\s+(?:UNLOGGED\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?${IDENT}`, "gi");
@@ -93,10 +99,11 @@ function tableUnder(markdown: string, heading: string): string[][] {
 const unquote = (cell: string) => cell.replace(/^`(.*)`$/, "$1");
 
 function parseInventory(markdown: string): { classes: ClassRow[]; tables: TableRow[] } {
-  const classes = tableUnder(markdown, CLASSES_HEADING).map(([code, cname, category]) => ({
+  const classes = tableUnder(markdown, CLASSES_HEADING).map(([code, cname, category, , , retention]) => ({
     code,
     name: cname,
     category,
+    retention: retention ?? "",
   }));
   const tables = tableUnder(markdown, TABLES_HEADING).map(([table, cls, note]) => ({
     table: unquote(table),
@@ -114,6 +121,9 @@ function coverageErrors(live: Set<string>, inv: { classes: ClassRow[]; tables: T
   if (codes.join() !== expected.join()) errors.push(`class codes are not 1..30 in order: ${codes.join()}`);
   for (const c of inv.classes) {
     if (!CATEGORIES.includes(c.category)) errors.push(`class ${c.code}: unknown category ${c.category}`);
+    if (!DECIDED.includes(c.code) && !c.retention.startsWith(OPEN)) {
+      errors.push(`class ${c.code}: retention must start with ${OPEN}`);
+    }
   }
   for (const [code, prefix] of Object.entries(ANCHORS)) {
     const c = inv.classes.find((x) => x.code === code);
@@ -142,11 +152,12 @@ function coverageErrors(live: Set<string>, inv: { classes: ClassRow[]; tables: T
 }
 
 const CLASSES = [
-  "| Klasa | Naziv | Kategorija |",
-  "| --- | --- | --- |",
+  "| Klasa | Naziv | Kategorija | Svrha | Okidač | Rok | Stanje |",
+  "| --- | --- | --- | --- | --- | --- | --- |",
   ...Array.from({ length: 30 }, (_, i) => {
     const n = i + 1;
-    return `| ${n} | ${ANCHORS[n] ?? `Klasa ${n}`} | ${CATEGORIES[i % 8]} |`;
+    const rok = DECIDED.includes(String(n)) ? "30 dana" : OPEN;
+    return `| ${n} | ${ANCHORS[n] ?? `Klasa ${n}`} | ${CATEGORIES[i % 8]} | s | o | ${rok} | izgrađeno |`;
   }),
 ].join("\n");
 
@@ -199,6 +210,8 @@ describe("coverageErrors", () => {
     ["29 classes", (c: string) => c.replace(/\n\| 30 \|[^\n]*/, ""), "class codes are not 1..30 in order"],
     ["a duplicate code", (c: string) => c.replace("| 30 |", "| 29 |"), "class codes are not 1..30 in order"],
     ["a category outside C-21", (c: string) => c.replace("| 2 | Klasa 2 | Sesije |", "| 2 | Klasa 2 | Pogon |"), "class 2: unknown category Pogon"],
+    ["an invented retention period", (c: string) => c.replace(`| 2 | Klasa 2 | Sesije | s | o | ${OPEN} |`, "| 2 | Klasa 2 | Sesije | s | o | 5 godina |"), "class 2: retention must start with"],
+    ["an empty retention period", (c: string) => c.replace(`| 5 | Klasa 5 | Predaja | s | o | ${OPEN} |`, "| 5 | Klasa 5 | Predaja | s | o |  |"), "class 5: retention must start with"],
     ["a moved anchor", (c: string) => c.replace("| 16 | Predani rad |", "| 16 | Komentari |"), "class 16 must be Predani rad (anchor)"],
   ])("fails on %s", (_case, edit, error) => {
     const errors = coverageErrors(live, parseInventory(doc(ok, edit(CLASSES))));

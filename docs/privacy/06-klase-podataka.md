@@ -9,7 +9,7 @@ Ovaj popis ne odlučuje ni o jednom roku i na njemu se ništa ne gradi. Tablica 
 ## 1. Kako čitati
 
 - **Okidač:** događaj od kojeg teče rok.
-- **Rok:** „otvoreno” znači da rok nije odlučen i čeka D-30 i Q-16. Prijedlozi iz `docs/ARCHITECTURE.md` §3 i D-272 MQ06 navedeni su kao prijedlozi. Odlučeni su samo rokovi iz D-273 MQ08: sesije nakon 30 dana, izvozni artefakt nakon 24 sata (D-173) i odbačeni privremeni objekti. Prije potvrde D-30 sve ostalo smije raditi samo kao probni prolaz (dry-run).
+- **Rok:** „otvoreno (D-30 PRIJEDLOG, Q-16)” znači da rok nije odlučen. Prijedlozi iz `docs/ARCHITECTURE.md` §3 i D-272 MQ06 navedeni su kao prijedlozi. Odlučeni su samo rokovi iz D-273 MQ08: sesije nakon 30 dana, izvozni artefakt nakon 24 sata (D-173) i odbačeni privremeni objekti. Prije potvrde D-30 sve ostalo smije raditi samo kao probni prolaz (dry-run).
 - **Stanje:**
   - `izgrađeno`: tablica postoji na `main`;
   - `planirano`: podatak postoji samo u dokumentima;
@@ -22,7 +22,7 @@ Ovaj popis ne odlučuje ni o jednom roku i na njemu se ništa ne gradi. Tablica 
   - 16, predani rad (D-272 MQ06);
   - 27, hashevi i potvrde (D-272 MQ06).
 
-  Ostali brojevi su prijedlog ovog popisa. Promjena broja mijenja i ovaj dokument i test.
+  Ostali brojevi su **prijedlog ovog popisa**, a ne odluka. Plan M10 može promijeniti numeraciju; na nju se zato ne gradi kod. Promjena broja mijenja ovaj dokument i test.
 
 Test `src/domain/privacy/data-class-inventory.test.ts` čita odjeljke 2 i 3. Pada ako tablica iz `-- migrate:up` dijela migracija nema redak u odjeljku 3, ako redak upućuje na tablicu koje nema, ako se tablica pojavi dvaput, ako je klasa nepoznata ili ako „bez osobnog podatka” nema razlog. Pada i ako klasa nije u jednoj od 8 kategorija.
 
@@ -30,36 +30,36 @@ Test `src/domain/privacy/data-class-inventory.test.ts` čita odjeljke 2 i 3. Pad
 
 | Klasa | Naziv | Kategorija | Svrha | Okidač | Rok | Stanje |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Identitet računa | Sesije | Veza računa s AAI@EduHr i ustanovom (D-09) | Istekao je zadnji ovisni zapis (D-272 MQ05) | Otvoreno | izgrađeno |
-| 2 | Ime i prezime | Sesije | Prikaz osobe nastavniku i mentoru (D-170 O1) | Kao klasa 1; osvježava se pri prijavi | Otvoreno; briše se samo uskom funkcijom (D-272 MQ04) | izgrađeno |
+| 1 | Identitet računa | Sesije | Veza računa s AAI@EduHr i ustanovom (D-09) | Istekao je zadnji ovisni zapis (D-272 MQ05) | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno |
+| 2 | Ime i prezime | Sesije | Prikaz osobe nastavniku i mentoru (D-170 O1) | Kao klasa 1; osvježava se pri prijavi | otvoreno (D-30 PRIJEDLOG, Q-16); briše se samo uskom funkcijom (D-272 MQ04) | izgrađeno |
 | 3 | Sesije prijave i odjave | Sesije | Prijava, odjava, zaštita od ponovljenog tokena odjave | Kraj sesije; istek `expires_at` | 30 dana nakon kraja (D-273 MQ08); `identity.purge_ended_sessions()` postoji, raspored nije izgrađen (M10.0-S2) | izgrađeno |
-| 4 | Nastava i članstvo | Sesije | Kolegiji, članstvo, seminarske grupe, kodovi i pokušaji upisa | Kraj članstva ili akademske godine | Otvoreno; pokušaji upisa brišu se pri sljedećem pokušaju | izgrađeno; kategorija za potvrdu |
-| 5 | Uloge i dodijeljeni pristup | Sesije | Uloge nastavnika i ustanove, zamjene, mentorstvo, pristup radu | Kraj uloge, mentorstva ili dodjele | Otvoreno | izgrađeno; kategorija za potvrdu |
-| 6 | Obavijesti u aplikaciji | Predaja | Obavijest o komentaru, verziji zadatka, predaji | Obavijest pročitana ili rad zatvoren | Otvoreno | izgrađeno; kategorija za potvrdu |
-| 7 | Potvrda obavijesti uz zadatak | Revizijski trag | Dokaz da je student vidio obavijest uz verziju zadatka | Kraj rada | Otvoreno | izgrađeno; kategorija za potvrdu |
-| 8 | Evaluacija pilota | Evaluacija pilota | Ankete i razgovori, odvojeno od evidencije | Kraj evaluacije | Otvoreno; prijedlog „do kraja evaluacije” | planirano |
-| 9 | Zadatak i verzije zadatka | Radne verzije | Upute, rokovi i pravila koje postavlja nastavnik | Kraj akademske godine zadatka | Otvoreno | izgrađeno; kategorija za potvrdu |
-| 10 | Pravila fakulteta i jezik rada | Radne verzije | Pravila rada ustanove, iznimka jezika po studentu | Novo pravilo; kraj rada | Otvoreno | izgrađeno; kategorija za potvrdu |
-| 11 | Projekt i dokument | Radne verzije | Metapodaci rada: kome pripada, koji zadatak | Kraj rada; predaja | Otvoreno | izgrađeno |
-| 12 | Privatna povijest rada | Radne verzije | Studentova privatna povijest (M10.8) | Nije određen | Ne gradi se do D-55 i C-19 (D-274 MQ09) | rezervirano |
-| 13 | Revizije dokumenta | Radne verzije | Verzije teksta rada | Kraj rada; predaja | Otvoreno; prijedlog „do kraja akademske godine” | izgrađeno |
-| 14 | Kontrolne točke s punim tekstom | Radne verzije | Brzo otvaranje i obnova rada | Kraj rada; predaja | Otvoreno; `body` se briše samo uskom funkcijom (D-272 MQ04) | izgrađeno |
-| 15 | Stanje prikaza uživo | Radne verzije | Prikaz uređivanja uživo | Kraj rada ili povlačenje (D-12) | Otvoreno; `collaboration.delete_live_state` postoji za `ductus_retention` | izgrađeno |
-| 16 | Predani rad | Predaja | Predana verzija i zahtjev za predaju | Predaja | Otvoreno; prijedlog „prema pravilniku fakulteta” | izgrađeno |
-| 17 | Izjava o pomoći AI-ja i ispisi razgovora | Predaja | Izjava uz predaju (D-77) | Predaja | Otvoreno | planirano |
-| 18 | Komentari | Predaja | Niti komentara nastavnika, mentora i studenta | Kraj rada | Otvoreno; prijedlog „kao predaja”; `body` uskom funkcijom (D-272 MQ04) | izgrađeno |
-| 19 | Zahtjevi za doradu | Predaja | Zahtjev, njegove verzije i odgovor | Kraj rada | Otvoreno; prijedlog „kao predaja” | izgrađeno |
+| 4 | Nastava i članstvo | Sesije | Kolegiji, članstvo, seminarske grupe, kodovi i pokušaji upisa | Kraj članstva ili akademske godine | otvoreno (D-30 PRIJEDLOG, Q-16); pokušaji upisa brišu se pri sljedećem pokušaju | izgrađeno; kategorija za potvrdu |
+| 5 | Uloge i dodijeljeni pristup | Sesije | Uloge nastavnika i ustanove, zamjene, mentorstvo, pristup radu | Kraj uloge, mentorstva ili dodjele | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno; kategorija za potvrdu |
+| 6 | Obavijesti u aplikaciji | Predaja | Obavijest o komentaru, verziji zadatka, predaji | Obavijest pročitana ili rad zatvoren | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno; kategorija za potvrdu |
+| 7 | Potvrda obavijesti uz zadatak | Revizijski trag | Dokaz da je student vidio obavijest uz verziju zadatka | Kraj rada | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno; kategorija za potvrdu |
+| 8 | Evaluacija pilota | Evaluacija pilota | Ankete i razgovori, odvojeno od evidencije | Kraj evaluacije | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „do kraja evaluacije” | planirano |
+| 9 | Zadatak i verzije zadatka | Radne verzije | Upute, rokovi i pravila koje postavlja nastavnik | Kraj akademske godine zadatka | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno; kategorija za potvrdu |
+| 10 | Pravila fakulteta i jezik rada | Radne verzije | Pravila rada ustanove, iznimka jezika po studentu | Novo pravilo; kraj rada | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno; kategorija za potvrdu |
+| 11 | Projekt i dokument | Radne verzije | Metapodaci rada: kome pripada, koji zadatak | Kraj rada; predaja | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno |
+| 12 | Privatna povijest rada | Radne verzije | Studentova privatna povijest (M10.8) | Nije određen | otvoreno (D-30 PRIJEDLOG, Q-16); ne gradi se do D-55 i C-19 (D-274 MQ09) | rezervirano |
+| 13 | Revizije dokumenta | Radne verzije | Verzije teksta rada | Kraj rada; predaja | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „do kraja akademske godine” | izgrađeno |
+| 14 | Kontrolne točke s punim tekstom | Radne verzije | Brzo otvaranje i obnova rada | Kraj rada; predaja | otvoreno (D-30 PRIJEDLOG, Q-16); `body` se briše samo uskom funkcijom (D-272 MQ04) | izgrađeno |
+| 15 | Stanje prikaza uživo | Radne verzije | Prikaz uređivanja uživo | Kraj rada ili povlačenje (D-12) | otvoreno (D-30 PRIJEDLOG, Q-16); `collaboration.delete_live_state` postoji za `ductus_retention` | izgrađeno |
+| 16 | Predani rad | Predaja | Predana verzija i zahtjev za predaju | Predaja | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „prema pravilniku fakulteta” | izgrađeno |
+| 17 | Izjava o pomoći AI-ja i ispisi razgovora | Predaja | Izjava uz predaju (D-77) | Predaja | otvoreno (D-30 PRIJEDLOG, Q-16) | planirano |
+| 18 | Komentari | Predaja | Niti komentara nastavnika, mentora i studenta | Kraj rada | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „kao predaja”; `body` uskom funkcijom (D-272 MQ04) | izgrađeno |
+| 19 | Zahtjevi za doradu | Predaja | Zahtjev, njegove verzije i odgovor | Kraj rada | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „kao predaja” | izgrađeno |
 | 20 | Izvozni paket | Predaja | Paket za studenta ili bivšeg studenta (D-271 MQ02) | Izdana poveznica | 24 sata, koliko i poveznica (D-173, D-273 MQ08) | planirano; kategorija za potvrdu |
-| 21 | Odsječci i paketi evidencije | Evidencija | Zapis nastanka rada (D-24) | Predaja; kraj rada | Otvoreno; prijedlog „kao predaja”; sadržaj u S3 briše adapter (D-272 MQ04) | izgrađeno |
-| 22 | Vrijeme po promjeni | Evidencija | Redoslijed i vrijeme svake promjene (D-143) | Predaja | Otvoreno; D-143 traži zasebnu klasu s kraćim rokom | planirano kao zasebna klasa |
+| 21 | Odsječci i paketi evidencije | Evidencija | Zapis nastanka rada (D-24) | Predaja; kraj rada | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „kao predaja”; sadržaj u S3 briše adapter (D-272 MQ04) | izgrađeno |
+| 22 | Vrijeme po promjeni | Evidencija | Redoslijed i vrijeme svake promjene (D-143) | Predaja | otvoreno (D-30 PRIJEDLOG, Q-16); D-143 traži zasebnu klasu s kraćim rokom | planirano kao zasebna klasa |
 | 23 | Odbačeni privremeni objekti | Evidencija | Rezervirani objekti bez potvrđenog upisa | Odbacivanje | Briše se prije D-30 (D-273 MQ08); trajanje nije zapisano | planirano |
-| 24 | Zapis AI pomoćnika | Evidencija | Prijenosi iz pomoćnika i razgovori (D-194) | Predaja | Otvoreno (Q-10) | planirano; kategorija za potvrdu |
-| 25 | Zapis pristupa radu | Revizijski trag | Tko je otvorio rad (PRAVILO 17) | Pristup | Otvoreno; prijedlog „dulje od predaje”; briše ga samo uska funkcija (D-272 MQ05) | izgrađeno |
-| 26 | Događaji promjena ovlasti | Revizijski trag | Trag promjena članstva, uloga, mentorstva i pravila | Događaj | Otvoreno | izgrađeno |
-| 27 | Hashevi i potvrde | Evidencija | Dokaz predaje nakon brisanja sadržaja | Predaja | Otvoreno; prijedlog „rok klase 16 uz rok za prigovor”; do potvrde osobni podatak (D-272 MQ06, D-264 Q11) | izgrađeno |
-| 28 | Evidencija brisanja | Revizijski trag | Nadgrobni zapis brisanja (tablica `erasure`) | Završen posao brisanja | Otvoreno | planirano (M10.0-S1) |
-| 29 | Kopije baze i bucketa | Kopije | PITR, dnevni dump, replika i verzije bucketa (BACKEND §4.7) | Nastanak kopije | Vlastiti rok po vrsti kopije; PITR 3 dana je tehnička postavka; ostalo otvoreno (D-12, Q-16) | planirano |
-| 30 | Lokalni dnevnik na uređaju | Lokalni zapis na uređaju | Rad bez mreže (Dexie) | Sinkronizacija; odjava | Do sinkronizacije; rok trajanja prije pilota (D-118, D-122) | izgrađeno u pregledniku, bez tablice |
+| 24 | Zapis AI pomoćnika | Evidencija | Prijenosi iz pomoćnika i razgovori (D-194) | Predaja | otvoreno (D-30 PRIJEDLOG, Q-16); uz Q-10 | planirano; kategorija za potvrdu |
+| 25 | Zapis pristupa radu | Revizijski trag | Tko je otvorio rad (PRAVILO 17) | Pristup | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „dulje od predaje”; briše ga samo uska funkcija (D-272 MQ05) | izgrađeno |
+| 26 | Događaji promjena ovlasti | Revizijski trag | Trag promjena članstva, uloga, mentorstva i pravila | Događaj | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno |
+| 27 | Hashevi i potvrde | Evidencija | Dokaz predaje nakon brisanja sadržaja | Predaja | otvoreno (D-30 PRIJEDLOG, Q-16); prijedlog „rok klase 16 uz rok za prigovor”; do potvrde osobni podatak (D-272 MQ06, D-264 Q11) | izgrađeno |
+| 28 | Evidencija brisanja | Revizijski trag | Nadgrobni zapis brisanja (tablica `erasure`) | Završen posao brisanja | otvoreno (D-30 PRIJEDLOG, Q-16) | planirano (M10.0-S1) |
+| 29 | Kopije baze i bucketa | Kopije | PITR, dnevni dump, replika i verzije bucketa (BACKEND §4.7) | Nastanak kopije | otvoreno (D-30 PRIJEDLOG, Q-16); vlastiti rok po vrsti kopije (D-12); PITR 3 dana je tehnička postavka, ne rok | planirano |
+| 30 | Lokalni dnevnik na uređaju | Lokalni zapis na uređaju | Rad bez mreže (Dexie) | Sinkronizacija; odjava | otvoreno (D-30 PRIJEDLOG, Q-16); zapis živi do sinkronizacije, rok trajanja odlučuje se prije pilota (D-118, D-122) | izgrađeno u pregledniku, bez tablice |
 
 ## 3. Tablice po klasama
 
