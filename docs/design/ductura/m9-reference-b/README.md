@@ -1,6 +1,6 @@
 # Referentna slika M9: A-AI-POL, S31-AI i N-AI-ATT (paket 14, DAN-411)
 
-Paket 14 iz `docs/design/EKRANI.md` §4, ovdje ekrani A-AI-POL, S31-AI i N-AI-ATT (N-AI-ATT dodan zasebnim PR-om nakon #1698). Smjer je „papir i grafit” (D-188, `docs/design/DESIGN-SYSTEM.md`). Samo specifikacija sučelja (D-269 O7), bez koda. Spajanje PR-a vlasnikovom porukom „Spoji n” znači odobrenje slika kao reference (D-183); dotad su prijedlog. Podaci su izmišljeni.
+Paket 14 iz `docs/design/EKRANI.md` §4, ovdje ekrani A-AI-POL, S31-AI i N-AI-ATT (N-AI-ATT dodan zasebnim PR-om nakon #1698; status PRIJEDLOG do vlasnikove potvrde reference po ekranu, Q-8). Smjer je „papir i grafit” (D-188, `docs/design/DESIGN-SYSTEM.md`). Samo specifikacija sučelja (D-269 O7), bez koda. Spajanje PR-a vlasnikovom porukom „Spoji n” znači odobrenje slika kao reference (D-183); dotad su prijedlog. Podaci su izmišljeni.
 
 ## Stranice
 
