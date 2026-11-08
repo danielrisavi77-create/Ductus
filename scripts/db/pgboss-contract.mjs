@@ -3,7 +3,8 @@
 // dbmate migration. This checks that pg-boss is pinned exactly and equally in
 // package.json, the lockfile importer and node_modules, with schema 46; that
 // the up section of the schema migration is PREAMBLE + the transactional body
-// of getConstructionPlans("pgboss") verbatim + POSTAMBLE; and that only the
+// of getConstructionPlans("pgboss") verbatim + POSTAMBLE, with one squawk-ignore
+// line before the singleton_on column of pgboss.job as the only addition; and that only the
 // three pg-boss migrations name the schema, so an upgrade (a new migration
 // from getMigrationPlans) changes this list and the pin together.
 //
@@ -42,6 +43,14 @@ const DIR = "db/migrations";
 const UP = "-- migrate:up";
 const DOWN = "-- migrate:down";
 const WRAPPED = /^\s*BEGIN;\n([\s\S]*)\n\s*COMMIT;\s*$/;
+// pg-boss keeps pgboss.job.singleton_on as timestamp without time zone; Squawk's
+// prefer-timestamp-tz is acknowledged for that column (INLINE_RULES of the
+// Squawk migration lint, DAN-319). Squawk 2.70.0 applies a
+// squawk-ignore comment to the next line only, so the line goes right before
+// the column, indented like it, not before the statement.
+export const IGNORE = "-- squawk-ignore prefer-timestamp-tz";
+const JOB_TABLE = /^\s*CREATE TABLE pgboss\.job \($/;
+const SINGLETON_ON = /^(\s*)singleton_on timestamp without time zone,?$/;
 
 /** The plan without its BEGIN and COMMIT: dbmate wraps the migration itself. */
 export function planBody(plan) {
@@ -50,8 +59,27 @@ export function planBody(plan) {
   return match[1];
 }
 
+/**
+ * The body with the IGNORE line before the singleton_on column of its only
+ * CREATE TABLE pgboss.job; that column is the plan's only timestamp without
+ * time zone, and it must lie inside that statement.
+ */
+export function acknowledged(body) {
+  const lines = body.split("\n");
+  const table = lines.flatMap((line, index) => (JOB_TABLE.test(line) ? [index] : []));
+  if (table.length !== 1) throw new Error(`the construction plan has ${table.length} CREATE TABLE pgboss.job statements, expected 1`);
+  const column = lines.flatMap((line, index) => (SINGLETON_ON.test(line) ? [index] : []));
+  if (column.length !== 1) throw new Error(`the construction plan has ${column.length} singleton_on timestamp without time zone columns, expected 1`);
+  const end = lines.findIndex((line, index) => index > table[0] && /^\s*\)/.test(line));
+  if (column[0] < table[0] || end < 0 || column[0] > end) throw new Error("the singleton_on column is not inside CREATE TABLE pgboss.job");
+  const untimed = lines.filter((line) => /timestamp without time zone/i.test(line)).length;
+  if (untimed !== 1) throw new Error(`the construction plan has ${untimed} lines with timestamp without time zone, expected 1`);
+  lines.splice(column[0], 0, `${SINGLETON_ON.exec(lines[column[0]])[1]}${IGNORE}`);
+  return lines.join("\n");
+}
+
 export function expectedUp(plan) {
-  return PREAMBLE + planBody(plan) + POSTAMBLE;
+  return PREAMBLE + acknowledged(planBody(plan)) + POSTAMBLE;
 }
 
 /** The lines between "-- migrate:up" and "-- migrate:down", each ending in LF. */
@@ -113,7 +141,7 @@ export async function checkRepository(root = process.cwd()) {
   });
   const actual = upText(read(path.posix.join(DIR, MIGRATIONS.schema)));
   if (actual !== expectedUp(installed.plan)) {
-    errors.push(`${DIR}/${MIGRATIONS.schema}: the up section is not PREAMBLE + getConstructionPlans("${SCHEMA_NAME}") of pg-boss ${PIN.version} + POSTAMBLE`);
+    errors.push(`${DIR}/${MIGRATIONS.schema}: the up section is not PREAMBLE + getConstructionPlans("${SCHEMA_NAME}") of pg-boss ${PIN.version}, with "${IGNORE}" before the singleton_on column of pgboss.job, + POSTAMBLE`);
   }
   const names = readdirSync(path.join(root, DIR)).filter((name) => name.endsWith(".sql"));
   for (const name of Object.values(MIGRATIONS)) {

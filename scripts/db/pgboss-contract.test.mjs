@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
-  MIGRATIONS, PIN, POSTAMBLE, PREAMBLE,
-  checkPin, checkRepository, expectedUp, installedPackage, planBody, strayMentions, upText,
+  IGNORE, MIGRATIONS, PIN, POSTAMBLE, PREAMBLE,
+  acknowledged, checkPin, checkRepository, expectedUp, installedPackage, planBody, strayMentions, upText,
 } from "./pgboss-contract.mjs";
 
 // DAN-517 (D-91, baza-i-pogon 4.8 t. 7): the pg-boss schema migration is the
@@ -30,6 +30,53 @@ test("one changed byte in the up section breaks the contract", async () => {
   assert.notEqual(upText(edited), expectedUp(plan));
   const noPostamble = text.replace("REVOKE CREATE ON SCHEMA pgboss FROM ductus_queue;\n", "");
   assert.notEqual(upText(noPostamble), expectedUp(plan));
+});
+
+test("the up section accepts exactly one squawk-ignore line, right before the singleton_on column", async () => {
+  const text = readFileSync(schemaFile, "utf8");
+  const { plan } = await installedPackage(root);
+  // Squawk 2.70.0 applies squawk-ignore to the next line only, so the line sits
+  // on the column it acknowledges, not on the statement.
+  const line = `      ${IGNORE}\n`;
+  const column = "      singleton_on timestamp without time zone,\n";
+  assert.equal(text.split(line).length, 2);
+  assert.ok(text.includes(line + column));
+  assert.equal(upText(text), expectedUp(plan));
+  // Each changed shape or place of the line is a different up section, so the contract fails.
+  const shapes = {
+    "no line": text.replace(line, ""),
+    "another comment": text.replace(line, "      -- pg-boss column\n"),
+    "another rule": text.replace(line, "      -- squawk-ignore ban-drop-column\n"),
+    "two rules": text.replace(line, "      -- squawk-ignore prefer-timestamp-tz, ban-drop-constraint\n"),
+    "two lines": text.replace(line, line + line),
+    "not indented": text.replace(line, `${IGNORE}\n`),
+    "trailing comment instead": text.replace(line + column, column.replace(",\n", `, ${IGNORE}\n`)),
+    "after the column": text.replace(line + column, column + line),
+    "before the statement": text.replace(line, "").replace("    CREATE TABLE pgboss.job (\n", `    ${IGNORE}\n    CREATE TABLE pgboss.job (\n`),
+    "before an earlier statement": text.replace(line, "").replace("    CREATE TABLE pgboss.version (", `    ${IGNORE}\n    CREATE TABLE pgboss.version (`),
+    "file wide": text.replace(line, "      -- squawk-ignore-file prefer-timestamp-tz\n"),
+  };
+  for (const [label, edited] of Object.entries(shapes)) {
+    assert.notEqual(edited, text, label);
+    assert.notEqual(upText(edited), expectedUp(plan), label);
+  }
+});
+
+test("acknowledged puts the line before the one singleton_on column inside CREATE TABLE pgboss.job", () => {
+  const job = (columns) => `A;\n    CREATE TABLE pgboss.job (\n${columns}\n    ) PARTITION BY LIST (name)\n  ;`;
+  const singleton = "      singleton_on timestamp without time zone,";
+  assert.equal(
+    acknowledged(job(`      id uuid,\n${singleton}\n      started_on timestamp with time zone`)),
+    job(`      id uuid,\n      ${IGNORE}\n${singleton}\n      started_on timestamp with time zone`),
+  );
+  assert.equal(acknowledged("CREATE TABLE pgboss.job (\nsingleton_on timestamp without time zone\n);"), `CREATE TABLE pgboss.job (\n${IGNORE}\nsingleton_on timestamp without time zone\n);`);
+  assert.throws(() => acknowledged(job("      id uuid").replace("pgboss.job (", "pgboss.queue (")), /has 0 CREATE TABLE pgboss\.job/);
+  assert.throws(() => acknowledged(job(singleton).replace("pgboss.job (", "pgboss.job_common (")), /has 0 CREATE TABLE/);
+  assert.throws(() => acknowledged(`${job(singleton)}\n${job("      id uuid")}`), /has 2 CREATE TABLE/);
+  assert.throws(() => acknowledged(job("      id uuid")), /has 0 singleton_on/);
+  assert.throws(() => acknowledged(job(`${singleton}\n${singleton}`)), /has 2 singleton_on/);
+  assert.throws(() => acknowledged(`CREATE TABLE pgboss.x (\n${singleton}\n);\n${job("      id uuid")}`), /not inside CREATE TABLE pgboss\.job/);
+  assert.throws(() => acknowledged(`${job(singleton)}\nCREATE TABLE pgboss.y (at timestamp without time zone);`), /has 2 lines with timestamp without time zone/);
 });
 
 test("the postamble takes back every right the preamble grants and ends as the migrator", () => {

@@ -6,8 +6,11 @@
 -- CREATE SCHEMA IF NOT EXISTS checks the database CREATE right before it sees
 -- the schema of the previous migration, so ductus_queue holds that right and
 -- CREATE on the schema for this transaction only.
--- scripts/db/pgboss-contract.mjs compares the section with the
--- package: do not edit it by hand. Grants, RLS and the dated queue_stats
+-- The only addition is the line "-- squawk-ignore prefer-timestamp-tz" right
+-- before the singleton_on column of the job table: pg-boss keeps it as
+-- timestamp without time zone, and Squawk applies the line to the next line
+-- only. scripts/db/pgboss-contract.mjs compares the section with the package:
+-- do not edit it by hand. Grants, RLS and the dated queue_stats
 -- partitions are the next migration.
 -- migrate:up
 SET LOCAL ROLE ductus_migrator;
@@ -228,6 +231,7 @@ CREATE SCHEMA IF NOT EXISTS pgboss;
       expire_seconds int not null default 900,
       deletion_seconds int not null default 604800,
       singleton_key text,
+      -- squawk-ignore prefer-timestamp-tz
       singleton_on timestamp without time zone,
       group_id text,
       group_tier text,
