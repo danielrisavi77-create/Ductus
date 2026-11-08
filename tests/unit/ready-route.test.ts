@@ -118,6 +118,42 @@ describe("GET /api/ready", () => {
     expect(log.mock.calls).toEqual([["readiness", { queue: "42501" }]]);
   });
 
+  it("never borrows more than one connection per database probe while probes hang", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      // withActor takes no signal: a probe past its limit keeps its connection
+      // until the pool's own query limit. Model that with probes that hang.
+      const releases: Array<() => void> = [];
+      withActor.mockImplementation(
+        (_token, fn) =>
+          new Promise((resolve, reject) => {
+            releases.push(() => fn({ query: answers("ok") }).then(resolve, reject));
+          }),
+      );
+      for (let call = 0; call < 5; call += 1) {
+        const response = GET();
+        await vi.advanceTimersByTimeAsync(3_000);
+        const body = await (await response).json();
+        expect(body.capabilities.database).toBe("nedostupno");
+        expect(body.capabilities.queue).toBe("nedostupno");
+      }
+      // One database probe and one queue probe, not one of each per call.
+      expect(withActor).toHaveBeenCalledTimes(2);
+      for (const release of releases) release();
+      await vi.advanceTimersByTimeAsync(0);
+      // Once they settle, the next call probes afresh and gets the answer.
+      const next = GET();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(withActor).toHaveBeenCalledTimes(4);
+      for (const release of releases.slice(2)) release();
+      const body = await (await next).json();
+      expect(body.capabilities).toMatchObject({ database: "ok", queue: "ok" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("refuses storage that is not the router rather than guessing", async () => {
     database(answers("ok"));
     vi.spyOn(console, "error").mockImplementation(() => {});

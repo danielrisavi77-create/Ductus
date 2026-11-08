@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   CAPABILITY_TIMEOUT_MS,
@@ -7,6 +7,7 @@ import {
   classifyQueue,
   classifyStorage,
   signingOutcome,
+  singleFlight,
   type Capability,
   type CapabilityName,
   type Probe,
@@ -183,5 +184,38 @@ describe("capability classifiers", () => {
 
   it("signing that answers is ok", async () => {
     await expect(signingOutcome(async () => ({}))).resolves.toBe("ok");
+  });
+});
+
+describe("singleFlight", () => {
+  it("shares one unsettled call and starts a new one once it settles", async () => {
+    let release: (value: string) => void = () => {};
+    const fn = vi.fn(() => new Promise<string>((resolve) => (release = resolve)));
+    const once = singleFlight(fn);
+    const first = once();
+    const second = once();
+    expect(second).toBe(first);
+    await Promise.resolve();
+    expect(fn).toHaveBeenCalledTimes(1);
+    release("a");
+    await expect(first).resolves.toBe("a");
+    const third = once();
+    expect(third).not.toBe(first);
+    await Promise.resolve();
+    expect(fn).toHaveBeenCalledTimes(2);
+    release("b");
+    await expect(third).resolves.toBe("b");
+  });
+
+  it("clears after a rejection, including a synchronous throw", async () => {
+    let calls = 0;
+    const once = singleFlight(() => {
+      calls += 1;
+      if (calls === 1) throw Object.assign(new Error(SECRET), { code: "E1" });
+      return Promise.resolve("ok");
+    });
+    await expect(once()).rejects.toMatchObject({ code: "E1" });
+    await expect(once()).resolves.toBe("ok");
+    expect(calls).toBe(2);
   });
 });

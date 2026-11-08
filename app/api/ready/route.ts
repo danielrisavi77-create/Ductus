@@ -7,6 +7,7 @@ import {
   classifyQueue,
   classifyStorage,
   signingOutcome,
+  singleFlight,
   type Capability,
 } from "@/server/ready";
 
@@ -45,6 +46,13 @@ function inDatabase<T>(timeoutMs: number, sql: string, read: (rows: unknown[]) =
   });
 }
 
+// withActor cannot be cancelled, so a probe past its limit can still hold a
+// pool connection until the pool's query limit ends it. Calls that arrive
+// meanwhile wait on that same probe under their own limit, so readiness never
+// holds more than one connection per database probe (DAN-585).
+const databaseProbe = singleFlight(() => inDatabase(CAPABILITY_TIMEOUT_MS.database, "SELECT 1", () => "ok" as const));
+const queueProbe = singleFlight(() => inDatabase(CAPABILITY_TIMEOUT_MS.queue, QUEUE_SQL, (rows) => classifyQueue(rows[0])));
+
 /**
  * Only the database is required: without it nothing can be served. Storage,
  * signing and the queue are reported, so one shared fault does not take every
@@ -56,7 +64,7 @@ function capabilities(): Capability[] {
       name: "database",
       required: true,
       timeoutMs: CAPABILITY_TIMEOUT_MS.database,
-      probe: () => inDatabase(CAPABILITY_TIMEOUT_MS.database, "SELECT 1", () => "ok" as const),
+      probe: databaseProbe,
     },
     {
       name: "storage",
@@ -83,7 +91,7 @@ function capabilities(): Capability[] {
       name: "queue",
       required: false,
       timeoutMs: CAPABILITY_TIMEOUT_MS.queue,
-      probe: () => inDatabase(CAPABILITY_TIMEOUT_MS.queue, QUEUE_SQL, (rows) => classifyQueue(rows[0])),
+      probe: queueProbe,
     },
   ];
 }

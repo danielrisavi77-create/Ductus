@@ -126,3 +126,22 @@ export async function signingOutcome(publicKey: () => Promise<unknown>): Promise
     throw error;
   }
 }
+
+/**
+ * One call of `fn` at a time: while it is unsettled, later callers get the
+ * same promise; once it settles, the next caller starts a new one. A database
+ * probe that cannot be cancelled (withActor takes no signal) may hold a pool
+ * connection until the pool's own query limit; this keeps readiness to one
+ * such connection per probe instead of one per call.
+ */
+export function singleFlight<T>(fn: () => Promise<T>): () => Promise<T> {
+  let pending: Promise<T> | undefined;
+  return () => {
+    pending ??= Promise.resolve()
+      .then(fn)
+      .finally(() => {
+        pending = undefined;
+      });
+    return pending;
+  };
+}
