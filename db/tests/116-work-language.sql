@@ -49,6 +49,14 @@ SELECT is(
   'lock_assignment_teacher is an invoker helper of the owner role that no client may call'
 );
 SELECT is(
+  (SELECT p.proowner::regrole::text || ' ' || p.prosecdef::text || ' ' || p.provolatile::text
+          || ' ' || has_function_privilege('ductus_app', p.oid, 'EXECUTE')::text
+          || ' ' || has_function_privilege('public', p.oid, 'EXECUTE')::text
+   FROM pg_proc p WHERE p.oid = 'institution.lock_assignment_student(uuid, uuid)'::regprocedure),
+  'ductus_identity false v false false',
+  'lock_assignment_student is an invoker helper of the owner role that no client may call'
+);
+SELECT is(
   (SELECT a.attnotnull::text || ' ' || coalesce(pg_get_expr(d.adbin, d.adrelid), 'no default')
    FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
    WHERE a.attrelid = 'institution.assignment_version'::regclass AND a.attname = 'work_language'),

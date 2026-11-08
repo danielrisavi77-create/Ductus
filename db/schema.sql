@@ -5235,6 +5235,40 @@ $$;
 
 
 --
+-- Name: lock_assignment_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.lock_assignment_student(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_institution uuid;
+  v_assignment institution.assignment%ROWTYPE;
+BEGIN
+  SELECT a.institution_id INTO v_institution FROM app.current_actor() a;
+  SELECT a.* INTO v_assignment FROM institution.assignment a
+   WHERE a.id = p_assignment_id AND a.institution_id = v_institution;
+  IF NOT FOUND OR p_student_id IS NULL THEN
+    RETURN false;
+  END IF;
+  IF v_assignment.course_id IS NOT NULL THEN
+    PERFORM 1 FROM institution.course_member m
+     WHERE m.course_id = v_assignment.course_id AND m.institution_id = v_institution
+       AND m.user_id = p_student_id AND m.role = 'student' AND m.member_to IS NULL
+     FOR SHARE;
+  ELSE
+    PERFORM 1 FROM institution.mentorship s
+     WHERE s.id = v_assignment.mentorship_id AND s.institution_id = v_institution
+       AND s.student_id = p_student_id AND s.ended_at IS NULL
+     FOR SHARE;
+  END IF;
+  RETURN FOUND;
+END
+$$;
+
+
+--
 -- Name: lock_assignment_teacher(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -5979,8 +6013,12 @@ BEGIN
   END IF;
   -- A submission request waits here, or this call waits for it, then sees it.
   PERFORM 1 FROM institution.assignment a WHERE a.id = p_assignment_id FOR UPDATE;
-  -- Again on the rows as they are now, as in set_assignment_work_language.
+  -- Again on the rows as they are now, as in set_assignment_work_language,
+  -- the teacher first, then the student: two statements fix the lock order.
   IF NOT institution.lock_assignment_teacher(p_assignment_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF NOT institution.lock_assignment_student(p_assignment_id, p_student_id) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
   IF app.work_submission_requested(p_assignment_id, p_student_id) THEN

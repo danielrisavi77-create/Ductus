@@ -17,7 +17,11 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // assignment FOR UPDATE the change checks again, and locks FOR SHARE, the rows
 // that make its caller a teacher, so a revocation that committed while the
 // change waited, or that is in progress, refuses the change, and a later one
-// waits for the change in progress. Every person, course, text
+// waits for the change in progress. Two last cases race a change against the
+// removal of the student (review c.6721908047, fix contract c.6721916859): after
+// the assignment FOR UPDATE the change also checks again, and locks FOR SHARE,
+// the student's active membership, so a removal that committed while the change
+// waited refuses it, and a later one waits for it. Every person, course, text
 // and hash is invented; random ids of one random institution, removed
 // afterwards. Loopback only.
 const SAFE_ADMIN_URL: string =
@@ -32,10 +36,10 @@ const withActor = createWithActor(app);
 const institutionId = randomUUID();
 const courseId = randomUUID();
 const assignmentId = randomUUID();
-// Vesna, Nada and Lea teach the course; Ana, Dora and Mara study in it; Iva administers.
-const names = ["vesna", "nada", "lea", "ana", "dora", "mara", "iva"] as const;
-const teachers: readonly Name[] = ["vesna", "nada", "lea"];
-const students: readonly Name[] = ["ana", "dora", "mara"];
+// Vesna, Nada, Lea and Maja teach the course; Ana, Dora, Mara, Tea and Ema study in it; Iva administers.
+const names = ["vesna", "nada", "lea", "maja", "ana", "dora", "mara", "tea", "ema", "iva"] as const;
+const teachers: readonly Name[] = ["vesna", "nada", "lea", "maja"];
+const students: readonly Name[] = ["ana", "dora", "mara", "tea", "ema"];
 type Name = typeof names[number];
 const people = Object.fromEntries(names.map((name) => [name, { id: randomUUID(), token: randomBytes(32).toString("base64url") }])) as
   Record<Name, { id: string; token: string }>;
@@ -53,6 +57,9 @@ const setAssignment = (expectedVersion: number, language: string) => async (tx: 
 const revoke = (teacher: Name) => async (tx: ActorTransaction) =>
   (await tx.query<{ revoked: boolean }>("SELECT institution.revoke_teacher_role($1) AS revoked",
     [people[teacher].id])).rows[0].revoked;
+const removeStudent = (student: Name) => async (tx: ActorTransaction) =>
+  (await tx.query<{ removed: boolean }>("SELECT institution.remove_student($1, $2) AS removed",
+    [courseId, people[student].id])).rows[0].removed;
 const readWork = (student: Name) => async (tx: ActorTransaction) =>
   (await tx.query<{ language: string | null }>("SELECT institution.work_language($1, $2) AS language",
     [assignmentId, people[student].id])).rows[0].language;
@@ -201,7 +208,7 @@ async function cleanUp() {
     await client.query("BEGIN");
     // Disposable synthetic rows only; the append-only triggers stay active in normal operation.
     await client.query("SET LOCAL session_replication_role = replica");
-    for (const table of ["institution.work_language_override", "audit.access_log", "audit.teacher_role_event", "evidence.submission", "evidence.submission_request",
+    for (const table of ["institution.work_language_override", "audit.access_log", "audit.teacher_role_event", "audit.course_member_event", "evidence.submission", "evidence.submission_request",
       "evidence.document_checkpoint", "evidence.document_revision", "evidence.document", "evidence.project",
       "institution.notice_acknowledgment"]) {
       await client.query(`DELETE FROM ${table} WHERE institution_id = $1`, [institutionId]);
@@ -326,5 +333,44 @@ describe("work language against the revocation of the teacher role, over two rea
     expect(await settle(withActor(people.lea.token, setWork("mara", "hr")))).toEqual({ value: null, code: "ZD403" });
     const mara = { student: people.mara.id, language: "en" };
     expect(await overrides()).toEqual([...before(), mara].sort((a, b) => a.student.localeCompare(b.student)));
+  });
+});
+
+describe("work language against the removal of the student, over two real connections", () => {
+  const override = (student: Name) => stored().then((state) => state.overrides.filter((row) => row.student === people[student].id));
+
+  it("removal while the change waits on the assignment: the change sees it and writes nothing", async () => {
+    // Another transaction holds the assignment, so the change waits after its first check.
+    const blocker = await admin.connect();
+    let work: ReturnType<typeof settle<string | null>>;
+    try {
+      await blocker.query("BEGIN");
+      await blocker.query("SELECT 1 FROM institution.assignment WHERE id = $1 FOR UPDATE", [assignmentId]);
+      work = settle(withActor(people.maja.token, setWork("tea", "en")));
+      await waitForBlocked("set_work_language");
+      // The removal does not wait for the change and commits first.
+      expect(await settle(withActor(people.maja.token, removeStudent("tea")))).toEqual({ value: true, code: null });
+    } finally {
+      await blocker.query("COMMIT");
+      blocker.release();
+    }
+    expect(await work).toEqual({ value: null, code: "ZD403" });
+    expect(await override("tea")).toEqual([]);
+  });
+
+  it("change first: the removal waits for the change in progress, after which the change is refused", async () => {
+    const change = hold(people.maja.token, setWork("ema", "en"));
+    let removal: ReturnType<typeof settle<boolean>>;
+    try {
+      expect(await change.answered).toBe("en");
+      removal = settle(withActor(people.maja.token, removeStudent("ema")));
+      await waitForBlocked("remove_student");
+    } finally {
+      change.release();
+    }
+    await change.done;
+    expect(await removal).toEqual({ value: true, code: null });
+    expect(await settle(withActor(people.maja.token, setWork("ema", "hr")))).toEqual({ value: null, code: "ZD403" });
+    expect(await override("ema")).toEqual([{ student: people.ema.id, language: "en" }]);
   });
 });
