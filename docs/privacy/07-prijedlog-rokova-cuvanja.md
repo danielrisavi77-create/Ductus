@@ -76,7 +76,7 @@ Administratora ustanove imenuje samo operater, na pisani zahtjev fakulteta. Doka
 - Do potvrde FPZG-a i DPO-a hash teksta tretira se kao osobni podatak (D-264 Q11), pa se čuva samo za tu svrhu i ne koristi za drugu.
 - Dok se ne potvrdi da klasa nije izvršna za brisanje, hash se čuva (D-272 MQ06). To ne znači da je rok odobren.
 - Prijedlog trajanja je razdoblje predanog rada (klasa 16) uz rok za prigovor. Rok za prigovor nije zapisan (nepoznato).
-- Samo tretman kao osobni podatak vrijedi i za hash vezan uz obavijest (klasa 7, D-264 Q17) i hash `jti` odjave (klasa 3). Svrha i trajanje klase 27 se na njih ne prenose: klasa 7 slijedi svoj redak (rok nepoznat), a `jti` slijedi klasu 3 (30 dana nakon kraja, D-273 MQ08; briše se pri sljedećem upisu) i ne čuva se kao dokaz predaje.
+- Samo tretman kao osobni podatak vrijedi i za hash vezan uz obavijest (klasa 7, D-264 Q17) i hash `jti` odjave (klasa 3). Svrha i trajanje klase 27 se na njih ne prenose: klasa 7 slijedi svoj redak (rok nepoznat), a rok za `jti` zapis nije zasebno odlučen (nepoznato): 30 dana iz D-273 MQ08 određuje sesije, dok se istekli `jti` zapisi trenutno brišu tek pri sljedećem upisu, pa mogu ostati dulje. `jti` se ne čuva kao dokaz predaje.
 
 ## 6. Što ovaj prilog ne radi
 
