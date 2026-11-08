@@ -1,5 +1,6 @@
 import type { EvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
-import { REVISION_ZERO_JCS } from "@/domain/document/revision-zero";
+import { DOCUMENT_SCHEMA_VERSION, DOCUMENT_SCHEMA_VERSION_V2 } from "@/domain/document/schema";
+import { REVISION_ZERO_JCS, REVISION_ZERO_V2_JCS } from "@/domain/document/revision-zero";
 import {
   digestEvidenceReceiptPayloadV2,
   isEvidenceReceiptPayloadV2,
@@ -134,25 +135,46 @@ export function submissionReceiptCheck(
  * never the snapshot table) and compares the result with the requested
  * revision's hash (4.10 t. 1: no comparison with the snapshot in the demo).
  * The payloads are read from the storage domain of the record's institution.
+ *
+ * The replayer and revision 0 are those of `documentSchemaVersion` (contract
+ * §9.2). Any other value, of any type, is `unavailable` with a closed code
+ * before a payload is read: the check could not be made, never a verdict. A
+ * segment of the other format is refused by the replay as a mismatch.
  */
-export function reconstructSubmission<TDocument>(
+export function reconstructSubmission<TV1, TV2>(
   dependencies: {
     payloads: EvidencePayloadReader;
-    replayer: EvidenceStepReplayerV2<TDocument>;
+    replayers: { v1: EvidenceStepReplayerV2<TV1>; v2: EvidenceStepReplayerV2<TV2> };
     keys: readonly EvidenceDomainKey[];
   },
+  record: SubmissionRecord,
+  documentSchemaVersion: unknown,
+): Promise<EvidenceReconstructionOutcome> {
+  if (documentSchemaVersion === DOCUMENT_SCHEMA_VERSION) {
+    return reconstructWith(dependencies.replayers.v1, REVISION_ZERO_JCS, dependencies, record);
+  }
+  if (documentSchemaVersion === DOCUMENT_SCHEMA_VERSION_V2) {
+    return reconstructWith(dependencies.replayers.v2, REVISION_ZERO_V2_JCS, dependencies, record);
+  }
+  return Promise.resolve({ status: "unavailable", stage: "verification", reason: "document_version_unknown" });
+}
+
+function reconstructWith<TDocument>(
+  replayer: EvidenceStepReplayerV2<TDocument>,
+  revisionZeroJcs: string,
+  dependencies: { payloads: EvidencePayloadReader; keys: readonly EvidenceDomainKey[] },
   record: SubmissionRecord,
 ): Promise<EvidenceReconstructionOutcome> {
   return reconstructAndCompareEvidence(
     {
       chain: { readChain: async () => ({ status: "found", head: record.head, segments: record.segments }) },
       payloads: dependencies.payloads,
-      replayer: dependencies.replayer,
+      replayer,
       receipts: submissionReceiptCheck(record, dependencies.keys),
     },
     {
       evidencePackageId: record.evidencePackageId,
-      initialDocument: JSON.parse(REVISION_ZERO_JCS) as JcsJsonValue,
+      initialDocument: JSON.parse(revisionZeroJcs) as JcsJsonValue,
       expectedDocumentSha256: record.contentHash,
     },
   );

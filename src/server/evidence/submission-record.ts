@@ -1,4 +1,5 @@
 import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-replayer";
+import { createEditStepsV2Replayer } from "@/adapters/evidence/edit-steps-v2-replayer";
 import type { EvidenceReconstructionOutcome } from "@/application/evidence/evidence-reconstruction";
 import {
   reconstructSubmission,
@@ -10,6 +11,7 @@ import {
   bindPayloadReader,
   type InstitutionEvidencePayloadReader,
 } from "@/application/ports/evidence-reconstruction";
+import { DOCUMENT_SCHEMA_VERSION } from "@/domain/document/schema";
 import { isEvidenceDomainId, isReceiptPrincipalId } from "@/domain/forensics/evidence-receipt";
 import type { EvidenceDomainKey } from "@/domain/forensics/evidence-receipt-verifier";
 import type { WithActor } from "@/server/db/with-actor";
@@ -153,10 +155,13 @@ export async function reconstructSubmissionRecord(
   const outcome = await reconstructSubmission(
     {
       payloads: bindPayloadReader(dependencies.payloads, read.record.institutionId),
-      replayer: createEditStepsV1Replayer(),
+      replayers: { v1: createEditStepsV1Replayer(), v2: createEditStepsV2Replayer() },
       keys: read.keys,
     },
     read.record,
+    // Until the record carries the document's version (DB step 1, contract
+    // §7), every submitted document is v1.
+    DOCUMENT_SCHEMA_VERSION,
   );
   return { status: "reconstructed", record: read.record, outcome };
 }
