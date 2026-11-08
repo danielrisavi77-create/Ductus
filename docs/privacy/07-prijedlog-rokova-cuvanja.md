@@ -71,7 +71,7 @@ Administratora ustanove imenuje samo operater, na pisani zahtjev fakulteta. Doka
 
 ## 5. Hash kao osobni podatak i klasa 27 (D-264 Q11, D-272 MQ06)
 
-**Svrha klase 27 (obrazloženje).** Nakon što se sadržaj predanog rada obriše, potvrda i hash dokazuju da je rad predan u tom obliku i u to vrijeme. Provjera tada kaže „potvrda vrijedi, sadržaj nije dostupan”. Bez te klase student i fakultet ne bi mogli dokazati predaju nakon brisanja, što je jedina svrha klase.
+**Svrha klase 27 (obrazloženje).** Nakon što se sadržaj predanog rada obriše, potvrda i hash dokazuju da je rad predan u tom obliku i u to vrijeme. Provjera tada kaže „potvrda vrijedi, sadržaj nije dostupan”. Bez te klase student i fakultet ne bi mogli dokazati predaju nakon brisanja. To je svrha zbog koje se predlaže čuvanje nakon brisanja sadržaja. Klasa 27 obuhvaća i `evidence.receipt`, čije se potvrde koriste i pri prihvatu i sinkronizaciji evidencije; razgraničenje tih potvrda od potvrda predaje otvoreno je pitanje za FPZG i DPO-a, a rok za njih nije predložen (nepoznato).
 
 - Do potvrde FPZG-a i DPO-a hash teksta tretira se kao osobni podatak (D-264 Q11), pa se čuva samo za tu svrhu i ne koristi za drugu.
 - Dok se ne potvrdi da klasa nije izvršna za brisanje, hash se čuva (D-272 MQ06). To ne znači da je rok odobren.
