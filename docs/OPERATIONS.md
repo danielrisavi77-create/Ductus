@@ -64,9 +64,15 @@ Dnevni zapis je jedan unos za svaki radni dan u fazama A i B. Pokazuje da su pil
 | STOP | „nema okidača” ili upućivanje na zapis incidenta | „STOP” | |
 | Upisao | uloga, bez imena dok je repo javan | | |
 
-**Što se ne upisuje:** sadržaj rada, citati iz rada, imena studenata, AAI identifikatori ni drugi osobni podaci. Upisuju se samo brojevi i interni identifikatori incidenta. Pojedinosti sigurnosnog nalaza idu samo u nejavni zapis incidenta, a ovdje ostaje njegov ID. `[PRAVILO]` (`CLAUDE.md`, `docs/privacy/README.md` „Granice nacrta”)
+**Što se ne upisuje:**
 
-**Faza C:** dnevni zapis se ne vodi. Ankete i razgovori iz evaluacije pohranjuju se odvojeno od evidencije pisanja i ne povezuju se s njom (C-22, `docs/PRODUCT.md` §12). `[PRAVILO]`
+- U javni repo ne ide nijedan stvarni osobni ni studentski podatak, a od sigurnosnog nalaza samo njegov ID i status; pojedinosti nikad ne idu u javni repo. Ovo vrijedi za svaki dio dnevnog zapisa koji završi u repou. `[PRAVILO]` (`CLAUDE.md`, „Vanjski botovi”; `docs/privacy/README.md` „Granice nacrta”)
+- Za sam dnevni zapis, gdje god ga vlasnik smjesti: ne upisuju se sadržaj rada, citati iz rada, imena studenata, AAI identifikatori ni drugi osobni podaci, nego samo brojevi i interni identifikatori incidenta; pojedinosti sigurnosnog nalaza idu samo u nejavni zapis incidenta. `[PRIJEDLOG, nije odluka]`; odobrava vlasnik. Navedena pravila uređuju javni repo i nacrte privatnosti, ne nejavni operativni zapis, pa ovo za nejavno mjesto još nije odluka.
+
+**Faza C:**
+
+- Ankete i razgovori iz evaluacije pohranjuju se odvojeno od evidencije pisanja i ne povezuju se s njom. `[PRAVILO]` (C-22, `docs/PRODUCT.md` §12)
+- Dnevni zapis se u fazi C ne vodi. `[PRIJEDLOG, nije odluka]`; odobrava vlasnik. C-22 propisuje samo odvajanje evaluacije od evidencije pisanja, ne prestanak dnevnog zapisa.
 
 ### STOP
 
