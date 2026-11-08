@@ -6,7 +6,7 @@ BEGIN;
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(1411);
+SELECT plan(1475);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
@@ -16,8 +16,9 @@ SELECT bag_eq(
   ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
         'assignment', 'assignment_version', 'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
         'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
-        'course_editor', 'team_substitution', 'work_grant', 'mentorship_request', 'faculty_rule_version'],
-  'the institution schema holds exactly the twenty-one tables of this matrix'
+        'course_editor', 'team_substitution', 'work_grant', 'mentorship_request', 'faculty_rule_version',
+        'work_language_override'],
+  'the institution schema holds exactly the twenty-two tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -59,7 +60,8 @@ SELECT bag_eq(
     'ductus_app SELECT team_substitution',
     'ductus_app SELECT work_grant',
     'ductus_app SELECT mentorship_request',
-    'ductus_app SELECT faculty_rule_version'
+    'ductus_app SELECT faculty_rule_version',
+    'ductus_app SELECT work_language_override'
   ],
   'besides the owner only ductus_app holds a privilege on an institution table, and only SELECT'
 );
@@ -112,7 +114,9 @@ SELECT bag_eq(
     'mentorship_request: mentorship_request_owner ALL to ductus_identity',
     'mentorship_request: mentorship_request_read SELECT to ductus_app',
     'faculty_rule_version: faculty_rule_version_owner ALL to ductus_identity',
-    'faculty_rule_version: faculty_rule_version_read SELECT to ductus_app'
+    'faculty_rule_version: faculty_rule_version_read SELECT to ductus_app',
+    'work_language_override: work_language_override_owner ALL to ductus_identity',
+    'work_language_override: work_language_override_read SELECT to ductus_app'
   ],
   'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
@@ -126,6 +130,7 @@ SELECT bag_eq(
   ARRAY['assignment_version: assignment_version_immutable 27 O', 'assignment_version: assignment_version_no_truncate 34 O',
         'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O',
         'assignment_version: assignment_version_institution_fill 7 O',
+        'assignment_version: assignment_version_work_language 7 O',
         'course_enrollment_code: course_enrollment_code_institution_fill 7 O',
         'faculty_rule_version: faculty_rule_version_immutable 27 O', 'faculty_rule_version: faculty_rule_version_no_truncate 34 O',
         'faculty_rule_version: faculty_rule_version_has_event 5 O',
@@ -219,7 +224,14 @@ SELECT bag_eq(
     'appoint_institution_admin(p_user_id uuid, p_request_ref text)',
     'revoke_institution_admin(p_user_id uuid, p_request_ref text)',
     'check_admin_appointment() definer',
-    'check_last_admin() definer'
+    'check_last_admin() definer',
+    'is_work_language(p_language text)',
+    'assignment_version_work_language() definer',
+    'lock_assignment_teacher(p_assignment_id uuid)',
+    'lock_assignment_student(p_assignment_id uuid, p_student_id uuid)',
+    'set_assignment_work_language(p_assignment_id uuid, p_expected_version integer, p_work_language text) definer app',
+    'work_language(p_assignment_id uuid, p_student_id uuid) definer app',
+    'set_work_language(p_assignment_id uuid, p_student_id uuid, p_work_language text) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
@@ -276,7 +288,7 @@ CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'c
                         'notice_acknowledgment', 'faculty_work_rule', 'mentorship', 'notification',
                         'course_holder', 'seminar_group', 'seminar_group_teacher', 'seminar_group_member',
                         'course_editor', 'team_substitution', 'work_grant', 'mentorship_request',
-                        'faculty_rule_version']) WITH ORDINALITY AS t (tbl, n)
+                        'faculty_rule_version', 'work_language_override']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(
