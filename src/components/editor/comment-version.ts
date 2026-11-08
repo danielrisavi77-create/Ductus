@@ -45,9 +45,25 @@ export function submittedTextsOf(schema: Schema, document: CanonicalDocument): S
   }
 }
 
-/** Not yet a gate: every place is kept (the red step of K7c and K7d). */
+/**
+ * Keeps a place only where the paragraph holding it reads in the editor as in
+ * the version. Returns the same array while the document, the version and the
+ * places are the same, so a cursor move draws nothing again.
+ */
 export function createVersionGate() {
-  return (_doc: PmNode, _version: PlacementVersion, ranges: readonly (CommentRange | null)[]): readonly (CommentRange | null)[] => ranges;
+  let last: { doc: PmNode; version: PlacementVersion; ranges: readonly (CommentRange | null)[]; out: readonly (CommentRange | null)[] } | null = null;
+  return (doc: PmNode, version: PlacementVersion, ranges: readonly (CommentRange | null)[]): readonly (CommentRange | null)[] => {
+    if (version === "draft") return ranges;
+    if (last && last.doc === doc && last.version === version && last.ranges === ranges) return last.out;
+    const out = ranges.map((range) => {
+      if (range === null || version === null) return null;
+      const block = doc.resolve(range.from).parent;
+      const id = block.attrs[NODE_ID_ATTRIBUTE];
+      return typeof id === "string" && version.get(id) === block.textContent ? range : null;
+    });
+    last = { doc, version, ranges, out };
+    return out;
+  };
 }
 
 /**
