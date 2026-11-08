@@ -292,5 +292,39 @@ INSERT INTO step VALUES
   (1715, '12', 'db', $$ SELECT pg_temp.state() $$, 'marks z1.ana,z1.dora,z3.tomo,zm1.ana');
 SELECT * FROM pg_temp.run(1700, 1799);
 
+-- 13. A group teacher who is a member of her own group gets nothing for her own
+-- work through the group branch: there she is the student, never the teacher.
+-- Iva confirms Nina; Vesna makes her the teacher of G1, moves Ana there from
+-- G2, and once Nina has enrolled in K1 with its code, makes her a student of
+-- G1 as well.
+INSERT INTO step VALUES
+  (1801, '13', 'db', $$ INSERT INTO identity.teacher_eligibility (user_id, institution_id)
+                        VALUES (pg_temp.id('nina'), pg_temp.id('fak_a')) RETURNING 'ok' $$, 'ok'),
+  (1802, '13', 'iva', $$ SELECT 'ok' FROM institution.confirm_teacher_role({nina}) $$, 'ok'),
+  (1803, '13', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_teacher({g1}, {nina}) $$, 'ok'),
+  (1804, '13', 'vesna', $$ SELECT 'ok' FROM institution.end_group_assignment({g2}, {ana}) $$, 'ok'),
+  (1805, '13', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g1}, {ana}) $$, 'ok'),
+  (1806, '13', 'nina', $$ SELECT (e::text = '(enrolled,' || {k1} || ')')::text FROM institution.enroll_with_code('KOD-K1-TEST') e $$, 'true'),
+  (1807, '13', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g1}, {nina}) $$, 'ok'),
+  -- Nina is a student of K1, so Ana's mark reaches her only as the group's
+  -- teacher; Dora is of no group of hers.
+  (1808, '13', 'nina', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'true'),
+  (1809, '13', 'nina', $$ SELECT coalesce(institution.work_accommodation({z1}, {dora})::text, 'null') $$, 'null'),
+  (1810, '13', 'nina', $$ SELECT institution.set_work_accommodation({z1}, true)::text $$, 'true'),
+  (1811, '13', 'nina', $$ SELECT coalesce(institution.work_accommodation({z1}, {nina})::text, 'null') $$, 'true'),
+  (1812, '13', 'nina', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {z1} $$, '2');
+SELECT * FROM pg_temp.run(1800, 1819);
+-- Her own value above is the student's answer. The group branch, asked as the
+-- reader asks it (as its owner role, with her session), gives her Ana's work
+-- and not her own.
+SELECT is(pg_temp.ask_as('ductus_identity', 'nina',
+            $$ SELECT institution.actor_group_work({z1}, {nina})::text || ',' || institution.actor_group_work({z1}, {ana})::text $$),
+          'false,true', '1820 (class 13, nina): the group branch answers for Ana''s work, not for her own');
+INSERT INTO step VALUES
+  (1821, '13', 'nina', $$ SELECT institution.set_work_accommodation({z1}, false)::text $$, 'false'),
+  (1822, '13', 'nina', $$ SELECT coalesce(institution.work_accommodation({z1}, {nina})::text, 'null') $$, 'false'),
+  (1823, '13', 'db', $$ SELECT pg_temp.state() $$, 'marks z1.ana,z1.dora,z3.tomo,zm1.ana');
+SELECT * FROM pg_temp.run(1821, 1899);
+
 SELECT * FROM finish();
 ROLLBACK;
