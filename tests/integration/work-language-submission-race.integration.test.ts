@@ -12,10 +12,12 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // language against a submission in both orders. Both language writers take the
 // assignment FOR UPDATE; request_submission holds it FOR SHARE through
 // app.lock_student_assignment, so the submission that commits first fixes the
-// language. Two more cases race a change against the revocation of the
-// teacher role (review c.6721404472): the change locks the rows that make its
-// caller a teacher FOR SHARE, so a revocation waits for a change in progress
-// and one that commits first refuses the change. Every person, course, text
+// language. Three more cases race a change against the revocation of the
+// teacher role (review c.6721404472, fix contract c.6721468597): after the
+// assignment FOR UPDATE the change checks again, and locks FOR SHARE, the rows
+// that make its caller a teacher, so a revocation that committed while the
+// change waited, or that is in progress, refuses the change, and a later one
+// waits for the change in progress. Every person, course, text
 // and hash is invented; random ids of one random institution, removed
 // afterwards. Loopback only.
 const SAFE_ADMIN_URL: string =
@@ -30,9 +32,9 @@ const withActor = createWithActor(app);
 const institutionId = randomUUID();
 const courseId = randomUUID();
 const assignmentId = randomUUID();
-// Vesna and Nada teach the course; Ana, Dora and Mara study in it; Iva administers.
-const names = ["vesna", "nada", "ana", "dora", "mara", "iva"] as const;
-const teachers: readonly Name[] = ["vesna", "nada"];
+// Vesna, Nada and Lea teach the course; Ana, Dora and Mara study in it; Iva administers.
+const names = ["vesna", "nada", "lea", "ana", "dora", "mara", "iva"] as const;
+const teachers: readonly Name[] = ["vesna", "nada", "lea"];
 const students: readonly Name[] = ["ana", "dora", "mara"];
 type Name = typeof names[number];
 const people = Object.fromEntries(names.map((name) => [name, { id: randomUUID(), token: randomBytes(32).toString("base64url") }])) as
@@ -286,26 +288,42 @@ describe("work language against the revocation of the teacher role, over two rea
     expect(await overrides()).toEqual(before());
   });
 
-  it("change first: the revocation waits for the change in progress, which then is the last one", async () => {
-    // The assignment is held so that the change stops after its role check.
+  it("revocation while the change waits on the assignment: both changes see it and write nothing", async () => {
+    // Another transaction holds the assignment, so both changes wait after their first check.
     const blocker = await admin.connect();
     let work: ReturnType<typeof settle<string | null>>;
-    let revocation: ReturnType<typeof settle<boolean>>;
+    let assignment: ReturnType<typeof settle<number>>;
     try {
       await blocker.query("BEGIN");
       await blocker.query("SELECT 1 FROM institution.assignment WHERE id = $1 FOR UPDATE", [assignmentId]);
       work = settle(withActor(people.vesna.token, setWork("mara", "en")));
       await waitForBlocked("set_work_language");
-      revocation = settle(withActor(people.iva.token, revoke("vesna")));
-      await waitForBlocked("revoke_teacher_role");
+      assignment = settle(withActor(people.vesna.token, setAssignment(1, "en")));
+      await waitForBlocked("set_assignment_work_language");
+      // The revocation does not wait for the changes and commits first.
+      expect(await settle(withActor(people.iva.token, revoke("vesna")))).toEqual({ value: true, code: null });
     } finally {
       await blocker.query("COMMIT");
       blocker.release();
     }
-    expect(await work).toEqual({ value: "en", code: null });
+    expect(await work).toEqual({ value: null, code: "ZD403" });
+    expect(await assignment).toEqual({ value: null, code: "ZD403" });
+    expect(await stored()).toEqual({ version: 1, versions: 1, language: "hr", overrides: before() });
+  });
+
+  it("change first: the revocation waits for the change in progress, after which the teacher may not change it", async () => {
+    const change = hold(people.lea.token, setWork("mara", "en"));
+    let revocation: ReturnType<typeof settle<boolean>>;
+    try {
+      expect(await change.answered).toBe("en");
+      revocation = settle(withActor(people.iva.token, revoke("lea")));
+      await waitForBlocked("revoke_teacher_role");
+    } finally {
+      change.release();
+    }
+    await change.done;
     expect(await revocation).toEqual({ value: true, code: null });
-    expect(await settle(withActor(people.vesna.token, setWork("mara", "hr")))).toEqual({ value: null, code: "ZD403" });
-    expect(await settle(withActor(people.vesna.token, setAssignment(1, "en")))).toEqual({ value: null, code: "ZD403" });
+    expect(await settle(withActor(people.lea.token, setWork("mara", "hr")))).toEqual({ value: null, code: "ZD403" });
     const mara = { student: people.mara.id, language: "en" };
     expect(await overrides()).toEqual([...before(), mara].sort((a, b) => a.student.localeCompare(b.student)));
   });

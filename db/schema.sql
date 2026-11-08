@@ -5818,7 +5818,7 @@ DECLARE
   v_current integer;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
-  IF NOT institution.lock_assignment_teacher(p_assignment_id)
+  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
      OR EXISTS (SELECT 1 FROM institution.assignment a WHERE a.id = p_assignment_id AND a.mentorship_id IS NOT NULL) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
@@ -5827,6 +5827,11 @@ BEGIN
   END IF;
   -- A submission request waits here, or this call waits for it, then sees it.
   SELECT a.current_version INTO v_current FROM institution.assignment a WHERE a.id = p_assignment_id FOR UPDATE;
+  -- Again on the rows as they are now: a revocation that committed while this
+  -- call waited is seen, and one that comes later waits for this call.
+  IF NOT institution.lock_assignment_teacher(p_assignment_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
   IF v_current IS DISTINCT FROM p_expected_version THEN
     RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
   END IF;
@@ -5965,7 +5970,7 @@ DECLARE
   actor record;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
-  IF NOT institution.lock_assignment_teacher(p_assignment_id)
+  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
      OR institution.work_relation(p_student_id, p_assignment_id) IS DISTINCT FROM 'student' THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
@@ -5974,6 +5979,10 @@ BEGIN
   END IF;
   -- A submission request waits here, or this call waits for it, then sees it.
   PERFORM 1 FROM institution.assignment a WHERE a.id = p_assignment_id FOR UPDATE;
+  -- Again on the rows as they are now, as in set_assignment_work_language.
+  IF NOT institution.lock_assignment_teacher(p_assignment_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
   IF app.work_submission_requested(p_assignment_id, p_student_id) THEN
     RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
   END IF;
