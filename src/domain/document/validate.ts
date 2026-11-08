@@ -15,19 +15,29 @@
 import {
   DOCUMENT_BLOCK_TYPES_BY_VERSION,
   DOCUMENT_SCHEMA_VERSION,
+  DOCUMENT_SCHEMA_VERSION_V2,
+  MAX_CITATION_LOCATOR_CODE_POINTS,
   isAcceptedDocumentSchemaVersion,
   isHeadingLevel,
   isMark,
   isPlainBlockType,
   isNodeId,
+  isSourceId,
   marksAreCanonical,
   type CanonicalDocument,
+  type CitationNode,
   type DocumentNode,
+  type DocumentNodeV2,
+  type DocumentSchemaVersion,
   type InlineNode,
+  type InlineNodeV2,
   type HeadingLevel,
   type Mark,
   type NodeId,
+  type VersionedDocument,
 } from "./schema";
+import { isAllowedText } from "./forbidden";
+import { checkUnknownFields, validateSources } from "./validate-sources";
 import { isPlainObject } from "../json";
 
 /** Stable error codes. Never renamed without a schema version bump. */
@@ -52,6 +62,25 @@ export const VALIDATION_ERROR_CODES = [
   "MARKS_DUPLICATE",
   "MARKS_UNSORTED",
   "ADJACENT_TEXT_SAME_MARKS",
+  // Document v2 (docs/contracts/document-schema-v2.md). Appended, never
+  // inserted: the codes above keep their meaning and their position.
+  "SOURCES_NOT_ARRAY",
+  "SOURCES_TOO_MANY",
+  "SOURCE_NOT_OBJECT",
+  "SOURCE_TYPE_INVALID",
+  "SOURCE_FIELD_MISSING",
+  "SOURCE_FIELD_INVALID",
+  "SOURCE_ID_INVALID",
+  "SOURCE_ID_DUPLICATE",
+  "SOURCE_YEAR_INVALID",
+  "SOURCE_ACCESSED_INVALID",
+  "SOURCE_URL_INVALID",
+  "AUTHORS_INVALID",
+  "EDITORS_INVALID",
+  "AUTHOR_INVALID",
+  "CITATION_SOURCE_ID_INVALID",
+  "CITATION_LOCATOR_INVALID",
+  "CITATION_NOT_ALLOWED",
 ] as const;
 
 export type ValidationErrorCode = (typeof VALIDATION_ERROR_CODES)[number];
@@ -63,46 +92,71 @@ export type ValidationOutcome =
   | { ok: true; doc: CanonicalDocument }
   | { ok: false; errors: ValidationError[] };
 
-const DOCUMENT_FIELDS = new Set(["schemaVersion", "nodes"]);
+export type VersionedValidationOutcome =
+  | { ok: true; doc: VersionedDocument }
+  | { ok: false; errors: ValidationError[] };
+
+/** The top-level keys of each accepted version (contract §1). */
+const DOCUMENT_FIELDS: ReadonlyMap<DocumentSchemaVersion, ReadonlySet<string>> = new Map([
+  [DOCUMENT_SCHEMA_VERSION, new Set(["schemaVersion", "nodes"])],
+  [DOCUMENT_SCHEMA_VERSION_V2, new Set(["schemaVersion", "nodes", "sources"])],
+]);
 /** Paragraph and every other plain block type (`PLAIN_BLOCK_TYPES`). */
 const PARAGRAPH_FIELDS = new Set(["type", "id", "children"]);
 const HEADING_FIELDS = new Set(["type", "id", "level", "children"]);
 const INLINE_FIELDS = new Set(["type", "text", "marks"]);
+const CITATION_FIELDS = new Set(["type", "sourceId", "locator"]);
 
-function checkUnknownFields(
-  value: Record<string, unknown>,
-  allowed: ReadonlySet<string>,
-  path: string,
-  errors: ValidationError[],
-): void {
-  for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) {
-      errors.push({ path: `${path}.${key}`, code: "UNKNOWN_FIELD" });
-    }
-  }
+/**
+ * Validates `doc` as a v1 document, the only version the callers of this
+ * function read. Any other version, v2 included, is `SCHEMA_VERSION_INVALID`.
+ * Errors are collected (not fail-fast) so a caller can report everything
+ * wrong with a payload in one pass.
+ */
+export function validateDocument(doc: unknown): ValidationOutcome {
+  return validate(doc, (version) => version === DOCUMENT_SCHEMA_VERSION) as ValidationOutcome;
 }
 
 /**
- * Validates `doc`. Errors are collected (not fail-fast) so a caller can report
- * everything wrong with a payload in one pass.
+ * Validates `doc` as a document of any accepted version
+ * (`DOCUMENT_BLOCK_TYPES_BY_VERSION`): v1 by the rules of v1, v2 with its
+ * sources and citations. The version is returned as found, never changed.
  */
-export function validateDocument(doc: unknown): ValidationOutcome {
+export function validateVersionedDocument(doc: unknown): VersionedValidationOutcome {
+  return validate(doc, () => true);
+}
+
+function validate(
+  doc: unknown,
+  accepts: (version: DocumentSchemaVersion) => boolean,
+): VersionedValidationOutcome {
   const errors: ValidationError[] = [];
 
   if (!isPlainObject(doc)) {
     return { ok: false, errors: [{ path: "$", code: "DOCUMENT_NOT_OBJECT" }] };
   }
 
-  checkUnknownFields(doc, DOCUMENT_FIELDS, "$", errors);
+  const accepted =
+    isAcceptedDocumentSchemaVersion(doc.schemaVersion) && accepts(doc.schemaVersion)
+      ? doc.schemaVersion
+      : null;
+  // A document of a version the caller does not accept is still read, by the
+  // rules of v1, so that every error is reported; the document is refused.
+  // `validateDocument` therefore reads a v2 document as v1: its `sources` is
+  // also UNKNOWN_FIELD and a citation INLINE_TYPE_INVALID.
+  const rules = accepted ?? DOCUMENT_SCHEMA_VERSION;
 
-  if (!isAcceptedDocumentSchemaVersion(doc.schemaVersion)) {
+  checkUnknownFields(doc, DOCUMENT_FIELDS.get(rules)!, "$", errors);
+
+  if (accepted === null) {
     errors.push({ path: "$.schemaVersion", code: "SCHEMA_VERSION_INVALID" });
   }
-  // The nodes of a document with a version not accepted are still read, by
-  // the rules of v1, so that every error is reported; the document is refused.
-  const blockTypes = DOCUMENT_BLOCK_TYPES_BY_VERSION.get(
-    isAcceptedDocumentSchemaVersion(doc.schemaVersion) ? doc.schemaVersion : DOCUMENT_SCHEMA_VERSION,
-  )!;
+  const blockTypes = DOCUMENT_BLOCK_TYPES_BY_VERSION.get(rules)!;
+
+  const sources =
+    rules === DOCUMENT_SCHEMA_VERSION_V2
+      ? validateSources(Object.hasOwn(doc, "sources") ? doc.sources : undefined, errors)
+      : [];
 
   if (!Array.isArray(doc.nodes)) {
     errors.push({ path: "$.nodes", code: "NODES_NOT_ARRAY" });
@@ -114,12 +168,12 @@ export function validateDocument(doc: unknown): ValidationOutcome {
   }
 
   const seenIds = new Set<string>();
-  const nodes: DocumentNode[] = [];
+  const nodes: DocumentNodeV2[] = [];
 
   // Array.from turns holes into `undefined`, so a sparse array fails validation
   // instead of being skipped by forEach.
   Array.from(doc.nodes).forEach((rawNode, index) => {
-    const node = validateNode(rawNode, `$.nodes[${index}]`, blockTypes, seenIds, errors);
+    const node = validateNode(rawNode, `$.nodes[${index}]`, blockTypes, rules, seenIds, errors);
     if (node) {
       nodes.push(node);
     }
@@ -129,16 +183,19 @@ export function validateDocument(doc: unknown): ValidationOutcome {
     return { ok: false, errors };
   }
 
-  return { ok: true, doc: { schemaVersion: DOCUMENT_SCHEMA_VERSION, nodes } };
+  return rules === DOCUMENT_SCHEMA_VERSION_V2
+    ? { ok: true, doc: { schemaVersion: DOCUMENT_SCHEMA_VERSION_V2, nodes, sources } }
+    : { ok: true, doc: { schemaVersion: DOCUMENT_SCHEMA_VERSION, nodes: nodes as DocumentNode[] } };
 }
 
 function validateNode(
   raw: unknown,
   path: string,
   blockTypes: ReadonlySet<string>,
+  rules: DocumentSchemaVersion,
   seenIds: Set<string>,
   errors: ValidationError[],
-): DocumentNode | null {
+): DocumentNodeV2 | null {
   if (!isPlainObject(raw)) {
     errors.push({ path, code: "NODE_NOT_OBJECT" });
     return null;
@@ -186,17 +243,27 @@ function validateNode(
     return null;
   }
 
-  const children: InlineNode[] = [];
+  const children: InlineNodeV2[] = [];
+  // The last valid text run. A citation, valid or not, stands between the
+  // runs on either side of it, so they are not adjacent (contract §3.1).
+  let previous: InlineNode | null = null;
   Array.from(raw.children).forEach((rawChild, index) => {
-    const child = validateInline(rawChild, `${path}.children[${index}]`, errors);
-    if (child) {
-      const previous = children[children.length - 1];
-      if (previous && sameMarks(previous.marks, child.marks)) {
-        errors.push({
-          path: `${path}.children[${index}]`,
-          code: "ADJACENT_TEXT_SAME_MARKS",
-        });
+    const childPath = `${path}.children[${index}]`;
+    if (rules === DOCUMENT_SCHEMA_VERSION_V2 && isPlainObject(rawChild) && rawChild.type === "citation") {
+      previous = null;
+      if (type === "heading") {
+        errors.push({ path: childPath, code: "CITATION_NOT_ALLOWED" });
       }
+      const citation = validateCitation(rawChild, childPath, errors);
+      if (citation) children.push(citation);
+      return;
+    }
+    const child = validateInline(rawChild, childPath, errors);
+    if (child) {
+      if (previous && sameMarks(previous.marks, child.marks)) {
+        errors.push({ path: childPath, code: "ADJACENT_TEXT_SAME_MARKS" });
+      }
+      previous = child;
       children.push(child);
     }
   });
@@ -206,8 +273,41 @@ function validateNode(
   }
 
   return type === "heading"
-    ? { type: "heading", id, level, children }
+    ? { type: "heading", id, level, children: children as InlineNode[] }
     : { type, id, children };
+}
+
+/**
+ * A citation atom (contract §3.1). The copy holds `locator` only when the
+ * input has it as an own key: absent means "no locator", and `""` is refused
+ * so one meaning has one form.
+ */
+function validateCitation(
+  raw: Record<string, unknown>,
+  path: string,
+  errors: ValidationError[],
+): CitationNode | null {
+  checkUnknownFields(raw, CITATION_FIELDS, path, errors);
+
+  let ok = true;
+  const sourceId = raw.sourceId;
+  if (!isSourceId(sourceId)) {
+    errors.push({ path: `${path}.sourceId`, code: "CITATION_SOURCE_ID_INVALID" });
+    ok = false;
+  }
+  const hasLocator = Object.hasOwn(raw, "locator");
+  const locator = raw.locator;
+  if (hasLocator && !isAllowedText(locator, MAX_CITATION_LOCATOR_CODE_POINTS)) {
+    errors.push({ path: `${path}.locator`, code: "CITATION_LOCATOR_INVALID" });
+    ok = false;
+  }
+
+  if (!ok || !isSourceId(sourceId)) {
+    return null;
+  }
+  return hasLocator
+    ? { type: "citation", sourceId, locator: locator as string }
+    : { type: "citation", sourceId };
 }
 
 function sameMarks(a: readonly Mark[], b: readonly Mark[]): boolean {
