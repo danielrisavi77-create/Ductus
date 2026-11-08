@@ -304,7 +304,7 @@ describe("edit step format: the D-96 size limit, to the byte", () => {
 });
 
 describe("parseEditSteps", () => {
-  it.each(["ductus-edit-steps-v2", "ductus-test-insert-text-v0", "", null, undefined, 1, ["x"]])(
+  it.each(["ductus-edit-steps-v3", "DUCTUS-EDIT-STEPS-V2", "ductus-test-insert-text-v0", "", null, undefined, 1, ["x"]])(
     "refuses the unknown format %j before reading a step",
     (format) => {
       const trap = new Proxy([], {
