@@ -10,6 +10,7 @@ function ready(title: string): WorkContextRead {
     kind: "ready",
     course: "Izmišljeni kolegij",
     wordRange: null,
+    workLanguage: null,
     notice: {
       assignmentId: "00000000-0000-4000-8000-000000000001",
       versionNo: 1,

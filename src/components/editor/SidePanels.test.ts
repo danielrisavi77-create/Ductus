@@ -2,9 +2,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { messagesEn } from "@/lib/i18n/messages.en";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import type { NoticeView } from "@/components/student/assignment-notice-read";
+import type { WorkLanguage } from "@/domain/assignment/work-language";
 import { DEMO_ASSIGNMENT, DEMO_WORK } from "@/lib/i18n/demo-work.hr";
 
 import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
@@ -13,7 +15,8 @@ import { InstructionsPanel, WorkPanel, type PanelLoad, type WorkOverview } from 
 
 const t = messagesHr.workspace;
 
-const instructions = (load: PanelLoad<NoticeView>) => renderToStaticMarkup(createElement(InstructionsPanel, { load }));
+const instructions = (load: PanelLoad<NoticeView>, workLanguage?: WorkLanguage | null) =>
+  renderToStaticMarkup(createElement(InstructionsPanel, { load, workLanguage }));
 const work = (load: PanelLoad<WorkOverview>) => renderToStaticMarkup(createElement(WorkPanel, { load }));
 
 describe("right panel states (FE-D9)", () => {
@@ -77,6 +80,37 @@ describe("Upute", () => {
   });
 });
 
+// M2.10-P02 (DAN-386): the language of the work is said in words, once, and
+// only when it is known; nothing guesses Croatian.
+describe("Upute: language of the work", () => {
+  it.each([
+    ["hr", "Jezik rada: hrvatski"],
+    ["en", "Jezik rada: engleski"],
+  ] as const)("names %s in Croatian under the due time", (language, line) => {
+    const html = instructions({ kind: "ready", value: DEMO_ASSIGNMENT }, language);
+    expect(html.split(line).length - 1).toBe(1);
+    expect(html.indexOf("Rok: ")).toBeLessThan(html.indexOf(line));
+    expect(html.indexOf(line)).toBeLessThan(html.indexOf(DEMO_ASSIGNMENT.instructions));
+  });
+
+  it.each([[null], [undefined]])("leaves the line out without a known language (%s)", (language) => {
+    const html = instructions({ kind: "ready", value: DEMO_ASSIGNMENT }, language);
+    expect(html).not.toContain("Jezik rada");
+    expect(html).toContain(DEMO_ASSIGNMENT.title);
+  });
+
+  it("says nothing of a language while loading, on an error or when empty", () => {
+    for (const load of [{ kind: "loading" }, { kind: "unavailable" }, { kind: "empty" }] as const) {
+      expect(instructions(load, "en")).not.toContain("Jezik rada");
+    }
+  });
+
+  it("has the line and both names in the English catalogue too", () => {
+    expect(messagesEn.workspace.upute.workLanguage).toContain("{language}");
+    expect(messagesEn.workspace.upute.workLanguages).toEqual({ hr: "Croatian", en: "English" });
+  });
+});
+
 describe("Rad", () => {
   it("writes out every stage state and the mentor's note", () => {
     const html = work({ kind: "ready", value: DEMO_WORK });
@@ -103,6 +137,8 @@ describe("forbidden vocabulary (PRODUCT §5)", () => {
   it("appears nowhere in the rendered demo panels", () => {
     const shown = [
       instructions({ kind: "ready", value: DEMO_ASSIGNMENT }),
+      instructions({ kind: "ready", value: DEMO_ASSIGNMENT }, "hr"),
+      instructions({ kind: "ready", value: DEMO_ASSIGNMENT }, "en"),
       work({ kind: "ready", value: DEMO_WORK }),
     ].map((html) => html.replace(/<[^>]*>/g, " "));
     for (const text of shown) expect(findForbiddenTerms(text), text).toEqual([]);

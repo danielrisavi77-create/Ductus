@@ -13,6 +13,7 @@ Stanje: nacrt od 11. 10. 2026. na `main` (zadatak 1.7 iz issuea #239). Namjena: 
 | `03-obavijest-o-privatnosti-nacrt.md` | Nacrt obavijesti za studente |
 | `04-podizvrsitelji-i-atributi-prijave.md` | Podizvršitelji kako ih predlažu dokumenti i atributi prijave |
 | `05-otvorena-pitanja.md` | Pitanja za ustanovu i vlasnika, po redoslijedu blokade; dokazi potrebni prije pilota |
+| `06-klase-podataka.md` | Klase podataka (DATA-CLASS): svrha, okidač, rok i stanje po klasi; svaka tablica iz migracija u jednoj klasi |
 
 ## Oznake koje se koriste u svim datotekama
 

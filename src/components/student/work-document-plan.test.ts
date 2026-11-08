@@ -22,6 +22,7 @@ function ready(assignmentId = ID): WorkContextRead {
     kind: "ready",
     course: "Izmišljeni kolegij",
     wordRange: null,
+    workLanguage: null,
     notice: {
       assignmentId,
       versionNo: 1,

@@ -2,6 +2,7 @@ import type { WithActor } from "@/server/db/with-actor";
 import type { WordRange } from "@/lib/i18n/length-line";
 
 import { AI_PURPOSES } from "@/components/teacher/assignment-create";
+import { parseWorkLanguage, type WorkLanguage } from "@/domain/assignment/work-language";
 
 import type { NoticeView } from "./assignment-notice-read";
 
@@ -37,6 +38,8 @@ interface Row {
   word_min: number | null;
   word_max: number | null;
   acknowledged_at: Date | null;
+  /** institution.work_language: unknown until parsed. */
+  work_language?: unknown;
 }
 
 // Keep the own-student and current-version predicates of readNotice. The
@@ -46,7 +49,8 @@ SELECT me.user_id, institution.actor_assignment_role(a.id) AS role, c.name AS co
   v.version_no, v.title, v.instructions, v.work_type, v.evidence_profile,
   v.opens_at, v.due_at, v.ai_policy, v.ai_purposes, v.word_min, v.word_max,
   (SELECT n.acknowledged_at FROM institution.notice_acknowledgment n
-    WHERE n.assignment_id = a.id AND n.version_no = a.current_version AND n.student_id = me.user_id) AS acknowledged_at
+    WHERE n.assignment_id = a.id AND n.version_no = a.current_version AND n.student_id = me.user_id) AS acknowledged_at,
+  institution.work_language(a.id, me.user_id) AS work_language
 FROM me
 LEFT JOIN institution.assignment a ON a.id = $1
 LEFT JOIN institution.assignment_version v ON v.assignment_id = a.id AND v.version_no = a.current_version
@@ -61,6 +65,13 @@ export type WorkContextRead =
       notice: NoticeView;
       /** Limits of that same acknowledged current version, if set. */
       wordRange: WordRange | null;
+      /**
+       * The language of this student's work (M2.10-P02), from the same
+       * statement: the override of the work or else that of the current
+       * version. Null for anything outside the closed set; nothing guesses
+       * Croatian. Not part of the notice, so never of its fingerprint.
+       */
+      workLanguage: WorkLanguage | null;
     }
   | { kind: "noticeFirst" }
   | { kind: "none" };
@@ -89,6 +100,7 @@ export async function readWorkContext(
       course: row.course_name,
       wordRange: row.word_min === null && row.word_max === null
         ? null : { min: row.word_min, max: row.word_max },
+      workLanguage: parseWorkLanguage(row.work_language),
       notice: {
         assignmentId,
         versionNo: row.version_no,

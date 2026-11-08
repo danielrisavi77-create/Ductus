@@ -7,3 +7,4 @@ export * from "./transaction";
 export * from "./equality";
 export * from "./edit-step";
 export * from "./chapters";
+export * from "./word-count";
