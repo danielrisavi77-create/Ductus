@@ -934,7 +934,7 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     const sheet = editorFor(session);
     sheet.type("x");
     await sheet.save();
-    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false });
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false, submitted: true });
   });
 
   it("S2-S4: after it nothing is recorded, saved, started or sent, and the refused row stays", async () => {
@@ -1215,7 +1215,7 @@ describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", ()
     const { session } = setup({ open });
     const result = await ready(session);
     expect((result as { document: CanonicalDocument }).document).toEqual(ASSIGNED);
-    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false });
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false, submitted: true });
   });
 
   it("O2-2: submitted: true never opens again, never commits, records or saves, and starts no runner or watch", async () => {
@@ -1330,6 +1330,79 @@ describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", ()
     expect(net.calls).toHaveLength(0);
     expect((await journal.readEvidence(DOC)).pending.map((row) => row.tx.clientTransactionId))
       .toEqual(before.pending.map((row) => row.tx.clientTransactionId));
+  });
+});
+
+// Review FAIL codex:cxcr1742 on c09d3dee (c.6726896384): a sticky local state
+// returns before `closedBy` is set, so the server's confirmed submission must
+// travel on its own, whatever stopped the load (K7c/K7d).
+describe("DAN-215: the server's submission is known whatever stopped the load", () => {
+  /** A journal whose stored state reads as `state`, as one left sticky by an earlier tab. */
+  async function stuckJournal(state: "CONFLICT" | "RECOVERY_REQUIRED" | null) {
+    const journal = openJournal();
+    const first = setup({ journal, online: network(false) });
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type(" lokalno");
+    await sheet.save();
+    first.session.close();
+    if (state === null) return journal;
+    const stuck = Object.create(journal) as AtomicDexieJournal;
+    stuck.readEvidence = async (id: string) => {
+      const contents = await journal.readEvidence(id);
+      return { ...contents, meta: { ...contents.meta!, state } };
+    };
+    return stuck;
+  }
+
+  const OPEN = {
+    submitted: async (): Promise<OpenOutcome> => ({ status: "opened", work: workFor(ASSIGNED, { submitted: true }) }),
+    "not submitted": async (): Promise<OpenOutcome> => ({ status: "opened", work: workFor(ASSIGNED, { submitted: false }) }),
+    unavailable: async (): Promise<OpenOutcome> => ({ status: "unavailable" }),
+  } as const;
+
+  // Every class of stored state × every answer of the open route.
+  const CASES = (["CONFLICT", "RECOVERY_REQUIRED", null] as const).flatMap((state) =>
+    (Object.keys(OPEN) as (keyof typeof OPEN)[]).map((answer) => [state ?? "clean", answer, state] as const));
+
+  it.each(CASES)("stored %s, the open route says %s", async (_label, answer, state) => {
+    const journal = await stuckJournal(state);
+    const { session } = setup({ journal, open: OPEN[answer], online: network(false), over: { storedProfile: () => PROFILE } });
+    const result = await session.load();
+    await session.settled();
+    const snapshot = session.snapshot();
+    expect(snapshot.submitted).toBe(answer === "submitted");
+    if (state !== null) {
+      // The sticky load itself is unchanged: its own state, never closed by submission.
+      expect(result).toMatchObject({ kind: "recovery", reason: "sticky" });
+      expect(snapshot).toMatchObject({ state, closedBy: null });
+    } else {
+      expect(result.kind).toBe("ready");
+      expect(snapshot.closedBy).toBe(answer === "submitted" ? "submission" : null);
+    }
+  });
+
+  it("a 409 not_accepting after the open says submitted too", async () => {
+    const net = server(R0, () => json(409, { status: "not_accepting" }));
+    const journal = openJournal();
+    const closed = watchClosedBySubmission(net.fetchImpl, async () => true);
+    const { session } = setup({
+      net, journal,
+      over: {
+        watchSubmission: closed.watch,
+        createRunner: (work) => createDrainRunner<QueuedTransaction>({
+          journal, transport: createEvidenceTransport(closed.fetchImpl), verifyFor: evidenceVerifierFor(work),
+          now: () => 0, jitter: () => 0.5,
+        }),
+      },
+    });
+    await ready(session);
+    expect(session.snapshot().submitted).toBe(false);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    await session.settled();
+    expect(session.snapshot()).toMatchObject({ closedBy: "submission", submitted: true });
   });
 });
 

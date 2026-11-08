@@ -17,7 +17,16 @@ import {
 import { EvidenceSession, type EvidenceSnapshot } from "./evidence-session";
 
 /** A snapshot of either saver; only the evidence session ever sets `closedBy`. */
-export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused">>;
+export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused" | "submitted">>;
+
+/**
+ * Whether the work is submitted (DAN-215, K7c/K7d): closed by submission, or
+ * the server's confirmed submission carried by a load that stopped earlier,
+ * such as a sticky local state. The local saver never knows of one.
+ */
+export function submittedOf(snapshot: DocumentSnapshot | null): boolean {
+  return snapshot?.closedBy === "submission" || snapshot?.submitted === true;
+}
 
 /**
  * The notice of the evidence session, if any (3d-2c2 §3): the server's work
