@@ -128,12 +128,6 @@
     "ticket": "DAN-379"
   },
   {
-    "function": "institution.set_assignment_work_language",
-    "status": "ruta dolazi",
-    "reason": "Jezik rada zadatka (nova verzija istog sadržaja); RPC postoji za ductus_app i omotač u src/server/institution/work-language.ts, ruta i sučelje dolaze u koraku M2.10-P02.",
-    "ticket": "DAN-386"
-  },
-  {
     "function": "institution.set_course_editor",
     "status": "ruta dolazi",
     "reason": "Nastavnik kolegija imenuje urednika kolegija i zatvara prethodnog (M2.7-P03); RPC postoji za ductus_app, ruta još nije spojena.",
@@ -150,12 +144,6 @@
     "status": "ruta dolazi",
     "reason": "Nastavnik kolegija upisuje zamjenu člana tima do zadanog roka (M2.7-P03); RPC postoji za ductus_app, ruta još nije spojena.",
     "ticket": "DAN-351"
-  },
-  {
-    "function": "institution.set_work_language",
-    "status": "ruta dolazi",
-    "reason": "Iznimka jezika za jedan rad; RPC postoji za ductus_app i omotač u src/server/institution/work-language.ts, ruta i sučelje dolaze u koraku M2.10-P02.",
-    "ticket": "DAN-386"
   },
   {
     "function": "institution.withdraw_mentorship_request",
