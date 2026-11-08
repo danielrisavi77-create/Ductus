@@ -1,7 +1,8 @@
 -- migrate:up
 -- DAN-380, M2.9-P01 (contract on #1091, c.6722796115): a student marks an
 -- approved accommodation on their own work (D-50); a teacher or mentor of the
--- work sees that it is marked, never why.
+-- work, a teacher of the student's seminar group included, sees that it is
+-- marked, never why.
 --
 -- The mark is a row and nothing else. No column, argument or log line holds a
 -- kind, a reason, a note or a diagnosis: whether the mark itself is health
@@ -35,8 +36,9 @@ CREATE POLICY work_accommodation_owner ON institution.work_accommodation TO duct
   USING (true) WITH CHECK (true);
 
 -- Is the work of p_student_id on the assignment marked: true or false for
--- that student and for a teacher or mentor of the work, null for anyone else,
--- so that nobody else learns whether a mark exists.
+-- that student and for a teacher or mentor of the work, a teacher of the
+-- student's seminar group included (actor_group_work, as collaboration.actor_role
+-- reads it), null for anyone else, so that nobody else learns whether a mark exists.
 CREATE FUNCTION institution.work_accommodation(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -50,7 +52,8 @@ BEGIN
   IF v_user IS NULL OR p_student_id IS NULL
      OR NOT coalesce((v_role = 'student' AND p_student_id = v_user)
                      OR (v_role = 'teacher'
-                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student'), false) THEN
+                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student')
+                     OR institution.actor_group_work(p_assignment_id, p_student_id), false) THEN
     RETURN NULL;
   END IF;
   RETURN EXISTS (
@@ -61,7 +64,8 @@ END
 $$;
 
 -- A direct read sees exactly the rows the reader answers: the student of the
--- work and a teacher or mentor of the work, while that student is still on it.
+-- work and a teacher or mentor of the work (or of the student's group), while
+-- that student is still on it.
 -- The reader runs as ductus_identity, where only the owner policy applies.
 CREATE POLICY work_accommodation_read ON institution.work_accommodation FOR SELECT TO ductus_app
   USING (

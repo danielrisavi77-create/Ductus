@@ -6277,7 +6277,8 @@ BEGIN
   IF v_user IS NULL OR p_student_id IS NULL
      OR NOT coalesce((v_role = 'student' AND p_student_id = v_user)
                      OR (v_role = 'teacher'
-                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student'), false) THEN
+                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student')
+                     OR institution.actor_group_work(p_assignment_id, p_student_id), false) THEN
     RETURN NULL;
   END IF;
   RETURN EXISTS (

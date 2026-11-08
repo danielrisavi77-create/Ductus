@@ -1,6 +1,7 @@
 -- DAN-380, M2.9-P01 (contract on #1091, c.6722796115; D-50): a student marks
 -- an approved accommodation on their own work; a teacher or mentor of the work
--- sees that it is marked, never why. Personas of institution.inc and
+-- (a teacher of the student's seminar group included) sees that it is marked,
+-- never why. Personas of institution.inc and
 -- mentorship.inc; every person and work is invented.
 --
 --   Vesna teaches K1 (Z1), whose students are Ana and Dora; Marko teaches K2
@@ -240,6 +241,34 @@ INSERT INTO step VALUES
   (1502, 'grant', 'vesna', $$ SELECT coalesce(institution.work_accommodation({zm1}, {ana})::text, 'null') $$, 'null'),
   (1503, 'grant', 'vesna', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {zm1} $$, '0');
 SELECT * FROM pg_temp.run(1300, 1599);
+
+-- 12. A teacher of the student's seminar group reads the mark like a course
+-- teacher, and loses it with the group place. Marko teaches K2 only and is no
+-- member of K1; Vesna opens G1 on K1 and puts him and Ana into it.
+INSERT INTO step VALUES
+  (1601, '12', 'ana', $$ SELECT institution.set_work_accommodation({z1}, true)::text $$, 'true'),
+  (1602, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'null'),
+  (1603, '12', 'marko', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {z1} $$, '0');
+SELECT * FROM pg_temp.run(1600, 1609);
+INSERT INTO ref VALUES ('g1', pg_temp.ask('vesna', $$ SELECT institution.create_seminar_group({k1}, 'Grupa 1') $$));
+INSERT INTO step VALUES
+  (1610, '12', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_teacher({g1}, {marko}) $$, 'ok'),
+  (1611, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'null'),
+  (1612, '12', 'vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g1}, {ana}) $$, 'ok'),
+  (1613, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'true'),
+  (1614, '12', 'marko', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {z1} $$, '1'),
+  -- Not of his group: Dora's row on Z1 stays hidden, and he writes nothing.
+  (1615, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {dora})::text, 'null') $$, 'null'),
+  (1616, '12', 'marko', $$ SELECT institution.set_work_accommodation({z1}, true)::text $$, 'ZD403: forbidden'),
+  (1617, '12', 'ana', $$ SELECT institution.set_work_accommodation({z1}, false)::text $$, 'false'),
+  (1618, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'false'),
+  (1619, '12', 'ana', $$ SELECT institution.set_work_accommodation({z1}, true)::text $$, 'true'),
+  -- Vesna ends Marko's place in G1: the mark is again none of his business.
+  (1620, '12', 'vesna', $$ SELECT 'ok' FROM institution.end_group_assignment({g1}, {marko}) $$, 'ok'),
+  (1621, '12', 'marko', $$ SELECT coalesce(institution.work_accommodation({z1}, {ana})::text, 'null') $$, 'null'),
+  (1622, '12', 'marko', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE assignment_id = {z1} $$, '0'),
+  (1623, '12', 'db', $$ SELECT pg_temp.state() $$, 'marks z1.ana,z1.dora,z3.tomo,zm1.ana');
+SELECT * FROM pg_temp.run(1610, 1699);
 
 SELECT * FROM finish();
 ROLLBACK;
