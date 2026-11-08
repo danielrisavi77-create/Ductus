@@ -30,7 +30,9 @@ export const PG_VERSION = "17.0";
 // The exceptions, rule -> reason, in one place. EXCLUDED_RULES are off for
 // every migration. INLINE_RULES may be switched off for one statement with a
 // line `-- squawk-ignore <rule>[, <rule>]` that the reviewer sees in the
-// migration; any other squawk-ignore form or rule is refused.
+// migration; any other squawk-ignore form or rule is refused. Squawk 2.70.0
+// applies the line to the next line only, so for a statement over several
+// lines it goes right before the line Squawk flags (e.g. a column).
 export const EXCLUDED_RULES = Object.freeze({
   "require-lock-timeout": "no migration sets lock_timeout; requiring SET LOCAL in each is a Backend decision (DAN-319 PR)",
   "require-statement-timeout": "no migration sets statement_timeout; same Backend decision as require-lock-timeout",
@@ -38,6 +40,7 @@ export const EXCLUDED_RULES = Object.freeze({
 });
 const IN_ONE_TRANSACTION = "dbmate runs the migration in one transaction, so the lock is unavoidable; acknowledge it per statement";
 const DELIBERATE_DROP = "a deliberate drop or replacement, acknowledged per statement";
+const GENERATED_PGBOSS = "pg-boss's generated schema (pgboss.job.singleton_on), held byte-exact by scripts/db/pgboss-contract.mjs; acknowledge it on the line before that column";
 export const INLINE_RULES = Object.freeze({
   "adding-foreign-key-constraint": IN_ONE_TRANSACTION,
   "constraint-missing-not-valid": IN_ONE_TRANSACTION,
@@ -47,6 +50,7 @@ export const INLINE_RULES = Object.freeze({
   "ban-drop-constraint": DELIBERATE_DROP,
   "ban-drop-function": DELIBERATE_DROP,
   "ban-drop-not-null": DELIBERATE_DROP,
+  "prefer-timestamp-tz": GENERATED_PGBOSS,
 });
 const IGNORE_LINE = /^\s*-- squawk-ignore ([a-z-]+(?:, [a-z-]+)*)$/;
 // dbmate v2.36.0 migrationFileRegexp (pkg/dbmate/db.go): the files it applies.
