@@ -190,12 +190,16 @@ Oblik prema odgovoru Q1: struktura kao u v1 (jedan prazan odlomak s fiksnim ID-o
 
 ## 7. Korak baze
 
-Zaseban PR nakon spajanja DAN-619 (odgovor Q1, Q2). Promjena u `db/migrations/` je nova migracija, a stare se ne mijenjaju.
+Dva zasebna PR-a (odgovori Q1, Q2; redoslijed iz odjeljka 9, orkestrator #1091 [c.6715141315](https://github.com/danielrisavi77-create/Ductus/issues/1091#issuecomment-6715141315)). Svaka promjena u `db/migrations/` je nova migracija, a stare se ne mijenjaju.
+
+Korak baze 1, nakon DAN-619 i prije DAN-620 (točke 1, 3 i 4). Ne mijenja koju verziju dobiva novi rad, pa svi radovi, i novi, ostaju v1.
+
+Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 
 1. Nova funkcija vraća v2 literal revizije nula. `evidence.revision_zero_document()` (v1) ostaje nepromijenjena.
-2. `app.open_student_work` za novi rad, u istoj transakciji u kojoj upisuje `evidence.document`, reviziju 0 i kontrolnu točku, upisuje v2 reviziju nula. Rad otvoren prije migracije ostaje v1. Trenutak prihvata v2 je ta migracija, a ne spajanje domene ni izdanje.
+2. `app.open_student_work` za novi rad, u istoj transakciji u kojoj upisuje `evidence.document`, reviziju 0 i kontrolnu točku, upisuje v2 reviziju nula. Rad otvoren prije migracije koraka baze 2 ostaje v1. Trenutak prihvata v2 je ta migracija, a ne spajanje domene, editora ni izdanje.
 3. Verzija rada je `schemaVersion` u hashiranim bajtovima revizije nula. Ugovor ne uvodi zaseban stupac kao drugi izvor istine. Ako ga korak baze uvede radi upita, mora biti izveden iz revizije nula u istoj transakciji i provjeren testom.
-4. Svaka sljedeća revizija mora imati istu `schemaVersion` kao revizija nula, inače se odbija bez upisa (#1711 K5, K7). Provjera je na poslužitelju u istoj transakciji kao upis revizije.
+4. Svaka sljedeća revizija mora imati istu `schemaVersion` kao revizija nula, inače se odbija bez upisa (#1711 K5, K7). Provjera je na poslužitelju u istoj transakciji kao upis revizije i vrijedi i za v1 radove (revizija v2 za v1 rad se odbija).
 5. Postojeća pravila otvaranja ostaju: jedinstveni ključ odlučuje, a ne prethodni upit (komentar u `20261019150000_evidence_open_work.sql`); vrijede i zaključavanje i provjere iz `20261104100000_group_scope.sql`.
 
 ## 8. Istodobnost
@@ -204,12 +208,12 @@ Zaseban PR nakon spajanja DAN-619 (odgovor Q1, Q2). Promjena u `db/migrations/` 
 - Poslužitelj vidi `schemaVersion: 2` revizije nula i odbija odsječak s formatom v1 (odjeljak 5.4). Ništa se ne upisuje.
 - Dnevnik klijenta se ne briše i ostaje za oporavak. Klijent ne prikazuje spremljeno (F-3/F-8).
 - Obrnut slučaj, koraci v2 za v1 rad, odbija se jednako.
-- Obavezan negativni test u DAN-619 (parser i replay) i u koraku baze (poslužitelj).
+- Obavezan negativni test u DAN-619 (parser i replay) i u koraku baze 1 (poslužitelj).
 
-**I2. Dva istodobna `app.open_student_work` za isti rad u trenutku migracije.**
+**I2. Dva istodobna `app.open_student_work` za isti rad u trenutku migracije koraka baze 2.**
 - Migracija je jedna transakcija. Poziv koji je počeo prije nje vidi staru funkciju i upisuje v1. Poziv poslije nje upisuje v2.
 - Jedinstveni ključ rada i revizije u istoj transakciji odlučuje da postoji točno jedna revizija nula, pa i jedna verzija rada. Drugi poziv vraća postojeći rad, ne upisuje drugu reviziju nula i ne mijenja verziju.
-- Obavezan test u koraku baze: dvije sesije otvaraju isti rad istodobno. Ishod je jedna revizija 0, jedan hash i ista verzija u oba odgovora. Uz njega ide pgTAP test da revizija s drugom `schemaVersion` od revizije nula nije upisana.
+- Obavezan test u koraku baze 2: dvije sesije otvaraju isti rad istodobno. Ishod je jedna revizija 0, jedan hash i ista verzija u oba odgovora. pgTAP test da revizija s drugom `schemaVersion` od revizije nula nije upisana ide već u korak baze 1.
 
 ## 9. Redoslijed PR-ova koda
 
@@ -217,13 +221,12 @@ Zaseban PR nakon spajanja DAN-619 (odgovor Q1, Q2). Promjena u `db/migrations/` 
    - (a) shema, validator i vektori;
    - (b) format koraka v2 i replay;
    - (c) bibliografija.
-   Nijedan dio ne mijenja `app.open_student_work`, pa novi rad ne može postati v2 prije koraka baze.
-2. **Korak baze** (odjeljak 7) s pgTAP i integracijskim testom iz odjeljka 8.
-3. **DAN-620, Tiptap**: čvor navoda u editoru, snimanje koraka v2 i izvora, `transactionFormat` prema radu. Tekstni navodi iz #866 ostaju tekst (D-226).
+   Nijedan dio ne mijenja `app.open_student_work`, pa novi rad ne može postati v2 prije koraka baze 2.
+2. **Korak baze 1** (odjeljak 7, točke 1, 3 i 4): v2 funkcija revizije nula i provjera iste verzije na svakoj reviziji, s pgTAP testom iz odjeljka 8 (I1). v1 radovi ostaju kakvi jesu i novi radovi su i dalje v1.
+3. **DAN-620, Tiptap**: čvor navoda u editoru, snimanje koraka v2 i izvora. Editor bira format (`transactionFormat`) i oblik dokumenta prema verziji revizije nula, pa radi i na v1 i na v2 radovima. Tekstni navodi iz #866 ostaju tekst (D-226).
+4. **Korak baze 2** (odjeljak 7, točka 2): `app.open_student_work` počinje stvarati v2 radove, s integracijskim testom iz odjeljka 8 (I2). To je trenutak prihvata iz odgovora Q2.
 
-**Otvoreno pitanje (BLOK na #1091).** U ovom redoslijedu korak baze uključuje v2 za nove radove (odgovor Q2) prije DAN-620. Između ta dva spajanja editor i dalje šalje `ductus-edit-steps-v1` (`src/editor/capture.ts`) i dokument bez `sources` (`src/editor/interop.ts`), pa poslužitelj odbija spremanje novog rada (odjeljci 5.4 i 7), a e2e na `main` pada. Ugovor ne mijenja redoslijed koji je zadao orkestrator. Korak baze se ne spaja dok orkestrator ne odgovori. Mogući odgovori:
-- (A) korak baze se dijeli: provjera iste verzije i v2 funkcija revizije nula prije DAN-620, a uključivanje v2 u `app.open_student_work` poslije DAN-620;
-- (B) DAN-620 ide prije koraka baze, jer editor bira format prema reviziji nula i radi i za v1.
+Svaki od ova četiri PR-a ostavlja `main` zelen, uključujući e2e. Redoslijed je odluka orkestratora na BLOK ovog ugovora (#1091 [c.6715141315](https://github.com/danielrisavi77-create/Ductus/issues/1091#issuecomment-6715141315), izbor (A)). Razlog: da korak baze uključi v2 prije DAN-620, editor bi i dalje slao `ductus-edit-steps-v1` (`src/editor/capture.ts`) i dokument bez `sources` (`src/editor/interop.ts`), pa bi poslužitelj odbio spremanje novog rada (odjeljci 5.4 i 7).
 
 ## 10. Klase ulaza i obavezni testovi
 
@@ -258,7 +261,8 @@ Generatori koriste samo sintetičke podatke iz #1711: „Izvor 1”, „str. 12�
 
 - Ovaj PR: samo `docs/contracts/document-schema-v2.md`.
 - DAN-619: `src/domain/document/{schema,validate,edit-step,revision-zero}.ts`, `src/adapters/evidence/edit-steps-v1-rules.ts` i novi replayeri v2, `src/domain/citation/` (izvođenje bibliografije), `src/domain/forensics/golden-vectors/` (rezervacija i vektori v2, #1711 V3).
-- Korak baze: nova migracija za `app.open_student_work` i provjeru verzije, `db/tests/`.
+- Korak baze 1: nova migracija za v2 funkciju revizije nula i provjeru verzije, `db/tests/`.
+- Korak baze 2: nova migracija za `app.open_student_work`, `db/tests/` i integracijski test.
 - DAN-620: `src/editor/` (shema, `capture.ts`), `src/components/editor/sources.ts` ostaje za v1 radove.
 
 ## Stvarni pozivatelj
