@@ -3,6 +3,7 @@ import { createElement as h, type ReactNode } from "react";
 import type { NoticeView } from "@/components/student/assignment-notice-read";
 import { zagrebParts } from "@/components/summary/zagreb-time";
 import { AI_PURPOSES } from "@/components/teacher/assignment-create";
+import type { WorkLanguage } from "@/domain/assignment/work-language";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./SidePanels.module.css";
@@ -57,7 +58,7 @@ function part(id: string, title: ReactNode, ...children: ReactNode[]): ReactNode
   return h(
     "section",
     { className: styles.part, "aria-labelledby": id },
-    h("h3", { id, className: styles.label }, title),
+    h("h2", { id, className: styles.label }, title),
     ...children,
   );
 }
@@ -67,7 +68,18 @@ function dueText(iso: string): string | null {
   return parts ? t.upute.due.replace("{date}", parts.date).replace("{time}", parts.time) : null;
 }
 
-export function InstructionsPanel({ load }: { load: PanelLoad<NoticeView> }): ReactNode {
+/**
+ * `workLanguage` is the language of the student's work (M2.10-P02), read
+ * beside the notice and not part of it; without one the line is left out
+ * rather than guessed.
+ */
+export function InstructionsPanel({
+  load,
+  workLanguage = null,
+}: {
+  load: PanelLoad<NoticeView>;
+  workLanguage?: WorkLanguage | null;
+}): ReactNode {
   if (load.kind !== "ready") return notReady(load, t.instructionsEmpty);
   const view = load.value;
   const due = dueText(view.dueAt);
@@ -80,6 +92,9 @@ export function InstructionsPanel({ load }: { load: PanelLoad<NoticeView> }): Re
       t.upute.task,
       h("p", { className: styles.title }, view.title),
       due ? h("p", { className: styles.meta }, due) : null,
+      workLanguage
+        ? h("p", { className: styles.meta }, t.upute.workLanguage.replace("{language}", t.upute.workLanguages[workLanguage]))
+        : null,
       h("p", { className: styles.text }, view.instructions),
     ),
     part(

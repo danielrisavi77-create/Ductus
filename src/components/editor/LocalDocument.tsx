@@ -43,6 +43,7 @@ import {
   createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type MouseEvent, type ReactNode,
 } from "react";
 
+import type { WorkLanguage } from "@/domain/assignment/work-language";
 import type { CanonicalDocument } from "@/domain/document";
 import {
   browserMarkStore, currentSession, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
@@ -749,8 +750,13 @@ function exportText(editor: Editor): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-/** The sheet: notices, the export escape hatch and the editor itself. */
-export function LocalEditor() {
+/**
+ * The sheet: notices, the export escape hatch and the editor itself. `lang`
+ * is the language of the work (M2.10-P02; WCAG 2.2 3.1.2, D-248) and marks
+ * the manuscript only: the notices above it are interface text and keep the
+ * page's language. Without a known language nothing is marked.
+ */
+export function LocalEditor({ lang = null }: { lang?: WorkLanguage | null } = {}) {
   const value = useLocalDocument();
   const { editor, phase } = value;
   const failure = failureOf(value);
@@ -780,7 +786,7 @@ export function LocalEditor() {
         </button>
       ) : null}
       {/* `data-phase` is for tests and styling only; it carries no text. */}
-      <EditorContent editor={editor} className="editor-surface" data-phase={phase} />
+      <EditorContent editor={editor} className="editor-surface" data-phase={phase} lang={lang ?? undefined} />
     </>
   );
 }
