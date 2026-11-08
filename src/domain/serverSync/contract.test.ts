@@ -5,9 +5,11 @@ import {
   newNodeId,
   paragraphNode,
   textNode,
+  validateVersionedDocument,
   type CanonicalDocument,
   type DocumentTransaction,
 } from "../document";
+import { revisionZeroDocumentV2 } from "../document/revision-zero";
 import {
   COMMIT_STATUSES,
   MAX_DOCUMENT_BYTES,
@@ -305,6 +307,36 @@ describe("commitRequestFromTransaction", () => {
 
   it("refuses a document over the size limit before it becomes a round trip", () => {
     expect(commitRequestFromTransaction(DOC_ID, tx({ document: oversizedDocument() }))).toBeNull();
+  });
+
+  it("refuses a document v2 until the v2 sync path exists (DAN-619)", () => {
+    const sourceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const withCitation = {
+      schemaVersion: 2,
+      nodes: [
+        {
+          type: "paragraph",
+          id: "11111111-1111-4111-8111-111111111111",
+          children: [{ type: "citation", sourceId, locator: "str. 12" }],
+        },
+      ],
+      sources: [
+        {
+          id: sourceId,
+          type: "book",
+          authors: [{ kind: "person", family: "Prezime", given: "Ime" }],
+          year: 2020,
+          title: "Izvor 1",
+          place: "Zagreb",
+          publisher: "Nakladnik",
+        },
+      ],
+    };
+    for (const document of [revisionZeroDocumentV2(), withCitation]) {
+      expect(validateVersionedDocument(document).ok).toBe(true);
+      const forged = { ...tx(), document } as unknown as DocumentTransaction;
+      expect(commitRequestFromTransaction(DOC_ID, forged)).toBeNull();
+    }
   });
 });
 

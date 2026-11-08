@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { REVISION_ZERO_V2_JCS, REVISION_ZERO_V2_SHA256 } from "@/domain/document/revision-zero";
 import { DOCUMENT_SCHEMA_VERSION, DOCUMENT_SCHEMA_VERSION_V2 } from "@/domain/document/schema";
+import { validateDocument, validateVersionedDocument } from "@/domain/document/validate";
+
+import { canonicalizeJcs } from "./jcs";
 
 import { verifyCanonicalEvidencePayloadV2 } from "./evidence-chain-v2";
 import {
@@ -42,6 +46,9 @@ type Vectors = {
     documentSchemaVersions: number[];
   };
   rejectedSegments: Rejected[];
+  documentsV1: unknown[];
+  documentsV2: { name: string; value: unknown; utf8Hex: string; sha256: string }[];
+  rejectedDocumentsV2: { name: string; value: unknown; errors: [string, string][] }[];
   pinnedFiles: Record<string, string>;
 };
 type Accepted = { name: string; canonical: string };
@@ -68,8 +75,10 @@ describe("format reservation (D-34, D-132)", () => {
     expect(RESERVED_EVIDENCE_SOURCES).toEqual(VECTORS.reserved.sources.map((entry) => entry.source));
     expect(RESERVED_EVIDENCE_EVENT_FIELDS).toEqual(VECTORS.reserved.sources.map((entry) => entry.eventField));
     expect(RESERVED_EVIDENCE_RECORD_SCHEMAS).toEqual(VECTORS.reserved.recordSchemas.map((entry) => entry.schema));
-    expect(VECTORS.reserved.documentSchemaVersions).toEqual([DOCUMENT_SCHEMA_VERSION_V2]);
+    // DAN-619 (#1711 V3): document v2 is accepted, so nothing stays reserved.
+    expect(VECTORS.reserved.documentSchemaVersions).toEqual([]);
     expect(DOCUMENT_SCHEMA_VERSION).toBe(1);
+    expect(DOCUMENT_SCHEMA_VERSION_V2).toBe(2);
   });
 
   it("G1: no reserved value is in any accepted set, and citation-form is not reserved", () => {
@@ -127,4 +136,38 @@ describe("format reservation (D-34, D-132)", () => {
       EVIDENCE_SEGMENT_SCHEMA_V3,
     );
   });
+
+  describe.each(VECTORS.documentsV2.map((entry) => [entry.name, entry] as const))("V3: document %s", (_name, entry) => {
+    it("is accepted by the versioned validator with the recorded bytes and hash", () => {
+      const outcome = validateVersionedDocument(entry.value);
+      expect(outcome.ok ? [] : outcome.errors).toEqual([]);
+      const bytes = bytesOf(canonicalizeJcs(outcome.ok ? outcome.doc : null));
+      expect(Buffer.from(bytes).toString("hex")).toBe(entry.utf8Hex);
+      expect(createHash("sha256").update(bytes).digest("hex")).toBe(entry.sha256);
+    });
+
+    it("is refused by the v1 view", () => {
+      expect(validateDocument(entry.value).ok).toBe(false);
+    });
+  });
+
+  it("V3: the v1 document vectors keep their bytes (SHA-256 of their JCS, taken before DAN-619)", () => {
+    expect(createHash("sha256").update(bytesOf(canonicalizeJcs(VECTORS.documentsV1))).digest("hex")).toBe(
+      "9eecd63ccfb341d1bdec8d9ca78ce35969da5f7f5ba3deed4d7e43677be33827",
+    );
+  });
+
+  it("V3: the v2 revision 0 in the code is the derived vector", () => {
+    const entry = VECTORS.documentsV2.find((candidate) => candidate.name === "v2-revision-zero")!;
+    expect(Buffer.from(bytesOf(REVISION_ZERO_V2_JCS)).toString("hex")).toBe(entry.utf8Hex);
+    expect(REVISION_ZERO_V2_SHA256).toBe(entry.sha256);
+  });
+
+  it.each(VECTORS.rejectedDocumentsV2.map((entry) => [entry.name, entry] as const))(
+    "V4: %s is refused with the recorded paths and codes",
+    (_name, entry) => {
+      const outcome = validateVersionedDocument(entry.value);
+      expect(outcome.ok ? [] : outcome.errors.map((error) => [error.path, error.code])).toEqual(entry.errors);
+    },
+  );
 });

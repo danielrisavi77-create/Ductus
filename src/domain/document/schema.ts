@@ -16,11 +16,11 @@
 export const DOCUMENT_SCHEMA_VERSION = 1;
 
 /**
- * The version of the first new node (DAN-453; contract on #1091). Reserved,
- * not accepted: no node needs it yet, so a document that names it is refused
- * like any unknown version. It is accepted only from the change that brings
- * its first node; when a document moves to it is open (K4 on #1091). Until
- * then, and after, a v1 document never changes version on load,
+ * Document v2: the citation node and the list of sources
+ * (docs/contracts/document-schema-v2.md, DAN-619). Accepted by
+ * `validateVersionedDocument` only; `validateDocument` and every caller that
+ * expects a v1 document still refuse it. A work keeps the version of its
+ * revision zero, and a v1 document never changes version on load,
  * normalisation or sync: `schemaVersion` is in the hashed bytes.
  */
 export const DOCUMENT_SCHEMA_VERSION_V2 = 2;
@@ -167,9 +167,12 @@ export function isPlainBlockType(value: unknown): value is PlainBlockType {
  */
 export const DOCUMENT_BLOCK_TYPES_BY_VERSION: ReadonlyMap<number, ReadonlySet<string>> = new Map([
   [DOCUMENT_SCHEMA_VERSION, new Set<string>(["heading", ...PLAIN_BLOCK_TYPES])],
+  [DOCUMENT_SCHEMA_VERSION_V2, new Set<string>(["heading", ...PLAIN_BLOCK_TYPES])],
 ]);
 
-export function isAcceptedDocumentSchemaVersion(value: unknown): value is typeof DOCUMENT_SCHEMA_VERSION {
+export type DocumentSchemaVersion = typeof DOCUMENT_SCHEMA_VERSION | typeof DOCUMENT_SCHEMA_VERSION_V2;
+
+export function isAcceptedDocumentSchemaVersion(value: unknown): value is DocumentSchemaVersion {
   return typeof value === "number" && DOCUMENT_BLOCK_TYPES_BY_VERSION.has(value);
 }
 
@@ -218,4 +221,108 @@ export function quoteNode(
   children: readonly InlineNode[] = [],
 ): QuoteNode {
   return { type: "quote", id, children: [...children] };
+}
+
+// ---------------------------------------------------------------------------
+// Document v2 (docs/contracts/document-schema-v2.md §1 to §3)
+
+declare const sourceIdBrand: unique symbol;
+
+/** Id of a source record: a canonical lowercase UUID v4 (contract §2.1). */
+export type SourceId = string & { readonly [sourceIdBrand]: "SourceId" };
+
+/** The pattern of `STEP_NODE_ID` (edit-step.ts): lowercase v4, nil refused. */
+const SOURCE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+export function isSourceId(value: unknown): value is SourceId {
+  return typeof value === "string" && SOURCE_ID_PATTERN.test(value);
+}
+
+/** Most sources one document holds (contract §1). */
+export const MAX_DOCUMENT_SOURCES = 500;
+/** Longest citation locator, in code points (contract §3.1). */
+export const MAX_CITATION_LOCATOR_CODE_POINTS = 100;
+export const MAX_SOURCE_AUTHORS = 50;
+export const MAX_SOURCE_EDITORS = 20;
+export const MAX_SOURCE_URL_LENGTH = 2048;
+
+/** Longest value of each text field of a source, in code points (§2.3). */
+export const SOURCE_TEXT_FIELD_MAX = {
+  title: 1000,
+  bookTitle: 1000,
+  journal: 500,
+  name: 300,
+  publisher: 300,
+  family: 200,
+  given: 200,
+  place: 200,
+  acronym: 50,
+  volume: 50,
+  issue: 50,
+  pages: 50,
+} as const;
+
+/**
+ * Inline atom pointing at a source (D-134, D-226). No marks, no text: it takes
+ * one position. `locator`, when present, is 1 to 100 code points.
+ */
+export type CitationNode = {
+  type: "citation";
+  sourceId: SourceId;
+  locator?: string;
+};
+
+export type InlineNodeV2 = InlineNode | CitationNode;
+
+export type ParagraphNodeV2 = { type: "paragraph"; id: NodeId; children: InlineNodeV2[] };
+export type BulletItemNodeV2 = { type: "bulletItem"; id: NodeId; children: InlineNodeV2[] };
+export type QuoteNodeV2 = { type: "quote"; id: NodeId; children: InlineNodeV2[] };
+
+/** A heading takes no citation (contract §3.1), so it is the v1 heading. */
+export type DocumentNodeV2 = ParagraphNodeV2 | HeadingNode | BulletItemNodeV2 | QuoteNodeV2;
+
+export type SourcePerson = { kind: "person"; family: string; given: string };
+export type SourceOrganization = { kind: "organization"; name: string; acronym?: string };
+export type SourceAuthor = SourcePerson | SourceOrganization;
+
+type DocumentSourceBase = {
+  id: SourceId;
+  authors: SourceAuthor[];
+  year: number;
+  title: string;
+};
+
+/**
+ * A source record as the document stores it (contract §2). The fields of
+ * `Source` in `src/domain/citation/types.ts` without `yearSuffix`, which the
+ * formatter derives from the whole list, plus the `id` citations point at.
+ */
+export type DocumentSource =
+  | (DocumentSourceBase & { type: "book"; place: string; publisher: string })
+  | (DocumentSourceBase & { type: "article"; journal: string; volume?: string; issue?: string; pages?: string })
+  | (DocumentSourceBase & {
+      type: "chapter";
+      editors: SourcePerson[];
+      bookTitle: string;
+      place: string;
+      publisher: string;
+      pages?: string;
+    })
+  | (DocumentSourceBase & { type: "web"; url: string; accessed: string });
+
+export const SOURCE_TYPES = ["book", "article", "chapter", "web"] as const;
+
+export type SourceType = (typeof SOURCE_TYPES)[number];
+
+export type CanonicalDocumentV2 = {
+  schemaVersion: typeof DOCUMENT_SCHEMA_VERSION_V2;
+  nodes: DocumentNodeV2[];
+  sources: DocumentSource[];
+};
+
+/** A document of any accepted version. */
+export type VersionedDocument = CanonicalDocument | CanonicalDocumentV2;
+
+export function citationNode(sourceId: SourceId, locator?: string): CitationNode {
+  return locator === undefined ? { type: "citation", sourceId } : { type: "citation", sourceId, locator };
 }
