@@ -6014,6 +6014,47 @@ $$;
 
 
 --
+-- Name: set_work_accommodation(uuid, boolean); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_work_accommodation(p_assignment_id uuid, p_marked boolean) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'student' THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF p_marked IS NULL THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- A submission request waits here, or this call waits for it, then sees it.
+  PERFORM 1 FROM institution.assignment a WHERE a.id = p_assignment_id FOR UPDATE;
+  -- Again on the row as it is now: a removal that committed while this call
+  -- waited is seen, and one that comes later waits for this call.
+  IF NOT institution.lock_assignment_student(p_assignment_id, actor.user_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF app.work_submission_requested(p_assignment_id, actor.user_id) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_marked THEN
+    INSERT INTO institution.work_accommodation (institution_id, assignment_id, student_id)
+    VALUES (actor.institution_id, p_assignment_id, actor.user_id)
+    ON CONFLICT (assignment_id, student_id) DO NOTHING;
+  ELSE
+    DELETE FROM institution.work_accommodation w
+     WHERE w.assignment_id = p_assignment_id AND w.student_id = actor.user_id;
+  END IF;
+  RETURN p_marked;
+END
+$$;
+
+
+--
 -- Name: set_work_language(uuid, uuid, text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -6214,6 +6255,35 @@ BEGIN
   INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
   SELECT institution_id, id, student_id, teacher_id, 'withdrawn', actor.user_id, now() FROM withdrawn;
   RETURN true;
+END
+$$;
+
+
+--
+-- Name: work_accommodation(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.work_accommodation(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_role text;
+BEGIN
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  v_role := institution.actor_assignment_role(p_assignment_id);
+  IF v_user IS NULL OR p_student_id IS NULL
+     OR NOT coalesce((v_role = 'student' AND p_student_id = v_user)
+                     OR (v_role = 'teacher'
+                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student'), false) THEN
+    RETURN NULL;
+  END IF;
+  RETURN EXISTS (
+    SELECT 1 FROM institution.work_accommodation w
+     WHERE w.assignment_id = p_assignment_id AND w.student_id = p_student_id
+       AND w.institution_id = v_institution);
 END
 $$;
 
@@ -7658,6 +7728,20 @@ ALTER TABLE ONLY institution.team_substitution FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: work_accommodation; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.work_accommodation (
+    institution_id uuid NOT NULL,
+    assignment_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    marked_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL
+);
+
+ALTER TABLE ONLY institution.work_accommodation FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: work_grant; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -8955,6 +9039,14 @@ ALTER TABLE ONLY institution.seminar_group_teacher
 
 ALTER TABLE ONLY institution.team_substitution
     ADD CONSTRAINT team_substitution_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: work_accommodation work_accommodation_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_accommodation
+    ADD CONSTRAINT work_accommodation_pkey PRIMARY KEY (assignment_id, student_id);
 
 
 --
@@ -10876,6 +10968,22 @@ ALTER TABLE ONLY institution.team_substitution
 
 
 --
+-- Name: work_accommodation work_accommodation_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_accommodation
+    ADD CONSTRAINT work_accommodation_assignment_id_institution_id_fkey FOREIGN KEY (assignment_id, institution_id) REFERENCES institution.assignment(id, institution_id);
+
+
+--
+-- Name: work_accommodation work_accommodation_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_accommodation
+    ADD CONSTRAINT work_accommodation_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: work_grant work_grant_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -11865,6 +11973,26 @@ CREATE POLICY team_substitution_read ON institution.team_substitution FOR SELECT
 
 
 --
+-- Name: work_accommodation; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.work_accommodation ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: work_accommodation work_accommodation_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY work_accommodation_owner ON institution.work_accommodation TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: work_accommodation work_accommodation_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY work_accommodation_read ON institution.work_accommodation FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_assignment_role(assignment_id) = 'teacher'::text))));
+
+
+--
 -- Name: work_grant; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -12228,4 +12356,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108110000'),
     ('20261108110100'),
     ('20261108110200'),
-    ('20261108120000');
+    ('20261108120000'),
+    ('20261108130000');
