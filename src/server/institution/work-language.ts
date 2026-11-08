@@ -21,7 +21,7 @@ function refusalOf(error: unknown, what: string): { kind: WorkLanguageRefusal } 
   if (code === "ZD403") return { kind: "forbidden" };
   if (code === "ZD409") return { kind: "conflict" };
   if (code === "ZD422") return { kind: "invalidInput" };
-  console.error(`${what} failed`, typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : "unknown");
+  console.error("work language call failed", what, typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : "unknown");
   return { kind: "unavailable" };
 }
 

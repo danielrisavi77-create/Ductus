@@ -1915,6 +1915,24 @@ $$;
 
 
 --
+-- Name: work_submission_requested(uuid, uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.work_submission_requested(p_assignment_id uuid, p_principal_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN evidence.submission_request r ON r.institution_id = a.institution_id
+     WHERE r.assignment_id = p_assignment_id
+       AND (p_principal_id IS NULL OR r.principal_id = p_principal_id)
+  )
+$$;
+
+
+--
 -- Name: work_submitted(uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -4137,6 +4155,30 @@ $$;
 
 
 --
+-- Name: assignment_version_work_language(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assignment_version_work_language() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_previous text;
+BEGIN
+  SELECT v.work_language INTO v_previous FROM institution.assignment_version v
+   WHERE v.assignment_id = NEW.assignment_id AND v.version_no = NEW.version_no - 1;
+  IF NEW.work_language IS NULL THEN
+    NEW.work_language := coalesce(v_previous, 'hr');
+  ELSIF v_previous IS NOT NULL AND NEW.work_language IS DISTINCT FROM v_previous
+        AND app.work_submission_requested(NEW.assignment_id, NULL) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+--
 -- Name: can(text, text); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -5118,6 +5160,18 @@ $$;
 
 
 --
+-- Name: is_work_language(text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_work_language(p_language text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  SELECT coalesce(p_language IN ('hr', 'en'), false)
+$$;
+
+
+--
 -- Name: list_teacher_candidates(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -5715,6 +5769,53 @@ $$;
 
 
 --
+-- Name: set_assignment_work_language(uuid, integer, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_assignment_work_language(p_assignment_id uuid, p_expected_version integer, p_work_language text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_current integer;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+     OR EXISTS (SELECT 1 FROM institution.assignment a WHERE a.id = p_assignment_id AND a.mentorship_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF NOT institution.is_work_language(p_work_language) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- A submission request waits here, or this call waits for it, then sees it.
+  SELECT a.current_version INTO v_current FROM institution.assignment a WHERE a.id = p_assignment_id FOR UPDATE;
+  IF v_current IS DISTINCT FROM p_expected_version THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  IF EXISTS (SELECT 1 FROM institution.assignment_version v
+              WHERE v.assignment_id = p_assignment_id AND v.version_no = v_current
+                AND v.work_language = p_work_language) THEN
+    RETURN v_current;
+  END IF;
+  IF app.work_submission_requested(p_assignment_id, NULL) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  INSERT INTO institution.assignment_version (
+    assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy,
+    ai_purposes, evidence_profile, import_allowed, word_min, word_max, work_language, created_by
+  )
+  SELECT v.assignment_id, v_current + 1, v.title, v.instructions, v.work_type, v.opens_at, v.due_at, v.ai_policy,
+         v.ai_purposes, v.evidence_profile, v.import_allowed, v.word_min, v.word_max, p_work_language, actor.user_id
+    FROM institution.assignment_version v
+   WHERE v.assignment_id = p_assignment_id AND v.version_no = v_current;
+  UPDATE institution.assignment a SET current_version = v_current + 1 WHERE a.id = p_assignment_id;
+  RETURN v_current + 1;
+END
+$$;
+
+
+--
 -- Name: set_course_editor(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -5811,6 +5912,44 @@ BEGIN
   VALUES (p_course_id, actor.institution_id, p_absent_id, p_substitute_id, actor.user_id, p_valid_to)
   RETURNING id INTO v_id;
   RETURN v_id;
+END
+$$;
+
+
+--
+-- Name: set_work_language(uuid, uuid, text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.set_work_language(p_assignment_id uuid, p_student_id uuid, p_work_language text) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+     OR institution.work_relation(p_student_id, p_assignment_id) IS DISTINCT FROM 'student' THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF p_work_language IS NOT NULL AND NOT institution.is_work_language(p_work_language) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  -- A submission request waits here, or this call waits for it, then sees it.
+  PERFORM 1 FROM institution.assignment a WHERE a.id = p_assignment_id FOR UPDATE;
+  IF app.work_submission_requested(p_assignment_id, p_student_id) THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_work_language IS NULL THEN
+    DELETE FROM institution.work_language_override o
+     WHERE o.assignment_id = p_assignment_id AND o.student_id = p_student_id;
+  ELSE
+    INSERT INTO institution.work_language_override (institution_id, assignment_id, student_id, work_language, set_by)
+    VALUES (actor.institution_id, p_assignment_id, p_student_id, p_work_language, actor.user_id)
+    ON CONFLICT (assignment_id, student_id) DO UPDATE
+      SET work_language = EXCLUDED.work_language, set_by = EXCLUDED.set_by, set_at = statement_timestamp();
+  END IF;
+  RETURN institution.work_language(p_assignment_id, p_student_id);
 END
 $$;
 
@@ -5970,6 +6109,38 @@ BEGIN
   INSERT INTO audit.mentorship_event (institution_id, request_id, student_id, teacher_id, kind, actor_id, occurred_at)
   SELECT institution_id, id, student_id, teacher_id, 'withdrawn', actor.user_id, now() FROM withdrawn;
   RETURN true;
+END
+$$;
+
+
+--
+-- Name: work_language(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.work_language(p_assignment_id uuid, p_student_id uuid) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_role text;
+BEGIN
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  v_role := institution.actor_assignment_role(p_assignment_id);
+  IF v_user IS NULL OR p_student_id IS NULL
+     OR NOT coalesce((v_role = 'student' AND p_student_id = v_user)
+                     OR (v_role = 'teacher'
+                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student'), false) THEN
+    RETURN NULL;
+  END IF;
+  RETURN (
+    SELECT coalesce(o.work_language, v.work_language)
+      FROM institution.assignment a
+      JOIN institution.assignment_version v ON v.assignment_id = a.id AND v.version_no = a.current_version
+      LEFT JOIN institution.work_language_override o
+        ON o.assignment_id = a.id AND o.student_id = p_student_id AND o.institution_id = a.institution_id
+     WHERE a.id = p_assignment_id AND a.institution_id = v_institution);
 END
 $$;
 
@@ -6774,9 +6945,11 @@ CREATE TABLE institution.assignment_version (
     word_min integer,
     word_max integer,
     institution_id uuid NOT NULL,
+    work_language text NOT NULL,
     CONSTRAINT assignment_version_check CHECK (institution.is_assignment_content(title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes, evidence_profile, import_allowed)),
     CONSTRAINT assignment_version_version_no_check CHECK ((version_no >= 1)),
-    CONSTRAINT assignment_version_word_range_check CHECK (institution.is_word_range(word_min, word_max))
+    CONSTRAINT assignment_version_word_range_check CHECK (institution.is_word_range(word_min, word_max)),
+    CONSTRAINT assignment_version_work_language_check CHECK (institution.is_work_language(work_language))
 );
 
 ALTER TABLE ONLY institution.assignment_version FORCE ROW LEVEL SECURITY;
@@ -7168,6 +7341,23 @@ CREATE TABLE institution.work_grant (
 );
 
 ALTER TABLE ONLY institution.work_grant FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: work_language_override; Type: TABLE; Schema: institution; Owner: -
+--
+
+CREATE TABLE institution.work_language_override (
+    institution_id uuid NOT NULL,
+    assignment_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    work_language text NOT NULL,
+    set_by uuid NOT NULL,
+    set_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
+    CONSTRAINT work_language_override_work_language_check CHECK (institution.is_work_language(work_language))
+);
+
+ALTER TABLE ONLY institution.work_language_override FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -8116,6 +8306,14 @@ ALTER TABLE ONLY institution.work_grant
 
 
 --
+-- Name: work_language_override work_language_override_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_language_override
+    ADD CONSTRAINT work_language_override_pkey PRIMARY KEY (assignment_id, student_id);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8758,6 +8956,13 @@ CREATE TRIGGER assignment_version_no_truncate BEFORE TRUNCATE ON institution.ass
 --
 
 CREATE TRIGGER assignment_version_notify AFTER INSERT ON institution.assignment_version FOR EACH ROW WHEN ((new.version_no > 1)) EXECUTE FUNCTION institution.notify_assignment_version();
+
+
+--
+-- Name: assignment_version assignment_version_work_language; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER assignment_version_work_language BEFORE INSERT ON institution.assignment_version FOR EACH ROW EXECUTE FUNCTION institution.assignment_version_work_language();
 
 
 --
@@ -9823,6 +10028,30 @@ ALTER TABLE ONLY institution.work_grant
 
 
 --
+-- Name: work_language_override work_language_override_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_language_override
+    ADD CONSTRAINT work_language_override_assignment_id_institution_id_fkey FOREIGN KEY (assignment_id, institution_id) REFERENCES institution.assignment(id, institution_id);
+
+
+--
+-- Name: work_language_override work_language_override_set_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_language_override
+    ADD CONSTRAINT work_language_override_set_by_institution_id_fkey FOREIGN KEY (set_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: work_language_override work_language_override_student_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_language_override
+    ADD CONSTRAINT work_language_override_student_id_institution_id_fkey FOREIGN KEY (student_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: access_log; Type: ROW SECURITY; Schema: audit; Owner: -
 --
 
@@ -10728,6 +10957,26 @@ CREATE POLICY work_grant_read ON institution.work_grant FOR SELECT TO ductus_app
 
 
 --
+-- Name: work_language_override; Type: ROW SECURITY; Schema: institution; Owner: -
+--
+
+ALTER TABLE institution.work_language_override ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: work_language_override work_language_override_owner; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY work_language_override_owner ON institution.work_language_override TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: work_language_override work_language_override_read; Type: POLICY; Schema: institution; Owner: -
+--
+
+CREATE POLICY work_language_override_read ON institution.work_language_override FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_assignment_role(assignment_id) = 'teacher'::text))));
+
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -10827,4 +11076,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261106220000'),
     ('20261107160000'),
     ('20261107170000'),
-    ('20261107180000');
+    ('20261107180000'),
+    ('20261108120000');

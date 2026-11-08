@@ -52,11 +52,17 @@ AS $$
 $$;
 
 -- Every existing version is Croatian; afterwards the trigger below fills it.
+-- No column default: it would hide an omitted language from the trigger.
+-- Versions are immutable; the trigger that says so is off for this one update.
+ALTER TABLE institution.assignment_version ADD COLUMN work_language text;
+ALTER TABLE institution.assignment_version DISABLE TRIGGER assignment_version_immutable;
+UPDATE institution.assignment_version SET work_language = 'hr';
+ALTER TABLE institution.assignment_version ENABLE TRIGGER assignment_version_immutable;
+-- squawk-ignore adding-not-nullable-field
+ALTER TABLE institution.assignment_version ALTER COLUMN work_language SET NOT NULL;
 ALTER TABLE institution.assignment_version
-  ADD COLUMN work_language text NOT NULL DEFAULT 'hr'
-    -- squawk-ignore adding-not-nullable-field
-    CONSTRAINT assignment_version_work_language_check CHECK (institution.is_work_language(work_language));
-ALTER TABLE institution.assignment_version ALTER COLUMN work_language DROP DEFAULT;
+  -- squawk-ignore constraint-missing-not-valid
+  ADD CONSTRAINT assignment_version_work_language_check CHECK (institution.is_work_language(work_language));
 
 -- After the institution fill and the mentorship rule, which fire before it by name.
 CREATE FUNCTION institution.assignment_version_work_language() RETURNS trigger
