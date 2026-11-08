@@ -38,7 +38,7 @@ Zadatak: DAN-297, M10.1-P02. Prilog ide uz jedan zahtjev FPZG-u (D-264 Q09, pake
 | 12 | Privatna povijest rada | | | rezervirana klasa; ne gradi se do D-55 i C-19 (D-274 MQ09) | nema |
 | 13 | Revizije dokumenta | | do kraja akademske godine | potvrda | db, kopije |
 | 14 | Kontrolne točke s punim tekstom | | | rok; `body` se briše uskom funkcijom | db, kopije |
-| 15 | Stanje prikaza uživo | | | rok (briše se pri kraju rada ili povlačenju, D-12) | db |
+| 15 | Stanje prikaza uživo | | | rok (briše se pri kraju rada ili povlačenju, D-12); rok za kopije zasebno nepoznat | db, kopije |
 | 16 | Predani rad | | prema pravilniku fakulteta | koji pravilnik i koji rok | db, kopije |
 | 17 | Izjava o pomoći AI-ja i ispisi razgovora | | | rok (Q-10) | db (planirano) |
 | 18 | Komentari | | kao predaja (klasa 16) | `body` uskom funkcijom | db, kopije |
@@ -76,7 +76,7 @@ Administratora ustanove imenuje samo operater, na pisani zahtjev fakulteta. Doka
 - Do potvrde FPZG-a i DPO-a hash teksta tretira se kao osobni podatak (D-264 Q11), pa se čuva samo za tu svrhu i ne koristi za drugu.
 - Dok se ne potvrdi da klasa nije izvršna za brisanje, hash se čuva (D-272 MQ06). To ne znači da je rok odobren.
 - Prijedlog trajanja je razdoblje predanog rada (klasa 16) uz rok za prigovor. Rok za prigovor nije zapisan (nepoznato).
-- Isto vrijedi i za hash vezan uz obavijest (klasa 7, D-264 Q17) i hash `jti` odjave (klasa 3, briše se pri sljedećem upisu).
+- Samo tretman kao osobni podatak vrijedi i za hash vezan uz obavijest (klasa 7, D-264 Q17) i hash `jti` odjave (klasa 3). Svrha i trajanje klase 27 se na njih ne prenose: klasa 7 slijedi svoj redak (rok nepoznat), a `jti` slijedi klasu 3 (30 dana nakon kraja, D-273 MQ08; briše se pri sljedećem upisu) i ne čuva se kao dokaz predaje.
 
 ## 6. Što ovaj prilog ne radi
 
