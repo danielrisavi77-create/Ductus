@@ -1,9 +1,10 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
-import { closeWork, openWorkOf, seedWork, workDocument } from "./work-seed";
+import { closeWork, openWorkOf, seedSubmission, seedWork, workDocument } from "./work-seed";
 import { ORIGIN, post } from "./comment-seed";
 import { editorMounted, SAVED_HERE, signIn, signOutHoweverHeld, signOutWithoutDialog } from "./support";
 
@@ -118,6 +119,70 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await expect(commentCards(student)).toHaveCount(0);
   await expect(student.getByText(QUOTE)).toHaveCount(0);
   await expect(student.getByRole("textbox", { name: t.replyLabel })).toHaveCount(0);
+});
+
+// K7c/K7d of the contract on #1091 (DAN-215) in the panel itself: a comment
+// placed on the draft loses its mark once the work is submitted, because the
+// submitted revision is not known without a request (O2); the thread stays in
+// the list with its note, also after a list that lands later and after a reload.
+// Istodobnost: the submission reaches the open sheet while the mark is shown.
+test("after the submission the panel draws no mark and keeps the thread with its note (K7c, K7d)", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const teacher = await (await browser.newContext()).newPage();
+  const student = await (await browser.newContext()).newPage();
+  await signIn(teacher, "/", "Demo nastavnik");
+  await signIn(student, "/rad");
+  const assignment = await seedWork({ teacher: true });
+  await student.goto(`/rad?zadatak=${assignment}`);
+  await student.getByRole("button", { name: messagesHr.workspace.startWork }).click();
+  const editor = student.getByRole("textbox", { name: messagesHr.workspace.documentLabel });
+  await expect(editor).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+  await editorMounted(student);
+  await editor.click();
+  await student.keyboard.type(TEXT);
+  await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "SYNCED", { timeout: 30_000 });
+  const nodeId = (await editor.locator("p[data-node-id]").first().getAttribute("data-node-id")) as NodeId;
+  const documentId = await workDocument(assignment);
+  const start = TEXT.indexOf(QUOTE);
+  const anchor = createTextAnchor({ nodeId, nodeText: TEXT, start, end: start + QUOTE.length });
+  expect((await post(teacher, "create", { documentId, body: "Dodaj izvor.", anchor })).status()).toBe(200);
+  await student.getByRole("button", { name: t.refresh }).click();
+  const card = student.getByRole("article", { name: t.number.replace("{n}", "1") });
+  await expect(editor.locator(".comment-mark")).toHaveText(QUOTE);
+  await expect(card).not.toContainText(t.notPlaced);
+
+  // Submitted on the server; the 409 of the next send tells the open sheet (3d-2c2a §4).
+  await seedSubmission(documentId);
+  await student.route("**/api/evidence/commit", (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
+  await editor.locator("p").first().click();
+  await student.keyboard.press("End");
+  await student.keyboard.type(" Nakon predaje.");
+  const readOnly = student.getByRole("status").filter({ hasText: messagesHr.editor.submittedReadOnly });
+  await expect(readOnly).toBeVisible({ timeout: 30_000 });
+  const unplaced = async () => {
+    await expect(editor.locator(".comment-mark")).toHaveCount(0);
+    await expect(card.getByText("Dodaj izvor.", { exact: true })).toBeVisible();
+    await expect(card).toContainText(t.notPlaced);
+  };
+  await unplaced();
+  // A list that lands after the change places nothing either.
+  await student.getByRole("button", { name: t.refresh }).click();
+  await unplaced();
+  // The reopened submitted work (O2).
+  await student.reload();
+  await expect(readOnly).toBeVisible({ timeout: 30_000 });
+  await expect(editor).toContainText(QUOTE);
+  await unplaced();
+  const results = await new AxeBuilder({ page: student }).include("section[aria-labelledby=\"comments-title\"]")
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+  expect(results.violations).toEqual([]);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await student.emulateMedia({ colorScheme });
+    for (const width of [1440, 400]) {
+      await student.setViewportSize({ width, height: 900 });
+      await test.info().attach(`dan215-predano-${colorScheme}-${width}`, { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
+    }
+  }
 });
 
 // F-093: a fixed, invented paragraph id; the sheet of these tests never holds it,
