@@ -28,10 +28,11 @@ import { pastDue, workDocumentPlan } from "@/components/student/work-document-pl
 import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
 import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { resolveCitationStyle } from "@/domain/institution-config";
 import {
-  LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
+  LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalDemoInstitution, resolveLocalScope,
 } from "@/lib/journal/local-scope";
-import { sessionPrincipal, sessionTag } from "@/server/auth/principal";
+import { sessionPrincipalWithInstitution, sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { readWorkDocument } from "@/server/evidence/work-document-read";
@@ -67,6 +68,16 @@ function localScope(): string | null {
   }
 }
 
+/** The institution of the local demo journal, only beside its scope (M2.12-P02 D4, D5). */
+function localInstitution(): string | null {
+  try {
+    return resolveLocalDemoInstitution(localScopeConfigFromEnv());
+  } catch (error) {
+    if (!(error instanceof LocalScopeConfigError)) throw error;
+    return null;
+  }
+}
+
 /**
  * The journal this request may open (F-5, plan #376). A signed-in person
  * journals under their own scope, checked by the database on every request;
@@ -75,16 +86,22 @@ function localScope(): string | null {
  * session cookie does the local demo journal remain, and it shows no one as
  * signed in. `tag` and `at` name the cookie and the server time of this
  * render for the tabs of the browser (D-118, src/client/session-marks.ts).
+ * `institution` is the slug whose record gives the citation style: the
+ * session's own institution from the database, or the demo flag beside the
+ * demo scope; never a default (M2.12-P02, plan #1689).
  */
 async function journalFor(token: string | undefined): Promise<{
-  scope: string | null; signedIn: boolean; signInAgain: boolean; tag: string | null; at: number;
+  scope: string | null; signedIn: boolean; signInAgain: boolean; tag: string | null; at: number; institution: string | null;
 }> {
   const at = Date.now();
   const tag = sessionTag(token);
-  const principal = await sessionPrincipal(token, withActor);
-  if (principal.kind === "signed-in") return { scope: principal.scope, signedIn: true, signInAgain: false, tag, at };
-  if (token !== undefined) return { scope: null, signedIn: false, signInAgain: true, tag, at };
-  return { scope: localScope(), signedIn: false, signInAgain: false, tag, at };
+  const principal = await sessionPrincipalWithInstitution(token, withActor);
+  if (principal.kind === "signed-in") {
+    return { scope: principal.scope, signedIn: true, signInAgain: false, tag, at, institution: principal.institution };
+  }
+  if (token !== undefined) return { scope: null, signedIn: false, signInAgain: true, tag, at, institution: null };
+  const scope = localScope();
+  return { scope, signedIn: false, signInAgain: false, tag, at, institution: scope === null ? null : localInstitution() };
 }
 
 /**
@@ -120,7 +137,7 @@ export default async function WorkspacePage({
   const { zadatak: rawParam, prikaz } = await searchParams;
   const assignmentId = assignmentParam(rawParam);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [{ scope, signedIn, signInAgain, tag, at }, read, role, doc] = await Promise.all([
+  const [{ scope, signedIn, signInAgain, tag, at, institution }, read, role, doc] = await Promise.all([
     journalFor(token),
     readWorkContext(token, assignmentId, withActor),
     readShellRole(token, withActor),
@@ -131,6 +148,8 @@ export default async function WorkspacePage({
   if (read.kind === "noticeFirst" && assignmentId) redirect(`/zadatak/${assignmentId}`);
   const plan = workDocumentPlan({ rawParam, assignmentId, signedIn, signInAgain, scope, context: read, doc });
   const journal = plan.journal;
+  // Without a record for the institution there is no style to cite in, so the tab stays empty.
+  const citationStyle = resolveCitationStyle(institution);
   const view = teacherViewMode(plan, prikaz);
   // Course, title and Upute only for the student's own acknowledged assignment.
   const ownsAssignment = plan.kind === "assignment" || plan.kind === "notStarted" || plan.kind === "notYetOpen";
@@ -176,7 +195,7 @@ export default async function WorkspacePage({
             label={t.workspace.panelTabs}
             initial="comments"
             tabs={[
-              { id: "sources", label: t.workspace.tabSources, content: journal ? <SourcesPanel /> : <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
+              { id: "sources", label: t.workspace.tabSources, content: journal && citationStyle ? <SourcesPanel citationStyle={citationStyle} /> : <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
               {
                 id: "instructions",
                 label: t.workspace.tabInstructions,
@@ -249,7 +268,7 @@ export default async function WorkspacePage({
   // The session mark survives the switch of views, so it never reopens the work (#732 item 7).
   return journal ? (
     <WorkDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
-      session={session} livePublish={plan.live}
+      session={session} livePublish={plan.live} publishHeld={view.mode === "teacher-view"}
       assignmentId={plan.kind === "assignment" ? plan.assignmentId : null}>
       {workspace}
     </WorkDocumentProvider>

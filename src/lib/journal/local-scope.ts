@@ -35,6 +35,8 @@ export type LocalScopeConfig = {
   readonly localDemoJournal?: string;
   /** Deployment marker; only `LOCAL_DEMO_DEPLOYMENTS` allow the demo scope. */
   readonly deployment?: string;
+  /** Slug of the institution record the demo journal cites in (M2.12-P02). */
+  readonly localDemoInstitution?: string;
 };
 
 /** The only deployments the demo scope runs in; matched exactly. */
@@ -76,6 +78,19 @@ export function resolveLocalScope(config: LocalScopeConfig): string | null {
 }
 
 /**
+ * The institution whose record the demo journal uses, or null (M2.12-P02,
+ * plan #1689 D4, D5). Only where the demo scope itself resolves: a deployment
+ * that refuses the demo journal never names an institution from this flag,
+ * and there is no default institution in code. Whether the slug has a record
+ * is the resolver's question (src/domain/institution-config).
+ */
+export function resolveLocalDemoInstitution(config: LocalScopeConfig): string | null {
+  if (resolveLocalScope(config) === null) return null;
+  const slug = own(config, "localDemoInstitution") ?? "";
+  return slug === "" ? null : slug;
+}
+
+/**
  * Reads the runtime configuration. Server only: without the `NEXT_PUBLIC_`
  * prefix these are undefined in the browser, so the server resolves the scope
  * per request and hands the result to the editor.
@@ -84,5 +99,6 @@ export function localScopeConfigFromEnv(): LocalScopeConfig {
   return {
     localDemoJournal: own(process.env, "DUCTUS_LOCAL_DEMO_JOURNAL"),
     deployment: own(process.env, "DUCTUS_DEPLOYMENT"),
+    localDemoInstitution: own(process.env, "DUCTUS_LOCAL_DEMO_INSTITUTION"),
   };
 }

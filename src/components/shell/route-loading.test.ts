@@ -15,6 +15,13 @@ const ROUTES = ["rad", "rad/[assignmentId]/predaja", "nastavnik/brz-put", "upis"
 // boundary would hide the teacher's shell and its sign-out (I5).
 const NO_SCRIPT_ROUTES = ["nastavnik"];
 
+// DAN-581 (A-01, A-02): these pages answer anyone without the role with the
+// 404 of a route that does not exist. A loading boundary would stream the
+// header and its title with status 200 before notFound(), so the response
+// would name the page and stop being a 404 (measured on next dev: 200 and
+// "Korisnici i uloge" with loading.tsx, 404 without it).
+const HIDDEN_ROUTES = ["ustanova", "ustanova/korisnici", "ustanova/kolegiji", "ustanova/pravila"];
+
 describe("route loading (#732 item 4)", () => {
   it("announces the wait in the page's main, without a session mark", () => {
     const html = renderToStaticMarkup(
@@ -36,6 +43,12 @@ describe("route loading (#732 item 4)", () => {
   });
 
   it.each(NO_SCRIPT_ROUTES)("app/%s has no loading.tsx, so it renders without JavaScript", (route) => {
+    expect(existsSync(join(process.cwd(), "app", route, "loading.tsx"))).toBe(false);
+  });
+
+  it.each(HIDDEN_ROUTES)("app/%s has no loading.tsx, so its 404 stays a 404 that names nothing", (route) => {
+    expect(existsSync(join(process.cwd(), "app", route, "page.tsx"))).toBe(true);
+    expect(readFileSync(join(process.cwd(), "app", route, "page.tsx"), "utf8")).toMatch(/\bnotFound\(\)/);
     expect(existsSync(join(process.cwd(), "app", route, "loading.tsx"))).toBe(false);
   });
 });

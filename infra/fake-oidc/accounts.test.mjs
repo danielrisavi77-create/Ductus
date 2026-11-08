@@ -69,6 +69,8 @@ test("every demo account belongs to exactly one of the two invented institutions
   assert.equal(orgs.size, 2);
   assert.deepEqual(demoAccountClaims("demo-b-teacher").hrEduPersonAffiliation, ["djelatnik"]);
   assert.deepEqual(demoAccountClaims("demo-b-teacher").hrEduPersonHomeOrg, [DEMO_HOME_ORG_B]);
+  assert.deepEqual(demoAccountClaims("demo-b-teacher-2").hrEduPersonAffiliation, ["djelatnik"]);
+  assert.deepEqual(demoAccountClaims("demo-b-teacher-2").hrEduPersonHomeOrg, [DEMO_HOME_ORG_B]);
   assert.deepEqual(demoAccountClaims("demo-b-student").hrEduPersonAffiliation, ["student"]);
   assert.deepEqual(demoAccountClaims("demo-b-student").hrEduPersonHomeOrg, [DEMO_HOME_ORG_B]);
 });

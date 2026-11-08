@@ -100,13 +100,19 @@ SELECT bag_eq(
   $$ VALUES ('collaboration.create_comment(text,text,jsonb)'), ('collaboration.reply_comment(uuid,text)'),
             ('collaboration.resolve_thread(uuid)'), ('collaboration.reopen_thread(uuid)'),
             ('collaboration.list_comments(text)'), ('collaboration.publish_live_state(text,uuid,text)'),
-            ('collaboration.read_live_state(text,text)') $$,
-  'the web role executes exactly the comment RPCs and the two live RPCs');
+            ('collaboration.read_live_state(text,text)'),
+            ('collaboration.create_revision_request(text,jsonb,text,bigint)'),
+            ('collaboration.list_revision_requests(text)'),
+            ('collaboration.respond_revision_request(uuid,bigint,text,text,bigint)'),
+            ('collaboration.accept_revision_request(uuid,bigint,bigint,text)'),
+            ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
+            ('collaboration.withdraw_revision_request(uuid,bigint)') $$,
+  'the web role executes exactly the comment RPCs, the two live RPCs and the six revision-request RPCs of 110 and 112');
 SELECT bag_eq(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.pronamespace = 'collaboration'::regnamespace AND has_function_privilege('ductus_retention', p.oid, 'EXECUTE') $$,
-  $$ VALUES ('collaboration.delete_live_state(text,uuid)') $$,
-  'the retention role executes only delete_live_state');
+  $$ VALUES ('collaboration.delete_live_state(text,uuid)'), ('collaboration.delete_revision_requests(text,uuid)') $$,
+  'the retention role executes only delete_live_state and the revision-request delete of 110');
 SELECT is_empty(
   $$ SELECT r || ' ' || p.oid::regprocedure::text FROM pg_proc p
       CROSS JOIN unnest(ARRAY['ductus_worker', 'ductus_auth', 'ductus_evidence']) AS r

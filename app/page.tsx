@@ -12,7 +12,6 @@ import SessionObserver from "@/components/shell/SessionObserver";
 import { shellSession } from "@/components/shell/shell-session";
 import { readHome } from "@/components/shell/shell-role";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
-import { sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -29,7 +28,7 @@ export default async function HomePage() {
   if (token === undefined) {
     return (
       <>
-        <SessionObserver tag={sessionTag(token)} at={Date.now()} />
+        <SessionObserver {...shellSession(token)} />
         <Landing />
       </>
     );

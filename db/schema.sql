@@ -603,6 +603,20 @@ CREATE FUNCTION app.current_institution_id() RETURNS uuid
 
 
 --
+-- Name: current_institution_slug(); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.current_institution_slug() RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT i.slug
+    FROM app.current_actor() a
+    JOIN identity.institution i ON i.id = a.institution_id
+$$;
+
+
+--
 -- Name: current_user_id(); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -1168,6 +1182,64 @@ $$;
 
 
 --
+-- Name: read_my_access_log(text, integer, timestamp with time zone, uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.read_my_access_log(p_document_id text, p_limit integer, p_before_at timestamp with time zone, p_before_id uuid) RETURNS TABLE(entry_id uuid, opened_at timestamp with time zone, surface text, reader_role text, reader_given_name text, reader_family_name text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_actor record;
+  v_scope record;
+BEGIN
+  SELECT * INTO v_actor FROM app.current_actor();
+  IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
+    RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100
+     OR (p_before_at IS NULL) <> (p_before_id IS NULL) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_document_id IS NULL OR pg_catalog.length(p_document_id) NOT BETWEEN 1 AND 256
+     OR p_document_id ~ '[[:cntrl:]]' OR p_document_id <> pg_catalog.btrim(p_document_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- The owner is the document's principal, decided once per call.
+  SELECT * INTO v_scope FROM collaboration.document_scope(p_document_id);
+  IF v_scope.principal_id IS DISTINCT FROM v_actor.user_id
+     OR v_scope.institution_id IS DISTINCT FROM v_actor.institution_id THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- The owner filter holds even against a row with another owner. A page
+  -- ends on an interval: it holds the whole interval of its p_limit-th row,
+  -- so it may be longer than p_limit by the rest of that interval, and the
+  -- next page takes only older intervals (opened_at < p_before_at). Openings
+  -- are written only into the current interval, so one written after a page
+  -- shows on a fresh first page, never in a continuation (QA c.6711590695).
+  -- p_before_id stays the other half of the cursor, checked as a pair above.
+  RETURN QUERY
+  WITH mine AS (
+    SELECT l.id, l.opened_at, l.surface, l.reader_role, l.reader_id, l.institution_id
+      FROM audit.access_log l
+     WHERE l.document_id = p_document_id AND l.institution_id = v_actor.institution_id
+       AND l.owner_id = v_actor.user_id
+       AND (p_before_at IS NULL OR l.opened_at < p_before_at)
+  ), edge AS (
+    SELECT pg_catalog.min(f.opened_at) AS opened_at
+      FROM (SELECT m.opened_at FROM mine m ORDER BY m.opened_at DESC LIMIT p_limit) f
+  )
+  SELECT m.id, m.opened_at, m.surface, m.reader_role, n.given_name, n.family_name
+    FROM mine m
+    CROSS JOIN edge e
+    LEFT JOIN identity.person_name n ON n.user_id = m.reader_id AND n.institution_id = m.institution_id
+   WHERE m.opened_at >= e.opened_at
+   ORDER BY m.opened_at DESC, m.id DESC;
+END
+$$;
+
+
+--
 -- Name: read_process_summary_source(text); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -1486,6 +1558,19 @@ BEGIN
 
   -- The deadline of the version the request names, not of a later version.
   v_due := app.assignment_version_due(v_request.assignment_id, v_request.assignment_version);
+
+  -- 4.14: the packages first, in id order as commit_evidence_segment takes its
+  -- one, then the document, as the collaboration writes take it (FOR SHARE in
+  -- lock_document_for_write). A revision-request write that holds the document
+  -- finishes first and stays; one that comes after waits here and then sees
+  -- the submission (ZD403). Taken before the INSERT, so the trigger
+  -- close_submitted_packages finds its rows already held.
+  PERFORM 1 FROM evidence.package k
+   WHERE k.document_id = v_request.document_id AND k.institution_id = v_request.institution_id
+   ORDER BY k.id FOR UPDATE;
+  PERFORM 1 FROM evidence.document d
+   WHERE d.id = v_request.document_id AND d.institution_id = v_request.institution_id
+     FOR UPDATE;
 
   INSERT INTO evidence.submission (
     submission_request_id, institution_id, principal_id, assignment_id, assignment_version, revision,
@@ -2011,6 +2096,33 @@ $$;
 
 
 --
+-- Name: worker_receipt_object(uuid, uuid); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.worker_receipt_object(p_evidence_domain_id uuid, p_receipt_id uuid) RETURNS TABLE(institution_id uuid, evidence_package_id text, segment_hash text, payload_bytes integer, storage_ref text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF p_evidence_domain_id IS NULL OR p_receipt_id IS NULL THEN
+    RAISE EXCEPTION 'invalid worker request' USING ERRCODE = '22023';
+  END IF;
+  RETURN QUERY
+    SELECT s.institution_id, s.evidence_package_id, s.segment_hash, s.payload_bytes, s.storage_ref
+      FROM evidence.receipt r
+      JOIN evidence.segment s
+        ON s.id = r.segment_id
+       AND s.evidence_package_id = r.evidence_package_id
+       AND s.institution_id = r.institution_id
+     WHERE r.id = p_receipt_id
+       AND r.evidence_domain_id = p_evidence_domain_id
+       AND r.status = 'pending_signature'
+       AND (r.receipt_payload::jsonb ->> 'receiptSchema') = 'ductus-evidence-receipt-v2';
+END
+$$;
+
+
+--
 -- Name: record_work_opening(uuid, text, uuid, uuid, text); Type: FUNCTION; Schema: audit; Owner: -
 --
 
@@ -2038,6 +2150,52 @@ BEGIN
   RAISE EXCEPTION 'append-only row' USING ERRCODE = 'ZD403';
 END
 $$;
+
+
+--
+-- Name: accept_revision_request(uuid, bigint, bigint, text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR NOT collaboration.is_revision_number(p_accepted_revision)
+     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state <> 'responded' THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_accepted_revision < (SELECT s.response_revision FROM collaboration.revision_response s
+                             WHERE s.request_id = r.request_id AND s.version = r.version) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_accepted_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'accepted', closed_by = r.actor_id, closed_at = now(),
+         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  UPDATE collaboration.revision_request q SET state = 'accepted', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'accepted'::text;
+END
+$_$;
 
 
 --
@@ -2092,6 +2250,54 @@ $$;
 
 
 --
+-- Name: create_revision_request(text, jsonb, text, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.create_revision_request(p_document_id text, p_anchor jsonb, p_instruction text, p_requested_revision bigint) RETURNS TABLE(request_id uuid, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  actor record;
+  scope record;
+  v_id uuid;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT * INTO scope FROM collaboration.document_scope(p_document_id);
+  IF collaboration.actor_role(scope.institution_id, scope.assignment_id, scope.principal_id) IS DISTINCT FROM 'teacher' THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  PERFORM collaboration.lock_document_for_write(p_document_id);
+  IF app.document_submitted(p_document_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- Checked before the table constraints, whose errors would quote the row.
+  IF NOT coalesce(collaboration.is_text_anchor(p_anchor), false)
+     OR NOT coalesce(collaboration.is_revision_text(p_instruction), false)
+     OR p_requested_revision IS NULL
+     OR p_requested_revision NOT BETWEEN 0 AND 9007199254740991 THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(p_document_id, scope.institution_id, p_requested_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  INSERT INTO collaboration.revision_request
+    (institution_id, assignment_id, owner_id, document_id, anchor, state, version, row_seq, created_by)
+  VALUES
+    (scope.institution_id, scope.assignment_id, scope.principal_id, p_document_id, p_anchor, 'open', 1, v_seq, actor.user_id)
+  RETURNING id INTO v_id;
+  INSERT INTO collaboration.revision_request_version
+    (request_id, institution_id, version, instruction, requested_revision, opened_by)
+  VALUES (v_id, scope.institution_id, 1, p_instruction, p_requested_revision, actor.user_id);
+  RETURN QUERY SELECT v_id, v_seq, 1, 'open'::text;
+END
+$$;
+
+
+--
 -- Name: delete_live_state(text, uuid); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2100,6 +2306,28 @@ CREATE FUNCTION collaboration.delete_live_state(p_document_id text, p_institutio
     SET search_path TO ''
     AS $$
   DELETE FROM collaboration.live_state l WHERE l.document_id = p_document_id AND l.institution_id = p_institution_id
+$$;
+
+
+--
+-- Name: delete_revision_requests(text, uuid); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.delete_revision_requests(p_document_id text, p_institution_id uuid) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  -- No foreign key of the application cascades (033), so the children go first.
+  DELETE FROM collaboration.revision_response s
+   USING collaboration.revision_request r
+   WHERE s.request_id = r.id AND s.institution_id = r.institution_id
+     AND r.document_id = p_document_id AND r.institution_id = p_institution_id;
+  DELETE FROM collaboration.revision_request_version v
+   USING collaboration.revision_request r
+   WHERE v.request_id = r.id AND v.institution_id = r.institution_id
+     AND r.document_id = p_document_id AND r.institution_id = p_institution_id;
+  DELETE FROM collaboration.revision_request r
+   WHERE r.document_id = p_document_id AND r.institution_id = p_institution_id;
 $$;
 
 
@@ -2131,6 +2359,42 @@ CREATE FUNCTION collaboration.is_comment_body(p_body text) RETURNS boolean
     AND p_body ~ '[^[:space:]]'
     AND translate(p_body, E'\n\t', '') !~ '[[:cntrl:]]'
     AND p_body !~ E'[\u202A-\u202E\u2066-\u2069]'
+$$;
+
+
+--
+-- Name: is_revision_number(bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.is_revision_number(p_revision bigint) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$ SELECT p_revision IS NOT NULL AND p_revision BETWEEN 0 AND 9007199254740991 $$;
+
+
+--
+-- Name: is_revision_seq(bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.is_revision_seq(p_seq bigint) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$ SELECT p_seq IS NOT NULL AND p_seq BETWEEN 1 AND 9007199254740991 $$;
+
+
+--
+-- Name: is_revision_text(text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.is_revision_text(p_text text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  SELECT p_text IS NOT NULL AND p_text IS NFC NORMALIZED
+    AND char_length(p_text) BETWEEN 1 AND 2000
+    AND translate(p_text, E'\n\t', '') !~ '[[:cntrl:]]'
+    AND p_text !~ E'[\u202A-\u202E\u2066-\u2069]'
+    AND p_text ~ E'[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200D\u2028\u2029\u202F\u205F\u2060\u3000\uFEFF]'
 $$;
 
 
@@ -2202,6 +2466,64 @@ BEGIN
     JOIN collaboration.comment c ON c.thread_id = t.id AND c.institution_id = t.institution_id
     WHERE t.document_id = p_document_id AND t.institution_id = scope.institution_id
     ORDER BY t.created_at, t.id, c.position;
+END
+$$;
+
+
+--
+-- Name: list_revision_requests(text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.list_revision_requests(p_document_id text) RETURNS TABLE(request_id uuid, request_state text, request_version integer, request_row_seq bigint, anchor jsonb, version integer, instruction text, requested_revision bigint, opened_is_own boolean, opened_window timestamp with time zone, response_kind text, response_explanation text, response_revision bigint, response_is_own boolean, response_window timestamp with time zone, closed_as text, closed_is_own boolean, closed_window timestamp with time zone, accepted_revision bigint, accepted_range_hash text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  actor record;
+  scope record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT * INTO scope FROM collaboration.document_scope(p_document_id);
+  IF collaboration.actor_role(scope.institution_id, scope.assignment_id, scope.principal_id) IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  RETURN QUERY
+    SELECT r.id, r.state, r.version, r.row_seq, CASE WHEN v.version = 1 THEN r.anchor END,
+           v.version, v.instruction, v.requested_revision, v.opened_by = actor.user_id,
+           date_bin('5 minutes', v.opened_at, timestamptz '2000-01-01 00:00:00+00'),
+           s.kind, s.explanation, s.response_revision, s.author_id = actor.user_id,
+           date_bin('5 minutes', s.created_at, timestamptz '2000-01-01 00:00:00+00'),
+           v.closed_as, v.closed_by = actor.user_id,
+           date_bin('5 minutes', v.closed_at, timestamptz '2000-01-01 00:00:00+00'),
+           v.accepted_revision, v.accepted_range_hash
+      FROM collaboration.revision_request r
+      JOIN collaboration.revision_request_version v ON v.request_id = r.id AND v.institution_id = r.institution_id
+      LEFT JOIN collaboration.revision_response s
+        ON s.request_id = v.request_id AND s.version = v.version AND s.institution_id = v.institution_id
+     WHERE r.document_id = p_document_id AND r.institution_id = scope.institution_id
+     ORDER BY r.created_at, r.id, v.version;
+END
+$$;
+
+
+--
+-- Name: lock_document_for_write(text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.lock_document_for_write(p_document_id text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  PERFORM 1
+    FROM evidence.document d
+    JOIN app.current_actor() a ON a.institution_id = d.institution_id
+   WHERE d.id = p_document_id
+     FOR SHARE OF d;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
 END
 $$;
 
@@ -2318,6 +2640,57 @@ $_$;
 
 
 --
+-- Name: reopen_revision_request(uuid, bigint, text, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.reopen_revision_request(p_request_id uuid, p_expected_seq bigint, p_instruction text, p_requested_revision bigint) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR NOT coalesce(collaboration.is_revision_text(p_instruction), false)
+     OR NOT collaboration.is_revision_number(p_requested_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state NOT IN ('open', 'reopened', 'responded', 'accepted') OR r.version >= 1000 THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_requested_revision < (
+    SELECT greatest(max(v.requested_revision), max(v.accepted_revision),
+             (SELECT max(s.response_revision) FROM collaboration.revision_response s WHERE s.request_id = r.request_id))
+      FROM collaboration.revision_request_version v WHERE v.request_id = r.request_id) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_requested_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'reopened', closed_by = r.actor_id, closed_at = now()
+   WHERE v.request_id = r.request_id AND v.version = r.version AND v.closed_as IS NULL;
+  INSERT INTO collaboration.revision_request_version
+    (request_id, institution_id, version, instruction, requested_revision, opened_by)
+  VALUES (r.request_id, r.institution_id, r.version + 1, p_instruction, p_requested_revision, r.actor_id);
+  UPDATE collaboration.revision_request q SET state = 'reopened', version = r.version + 1, row_seq = v_seq
+   WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version + 1, 'reopened'::text;
+END
+$$;
+
+
+--
 -- Name: reopen_thread(uuid); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2375,6 +2748,97 @@ CREATE FUNCTION collaboration.resolve_thread(p_thread_id uuid) RETURNS void
 
 
 --
+-- Name: respond_revision_request(uuid, bigint, text, text, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.respond_revision_request(p_request_id uuid, p_expected_seq bigint, p_kind text, p_explanation text, p_response_revision bigint) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'student');
+  -- Checked before the table constraints, whose errors would quote the row.
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR p_kind IS NULL OR p_kind NOT IN ('done', 'declined')
+     OR NOT coalesce(collaboration.is_revision_text(p_explanation), false)
+     OR NOT collaboration.is_revision_number(p_response_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state NOT IN ('open', 'reopened') THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_response_revision < (SELECT v.requested_revision FROM collaboration.revision_request_version v
+                             WHERE v.request_id = r.request_id AND v.version = r.version) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_response_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  INSERT INTO collaboration.revision_response
+    (request_id, institution_id, version, kind, explanation, response_revision, author_id)
+  VALUES (r.request_id, r.institution_id, r.version, p_kind, p_explanation, p_response_revision, r.actor_id);
+  UPDATE collaboration.revision_request q SET state = 'responded', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'responded'::text;
+END
+$$;
+
+
+--
+-- Name: revision_above_document(text, uuid, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.revision_above_document(p_document_id text, p_institution_id uuid, p_revision bigint) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT coalesce(p_revision > (SELECT d.current_revision FROM evidence.document d
+                                 WHERE d.id = p_document_id AND d.institution_id = p_institution_id), true)
+$$;
+
+
+--
+-- Name: revision_request_for_write(uuid, text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.revision_request_for_write(p_request_id uuid, p_role text, OUT request_id uuid, OUT institution_id uuid, OUT state text, OUT version integer, OUT row_seq bigint, OUT actor_id uuid) RETURNS record
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  r record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT q.id, q.institution_id, q.assignment_id, q.owner_id, q.document_id INTO r
+    FROM collaboration.revision_request q WHERE q.id = p_request_id AND q.institution_id = actor.institution_id;
+  IF r.id IS NULL OR collaboration.actor_role(r.institution_id, r.assignment_id, r.owner_id) IS DISTINCT FROM p_role THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  SELECT q.state, q.version, q.row_seq INTO state, version, row_seq
+    FROM collaboration.revision_request q WHERE q.id = r.id FOR UPDATE;
+  PERFORM collaboration.lock_document_for_write(r.document_id);
+  IF app.document_submitted(r.document_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  request_id := r.id;
+  institution_id := r.institution_id;
+  actor_id := actor.user_id;
+END
+$$;
+
+
+--
 -- Name: set_thread_state(uuid, text); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2425,6 +2889,40 @@ $$;
 
 
 --
+-- Name: withdraw_revision_request(uuid, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.withdraw_revision_request(p_request_id uuid, p_expected_seq bigint) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state NOT IN ('open', 'reopened', 'responded') THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'withdrawn', closed_by = r.actor_id, closed_at = now()
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  UPDATE collaboration.revision_request q SET state = 'withdrawn', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'withdrawn'::text;
+END
+$$;
+
+
+--
 -- Name: work_started_at(uuid, uuid, uuid); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2445,7 +2943,11 @@ CREATE FUNCTION collaboration.works_started_last(p_institution_id uuid, p_assign
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
-  SELECT max(p.created_at) FROM evidence.project p
+  SELECT max(CASE WHEN p.created_at = now()
+                   AND p.xmin IS DISTINCT FROM pg_catalog.pg_current_xact_id_if_assigned()::xid
+                  THEN p.created_at + interval '1 microsecond'
+                  ELSE p.created_at END)
+    FROM evidence.project p
    WHERE p.institution_id = p_institution_id AND p.assignment_id = ANY (p_assignment_ids)
      AND p.principal_id = ANY (p_student_ids)
 $$;
@@ -2794,6 +3296,71 @@ $_$;
 
 
 --
+-- Name: backchannel_logout(text, text, text, text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.backchannel_logout(p_issuer text, p_subject text, p_sid text, p_jti text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_sid_hash bytea;
+  v_count integer;
+BEGIN
+  IF p_issuer IS NULL OR pg_catalog.length(p_issuer) NOT BETWEEN 1 AND 255
+     OR p_jti IS NULL OR pg_catalog.length(p_jti) NOT BETWEEN 1 AND 255
+     OR (p_subject IS NULL AND p_sid IS NULL)
+     OR pg_catalog.length(p_subject) NOT BETWEEN 1 AND 255 OR p_subject ~ '[[:cntrl:]]'
+     OR pg_catalog.length(p_sid) NOT BETWEEN 1 AND 255 OR p_sid ~ '[[:cntrl:]]' THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+
+  DELETE FROM identity.logout_token_jti WHERE expires_at <= pg_catalog.now();
+  INSERT INTO identity.logout_token_jti (oidc_issuer, jti_hash, expires_at)
+  VALUES (p_issuer, pg_catalog.sha256(pg_catalog.convert_to(p_jti, 'UTF8')), pg_catalog.now() + interval '1 hour')
+  ON CONFLICT (oidc_issuer, jti_hash) DO NOTHING;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  IF v_count = 0 THEN
+    RAISE EXCEPTION 'logout token replayed' USING ERRCODE = 'ZD409';
+  END IF;
+
+  IF p_sid IS NOT NULL THEN
+    v_sid_hash := pg_catalog.sha256(pg_catalog.convert_to(p_sid, 'UTF8'));
+  END IF;
+  UPDATE identity.session s
+     SET closed_at = pg_catalog.now(), close_reason = 'backchannel_logout'
+    FROM identity.user_account u
+   WHERE u.id = s.user_id
+     AND u.oidc_issuer = p_issuer
+     AND (p_subject IS NULL OR u.oidc_subject = p_subject)
+     AND (p_sid IS NULL OR s.oidc_sid_hash = v_sid_hash)
+     AND s.closed_at IS NULL
+     AND s.expires_at > pg_catalog.now();
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END
+$$;
+
+
+--
+-- Name: clear_session_sid(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.clear_session_sid() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  NEW.oidc_sid_hash := NULL;
+  RETURN NEW;
+END
+$$;
+
+
+--
 -- Name: close_all_sessions_for_identity(); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -3118,6 +3685,30 @@ BEGIN
     ON CONFLICT (user_id) DO UPDATE SET updated_at = pg_catalog.now();
   ELSE
     DELETE FROM identity.teacher_eligibility WHERE user_id = v_user;
+  END IF;
+  RETURN v_expires;
+END
+$$;
+
+
+--
+-- Name: open_session(text, text, text, text, bytea, text, text, boolean, text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.open_session(p_issuer text, p_subject text, p_unique_id text, p_home_org text, p_token_hash bytea, p_given_name text, p_family_name text, p_teacher_eligible boolean, p_sid text) RETURNS timestamp with time zone
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_expires timestamptz;
+BEGIN
+  v_expires := identity.open_session(
+    p_issuer, p_subject, p_unique_id, p_home_org, p_token_hash, p_given_name, p_family_name, p_teacher_eligible
+  );
+  IF pg_catalog.length(p_sid) BETWEEN 1 AND 255 AND p_sid !~ '[[:cntrl:]]' THEN
+    UPDATE identity.session
+       SET oidc_sid_hash = pg_catalog.sha256(pg_catalog.convert_to(p_sid, 'UTF8'))
+     WHERE token_hash = p_token_hash AND closed_at IS NULL;
   END IF;
   RETURN v_expires;
 END
@@ -4294,6 +4885,94 @@ $$;
 
 
 --
+-- Name: institution_academic_years(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.institution_academic_years() RETURNS TABLE(academic_year text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  RETURN QUERY
+  SELECT DISTINCT c.academic_year FROM institution.course c
+  WHERE c.institution_id = actor.institution_id
+  ORDER BY c.academic_year DESC;
+END
+$$;
+
+
+--
+-- Name: institution_courses(text); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.institution_courses(p_academic_year text) RETURNS TABLE(kind text, course_id uuid, course_name text, group_id uuid, group_name text, user_id uuid, given_name text, family_name text, students integer)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF NOT coalesce(CASE WHEN p_academic_year ~ '^[0-9]{4}/[0-9]{4}$'
+                       THEN right(p_academic_year, 4)::integer = left(p_academic_year, 4)::integer + 1
+                  END, false) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  RETURN QUERY
+  WITH c AS (
+    SELECT c.id, c.name FROM institution.course c
+    WHERE c.institution_id = actor.institution_id AND c.academic_year = p_academic_year
+  ),
+  fact AS (
+    SELECT 'course'::text AS kind, c.id AS course_id, c.name AS course_name,
+           NULL::uuid AS group_id, NULL::text AS group_name, NULL::uuid AS user_id,
+           (SELECT count(DISTINCT m.user_id)::integer FROM institution.course_member m
+             WHERE m.course_id = c.id AND m.role = 'student' AND m.member_to IS NULL) AS students
+    FROM c
+    UNION ALL
+    SELECT 'holder', h.course_id, NULL, NULL, NULL, h.user_id, NULL
+    FROM institution.course_holder h JOIN c ON c.id = h.course_id
+    WHERE h.valid_to IS NULL
+    UNION ALL
+    SELECT 'team', t.course_id, NULL, NULL, NULL, t.user_id, NULL
+    FROM (SELECT m.course_id, m.user_id FROM institution.course_member m JOIN c ON c.id = m.course_id
+           WHERE m.role = 'teacher' AND m.member_to IS NULL
+          UNION
+          SELECT g.course_id, g.user_id FROM institution.seminar_group_teacher g JOIN c ON c.id = g.course_id
+           WHERE g.valid_to IS NULL) t
+    WHERE institution.is_course_team_member(t.user_id, t.course_id)
+    UNION ALL
+    SELECT 'group', g.course_id, NULL, g.id, g.name, NULL,
+           (SELECT count(*)::integer FROM institution.seminar_group_member s
+             WHERE s.group_id = g.id AND s.valid_to IS NULL
+               AND EXISTS (SELECT 1 FROM institution.course_member m
+                           WHERE m.course_id = g.course_id AND m.user_id = s.user_id
+                             AND m.role = 'student' AND m.member_to IS NULL))
+    FROM institution.seminar_group g JOIN c ON c.id = g.course_id
+    UNION ALL
+    SELECT 'group_teacher', t.course_id, NULL, t.group_id, NULL, t.user_id, NULL
+    FROM institution.seminar_group_teacher t JOIN c ON c.id = t.course_id
+    WHERE t.valid_to IS NULL AND institution.is_course_team_member(t.user_id, t.course_id)
+  )
+  SELECT f.kind, f.course_id, f.course_name, f.group_id, f.group_name, f.user_id,
+         n.given_name, n.family_name, f.students
+  FROM fact f
+  LEFT JOIN identity.person_name n ON n.user_id = f.user_id AND n.institution_id = actor.institution_id
+  ORDER BY f.course_id, f.kind, f.group_id, f.user_id;
+END
+$_$;
+
+
+--
 -- Name: institution_overview(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4535,6 +5214,21 @@ CREATE FUNCTION institution.lock_teacher_role(p_user_id uuid) RETURNS uuid
   WHERE r.user_id = p_user_id AND r.role = 'teacher'
     AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
   FOR SHARE OF r
+$$;
+
+
+--
+-- Name: notice_acknowledgment_binding_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.notice_acknowledgment_binding_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  NEW.notice_binding := CASE WHEN NEW.notice_fingerprint IS NULL THEN 'legacy_unverified' ELSE 'bound' END;
+  RETURN NEW;
+END
 $$;
 
 
@@ -5143,6 +5837,57 @@ $$;
 
 
 --
+-- Name: teacher_roles(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.teacher_roles() RETURNS TABLE(user_id uuid, list text, given_name text, family_name text, confirmed_at timestamp with time zone, revoked_at timestamp with time zone, for_review boolean)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  IF NOT institution.actor_has_role('admin') THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  RETURN QUERY
+  WITH member AS (
+    -- The same conditions as list_teacher_candidates and confirm_teacher_role.
+    SELECT 'candidate'::text AS list, e.user_id, NULL::timestamptz AS confirmed_at,
+           (SELECT max(o.revoked_at) FROM institution.institution_role o
+             WHERE o.institution_id = actor.institution_id AND o.user_id = e.user_id
+               AND o.role = 'teacher' AND o.revoked_at IS NOT NULL) AS revoked_at,
+           NULL::boolean AS for_review
+    FROM identity.teacher_eligibility e
+    JOIN identity.user_account u ON u.id = e.user_id AND u.institution_id = actor.institution_id
+    WHERE e.institution_id = actor.institution_id
+      AND e.user_id <> actor.user_id
+      AND NOT EXISTS (
+        SELECT 1 FROM institution.institution_role r
+        WHERE r.institution_id = actor.institution_id AND r.user_id = e.user_id
+          AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+      )
+    UNION ALL
+    -- The same conditions as teachers_without_affiliation, without the filter.
+    SELECT 'confirmed', r.user_id, r.confirmed_at, NULL::timestamptz,
+           NOT EXISTS (
+             SELECT 1 FROM identity.teacher_eligibility e
+             WHERE e.user_id = r.user_id AND e.institution_id = actor.institution_id
+           )
+    FROM institution.institution_role r
+    WHERE r.institution_id = actor.institution_id
+      AND r.role = 'teacher' AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+  )
+  SELECT m.user_id, m.list, n.given_name, n.family_name, m.confirmed_at, m.revoked_at, m.for_review
+  FROM member m
+  LEFT JOIN identity.person_name n ON n.user_id = m.user_id AND n.institution_id = actor.institution_id
+  ORDER BY m.list, m.user_id;
+END
+$$;
+
+
+--
 -- Name: teachers_without_affiliation(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -5717,6 +6462,97 @@ ALTER TABLE ONLY collaboration.live_state FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: revision_request; Type: TABLE; Schema: collaboration; Owner: -
+--
+
+CREATE TABLE collaboration.revision_request (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    assignment_id uuid NOT NULL,
+    owner_id uuid NOT NULL,
+    document_id text NOT NULL,
+    anchor jsonb NOT NULL,
+    state text NOT NULL,
+    version integer NOT NULL,
+    row_seq bigint NOT NULL,
+    created_by uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT revision_request_anchor_check CHECK (collaboration.is_text_anchor(anchor)),
+    CONSTRAINT revision_request_document_id_check CHECK (((length(document_id) >= 1) AND (length(document_id) <= 256))),
+    CONSTRAINT revision_request_row_seq_check CHECK (((row_seq >= 1) AND (row_seq <= '9007199254740991'::bigint))),
+    CONSTRAINT revision_request_state_check CHECK ((state = ANY (ARRAY['open'::text, 'responded'::text, 'accepted'::text, 'reopened'::text, 'withdrawn'::text]))),
+    CONSTRAINT revision_request_version_check CHECK (((version >= 1) AND (version <= 1000)))
+);
+
+ALTER TABLE ONLY collaboration.revision_request FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: revision_request_seq; Type: SEQUENCE; Schema: collaboration; Owner: -
+--
+
+CREATE SEQUENCE collaboration.revision_request_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    MAXVALUE 9007199254740991
+    CACHE 1;
+
+
+--
+-- Name: revision_request_version; Type: TABLE; Schema: collaboration; Owner: -
+--
+
+CREATE TABLE collaboration.revision_request_version (
+    request_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    version integer NOT NULL,
+    instruction text NOT NULL,
+    requested_revision bigint NOT NULL,
+    opened_by uuid NOT NULL,
+    opened_at timestamp with time zone DEFAULT now() NOT NULL,
+    closed_as text,
+    closed_by uuid,
+    closed_at timestamp with time zone,
+    accepted_revision bigint,
+    accepted_range_hash text,
+    CONSTRAINT revision_request_version_accepted_range_hash_check CHECK ((accepted_range_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT revision_request_version_accepted_revision_check CHECK (((accepted_revision >= 0) AND (accepted_revision <= '9007199254740991'::bigint))),
+    CONSTRAINT revision_request_version_check1 CHECK ((((closed_as IS NULL) = (closed_by IS NULL)) AND ((closed_as IS NULL) = (closed_at IS NULL)))),
+    CONSTRAINT revision_request_version_check2 CHECK (((accepted_revision IS NOT NULL) = (NOT (closed_as IS DISTINCT FROM 'accepted'::text)))),
+    CONSTRAINT revision_request_version_check3 CHECK (((accepted_range_hash IS NULL) OR (NOT (closed_as IS DISTINCT FROM 'accepted'::text)))),
+    CONSTRAINT revision_request_version_closed_as_check CHECK ((closed_as = ANY (ARRAY['accepted'::text, 'reopened'::text, 'withdrawn'::text]))),
+    CONSTRAINT revision_request_version_instruction_check CHECK (collaboration.is_revision_text(instruction)),
+    CONSTRAINT revision_request_version_requested_revision_check CHECK (((requested_revision >= 0) AND (requested_revision <= '9007199254740991'::bigint))),
+    CONSTRAINT revision_request_version_version_check CHECK (((version >= 1) AND (version <= 1000)))
+);
+
+ALTER TABLE ONLY collaboration.revision_request_version FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: revision_response; Type: TABLE; Schema: collaboration; Owner: -
+--
+
+CREATE TABLE collaboration.revision_response (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    request_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    version integer NOT NULL,
+    kind text NOT NULL,
+    explanation text NOT NULL,
+    response_revision bigint NOT NULL,
+    author_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT revision_response_explanation_check CHECK (collaboration.is_revision_text(explanation)),
+    CONSTRAINT revision_response_kind_check CHECK ((kind = ANY (ARRAY['done'::text, 'declined'::text]))),
+    CONSTRAINT revision_response_response_revision_check CHECK (((response_revision >= 0) AND (response_revision <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY collaboration.revision_response FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: document; Type: TABLE; Schema: evidence; Owner: -
 --
 
@@ -6067,6 +6903,21 @@ ALTER TABLE ONLY identity.institution_issuer FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: logout_token_jti; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.logout_token_jti (
+    oidc_issuer text NOT NULL,
+    jti_hash bytea NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT logout_token_jti_jti_hash_check CHECK ((octet_length(jti_hash) = 32)),
+    CONSTRAINT logout_token_jti_oidc_issuer_check CHECK (((length(oidc_issuer) >= 1) AND (length(oidc_issuer) <= 255)))
+);
+
+ALTER TABLE ONLY identity.logout_token_jti FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: person_name; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -6097,10 +6948,13 @@ CREATE TABLE identity.session (
     closed_at timestamp with time zone,
     close_reason text,
     last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    oidc_sid_hash bytea,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
     CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text]))),
     CONSTRAINT session_last_seen_check CHECK ((last_seen_at >= created_at)),
+    CONSTRAINT session_oidc_sid_hash_check CHECK ((octet_length(oidc_sid_hash) = 32)),
+    CONSTRAINT session_oidc_sid_hash_closed_check CHECK (((closed_at IS NULL) OR (oidc_sid_hash IS NULL))),
     CONSTRAINT session_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
 
@@ -6441,6 +7295,8 @@ CREATE TABLE institution.notice_acknowledgment (
     institution_id uuid NOT NULL,
     notice_template_version integer,
     notice_fingerprint text,
+    notice_binding text DEFAULT 'legacy_unverified'::text NOT NULL,
+    CONSTRAINT notice_acknowledgment_binding_check CHECK ((((notice_binding = 'bound'::text) AND (num_nulls(notice_template_version, notice_fingerprint) = 0)) OR ((notice_binding = 'legacy_unverified'::text) AND (num_nulls(notice_template_version, notice_fingerprint) = 2)))),
     CONSTRAINT notice_acknowledgment_fingerprint_check CHECK (((num_nulls(notice_template_version, notice_fingerprint) = 2) OR ((num_nulls(notice_template_version, notice_fingerprint) = 0) AND (notice_template_version >= 1) AND (notice_fingerprint ~ '^[0-9a-f]{64}$'::text))))
 );
 
@@ -7028,6 +7884,62 @@ ALTER TABLE ONLY collaboration.live_state
 
 
 --
+-- Name: revision_request revision_request_id_institution_id_key; Type: CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request
+    ADD CONSTRAINT revision_request_id_institution_id_key UNIQUE (id, institution_id);
+
+
+--
+-- Name: revision_request revision_request_pkey; Type: CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request
+    ADD CONSTRAINT revision_request_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: revision_request revision_request_row_seq_key; Type: CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request
+    ADD CONSTRAINT revision_request_row_seq_key UNIQUE (row_seq);
+
+
+--
+-- Name: revision_request_version revision_request_version_pkey; Type: CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request_version
+    ADD CONSTRAINT revision_request_version_pkey PRIMARY KEY (request_id, version);
+
+
+--
+-- Name: revision_request_version revision_request_version_request_id_version_institution_id_key; Type: CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request_version
+    ADD CONSTRAINT revision_request_version_request_id_version_institution_id_key UNIQUE (request_id, version, institution_id);
+
+
+--
+-- Name: revision_response revision_response_pkey; Type: CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_response
+    ADD CONSTRAINT revision_response_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: revision_response revision_response_request_id_version_key; Type: CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_response
+    ADD CONSTRAINT revision_response_request_id_version_key UNIQUE (request_id, version);
+
+
+--
 -- Name: document_checkpoint document_checkpoint_pkey; Type: CONSTRAINT; Schema: evidence; Owner: -
 --
 
@@ -7393,6 +8305,14 @@ ALTER TABLE ONLY identity.institution
 
 ALTER TABLE ONLY identity.institution
     ADD CONSTRAINT institution_slug_key UNIQUE (slug);
+
+
+--
+-- Name: logout_token_jti logout_token_jti_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.logout_token_jti
+    ADD CONSTRAINT logout_token_jti_pkey PRIMARY KEY (oidc_issuer, jti_hash);
 
 
 --
@@ -7924,6 +8844,13 @@ CREATE INDEX comment_thread_document_idx ON collaboration.comment_thread USING b
 
 
 --
+-- Name: revision_request_document_idx; Type: INDEX; Schema: collaboration; Owner: -
+--
+
+CREATE INDEX revision_request_document_idx ON collaboration.revision_request USING btree (document_id, institution_id);
+
+
+--
 -- Name: evidence_document_project_idx; Type: INDEX; Schema: evidence; Owner: -
 --
 
@@ -8019,6 +8946,13 @@ CREATE INDEX evidence_submission_version_idx ON evidence.submission USING btree 
 --
 
 CREATE INDEX submission_receipt_issuance_submission_idx ON evidence.submission_receipt_issuance USING btree (submission_id);
+
+
+--
+-- Name: session_oidc_sid_hash_idx; Type: INDEX; Schema: identity; Owner: -
+--
+
+CREATE INDEX session_oidc_sid_hash_idx ON identity.session USING btree (oidc_sid_hash) WHERE (oidc_sid_hash IS NOT NULL);
 
 
 --
@@ -8568,6 +9502,13 @@ CREATE TRIGGER submission_receipt_no_truncate BEFORE TRUNCATE ON evidence.submis
 
 
 --
+-- Name: session clear_session_sid; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER clear_session_sid BEFORE UPDATE ON identity.session FOR EACH ROW WHEN (((new.closed_at IS NOT NULL) AND (new.oidc_sid_hash IS NOT NULL))) EXECUTE FUNCTION identity.clear_session_sid();
+
+
+--
 -- Name: institution close_sessions_on_home_org_change; Type: TRIGGER; Schema: identity; Owner: -
 --
 
@@ -8670,6 +9611,20 @@ CREATE CONSTRAINT TRIGGER institution_role_admin_reappointed AFTER UPDATE ON ins
 --
 
 CREATE CONSTRAINT TRIGGER institution_role_keeps_admin AFTER UPDATE ON institution.institution_role DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((old.role = 'admin'::text) AND (old.confirmed_at IS NOT NULL) AND (old.revoked_at IS NULL) AND (NOT ((new.role = 'admin'::text) AND (new.confirmed_at IS NOT NULL) AND (new.revoked_at IS NULL) AND (NOT (((old.id IS DISTINCT FROM new.id) OR (old.institution_id IS DISTINCT FROM new.institution_id)) OR (old.user_id IS DISTINCT FROM new.user_id))))))) EXECUTE FUNCTION institution.check_last_admin();
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_binding_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER notice_acknowledgment_binding_fill BEFORE INSERT ON institution.notice_acknowledgment FOR EACH ROW EXECUTE FUNCTION institution.notice_acknowledgment_binding_fill();
+
+
+--
+-- Name: notice_acknowledgment notice_acknowledgment_binding_immutable; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER notice_acknowledgment_binding_immutable BEFORE UPDATE OF notice_binding ON institution.notice_acknowledgment FOR EACH ROW EXECUTE FUNCTION institution.refuse_acknowledgment_change();
 
 
 --
@@ -8869,6 +9824,70 @@ ALTER TABLE ONLY collaboration.live_state
 
 ALTER TABLE ONLY collaboration.live_state
     ADD CONSTRAINT live_state_owner_id_institution_id_fkey FOREIGN KEY (owner_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: revision_request revision_request_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request
+    ADD CONSTRAINT revision_request_assignment_id_institution_id_fkey FOREIGN KEY (assignment_id, institution_id) REFERENCES institution.assignment(id, institution_id);
+
+
+--
+-- Name: revision_request revision_request_created_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request
+    ADD CONSTRAINT revision_request_created_by_institution_id_fkey FOREIGN KEY (created_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: revision_request revision_request_owner_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request
+    ADD CONSTRAINT revision_request_owner_id_institution_id_fkey FOREIGN KEY (owner_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: revision_request_version revision_request_version_closed_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request_version
+    ADD CONSTRAINT revision_request_version_closed_by_institution_id_fkey FOREIGN KEY (closed_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: revision_request_version revision_request_version_opened_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request_version
+    ADD CONSTRAINT revision_request_version_opened_by_institution_id_fkey FOREIGN KEY (opened_by, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: revision_request_version revision_request_version_request_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_request_version
+    ADD CONSTRAINT revision_request_version_request_id_institution_id_fkey FOREIGN KEY (request_id, institution_id) REFERENCES collaboration.revision_request(id, institution_id);
+
+
+--
+-- Name: revision_response revision_response_author_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_response
+    ADD CONSTRAINT revision_response_author_id_institution_id_fkey FOREIGN KEY (author_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: revision_response revision_response_request_id_version_institution_id_fkey; Type: FK CONSTRAINT; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE ONLY collaboration.revision_response
+    ADD CONSTRAINT revision_response_request_id_version_institution_id_fkey FOREIGN KEY (request_id, version, institution_id) REFERENCES collaboration.revision_request_version(request_id, version, institution_id);
 
 
 --
@@ -9765,6 +10784,45 @@ CREATE POLICY live_state_owner ON collaboration.live_state TO ductus_identity US
 
 
 --
+-- Name: revision_request; Type: ROW SECURITY; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE collaboration.revision_request ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: revision_request revision_request_owner; Type: POLICY; Schema: collaboration; Owner: -
+--
+
+CREATE POLICY revision_request_owner ON collaboration.revision_request TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: revision_request_version; Type: ROW SECURITY; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE collaboration.revision_request_version ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: revision_request_version revision_request_version_owner; Type: POLICY; Schema: collaboration; Owner: -
+--
+
+CREATE POLICY revision_request_version_owner ON collaboration.revision_request_version TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: revision_response; Type: ROW SECURITY; Schema: collaboration; Owner: -
+--
+
+ALTER TABLE collaboration.revision_response ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: revision_response revision_response_owner; Type: POLICY; Schema: collaboration; Owner: -
+--
+
+CREATE POLICY revision_response_owner ON collaboration.revision_response TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: document; Type: ROW SECURITY; Schema: evidence; Owner: -
 --
 
@@ -10047,6 +11105,19 @@ CREATE POLICY institution_issuer_owner ON identity.institution_issuer TO ductus_
 --
 
 CREATE POLICY institution_owner ON identity.institution TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: logout_token_jti; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.logout_token_jti ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: logout_token_jti logout_token_jti_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY logout_token_jti_owner ON identity.logout_token_jti TO ductus_identity USING (true) WITH CHECK (true);
 
 
 --
@@ -10811,4 +11882,16 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261105110000'),
     ('20261105120000'),
     ('20261105120100'),
-    ('20261105120200');
+    ('20261105120200'),
+    ('20261106120000'),
+    ('20261106150000'),
+    ('20261106160000'),
+    ('20261106170000'),
+    ('20261106180000'),
+    ('20261106190000'),
+    ('20261106200000'),
+    ('20261106210000'),
+    ('20261106220000'),
+    ('20261107160000'),
+    ('20261107170000'),
+    ('20261107180000');

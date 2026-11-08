@@ -22,6 +22,13 @@ export interface LoginIdentity {
    * or malformed attribute is false and never refuses the login.
    */
   teacherEligible: boolean;
+  /**
+   * The provider's login session id from the ID token (Back-Channel Logout
+   * 1.0 2.1), kept so a back-channel logout can name this session (DAN-474).
+   * Present only when it is a plain string of 1 to 255 characters: a missing
+   * or invalid one costs back-channel logout by `sid`, never the login (E5).
+   */
+  sid?: string;
 }
 
 export type ClaimsResult =
@@ -140,5 +147,8 @@ export function identityFromClaims(idToken: Claims, userinfo?: Claims): ClaimsRe
   };
   const names = nameFromClaims(merged);
   if (names) Object.assign(identity, names);
+  // Only the ID token names the provider's session; userinfo never does.
+  const sid = check(idToken.sid);
+  if ("value" in sid) identity.sid = sid.value;
   return { ok: true, identity };
 }

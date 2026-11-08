@@ -11,7 +11,7 @@
  * under it, because the student's right panel stays as in writing.
  */
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 
 import { handleShowInText, onCommentsLoaded } from "@/client/comments-bridge";
 import type { SessionMark } from "@/client/session-marks";
@@ -47,7 +47,8 @@ export default function TeacherViewSheet({ documentId, session, heading }: {
   // of the outline brings that heading of this text into view.
   const textRef = useRef<HTMLDivElement>(null);
   const placedRef = useRef(placed);
-  placedRef.current = placed;
+  // The places of the last commit: what the reader sees on screen.
+  useLayoutEffect(() => { placedRef.current = placed; });
   useEffect(() => handleShowInText(documentId, (target) => {
     const root = textRef.current;
     if (!root) return;

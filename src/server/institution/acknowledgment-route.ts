@@ -17,11 +17,55 @@ function respond(status: number, body: Record<string, string>): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 
-function validInput(value: unknown): value is { versionNo: number } {
+type Input = { versionNo: number; fingerprint: string };
+
+// DAN-306 #1502 B3: the fingerprint of the notice the browser showed, as
+// noticeFingerprint() writes it. Nothing is normalised: another spelling of
+// the same digest is refused, not repaired.
+const FINGERPRINT = /^[0-9a-f]{64}$/;
+
+function validInput(value: unknown): value is Input {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const input = value as Record<string, unknown>;
-  return Object.keys(input).length === 1 && Object.hasOwn(input, "versionNo") &&
-    Number.isInteger(input.versionNo) && (input.versionNo as number) >= 1 && (input.versionNo as number) <= 2_147_483_647;
+  return Object.keys(input).length === 2 && Object.hasOwn(input, "versionNo") && Object.hasOwn(input, "fingerprint") &&
+    Number.isInteger(input.versionNo) && (input.versionNo as number) >= 1 && (input.versionNo as number) <= 2_147_483_647 &&
+    typeof input.fingerprint === "string" && FINGERPRINT.test(input.fingerprint);
+}
+
+// JSON.parse keeps the last of two equal keys, so {"fingerprint":A,
+// "fingerprint":B} would be read as B while a proxy or log reads A. A valid
+// body has two keys, two plain string keys and one string value: exactly six
+// quotes and no escape, so neither a repeat nor an escaped spelling of a key
+// (fingerpr\u0069nt) gets through. A strict rule for this body alone, not a
+// JSON parser.
+function singleKeys(text: string): boolean {
+  return !text.includes("\\") && text.split('"').length === 7;
+}
+
+// Thrown inside the transaction so that withActor rolls the acknowledgment
+// back: the stored notice is not the one the browser showed.
+class NoticeChanged extends Error {}
+
+const ACKNOWLEDGE_SQL = "SELECT institution.acknowledge_notice($1::uuid, $2::integer, $3::integer) AS acknowledged_at";
+// The student's own row only: the policy limits it too, the predicate keeps
+// the read from depending on that alone.
+const STORED_FINGERPRINT_SQL = `SELECT notice_fingerprint FROM institution.notice_acknowledgment
+  WHERE assignment_id = $1::uuid AND version_no = $2::integer AND student_id = app.current_user_id()`;
+const CURRENT_VERSION_SQL = "SELECT current_version FROM institution.assignment WHERE id = $1::uuid";
+
+/**
+ * ZD409 comes both for a version that is no longer current and for a stored
+ * acknowledgment of another text. Only the first is a version conflict; the
+ * second says the notice changed. An unreadable version keeps "conflict".
+ */
+async function conflictKind(withActor: WithActor, sessionToken: string, assignmentId: string, versionNo: number): Promise<string> {
+  try {
+    const result = await withActor(sessionToken, (tx) =>
+      tx.query<{ current_version: unknown }>(CURRENT_VERSION_SQL, [assignmentId]));
+    return result.rows[0]?.current_version === versionNo ? "notice_changed" : "conflict";
+  } catch {
+    return "conflict";
+  }
 }
 
 /** The RPC derives the student and institution from the cookie-backed actor. */
@@ -35,7 +79,8 @@ export async function handleAcknowledgment(request: Request, assignmentId: strin
   }
   if (!allowed.ok) return respond(allowed.status, { error: allowed.reason });
   if (!UUID.test(assignmentId)) return respond(400, { error: "invalid_assignment_id" });
-  if (!deps.sessionToken || !TOKEN.test(deps.sessionToken)) return respond(401, { error: "unauthorized" });
+  const sessionToken = deps.sessionToken;
+  if (!sessionToken || !TOKEN.test(sessionToken)) return respond(401, { error: "unauthorized" });
   if (!/^application\/json(?:\s*;\s*charset\s*=\s*utf-8)?$/i.test(request.headers.get("content-type") ?? "")) {
     return respond(415, { error: "unsupported_media_type" });
   }
@@ -43,28 +88,33 @@ export async function handleAcknowledgment(request: Request, assignmentId: strin
   const body = await readBodyWithLimit(request, MAX_BODY_BYTES, 5_000);
   if (!body.ok) return respond(body.status, { error: body.reason });
   let input: unknown;
+  let text: string;
   try {
-    input = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body.bytes));
+    text = new TextDecoder("utf-8", { fatal: true }).decode(body.bytes);
+    input = JSON.parse(text);
   } catch {
     return respond(400, { error: "invalid_json" });
   }
-  if (!validInput(input)) return respond(422, { error: "invalid_input" });
+  if (!singleKeys(text) || !validInput(input)) return respond(422, { error: "invalid_input" });
+  const { versionNo, fingerprint } = input;
 
   try {
-    const result = await deps.withActor(deps.sessionToken, (tx) =>
-      tx.query<{ acknowledged_at: Date }>(
-        "SELECT institution.acknowledge_notice($1::uuid, $2::integer, $3::integer) AS acknowledged_at",
-        [assignmentId, input.versionNo, NOTICE_TEMPLATE_VERSION],
-      ),
-    );
-    const at = result.rows[0]?.acknowledged_at;
+    const at = await deps.withActor(sessionToken, async (tx) => {
+      const result = await tx.query<{ acknowledged_at: Date }>(ACKNOWLEDGE_SQL, [assignmentId, versionNo, NOTICE_TEMPLATE_VERSION]);
+      const stored = await tx.query<{ notice_fingerprint: string | null }>(STORED_FINGERPRINT_SQL, [assignmentId, versionNo]);
+      // #1502 B2/E3: another fingerprint, or none on a row from before
+      // fingerprints, is not the text the student saw.
+      if (stored.rows.length !== 1 || stored.rows[0]!.notice_fingerprint !== fingerprint) throw new NoticeChanged();
+      return result.rows[0]?.acknowledged_at;
+    });
     if (!(at instanceof Date) || Number.isNaN(at.getTime())) return respond(503, { error: "unavailable" });
     return respond(200, { acknowledgedAt: at.toISOString() });
   } catch (error) {
+    if (error instanceof NoticeChanged) return respond(409, { error: "notice_changed" });
     const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
     if (code === "ZD401") return respond(401, { error: "unauthorized" });
     if (code === "ZD403") return respond(403, { error: "forbidden" });
-    if (code === "ZD409") return respond(409, { error: "conflict" });
+    if (code === "ZD409") return respond(409, { error: await conflictKind(deps.withActor, sessionToken, assignmentId, versionNo) });
     return respond(503, { error: "unavailable" });
   }
 }

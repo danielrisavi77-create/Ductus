@@ -51,14 +51,19 @@ export function useProcessSummary(documentId: string, current: () => boolean, ac
     const result = await fetchProcessSummary(documentId, current);
     if (mine === generation.current) setOutcome(result);
   }, [documentId, current, active]);
+  // Dropped in the render that first sees `active` change; the
+  // generation moves after that commit, so a late answer is ignored.
+  const [wasActive, setWasActive] = useState(active);
+  if (active !== wasActive) {
+    setWasActive(active);
+    setOutcome(null);
+  }
   useEffect(() => {
     if (active) void load();
-    else {
-      generation.current += 1;
-      setOutcome(null);
-    }
+    else generation.current += 1;
   }, [load, active]);
-  return { outcome, load };
+  // An answer that lands between that render and the effect is never shown.
+  return { outcome: active ? outcome : null, load };
 }
 
 export default function SummaryCard({ documentId, current }: { documentId: string; current: () => boolean }) {

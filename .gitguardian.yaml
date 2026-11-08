@@ -1,0 +1,8 @@
+# GitGuardian: the narrowest exclusion (DAN-666). Only test files whose
+# credentials are invented may be listed; the reader and the allowed list are in
+# scripts/engineering/gitguardian-config.mjs and its test. Gitleaks and the CI
+# secret scanners are not affected.
+version: 2
+secret:
+  ignored_paths:
+    - scripts/db/native-db.test.mjs

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { LOGIN_SHARDS } from "./login-shard-plan.mjs";
 import { E2E_PROJECTS } from "./ui-test-pilot.mjs";
 
@@ -48,10 +48,13 @@ test("every run, pull requests included, installs all three engines and runs eve
     assert.doesNotMatch(s, /event_name|ALL_ENGINES|--project|--grep|--retries|--last-failed|continue-on-error|\|\| true/);
   }
   assert.match(install, /^ {8}run: bash scripts\/engineering\/playwright-install\.sh chromium firefox webkit$/m);
+  assert.match(install, /^ {10}PLAYWRIGHT_APT_CACHE_DIR: ~\/\.cache\/ductus-apt$/m);
   assert.match(inventory, /^ {10}pnpm exec playwright test --list --reporter=json$/m);
   assert.match(e2e, /^ {8}run: pnpm test:e2e --shard="\$E2E_SHARD\/3"$/m);
-  // The browser cache key no longer depends on the event either.
-  assert.match(step("Restore Playwright browsers"), /^ {10}key: pw-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('pnpm-lock\.yaml'\) \}\}-all$/m);
+  // The browser cache key no longer depends on the event either (DAN-663: it
+  // follows playwright-core and the runner image, not the whole lockfile).
+  assert.match(step("Restore Playwright browsers"), /^ {10}key: pw-\$\{\{ runner\.os \}\}-\$\{\{ steps\.playwright\.outputs\.image \}\}-\$\{\{ steps\.playwright\.outputs\.version \}\}-all$/m);
+  assert.match(step("Restore Playwright browsers"), /^ {10}path: \|\n {12}~\/\.cache\/ms-playwright\n {12}~\/\.cache\/ductus-apt$/m);
   // Flaky passes are not passes (docs/TESTING.md 2).
   assert.match(playwright, /^ {2}retries: 0,$/m);
 });
@@ -64,7 +67,7 @@ test("the isolated login job runs the full Chromium suite, the WebKit acceptance
   assert.match(webkit, /^ {8}run: bash scripts\/engineering\/playwright-install\.sh webkit$/m);
   assert.match(webkit, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
   assert.doesNotMatch(webkit, /PLAYWRIGHT_TRY_WITHOUT_DEPS|continue-on-error|\|\| true/);
-  assert.match(step("Restore Playwright browsers", "stack-login"), /^ {10}key: pw-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('pnpm-lock\.yaml'\) \}\}-chromium-webkit$/m);
+  assert.match(step("Restore Playwright browsers", "stack-login"), /^ {10}key: pw-\$\{\{ runner\.os \}\}-\$\{\{ steps\.playwright\.outputs\.image \}\}-\$\{\{ steps\.playwright\.outputs\.version \}\}-chromium-webkit$/m);
   const login = step("Full login E2E", "stack-login");
   // The whole suite, split over the matrix by the duration plan (DAN-375); the
   // inventory job (login-shards.mjs) proves each shard ran its plan and the
@@ -109,4 +112,42 @@ test("the projects are Chromium desktop and mobile, Firefox and WebKit, and the 
     assert.match(script, /projects: E2E_PROJECTS/);
     assert.doesNotMatch(script, /projects: env\.EVENT_NAME/);
   }
+});
+
+// DAN-663: a browser install that hung on a slow apt mirror held a job for over
+// 40 minutes. Every step in every workflow that installs Playwright browsers
+// goes through the capped script, has its own timeout-minutes as a backstop,
+// and comes after a browser cache keyed by the playwright-core version.
+test("every browser install in every workflow is capped and cached", async () => {
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const files = (await readdir(dir)).filter((name) => /\.ya?ml$/.test(name));
+  let installs = 0;
+  for (const file of files) {
+    const text = await readFile(new URL(file, dir), "utf8");
+    const jobs = text.split(/^ {2}(?=[\w-]+:\n)/m).slice(1);
+    for (const job of jobs) {
+      const steps = job.split(/^ {6}- /m).slice(1);
+      const installsHere = steps.filter((s) => /playwright install|playwright-install\.sh/.test(s));
+      if (!installsHere.length) continue;
+      const id = `${file} ${job.split(":")[0]}`;
+      const version = steps.findIndex((s) => s.startsWith("name: Playwright version\n"));
+      const cache = steps.findIndex((s) => s.startsWith("name: Restore Playwright browsers\n"));
+      assert.ok(version >= 0 && cache > version, `${id}: a Playwright version step, then the browser cache`);
+      assert.match(steps[version], /^ {8}id: playwright\n/m, id);
+      assert.match(steps[version], /^ {8}run: node scripts\/engineering\/playwright-version\.mjs$/m, id);
+      assert.match(steps[cache], /^ {8}uses: actions\/cache@[0-9a-f]{40} # v[\d.]+$/m, id);
+      assert.match(steps[cache], /^ {10}key: pw-\$\{\{ runner\.os \}\}-\$\{\{ steps\.playwright\.outputs\.image \}\}-\$\{\{ steps\.playwright\.outputs\.version \}\}-[\w-]+$/m, id);
+      assert.match(steps[cache], /ms-playwright$/m, id);
+      for (const install of installsHere) {
+        installs += 1;
+        assert.ok(steps.indexOf(install) > cache, `${id}: the install comes after the cache`);
+        assert.match(install, /^ {8}run: bash scripts\/engineering\/playwright-install\.sh [a-z ]+$/m, `${id}: through the capped script`);
+        const minutes = Number(install.match(/^ {8}timeout-minutes: (\d+)$/m)?.[1]);
+        assert.ok(minutes > 0 && minutes <= 15, `${id}: timeout-minutes of at most 15 on the install step`);
+        assert.doesNotMatch(install, /PLAYWRIGHT_INSTALL_(BUDGET|TIMEOUT)|continue-on-error|\|\| true/, id);
+      }
+    }
+  }
+  // ci.yml (three steps), local-native.yml and webkit-macos.yml.
+  assert.equal(installs, 5);
 });

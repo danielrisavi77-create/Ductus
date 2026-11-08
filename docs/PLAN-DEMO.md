@@ -54,7 +54,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | P-4 | Migracije s dbmateom (D-91) i pgTAP u CI-ju (`pg_prove` nad Postgresom iz compose); zaštitne mjere iz D-91 u zasebnom PR-u | P-3 | Prazna migracija i jedan pgTAP test prolaze lokalno i u CI-ju | T2 |
 | P-5 | E2E u CI-ju: Playwright nad stogom iz compose, axe, snimke zaslona i video kao artefakti PR-a | P-2, P-3 | Primjer E2E testa zelen u CI-ju; snimke vidljive uz PR | T2 |
 | P-6 | Provjera zabranjenih riječi u CI-ju (rječnik iz `PRODUCT.md` §5) nad tekstovima sučelja | P-2 | Riječ iz rječnika u ključu teksta ruši CI | T2 |
-| P-7 | Demo naredbe: `pnpm demo:up` (stog, migracije, izmišljeni podaci) i kratke upute za Daniela | P-3, K-3 | Daniel s čistog stanja podiže demo jednom naredbom | T4 |
+| P-7 | Demo naredbe: `pnpm local:up` (stog, migracije, izmišljeni podaci) i kratke upute za Daniela | P-3, K-3 | Daniel s čistog stanja podiže demo jednom naredbom | T4 |
 
 ### Backend
 
@@ -101,7 +101,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | K-2 | Citatni stil (D-83): FPZG stil kopiran iz Lekte (`katedra-lite/references/fakulteti/fpzg.json`, `fpzg-diplomski/references/stranice-i-izvori.md`) u konfiguracijsku datoteku Ductusa; čista funkcija za citat u tekstu i bibliografiju | P-1 | Testovi s primjerima iz Lekte zeleni | T2 |
 | K-3 | Izmišljeni podaci demoa: fakultet, kolegij, zadatak, nastavnik, dva studenta, i dvije povijesti koje Ductus ne može razlikovati (samostalan uvezeni tekst i postupno pretipkan tuđi tekst) s objašnjenjem granica zapisa (D-80 točka 3) | B-7, B-8 | Skripta puni bazu; nijedan stvarni osobni podatak | T3 |
 | K-4 | E2E prolaz demoa 1 do 5 kao jedan Playwright test s videom. Nastaje u T2 s prvim korakom i raste postupno (§7 t. 2); završni rok ostaje T4. Do 1. 11. obvezan je samo na Chromiumu; Firefox i WebKit su informativni (D-98 dopuna) | F-10, P-5, K-3 | Zelen u CI-ju; video priložen | T4 |
-| D-3 | Proba demoa u subotu 31. 10.: Daniel prolazi demo sam, zapisuje primjedbe. Prijava ne stvara ulogu nastavnika: `pnpm demo:up` prije pokretanja aplikacije daje je samo računu `Demo nastavnik` (`db/local/demo-k3.sql`, ista dodjela kao `db/local/provision-demo-teacher.sql`). Nakon `pnpm demo:prepare` i prve prijave računa ulogu daje `node scripts/demo/provision-teacher.mjs` (za `Demo nastavnica` s argumentom `demo-teacher-2`) ili `pnpm demo:bootstrap-accounts` za oba računa | K-4, P-7 | Primjedbe poslane orkestratoru | T4 |
+| D-3 | Proba demoa u subotu 31. 10.: Daniel prolazi demo sam, zapisuje primjedbe. Prijava ne stvara ulogu nastavnika: `pnpm local:up` prije pokretanja aplikacije daje je samo računu `Demo nastavnik` (`db/local/demo-k3.sql`, ista dodjela kao `db/local/provision-demo-teacher.sql`). Nakon `pnpm local:prepare` i prve prijave računa ulogu daje `node scripts/local/provision-teacher.mjs` (za `Demo nastavnica` s argumentom `demo-teacher-2`) ili `pnpm local:bootstrap-accounts` za oba računa | K-4, P-7 | Primjedbe poslane orkestratoru | T4 |
 | D-4 | Snimka prolaza 1 do 5 za sastanak | D-3 | Snimka postoji | T4 |
 
 ## 5. Rezovi ako se kasni

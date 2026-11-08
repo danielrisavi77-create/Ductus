@@ -3,7 +3,7 @@
 // Review and QA verdicts are shown as agent, head and PASS/FAIL only, never their text, so the
 // output is safe to hand to a QA session (QA must not have seen review findings).
 import { field } from "../engineering/metadata-parser.mjs";
-import { evaluateChecks, latestVerdict, parseAgentRisk } from "./orchestrator-core.mjs";
+import { evaluateChecks, headOrigin, latestVerdict, originText, parseAgentRisk } from "./orchestrator-core.mjs";
 import { contractText } from "./preflight-core.mjs";
 
 const SHA_RE = /^[0-9a-f]{40}$/i;
@@ -62,10 +62,13 @@ function gateOf(gate) {
 /**
  * Evidence for one PR. `pr` is toPr() shaped; `comments`, `rollup` and `gate` are what gh.mjs
  * returns for its head, or undefined when they could not be read (shown as unread, never as ok).
+ * `repository` is repoId() as "owner/name", or null when it could not be read.
  */
-export function buildEvidence({ pr, comments, rollup, gate }) {
+export function buildEvidence({ pr, comments, rollup, gate, repository }) {
   const head = String(pr?.headRefOid ?? "");
   if (!SHA_RE.test(head)) throw new Error("PR head is not a 40-character SHA");
+  // F-010 (plan #1671 N10): the gate reads no verdict on a head outside this repository.
+  const origin = headOrigin(pr, repository);
   const { agent, risk } = parseAgentRisk(pr.body);
   const lines = (labels) =>
     labels.map((label) => {
@@ -83,15 +86,18 @@ export function buildEvidence({ pr, comments, rollup, gate }) {
     contract: lines(CONTRACT_LABELS),
     open: lines(OPEN_LABELS),
     checks: checksOf(rollup),
-    gate: gateOf(gate),
-    review: verdictOf(comments, "review", head),
-    qa: verdictOf(comments, "qa", head),
+    gate: origin.ok ? gateOf(gate) : { state: "outside", description: "" },
+    review: origin.ok ? verdictOf(comments, "review", head) : { verdict: "outside" },
+    qa: origin.ok ? verdictOf(comments, "qa", head) : { verdict: "outside" },
+    ...(origin.ok ? {} : { external: originText(origin) }),
   };
 }
 
+const OUTSIDE = "not shown: head outside this repository";
 function verdictText(v) {
   if (v === null) return "unread";
   if (v.verdict === "none") return "none";
+  if (v.verdict === "outside") return OUTSIDE;
   return `${v.verdict} by ${v.agent ?? "?"} on ${v.head}${v.current ? "" : " (not this head)"}`;
 }
 
@@ -99,11 +105,13 @@ function verdictText(v) {
 export function renderEvidence(e) {
   const out = [`PR #${e.pr} ${e.state}${e.draft ? " DRAFT" : ""} head ${e.head}`];
   out.push(`Agent: ${e.agent ?? "-"} | Risk: ${e.risk ?? "-"} | Task: ${e.task ?? "-"}`);
+  if (e.external) out.push(`Head origin: VANJSKI (${e.external})`);
   if (e.checks === null) out.push("CI checks: unread");
   else if (e.checks.total === 0) out.push("CI checks: none reported on this head");
   else if (e.checks.bad.length === 0) out.push(`CI checks: ${e.checks.total} reported, none failing or pending`);
   else out.push(`CI checks: ${e.checks.bad.length}/${e.checks.total} not green: ${e.checks.bad.map((b) => `${b.name}=${b.state}`).join(", ")}`);
   if (e.gate === null) out.push("Gate status: unread");
+  else if (e.gate.state === "outside") out.push(`Gate status: ${OUTSIDE}`);
   else out.push(`Gate status: ${e.gate.state}${e.gate.description ? ` - ${e.gate.description}` : ""}`);
   out.push(`Review verdict on this head: ${verdictText(e.review)}`);
   out.push(`QA verdict on this head: ${verdictText(e.qa)}`);

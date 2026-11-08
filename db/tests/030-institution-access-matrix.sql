@@ -131,8 +131,10 @@ SELECT bag_eq(
         'faculty_rule_version: faculty_rule_version_has_event 5 O',
         'institution_role: institution_role_admin_appointed 5 O', 'institution_role: institution_role_admin_reappointed 17 O',
         'institution_role: institution_role_keeps_admin 17 O',
-        'notice_acknowledgment: notice_acknowledgment_fingerprint_immutable 19 O'],
-  'triggers: immutable versions and fingerprints, mentorship validation, transactional notification, the institution of the parent and the operator''s administrators, all enabled'
+        'notice_acknowledgment: notice_acknowledgment_fingerprint_immutable 19 O',
+        'notice_acknowledgment: notice_acknowledgment_binding_fill 7 O',
+        'notice_acknowledgment: notice_acknowledgment_binding_immutable 19 O'],
+  'triggers: immutable versions, fingerprints and bindings, the binding derived on insert, mentorship validation, transactional notification, the institution of the parent and the operator''s administrators, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -162,6 +164,9 @@ SELECT bag_eq(
     'revoke_teacher_role(p_teacher_id uuid) definer app',
     'teachers_without_affiliation() definer app',
     'institution_overview() definer app',
+    'teacher_roles() definer app',
+    'institution_courses(p_academic_year text) definer app',
+    'institution_academic_years() definer app',
     'ai_policy_rank(p_ai_policy text)',
     'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean)',
     'refuse_change()',
@@ -173,6 +178,7 @@ SELECT bag_eq(
     'acknowledge_notice(p_assignment_id uuid, p_version_no integer, p_template_version integer) definer app',
     'notice_fingerprint(p_template_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_word_min integer, p_word_max integer)',
     'refuse_acknowledgment_change()',
+    'notice_acknowledgment_binding_fill()',
     'has_acknowledged_current(p_assignment_id uuid) definer app',
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',

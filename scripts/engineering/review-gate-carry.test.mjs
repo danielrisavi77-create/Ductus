@@ -40,7 +40,15 @@ const override = (sha) =>
     association: "OWNER",
   });
 
-const file = (filename, patch = "@@ -1 +1 @@\n-a\n+b") => ({ filename, status: "modified", patch, sha: "1".repeat(40) });
+// F-046: a compared file carries its tree entry at the head and at the merge base.
+const file = (filename, patch = "@@ -1 +1 @@\n-a\n+b") => ({
+  filename,
+  status: "modified",
+  patch,
+  sha: "1".repeat(40),
+  entry: "100644 blob",
+  baseEntry: "100644 blob",
+});
 
 test("verdicts on a carried earlier head count for the current head", () => {
   const comments = [review(earlier), qa(earlier)];
@@ -215,7 +223,7 @@ test("a success that counts a carried verdict names the earlier head", () => {
 });
 
 test("evaluatePullRequest passes carried heads to the gate", () => {
-  const pr = { body: body(), head: { sha: head }, changed_files: 1, auto_merge: null };
+  const pr = { body: body(), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, changed_files: 1, auto_merge: null };
   const files = [{ filename: "apps/web/a.ts", status: "modified" }];
   const comments = [review(earlier)];
   const carried = evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHeads: new Set([earlier]) });

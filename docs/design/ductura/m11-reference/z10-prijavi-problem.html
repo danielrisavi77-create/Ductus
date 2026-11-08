@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Z-10 — Prijavi problem (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 18 · DAN-584 · prijedlog slike · M11.UX-R</div>
+  <h1>Z-10 — Prijavi problem</h1>
+  <p>Obrazac za studenta i mentora. Prototipa nema; složen je po retku Z-10 iz <code>docs/design/EKRANI.md</code>. Uz opis se šalju samo stanje spremanja i verzija aplikacije, bez sadržaja rada (D-69). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant wide" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Prijavi problem</h2></div>
+      <div class="panel-body cols">
+        <form class="stack" onsubmit="return false">
+          <fieldset class="stack">
+            <legend class="title">O čemu se radi?</legend>
+            <label class="opt"><input type="radio" name="vrsta" checked> Ductura ne radi kako treba <span class="meta">odgovara održavatelj Ducture</span></label>
+            <label class="opt"><input type="radio" name="vrsta"> Ne mogu se prijaviti sustavom AAI@EduHr <span class="meta">odgovara AAI administrator fakulteta</span></label>
+            <label class="opt"><input type="radio" name="vrsta"> Pitanje o uputama ili roku <span class="meta">odgovara koordinator pilota</span></label>
+          </fieldset>
+          <div class="field"><label for="opis">Opis</label><textarea class="input" id="opis" rows="4">Nakon ponovnog otvaranja kartice traka spremanja pokazuje stanje od jučer.</textarea></div>
+          <button class="btn" type="submit">Pošalji prijavu</button>
+        </form>
+        <div class="stack">
+          <h3 class="title">Uz opis se šalje</h3>
+          <div class="kv"><span>Stanje spremanja</span><b>Spremljeno na poslužitelju · 14:21</b></div>
+          <div class="kv"><span>Verzija aplikacije</span><b>0.11.2</b></div>
+          <p class="note">Sadržaj Vašeg rada se ne šalje.</p>
+          <p class="meta">Prijava ide osobi koja je za tu vrstu problema zadužena. Odgovor stiže u aplikaciji i e-poštom.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="poslano">
+    <div class="ref-tag">Stanje 2 · poslano</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t2">Prijava je poslana</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Broj prijave: <b>2027-0042</b>. Odgovor stiže u aplikaciji i e-poštom.</p>
+        <button class="btn secondary" type="button">Natrag na rad</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 3 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t3">Moje prijave</h2></div>
+      <div class="panel-body"><p class="note">Još niste poslali nijednu prijavu.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 4 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t4">Prijavi problem</h2></div>
+      <div class="panel-body"><p class="note" role="status">Šaljem prijavu.</p><div class="skel w60"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 5 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t5">Prijavi problem</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Prijava nije poslana. Opis ostaje na ovom uređaju dok ga ponovno ne pošaljete.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Obrazac ne traži ime ni broj indeksa: pošiljatelja poznaje prijava sustavom AAI@EduHr. Rok odgovora se ne obećava.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Prijavi problem, 2. vrsta problema (strelice), 3. Opis, 4. Pošalji prijavu, 5. Natrag na rad ili Pokušaj ponovno.</p>
+</main>
+</body>
+</html>

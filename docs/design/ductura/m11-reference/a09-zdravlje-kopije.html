@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-09 — Zdravlje sustava i sigurnosne kopije (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 18 · DAN-584 · prijedlog slike · M11.UX-R</div>
+  <h1>A-09 — Zdravlje sustava i sigurnosne kopije</h1>
+  <p>Stranica administratora fakulteta. Prototipa nema; složena je po retku A-09 iz <code>docs/design/EKRANI.md</code>. Prikazuje samo vlastite provjere Ducture (D-277 NQ10) i probu povrata M11.2-P04 (D-277 NQ05). Pružatelj i lokacija još nisu odlučeni (P-01 do P-04). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant wide" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Zdravlje sustava</h2></div>
+      <div class="panel-body cols">
+        <div class="item">
+          <div class="comp"><span class="title">Vlastite provjere</span><span class="meta">Zadnja u 14:10</span></div>
+          <div class="comp"><span>Poslužitelj prima promjene</span><span class="state up">Radi</span></div>
+          <div class="comp"><span>Obrada u pozadini</span><span class="state part">Djelomično</span></div>
+          <div class="comp"><span>Provjera roka predaje</span><span class="state up">Radi</span></div>
+          <p class="meta">Obrada u pozadini kasni 6 minuta. Promjene studenata stižu i potvrđuju se kao i prije.</p>
+          <h3 class="title">Uzbune iz vlastitih provjera</h3>
+          <ul class="list">
+            <li class="comp"><span>14:04 · obrada u pozadini kasni</span><span class="meta">otvoreno</span></li>
+            <li class="comp"><span>3. 3. 09:12 · poslužitelj nije odgovorio 2 minute</span><span class="meta">zatvoreno 09:14</span></li>
+          </ul>
+        </div>
+        <div class="stack">
+          <div class="comp"><span class="title">Sigurnosne kopije</span></div>
+          <div class="kv"><span>Zadnja kopija baze</span><b>danas 03:00</b></div>
+          <div class="kv"><span>Zadnja proba povrata</span><b>1. 3. · uspjela, 18 min</b></div>
+          <div class="kv"><span>Iduća proba povrata</span><b>1. 4.</b></div>
+          <div class="comp"><span>Pružatelj</span><span class="open-mark">Odluka: otvoreno</span></div>
+          <div class="comp"><span>Lokacija kopija</span><span class="open-mark">Odluka: otvoreno</span></div>
+          <p class="meta">Proba povrata vraća kopiju na zaseban poslužitelj i provjerava je. Postupak je M11.2-P04.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 2 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t2">Sigurnosne kopije</h2></div>
+      <div class="panel-body">
+        <div class="kv"><span>Zadnja kopija baze</span><b>danas 03:00</b></div>
+        <p class="note">Proba povrata još nije izvedena. Prva je u planu prije probe s korisnicima.</p>
+        <p class="meta">Uzbuna iz vlastitih provjera nema.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 3 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t3">Zdravlje sustava</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam rezultate provjera.</p><div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 4 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t4">Zdravlje sustava</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Rezultate provjera trenutačno nije moguće učitati. To ne znači da sustav ne radi.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Stanje se razlikuje riječju i oblikom oznake: puna točka (radi), prsten (djelomično), crtica (ne radi). Boja nikad nije jedini znak.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Zdravlje sustava, 2. vlastite provjere redom, 3. uzbune, 4. sigurnosne kopije, 5. Pokušaj ponovno.</p>
+</main>
+</body>
+</html>

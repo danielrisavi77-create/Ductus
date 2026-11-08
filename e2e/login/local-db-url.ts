@@ -8,7 +8,7 @@ const PROTOCOLS = new Set(["postgres:", "postgresql:"]);
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-/** Returns a plain local database URL unchanged, as scripts/demo/up.mjs accepts it, and throws otherwise. */
+/** Returns a plain local database URL unchanged, as scripts/local/up.mjs accepts it, and throws otherwise. */
 export function localDbUrl(url: string): string {
   const parsed = new URL(url);
   if (

@@ -1,10 +1,6 @@
-import { dirname, posix } from "node:path";
-import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const compat = new FlatCompat({
-  baseDirectory: dirname(fileURLToPath(import.meta.url)),
-});
+import { posix } from "node:path";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
 
 // The pg family by package name (pg, pg/lib/..., pg-cursor, pg-boss), or a
 // static path into an installed copy of it (../../node_modules/pg, the pnpm
@@ -94,7 +90,8 @@ const eslintConfig = [
       "test-results-login/**",
     ],
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...nextCoreWebVitals,
+  ...nextTypescript,
   // Keep direct driver imports behind src/server/db (withActor, BACKEND 4.3).
   // This development guard covers static and dynamic literal module imports;
   // it does not enforce every possible JavaScript module-loading operation.

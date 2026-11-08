@@ -5,6 +5,8 @@ import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { NOTICE_TEMPLATE_VERSION, noticeFingerprint } from "@/domain/notice/fingerprint";
+import { readNotice } from "@/components/student/assignment-notice-read";
+import { acknowledgeNotice } from "@/components/student/notice-gate";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { createAcknowledgmentPostHandler } from "@/server/institution/acknowledgment-route";
@@ -446,11 +448,12 @@ describe("assignments and removal over withActor", () => {
       return result.rows[0].yes;
     });
   // What the student stored for a version, and what the TS mirror computes
-  // from the stored version (DAN-306, E1 and A13); instants to milliseconds.
+  // from the stored version (DAN-306, E1 and A13; P03: the RPC's rows are
+  // bound); instants to milliseconds.
   const storedNotice = async (versionNo: number) =>
     (
       await admin.query(
-        `SELECT notice_template_version, notice_fingerprint FROM institution.notice_acknowledgment
+        `SELECT notice_template_version, notice_fingerprint, notice_binding FROM institution.notice_acknowledgment
          WHERE assignment_id = $1 AND version_no = $2 AND student_id = $3`,
         [assignment, versionNo, people.student.id],
       )
@@ -585,7 +588,7 @@ describe("assignments and removal over withActor", () => {
     expect(await acknowledgedCurrent(people.student.token)).toBe(false);
     // E1 (DAN-306): the row carries the fingerprint of version 2, the version
     // current under the lock, not that of version 3.
-    expect(await storedNotice(2)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(2) });
+    expect(await storedNotice(2)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(2), notice_binding: "bound" });
     expect(await versionFingerprint(2)).not.toBe(await versionFingerprint(3));
 
     // E2: the same student, the same version, two template versions. The
@@ -604,7 +607,7 @@ describe("assignments and removal over withActor", () => {
     } finally {
       await firstTab.end();
     }
-    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4) });
+    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4), notice_binding: "bound" });
 
     // E4: ten parallel confirmations of version 4 leave one row and return the first time.
     const repeats = await Promise.all(
@@ -614,7 +617,7 @@ describe("assignments and removal over withActor", () => {
     );
     expect(repeats.map((at) => at.toISOString())).toEqual(Array.from({ length: 10 }, () => firstAt.toISOString()));
     expect((await confirmed()).rows).toEqual([{ version_no: 2 }, { version_no: 4 }]);
-    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4) });
+    expect(await storedNotice(4)).toEqual({ notice_template_version: 1, notice_fingerprint: await versionFingerprint(4), notice_binding: "bound" });
     expect(await acknowledgedCurrent(people.student.token)).toBe(true);
     // Nobody else has confirmed it, the teacher included.
     expect(await acknowledgedCurrent(people.guesser.token)).toBe(false);
@@ -624,10 +627,13 @@ describe("assignments and removal over withActor", () => {
   it("acknowledges over the HTTP boundary with a cookie actor and preserves the database time on retry", async () => {
     const origin = "http://localhost:3000";
     const post = createAcknowledgmentPostHandler({ withActor, getRedirectUri: () => `${origin}/auth/callback` });
+    // DAN-306: every request carries the fingerprint of version 4 unless a
+    // test gives another one.
+    const fp4 = await versionFingerprint(4);
     const call = (
       token: string | undefined,
       versionNo: unknown = 4,
-      options: { id?: string; body?: string; headers?: Record<string, string> } = {},
+      options: { id?: string; body?: string; headers?: Record<string, string>; fingerprint?: string } = {},
     ) => {
       const id = options.id ?? assignment;
       const request = new NextRequest(`${origin}/api/institution/assignments/${id}/acknowledgment`, {
@@ -639,28 +645,68 @@ describe("assignments and removal over withActor", () => {
           ...(token ? { cookie: `${SESSION_COOKIE_NAME}=${token}` } : {}),
           ...options.headers,
         },
-        body: options.body ?? JSON.stringify({ versionNo }),
+        body: options.body ?? JSON.stringify({ versionNo, fingerprint: options.fingerprint ?? fp4 }),
       });
       return post(request, { params: Promise.resolve({ assignmentId: id }) });
     };
-    const rows = () => admin.query<{ acknowledged_at: Date; notice_template_version: number; notice_fingerprint: string }>(
-      `SELECT acknowledged_at, notice_template_version, notice_fingerprint FROM institution.notice_acknowledgment
-        WHERE assignment_id = $1 AND version_no = 4 AND student_id = $2`,
+    // The browser's own call: acknowledgeNotice computes the fingerprint from
+    // the view readNotice gives the screen, and the request reaches the route
+    // with the guesser's cookie.
+    const browserSend = (async (url: string, init: RequestInit) =>
+      post(new NextRequest(`${origin}${url}`, {
+        method: init.method,
+        body: init.body,
+        headers: {
+          ...(init.headers as Record<string, string>),
+          origin,
+          "sec-fetch-site": "same-origin",
+          cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}`,
+        },
+      }), { params: Promise.resolve({ assignmentId: assignment }) })) as unknown as typeof fetch;
+    const rows = () => admin.query<{ acknowledged_at: Date; notice_template_version: number; notice_fingerprint: string; notice_binding: string }>(
+      `SELECT acknowledged_at, notice_template_version, notice_fingerprint, notice_binding
+         FROM institution.notice_acknowledgment WHERE assignment_id = $1 AND version_no = 4 AND student_id = $2`,
       [assignment, people.guesser.id],
     );
 
     expect((await rows()).rows).toHaveLength(0);
+    // #1502 B2: the fingerprint of another text records nothing.
+    const wrong = await call(people.guesser.token, 4, { fingerprint: "f".repeat(64) });
+    expect([wrong.status, await wrong.json()]).toEqual([409, { error: "notice_changed" }]);
+    expect((await rows()).rows).toHaveLength(0);
+
+    // The view the screen shows hashes to the server's fingerprint, so the
+    // client's computation and the database's agree (B1).
+    const shown = await readNotice(people.guesser.token, assignment, withActor);
+    if (shown.kind !== "available") throw new Error(`notice not available: ${shown.kind}`);
+    expect(shown.view.versionNo).toBe(4);
+
+    // Istodobnost: a request with another fingerprint racing the browser's
+    // own records only the browser's, whichever runs first.
+    const [raced, viaBrowser] = await Promise.all([
+      call(people.guesser.token, 4, { fingerprint: "e".repeat(64) }),
+      acknowledgeNotice(shown.view, browserSend),
+    ]);
+    expect([raced.status, await raced.json()]).toEqual([409, { error: "notice_changed" }]);
+    expect(viaBrowser.kind).toBe("acknowledged");
+    expect((await rows()).rows).toHaveLength(1);
+
     const first = await call(people.guesser.token);
     expect(first.status).toBe(200);
     expect(first.headers.get("cache-control")).toBe("no-store");
     const answer = await first.json();
     expect(answer).toEqual({ acknowledgedAt: (await rows()).rows[0].acknowledged_at.toISOString() });
+    expect(viaBrowser).toEqual({ kind: "acknowledged", at: answer.acknowledgedAt });
     // The route passes the server's template version, never one from the
     // client, and the row holds the fingerprint of that version (DAN-306).
     expect((await rows()).rows[0]).toMatchObject({
       notice_template_version: NOTICE_TEMPLATE_VERSION,
-      notice_fingerprint: await versionFingerprint(4),
+      notice_fingerprint: fp4,
+      notice_binding: "bound",
     });
+    // After the row exists, another fingerprint is still refused and changes nothing.
+    const later = await call(people.guesser.token, 4, { fingerprint: "f".repeat(64) });
+    expect([later.status, await later.json()]).toEqual([409, { error: "notice_changed" }]);
     const retry = await call(people.guesser.token);
     expect([retry.status, await retry.json()]).toEqual([200, answer]);
     expect((await rows()).rows).toHaveLength(1);
@@ -672,7 +718,7 @@ describe("assignments and removal over withActor", () => {
       const request = new NextRequest(`${origin}/api/institution/assignments/${assignment}/acknowledgment`, {
         method: "POST",
         headers: { origin, "content-type": "application/json", cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}` },
-        body: JSON.stringify({ versionNo: 4 }),
+        body: JSON.stringify({ versionNo: 4, fingerprint: fp4 }),
       });
       const routed = await acknowledgmentPost(request, { params: Promise.resolve({ assignmentId: assignment }) });
       expect([routed.status, await routed.json()]).toEqual([200, answer]);
@@ -710,9 +756,12 @@ describe("assignments and removal over withActor", () => {
     }
     for (const [body, status] of [
       ["{", 400],
-      [JSON.stringify({ versionNo: "4" }), 422],
-      [JSON.stringify({ versionNo: 4, studentId: people.student.id }), 422],
-      [JSON.stringify({ versionNo: 2_147_483_648 }), 422],
+      [JSON.stringify({ versionNo: "4", fingerprint: fp4 }), 422],
+      [JSON.stringify({ versionNo: 4, fingerprint: fp4, studentId: people.student.id }), 422],
+      [JSON.stringify({ versionNo: 2_147_483_648, fingerprint: fp4 }), 422],
+      // #1502 B3/B4: an old client's body and another spelling of the digest.
+      [JSON.stringify({ versionNo: 4 }), 422],
+      [JSON.stringify({ versionNo: 4, fingerprint: fp4.toUpperCase() }), 422],
       ["x".repeat(1025), 413],
     ] as const) {
       expect((await call(people.guesser.token, 4, { body })).status).toBe(status);
@@ -722,7 +771,7 @@ describe("assignments and removal over withActor", () => {
     const misconfigured = createAcknowledgmentPostHandler({ withActor, getRedirectUri: () => "file:///bad" });
     const brokenRequest = new NextRequest(`${origin}/api/institution/assignments/${assignment}/acknowledgment`, {
       method: "POST", headers: { origin, "content-type": "application/json", cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}` },
-      body: JSON.stringify({ versionNo: 4 }),
+      body: JSON.stringify({ versionNo: 4, fingerprint: fp4 }),
     });
     expect((await misconfigured(brokenRequest, { params: Promise.resolve({ assignmentId: assignment }) })).status).toBe(503);
     const failed = createAcknowledgmentPostHandler({
@@ -731,7 +780,7 @@ describe("assignments and removal over withActor", () => {
     });
     const failureRequest = new NextRequest(`${origin}/api/institution/assignments/${assignment}/acknowledgment`, {
       method: "POST", headers: { origin, "content-type": "application/json", cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}` },
-      body: JSON.stringify({ versionNo: 4 }),
+      body: JSON.stringify({ versionNo: 4, fingerprint: fp4 }),
     });
     const failure = await failed(failureRequest, { params: Promise.resolve({ assignmentId: assignment }) });
     expect([failure.status, await failure.json()]).toEqual([503, { error: "unavailable" }]);

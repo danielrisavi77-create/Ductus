@@ -18,7 +18,8 @@ export type MenuItem = {
   key: string;
   label: string;
   glyph?: ReactNode;
-  role: "menuitemcheckbox" | "menuitemradio";
+  /** A plain "menuitem" is a command, not a toggle, and has no checked state. */
+  role: "menuitem" | "menuitemcheckbox" | "menuitemradio";
   checked: boolean;
   disabled?: boolean;
 };
@@ -76,7 +77,7 @@ export default function ToolbarMenu({
       role={item.role}
       className="editor-menu__item"
       data-item={item.key}
-      aria-checked={item.checked}
+      aria-checked={item.role === "menuitem" ? undefined : item.checked}
       aria-disabled={item.disabled ? "true" : undefined}
       tabIndex={-1}
       onMouseDown={(event) => event.preventDefault()}

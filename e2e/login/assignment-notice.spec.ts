@@ -182,13 +182,24 @@ test("FE-D8: the open notice asks for the confirmation and passes axe", async ({
 test("FE-D8: a confirmation the server records leads on to writing", async ({ page }) => {
   await withSeed({}, page, async (path) => {
     await page.goto(path);
-    // Models the existing acknowledgment contract; #541 is not on main yet.
-    await page.route("**/api/institution/assignments/*/acknowledgment", (route) => route.fulfill({
-      status: 200, contentType: "application/json", body: JSON.stringify({ acknowledgedAt: "2026-10-19T09:14:00.000Z" }),
-    }));
+    // DAN-306 (#1502 F2): the real route records the confirmation only if
+    // the fingerprint the browser computed of the shown text is the one the
+    // database computes of the stored version.
+    const posted = page.waitForRequest((request) =>
+      request.method() === "POST" && request.url().endsWith("/acknowledgment"));
     await page.getByRole("checkbox", { name: s.checkbox }).check();
     await page.getByRole("button", { name: s.confirm }).click();
     await expect(page.getByRole("status").filter({ hasText: "Potvrđeno" })).toBeVisible();
+    const sent = (await posted).postDataJSON() as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual(["fingerprint", "versionNo"]);
+    expect(sent.versionNo).toBe(1);
+    const { rows } = await admin((client) => client.query<{ notice_fingerprint: string | null }>(
+      `SELECT n.notice_fingerprint FROM institution.notice_acknowledgment n
+         JOIN identity.user_account u ON u.id = n.student_id
+        WHERE n.assignment_id = $1 AND n.version_no = 1 AND u.hr_edu_person_unique_id = $2`,
+      [path.slice("/zadatak/".length), STUDENT]));
+    expect(rows).toEqual([{ notice_fingerprint: sent.fingerprint }]);
+    expect(sent.fingerprint).toMatch(/^[0-9a-f]{64}$/);
     await expect(page.getByRole("link", { name: s.openEditor })).toHaveAttribute("href", `/rad?zadatak=${path.slice("/zadatak/".length)}`);
     await expect(page.getByRole("checkbox")).toHaveCount(0);
   });

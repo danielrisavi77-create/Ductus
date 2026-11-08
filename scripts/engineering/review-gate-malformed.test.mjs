@@ -287,7 +287,19 @@ test("a negative quoted inside a code block is a quote and does not block", () =
 // holds after a clean merge of main like one with the full SHA.
 const mainParent = "9".repeat(40);
 const prBase = "8".repeat(40);
-const prChange = { files: [{ filename: "a.mjs", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b", sha: "7".repeat(40) }] };
+const prChange = {
+  merge_base_commit: { sha: prBase },
+  files: [{ filename: "a.mjs", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b", sha: "7".repeat(40) }],
+};
+// F-046: the live tip of main and whole trees for every compared side.
+const tipAndTree = (path) => {
+  if (path === "/repos/o/r/branches/main") return { commit: { sha: prBase } };
+  if (/^\/repos\/o\/r\/git\/trees\/[0-9a-f]{40}\?recursive=1$/.test(path)) {
+    return { truncated: false, tree: [{ path: "a.mjs", mode: "100644", type: "blob" }] };
+  }
+  return undefined;
+};
+const answer = (value) => ({ ok: true, status: 200, json: async () => value, text: async () => JSON.stringify(value) });
 const mergedPr = { head: { sha: head }, base: { sha: prBase, ref: "main" } };
 const mergeApi = () =>
   createApi({
@@ -296,7 +308,8 @@ const mergeApi = () =>
     timeoutMs: 1000,
     fetchImpl: async (url) => {
       const path = url.replace("https://api.test", "");
-      let value;
+      let value = tipAndTree(path);
+      if (value) return answer(value);
       if (path.endsWith(`/commits/${head}`)) value = { sha: head, parents: [{ sha: carried }, { sha: mainParent }] };
       else if (path.endsWith(`/commits/${carried}`)) value = { sha: carried, parents: [{ sha: "6".repeat(40) }] };
       else if (path.includes(`/compare/main...${mainParent}`)) value = { status: "behind", files: [] };
@@ -394,7 +407,8 @@ const walkApi = (parents, { broken = new Set(), hanging = new Set(), asked = [],
     fetchImpl: async (url) => {
       const path = url.replace("https://api.test", "");
       const sha = path.match(/\/commits\/([0-9a-f]{40})$/)?.[1];
-      let value;
+      let value = tipAndTree(path);
+      if (value) return answer(value);
       if (sha) {
         asked.push(sha);
         if (broken.has(sha)) throw new Error(`broken ${sha}`);

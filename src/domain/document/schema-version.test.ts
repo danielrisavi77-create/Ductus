@@ -35,14 +35,23 @@ const codes = (doc: unknown) => {
 };
 
 describe("document schema versions", () => {
-  it("A5: accepts version 1 only; version 2 is reserved, not accepted", () => {
+  it("A5: the version list holds 1 and 2, with the same block types; validateDocument stays v1 only", () => {
+    // DAN-619 (contract document-schema-v2 §1, #1711 V1): v2 is accepted, with
+    // the block types of v1, and the Map stays the only list of versions.
     expect(DOCUMENT_SCHEMA_VERSION).toBe(1);
     expect(DOCUMENT_SCHEMA_VERSION_V2).toBe(2);
-    expect([...DOCUMENT_BLOCK_TYPES_BY_VERSION.keys()]).toEqual([1]);
+    expect([...DOCUMENT_BLOCK_TYPES_BY_VERSION.keys()]).toEqual([1, 2]);
+    expect([...DOCUMENT_BLOCK_TYPES_BY_VERSION.get(2)!]).toEqual([...DOCUMENT_BLOCK_TYPES_BY_VERSION.get(1)!]);
     expect(isAcceptedDocumentSchemaVersion(1)).toBe(true);
-    for (const value of [2, 3, 0, -1, 1.5, "1", "2", "2.0", null, undefined, true, [1], { v: 1 }]) {
+    expect(isAcceptedDocumentSchemaVersion(2)).toBe(true);
+    for (const value of [3, 0, -1, 1.5, "1", "2", "2.0", null, undefined, true, [1], { v: 1 }]) {
       expect(isAcceptedDocumentSchemaVersion(value), JSON.stringify(value)).toBe(false);
     }
+    // The v1 view reads a v2 document as v1, so `sources` is a field of no v1.
+    expect(codes({ schemaVersion: 2, nodes: V1.nodes, sources: [] })).toEqual([
+      "UNKNOWN_FIELD",
+      "SCHEMA_VERSION_INVALID",
+    ]);
   });
 
   it("A5: refuses a v2 document that is v1 in everything but the version, and never rewrites it", () => {

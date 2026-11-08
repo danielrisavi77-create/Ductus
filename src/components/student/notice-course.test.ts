@@ -63,7 +63,7 @@ describe("S03-a header", () => {
     const view: NoticeView = {
       assignmentId: MINE, versionNo: 1, title: "Izmišljeni esej", instructions: "Izmišljene upute.",
       workType: "nepoznata_vrsta", evidenceProfile: "basic", opensAt: "2026-11-01T08:00:00.000Z",
-      dueAt: "2026-11-30T22:59:00.000Z", aiPurposes: [], wordMin: null, wordMax: null, acknowledgedAt: null,
+      dueAt: "2026-11-30T22:59:00.000Z", aiPolicy: "prohibited", aiPurposes: [], wordMin: null, wordMax: null, acknowledgedAt: null,
     };
     const html = renderToStaticMarkup(createElement(AssignmentNotice, { view, timing: "open" }));
     expect(html).toContain(s.step);

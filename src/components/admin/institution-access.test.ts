@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { SessionPrincipal } from "@/server/auth/principal";
 import type { InstitutionOverviewRead } from "@/server/institution/institution-overview";
+import type { FacultyRulesRead } from "@/server/institution/faculty-rules";
+import type { TeacherRolesRead } from "@/server/institution/teacher-roles";
 
 import { institutionScreen, type InstitutionScreen } from "./institution-access";
+import type { CoursesPage } from "./institution-courses-view";
 
 const TOKEN = "T".repeat(43);
 
@@ -61,5 +64,50 @@ describe("institutionScreen", () => {
 
   it("shows the counts only to a signed-in administrator", () => {
     expect(institutionScreen("ok", "signed-in", TOKEN)).toBe("allowed");
+  });
+});
+
+// DAN-581 PR 3 (A-02, contract #1091 c.6677177709): /ustanova/korisnici takes
+// its screen from the teacher roles read, whose answers are the same four.
+describe("institutionScreen for the teacher roles read", () => {
+  type RolesRead = TeacherRolesRead["kind"] | null;
+  const kinds: Record<TeacherRolesRead["kind"], true> = { ok: true, unauthorized: true, notFound: true, unavailable: true };
+
+  it("has a row in the table above for every answer of the teacher roles read", () => {
+    const reads = new Set<RolesRead>(TABLE.map(([read]) => read));
+    for (const kind of Object.keys(kinds) as TeacherRolesRead["kind"][]) expect(reads.has(kind)).toBe(true);
+  });
+
+  it("shows no list when the session closed after the lists were read", () => {
+    expect(institutionScreen("ok", "signed-out", TOKEN)).toBe("expired");
+    expect(institutionScreen("ok", "signed-out", undefined)).toBe("signedOut");
+  });
+});
+
+// DAN-590 (A-04, contract #1091 c.6695058963): /ustanova/pravila takes its
+// screen from the faculty rules read, whose answers are the same four.
+describe("institutionScreen for the faculty rules read", () => {
+  type RulesRead = FacultyRulesRead["kind"] | null;
+  const kinds: Record<FacultyRulesRead["kind"], true> = { ok: true, unauthorized: true, notFound: true, unavailable: true };
+
+  it("has a row in the table above for every answer of the faculty rules read", () => {
+    const reads = new Set<RulesRead>(TABLE.map(([read]) => read));
+    for (const kind of Object.keys(kinds) as FacultyRulesRead["kind"][]) expect(reads.has(kind)).toBe(true);
+  });
+
+  it("hides the page from a caller who is not the administrator", () => {
+    expect(institutionScreen("notFound", "signed-in", TOKEN)).toBe("notFound");
+  });
+});
+
+// DAN-591 (A-03, contract #1091 c.6708627828): /ustanova/kolegiji takes its
+// screen from coursesPage, whose answers are the same four
+// (institution-courses-view.test.ts has every pair of its two reads).
+describe("institutionScreen for the courses page", () => {
+  const kinds: Record<CoursesPage["kind"], true> = { ok: true, unauthorized: true, notFound: true, unavailable: true };
+
+  it("has a row in the table above for every answer of the courses page", () => {
+    const reads = new Set<Read | CoursesPage["kind"]>(TABLE.map(([read]) => read));
+    for (const kind of Object.keys(kinds) as CoursesPage["kind"][]) expect(reads.has(kind)).toBe(true);
   });
 });

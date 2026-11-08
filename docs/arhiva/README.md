@@ -10,6 +10,14 @@ Datoteka se premješta ovamo samo ako je ne čitaju `CLAUDE.md`, `AGENTS.md`, `d
 | --- | --- | --- | --- |
 | `ISTRAZIVANJE-ALATA-2026-10-25.md` | `docs/` | 1. 11. 2026. | Istraživanje alata, samo za sebe kaže da nije odluka o instalaciji. Koraci iz njegova §5 vode se kao zasebni zadaci u Linearu, a `docs/REPOZITORIJI.md` §10 upućuje ovamo. |
 
+## Dodano izravno
+
+Datoteka koja nikad nije bila mjerodavna i odmah ulazi u arhivu kao istraživanje.
+
+| Datoteka | Datum | Razlog |
+| --- | --- | --- |
+| `ISTRAZIVANJE-TEHNOLOGIJA-2026-10-19.md` | 2. 11. 2026. | Sažetak vlasnikova paketa istraživanja od 19. 10. 2026. (D-251). Nije odluka; odgovori na njegova otvorena pitanja su D-251 do D-259, a `docs/REPOZITORIJI.md` §11 upućuje ovamo. |
+
 ## Pregledano, ali nije premješteno
 
 Stanje 1. 11. 2026. Kandidat ostaje na svom mjestu dok vrijedi razlog.

@@ -22,6 +22,7 @@ export const DEMO_ASSIGNMENT: NoticeView = {
   evidenceProfile: "basic",
   opensAt: "2026-10-12T07:00:00.000Z",
   dueAt: "2026-11-20T22:59:00.000Z",
+  aiPolicy: "partially_allowed",
   aiPurposes: ["formatting", "proofreading", "literature_search"],
   wordMin: null,
   wordMax: null,

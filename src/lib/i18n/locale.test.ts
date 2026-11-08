@@ -1,0 +1,171 @@
+import { describe, expect, it } from "vitest";
+
+import { messagesHr } from "./messages.hr";
+import { DEFAULT_INTERFACE_LOCALE, INTERFACE_LOCALES, languageOfTag, messagesFor, parseInterfaceLocale } from "./locale";
+
+// Classes of input the parser covers (DAN-427 contract on #1091). Every class
+// that is not a registered language tag gives the default, never an error.
+describe("parseInterfaceLocale", () => {
+  it("defaults to Croatian", () => {
+    expect(DEFAULT_INTERFACE_LOCALE).toBe("hr");
+    expect(INTERFACE_LOCALES).toContain("hr");
+  });
+
+  it.each([
+    // 1. A registered tag.
+    ["hr", "hr"],
+    // 2. Language tags are case-insensitive (BCP 47).
+    ["HR", "hr"],
+    ["Hr", "hr"],
+    // 3. A region or script subtag keeps the language.
+    ["hr-HR", "hr"],
+    ["hr-hr", "hr"],
+    ["HR-Latn-HR", "hr"],
+    // Variants, extensions and private use, each well formed (RFC 5646 2.1).
+    ["hr-HR-1994", "hr"],
+    ["hr-HR-u-ca-gregory", "hr"],
+    ["hr-x-private", "hr"],
+    ["hr-x-a", "hr"],
+    ["Hr-419", "hr"],
+  ])("reads %j as %s", (value, locale) => {
+    expect(languageOfTag(value)).toBe(locale);
+    expect(parseInterfaceLocale(value)).toBe(locale);
+  });
+
+  // 4. A well-formed tag of a language without a catalogue: the tag is read, the
+  // default is chosen only because nothing is registered for it.
+  it.each([
+    ["de", "de"],
+    ["sr-Latn", "sr"],
+    // A letter next to "hr" makes another three-letter language, not "hr".
+    ["hrx", "hrx"],
+    ["xhr", "xhr"],
+  ])("reads the language of %j as %s and gives the default", (value, language) => {
+    expect(languageOfTag(value)).toBe(language);
+    expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
+  });
+
+  // Classes 5 to 10 are not one tag at all. With only "hr" registered the default
+  // and a match look the same, so the tag reading is checked on its own.
+  it.each([
+    // 5. Empty or blank.
+    [""],
+    ["   "],
+    // 6. Not a string.
+    [undefined],
+    [null],
+    [0],
+    [1],
+    [Number.NaN],
+    [true],
+    [{}],
+    [["hr"]],
+    [{ toString: () => "hr" }],
+    [new String("hr")],
+    [Symbol("hr")],
+    // 7. Padding, control characters, separators and suffixes around a tag.
+    [" hr"],
+    ["hr "],
+    ["hr\n"],
+    ["hr\u0000"],
+    ["hr_HR"],
+    ["hr-"],
+    ["-hr"],
+    ["hr--HR"],
+    ["hr,en;q=0.8"],
+    ["hr-HR-toolongsubtag"],
+    // Not well formed (RFC 5646 2.1): a singleton without its subtags, a subtag in the
+    // wrong place or of a length no subtag has there.
+    ["hr-u"],
+    ["hr-x"],
+    ["hr-HR-u"],
+    ["hr-u-a"],
+    ["hr-a-b-c"],
+    ["hr-x-"],
+    ["hr-HR-abc"],
+    ["hr-Latn-Latn"],
+    ["hr-HR-HR"],
+    ["hr-1"],
+    ["hr-12"],
+    ["hr-1234567890"],
+    // 8. Keys of Object.prototype ("toString" is a well-formed tag, see below).
+    ["__proto__"],
+    ["constructor"],
+    ["hasOwnProperty"],
+    // 9. Look-alike letters, full width and combining marks; nothing is normalised.
+    ["һr"],
+    ["ｈｒ"],
+    ["h́r"],
+    ["h​r"],
+    // 10. Overlong input.
+    [`hr-${"a".repeat(8)}`.repeat(20)],
+  ])("reads %j as no tag and gives the default", (value) => {
+    expect(languageOfTag(value)).toBeUndefined();
+    expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
+  });
+});
+
+// The language subtag has two to eight letters (RFC 5646 2.1: 2*3ALPHA, 4ALPHA,
+// 5*8ALPHA); an extended language subtag follows only one of two or three letters.
+describe("languageOfTag, length of the language subtag", () => {
+  it.each([
+    // Two and three letters, as before.
+    ["Hr", "hr"],
+    ["HRV", "hrv"],
+    ["hrv-HR", "hrv"],
+    ["zh-yue", "zh"],
+    // Four letters.
+    ["Abcd", "abcd"],
+    ["ABCD", "abcd"],
+    ["abcd-Latn-HR", "abcd"],
+    // Five to eight letters.
+    ["ABCDE", "abcde"],
+    ["abcdeF", "abcdef"],
+    ["AbCdEfG", "abcdefg"],
+    ["ABCDEFGH", "abcdefgh"],
+    ["abcdefgh-419-x-a", "abcdefgh"],
+    // A key of Object.prototype that is a well-formed tag has no catalogue.
+    ["toString", "tostring"],
+  ])("reads %j as %s and gives the default", (value, language) => {
+    expect(languageOfTag(value)).toBe(language);
+    expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
+  });
+
+  it.each([
+    // One letter.
+    ["h"],
+    ["H"],
+    ["h-HR"],
+    // Nine letters.
+    ["abcdefghi"],
+    ["ABCDEFGHI-HR"],
+    // Digits in or as the language.
+    ["1"],
+    ["12"],
+    ["123"],
+    ["1234"],
+    ["12345678"],
+    ["h1"],
+    ["1hr"],
+    ["abc4"],
+    ["abcdefg8"],
+    // Empty.
+    [""],
+    // An extended language after a language of four to eight letters.
+    ["abcd-abc"],
+    ["abcdefgh-abc"],
+  ])("reads %j as no tag and gives the default", (value) => {
+    expect(languageOfTag(value)).toBeUndefined();
+    expect(parseInterfaceLocale(value)).toBe(DEFAULT_INTERFACE_LOCALE);
+  });
+});
+
+describe("messagesFor", () => {
+  it("gives the Croatian catalogue for Croatian", () => {
+    expect(messagesFor("hr")).toBe(messagesHr);
+  });
+
+  it("gives a catalogue for every registered locale", () => {
+    for (const locale of INTERFACE_LOCALES) expect(messagesFor(locale).app.name).toBe(messagesHr.app.name);
+  });
+});

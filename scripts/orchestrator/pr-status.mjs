@@ -1,10 +1,13 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
 import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
 import {
-  evaluateChecks, externalReason, formatStatusRow, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
+  evaluateChecks, externalReason, formatStatusRow, formatVerdict, headOrigin, latestVerdict, originText, overlapPairs,
+  overlapsOf, parseAgentRisk,
 } from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
+// F-010 (plan #1671 N10): the gate reads no verdict on a head outside this repository.
+const HIDDEN = "not shown (VANJSKI)";
 
 function formatChecks({ total, bad }) {
   if (!total) return "none";
@@ -21,19 +24,20 @@ async function row(pr, origin) {
   const { agent, risk } = parseAgentRisk(pr.body);
   const review = comments ? latestVerdict(comments, "review", pr.headRefOid) : undefined;
   const qa = comments ? latestVerdict(comments, "qa", pr.headRefOid) : undefined;
+  const o = headOrigin(pr, origin.repository);
   return {
     number: pr.number,
     head: pr.headRefOid.slice(0, 8),
     base: pr.baseRefName,
     draft: pr.isDraft,
     // F-010: reason the PR waits for the owner to adopt it, or null.
-    external: externalReason(pr, origin.repository, origin.owner),
+    external: externalReason(pr, origin.repository, origin.owner) ?? (o.ok ? null : originText(o)),
     agent,
     risk,
     ci: rollup ? formatChecks(evaluateChecks(rollup)) : "?",
-    gate: gate === undefined ? "?" : gate ? `${gate.state}: ${(gate.description ?? "").slice(0, 60)}` : "none",
-    review: comments ? formatVerdict(review) : "?",
-    qa: comments ? formatVerdict(qa) : "?",
+    gate: !o.ok ? HIDDEN : gate === undefined ? "?" : gate ? `${gate.state}: ${(gate.description ?? "").slice(0, 60)}` : "none",
+    review: !o.ok ? HIDDEN : comments ? formatVerdict(review) : "?",
+    qa: !o.ok ? HIDDEN : comments ? formatVerdict(qa) : "?",
   };
 }
 

@@ -33,6 +33,12 @@ const NAV: Record<ShellRole, readonly NavItem[]> = {
   // DAN-313 (A-01): the administrator's overview of their own institution.
   admin: [
     { href: "/ustanova", label: t.shell.nav.institution },
+    // DAN-581 (A-02): the administrator confirms and revokes the teacher role.
+    { href: "/ustanova/korisnici", label: t.shell.nav.users },
+    // DAN-591 (A-03): the courses, teams and groups by academic year, read only.
+    { href: "/ustanova/kolegiji", label: t.shell.nav.institutionCourses },
+    // DAN-590 (A-04): the faculty rule versions, read only.
+    { href: "/ustanova/pravila", label: t.shell.nav.facultyRules },
   ],
 };
 

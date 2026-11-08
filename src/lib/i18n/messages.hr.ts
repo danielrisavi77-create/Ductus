@@ -45,6 +45,12 @@ export const hr = {
       workspace: "Radni prostor",
       enroll: "Upis u kolegij",
       institution: "Pregled ustanove",
+      // DAN-581 (A-02): the institution's teachers and their roles, /ustanova/korisnici.
+      users: "Korisnici",
+      // DAN-591 (A-03): the institution's courses, teams and groups, /ustanova/kolegiji.
+      institutionCourses: "Kolegiji",
+      // DAN-590 (A-04): the faculty rule versions, /ustanova/pravila.
+      facultyRules: "Pravila fakulteta",
     },
     role: { teacher: "Nastavnik", student: "Student", admin: "Administrator" },
     demoNote: "Nijedan stvarni osobni podatak.",
@@ -535,6 +541,70 @@ export const hr = {
       students: { label: "Studenti", note: "Upisani u barem jedan kolegij, svaka osoba jednom." },
     },
     unavailable: "Pregled ustanove trenutačno nije dostupan. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+  },
+  // DAN-581 (A-02, docs/design/ductura/m2-reference): the administrator
+  // confirms and revokes the teacher role. "Za pregled" is D-200 P7: a lost
+  // right at sign-in does not revoke the role. Names stay in the nominative
+  // on their own line ("Osoba"), since a name cannot be declined reliably.
+  teacherRoles: {
+    title: "Korisnici i uloge",
+    lead: "Nastavnici vaše ustanove i osobe koje čekaju potvrdu uloge. Ulogu nastavnika potvrđujete i opozivate vi; prijava preko AAI@EduHr daje samo pravo da vas osoba čeka na popisu.",
+    person: "Osoba",
+    // A person whose name the identity provider has not given (identity.person_name has no row).
+    unnamed: "Ime nije upisano",
+    pending: {
+      heading: "Čekaju potvrdu uloge",
+      note: "Zadnja prijava preko AAI@EduHr dala im je pravo nastavnika. Uloga počinje tek kad je potvrdite.",
+      empty: "Nitko ne čeka potvrdu uloge.",
+      emptyNote: "Osoba se pojavi ovdje nakon prijave preko AAI@EduHr koja joj da pravo nastavnika na ovoj ustanovi.",
+      revokedOn: "uloga opozvana",
+    },
+    confirmed: {
+      heading: "Potvrđeni nastavnici",
+      empty: "Na ustanovi još nema potvrđenih nastavnika.",
+      confirmedOn: "Potvrđeno",
+    },
+    review: {
+      mark: "Za pregled",
+      note: "Zadnja prijava nije dala pravo nastavnika. Uloga nije opozvana i ostaje dok ne odlučite.",
+    },
+    confirmAction: "Potvrdi ulogu",
+    revokeAction: "Opozovi ulogu",
+    cancel: "Odustani",
+    close: "Zatvori",
+    check: "Provjeri stanje",
+    confirmDialog: {
+      label: "Potvrda uloge",
+      title: "Potvrditi ulogu nastavnika?",
+      points: [
+        "Moći će stvarati kolegije i zadatke na ovoj ustanovi.",
+        "Ulogu možete kasnije opozvati.",
+        "Potvrda se upisuje u revizijski trag, s vama kao izvršiteljem.",
+      ],
+    },
+    revokeDialog: {
+      label: "Opoziv uloge",
+      title: "Opozvati ulogu nastavnika?",
+      points: [
+        "Od sljedećeg zahtjeva više ne može raditi kao nastavnik na ovoj ustanovi.",
+        "Kolegiji i zadaci ostaju. Ako je nositelj kolegija, ostaje upisan kao nositelj dok ga nastavnik tog kolegija ne zamijeni.",
+        "Ako mu kasnija prijava da pravo nastavnika, ponovno će čekati vašu potvrdu.",
+        "Opoziv se upisuje u revizijski trag, s vama kao izvršiteljem.",
+      ],
+    },
+    // One line per outcome of teacher-role-action.ts; "unknown" never claims either way.
+    outcome: {
+      confirmed: "Uloga nastavnika je potvrđena. Osoba je sada među potvrđenim nastavnicima.",
+      revoked: "Uloga nastavnika je opozvana.",
+      notCandidate: "Potvrda nije moguća. Ova osoba više ne čeka potvrdu na vašoj ustanovi. Popis je osvježen.",
+      notConfirmed: "Opoziv nije potreban. Ova osoba više nema potvrđenu ulogu na vašoj ustanovi. Popis je osvježen.",
+      unknownConfirm: "Ishod nije poznat. Veza s poslužiteljem prekinula se prije odgovora, pa nije sigurno je li uloga potvrđena. Provjerite stanje prije nego što pokušate ponovno.",
+      unknownRevoke: "Ishod nije poznat. Veza s poslužiteljem prekinula se prije odgovora, pa nije sigurno je li uloga opozvana. Provjerite stanje prije nego što pokušate ponovno.",
+      ended: "Radnja nije provedena. Prijava je istekla ili više nemate ovlast za ovu stranicu. Stranica je osvježena.",
+      invalid: "Radnja nije provedena. Osvježite stranicu i pokušajte ponovno.",
+    },
+    unavailable: "Popis korisnika trenutačno nije dostupan. Pokušajte ponovno.",
     retry: "Pokušaj ponovno",
   },
   teacherCourses: {
@@ -1302,12 +1372,82 @@ export const hr = {
       mentoredWorks: "radove uz mentora",
       home: "svoj prostor",
       institution: "pregled svoje ustanove",
+      users: "korisnike svoje ustanove",
+      facultyRules: "pravila svoje ustanove",
+      institutionCourses: "kolegije svoje ustanove",
     },
     deniedTitle: "Nemate pristup ovom prikazu",
     deniedBody: "Ovaj prikaz namijenjen je nastavnicima.",
     deniedPending: "Ulogu nastavnika potvrđuje administrator fakulteta. Dok se ne potvrdi, ovaj prikaz nije dostupan.",
     deniedNext: "Javite se koordinatoru na svojoj ustanovi.",
     backToOwn: "Natrag na moj prostor",
+  },
+  // DAN-591 (M2.11-P03, A-03): the institution's courses by academic year,
+  // read only, as docs/design/ductura/m2-reference/a03-kolegiji-tim-i-grupe.html
+  // writes them. Students are only counted, never named.
+  institutionCourses: {
+    title: "Kolegiji i akademske godine",
+    lead: "Kolegiji vaše ustanove po akademskoj godini, s nastavnim timom i seminarskim grupama. Radovi studenata i njihov sadržaj ovdje se ne prikazuju.",
+    yearHeading: "Akademska godina {year}",
+    yearsLabel: "Akademske godine",
+    enrolled: { one: "upisan student", few: "upisana studenta", many: "upisanih studenata" },
+    students: { one: "student", few: "studenta", many: "studenata" },
+    holder: "Nositelj",
+    team: "Nastavni tim",
+    noHolder: "Nije upisan",
+    noTeam: "Nema članova",
+    noGroups: "Kolegij nema seminarskih grupa.",
+    groupTeacher: { one: "Nastavnik", many: "Nastavnici" },
+    noTeacher: "Bez nastavnika",
+    noTeacherNote: "Studenti grupe vide kolegij i zadatke.",
+    emptyYear: "Za ovu akademsku godinu ustanova nema kolegija.",
+    noCourses: "Ustanova još nema kolegija.",
+    emptyNote: "Kolegij stvara nastavnik s potvrđenom ulogom; potvrda je u „Korisnici i uloge”.",
+    unavailable: "Kolegiji trenutačno nisu dostupni. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
+  },
+  // DAN-590 (M2.12-P03, A-04): the faculty rule versions of DAN-315, read
+  // only. The package of form rules (facultyRules below, M4) has no data yet
+  // and is not shown. Purpose labels are short forms of tools.purposes.
+  facultyRuleVersions: {
+    title: "Pravila fakulteta",
+    lead: "Polazno pravilo fakulteta za svaku vrstu rada i sve njegove objavljene verzije. Zaslon je samo za čitanje. Objavljena verzija se ne mijenja; nova verzija dolazi uz nju.",
+    currentHeading: "Pravila na snazi",
+    currentNote: "Za svaku vrstu rada vrijedi zadnja objavljena verzija.",
+    versionOf: "Verzija {n} · objavljena {date}",
+    aiPolicy: "AI pomoć",
+    policies: {
+      prohibited: "Nije dopuštena",
+      partially_allowed: "Djelomično dopuštena",
+      encouraged: "Potiče se",
+    },
+    purposes: "Dopuštene uporabe",
+    purposeLabels: {
+      formatting: "formatiranje",
+      proofreading: "lektoriranje i jezična provjera",
+      literature_search: "pronalaženje literature",
+      transcription: "transkribiranje",
+      translation: "prevođenje",
+    },
+    purposesNone: "Nijedna s popisa",
+    profile: "Profil zapisa",
+    profiles: { basic: "Osnovni", extended: "Prošireni" },
+    importLabel: "Uvoz teksta",
+    importValues: { yes: "Dopušten", no: "Nije dopušten" },
+    origin: "Objavio",
+    origins: { operator: "Tim Ducture", administrator: "Administrator ustanove" },
+    historyLabel: "Povijest verzija: {workType}",
+    colVersion: "Verzija",
+    colPublished: "Objavljeno",
+    colOrigin: "Objavio",
+    colAi: "AI pomoć",
+    inForce: "{n} (na snazi)",
+    notSetHeading: "Bez pravila",
+    notSetNote: "Za ove vrste rada pravilo fakulteta nije postavljeno:",
+    empty: "Ustanova još nema objavljenih pravila fakulteta.",
+    readOnly: "Ovaj zaslon samo prikazuje pravila. Objava nove verzije ovdje nije dostupna.",
+    unavailable: "Pravila fakulteta trenutačno nisu dostupna. Pokušajte ponovno.",
+    retry: "Pokušaj ponovno",
   },
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
   // M4 (DAN-506): A-04 "Pravila fakulteta", read-only (D-217), reference #1403.

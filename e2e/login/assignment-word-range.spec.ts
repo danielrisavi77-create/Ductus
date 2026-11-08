@@ -24,7 +24,7 @@ test("teacher form keeps the committed request key for an equivalent range", asy
         WHERE u.hr_edu_person_unique_id = $1 AND r.role = 'teacher'
           AND r.revoked_at IS NULL AND r.confirmed_at IS NOT NULL) AS active`, [TEACHER]);
     grantedHere = !role.rows[0]!.active;
-    const grant = spawnSync(process.execPath, ["scripts/demo/provision-teacher.mjs"], {
+    const grant = spawnSync(process.execPath, ["scripts/local/provision-teacher.mjs"], {
       cwd: ROOT, encoding: "utf8", timeout: 30_000, windowsHide: true,
     });
     expect(grant.error).toBeUndefined();

@@ -1,7 +1,10 @@
 import { fc, test } from "@fast-check/vitest";
 import { expect } from "vitest";
 
-import { formatInText, fpzgCitationStyle as style, normalizePages, type BookSource } from "./index";
+import { formatInText, normalizePages, parseCitationStyle, type BookSource } from "./index";
+import fpzgConfig from "../../../config/faculties/fpzg/citation.json";
+
+const style = parseCitationStyle(fpzgConfig);
 
 const name = fc.string({ minLength: 1, maxLength: 20 }).filter((s) => s.trim() !== "");
 

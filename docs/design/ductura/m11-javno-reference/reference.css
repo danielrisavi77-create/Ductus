@@ -1,0 +1,37 @@
+/* Paket 17 (DAN-584): tokeni i dijelovi iz m5-reference i m5-reference-c; ovdje samo dodaci za javne stranice. */
+@import url("../m5-reference-c/reference.css");
+
+/* Zaglavlje javne stranice: ime, poveznice, tema. Bez ikona. */
+.site { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid var(--rule-2); background: var(--chrome); }
+.site .brand { font: 500 20px/1.2 var(--ff-display); }
+.site nav { display: flex; flex-wrap: wrap; gap: 0 12px; align-items: center; }
+.hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: start; }
+.hero h2 { font-size: 27px; line-height: 1.2; }
+.lead { font: 16px/1.6 var(--ff-display); color: var(--ink-2); }
+.stack { display: grid; gap: 10px; }
+.wide { grid-column: 1 / -1; }
+
+/* Tablica tko što vidi i popis dijelova sustava. */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th, .tbl td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--rule-2); }
+.tbl th[scope="col"] { color: var(--ink-3); font-weight: 600; }
+.ok, .no { font-weight: 600; }
+.no { color: var(--ink-3); }
+.comp { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--rule-2); }
+.state { font-size: 12.5px; font-weight: 600; }
+.state.up::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--synced); margin-right: 6px; }
+.state.part::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--accent); margin-right: 6px; box-sizing: border-box; }
+.incident { border: 1px solid var(--accent); border-left-width: 4px; border-radius: 6px; padding: 10px 12px; display: grid; gap: 6px; background: var(--card); }
+.timeline { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); }
+.timeline b { font: 500 12.5px/1.4 var(--ff-mono); color: var(--ink); }
+.decl h3 { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; margin-top: 4px; }
+.decl ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; color: var(--ink-2); }
+.open-mark { font-size: 12.5px; color: var(--ink-2); border: 1px dashed var(--rule); border-radius: 4px; padding: 1px 6px; }
+
+@media (max-width: 1050px) { .hero { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .site nav a { min-height: 44px; }
+  .hero h2 { font-size: 23px; }
+  .tbl { font-size: 13px; }
+  .tbl th, .tbl td { padding: 6px 4px; }
+}

@@ -64,15 +64,15 @@ const CRITICAL_SAMPLES = [
   "playwright.login.config.ts",
   "test-output.ts",
   "e2e/auth.spec.ts",
-  "scripts/demo/native/tools.mjs",
-  "scripts/demo/native/up.mjs",
-  "scripts/demo/native/lib/any.mjs",
-  "scripts/demo/up.mjs",
-  "scripts/demo/bootstrap-accounts.mjs",
-  "scripts/demo/provision-teacher.mjs",
-  "scripts/demo/up.test.mjs",
-  "scripts/demo/bootstrap-accounts.test.mjs",
-  "scripts/demo/provision-teacher.test.mjs",
+  "scripts/local/native/tools.mjs",
+  "scripts/local/native/up.mjs",
+  "scripts/local/native/lib/any.mjs",
+  "scripts/local/up.mjs",
+  "scripts/local/bootstrap-accounts.mjs",
+  "scripts/local/provision-teacher.mjs",
+  "scripts/local/up.test.mjs",
+  "scripts/local/bootstrap-accounts.test.mjs",
+  "scripts/local/provision-teacher.test.mjs",
   ...D97_PATHS.map(sample),
 ];
 
@@ -132,8 +132,8 @@ test("spelling of a path does not change its floor", () => {
     "scripts//orchestrator//gh.mjs",
     "SRC/Server/DB/with-actor.ts",
     "Tests/Unit/codeowners.test.ts",
-    "scripts\\demo\\native\\tools.mjs",
-    "./Scripts/Demo/Native/up.mjs",
+    "scripts\\local\\native\\tools.mjs",
+    "./Scripts/Local/Native/up.mjs",
   ]) {
     assert.equal(minimumRisk([file]).risk, "critical", file);
     assert.equal(declared("standard", [file]).ok, false, file);
@@ -231,7 +231,7 @@ test("ordinary documentation stays low and ordinary code stays standard", () => 
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "src/pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "src/pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/local/nativex/up.mjs", "scripts/local/up.test.mjsx", "scripts/local/login-e2e-evidence.mjs", "scripts/local/login-e2e-evidence.test.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });
@@ -269,7 +269,7 @@ const decide = ({ risk, names, autoMerge = false, changed, list }) =>
   evaluatePullRequest({
     pr: {
       body: body(risk),
-      head: { sha: head },
+      head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } },
       auto_merge: autoMerge ? { merge_method: "squash" } : null,
       changed_files: changed ?? names.length,
     },
@@ -321,7 +321,7 @@ test("an incomplete or unconfirmed file list fails closed", () => {
     assert.equal(decide({ risk: "low", names, changed }).state, "failure", String(changed));
   }
   const unknown = evaluatePullRequest({
-    pr: { body: body("low"), head: { sha: head }, auto_merge: null },
+    pr: { body: body("low"), head: { sha: head, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } }, auto_merge: null },
     files: files(...names),
     comments: passes(),
     ownerLogin,

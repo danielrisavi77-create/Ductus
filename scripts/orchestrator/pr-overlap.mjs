@@ -4,7 +4,7 @@
 //   --plan adds advice per PR (plan-core.mjs); the work contract defaults to
 //   $DUCTUS_WORK_CONTRACT; --independent records the orchestrator's own check that
 //   two writers' PRs share no contract. Exit 1 when some PR's files could not be read.
-import { openPrsWithPaths } from "./gh.mjs";
+import { openPrsWithPaths, repoId } from "./gh.mjs";
 import { overlapPairs, renderOverlap } from "./orchestrator-core.mjs";
 import { parseArgs, planParallel, renderPlan } from "./plan-core.mjs";
 import { readContract } from "./work-guard.mjs";
@@ -15,7 +15,9 @@ try {
   const pairs = overlapPairs(prs);
   // An unreadable contract is passed on as an invalid one: it never counts as "no checks needed".
   const contract = args.plan && args.contract ? await readContract(args.contract).catch(() => ({})) : null;
-  const plan = args.plan ? planParallel({ prs, pairs, contract, independent: args.independent }) : null;
+  // F-010: an unread repository judges every head as unread, never as this repository's.
+  const repository = args.plan ? await repoId().then(({ owner, repo }) => `${owner}/${repo}`, () => null) : null;
+  const plan = args.plan ? planParallel({ prs, pairs, contract, independent: args.independent, repository }) : null;
   if (args.json) {
     console.log(JSON.stringify({
       prs: prs.map((p) => ({

@@ -20,6 +20,11 @@
     "reason": "Brisanje po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
   },
   {
+    "function": "collaboration.delete_revision_requests",
+    "status": "bez rute",
+    "reason": "Brisanje zahtjeva za doradu jednog dokumenta po pravilu zadržavanja; poziva ga samo ductus_retention, ne korisnik."
+  },
+  {
     "function": "collaboration.set_thread_state",
     "status": "bez rute",
     "reason": "Interni korak bez EXECUTE za aplikacijske uloge; zovu ga collaboration.resolve_thread i reopen_thread, koje imaju rutu."

@@ -2,7 +2,7 @@
 // (or `migrate --strict`), so a migration older than the newest applied one is
 // refused instead of applied out of order. CI applies them through
 // `pnpm db:migrate` (.github/workflows/ci.yml); the Windows demo through
-// scripts/demo/native/up.mjs. No deploy path exists yet; one that is added
+// scripts/local/native/up.mjs. No deploy path exists yet; one that is added
 // later is caught by the scans below.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -32,7 +32,9 @@ test("the pattern finds dbmate up and migrate, and only those", () => {
 test("every package.json script that applies migrations passes --strict", () => {
   const { scripts } = JSON.parse(read("package.json"));
   const found = Object.entries(scripts).flatMap(([name, command]) => applying(command).map((segment) => [name, segment]));
-  assert.ok(found.some(([name]) => name === "db:migrate"), "db:migrate applies migrations");
+  // D-91 (3): db:migrate applies them through the locked runner, whose dbmate
+  // argv is checked by the scan of scripts/ below.
+  assert.match(scripts["db:migrate"], /node scripts\/db\/migrate-locked\.mjs /, "db:migrate applies migrations");
   for (const [name, segment] of found) assert.match(segment, /\s--strict\b/, `${name}: ${segment.trim()}`);
 });
 
@@ -59,11 +61,12 @@ test("a script that calls the dbmate CLI with up or migrate passes --strict in t
   const calls = [];
   for (const file of files) {
     const text = read(file);
-    if (!/dbmate/.test(text)) continue;
+    if (!/dbmate/i.test(text)) continue;
     for (const line of text.split(/\r?\n/)) {
-      if (/\[[^\]]*dbmate[^\]]*"(up|migrate)"/.test(line)) calls.push([file, line]);
+      if (/\[[^\]]*dbmate[^\]]*"(up|migrate)"/i.test(line)) calls.push([file, line]);
     }
   }
-  assert.ok(calls.some(([file]) => file.endsWith(path.join("demo", "native", "up.mjs"))), "the native demo applies migrations");
+  assert.ok(calls.some(([file]) => file.endsWith(path.join("local", "native", "up.mjs"))), "the native runner applies migrations");
+  assert.ok(calls.some(([file]) => file.endsWith(path.join("db", "migrate-locked.mjs"))), "the locked runner applies migrations");
   for (const [file, line] of calls) assert.match(line, /"--strict"/, `${file}: ${line.trim()}`);
 });

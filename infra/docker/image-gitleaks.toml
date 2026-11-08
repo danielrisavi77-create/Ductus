@@ -1,0 +1,22 @@
+# Gitleaks config for the files of the production web image (DAN-298), used by
+# scripts/engineering/production-image-smoke.sh. Default rules, with one
+# narrow exception: the random keys `next build` writes into its own manifests
+# on every build. The application has no Server Actions and no draft mode
+# (scripts/engineering/production-image.test.mjs), so those keys guard nothing;
+# the smoke script plants a canary in the same files to show the exception
+# stays narrow.
+title = "Ductus production image"
+
+[extend]
+useDefault = true
+
+# Only the key names Next.js writes, each with the exact form of its value: a
+# path allowlist would skip the whole file whatever its condition, so none is
+# used here.
+[[allowlists]]
+description = "Per-build Next.js preview and Server Actions keys in .next manifests"
+regexTarget = "match"
+regexes = [
+  '''^(?:previewModeSigningKey|previewModeEncryptionKey|__NEXT_PREVIEW_MODE_SIGNING_KEY|__NEXT_PREVIEW_MODE_ENCRYPTION_KEY)"\s*:\s*"[0-9a-f]{64}"$''',
+  '''^(?:encryptionKey|NEXT_SERVER_ACTIONS_ENCRYPTION_KEY)"\s*:\s*"[A-Za-z0-9+/]{43}="$''',
+]

@@ -14,6 +14,7 @@
 import { useEditorState } from "@tiptap/react";
 import { useId, useRef, useState } from "react";
 
+import type { CitationStyle } from "@/domain/citation";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
@@ -35,13 +36,14 @@ const trusted = (action: () => void) => (event: { isTrusted: boolean }) => {
   if (event.isTrusted) action();
 };
 
-export default function SourcesPanel() {
+/** `citationStyle` comes from the record of the institution (M2.12-P02); the panel has no default. */
+export default function SourcesPanel({ citationStyle }: { citationStyle: CitationStyle }) {
   const signedOut = useLocalSignedOut();
   // The panel keeps nobody's sources or form after the session ends (as CommentPanel).
-  return signedOut ? <div className={styles.panel}><p className={styles.note}>{t.readOnly}</p></div> : <SourcesForm />;
+  return signedOut ? <div className={styles.panel}><p className={styles.note}>{t.readOnly}</p></div> : <SourcesForm style={citationStyle} />;
 }
 
-function SourcesForm() {
+function SourcesForm({ style }: { style: CitationStyle }) {
   const editor = useLocalEditor();
   const editable = useEditorState({
     editor, selector: ({ editor: e }) => e !== null && !e.isDestroyed && e.isEditable,
@@ -75,15 +77,15 @@ function SourcesForm() {
   const commit = (cite: boolean) => {
     setTried(true);
     if (!check.ok || !pageValid(page) || !canWrite()) return;
-    const entry = entryText(check.source);
-    if (!writeSource(editor, cite ? citationText(check.source, page) : null, entry)) return;
+    const entry = entryText(check.source, style);
+    if (!writeSource(editor, cite ? citationText(check.source, page, style) : null, entry)) return;
     const source = check.source;
     setAdded((list) => (list.some((item) => item.entry === entry) ? list : [...list, { entry, source }].sort((a, b) => compareEntries(a.entry, b.entry))));
     close();
   };
 
   const cite = (item: Added) => {
-    if (pageValid(listPage) && canWrite()) writeSource(editor, citationText(item.source, listPage), null);
+    if (pageValid(listPage) && canWrite()) writeSource(editor, citationText(item.source, listPage, style), null);
   };
 
   const set = (field: keyof SourceFields) => (value: string) => setFields((f) => ({ ...f, [field]: value }));
@@ -163,8 +165,8 @@ function SourcesForm() {
           {check.ok ? (
             <section className={styles.preview} aria-labelledby={`${id}-preview`}>
               <h3 id={`${id}-preview`} className={styles.label}>{t.preview}</h3>
-              <p data-preview="citation">{citationText(check.source, page)}</p>
-              <p data-preview="entry">{entryText(check.source)}</p>
+              <p data-preview="citation">{citationText(check.source, page, style)}</p>
+              <p data-preview="entry">{entryText(check.source, style)}</p>
             </section>
           ) : null}
           <div className={styles.actions}>

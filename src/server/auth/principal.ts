@@ -53,24 +53,57 @@ export function sessionTag(token: string | undefined): string | null {
   return createHash("sha256").update(`${SESSION_TAG_LABEL}\n${token}`, "utf8").digest("hex");
 }
 
+type ActorRow = { user_id: string | null; institution_id: string | null; institution_slug?: string | null };
+
+/** One statement, one transaction; null on an error the caller turns into `unverified`. */
+async function readActor(token: string, withActor: WithActor, statement: string): Promise<ActorRow | undefined | null> {
+  try {
+    return await withActor(token, async (tx) => (await tx.query<ActorRow>(statement)).rows[0]);
+  } catch (error) {
+    // Only the error's name: never the token, a statement or a message.
+    console.error("session check failed", error instanceof Error ? error.name : "unknown");
+    return null;
+  }
+}
+
 export async function sessionPrincipal(
   token: string | undefined,
   withActor: WithActor,
 ): Promise<SessionPrincipal> {
   if (token === undefined || !TOKEN_FORMAT.test(token)) return { kind: "signed-out" };
-  let actor: { user_id: string | null; institution_id: string | null } | undefined;
-  try {
-    actor = await withActor(token, async (tx) => {
-      const { rows } = await tx.query<{ user_id: string | null; institution_id: string | null }>(
-        "SELECT user_id, institution_id FROM app.current_actor()",
-      );
-      return rows[0];
-    });
-  } catch (error) {
-    // Only the error's name: never the token, a statement or a message.
-    console.error("session check failed", error instanceof Error ? error.name : "unknown");
-    return { kind: "unverified" };
-  }
+  const actor = await readActor(token, withActor, "SELECT user_id, institution_id FROM app.current_actor()");
+  if (actor === null) return { kind: "unverified" };
   if (!actor?.user_id || !actor.institution_id) return { kind: "signed-out" };
   return { kind: "signed-in", scope: principalScope(actor.user_id, actor.institution_id) };
+}
+
+/** As `SessionPrincipal`, and a signed-in one also names the slug of its institution. */
+export type SessionPrincipalWithInstitution =
+  | { kind: "signed-in"; scope: string; institution: string | null }
+  | { kind: "signed-out" }
+  | { kind: "unverified" };
+
+/**
+ * `sessionPrincipal` plus the slug of the session's institution, whose record
+ * gives the citation style (M2.12-P02, plan #1689 C1 to C7). Person and slug
+ * come from the same statement and transaction, so a session closed in
+ * between yields neither, and an institution never comes from the request.
+ */
+export async function sessionPrincipalWithInstitution(
+  token: string | undefined,
+  withActor: WithActor,
+): Promise<SessionPrincipalWithInstitution> {
+  if (token === undefined || !TOKEN_FORMAT.test(token)) return { kind: "signed-out" };
+  const actor = await readActor(
+    token, withActor,
+    "SELECT user_id, institution_id, app.current_institution_slug() AS institution_slug FROM app.current_actor()",
+  );
+  if (actor === null) return { kind: "unverified" };
+  if (!actor?.user_id || !actor.institution_id) return { kind: "signed-out" };
+  const slug = actor.institution_slug;
+  return {
+    kind: "signed-in",
+    scope: principalScope(actor.user_id, actor.institution_id),
+    institution: typeof slug === "string" ? slug : null,
+  };
 }
