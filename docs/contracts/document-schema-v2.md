@@ -135,7 +135,8 @@ Riječ „blok” iz D-226 ugovor čita kao način prikaza: bibliografija se pri
 - unosi: izvori iz `sources` na koje upućuje barem jedan navod, svaki jednom, sortirani s `sortBibliography`, sa slovima iz `assignYearSuffixes`;
 - navodi bez izvora ne daju unos, nego vidljivu oznaku uz bibliografiju s brojem takvih navoda (odgovor Q4);
 - izvori bez navoda ne ulaze u bibliografiju, ali ostaju u popisu izvora rada;
-- izvođenje je čista funkcija: isti dokument i isti stil daju isti niz unosa.
+- izvođenje je čista funkcija: isti dokument i isti stil daju isti niz unosa;
+- izvođenje je totalno: svaki dokument valjan po odjeljcima 1 do 3 daje bibliografiju, bez iznimke. Postojeći `assignYearSuffixes` baca `CitationInputError` za više od 26 djela istih autora iste godine, a 500 izvora to dopušta. DAN-619 zato nastavlja slova nakon `z` s `aa`, `ab`, … (izbor ugovora), s graničnim testom za 26, 27 i 500 izvora istih autora i godine.
 
 Ako vlasnik ili orkestrator „blok” čitaju kao spremljeni čvor, to je otvoreno pitanje. Kod se tada ne piše dok se ne odgovori na #1091.
 
@@ -219,6 +220,10 @@ Zaseban PR nakon spajanja DAN-619 (odgovor Q1, Q2). Promjena u `db/migrations/` 
    Nijedan dio ne mijenja `app.open_student_work`, pa novi rad ne može postati v2 prije koraka baze.
 2. **Korak baze** (odjeljak 7) s pgTAP i integracijskim testom iz odjeljka 8.
 3. **DAN-620, Tiptap**: čvor navoda u editoru, snimanje koraka v2 i izvora, `transactionFormat` prema radu. Tekstni navodi iz #866 ostaju tekst (D-226).
+
+**Otvoreno pitanje (BLOK na #1091).** U ovom redoslijedu korak baze uključuje v2 za nove radove (odgovor Q2) prije DAN-620. Između ta dva spajanja editor i dalje šalje `ductus-edit-steps-v1` (`src/editor/capture.ts`) i dokument bez `sources` (`src/editor/interop.ts`), pa poslužitelj odbija spremanje novog rada (odjeljci 5.4 i 7), a e2e na `main` pada. Ugovor ne mijenja redoslijed koji je zadao orkestrator. Korak baze se ne spaja dok orkestrator ne odgovori. Mogući odgovori:
+- (A) korak baze se dijeli: provjera iste verzije i v2 funkcija revizije nula prije DAN-620, a uključivanje v2 u `app.open_student_work` poslije DAN-620;
+- (B) DAN-620 ide prije koraka baze, jer editor bira format prema reviziji nula i radi i za v1.
 
 ## 10. Klase ulaza i obavezni testovi
 
