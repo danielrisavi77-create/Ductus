@@ -81,6 +81,12 @@ describe("logger shape", () => {
     ]);
   });
 
+  it("writes the time it sets itself unredacted", () => {
+    const lines: string[] = [];
+    createLogger((_level, line) => lines.push(line), () => new Date(1762632000123))("info", "started");
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ time: "2025-11-08T20:00:00.123Z" });
+  });
+
   it("keeps a line break in an event or field inside the one line", () => {
     const lines: string[] = [];
     const log = createLogger((_level, line) => lines.push(line), () => new Date(0));

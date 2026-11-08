@@ -139,6 +139,11 @@ describe("redact keeps what an operator needs", () => {
     expect(redact("x ".repeat(600))).toMatch(/\[cut\]$/);
   });
 
+  it("never touches a number or the logger's own time, only a digit run in a string", () => {
+    expect(redact({ bytes: 1234567890123, at: 1762632000000 })).toEqual({ bytes: 1234567890123, at: 1762632000000 });
+    expect(redact({ stage: "oib 12345678901" })).toEqual({ stage: "oib [number]" });
+  });
+
   it("keeps the path of a URL and drops only its secret parts", () => {
     expect(redact("see https://u:p@s3.example.test/bucket/key?sig=1#f")).toBe("see https://s3.example.test/bucket/key?[redacted]");
   });
