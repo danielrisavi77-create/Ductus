@@ -178,6 +178,8 @@ D-226 traži da zapise izvora pokrivaju hash i rekonstrukcija. Zato svaka promje
 - `captureContext.transactionFormat` odsječka mora odgovarati tom formatu. Nepodudaranje se odbija bez upisa.
 - Format v1 nad v2 radom se odbija, kao i obrnuto. Ništa se ne upisuje, a dnevnik klijenta se ne briše. Oporavak ne pretvara korake iz jednog formata u drugi.
 - `parseEditSteps` prima oba formata i za nepoznat format vraća `unsupported_format`, kao danas. Poslužitelj ne bira format prema tome što je klijent poslao, nego prema reviziji nula.
+- Validator odsječka `src/domain/forensics/evidence-segment-v2.ts` danas prima samo `ductus-edit-steps-v1` (redak 363). Mora primati oba formata, a nepoznat format i dalje odbija. Bez toga poslužitelj odbija svaki valjan odsječak v2.
+- Provjera nepodudaranja je u poslužiteljskom prihvatu (`src/server/evidence/evidence-commit-request.ts`), prije `putImmutable`. Kontekst commita (`app.evidence_commit_context`, `readEvidenceCommitContext`) vraća verziju rada izvedenu iz revizije nula. Danas je ne vraća, a ni RPC ni descriptor ne nose format. Odbijeni odsječak ne sprema objekt i ne upisuje ništa.
 - `src/editor/capture.ts` piše `transactionFormat` prema verziji otvorenog rada, a ne konstantu.
 
 ## 6. v2 revizija nula
@@ -192,7 +194,7 @@ Oblik prema odgovoru Q1: struktura kao u v1 (jedan prazan odlomak s fiksnim ID-o
 
 Dva zasebna PR-a (odgovori Q1, Q2; redoslijed iz odjeljka 9, orkestrator #1091 [c.6715141315](https://github.com/danielrisavi77-create/Ductus/issues/1091#issuecomment-6715141315)). Svaka promjena u `db/migrations/` je nova migracija, a stare se ne mijenjaju.
 
-Korak baze 1, nakon DAN-619 i prije DAN-620 (točke 1, 3 i 4). Ne mijenja koju verziju dobiva novi rad, pa svi radovi, i novi, ostaju v1.
+Korak baze 1, nakon DAN-619 i prije DAN-620 (točke 1, 3, 4 i 6). Ne mijenja koju verziju dobiva novi rad, pa svi radovi, i novi, ostaju v1.
 
 Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 
@@ -201,6 +203,7 @@ Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 3. Verzija rada je `schemaVersion` u hashiranim bajtovima revizije nula. Ugovor ne uvodi zaseban stupac kao drugi izvor istine. Ako ga korak baze uvede radi upita, mora biti izveden iz revizije nula u istoj transakciji i provjeren testom.
 4. Svaka sljedeća revizija mora imati istu `schemaVersion` kao revizija nula, inače se odbija bez upisa (#1711 K5, K7). Provjera je na poslužitelju u istoj transakciji kao upis revizije i vrijedi i za v1 radove (revizija v2 za v1 rad se odbija).
 5. Postojeća pravila otvaranja ostaju: jedinstveni ključ odlučuje, a ne prethodni upit (komentar u `20261019150000_evidence_open_work.sql`); vrijede i zaključavanje i provjere iz `20261104100000_group_scope.sql`.
+6. `app.evidence_commit_context` vraća verziju rada izvedenu iz revizije nula, a `commitEvidenceRequest` prije `putImmutable` odbija odsječak čiji `transactionFormat` ne odgovara toj verziji (odjeljak 5.4). Vrijedi i za v1 radove.
 
 ## 8. Istodobnost
 
@@ -208,7 +211,7 @@ Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 - Poslužitelj vidi `schemaVersion: 2` revizije nula i odbija odsječak s formatom v1 (odjeljak 5.4). Ništa se ne upisuje.
 - Dnevnik klijenta se ne briše i ostaje za oporavak. Klijent ne prikazuje spremljeno (F-3/F-8).
 - Obrnut slučaj, koraci v2 za v1 rad, odbija se jednako.
-- Obavezan negativni test u DAN-619 (parser i replay) i u koraku baze 1 (poslužitelj).
+- Obavezan negativni test u DAN-619 (parser i replay) i u koraku baze 1 (poslužitelj): integracijski test kroz `commitEvidenceRequest` pokazuje da odbijeni odsječak ne poziva `putImmutable` i ne upisuje reviziju.
 
 **I2. Dva istodobna `app.open_student_work` za isti rad u trenutku migracije koraka baze 2.**
 - Migracija je jedna transakcija. Poziv koji je počeo prije nje vidi staru funkciju i upisuje v1. Poziv poslije nje upisuje v2.
@@ -217,12 +220,12 @@ Korak baze 2, nakon DAN-620 (točka 2). Tek on uključuje v2 za nove radove.
 
 ## 9. Redoslijed PR-ova koda
 
-1. **DAN-619, domena** (`src/domain/document`, `src/domain/citation`, `src/adapters/evidence`, zlatni vektori): shema v2, validator, `ductus-edit-steps-v2` s replayerima (Node i preglednik), v2 konstante revizije nula, izvođenje bibliografije. Ako prijeđe oko 400 redaka, dijeli se tim redom:
+1. **DAN-619, domena** (`src/domain/document`, `src/domain/citation`, `src/domain/forensics`, `src/adapters/evidence`, zlatni vektori): shema v2, validator, `ductus-edit-steps-v2` s replayerima (Node i preglednik), validator odsječka koji prima oba formata (odjeljak 5.4), v2 konstante revizije nula, izvođenje bibliografije. Ako prijeđe oko 400 redaka, dijeli se tim redom:
    - (a) shema, validator i vektori;
    - (b) format koraka v2 i replay;
    - (c) bibliografija.
    Nijedan dio ne mijenja `app.open_student_work`, pa novi rad ne može postati v2 prije koraka baze 2.
-2. **Korak baze 1** (odjeljak 7, točke 1, 3 i 4): v2 funkcija revizije nula i provjera iste verzije na svakoj reviziji, s pgTAP testom iz odjeljka 8 (I1). v1 radovi ostaju kakvi jesu i novi radovi su i dalje v1.
+2. **Korak baze 1** (odjeljak 7, točke 1, 3, 4 i 6): v2 funkcija revizije nula, provjera iste verzije na svakoj reviziji i provjera formata u poslužiteljskom prihvatu, s pgTAP testom i integracijskim testom iz odjeljka 8 (I1). Integracijski test kroz stvarni commit put (`commitEvidenceRequest`) na v2 radu iz testnog fixturea prihvaća odsječak v2 i odbija odsječak v1, prije nego korak baze 2 uključi v2 za nove radove. v1 radovi ostaju kakvi jesu i novi radovi su i dalje v1.
 3. **DAN-620, Tiptap**: čvor navoda u editoru, snimanje koraka v2 i izvora. Editor bira format (`transactionFormat`) i oblik dokumenta prema verziji revizije nula, pa radi i na v1 i na v2 radovima. Tekstni navodi iz #866 ostaju tekst (D-226).
 4. **Korak baze 2** (odjeljak 7, točka 2): `app.open_student_work` počinje stvarati v2 radove, s integracijskim testom iz odjeljka 8 (I2). To je trenutak prihvata iz odgovora Q2.
 
@@ -260,8 +263,8 @@ Generatori koriste samo sintetičke podatke iz #1711: „Izvor 1”, „str. 12�
 ## Mjesta
 
 - Ovaj PR: samo `docs/contracts/document-schema-v2.md`.
-- DAN-619: `src/domain/document/{schema,validate,edit-step,revision-zero}.ts`, `src/adapters/evidence/edit-steps-v1-rules.ts` i novi replayeri v2, `src/domain/citation/` (izvođenje bibliografije), `src/domain/forensics/golden-vectors/` (rezervacija i vektori v2, #1711 V3).
-- Korak baze 1: nova migracija za v2 funkciju revizije nula i provjeru verzije, `db/tests/`.
+- DAN-619: `src/domain/document/{schema,validate,edit-step,revision-zero}.ts`, `src/domain/forensics/evidence-segment-v2.ts` (oba formata), `src/adapters/evidence/edit-steps-v1-rules.ts` i novi replayeri v2, `src/domain/citation/` (izvođenje bibliografije), `src/domain/forensics/golden-vectors/` (rezervacija i vektori v2, #1711 V3).
+- Korak baze 1: nova migracija za v2 funkciju revizije nula, provjeru verzije i verziju rada u `app.evidence_commit_context`; `src/server/evidence/{evidence-commit,evidence-commit-request}.ts` (provjera formata prije `putImmutable`); `db/tests/` i integracijski test commita.
 - Korak baze 2: nova migracija za `app.open_student_work`, `db/tests/` i integracijski test.
 - DAN-620: `src/editor/` (shema, `capture.ts`), `src/components/editor/sources.ts` ostaje za v1 radove.
 
