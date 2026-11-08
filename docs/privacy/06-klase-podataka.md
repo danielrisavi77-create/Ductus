@@ -96,6 +96,7 @@ Svaka tablica koju `-- migrate:up` dijelovi u `db/migrations/` ostavljaju na `ma
 | `institution.faculty_work_rule` | 10 | |
 | `institution.faculty_rule_version` | 10 | |
 | `institution.work_language_override` | 10 | |
+| `institution.work_accommodation` | 10 | Klasa i rok za potvrdu; samo oznaka na radu (D-50); je li oznaka podatak o zdravlju otvoreno je (`05-otvorena-pitanja.md` t. 10) |
 | `evidence.project` | 11 | |
 | `evidence.document` | 11 | |
 | `evidence.document_revision` | 13 | |
