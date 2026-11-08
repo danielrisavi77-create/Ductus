@@ -165,6 +165,11 @@ export function useLocalSignedOut(): boolean {
   return useLocalDocument().phase === "signed-out";
 }
 
+/** True once the work in this tab is closed by its submission (DAN-215). */
+export function useLocalSubmitted(): boolean {
+  return useLocalDocument().snapshot?.closedBy === "submission";
+}
+
 /**
  * Whether the candidate holds exactly the ids the editor holds. The identity
  * plugin (#226) gives every block its id, so interop never mints one; if it

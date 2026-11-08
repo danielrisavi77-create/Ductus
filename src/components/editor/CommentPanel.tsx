@@ -28,7 +28,8 @@ import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./CommentPanel.module.css";
-import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
+import { createVersionGate, readSubmittedTexts, type SubmittedTexts } from "./comment-version";
+import { useLocalEditor, useLocalSignedOut, useLocalSubmitted } from "./LocalDocument";
 
 const t = messagesHr.comments;
 
@@ -189,14 +190,31 @@ function SessionCommentPanel({ documentId, session }: {
     return () => { if (!editor.isDestroyed) editor.unregisterPlugin(commentHighlightKey); };
   }, [editor]);
 
+  // Once the work is submitted, comments are placed on the submitted revision
+  // only (DAN-215, K7c/K7d): it is read once, and until it lands, or when it
+  // cannot be read, nothing is placed. An answer of an older read, or one that
+  // lands after the session ended, is dropped.
+  const submitted = useLocalSubmitted();
+  const [submittedTexts, setSubmittedTexts] = useState<SubmittedTexts | null>(null);
+  const versionTicket = useRef(0);
+  useEffect(() => {
+    const mine = ++versionTicket.current;
+    if (!submitted || stopped || !editor || editor.isDestroyed) return;
+    void readSubmittedTexts(documentId, editor.schema, current).then((texts) => {
+      if (mine === versionTicket.current && current()) setSubmittedTexts(texts);
+    });
+  }, [submitted, stopped, editor, documentId, current]);
+
   const threads = !stopped && outcome?.kind === "ok" ? outcome.threads : NO_THREADS;
   // Placed again on every change of the text, so an edited paragraph never
   // keeps a stale place; a transaction that leaves the text as it was (a
   // cursor move) reuses the last places (F-093).
   const [placer] = useState(() => createAnchorPlacer((thread: CommentThread) => thread.anchor));
+  const [gate] = useState(createVersionGate);
+  const version = submitted ? submittedTexts : "draft";
   const places = useEditorState({
     editor,
-    selector: ({ editor: e }) => (!e || e.isDestroyed ? NO_RANGES : placer(e.state.doc, threads)),
+    selector: ({ editor: e }) => (!e || e.isDestroyed ? NO_RANGES : gate(e.state.doc, version, placer(e.state.doc, threads))),
   }) ?? NO_RANGES;
   const placed: Placed[] = threads.map((thread, i) => ({ thread, range: places[i] ?? null }));
 
