@@ -236,9 +236,10 @@ function mainWordCount(doc: CanonicalDocument): number {
 }
 
 describe("D7: documentWordCount", () => {
-  it("counts a citation as neither a word nor a character", () => {
+  it("counts a citation as no word but as a boundary between words", () => {
     expect(documentWordCount(valid(v2([text("Prva"), cite(1), text(" riječ")])))).toBe(1 + 2);
-    expect(documentWordCount(valid(v2([text("Prva"), cite(1), text("riječ")])))).toBe(1 + 1);
+    expect(documentWordCount(valid(v2([text("Prva"), cite(1), text("riječ")])))).toBe(1 + 2);
+    expect(documentWordCount(valid(v2([text("a"), cite(1), cite(9), text("b c")])))).toBe(1 + 3);
     expect(documentWordCount(valid(v2([cite(1)])))).toBe(1);
     expect(documentWordCount(valid(v2([cite(9, "str. 12")])))).toBe(1);
     expect(documentWordCount(valid(v2([cite(1), cite(9)], [book(1)], "Dva naslova")))).toBe(2);
