@@ -245,6 +245,18 @@ describe("D7: documentWordCount", () => {
     expect(documentWordCount(valid(v2([cite(1), cite(9)], [book(1)], "Dva naslova")))).toBe(2);
   });
 
+  it.each<[string, InlineNodeV2[], number]>([
+    ["at the start", [cite(1), text("prva druga")], 2],
+    ["in the middle", [text("prva"), cite(1), text("druga")], 2],
+    ["at the end", [text("prva druga"), cite(1)], 2],
+    ["two in a row", [text("prva"), cite(1), cite(9, "str. 12"), text("druga")], 2],
+    ["two in a row at the start", [cite(1), cite(9), text("prva")], 1],
+    ["two in a row at the end", [text("prva"), cite(1), cite(9)], 1],
+    ["at the start, in the middle and at the end", [cite(1), text("prva"), cite(9), text("druga"), cite(1)], 2],
+  ])("keeps the words around a citation %s apart and adds none", (_, children, words) => {
+    expect(documentWordCount(valid(v2(children, [book(1)])))).toBe(1 + words);
+  });
+
   it("gives v1 the same count as on main", () => {
     const docs: CanonicalDocument[] = [
       { schemaVersion: 1, nodes: [{ type: "paragraph", id: nid(1), children: [] }] },
