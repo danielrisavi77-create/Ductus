@@ -1,3 +1,4 @@
+import type { WorkLanguage } from "@/domain/assignment/work-language";
 import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-request";
 
 /**
@@ -33,7 +34,9 @@ export type InstitutionReply =
   | { confirmed: true }
   | { removed: boolean }
   | { allowed: boolean }
-  | { assignmentId: string; versionNo: number };
+  | { assignmentId: string; versionNo: number }
+  | { version: number }
+  | { language: WorkLanguage };
 
 export function respond(status: number, body: InstitutionReply): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
