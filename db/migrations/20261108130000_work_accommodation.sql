@@ -33,13 +33,6 @@ ALTER TABLE institution.work_accommodation ENABLE ROW LEVEL SECURITY;
 ALTER TABLE institution.work_accommodation FORCE ROW LEVEL SECURITY;
 CREATE POLICY work_accommodation_owner ON institution.work_accommodation TO ductus_identity
   USING (true) WITH CHECK (true);
--- The student of the work and a teacher or mentor of the work see the mark.
-CREATE POLICY work_accommodation_read ON institution.work_accommodation FOR SELECT TO ductus_app
-  USING (
-    institution_id = (SELECT app.current_institution_id())
-    AND (student_id = (SELECT app.current_user_id())
-         OR institution.actor_assignment_role(assignment_id) = 'teacher')
-  );
 
 -- Is the work of p_student_id on the assignment marked: true or false for
 -- that student and for a teacher or mentor of the work, null for anyone else,
@@ -66,6 +59,15 @@ BEGIN
        AND w.institution_id = v_institution);
 END
 $$;
+
+-- A direct read sees exactly the rows the reader answers: the student of the
+-- work and a teacher or mentor of the work, while that student is still on it.
+-- The reader runs as ductus_identity, where only the owner policy applies.
+CREATE POLICY work_accommodation_read ON institution.work_accommodation FOR SELECT TO ductus_app
+  USING (
+    institution_id = (SELECT app.current_institution_id())
+    AND institution.work_accommodation(assignment_id, student_id) IS NOT NULL
+  );
 
 -- The caller marks (true) or unmarks (false) their own work on the assignment
 -- and gets back whether it is marked afterwards. The same value again changes
@@ -121,9 +123,10 @@ SET LOCAL ROLE ductus_migrator;
 GRANT CREATE ON SCHEMA institution TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
+-- The table first: its read policy calls the reader.
+DROP TABLE institution.work_accommodation;
 DROP FUNCTION institution.set_work_accommodation(uuid, boolean);
 DROP FUNCTION institution.work_accommodation(uuid, uuid);
-DROP TABLE institution.work_accommodation;
 
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;

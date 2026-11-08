@@ -219,11 +219,21 @@ INSERT INTO step VALUES
   -- Ana's request on zm1 leaves her work on Z1 open.
   (1306, '11', 'ana', $$ SELECT institution.set_work_accommodation({z1}, false)::text $$, 'false'),
   (1307, '11', 'db', $$ SELECT pg_temp.state() $$, 'marks z3.tomo,zm1.ana'),
+  -- Dora's mark on Z1 from before her request; her teacher and she read it directly.
+  (1308, '7', 'db', $$ INSERT INTO institution.work_accommodation (institution_id, assignment_id, student_id)
+                        SELECT a.institution_id, a.id, {dora} FROM institution.assignment a WHERE a.id = {z1}
+                        RETURNING 'marked' $$, 'marked'),
+  (1309, '7', 'vesna', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE student_id = {dora} $$, '1'),
+  (1310, '7', 'dora', $$ SELECT count(*)::text FROM institution.work_accommodation $$, '1'),
   -- Vesna removes Dora from K1: Dora is no longer a student of Z1.
   (1401, '7', 'vesna', $$ SELECT institution.remove_student({k1}, {dora})::text $$, 'true'),
   (1402, '7', 'dora', $$ SELECT institution.set_work_accommodation({z1}, false)::text $$, 'ZD403: forbidden'),
   (1403, '7', 'vesna', $$ SELECT coalesce(institution.work_accommodation({z1}, {dora})::text, 'null') $$, 'null'),
-  (1404, '7', 'db', $$ SELECT pg_temp.state() $$, 'marks z3.tomo,zm1.ana'),
+  (1404, '7', 'db', $$ SELECT pg_temp.state() $$, 'marks z1.dora,z3.tomo,zm1.ana'),
+  -- The row stays, and a direct read sees no more than the reader: nobody.
+  (1405, '7', 'vesna', $$ SELECT count(*)::text FROM institution.work_accommodation WHERE student_id = {dora} $$, '0'),
+  (1406, '7', 'dora', $$ SELECT count(*)::text FROM institution.work_accommodation $$, '0'),
+  (1407, '7', 'dora', $$ SELECT coalesce(institution.work_accommodation({z1}, {dora})::text, 'null') $$, 'null'),
   -- A co-mentor with a grant on the work (work_grant) does not see the mark.
   (1501, 'grant', 'marko', $$ SELECT (institution.grant_work_access({zm1}, {ana}, {vesna}, 'committee', '{read_text}',
                                          NULL, now() + interval '30 days') IS NOT NULL)::text $$, 'true'),

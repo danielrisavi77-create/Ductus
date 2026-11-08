@@ -11989,7 +11989,7 @@ CREATE POLICY work_accommodation_owner ON institution.work_accommodation TO duct
 -- Name: work_accommodation work_accommodation_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY work_accommodation_read ON institution.work_accommodation FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_assignment_role(assignment_id) = 'teacher'::text))));
+CREATE POLICY work_accommodation_read ON institution.work_accommodation FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND (institution.work_accommodation(assignment_id, student_id) IS NOT NULL)));
 
 
 --
