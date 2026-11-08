@@ -12,8 +12,12 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // language against a submission in both orders. Both language writers take the
 // assignment FOR UPDATE; request_submission holds it FOR SHARE through
 // app.lock_student_assignment, so the submission that commits first fixes the
-// language. Every person, course, text and hash is invented; random ids of one
-// random institution, removed afterwards. Loopback only.
+// language. Two more cases race a change against the revocation of the
+// teacher role (review c.6721404472): the change locks the rows that make its
+// caller a teacher FOR SHARE, so a revocation waits for a change in progress
+// and one that commits first refuses the change. Every person, course, text
+// and hash is invented; random ids of one random institution, removed
+// afterwards. Loopback only.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The work language race test runs only against a loopback database (DATABASE_URL).");
@@ -26,7 +30,10 @@ const withActor = createWithActor(app);
 const institutionId = randomUUID();
 const courseId = randomUUID();
 const assignmentId = randomUUID();
-const names = ["vesna", "ana", "dora"] as const;
+// Vesna and Nada teach the course; Ana, Dora and Mara study in it; Iva administers.
+const names = ["vesna", "nada", "ana", "dora", "mara", "iva"] as const;
+const teachers: readonly Name[] = ["vesna", "nada"];
+const students: readonly Name[] = ["ana", "dora", "mara"];
 type Name = typeof names[number];
 const people = Object.fromEntries(names.map((name) => [name, { id: randomUUID(), token: randomBytes(32).toString("base64url") }])) as
   Record<Name, { id: string; token: string }>;
@@ -41,6 +48,9 @@ const setWork = (student: Name, language: string | null) => async (tx: ActorTran
 const setAssignment = (expectedVersion: number, language: string) => async (tx: ActorTransaction) =>
   (await tx.query<{ version: number }>("SELECT institution.set_assignment_work_language($1, $2, $3) AS version",
     [assignmentId, expectedVersion, language])).rows[0].version;
+const revoke = (teacher: Name) => async (tx: ActorTransaction) =>
+  (await tx.query<{ revoked: boolean }>("SELECT institution.revoke_teacher_role($1) AS revoked",
+    [people[teacher].id])).rows[0].revoked;
 const readWork = (student: Name) => async (tx: ActorTransaction) =>
   (await tx.query<{ language: string | null }>("SELECT institution.work_language($1, $2) AS language",
     [assignmentId, people[student].id])).rows[0].language;
@@ -127,14 +137,20 @@ beforeAll(async () => {
         `INSERT INTO identity.session (token_hash, user_id, institution_id, expires_at)
          VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() + interval '1 hour')`, [token, id, institutionId]);
     }
-    await client.query("INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'teacher', now())",
-      [institutionId, people.vesna.id]);
+    for (const name of teachers) await client.query(
+      "INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'teacher', now())",
+      [institutionId, people[name].id]);
+    // The operator procedure appoints administrators; replica mode stands in for it here.
+    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query("INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at) VALUES ($1, $2, 'admin', now())",
+      [institutionId, people.iva.id]);
+    await client.query("SET LOCAL session_replication_role = origin");
     await client.query(
       `INSERT INTO institution.course (id, institution_id, name, academic_year, ai_policy, created_by)
        VALUES ($1, $2, $3, '2026/2027', 'partially_allowed', $4)`, [courseId, institutionId, `Izmisljeni kolegij ${suffix}`, people.vesna.id]);
-    for (const name of names) await client.query(
+    for (const name of [...teachers, ...students]) await client.query(
       "INSERT INTO institution.course_member (course_id, institution_id, user_id, role) VALUES ($1, $2, $3, $4)",
-      [courseId, institutionId, people[name].id, name === "vesna" ? "teacher" : "student"]);
+      [courseId, institutionId, people[name].id, teachers.includes(name) ? "teacher" : "student"]);
     await client.query(
       "INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by) VALUES ($1, $2, $3, 1, $4)",
       [assignmentId, courseId, institutionId, people.vesna.id]);
@@ -183,7 +199,7 @@ async function cleanUp() {
     await client.query("BEGIN");
     // Disposable synthetic rows only; the append-only triggers stay active in normal operation.
     await client.query("SET LOCAL session_replication_role = replica");
-    for (const table of ["institution.work_language_override", "audit.access_log", "evidence.submission", "evidence.submission_request",
+    for (const table of ["institution.work_language_override", "audit.access_log", "audit.teacher_role_event", "evidence.submission", "evidence.submission_request",
       "evidence.document_checkpoint", "evidence.document_revision", "evidence.document", "evidence.project",
       "institution.notice_acknowledgment"]) {
       await client.query(`DELETE FROM ${table} WHERE institution_id = $1`, [institutionId]);
@@ -247,5 +263,50 @@ describe("work language against a submission, over two real connections", () => 
     expect(await settle(withActor(people.vesna.token, setWork("dora", null)))).toEqual({ value: null, code: "ZD409" });
     expect(await settle(withActor(people.vesna.token, setAssignment(1, "en")))).toEqual({ value: null, code: "ZD409" });
     expect(await stored()).toEqual({ version: 1, versions: 1, language: "hr", overrides: [{ student: people.dora.id, language: "en" }] });
+  });
+});
+
+describe("work language against the revocation of the teacher role, over two real connections", () => {
+  const overrides = () => stored().then((state) => state.overrides);
+  const before = () => [{ student: people.dora.id, language: "en" }];
+
+  it("revocation first: the change waits on the role, then is refused and writes nothing", async () => {
+    const revocation = hold(people.iva.token, revoke("nada"));
+    let work: ReturnType<typeof settle<string | null>>;
+    try {
+      expect(await revocation.answered).toBe(true);
+      work = settle(withActor(people.nada.token, setWork("mara", "en")));
+      await waitForBlocked("set_work_language");
+    } finally {
+      revocation.release();
+    }
+    await revocation.done;
+    // The change must see the revocation it waited for, not its older snapshot.
+    expect(await work).toEqual({ value: null, code: "ZD403" });
+    expect(await overrides()).toEqual(before());
+  });
+
+  it("change first: the revocation waits for the change in progress, which then is the last one", async () => {
+    // The assignment is held so that the change stops after its role check.
+    const blocker = await admin.connect();
+    let work: ReturnType<typeof settle<string | null>>;
+    let revocation: ReturnType<typeof settle<boolean>>;
+    try {
+      await blocker.query("BEGIN");
+      await blocker.query("SELECT 1 FROM institution.assignment WHERE id = $1 FOR UPDATE", [assignmentId]);
+      work = settle(withActor(people.vesna.token, setWork("mara", "en")));
+      await waitForBlocked("set_work_language");
+      revocation = settle(withActor(people.iva.token, revoke("vesna")));
+      await waitForBlocked("revoke_teacher_role");
+    } finally {
+      await blocker.query("COMMIT");
+      blocker.release();
+    }
+    expect(await work).toEqual({ value: "en", code: null });
+    expect(await revocation).toEqual({ value: true, code: null });
+    expect(await settle(withActor(people.vesna.token, setWork("mara", "hr")))).toEqual({ value: null, code: "ZD403" });
+    expect(await settle(withActor(people.vesna.token, setAssignment(1, "en")))).toEqual({ value: null, code: "ZD403" });
+    const mara = { student: people.mara.id, language: "en" };
+    expect(await overrides()).toEqual([...before(), mara].sort((a, b) => a.student.localeCompare(b.student)));
   });
 });

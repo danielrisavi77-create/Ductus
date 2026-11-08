@@ -85,6 +85,42 @@ $$;
 CREATE TRIGGER assignment_version_work_language BEFORE INSERT ON institution.assignment_version
   FOR EACH ROW EXECUTE FUNCTION institution.assignment_version_work_language();
 
+-- The rows that make the caller a teacher of the assignment, locked FOR SHARE
+-- until the caller commits: the confirmed, unrevoked teacher role and the open
+-- teacher membership of the course, or the open mentorship with the caller as
+-- mentor. A revocation or an ending waits for a change in progress, and one
+-- that committed first leaves no row. False: not a teacher of it now.
+CREATE FUNCTION institution.lock_assignment_teacher(p_assignment_id uuid) RETURNS boolean
+LANGUAGE plpgsql VOLATILE SET search_path = ''
+AS $$
+DECLARE
+  v_actor record;
+  v_assignment institution.assignment%ROWTYPE;
+BEGIN
+  SELECT a.user_id, a.institution_id INTO v_actor FROM app.current_actor() a;
+  IF v_actor.user_id IS NULL OR institution.lock_teacher_role(v_actor.user_id) IS NULL THEN
+    RETURN false;
+  END IF;
+  SELECT a.* INTO v_assignment FROM institution.assignment a
+   WHERE a.id = p_assignment_id AND a.institution_id = v_actor.institution_id;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+  IF v_assignment.course_id IS NOT NULL THEN
+    PERFORM 1 FROM institution.course_member m
+     WHERE m.course_id = v_assignment.course_id AND m.institution_id = v_actor.institution_id
+       AND m.user_id = v_actor.user_id AND m.role = 'teacher' AND m.member_to IS NULL
+     FOR SHARE;
+  ELSE
+    PERFORM 1 FROM institution.mentorship s
+     WHERE s.id = v_assignment.mentorship_id AND s.institution_id = v_actor.institution_id
+       AND s.mentor_id = v_actor.user_id AND s.ended_at IS NULL
+     FOR SHARE;
+  END IF;
+  RETURN FOUND;
+END
+$$;
+
 -- A new version with the content of the current one and another language.
 -- The same language is no change and writes nothing. Who may: as
 -- publish_assignment_version, whose rules a mentorship's assignment does not
@@ -99,7 +135,7 @@ DECLARE
   v_current integer;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
-  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+  IF NOT institution.lock_assignment_teacher(p_assignment_id)
      OR EXISTS (SELECT 1 FROM institution.assignment a WHERE a.id = p_assignment_id AND a.mentorship_id IS NOT NULL) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
@@ -196,7 +232,7 @@ DECLARE
   actor record;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
-  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+  IF NOT institution.lock_assignment_teacher(p_assignment_id)
      OR institution.work_relation(p_student_id, p_assignment_id) IS DISTINCT FROM 'student' THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
@@ -223,6 +259,7 @@ $$;
 
 REVOKE ALL ON FUNCTION institution.is_work_language(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION institution.assignment_version_work_language() FROM PUBLIC;
+REVOKE ALL ON FUNCTION institution.lock_assignment_teacher(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION institution.set_assignment_work_language(uuid, integer, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION institution.work_language(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION institution.set_work_language(uuid, uuid, text) FROM PUBLIC;
@@ -247,6 +284,7 @@ DROP FUNCTION institution.set_work_language(uuid, uuid, text);
 DROP FUNCTION institution.work_language(uuid, uuid);
 DROP TABLE institution.work_language_override;
 DROP FUNCTION institution.set_assignment_work_language(uuid, integer, text);
+DROP FUNCTION institution.lock_assignment_teacher(uuid);
 DROP TRIGGER assignment_version_work_language ON institution.assignment_version;
 DROP FUNCTION institution.assignment_version_work_language();
 ALTER TABLE institution.assignment_version DROP COLUMN work_language;

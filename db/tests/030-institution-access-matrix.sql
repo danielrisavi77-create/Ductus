@@ -227,6 +227,7 @@ SELECT bag_eq(
     'check_last_admin() definer',
     'is_work_language(p_language text)',
     'assignment_version_work_language() definer',
+    'lock_assignment_teacher(p_assignment_id uuid)',
     'set_assignment_work_language(p_assignment_id uuid, p_expected_version integer, p_work_language text) definer app',
     'work_language(p_assignment_id uuid, p_student_id uuid) definer app',
     'set_work_language(p_assignment_id uuid, p_student_id uuid, p_work_language text) definer app'

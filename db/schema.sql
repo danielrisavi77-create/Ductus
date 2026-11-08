@@ -5235,6 +5235,43 @@ $$;
 
 
 --
+-- Name: lock_assignment_teacher(uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.lock_assignment_teacher(p_assignment_id uuid) RETURNS boolean
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_actor record;
+  v_assignment institution.assignment%ROWTYPE;
+BEGIN
+  SELECT a.user_id, a.institution_id INTO v_actor FROM app.current_actor() a;
+  IF v_actor.user_id IS NULL OR institution.lock_teacher_role(v_actor.user_id) IS NULL THEN
+    RETURN false;
+  END IF;
+  SELECT a.* INTO v_assignment FROM institution.assignment a
+   WHERE a.id = p_assignment_id AND a.institution_id = v_actor.institution_id;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+  IF v_assignment.course_id IS NOT NULL THEN
+    PERFORM 1 FROM institution.course_member m
+     WHERE m.course_id = v_assignment.course_id AND m.institution_id = v_actor.institution_id
+       AND m.user_id = v_actor.user_id AND m.role = 'teacher' AND m.member_to IS NULL
+     FOR SHARE;
+  ELSE
+    PERFORM 1 FROM institution.mentorship s
+     WHERE s.id = v_assignment.mentorship_id AND s.institution_id = v_actor.institution_id
+       AND s.mentor_id = v_actor.user_id AND s.ended_at IS NULL
+     FOR SHARE;
+  END IF;
+  RETURN FOUND;
+END
+$$;
+
+
+--
 -- Name: lock_teacher_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -5781,7 +5818,7 @@ DECLARE
   v_current integer;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
-  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+  IF NOT institution.lock_assignment_teacher(p_assignment_id)
      OR EXISTS (SELECT 1 FROM institution.assignment a WHERE a.id = p_assignment_id AND a.mentorship_id IS NOT NULL) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
@@ -5928,7 +5965,7 @@ DECLARE
   actor record;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
-  IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+  IF NOT institution.lock_assignment_teacher(p_assignment_id)
      OR institution.work_relation(p_student_id, p_assignment_id) IS DISTINCT FROM 'student' THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;

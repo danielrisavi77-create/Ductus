@@ -41,6 +41,14 @@ SELECT is(
 SELECT ok(NOT has_function_privilege('public', 'app.work_submission_requested(uuid, uuid)', 'EXECUTE'),
   'PUBLIC may not call work_submission_requested');
 SELECT is(
+  (SELECT p.proowner::regrole::text || ' ' || p.prosecdef::text || ' ' || p.provolatile::text
+          || ' ' || has_function_privilege('ductus_app', p.oid, 'EXECUTE')::text
+          || ' ' || has_function_privilege('public', p.oid, 'EXECUTE')::text
+   FROM pg_proc p WHERE p.oid = 'institution.lock_assignment_teacher(uuid)'::regprocedure),
+  'ductus_identity false v false false',
+  'lock_assignment_teacher is an invoker helper of the owner role that no client may call'
+);
+SELECT is(
   (SELECT a.attnotnull::text || ' ' || coalesce(pg_get_expr(d.adbin, d.adrelid), 'no default')
    FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
    WHERE a.attrelid = 'institution.assignment_version'::regclass AND a.attname = 'work_language'),
@@ -290,6 +298,16 @@ GRANT EXECUTE ON FUNCTION pg_temp.write_version(integer, text) TO ductus_app;
 GRANT ductus_identity TO ductus_app;
 SELECT * FROM pg_temp.run(700, 899);
 REVOKE ductus_identity FROM ductus_app;
+
+INSERT INTO step VALUES
+  -- 4. Iva revokes Vesna's teacher role: from then on Vesna changes neither
+  -- the assignment nor a work, and nothing is written.
+  (901, '4', 'iva', $$ SELECT institution.revoke_teacher_role({vesna})::text $$, 'true'),
+  (902, '4', 'vesna', $$ SELECT institution.set_work_language({z1}, {ana}, 'en') $$, 'ZD403: forbidden'),
+  (903, '4', 'vesna', $$ SELECT institution.set_work_language({z1}, {ana}, NULL) $$, 'ZD403: forbidden'),
+  (904, '4', 'vesna', $$ SELECT institution.set_assignment_work_language({z1}, 4, 'hr')::text $$, 'ZD403: forbidden'),
+  (905, '4', 'db', $$ SELECT pg_temp.state() $$, 'z1 v4 1=hr,2=hr,3=en,4=en,5=en,6=en | overrides z1.ana=hr,z1.dora=hr,zm1.ana=en');
+SELECT * FROM pg_temp.run(900, 999);
 
 SELECT * FROM finish();
 ROLLBACK;
