@@ -6,11 +6,16 @@
  * editor is exactly its text in that revision. Any other paragraph, or a
  * revision that is not known, gives no place: the comment stays in the list
  * with its note, never at a place of another version.
+ *
+ * The client has no source of the submitted revision that asks nothing of the
+ * server: the opening carries the current revision, which may be later than
+ * the submitted one (a segment can land between the request and the record),
+ * and a submitted work makes no request to the live channel (DAN-289 O2). So
+ * after the submission the version is not known and nothing is placed (K7d).
  */
 
 import type { Node as PmNode, Schema } from "@tiptap/pm/model";
 
-import { readLiveState } from "@/client/live-reader";
 import type { CanonicalDocument } from "@/domain/document";
 import type { CommentRange } from "@/editor/comment-anchor";
 import { canonicalToTiptap, NODE_ID_ATTRIBUTE } from "@/editor/interop";
@@ -34,6 +39,15 @@ function textsOf(doc: PmNode): Map<string, string> {
     return false;
   });
   return texts;
+}
+
+/**
+ * The version the comments are placed on in the editor: the draft before the
+ * submission, and after it none, since the submitted revision is not known
+ * without a request (see the module comment).
+ */
+export function placementVersion(submitted: boolean): PlacementVersion {
+  return submitted ? null : "draft";
 }
 
 /** The texts of a stored revision, read through the editor's own schema. */
@@ -64,21 +78,4 @@ export function createVersionGate() {
     last = { doc, version, ranges, out };
     return out;
   };
-}
-
-/**
- * One read of the submitted revision for the student's own work. Only a
- * document the route marks as submitted counts; anything else, or an answer
- * that lands once `current()` is false, gives null.
- */
-export async function readSubmittedTexts(
-  documentId: string,
-  schema: Schema,
-  current: () => boolean,
-  fetcher: typeof fetch = fetch,
-): Promise<SubmittedTexts | null> {
-  if (!current()) return null;
-  const read = await readLiveState(documentId, null, fetcher);
-  if (!current() || read.kind !== "state" || !read.submitted) return null;
-  return submittedTextsOf(schema, read.document);
 }

@@ -1,13 +1,15 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { Editor } from "@tiptap/core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createTextAnchor, type TextAnchor } from "@/domain/collaboration";
 import type { CanonicalDocument, NodeId } from "@/domain/document";
-import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import { createAnchorPlacer } from "@/editor/comment-anchor";
 import { createEditorExtensions, NODE_ID_ATTRIBUTE } from "@/editor/schema";
 
-import { createVersionGate, readSubmittedTexts, submittedTextsOf } from "./comment-version";
+import { createVersionGate, placementVersion, submittedTextsOf } from "./comment-version";
 
 /**
  * K7c and K7d of the contract on #1091 (DAN-215): after the submission a
@@ -94,40 +96,19 @@ describe("a comment on the submitted version stays with that version", () => {
   });
 });
 
-const sha256 = async (text: string) => [...new Uint8Array(
-  await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
-)].map((b) => b.toString(16).padStart(2, "0")).join("");
-
-async function reply(submitted: boolean): Promise<Response> {
-  const body = canonicalizeJcs(stored(TEXT));
-  return new Response(body, {
-    status: 200,
-    headers: { etag: `"${await sha256(body)}"`, ...(submitted ? { "ductus-live-state": "submitted" } : {}) },
-  });
-}
-
-describe("readSubmittedTexts", () => {
-  const schema = editorWith(TEXT).schema;
-
-  it("reads the texts of the revision the route marks as submitted", async () => {
-    const texts = await readSubmittedTexts("izmisljeni-rad", schema, () => true, vi.fn<typeof fetch>(async () => reply(true)));
-    expect(texts?.get(ID.b)).toBe(TEXT.b);
+describe("the version in the editor (O2, DAN-289)", () => {
+  it("before the submission the draft, after it none: nothing is placed and the comments stay in the list", () => {
+    expect(placementVersion(false)).toBe("draft");
+    expect(placementVersion(true)).toBeNull();
+    const editor = editorWith(TEXT);
+    expect(placeAll(editor, placementVersion(true)).gated).toEqual([null, null]);
+    editor.destroy();
   });
 
-  it("negative: a state that is not the submitted revision is not a version", async () => {
-    expect(await readSubmittedTexts("izmisljeni-rad", schema, () => true, vi.fn<typeof fetch>(async () => reply(false)))).toBeNull();
-    expect(await readSubmittedTexts("izmisljeni-rad", schema, () => true, vi.fn<typeof fetch>(async () => new Response(null, { status: 503 })))).toBeNull();
-  });
-
-  it("Istodobnost negative: an answer that lands after the session ended is dropped", async () => {
-    let live = true;
-    const fetcher = vi.fn<typeof fetch>(async () => { live = false; return reply(true); });
-    expect(await readSubmittedTexts("izmisljeni-rad", schema, () => live, fetcher)).toBeNull();
-  });
-
-  it("asks nothing once the session has ended", async () => {
-    const fetcher = vi.fn<typeof fetch>(async () => reply(true));
-    expect(await readSubmittedTexts("izmisljeni-rad", schema, () => false, fetcher)).toBeNull();
-    expect(fetcher).not.toHaveBeenCalled();
+  it("negative: neither the panel nor the version reads the live channel, so a submitted work asks nothing of it", () => {
+    for (const file of ["comment-version.ts", "CommentPanel.tsx"]) {
+      const source = readFileSync(join(process.cwd(), "src/components/editor", file), "utf8");
+      expect(source).not.toMatch(/live-reader|readLiveState|\/api\/live/);
+    }
   });
 });

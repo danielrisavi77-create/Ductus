@@ -28,7 +28,7 @@ import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./CommentPanel.module.css";
-import { createVersionGate, readSubmittedTexts, type SubmittedTexts } from "./comment-version";
+import { createVersionGate, placementVersion } from "./comment-version";
 import { useLocalEditor, useLocalSignedOut, useLocalSubmitted } from "./LocalDocument";
 
 const t = messagesHr.comments;
@@ -191,19 +191,10 @@ function SessionCommentPanel({ documentId, session }: {
   }, [editor]);
 
   // Once the work is submitted, comments are placed on the submitted revision
-  // only (DAN-215, K7c/K7d): it is read once, and until it lands, or when it
-  // cannot be read, nothing is placed. An answer of an older read, or one that
-  // lands after the session ended, is dropped.
+  // only (DAN-215, K7c/K7d). That revision is not known without a request,
+  // and a submitted work makes none (O2), so nothing is placed: every comment
+  // stays in the list with its note.
   const submitted = useLocalSubmitted();
-  const [submittedTexts, setSubmittedTexts] = useState<SubmittedTexts | null>(null);
-  const versionTicket = useRef(0);
-  useEffect(() => {
-    const mine = ++versionTicket.current;
-    if (!submitted || stopped || !editor || editor.isDestroyed) return;
-    void readSubmittedTexts(documentId, editor.schema, current).then((texts) => {
-      if (mine === versionTicket.current && current()) setSubmittedTexts(texts);
-    });
-  }, [submitted, stopped, editor, documentId, current]);
 
   const threads = !stopped && outcome?.kind === "ok" ? outcome.threads : NO_THREADS;
   // Placed again on every change of the text, so an edited paragraph never
@@ -211,7 +202,7 @@ function SessionCommentPanel({ documentId, session }: {
   // cursor move) reuses the last places (F-093).
   const [placer] = useState(() => createAnchorPlacer((thread: CommentThread) => thread.anchor));
   const [gate] = useState(createVersionGate);
-  const version = submitted ? submittedTexts : "draft";
+  const version = placementVersion(submitted);
   const places = useEditorState({
     editor,
     selector: ({ editor: e }) => (!e || e.isDestroyed ? NO_RANGES : gate(e.state.doc, version, placer(e.state.doc, threads))),
