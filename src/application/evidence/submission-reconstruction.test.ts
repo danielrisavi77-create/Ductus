@@ -6,13 +6,15 @@ import {
   createEditStepsV1Replayer,
   removedRangeSha256,
 } from "@/adapters/evidence/edit-steps-v1-replayer";
+import { createEditStepsV2Replayer } from "@/adapters/evidence/edit-steps-v2-replayer";
 import type { EvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
-import { REVISION_ZERO_JCS, REVISION_ZERO_NODE_ID } from "@/domain/document/revision-zero";
+import { REVISION_ZERO_JCS, REVISION_ZERO_NODE_ID, REVISION_ZERO_V2_JCS } from "@/domain/document/revision-zero";
 import {
   digestEvidenceReceiptPayloadV2,
   type EvidenceReceiptPayloadV2,
 } from "@/domain/forensics/evidence-receipt";
 import type { EvidenceDomainKey } from "@/domain/forensics/evidence-receipt-verifier";
+import type { EvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 
 import { decideSubmission } from "./submission-decision";
@@ -49,7 +51,14 @@ function key(overrides: Partial<EvidenceDomainKey> = {}, keyPair = pair): Eviden
   };
 }
 
-const hashOf = (document: unknown) => sha256(canonicalizeJcs(replayer.toCanonical(document as never)));
+const replayerV2 = createEditStepsV2Replayer();
+
+/** The replayer, revision 0 and step format of one document schema version (contract §9.2). */
+type Engine = { replayer: EvidenceStepReplayerV2<unknown>; zero: string; format: string };
+const V1: Engine = { replayer: replayer as EvidenceStepReplayerV2<unknown>, zero: REVISION_ZERO_JCS, format: "ductus-edit-steps-v1" };
+const V2: Engine = { replayer: replayerV2 as EvidenceStepReplayerV2<unknown>, zero: REVISION_ZERO_V2_JCS, format: "ductus-edit-steps-v2" };
+
+const hashOf = (document: unknown, engine = V1) => sha256(canonicalizeJcs(engine.replayer.toCanonical(document)));
 
 /** One event per segment: its steps applied to the document after the segment before. */
 type Edit = (document: ReturnType<typeof replayer.load>) => unknown[];
@@ -70,20 +79,23 @@ const EDITS: Edit[] = [
 
 type Built = { bytes: Map<string, Uint8Array>; record: SubmissionRecord; payloads: EvidencePayloadReader };
 
-async function build(options: { gapAt?: number; edits?: Edit[]; record?: (steps: unknown[]) => unknown[] } = {}): Promise<Built> {
+async function build(
+  options: { gapAt?: number; edits?: Edit[]; record?: (steps: unknown[]) => unknown[]; engine?: Engine } = {},
+): Promise<Built> {
+  const engine = options.engine ?? V1;
   const bytes = new Map<string, Uint8Array>();
   const segments: SubmissionRecord["segments"] = [];
-  let document = replayer.load(JSON.parse(REVISION_ZERO_JCS) as JcsJsonValue);
-  let before = hashOf(document);
+  let document = engine.replayer.load(JSON.parse(engine.zero) as JcsJsonValue);
+  let before = hashOf(document, engine);
   let predecessor: string | null = null;
   let previousReceiptId: string | null = null;
   let sequence = 0;
   for (const [i, edit] of (options.edits ?? EDITS).entries()) {
     sequence += options.gapAt === i ? 2 : 1;
-    const steps = edit(document);
+    const steps = edit(document as never);
     const event = { sequence, source: "editor", steps, touchedNodeIds: [REVISION_ZERO_NODE_ID] };
-    document = replayer.apply(document, event as never);
-    const after = hashOf(document);
+    document = engine.replayer.apply(document, event as never);
+    const after = hashOf(document, engine);
     const segment = canonicalizeJcs({
       evidenceSchema: "ductus-evidence-segment-v2",
       canonicalization: "RFC8785-JCS",
@@ -99,7 +111,7 @@ async function build(options: { gapAt?: number; edits?: Edit[]; record?: (steps:
       finalDocumentHash: after,
       predecessorSegmentHash: predecessor,
       events: [{ ...event, steps: options.record?.(steps) ?? steps, beforeDocumentHash: before, afterDocumentHash: after }],
-      captureContext: { editorModel: "prosemirror", transactionFormat: "ductus-edit-steps-v1" },
+      captureContext: { editorModel: "prosemirror", transactionFormat: engine.format },
       evidenceProfileId: "standard-v1",
     });
     const segmentHash = sha256(segment);
@@ -165,8 +177,10 @@ async function stored(payload: EvidenceReceiptPayloadV2, keyPair = pair): Promis
   };
 }
 
-const run = (built: Built, keys: EvidenceDomainKey[] = [key()]) =>
-  reconstructSubmission({ payloads: built.payloads, replayer, keys }, built.record);
+/** The reconstruction under an explicit schema version, `undefined` included. */
+const runAt = (built: Built, version: unknown, keys: EvidenceDomainKey[] = [key()]) =>
+  reconstructSubmission({ payloads: built.payloads, replayers: { v1: replayer, v2: replayerV2 }, keys }, built.record, version);
+const run = (built: Built, keys: EvidenceDomainKey[] = [key()]) => runAt(built, 1, keys);
 
 /** The last segment's receipt, rewritten and signed again under the test key. */
 async function resign(built: Built, change: Partial<EvidenceReceiptPayloadV2>, index = built.record.segments.length - 1) {
@@ -316,5 +330,98 @@ describe("reconstruction of a submission over receipts v2 (B-12 step 4b1)", () =
     const built = await build();
     built.payloads = { readImmutable: async () => ({ status: "unavailable", reason: "timeout" }) };
     expect(decideSubmission(await run(built))).toEqual({ decision: "retry", stage: "storage" });
+  });
+});
+
+// DAN-619 (d), contract §9.2, classes D8 to D11: the replayer and revision 0
+// follow the document's schema version. Invented source and text only.
+const SOURCE = {
+  id: "00000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  type: "book",
+  authors: [{ kind: "person", family: "Prezime", given: "Ime" }],
+  year: 2020,
+  title: "Izvor 1",
+  place: "Mjesto",
+  publisher: "Nakladnik",
+};
+const EDITS_V2: Edit[] = [
+  () => [{ stepType: "sourceSet", source: SOURCE }],
+  () => [
+    {
+      stepType: "replace",
+      from: 1,
+      to: 1,
+      slice: { content: [{ type: "text", text: "Odlomak A " }, { type: "citation", sourceId: SOURCE.id, locator: "str. 12" }] },
+    },
+  ],
+];
+const buildV2 = () => build({ engine: V2, edits: EDITS_V2 });
+
+describe("reconstruction by document schema version (DAN-619, contract §9.2)", () => {
+  it("replays a v1 record from v1 revision 0 under version 1, as before (D8)", async () => {
+    const built = await build();
+    expect(await runAt(built, 1)).toMatchObject({ status: "match", documentSha256: built.record.contentHash });
+  });
+
+  it("loads v2 revision 0 into the v2 replayer under version 2, and v1 revision 0 into the v1 replayer under 1 (D9)", async () => {
+    const built = await build();
+    const loaded: [string, unknown][] = [];
+    const spy = <T,>(name: string, inner: EvidenceStepReplayerV2<T>): EvidenceStepReplayerV2<T> => ({
+      ...inner,
+      load: (document) => {
+        loaded.push([name, document]);
+        return inner.load(document);
+      },
+    });
+    const replayers = { v1: spy("v1", replayer), v2: spy("v2", replayerV2) };
+    await reconstructSubmission({ payloads: built.payloads, replayers, keys: [key()] }, built.record, 2);
+    expect(loaded.length).toBeGreaterThan(0);
+    expect(loaded.every(([name, document]) => name === "v2" && canonicalizeJcs(document) === REVISION_ZERO_V2_JCS)).toBe(true);
+    loaded.length = 0;
+    await reconstructSubmission({ payloads: built.payloads, replayers, keys: [key()] }, built.record, 1);
+    expect(loaded.length).toBeGreaterThan(0);
+    expect(loaded.every(([name, document]) => name === "v1" && canonicalizeJcs(document) === REVISION_ZERO_JCS)).toBe(true);
+  });
+
+  // Until DB step 1 the segment validator takes only `ductus-edit-steps-v1`
+  // (contract §5.4), so a v2 record is refused there under either version:
+  // never a match. The successful v2 submission is DB step 2's integration test.
+  it.each<[string, () => Promise<Built>, number, { status: string; reason?: string; index?: number | null }]>([
+    ["a v2 record under version 2", buildV2, 2, { status: "mismatch", reason: "invalid_segment", index: 0 }],
+    ["a v2 record under version 1", buildV2, 1, { status: "mismatch", reason: "invalid_segment", index: 0 }],
+  ])("never matches %s before DB step 1 (D10)", async (_name, make, version, expected) => {
+    const outcome = await runAt(await make(), version);
+    expect(outcome).toEqual(expected);
+    expect(decideSubmission(outcome)).toEqual({ decision: "blocked", reason: "record_mismatch" });
+  });
+
+  it("never matches a v1 record under version 2: it does not start at v2 revision 0 (D10)", async () => {
+    const outcome = await runAt(await build(), 2);
+    expect(outcome).toMatchObject({ status: "discontinuity", discontinuity: { index: 0, documentHashBreak: true } });
+    expect(decideSubmission(outcome)).toEqual({ decision: "blocked", reason: "record_discontinuous" });
+  });
+
+  it.each<[string, unknown]>([
+    ["0", 0],
+    ["3", 3],
+    ['"1"', "1"],
+    ['"2"', "2"],
+    ["null", null],
+    ["undefined", undefined],
+    ["1.5", 1.5],
+    ["NaN", Number.NaN],
+  ])("asks for a retry with a closed code, reading no payload, for version %s (D11)", async (_name, version) => {
+    const built = await build();
+    let reads = 0;
+    built.payloads = {
+      readImmutable: async () => {
+        reads += 1;
+        return { status: "unavailable", reason: "timeout" };
+      },
+    };
+    const outcome = await runAt(built, version);
+    expect(outcome).toEqual({ status: "unavailable", stage: "verification", reason: "document_version_unknown" });
+    expect(reads).toBe(0);
+    expect(decideSubmission(outcome)).toEqual({ decision: "retry", stage: "verification" });
   });
 });
