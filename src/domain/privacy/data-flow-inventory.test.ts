@@ -203,6 +203,9 @@ describe(INVENTORY, () => {
     ["9", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /JOIN institution\.assignment_version v/],
     ["11", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /LEFT JOIN evidence\.document d/],
     ["16", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /LEFT JOIN evidence\.submission s/],
+    // Reads of segment payloads from S3 behind a route that does not name them.
+    ["21", "src/server/evidence/submission.ts", "src/application/evidence/evidence-reconstruction.ts", /payloads\.readImmutable\(/],
+    ["21", "src/server/projection/process-summary.ts", "src/application/projection/process-summary-reader.ts", /storage\.readImmutable\(/],
   ])("lists class %s on the flow through %s while %s writes or returns it", (cls, code, migration, touch) => {
     expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(touch);
     const flows = parseFlows(readFileSync(join(ROOT, INVENTORY), "utf8")).filter(
@@ -210,5 +213,23 @@ describe(INVENTORY, () => {
     );
     expect(flows.length).toBeGreaterThan(0);
     for (const f of flows) expect(f.classes.split(",").map((c) => c.trim())).toContain(cls);
+  });
+
+  // The student reads the summary of their own work on the submission page, and
+  // the source function records the access only for a teacher or mentor.
+  it("lists the student as a reader of the process summary and the teacher-only access record", () => {
+    const migration = "db/migrations/20261021130000_audit_access_log_write.sql";
+    expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(
+      /IF v_role = 'teacher' THEN\s+PERFORM audit\.record_work_opening\([^;]*'process_summary'\);/,
+    );
+    expect(readFileSync(join(ROOT, "src/components/student/Submission.tsx"), "utf8")).toMatch(/fetchProcessSummary\(/);
+    const rows = tableUnder(readFileSync(join(ROOT, INVENTORY), "utf8"), FLOWS_HEADING).filter(([, , , paths]) => {
+      const cited = codeSpans(paths ?? "");
+      return cited.includes("src/components/student/Submission.tsx") && cited.includes(migration);
+    });
+    expect(rows).toHaveLength(1);
+    const [, , how, , , readers] = rows[0];
+    expect(readers).toContain("student");
+    expect(how).toContain("IF v_role = 'teacher'");
   });
 });
