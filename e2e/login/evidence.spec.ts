@@ -34,6 +34,28 @@ function recordRequests(page: Page, pattern = /^\/api\/evidence\//): Request[] {
 }
 const commitsOf = (requests: Request[]) => requests.filter((r) => pathOf(r) === "/api/evidence/commit");
 
+type SentSegment = { events: { source: string; steps: unknown[] }[] };
+
+/**
+ * The segments of every commit from now on, each distinct body once: a body
+ * sent again unchanged (a retry, or DAN-595's same bytes under "1" after a 426
+ * to "2") is the same commit, not a second one.
+ */
+async function sentSegments(page: Page): Promise<SentSegment[]> {
+  const segments: SentSegment[] = [];
+  const seen = new Set<string>();
+  await page.route(COMMIT, async (route) => {
+    const text = route.request().postData() ?? "";
+    if (!seen.has(text)) {
+      seen.add(text);
+      const sent = JSON.parse(text) as { segments: string[] };
+      for (const segment of sent.segments) segments.push(JSON.parse(Buffer.from(segment, "base64").toString("utf8")) as SentSegment);
+    }
+    await route.continue();
+  });
+  return segments;
+}
+
 /** A writable sheet of a new invented assignment; returns its document id. */
 async function openSheet(page: Page): Promise<{ assignment: string; documentId: string }> {
   await signIn(page, "/rad");
@@ -283,12 +305,7 @@ test("3d-2c2: a real paste is recorded as paste", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await openSheet(page);
   const PASTED = "Izmišljeni zalijepljeni odlomak.";
-  const segments: { events: { source: string; steps: unknown[] }[] }[] = [];
-  await page.route(COMMIT, async (route) => {
-    const sent = route.request().postDataJSON() as { segments: string[] };
-    for (const segment of sent.segments) segments.push(JSON.parse(Buffer.from(segment, "base64").toString("utf8")));
-    await route.continue();
-  });
+  const segments = await sentSegments(page);
   await type(page, "Prije lijepljenja. ");
   await page.evaluate((text) => navigator.clipboard.writeText(text), PASTED);
   await page.keyboard.press("Control+V");
@@ -307,12 +324,7 @@ test("DAN-484: the Literatura tab's text reaches the server as citation-form", a
   const s = t.workspace.sources;
   await page.setViewportSize({ width: 1440, height: 900 });
   const { documentId } = await openSheet(page);
-  const segments: { events: { source: string; steps: unknown[] }[] }[] = [];
-  await page.route(COMMIT, async (route) => {
-    const sent = route.request().postDataJSON() as { segments: string[] };
-    for (const segment of sent.segments) segments.push(JSON.parse(Buffer.from(segment, "base64").toString("utf8")));
-    await route.continue();
-  });
+  const segments = await sentSegments(page);
   await type(page, "Izmišljeni odlomak ");
   const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
   await panel.getByRole("tab", { name: t.workspace.tabSources }).click();
