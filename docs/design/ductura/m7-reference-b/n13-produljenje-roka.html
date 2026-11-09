@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N-13 Produljenje roka (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <a class="brand" href="#" aria-label="Ductura, početna stranica nastavnika"><span class="mark" aria-hidden="true">D</span><span class="word">Ductura</span></a>
+    <button class="btn secondary menu" type="button" aria-expanded="false">Izbornik</button>
+    <nav aria-label="Nastavnik">
+      <a href="#" aria-current="page">Kolegiji</a>
+      <a href="#">Mentorstva</a>
+      <a href="#">Brz put</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header>
+      <div class="ref-tag">Referenca paketa 7 · DAN-600 · N-13 · prijedlog slike · prototipa nema · podaci su izmišljeni</div>
+      <h1>Produljenje roka</h1>
+      <p>Nastavnik produljuje rok jednom studentu. Rok se zamrzava pri zahtjevu za predaju; kasnije produljenje je dopuna i ne mijenja već zabilježenu predaju (D-263 Q07). Razlog vide samo nastavnik i taj student (PRODUCT §6 t. 10). Oblik razloga čeka Q-5. Tipkovnički redoslijed (EQ6): 1 „Produlji rok” u retku studenta, 2 „Novi rok”, 3 „Razlog”, 4 „Zabilježi produljenje”, 5 „Odustani”.</p>
+    </header>
+
+    <section class="state" aria-labelledby="h-pop">
+      <div class="ref-tag">N-13 · stanje 1 · popunjeno</div>
+      <h2 id="h-pop">Metodologija istraživanja · Seminarski rad 1</h2>
+      <p class="meta">Rok zadatka: 27. 11. 2026. u 23:59 (Europe/Zagreb)</p>
+      <ul class="list rows" aria-label="Studenti · po prezimenu">
+        <li><div class="item"><div><span class="who">Ana Ogledić</span><div class="facts">U pisanju. Rok 27. 11. 2026. u 23:59.</div></div><div class="actions"><button class="btn secondary" type="button">Produlji rok</button></div></div></li>
+        <li><div class="item"><div><span class="who">Petar Uzorak</span><div class="facts">U pisanju. Rok: 4. 12. 2026. u 23:59 (produljen, izvorni rok 27. 11. 2026. u 23:59).</div></div><div class="actions"><button class="btn secondary" type="button">Promijeni produljenje</button></div></div></li>
+      </ul>
+      <div class="scrim">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d-pop">
+          <h3 id="d-pop">Produlji rok: Ana Ogledić</h3>
+          <dl class="kv"><dt>Rok zadatka</dt><dd>27. 11. 2026. u 23:59 (Europe/Zagreb)</dd></dl>
+          <div class="formrow">
+            <label for="nr">Novi rok</label>
+            <input class="field" id="nr" type="text" value="4. 12. 2026. u 23:59" aria-describedby="nr-h">
+            <span class="hint" id="nr-h">Datum i sat po zagrebačkom vremenu (Europe/Zagreb).</span>
+          </div>
+          <div class="formrow">
+            <label for="rz">Razlog</label>
+            <input class="field" id="rz" type="text" value="opravdani razlog" aria-describedby="rz-h">
+            <span class="hint" id="rz-h">Razlog vidite samo Vi i ovaj student. Ne upisujte zdravstvene podatke; dovoljno je ‚opravdani razlog’.</span>
+          </div>
+          <div class="buttons"><button class="btn" type="button">Zabilježi produljenje</button><button class="btn secondary" type="button">Odustani</button></div>
+        </div>
+      </div>
+      <p class="meta">Polje „Razlog” je slobodan tekst samo u slici. Hoće li biti kategorije, tko ga još vidi i koliko se čuva odlučuje Q-5 (ADR §8a do 8d).</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-suk">
+      <div class="ref-tag">N-13 · stanje 2 · sukob s rokom (predaja je već zatražena)</div>
+      <h2 id="h-suk">Produljenje nakon zahtjeva za predaju</h2>
+      <div class="scrim">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="d-suk" aria-describedby="d-suk-t">
+          <h3 id="d-suk">Produlji rok: Ivo Predložak</h3>
+          <p id="d-suk-t">Student je predaju zatražio 28. 11. 2026. u 00:12, prije ovog produljenja. Produljenje ne mijenja tu predaju; bilježi se kao dopuna uz nju.</p>
+          <dl class="kv"><dt>Rok pri zahtjevu</dt><dd>27. 11. 2026. u 23:59 (Europe/Zagreb)</dd><dt>Predaja</dt><dd>Nakon roka</dd><dt>Novi rok</dt><dd>4. 12. 2026. u 23:59 (Europe/Zagreb)</dd></dl>
+          <div class="buttons"><button class="btn" type="button">Zabilježi produljenje</button><button class="btn secondary" type="button">Odustani</button></div>
+        </div>
+      </div>
+      <p class="meta">Sukob je činjenica o vremenu, bez boje i bez upozoravajućeg znaka (D-128). „Nakon roka” ostaje kako je zabilježeno pri zahtjevu (Q07).</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-stu">
+      <div class="ref-tag">N-13 · stanje 3 · što vidi student</div>
+      <h2 id="h-stu">Rok u radnom prostoru studenta</h2>
+      <div class="grid">
+        <div class="frame"><h3>Dok produljenje vrijedi</h3><p>Rok: 4. 12. 2026. u 23:59 (produljen, izvorni rok 27. 11. 2026. u 23:59)</p><p class="meta">Napomena o predaji nakon roka se ne prikazuje.</p></div>
+        <div class="frame"><h3>Razlog produljenja</h3><p>opravdani razlog</p><p class="meta">Vidi ga samo ovaj student i nastavnik koji je produljio rok.</p></div>
+      </div>
+    </section>
+
+    <section class="state" aria-labelledby="h-pra">
+      <div class="ref-tag">N-13 · stanje 4 · prazno</div>
+      <h2 id="h-pra">Bez produljenja</h2>
+      <div class="grid">
+        <div class="frame"><h3>Nijedan rok nije produljen.</h3><p>Svi studenti ovog zadatka imaju rok 27. 11. 2026. u 23:59 (Europe/Zagreb).</p></div>
+        <div class="frame"><h3>Zadatak nema rok</h3><p>Produljenje je moguće kad zadatak ima rok.</p></div>
+      </div>
+    </section>
+
+    <section class="state" aria-labelledby="h-gre">
+      <div class="ref-tag">N-13 · stanje 5 i 6 · učitavanje i greška</div>
+      <h2 id="h-gre">Produljenje roka</h2>
+      <div class="grid">
+        <div class="frame" aria-busy="true"><div class="sk" role="status"><span class="sr">Učitavanje rokova…</span><i class="w1"></i><i class="w2"></i><i class="w3"></i></div></div>
+        <div class="frame"><p class="alert" role="alert"><strong>Produljenje nije zabilježeno.</strong> Rok je ostao 27. 11. 2026. u 23:59. Pokušajte ponovno. <a class="btn secondary" href="#">Pokušaj ponovno</a></p></div>
+      </div>
+      <p class="meta">Greška kaže koji rok vrijedi, da nastavnik ne pretpostavi da je produljenje prošlo.</p>
+    </section>
+
+    <section class="state" aria-labelledby="h-mob">
+      <div class="ref-tag">N-13 · stanje 7 · mobitel (400 px)</div>
+      <h2 id="h-mob">Isti dijalog na uskom zaslonu</h2>
+      <p class="lead">Na snimci od 400 px dijalog zauzima punu širinu, polja su jedno ispod drugog, a gumbi se dijele u retku.</p>
+    </section>
+  </main>
+</div>
+</body>
+</html>
