@@ -23,10 +23,13 @@ export async function register(
   // A block, not an early return: webpack drops a dead branch with its
   // imports, so the edge bundle never tries to resolve node:http.
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { environmentProblems } = await import("@/server/env");
+    const [{ environmentProblems }, { logEvent }] = await Promise.all([
+      import("@/server/env"),
+      import("@/server/log/logger"),
+    ]);
     const problems = environmentProblems();
     if (problems.length > 0) {
-      console.error(`Ductus cannot start: ${problems.join("; ")}`);
+      logEvent("error", "Ductus cannot start", { problems });
       exit(1);
       return;
     }

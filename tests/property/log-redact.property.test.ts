@@ -1,0 +1,133 @@
+import { fc, test } from "@fast-check/vitest";
+import { expect, vi } from "vitest";
+
+import { pair, urlWithUser } from "@/server/log/invented.fixture";
+import { logEvent } from "@/server/log/logger";
+import { redact } from "@/server/log/redact";
+
+// DAN-586: whatever structure a canary is hidden in, the redacted output is
+// valid JSON, is built without throwing and never shows the canary. Every
+// canary is invented and has at least one letter and one digit.
+const canary = fc
+  .tuple(fc.stringMatching(/^[A-Za-z]{6,12}$/), fc.stringMatching(/^[0-9]{2,4}$/), fc.stringMatching(/^[A-Za-z0-9]{12,20}$/))
+  .map(([a, b, c]) => `kx${a}${b}${c}`);
+
+const sensitiveKey = fc
+  .constantFrom("authorization", "cookie", "set-cookie", "session_token", "password", "api_key", "client_secret", "text", "body", "html", "document", "snapshot", "payload", "email", "first_name", "oib", "jmbag", "phone", "user-agent")
+  .chain((key) => fc.array(fc.boolean(), { minLength: key.length, maxLength: key.length }).map((upper) => [...key].map((ch, i) => (upper[i] ? ch.toUpperCase() : ch)).join("")))
+  .chain((key) => fc.constantFrom(key, key.replace(/[-_]/g, ""), key.replace(/[-_]/g, "-"), key.replace(/[-_]/g, "_")));
+
+/** One place the canary can hide, by input class of the contract. */
+function hide(kind: number, key: string, secret: string): unknown {
+  switch (kind) {
+    case 0:
+      return { [key]: secret };
+    case 1:
+      return { [key]: { nested: [secret] } };
+    case 2:
+      return `free text ${key}=${secret} and more`;
+    case 3:
+      return `request: Bearer ${secret}`;
+    case 4:
+      return urlWithUser("https", "u", secret, `h.example.test/p?q=${secret}#${secret}`);
+    case 5:
+      return new URL(`https://h.example.test/p?q=${secret}`);
+    case 6:
+      return new Headers({ authorization: secret, cookie: `a=${secret}` });
+    case 7:
+      return new Error("outer", { cause: new Error(`inner ${secret}`, { cause: { [key]: secret } }) });
+    case 8:
+      return new Map([[key, secret]]);
+    case 9:
+      return { [secret]: 1 };
+    case 10:
+      return `${secret}@example.test`;
+    default:
+      return secret;
+  }
+}
+
+const harmless = fc.letrec((tie) => ({
+  node: fc.oneof(
+    { depthSize: "small" },
+    fc.constantFrom("context", "duplicate", "42501", 0, 1, true, null),
+    fc.array(tie("node"), { maxLength: 4 }),
+    fc.dictionary(fc.constantFrom("stage", "code", "outcome", "id", "bytes"), tie("node"), { maxKeys: 3 }),
+  ),
+})).node;
+
+test.prop([harmless, fc.nat(11), sensitiveKey, canary, fc.nat(60), fc.boolean()])(
+  "no canary in any class, nesting, depth or cycle",
+  (around, kind, key, secret, depth, cyclic) => {
+    let value: unknown = { around, hidden: hide(kind, key, secret) };
+    for (let i = 0; i < depth; i += 1) value = i % 2 === 0 ? { next: value } : [value];
+    if (cyclic && typeof value === "object" && value !== null && !Array.isArray(value)) {
+      (value as Record<string, unknown>).self = value;
+    }
+    let out = "";
+    expect(() => {
+      out = JSON.stringify(redact(value));
+    }).not.toThrow();
+    expect(() => JSON.parse(out)).not.toThrow();
+    expect(out).not.toContain(secret);
+    expect(out.toLowerCase()).not.toContain(secret.toLowerCase());
+  },
+);
+
+test.prop([fc.anything({ withBigInt: true, withDate: true, withMap: true, withSet: true, withTypedArray: true, withNullPrototype: true })])(
+  "any value becomes valid JSON without throwing",
+  (value) => {
+    const out = JSON.stringify(redact(value));
+    expect(typeof out).toBe("string");
+    expect(() => JSON.parse(out)).not.toThrow();
+  },
+);
+
+// Codex P2 on #1772: a UUID stays whole even when its last group holds nine or
+// more digits in a row, while a bare digit run next to it is still a number.
+const hex = (length: number) => fc.stringMatching(new RegExp(`^[0-9a-f]{${length}}$`));
+const numericTailUuid = fc
+  .integer({ min: 9, max: 12 })
+  .chain((digits) =>
+    fc.tuple(hex(8), hex(4), hex(4), hex(4), fc.stringMatching(new RegExp(`^[0-9]{${digits}}$`)), hex(12 - digits), fc.boolean(), fc.boolean()),
+  )
+  .map(([a, b, c, d, digits, fill, digitsFirst, upper]) => {
+    const id = `${a}-${b}-${c}-${d}-${digitsFirst ? `${digits}${fill}` : `${fill}${digits}`}`;
+    return upper ? id.toUpperCase() : id;
+  });
+
+test.prop([numericTailUuid, fc.stringMatching(/^[0-9]{9,15}$/)])(
+  "a UUID with a long digit run in its last group stays whole, a bare digit run does not",
+  (id, digits) => {
+    expect(redact({ document_id: id })).toEqual({ document_id: id });
+    expect(redact(`doc ${id} broj ${digits}`)).toBe(`doc ${id} broj [number]`);
+  },
+);
+
+// QA on #1772 (round 2): a sensitive key in text whose words are joined by
+// `.`, `-`, `_` or camel case, in any letter case and under a harmless dotted
+// prefix, drops a short value that has no token shape, through logEvent.
+const textKey = fc
+  .tuple(
+    fc.constantFrom(["api", "key"], ["client", "secret"], ["access", "token"], ["private", "key"], ["session", "id"], ["e", "mail"], ["pass", "word"]),
+    fc.constantFrom(".", "-", "_", ""),
+    fc.constantFrom("", "app.", "cfg.", "db.conn."),
+  )
+  .map(([words, joiner, prefix]) => prefix + words.map((word, i) => (joiner === "" && i > 0 ? word[0]?.toUpperCase() + word.slice(1) : word)).join(joiner))
+  .chain((key) => fc.array(fc.boolean(), { minLength: key.length, maxLength: key.length }).map((upper) => [...key].map((ch, i) => (upper[i] ? ch.toUpperCase() : ch)).join("")));
+
+test.prop([textKey, fc.constantFrom("=", ":", ": ", " = "), fc.stringMatching(/^[a-z]{3,8}$/)])(
+  "a sensitive key in an Error message drops its short value whatever joins its words",
+  (key, separator, tail) => {
+    const value = `kx${tail}`;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      logEvent("error", "request refused", { error: new Error(`retry ${pair(key, separator, value)}`) });
+      const printed = JSON.stringify(error.mock.calls).toLowerCase();
+      expect(printed).toContain("[redacted]");
+      expect(printed).not.toContain(value);
+    } finally {
+      error.mockRestore();
+    }
+  },
+);
