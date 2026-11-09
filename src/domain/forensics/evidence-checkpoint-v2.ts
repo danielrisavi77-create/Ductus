@@ -125,6 +125,78 @@ export type EvidenceGapReplayResultV2 =
       discontinuity: EvidenceChainDiscontinuityV2;
     };
 
+type CheckpointLookup = (
+  hash: string,
+) => Promise<{ ok: true; document: JcsJsonValue } | { ok: false; reason: "checkpoint_missing" | "checkpoint_invalid" }>;
+
+/**
+ * The checkpoint stored under a hash, verified against that hash. Each hash is
+ * read and verified once, so one replay cannot get two answers for it.
+ */
+function checkpointLookup<TDocument>(
+  checkpoints: ReadonlyMap<string, Uint8Array>,
+  replayer: Pick<AsyncEvidenceStepReplayerV2<TDocument>, "load" | "toCanonical">,
+): CheckpointLookup {
+  const seen = new Map<string, ReturnType<CheckpointLookup>>();
+  const read: CheckpointLookup = async (hash) => {
+    const bytes = checkpoints.get(hash);
+    if (bytes === undefined) return { ok: false, reason: "checkpoint_missing" };
+    const checkpoint = await verifyEvidenceCheckpointV2(bytes, hash, replayer);
+    return checkpoint.ok ? checkpoint : { ok: false, reason: "checkpoint_invalid" };
+  };
+  return (hash) => {
+    const known = seen.get(hash) ?? read(hash);
+    seen.set(hash, known);
+    return known;
+  };
+}
+
+type EvidenceGapReplayStopV2 = Exclude<EvidenceGapReplayResultV2, { ok: true }>;
+
+/**
+ * Replays `segments` from index `from`, starting at `document`, continuing
+ * past each of `breaks` (those after the start, in order) from its checkpoint.
+ */
+async function replayRuns<TDocument>(
+  document: JcsJsonValue,
+  from: number,
+  segments: readonly EvidenceSegment[],
+  replayer: AsyncEvidenceStepReplayerV2<TDocument>,
+  breaks: readonly EvidenceChainDiscontinuityV2[],
+  lookup: CheckpointLookup,
+): Promise<{ ok: true; canonicalDocument: string; documentSha256: string } | EvidenceGapReplayStopV2> {
+  let replayed: { canonicalDocument: string; documentSha256: string } | null = null;
+  for (let run = 0; run <= breaks.length; run++) {
+    const to = run < breaks.length ? breaks[run].index : segments.length;
+    if (to > from || replayed === null) {
+      const result = await replayEvidenceSegmentsV2(document, segments.slice(from, to), replayer);
+      if (!result.ok) {
+        const segmentIndex = result.segmentIndex === null ? null : from + result.segmentIndex;
+        return { ...result, segmentIndex, discontinuity: null };
+      }
+      replayed = result;
+    }
+    if (run === breaks.length) break;
+
+    const discontinuity = breaks[run];
+    const failure = (reason: EvidenceBreakFailureV2): EvidenceGapReplayStopV2 => ({
+      ok: false,
+      reason,
+      segmentIndex: discontinuity.index,
+      sequence: null,
+      discontinuity,
+    });
+    if (!resumable(discontinuity)) return failure("break_not_resumable");
+    const checkpoint = await lookup(segments[discontinuity.index].initialDocumentHash);
+    if (!checkpoint.ok) return failure(checkpoint.reason);
+    document = checkpoint.document;
+    from = discontinuity.index;
+    replayed = null;
+  }
+
+  return { ok: true, canonicalDocument: replayed!.canonicalDocument, documentSha256: replayed!.documentSha256 };
+}
+
 /**
  * Replays the whole record, continuing past each gap from its checkpoint.
  * The breaks are computed here from the segments, never taken from the
@@ -145,41 +217,82 @@ export async function replayEvidenceAcrossGapsV2<TDocument>(
   if (!found.ok) {
     return { ok: false, reason: found.reason, segmentIndex: null, sequence: null, discontinuity: null };
   }
+  const lookup = checkpointLookup(checkpoints, replayer);
+  const result = await replayRuns(initialDocument, 0, segments, replayer, found.breaks, lookup);
+  return result.ok ? { ...result, breaks: found.breaks } : result;
+}
+
+/**
+ * Hashes of the checkpoints a resumed replay may start from: the initial
+ * document hash of the newest positions, at most `limit` distinct ones, sorted.
+ * Never the first position (that is the start itself) and never a position at
+ * or after a break no checkpoint may cross.
+ */
+export function evidenceResumeHashesV2(
+  segments: readonly EvidenceSegment[],
+  breaks: readonly EvidenceChainDiscontinuityV2[],
+  limit: number,
+): string[] {
+  const end = breaks.find((item) => !resumable(item))?.index ?? segments.length;
+  const hashes = new Set<string>();
+  for (let index = end - 1; index >= 1 && hashes.size < limit; index--) hashes.add(segments[index].initialDocumentHash);
+  return [...hashes].sort();
+}
+
+export type EvidenceResumedReplayResultV2 =
+  | (Extract<EvidenceGapReplayResultV2, { ok: true }> & {
+      /** Index of the segment the replay started at; 0 is the start of the record. */
+      resumedAt: number;
+    })
+  | EvidenceGapReplayStopV2;
+
+/**
+ * {@link replayEvidenceAcrossGapsV2} that starts at the newest position with a
+ * verified checkpoint instead of at the start (M3.3-P02). A checkpoint counts
+ * only if it passes {@link verifyEvidenceCheckpointV2} against the
+ * `initialDocumentHash` of the segment at its position; any other is passed
+ * over for an older one, and with none the replay starts at the start.
+ *
+ * The breaks are those of the whole record, and the replay never starts past a
+ * break the full replay cannot cross: it stops there with the same reason.
+ * When the full replay succeeds, this gives the same document and breaks.
+ *
+ * Segments before `resumedAt` are not replayed, so a fault inside them that
+ * only a replay finds is not reported. The caller decides what a result with
+ * `resumedAt > 0` may be used for.
+ */
+export async function replayEvidenceFromCheckpointV2<TDocument>(
+  initialDocument: JcsJsonValue,
+  segments: readonly EvidenceSegment[],
+  replayer: AsyncEvidenceStepReplayerV2<TDocument>,
+  checkpoints: ReadonlyMap<string, Uint8Array>,
+): Promise<EvidenceResumedReplayResultV2> {
+  const found = await findEvidenceBreaksV2(initialDocument, segments, replayer);
+  if (!found.ok) {
+    return { ok: false, reason: found.reason, segmentIndex: null, sequence: null, discontinuity: null };
+  }
   const { breaks } = found;
+  const lookup = checkpointLookup(checkpoints, replayer);
 
-  let document = initialDocument;
-  let from = 0;
-  let replayed: { canonicalDocument: string; documentSha256: string } | null = null;
-  for (let run = 0; run <= breaks.length; run++) {
-    const to = run < breaks.length ? breaks[run].index : segments.length;
-    if (to > from || replayed === null) {
-      const result = await replayEvidenceSegmentsV2(document, segments.slice(from, to), replayer);
-      if (!result.ok) {
-        const segmentIndex = result.segmentIndex === null ? null : from + result.segmentIndex;
-        return { ...result, segmentIndex, discontinuity: null };
-      }
-      replayed = result;
-    }
-    if (run === breaks.length) break;
-
-    const discontinuity = breaks[run];
-    const failure = (reason: EvidenceBreakFailureV2): EvidenceGapReplayResultV2 => ({
-      ok: false,
-      reason,
-      segmentIndex: discontinuity.index,
-      sequence: null,
-      discontinuity,
-    });
-    if (!resumable(discontinuity)) return failure("break_not_resumable");
-    const expected = segments[discontinuity.index].initialDocumentHash;
-    const bytes = checkpoints.get(expected);
-    if (bytes === undefined) return failure("checkpoint_missing");
-    const checkpoint = await verifyEvidenceCheckpointV2(bytes, expected, replayer);
-    if (!checkpoint.ok) return failure("checkpoint_invalid");
-    document = checkpoint.document;
-    from = discontinuity.index;
-    replayed = null;
+  // The first break the full replay cannot cross; nothing at or after it is a start.
+  let limit = segments.length;
+  for (const item of breaks) {
+    if (resumable(item) && (await lookup(segments[item.index].initialDocumentHash)).ok) continue;
+    limit = item.index;
+    break;
   }
 
-  return { ok: true, canonicalDocument: replayed!.canonicalDocument, documentSha256: replayed!.documentSha256, breaks };
+  let resumedAt = 0;
+  let document = initialDocument;
+  for (let index = limit - 1; index >= 1; index--) {
+    const checkpoint = await lookup(segments[index].initialDocumentHash);
+    if (!checkpoint.ok) continue;
+    resumedAt = index;
+    document = checkpoint.document;
+    break;
+  }
+
+  const remaining = resumedAt === 0 ? breaks : breaks.filter((item) => item.index > resumedAt);
+  const result = await replayRuns(document, resumedAt, segments, replayer, remaining, lookup);
+  return result.ok ? { ...result, breaks, resumedAt } : result;
 }
