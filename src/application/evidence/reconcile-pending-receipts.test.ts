@@ -295,6 +295,68 @@ describe("reconcilePendingReceipts: signing outcomes", () => {
   });
 });
 
+describe("reconcilePendingReceipts: domains past maxDomains are not starved", () => {
+  const go = (status: string, extra: Record<string, unknown> = {}) => ({ status, ...extra });
+  const stuck: [string, PendingReceiptRow[], (r: PendingReceiptRow) => unknown][] = [
+    ["only v1 receipts (no v2 rows)", [], () => go("signed", { signedReceipt: {} })],
+    ["always held", [row(1)], (r) => (r.receiptId === rid(1) ? go("held", { reason: "object_absent" }) : go("signed", { signedReceipt: {} }))],
+    ["always unavailable at the store", [row(1)], (r) =>
+      r.receiptId === rid(1) ? go("unavailable", { stage: "store" }) : go("signed", { signedReceipt: {} })],
+  ];
+  it.each(stuck)("an older domain with %s does not hold the only slot", async (_, stuckRows, sign) => {
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLDER), backlogRow(D2, OLD)]),
+      receipts: { [D1]: stuckRows, [D2]: [row(2)] },
+      sign,
+      deps: { maxDomains: 1 },
+    });
+    await h.run();
+    expect(h.queried()).toEqual([D1]);
+    await h.run();
+    expect(h.queried()).toEqual([D1, D2]);
+    expect(h.signedIds()).toContain(rid(2));
+  });
+
+  it("reaches every due domain within ceil(due / maxDomains) passes after the first", async () => {
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLD), backlogRow(D2, OLDER), backlogRow(D3, "2026-11-09T09:00:00.000Z")]),
+      deps: { maxDomains: 2 },
+    });
+    await h.run();
+    expect(h.queried()).toEqual([D3, D2]);
+    await h.run();
+    // The second window wraps past D3 to D1 and D2, still oldest first.
+    expect(h.queried().slice(2)).toEqual([D2, D1]);
+    expect(new Set(h.queried())).toEqual(new Set([D1, D2, D3]));
+  });
+
+  it("a stopped sweep keeps the window, so the next pass retries the same domain", async () => {
+    let calls = 0;
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLDER), backlogRow(D2, OLD)]),
+      receipts: { [D1]: [row(1)], [D2]: [row(2)] },
+      sign: () => (++calls === 1 ? go("unavailable", { stage: "signing" }) : go("signed", { signedReceipt: {} })),
+      deps: { maxDomains: 1 },
+    });
+    expect((await h.run()).status).toBe("stopped");
+    expect((await h.run()).status).toBe("completed");
+    expect(h.queried()).toEqual([D1, D1]);
+    await h.run();
+    expect(h.queried()).toEqual([D1, D1, D2]);
+  });
+
+  it("forgets the cursor once every due domain fits, so the oldest go first again", async () => {
+    let backlog = [backlogRow(D1, OLDER), backlogRow(D2, OLD)];
+    const h = harness({ backlog: () => ({ status: "ok", rows: backlog }) as PendingBacklogRead, deps: { maxDomains: 1 } });
+    await h.run();
+    backlog = [backlogRow(D1, OLDER)];
+    await h.run();
+    backlog = [backlogRow(D1, OLDER), backlogRow(D2, OLD)];
+    await h.run();
+    expect(h.queried()).toEqual([D1, D1, D1]);
+  });
+});
+
 describe("createReconcilePendingReceipts: configuration", () => {
   const base = (): ReconcileDeps => ({
     queue: { backlog: async () => ({ status: "ok", rows: [] }), pendingReceipts: async () => ({ status: "ok", rows: [] }) },

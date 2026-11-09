@@ -84,6 +84,27 @@ type Step = "continue" | "domain" | SweepStop;
 const SWEEP_STAGES: ReadonlySet<unknown> = new Set(["signing", "hash", "verification"]);
 
 /**
+ * At most `limit` due domains, returned oldest first. Without a cursor the
+ * window is the oldest `limit`; with one it is the next `limit` ids after the
+ * cursor, wrapping around. A domain that never drains (only v1 receipts,
+ * always held, always unavailable) would otherwise hold the same oldest slots
+ * on every pass and starve the rest; the moving cursor reaches every due
+ * domain within ceil(due / limit) passes after the first.
+ */
+function pickWindow(due: Domain[], limit: number, cursor: string | null): { window: Domain[]; last: string | null } {
+  if (due.length <= limit) return { window: due, last: null };
+  if (cursor === null) {
+    const window = due.slice(0, limit);
+    return { window, last: window.map((d) => d.id).sort().at(-1) ?? null };
+  }
+  const ids = due.map((d) => d.id).sort();
+  const after = ids.findIndex((id) => id > cursor);
+  const start = after < 0 ? 0 : after;
+  const taken = new Set(Array.from({ length: limit }, (_, i) => ids[(start + i) % ids.length]));
+  return { window: due.filter((d) => taken.has(d.id)), last: ids[(start + limit - 1) % ids.length] ?? null };
+}
+
+/**
  * Signs v2 receipts left in `pending_signature` after the worker's own job
  * was lost (DAN-593, plan #1021 P-10). Every signature goes through
  * `signPendingReceipt`, so the object check (P-13), the registry check and
@@ -154,6 +175,9 @@ export function createReconcilePendingReceipts(deps: ReconcileDeps) {
     return SWEEP_STAGES.has(stage) ? (stage as SweepStop) : "domain";
   }
 
+  // Where the next pass's window starts when more domains are due than fit.
+  let cursor: string | null = null;
+
   return async function reconcilePendingReceipts(): Promise<ReconcileSummary> {
     const summary: ReconcileSummary = {
       status: "completed",
@@ -203,8 +227,9 @@ export function createReconcilePendingReceipts(deps: ReconcileDeps) {
       due.push(domain);
     }
     summary.domains.deferred = Math.max(due.length - maxDomains, 0);
+    const { window, last } = pickWindow(due, maxDomains, cursor);
 
-    for (const domain of due.slice(0, maxDomains)) {
+    for (const domain of window) {
       const read = await readReceipts(domain.id);
       if (read === null) {
         summary.domains.unavailable += 1;
@@ -227,8 +252,10 @@ export function createReconcilePendingReceipts(deps: ReconcileDeps) {
         continue;
       }
       summary.domains.unavailable += 1;
+      // A stopped sweep keeps the cursor, so the next pass retries this window.
       if (step !== "domain") return { ...summary, status: "stopped", stoppedAt: step };
     }
+    cursor = last;
     return summary;
   };
 }
