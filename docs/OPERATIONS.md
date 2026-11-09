@@ -1,8 +1,10 @@
 # Operacije
 
-Stanje: 8. 11. 2026., na `main` od spajanja PR-a za DAN-588. Ovaj dokument je dokaz za GO redak „Operativni” iz `docs/PROGRAM.md` (odjeljak „GO uvjeti za stvarne studente”). Taj redak traži kontakt za podršku, postupak incidenta i imenovanu osobu na FPZG-u koja smije zaustaviti pilot.
+Stanje: 9. 11. 2026. (DAN-540, M11.3-P04). Ovaj dokument je dokaz za GO redak „Operativni” iz `docs/PROGRAM.md` (odjeljak „GO uvjeti za stvarne studente”). Taj redak traži kontakt za podršku, postupak incidenta i imenovanu osobu na FPZG-u koja smije zaustaviti pilot.
 
-Ovaj PR dodaje samo poglavlje „Pilot (M12)” (DAN-588, M12.1b). Kostur ostalih poglavlja dodaje DAN-540 (M11.3; Q-21 A u D-280): kontakt za podršku, opći postupak incidenta, deploy, kopije i probu povrata. Kad DAN-540 stigne, poglavlje o pilotu ostaje cjelina koju samo premješta na pravo mjesto.
+Dokument ima četiri dijela: nositelje („Nositelji”), kontakt za podršku, četiri operativna postupka („Postupci”: pokretanje, gašenje, povrat, incident) i poglavlje „Pilot (M12)” (DAN-588, M12.1b).
+
+**Provjera.** Svaki korak postupka imenuje naredbu koja postoji u repou (`Naredba:` i naredba u kodu) ili nositelja iz tablice „Nositelji” (`Nositelj:` i ključ u kodu). To provjerava `node scripts/operations/check-procedures.mjs`, a test `tests/unit/operations-procedures.test.ts` pokreće istu provjeru nad ovim dokumentom u CI-ju. Dopuštene naredbe su skripte iz `package.json`, `pnpm install`, `node` s datotekom koja postoji, `curl` na rutu `/api/...` koja postoji u `app/api/`, `docker compose <naredba>` i `kill -TERM` ili `kill -INT`. Provjera ne dokazuje da naredba radi na produkciji, ni da je nositelj imenovan; to piše uz svaki korak.
 
 Oznake su iste kao u `docs/privacy/README.md`:
 
@@ -13,6 +15,74 @@ Oznake su iste kao u `docs/privacy/README.md`:
 - `[PRIJEDLOG, nije odluka]`: postupak koji predlaže ovaj dokument, kao u `docs/PROGRAM.md` „Pilot M12: prijedlozi odgovora”. Takav postupak vrijedi tek kad ga odobri osoba navedena uz stavku.
 
 Imena i kontakti osoba ne upisuju se u ovaj dokument dok se ne odluči o vidljivosti repoa (D-277 NQ02, `STATE.md` Owner queue). Do tada su mjesta za njih označena u uglatim zagradama.
+
+## Nositelji
+
+Nositelj je uloga, ne osoba. Ključ u prvom stupcu je ono što korak postupka navodi iza `Nositelj:`. Ključ je samo naziv uloge, bez zagrada i oznaka; osoba se upisuje u stupac „Tko” kad se odluči o vidljivosti repoa.
+
+| Nositelj | Odgovornost | Tko | Izvor | Stanje |
+| --- | --- | --- | --- | --- |
+| `vlasnik` | tehnički kvarovi, deploy, migracije na produkciju, kopije, povrat, zapis incidenta | vlasnik | D-69; `CLAUDE.md` (migracije ne primjenjuje agent) | `[PRAVILO]` |
+| `zamjenik vlasnika` | zamjenjuje vlasnika u njegovoj odsutnosti | `[Q-13: imenovati]` | Q-13 (P11) | `[ODLUKA]` |
+| `zaustavlja pilot` | smije zaustaviti pilot | `[Q-13: imenovati]` | `docs/PROGRAM.md` GO redak „Operativni”; `docs/privacy/05-otvorena-pitanja.md` t. 12 | `[ODLUKA]` |
+| `prijavljuje povredu` | prijavljuje povredu podataka nadzornom tijelu (AZOP) u roku od 72 sata | `[Q-13: imenovati]` | Q-13 (P1); `docs/privacy/05-otvorena-pitanja.md` t. 12 | `[ODLUKA]` |
+| `DPO ustanove` | službenik za zaštitu podataka FPZG-a; sudjeluje u odluci o prijavi povrede | `[Ustanova: imenovati]` | D-69; paket FPZG-u (Q-3) | `[ODLUKA]` |
+| `koordinator pilota` | netehnička pitanja na FPZG-u: produljenje roka, upute, obavijest nastavnicima i studentima | `[Ustanova: imenovati]` | D-69; paket FPZG-u (Q-3, D-264 Q09) | `[ODLUKA]` |
+| `AAI administrator` | problemi s AAI@EduHr računom | `[Ustanova: imenovati]` | D-69 | `[ODLUKA]` |
+
+Dok uloge iz Q-13 nisu imenovane (rok 15. 1. 2027.), GO redak „Operativni” nije zelen, iako provjera koraka prolazi.
+
+## Kontakt za podršku
+
+- Raspodjela (D-69): netehnička pitanja ide `koordinator pilota`, problemi s AAI računom `AAI administrator`, tehnički kvarovi `vlasnik`. `[PRAVILO]`
+- Kanal je gumb „Prijavi problem” u aplikaciji; šalje stanje spremanja i verziju aplikacije, bez sadržaja rada (D-69). `planirano`
+- Adresa e-pošte za podršku dok gumb ne postoji, i radno vrijeme podrške. `[ODLUKA]` vlasnika; ne upisuje se dok je repo javan.
+- Ako Ductus ne radi u zadnja 24 sata prije roka, vrijedi zamjenski postupak predaje koji FPZG propisuje unaprijed (D-69). `[ODLUKA]` FPZG-a.
+
+## Postupci
+
+Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne postoji: hosting čeka D-08 i B0.1. Korak koji se tiče produkcije zato ima nositelja, a ne naredbu. Adresa `http://localhost:3000` je lokalna; na produkciji se iste rute zovu na adresi izdanja. Postupci su `[PRIJEDLOG, nije odluka]` osim stavki označenih kao `[PRAVILO]`; odobrava vlasnik.
+
+### Pokretanje
+
+1. Instaliraj ovisnosti točno prema lockfileu. Naredba: `pnpm install --frozen-lockfile`. `izgrađeno`
+2. Podigni lokalni stog, primijeni migracije na lokalnu bazu, upiši sintetičke podatke i pokreni aplikaciju na `localhost:3000`. Naredba: `pnpm local:up`. Aplikacija odbija start bez valjanog `APP_DATABASE_URL` (`src/server/env.ts`). `izgrađeno`
+3. Provjeri da proces odgovara. Naredba: `curl -fsS http://localhost:3000/api/health`. `izgrađeno`
+4. Provjeri spremnost po sposobnosti: `database`, `storage`, `signing`, `queue` (`ok`, `nedostupno` ili `nije_konfigurirano`). Naredba: `curl -fsS http://localhost:3000/api/ready`; odgovor `503` znači da baza nije spremna i promet se ne pušta na repliku (DAN-585). `izgrađeno`
+5. Deploy zamrznutog izdanja na produkciju i primjena migracija na produkcijsku bazu. Nositelj: `vlasnik`. Agent ne primjenjuje migracije na produkciju (`CLAUDE.md`). `[PRAVILO]`; deploy je `planirano`.
+6. U fazama A i B upiši izdanje (puni commit SHA) i stanje spremnosti u dnevni zapis. Nositelj: `vlasnik`.
+
+### Gašenje
+
+1. Pošalji web procesu signal `SIGTERM` (u terminalu `Ctrl+C` šalje `SIGINT`). Naredba: `kill -TERM <pid>`. Proces ne prima novi rad, `/api/ready` odgovara `503` sa stanjem `draining`, a rad u tijeku ima do 8 s (`SHUTDOWN_GRACE_MS`, `src/server/shutdown.ts`). Nakon roka proces izlazi s kodom 1 i zatvorenim kodom `SHUTDOWN_DEADLINE` u zapisu (DAN-587). `izgrađeno`
+2. Worker se gasi istim signalom: posao u tijeku završava, a novi se odbija kodom `SHUTTING_DOWN`. Nositelj: `vlasnik`. `planirano`: ulaz workera je DAN-518.
+3. Zaustavi lokalne servise, a podatke sačuvaj. Naredba: `docker compose stop`. `izgrađeno` Ne koristi `pnpm stack:down` kad podatke treba sačuvati, jer briše volumene i lokalnu bazu (`docker compose down -v`).
+4. Gašenje produkcije. Nositelj: `vlasnik`. `planirano`
+5. Upiši vrijeme i razlog gašenja u dnevni zapis (faze A i B) ili u zapis incidenta. Nositelj: `vlasnik`.
+
+### Povrat
+
+1. Odluči što se vraća (kod na prethodno izdanje ili podaci iz kopije), na koje izdanje i zašto; ako povrat prati incident, upiši njegov ID. Nositelj: `vlasnik`.
+2. Ugasi aplikaciju po postupku „Gašenje”. Naredba: `kill -TERM <pid>`.
+3. Vrati prethodno zamrznuto izdanje (puni commit SHA iz dnevnog zapisa) na produkciju. Nositelj: `vlasnik`. `planirano`
+4. Vrati bazu i pohranu iz kopije. Nositelj: `vlasnik`. `planirano`: kopije i proba povrata su M11.2-P04 (D-277 NQ05). Dok proba povrata ne prođe, povrat iz kopije nije dokazan. `[DOKAZ]`
+5. Provjeri stanje migracija. Naredba: `pnpm db:status`. Naredba gleda samo lokalnu bazu; usporedba s `db/migrations.sum` (D-91) na produkciji ide uz korak 3.
+6. Pokreni po postupku „Pokretanje” i provjeri spremnost. Naredba: `pnpm local:up`, `curl -fsS http://localhost:3000/api/ready`.
+7. Provjeri rekonstrukciju predanih radova na vraćenom izdanju; prag je 100 %, a svako odstupanje blokira izdanje (`docs/PRODUCT.md` §12). Nositelj: `vlasnik`. `[PRAVILO]`; alat je `[DOKAZ]`.
+8. Upiši povrat u dnevni zapis: izdanje prije i poslije, razlog i ID incidenta. Nositelj: `vlasnik`.
+
+Što povrat iz kopije radi s podacima obrisanima nakon nastanka kopije otvoreno je (D-12, Q-16; rok čuvanja D-30 je PRIJEDLOG). `[ODLUKA]`
+
+### Incident
+
+1. Otvori zapis incidenta s ID-om i vremenom (UTC). U dnevni zapis i javni repo ide samo ID; pojedinosti sigurnosnog nalaza nikad ne idu u javni repo (`CLAUDE.md`, „Vanjski botovi”). Nositelj: `vlasnik` ili `zamjenik vlasnika`. `[PRAVILO]` za javni repo.
+2. Provjeri spremnost po sposobnosti. Naredba: `curl -fsS http://localhost:3000/api/ready`.
+3. Pregledaj zapise poslužitelja: JSON redci na stdout i stderr, bez osobnih podataka i sadržaja rada (`src/server/log/logger.ts`, DAN-586). Nositelj: `vlasnik`.
+4. U pilotu: ako je incident okidač STOP-a (neovlašten pristup, gubitak rada, lažan status), odluka o zaustavljanju ide po odjeljku „STOP”. Nositelj: `zaustavlja pilot`.
+5. Ako incident uključuje povredu osobnih podataka, odluči o prijavi AZOP-u u roku od 72 sata. Nositelj: `prijavljuje povredu`, `DPO ustanove`.
+6. Ograniči štetu: gašenje po postupku „Gašenje” ili povrat po postupku „Povrat”. Nositelj: `vlasnik`.
+7. Ispravak ide kao novo izdanje kroz puni gate iz `docs/ENGINEERING_SYSTEM.md` §5 i §10. Nositelj: `vlasnik`. `[PRAVILO]`
+8. Zatvori zapis: uzrok, ispravak, izdanje i provjera rekonstrukcije. U pilotu obavijesti FPZG. Nositelj: `vlasnik`, `koordinator pilota`.
 
 ## Pilot (M12)
 
@@ -28,14 +98,7 @@ Imena i kontakti osoba ne upisuju se u ovaj dokument dok se ne odluči o vidljiv
 
 Tri STOP uloge su Q-13 u Owner queueu (`STATE.md`). Odabir je „imenovati sve tri uloge prije razgovora s pravnikom”, a rok 15. 1. 2027. Vlasnik ih još nije imenovao. Dok ih ne imenuje, GO redak „Operativni” nije zelen.
 
-| Uloga | Tko | Izvor | Stanje |
-| --- | --- | --- | --- |
-| Smije zaustaviti pilot | `[Q-13: imenovati]` | `docs/PROGRAM.md` GO redak „Operativni”; `docs/privacy/05-otvorena-pitanja.md` t. 12 | `[ODLUKA]` |
-| Prijavljuje povredu podataka nadzornom tijelu (AZOP) u roku od 72 sata | `[Q-13: imenovati]` | Q-13 (P1); `docs/privacy/05-otvorena-pitanja.md` t. 12 | `[ODLUKA]` |
-| Zamjenik vlasnika | `[Q-13: imenovati]` | Q-13 (P11) | `[ODLUKA]` |
-| Koordinator pilota na FPZG-u: netehnička pitanja, produljenje roka, upute | `[Ustanova: imenovati]` | D-69; paket FPZG-u (Q-3, D-264 Q09) | `[ODLUKA]` |
-| AAI administrator FPZG-a: problemi s AAI računom | `[Ustanova: imenovati]` | D-69 | `[ODLUKA]` |
-| Tehnički kvarovi | vlasnik | D-69 | `[PRAVILO]` |
+Uloge su u tablici „Nositelji” na početku dokumenta: `zaustavlja pilot`, `prijavljuje povredu`, `zamjenik vlasnika`, `koordinator pilota`, `AAI administrator` i `vlasnik` za tehničke kvarove.
 
 O05 iz `docs/PROGRAM.md` je samo prijedlog. Po njemu zaustaviti pilot može svatko od dvoje sam, koordinator FPZG-a ili operater, a ponovno pokretanje traži oboje i zapis incidenta. Ulogu imenuje FPZG. `[PRIJEDLOG, nije odluka]`
 
@@ -82,7 +145,7 @@ Okidač ne čeka dnevni zapis. Tko ga uoči, odmah javlja osobi koja smije zaust
 
 **Tko odlučuje:** `[Q-13: imenovati]`. Prijedlog O05 je u odjeljku „Uloge”.
 
-**Postupak** `[PRIJEDLOG, nije odluka]`; odobrava vlasnik, a za korake koji se tiču FPZG-a FPZG:
+**Postupak** `[PRIJEDLOG, nije odluka]`; odobrava vlasnik, a za korake koji se tiču FPZG-a FPZG. Opći postupak „Incident” iz „Postupci” vrijedi i u pilotu; ovi koraci ga dopunjuju za STOP:
 
 1. **Odluka i vrijeme.** Osoba koja smije zaustaviti pilot zapisuje okidač, vrijeme odluke (UTC) i izdanje na kojem se okidač dogodio. Zapis incidenta dobiva ID; u dnevni zapis ide samo taj ID.
 2. **Zamjenski postupak.** Studenti i nastavnici koriste zamjenski postupak predaje koji FPZG propisuje unaprijed (D-69). Zaustavljanje nema posljedica za studenta (`docs/PRODUCT.md` §12). Zamjenski postupak propisuje FPZG. `[ODLUKA]`
@@ -119,4 +182,4 @@ Nova funkcija, novi tekst sučelja i promjena koja nije ispravak ne idu u zamrzn
 4. Rekonstrukcija predanih radova provjerava se i na novom izdanju; odstupanje blokira izdanje (`docs/PRODUCT.md` §12). `[PRAVILO]`
 5. Promjena se ne uvodi u zadnja 24 sata prije roka predaje nekog zadatka u pilotu, osim ispravka okidača STOP-a. Rokovi u pilotu su radnim danom u podne (D-69).
 
-**Granice:** ovo poglavlje ne određuje kako se izdanje tehnički isporučuje. Deploy i kopije su opseg DAN-540 i M11, a hosting čeka D-08 i B0.1.
+**Granice:** ovo poglavlje ne određuje kako se izdanje tehnički isporučuje. Pokretanje, gašenje i povrat su u „Postupci”; deploy na produkciju i kopije su `planirano` (M11.2), a hosting čeka D-08 i B0.1.
