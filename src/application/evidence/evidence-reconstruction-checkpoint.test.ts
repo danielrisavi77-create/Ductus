@@ -121,11 +121,11 @@ async function buildRecord(specs: readonly Spec[], start: Doc = EMPTY) {
   let document = start;
   for (const [index, spec] of specs.entries()) {
     const from = spec.from ?? document;
-    const text = TEXTS[index] ?? `Izmišljeni dio ${index}. `;
+    const text = TEXTS[index] ?? `Izmišljeni dodatak ${index}. `;
     const built = await buildSegment(index + 1, from, text, hashes.at(-1) ?? null, spec.sequence);
-    const payload = canonicalEvidenceSegmentV2(built.segment);
-    bytes.push(utf8(payload));
-    hashes.push(await sha256WebCrypto(payload));
+    const canonicalSegment = canonicalEvidenceSegmentV2(built.segment);
+    bytes.push(utf8(canonicalSegment));
+    hashes.push(await sha256WebCrypto(canonicalSegment));
     starts.push(from);
     segments.push(built.segment);
     document = built.document;
@@ -424,6 +424,21 @@ describe("reconstruction resumed at a checkpoint (DAN-293, M3.3-P02)", () => {
     expect(offered.calls).toEqual([]);
   });
 
+  it("asks for the gap and the newest 32 positions only, sorted, however long the record", async () => {
+    // A gap at position 1 and 34 segments after it: the gap is older than the
+    // 32 newest positions (4 to 35), and so is position 3.
+    const later = Array.from({ length: 34 }, (_, index) => ({ sequence: 6 + index }));
+    const record = await buildRecord([{ sequence: 1 }, { sequence: 5 }, ...later]);
+    const { reader, calls } = checkpointStore(await checkpointsAt(record, [1, 3]));
+    // Position 3 is stored but never asked for, so the start is the gap.
+    expect(await resume(record, reader)).toEqual(await resumedMatch(record, 1, [gapAt(1, 1, 5)]));
+    const asked = [1, ...Array.from({ length: 32 }, (_, index) => 4 + index)];
+    const documentHashes = asked.map((index) => record.segments[index].initialDocumentHash).sort();
+    expect(calls).toEqual([{ evidencePackageId: PACKAGE, documentHashes }]);
+    // The hash of the gap is not the smallest one, so the order above is the sort's doing.
+    expect(documentHashes[0]).not.toBe(record.segments[1].initialDocumentHash);
+  });
+
   it("keeps every gap in the outcome, also the ones before the start", async () => {
     const record = await buildRecord(GAPPED);
     const gap = gapAt(1, 1, 5);
@@ -433,16 +448,16 @@ describe("reconstruction resumed at a checkpoint (DAN-293, M3.3-P02)", () => {
     expect(await resume(record, afterGap.reader)).toEqual(await resumedMatch(record, 2, [gap]));
   });
 
-  // A gap older than the newest positions asked for is still asked for, so a
-  // long record does not stop at a gap the full pass crosses.
-  it("asks for the checkpoint at a gap older than the newest positions, as the full pass does", async () => {
-    const later = Array.from({ length: 32 }, (_, index) => ({ sequence: 6 + index }));
-    const record = await buildRecord([{ sequence: 1 }, { sequence: 5 }, ...later]);
-    const { reader, calls } = checkpointStore(await checkpointsAt(record, [1]));
-    expect(await resume(record, reader)).toEqual(await resumedMatch(record, 1, [gapAt(1, 1, 5)]));
-    expect(calls[0].documentHashes).toHaveLength(33);
-    expect(calls[0].documentHashes).toContain(record.segments[1].initialDocumentHash);
-    expect(await reconstruct(record, reader)).toMatchObject({ status: "match_across_gaps", breaks: [gapAt(1, 1, 5)] });
+  it("needs the checkpoint of a gap at the very start of the record too", async () => {
+    const record = await buildRecord([{ sequence: 3 }, { sequence: 4 }, { sequence: 5 }]);
+    const start = gapAt(0, 0, 3);
+    const both = checkpointStore(await checkpointsAt(record, [0, 2]));
+    expect(await resume(record, both.reader)).toEqual(await resumedMatch(record, 2, [start]));
+    expect(both.calls[0].documentHashes).toContain(record.segments[0].initialDocumentHash);
+
+    const later = checkpointStore(await checkpointsAt(record, [2]));
+    expect(await resume(record, later.reader)).toEqual({ status: "discontinuity", discontinuity: start });
+    expect(await resume(record, later.reader)).toEqual(await reconstruct(record, later.reader));
   });
 
   it("does not start behind a gap the full pass cannot cross, or behind a regression", async () => {
