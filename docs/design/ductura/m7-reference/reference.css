@@ -10,3 +10,14 @@
 .decl.own { border-style: dashed; border-color: var(--rule); background: transparent; }
 .decl h3 { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 select.input { width: 100%; min-width: 0; text-overflow: ellipsis; }
+/* PR2 paketa 6 (S-15, S-33): samo dodaci. */
+.variant.wide { grid-column: span 2; }
+.sum { gap: 12px; }
+.ev { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; }
+.quote { margin: 0; padding-left: 10px; border-left: 2px solid var(--rule); color: var(--ink-2); font-family: var(--ff-display); }
+.side-panel { max-width: 360px; width: 100%; }
+.tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--rule-2); }
+.tabs button { font: inherit; font-size: 12.5px; background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 10px; color: var(--ink-3); cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.links { list-style: none; padding-left: 0; }
+@media (max-width: 640px) { .variant.wide { grid-column: auto; } .side-panel { max-width: none; } .tabs button { min-height: 44px; } }
