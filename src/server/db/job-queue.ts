@@ -36,7 +36,7 @@ export type JobQueueSettings = {
   /** Attempts after the first one. */
   readonly retryLimit: number;
   readonly retryDelaySeconds: number;
-  /** The handler is asked to stop after this long; at least half a second before the queue takes the job back. */
+  /** The handler is asked to stop this long after the job was asked for; at least half a second before the queue takes it back. */
   readonly deadlineMs: number;
   /** A job active this long belongs to a worker that is gone; the sweep hands it out again. */
   readonly expireSeconds: number;
@@ -249,6 +249,7 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     }),
     runOnce: (name, handler) => closed(async () => {
       const definition = known(name);
+      const from = performance.now();
       const taken = await fenced(async () => {
         const [job] = await boss.fetch(name, { batchSize: 1 });
         if (job === undefined) return null;
@@ -257,7 +258,11 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
         if (!parsed.ok) return { job, code: "invalid_body" };
         // One that carries its own expiry or a heartbeat is not run: the fence is set for this queue's expiry.
         const leased = job.expireInSeconds === settings.expireSeconds && job.heartbeatSeconds === null;
-        return { job, code: leased ? await attempt(handler, parsed.body, settings.deadlineMs) : "invalid_lease" };
+        if (!leased) return { job, code: "invalid_lease" };
+        // The handler's time counts from before the fence was armed, so it is asked to stop before the
+        // fence fires however long the take lasted. A take that used the time up is not run.
+        const left = settings.deadlineMs - Math.ceil(performance.now() - from);
+        return { job, code: left < 1 ? "timeout" : await attempt(handler, parsed.body, left) };
       });
       if (taken === null) return { status: "idle" };
       const { job, code } = taken;

@@ -257,6 +257,40 @@ describe("job queue: one job, one attempt at a time", () => {
     expect((await jobs(def.name))[0].output).toEqual({ code: "timeout" });
   });
 
+  // The thread is held right after the job was asked for: the take lasts at least that long.
+  const hold = (ms: number): void => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+  it("W-4: after a slow take the handler is still told to stop before the fence fires", async () => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit: 0, expireSeconds: 2, deadlineMs: 1000 });
+    await queue.enqueue(def.name, body(41));
+    const waited: number[] = [];
+    const stopped: JobHandler = (_job, signal) => {
+      const from = Date.now();
+      return new Promise((_resolve, reject) => signal.addEventListener("abort", () => { waited.push(Date.now() - from); reject(new Error("aborted")); }));
+    };
+    const run = queue.runOnce(def.name, stopped);
+    hold(600);
+    expect(await run).toEqual({ status: "failed", code: "timeout" });
+    // The deadline counted from before the take, so the fence (armed for 1500 ms) had not fired.
+    expect(fence).toEqual({ armed: [1500], fired: [] });
+    expect(waited).toHaveLength(1);
+    expect(waited[0]).toBeLessThan(900);
+  });
+
+  it("W-4: a take that lasted longer than the deadline is stored as timeout and its handler is not run", async () => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit: 0, expireSeconds: 1, deadlineMs: 300 });
+    await queue.enqueue(def.name, body(42));
+    let runs = 0;
+    const run = queue.runOnce(def.name, async () => { runs += 1; return { ok: true }; });
+    hold(350);
+    expect(await run).toEqual({ status: "failed", code: "timeout" });
+    expect(runs).toBe(0);
+    expect(await jobs(def.name)).toEqual([{ state: "failed", retry_count: 0, output: { code: "timeout" }, data: body(42) }]);
+    expect(fence).toEqual({ armed: [650], fired: [] });
+  });
+
   it("W-5: twenty enqueues of one subject from two workers leave one job", async () => {
     const def = definition();
     const [a, b] = await Promise.all([open(def, "workerA"), open(def, "workerB")]);
