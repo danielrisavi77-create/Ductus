@@ -186,7 +186,7 @@ Tekst koji dolazi iz ugrađenog AI pomoćnika i dalje se prikazuje kao „iz AI 
 6a. **Konzultacije (mentor):** zapis konzultacije vezan uz verziju rada (D-47). Zapis ima dva dijela: „Dogovoreno” (student vidi) i „Bilješka mentora” (privatni radni zapis iz D-130). Nakon demoa; uvjetno do pravnog mišljenja D-55 (D-135).
 7. **Izmjene teksta:** kao prijedlozi koje student prihvaća ili kao izravne izmjene. Način dogovaraju nastavnik i student, postavka se vidi na radu, a student je može u svakom trenutku vratiti na prijedloge. Izravna izmjena tehnički je prijedlog koji se automatski primjenjuje kod studenta (D-34). Svaka izmjena nastavnika pripisana je nastavniku. [ODLUČENO D-21]
 8. **Sažetak procesa** (§7) u svakom trenutku, uključujući prije predaje, i panel **Pravila zadatka**: pravilo i opaženo stanje, bez oznaka prolaza ili pada (D-62).
-9. **Usporedba verzija** u Proširenom profilu.
+9. **Usporedba poslanih verzija** u oba profila (D-237), bez oznake i bez ocjene.
 10. **Produljenje roka** pojedinom studentu, s razlogom vidljivim samo nastavniku i tom studentu.
 11. **Izvoz** predanog rada i potvrde predaje.
 
