@@ -46,14 +46,14 @@ Izlaz A predlaže ovaj dokument. `[PRIJEDLOG, nije odluka]`; odobravaju vlasnik 
 2. Na zamrznutom izdanju KPI-01 je 100 %, a KPI-02, KPI-03 i KPI-04 su 0, svi na sintetičkim radovima iz faze A.
 3. Krug iz `docs/UX-EVAL.md` proveden je na buildu koji se pilotira, prije odluke o prelasku u B (UX-EVAL §2). KPI-06 i KPI-07 izvještavaju se iz tog kruga, a KPI-06 se uspoređuje s pragom ako je upisan.
 4. Nijedan STOP nije otvoren (`docs/OPERATIONS.md`, „STOP”).
-5. Svi GO uvjeti iz `docs/PROGRAM.md` su zeleni. Jedan crveni uvjet znači da val ne kreće. `[PRAVILO]`
+5. Stanje GO uvjeta iz `docs/PROGRAM.md` zapisano je uz prijedlog izlaza, a otvoreni uvjeti navedeni su s nositeljem. Obvezna provjera da su svi zeleni je na ulazu u B (§2.3), jer `docs/PROGRAM.md` GO uvjete propisuje za stvarne studente.
 
 Okidač STOP-a u fazi A znači da izlaz A nije postignut. Proba se nastavlja s novim izdanjem (`docs/OPERATIONS.md`, „STOP”). Ako izlaz A nije gotov do 19. 4. 2027., vlasnik i FPZG odlučuju o fazi B u zimskom semestru 2027./28. (O02). `[PRIJEDLOG, nije odluka]`
 
 ### 2.3 Ulaz u fazu B
 
 - Izlaz A postignut i FPZG dao suglasnost (D-203 E3). `[PRAVILO]`
-- GO uvjeti za stvarne studente zeleni, uključujući DPIA, ugovor o obradi, obavijest o privatnosti, koordinatora i odluku o obveznosti (`docs/PROGRAM.md`). `[PRAVILO]`
+- Svi GO uvjeti za stvarne studente zeleni, uključujući DPIA, ugovor o obradi, obavijest o privatnosti, koordinatora i odluku o obveznosti (`docs/PROGRAM.md`). Jedan crveni uvjet znači da val ne kreće. `[PRAVILO]`
 - Popis kolegija i zadataka dao je FPZG (O01). `[ODLUKA]`
 - Uloge za zaustavljanje pilota imenovane (Q-13, `docs/OPERATIONS.md` „Uloge”). `[ODLUKA]`
 
