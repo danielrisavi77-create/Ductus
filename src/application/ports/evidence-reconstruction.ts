@@ -96,3 +96,28 @@ export function bindPayloadReader(
       reader.readImmutable({ institutionId, evidencePackageId, segmentHash }),
   };
 }
+
+export type EvidenceCheckpointReadResult =
+  | {
+      status: "found";
+      /**
+       * Stored bytes by the document hash they were saved under, exactly as
+       * stored. A hash with no checkpoint is simply absent. Nothing here is
+       * trusted: the reconstruction checks each one against the chain.
+       */
+      checkpoints: ReadonlyMap<string, Uint8Array>;
+    }
+  | { status: "unavailable"; reason: string };
+
+/**
+ * Checkpoints of a reconstruction (B-12, D-191 t. 4): canonical documents
+ * stored by their SHA-256, read once per reconstruction for exactly the
+ * hashes it asks for. Server-side only, like the readers above.
+ */
+export interface EvidenceCheckpointReader {
+  readCheckpoints(input: {
+    evidencePackageId: string;
+    /** Sorted, without repeats; never empty. */
+    documentHashes: readonly string[];
+  }): Promise<EvidenceCheckpointReadResult>;
+}
