@@ -16,6 +16,8 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // random ids of one random institution, removed afterwards. Loopback only.
 // Step 2b adds two transitions with the same expected counter: the second
 // waits on the request row, then sees the new counter and writes nothing.
+// M6.5-P02 (contract c.6752687836) adds the rereview: two at once, and one
+// against the acceptance it follows. Boris's document is at revision 2.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The revision request race test runs only against a loopback database (DATABASE_URL).");
@@ -148,10 +150,13 @@ beforeAll(async () => {
         [`project-${document}`, institutionId, assignmentId, id]);
       await client.query(
         `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_revision, current_content_hash)
-         VALUES ($1, $2, $3, $4, 1, $5)`, [document, institutionId, `project-${document}`, id, HASH]);
+         VALUES ($1, $2, $3, $4, $6, $5)`, [document, institutionId, `project-${document}`, id, HASH, student === "boris" ? 2 : 1]);
       await client.query(
         `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
          VALUES ($1, $2, 0, NULL, $3, $4), ($1, $2, 1, 0, $3, $5)`, [document, institutionId, id, "a".repeat(64), HASH]);
+      if (student === "boris") await client.query(
+        `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
+         VALUES ($1, $2, 2, 1, $3, $4)`, [document, institutionId, id, HASH]);
       await client.query("INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES ($1, $2, 1, $3)",
         [document, institutionId, TEXT]);
     }
@@ -302,5 +307,63 @@ describe("two transitions with the same expected counter, over two real connecti
     await first.done;
     expect(await second).toEqual({ value: { outcome: "conflict", row_seq: one.row_seq, version: 1, state: "withdrawn" }, code: null });
     expect(await answers(created.request_id)).toEqual({ state: "withdrawn", rowSeq: one.row_seq, responses: 0, closed: "withdrawn" });
+  });
+});
+
+const ACCEPTED_HASH = "e".repeat(64);
+const SEEN_HASH = "f".repeat(64);
+const accept = (id: string, seq: string) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+  "SELECT outcome, row_seq, version, state FROM collaboration.accept_revision_request($1, $2, 1, $3)", [id, seq, ACCEPTED_HASH])).rows[0];
+const rereview = (id: string, seq: string, hash: string | null) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+  "SELECT outcome, row_seq, version, state FROM collaboration.rereview_revision_request($1, $2, 2, $3)", [id, seq, hash])).rows[0];
+const versions = async (id: string) => (await admin.query<{ version: number; opened_as: string; instruction: string; observed: string | null; closed: string | null }>(
+  `SELECT version, opened_as, instruction, observed_range_hash AS observed, closed_as AS closed
+     FROM collaboration.revision_request_version WHERE request_id = $1 ORDER BY version`, [id])).rows;
+const FIRST = { version: 1, opened_as: "instruction", instruction: "Dodaj izvor za ovu tvrdnju.", observed: null, closed: "accepted" };
+
+describe("changed after acceptance, over two real connections (M6.5-P02)", () => {
+  it("two rereviews at once: the second waits on the request, then is a conflict and opens no version", async () => {
+    const created = await withActor(people.vesna.token, create(documents.boris));
+    const answered = await withActor(people.boris.token, respond(created.request_id, created.row_seq));
+    const accepted = await withActor(people.vesna.token, accept(created.request_id, answered.row_seq));
+    expect(accepted).toMatchObject({ outcome: "applied", version: 1, state: "accepted" });
+    const first = hold(people.boris.token, rereview(created.request_id, accepted.row_seq, SEEN_HASH));
+    let one: Moved;
+    let second: ReturnType<typeof settle<Moved>>;
+    try {
+      one = await first.answered;
+      expect(one).toMatchObject({ outcome: "applied", version: 2, state: "reopened" });
+      second = settle(withActor(people.vesna.token, rereview(created.request_id, accepted.row_seq, null)));
+      await waitForBlocked("rereview_revision_request");
+    } finally {
+      first.release();
+    }
+    await first.done;
+    expect(await second).toEqual({ value: { outcome: "conflict", row_seq: one.row_seq, version: 2, state: "reopened" }, code: null });
+    // One new version, with the teacher's instruction and the hash of the call that was applied; the answer of version 1 stays.
+    expect(await versions(created.request_id)).toEqual([FIRST, { ...FIRST, version: 2, opened_as: "rereview", observed: SEEN_HASH, closed: null }]);
+    expect(await answers(created.request_id)).toEqual({ state: "reopened", rowSeq: one.row_seq, responses: 1, closed: null });
+  });
+
+  it("an acceptance and a rereview at once: the rereview that loaded the older counter is a conflict, the next one is applied", async () => {
+    const created = await withActor(people.vesna.token, create(documents.boris));
+    const answered = await withActor(people.boris.token, respond(created.request_id, created.row_seq));
+    const first = hold(people.vesna.token, accept(created.request_id, answered.row_seq));
+    let one: Moved;
+    let second: ReturnType<typeof settle<Moved>>;
+    try {
+      one = await first.answered;
+      expect(one).toMatchObject({ outcome: "applied", version: 1, state: "accepted" });
+      second = settle(withActor(people.boris.token, rereview(created.request_id, answered.row_seq, SEEN_HASH)));
+      await waitForBlocked("rereview_revision_request");
+    } finally {
+      first.release();
+    }
+    await first.done;
+    expect(await second).toEqual({ value: { outcome: "conflict", row_seq: one.row_seq, version: 1, state: "accepted" }, code: null });
+    expect(await versions(created.request_id)).toEqual([FIRST]);
+    const next = await withActor(people.boris.token, rereview(created.request_id, one.row_seq, SEEN_HASH));
+    expect(next).toMatchObject({ outcome: "applied", version: 2, state: "reopened" });
+    expect(await versions(created.request_id)).toEqual([FIRST, { ...FIRST, version: 2, opened_as: "rereview", observed: SEEN_HASH, closed: null }]);
   });
 });
