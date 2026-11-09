@@ -15,9 +15,10 @@ import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-
 
 /**
  * DAN-314 step 2f HTTP boundary (docs/backend/suradnja.md 4.14, #1506). The
- * SECURITY DEFINER RPCs of migrations 20261106160000, 20261106190000 and
- * 20261106220000 (revision ceiling) decide who may read or write, which
- * transition is allowed and which revision is too new; this only refuses
+ * SECURITY DEFINER RPCs of migrations 20261106160000, 20261106190000,
+ * 20261106220000 (revision ceiling) and 20261109040000 (rereview) decide who
+ * may read or write, which transition is allowed, which revision is too new
+ * and whether an accepted range counts as changed; this only refuses
  * malformed requests before the database, in an order that needs no database
  * at all, so no answer tells whether a request or document exists.
  *
@@ -35,8 +36,10 @@ const STATES = new Set(["open", "responded", "accepted", "reopened", "withdrawn"
 const CLOSED = new Set(["accepted", "reopened", "withdrawn"]);
 const VERSION_MAX = 1000;
 
-export type RevisionAction = "create" | "respond" | "accept" | "reopen" | "withdraw" | "list";
-export const REVISION_ACTIONS: readonly RevisionAction[] = ["create", "respond", "accept", "reopen", "withdraw", "list"];
+export type RevisionAction = "create" | "respond" | "accept" | "reopen" | "rereview" | "withdraw" | "list";
+export const REVISION_ACTIONS: readonly RevisionAction[] = [
+  "create", "respond", "accept", "reopen", "rereview", "withdraw", "list",
+];
 
 export interface RevisionDeps {
   withActor: WithActor;
@@ -91,6 +94,16 @@ const SPECS: Record<RevisionAction, Spec> = {
     valid: (i) => isExpectedSeq(i.expectedSeq) && isRevisionText(i.instruction) && isRevisionNumber(i.requestedRevision),
     sql: `${TRANSITION}collaboration.reopen_revision_request($1::uuid, $2::bigint, $3, $4::bigint)`,
     params: (i) => [i.requestId, i.expectedSeq, i.instruction, i.requestedRevision],
+  },
+  // The hash of the accepted range as it resolves now, or null when it no
+  // longer resolves; the text of the range is never sent.
+  rereview: {
+    keys: ["currentRevision", "expectedSeq", "rangeHash", "requestId"],
+    id: "requestId",
+    valid: (i) => isExpectedSeq(i.expectedSeq) && isRevisionNumber(i.currentRevision)
+      && (i.rangeHash === null || isRangeHash(i.rangeHash)),
+    sql: `${TRANSITION}collaboration.rereview_revision_request($1::uuid, $2::bigint, $3::bigint, $4)`,
+    params: (i) => [i.requestId, i.expectedSeq, i.currentRevision, i.rangeHash],
   },
   withdraw: {
     keys: ["expectedSeq", "requestId"],

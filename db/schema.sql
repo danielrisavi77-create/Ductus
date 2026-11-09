@@ -2764,6 +2764,67 @@ $$;
 
 
 --
+-- Name: rereview_revision_request(uuid, bigint, bigint, text); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.rereview_revision_request(p_request_id uuid, p_expected_seq bigint, p_current_revision bigint, p_range_hash text) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+#variable_conflict use_column
+DECLARE
+  actor record;
+  v_role text;
+  r record;
+  a record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT collaboration.actor_role(q.institution_id, q.assignment_id, q.owner_id) INTO v_role
+    FROM collaboration.revision_request q
+   WHERE q.id = p_request_id AND q.institution_id = actor.institution_id;
+  IF v_role IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, v_role);
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR NOT collaboration.is_revision_number(p_current_revision)
+     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state <> 'accepted' OR r.version >= 1000 THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  SELECT v.instruction, v.accepted_revision, v.accepted_range_hash INTO a
+    FROM collaboration.revision_request_version v
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  IF a.accepted_range_hash IS NULL OR p_range_hash IS NOT DISTINCT FROM a.accepted_range_hash THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_current_revision <= a.accepted_revision THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_current_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  INSERT INTO collaboration.revision_request_version
+    (request_id, institution_id, version, instruction, requested_revision, opened_by, opened_as, observed_range_hash)
+  VALUES (r.request_id, r.institution_id, r.version + 1, a.instruction, p_current_revision, r.actor_id, 'rereview', p_range_hash);
+  UPDATE collaboration.revision_request q SET state = 'reopened', version = r.version + 1, row_seq = v_seq
+   WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version + 1, 'reopened'::text;
+END
+$_$;
+
+
+--
 -- Name: resolve_thread(uuid); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -6890,6 +6951,8 @@ CREATE TABLE collaboration.revision_request_version (
     closed_at timestamp with time zone,
     accepted_revision bigint,
     accepted_range_hash text,
+    opened_as text DEFAULT 'instruction'::text NOT NULL,
+    observed_range_hash text,
     CONSTRAINT revision_request_version_accepted_range_hash_check CHECK ((accepted_range_hash ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT revision_request_version_accepted_revision_check CHECK (((accepted_revision >= 0) AND (accepted_revision <= '9007199254740991'::bigint))),
     CONSTRAINT revision_request_version_check1 CHECK ((((closed_as IS NULL) = (closed_by IS NULL)) AND ((closed_as IS NULL) = (closed_at IS NULL)))),
@@ -6897,6 +6960,9 @@ CREATE TABLE collaboration.revision_request_version (
     CONSTRAINT revision_request_version_check3 CHECK (((accepted_range_hash IS NULL) OR (NOT (closed_as IS DISTINCT FROM 'accepted'::text)))),
     CONSTRAINT revision_request_version_closed_as_check CHECK ((closed_as = ANY (ARRAY['accepted'::text, 'reopened'::text, 'withdrawn'::text]))),
     CONSTRAINT revision_request_version_instruction_check CHECK (collaboration.is_revision_text(instruction)),
+    CONSTRAINT revision_request_version_observed_hash_check CHECK ((observed_range_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT revision_request_version_observed_rereview_check CHECK (((observed_range_hash IS NULL) OR (opened_as = 'rereview'::text))),
+    CONSTRAINT revision_request_version_opened_as_check CHECK ((opened_as = ANY (ARRAY['instruction'::text, 'rereview'::text]))),
     CONSTRAINT revision_request_version_requested_revision_check CHECK (((requested_revision >= 0) AND (requested_revision <= '9007199254740991'::bigint))),
     CONSTRAINT revision_request_version_version_check CHECK (((version >= 1) AND (version <= 1000)))
 );
@@ -12408,4 +12474,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108120000'),
     ('20261108130000'),
     ('20261108140000'),
-    ('20261109030000');
+    ('20261109030000'),
+    ('20261109040000');
