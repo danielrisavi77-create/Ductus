@@ -38,8 +38,19 @@ const STOP_SIGNALS = new Set(["-TERM", "-INT", "-SIGTERM", "-SIGINT"]);
  * @typedef {{ scripts: Set<string>, fileExists: (path: string) => boolean, routeExists: (route: string) => boolean }} Context
  */
 
-/** @param {string} line */
-const isIndented = (line) => /^[ \t]/.test(line);
+/**
+ * Leading whitespace width, a tab reaching the next multiple of four (CommonMark).
+ * @param {string} line
+ */
+function indentWidth(line) {
+  let width = 0;
+  for (const char of line) {
+    if (char === " ") width += 1;
+    else if (char === "\t") width += 4 - (width % 4);
+    else break;
+  }
+  return width;
+}
 
 /** @param {string} row */
 function cells(row) {
@@ -129,8 +140,9 @@ export function parseOperations(text) {
         open = { step, parts: [line.slice(start[0].length)], blank: false, offset: start[0].length };
       } else if (open && line.trim() === "") {
         open.blank = true;
-      } else if (open && (isIndented(line) || !open.blank)) {
-        // An indented line, or a lazy continuation right after the step.
+      } else if (open && (!open.blank || indentWidth(line) >= open.offset)) {
+        // A lazy continuation right after the step, or, after a blank line, a
+        // line indented to the step's content; anything less is outside it.
         if (!fenceOpen) open.parts.push(line.trim());
       } else {
         closeStep();

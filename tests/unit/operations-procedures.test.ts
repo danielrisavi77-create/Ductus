@@ -38,6 +38,9 @@ function doc(steps: string, options: { owners?: string; extra?: string } = {}): 
   return `# Operacije\n\n${options.owners ?? OWNERS}\n## Postupci\n\n### ${REQUIRED_PROCEDURES[0]}\n\n${steps}\n\n${rest}${options.extra ?? ""}`;
 }
 
+/** Steps 1 to 9 with an owner, so the next step can be numbered 10. */
+const NINE_STEPS = Array.from({ length: 9 }, (_, i) => `${i + 1}. Korak. Nositelj: \`vlasnik\`.\n`).join("");
+
 const messages = (text: string) => checkOperations(text, CONTEXT).map((p) => `${p.procedure}#${p.step ?? "-"}: ${p.message}`);
 
 describe("checkOperations: one step per input class", () => {
@@ -79,6 +82,10 @@ describe("checkOperations: one step per input class", () => {
     ["7 marker on a lazy continuation line", "1. Odluči.\nNositelj: `vlasnik`.", []],
     ["7 marker after a blank line, indented", "1. Odluči.\n\n   Nositelj: `vlasnik`.", []],
     ["7 marker after a blank line, not indented, is prose", "1. Odluči.\n\nNositelj: `vlasnik`.", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
+    ["7 marker after a blank line, one space short of the step, is prose", "1. Odluči.\n\n Nositelj: `vlasnik`.", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
+    ["7 marker after a blank line, two spaces short of the step, is prose", "1. Odluči.\n\n  Nositelj: `vlasnik`.", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
+    ["7 marker after a blank line, short of a wide step, is prose", `${NINE_STEPS}10. Odluči.\n\n   Nositelj: \`vlasnik\`.`, ["Pokretanje#10: step has neither Naredba: nor Nositelj:"]],
+    ["7 marker after a blank line, at a wide step's content", `${NINE_STEPS}10. Odluči.\n\n    Nositelj: \`vlasnik\`.`, []],
     ["7 several commands after one marker", "1. Oba. Naredba: `pnpm local:up`, `pnpm nope`.", ["Pokretanje#1: pnpm script not in package.json: nope"]],
     ["7 code after the marker's sentence is not a command", "1. Spremnost. Naredba: `curl http://localhost:3000/api/ready`; odgovor `503` znači stani.", []],
     ["7 marker inside an indented fence does not count", "1. Odluči.\n   ```\n   Nositelj: `vlasnik`\n   ```", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
