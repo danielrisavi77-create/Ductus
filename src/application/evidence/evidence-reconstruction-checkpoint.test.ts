@@ -94,8 +94,8 @@ async function buildSegment(ordinal: number, from: Doc, text: string, predecesso
     segmentId: `odsjecak-${ordinal}`,
     sequenceFrom: sequence,
     sequenceTo: sequence,
-    observedStartedAt: `2026-10-12T08:0${ordinal}:00.000Z`,
-    observedEndedAt: `2026-10-12T08:0${ordinal}:00.000Z`,
+    observedStartedAt: `2026-10-12T08:${String(ordinal).padStart(2, "0")}:00.000Z`,
+    observedEndedAt: `2026-10-12T08:${String(ordinal).padStart(2, "0")}:00.000Z`,
     initialDocumentHash,
     finalDocumentHash,
     predecessorSegmentHash: predecessor,
@@ -121,10 +121,11 @@ async function buildRecord(specs: readonly Spec[], start: Doc = EMPTY) {
   let document = start;
   for (const [index, spec] of specs.entries()) {
     const from = spec.from ?? document;
-    const built = await buildSegment(index + 1, from, TEXTS[index], hashes.at(-1) ?? null, spec.sequence);
-    const text = canonicalEvidenceSegmentV2(built.segment);
-    bytes.push(utf8(text));
-    hashes.push(await sha256WebCrypto(text));
+    const text = TEXTS[index] ?? `Izmišljeni dio ${index}. `;
+    const built = await buildSegment(index + 1, from, text, hashes.at(-1) ?? null, spec.sequence);
+    const payload = canonicalEvidenceSegmentV2(built.segment);
+    bytes.push(utf8(payload));
+    hashes.push(await sha256WebCrypto(payload));
     starts.push(from);
     segments.push(built.segment);
     document = built.document;
@@ -430,6 +431,18 @@ describe("reconstruction resumed at a checkpoint (DAN-293, M3.3-P02)", () => {
     expect(await resume(record, atGap.reader)).toEqual(await resumedMatch(record, 1, [gap]));
     const afterGap = checkpointStore(await checkpointsAt(record, [1, 2]));
     expect(await resume(record, afterGap.reader)).toEqual(await resumedMatch(record, 2, [gap]));
+  });
+
+  // A gap older than the newest positions asked for is still asked for, so a
+  // long record does not stop at a gap the full pass crosses.
+  it("asks for the checkpoint at a gap older than the newest positions, as the full pass does", async () => {
+    const later = Array.from({ length: 32 }, (_, index) => ({ sequence: 6 + index }));
+    const record = await buildRecord([{ sequence: 1 }, { sequence: 5 }, ...later]);
+    const { reader, calls } = checkpointStore(await checkpointsAt(record, [1]));
+    expect(await resume(record, reader)).toEqual(await resumedMatch(record, 1, [gapAt(1, 1, 5)]));
+    expect(calls[0].documentHashes).toHaveLength(33);
+    expect(calls[0].documentHashes).toContain(record.segments[1].initialDocumentHash);
+    expect(await reconstruct(record, reader)).toMatchObject({ status: "match_across_gaps", breaks: [gapAt(1, 1, 5)] });
   });
 
   it("does not start behind a gap the full pass cannot cross, or behind a regression", async () => {
