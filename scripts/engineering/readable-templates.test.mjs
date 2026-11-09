@@ -60,7 +60,7 @@ for (const rel of [PR_TEMPLATE, ...ISSUE_TEMPLATES]) {
 // A whole-line HTML comment (guidance for the author) is invisible to people and may sit between.
 for (const rel of [PR_TEMPLATE, ...ISSUE_TEMPLATES]) {
   test(`${rel} keeps the machine part inside one <details> right below the human lines`, () => {
-    const lines = contentLines(read(rel)).filter((l) => !/^<!--.*-->$/.test(l));
+    const lines = contentLines(read(rel)).filter((l) => !(l.startsWith("<!--") && l.endsWith("-->")));
     assert.equal(lines[3], "<details>");
     assert.equal(lines[4], "<summary>Detalji za agente</summary>");
     assert.equal(lines.at(-1), "</details>");
