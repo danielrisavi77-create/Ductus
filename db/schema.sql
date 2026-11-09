@@ -3824,6 +3824,30 @@ $$;
 
 
 --
+-- Name: actor_assignment_ids(text[]); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_assignment_ids(p_roles text[]) RETURNS uuid[]
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT coalesce(pg_catalog.array_agg(x.id), '{}')
+  FROM (
+    SELECT a.id
+    FROM institution.assignment a
+    WHERE a.course_id = ANY ((SELECT institution.actor_course_ids(p_roles))::uuid[])
+    UNION ALL
+    SELECT a.id
+    FROM app.current_actor() c
+    JOIN institution.mentorship m ON m.institution_id = c.institution_id AND m.ended_at IS NULL
+    JOIN institution.assignment a ON a.mentorship_id = m.id
+    WHERE CASE WHEN m.mentor_id = c.user_id AND (SELECT institution.actor_has_role('teacher')) THEN 'teacher'
+               WHEN m.student_id = c.user_id THEN 'student' END = ANY (p_roles)
+  ) x
+$$;
+
+
+--
 -- Name: actor_assignment_role(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -3837,6 +3861,22 @@ CREATE FUNCTION institution.actor_assignment_role(p_assignment_id uuid) RETURNS 
          END
   FROM institution.assignment a
   WHERE a.id = p_assignment_id
+$$;
+
+
+--
+-- Name: actor_course_ids(text[]); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_course_ids(p_roles text[]) RETURNS uuid[]
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  SELECT coalesce(pg_catalog.array_agg(m.course_id), '{}')
+  FROM app.current_actor() a
+  JOIN institution.course_member m ON m.user_id = a.user_id AND m.institution_id = a.institution_id
+  WHERE m.member_to IS NULL AND m.role = ANY (p_roles)
+    AND (m.role = 'student' OR (SELECT institution.actor_has_role('teacher')))
 $$;
 
 
@@ -11611,7 +11651,7 @@ CREATE POLICY assignment_owner ON institution.assignment TO ductus_identity USIN
 -- Name: assignment assignment_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY assignment_read ON institution.assignment FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND (institution.actor_assignment_role(id) IS NOT NULL)));
+CREATE POLICY assignment_read ON institution.assignment FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND (id = ANY (( SELECT institution.actor_assignment_ids('{teacher,student}'::text[]) AS actor_assignment_ids)::uuid[]))));
 
 
 --
@@ -11631,7 +11671,7 @@ CREATE POLICY assignment_version_owner ON institution.assignment_version TO duct
 -- Name: assignment_version assignment_version_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY assignment_version_read ON institution.assignment_version FOR SELECT TO ductus_app USING ((institution.actor_assignment_role(assignment_id) IS NOT NULL));
+CREATE POLICY assignment_version_read ON institution.assignment_version FOR SELECT TO ductus_app USING ((assignment_id = ANY (( SELECT institution.actor_assignment_ids('{teacher,student}'::text[]) AS actor_assignment_ids)::uuid[])));
 
 
 --
@@ -11657,7 +11697,7 @@ CREATE POLICY course_editor_owner ON institution.course_editor TO ductus_identit
 -- Name: course_editor course_editor_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY course_editor_read ON institution.course_editor FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+CREATE POLICY course_editor_read ON institution.course_editor FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[]))));
 
 
 --
@@ -11677,7 +11717,7 @@ CREATE POLICY course_enrollment_code_owner ON institution.course_enrollment_code
 -- Name: course_enrollment_code course_enrollment_code_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY course_enrollment_code_read ON institution.course_enrollment_code FOR SELECT TO ductus_app USING ((institution.actor_course_role(course_id) = 'teacher'::text));
+CREATE POLICY course_enrollment_code_read ON institution.course_enrollment_code FOR SELECT TO ductus_app USING ((course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[])));
 
 
 --
@@ -11697,7 +11737,7 @@ CREATE POLICY course_holder_owner ON institution.course_holder TO ductus_identit
 -- Name: course_holder course_holder_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY course_holder_read ON institution.course_holder FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+CREATE POLICY course_holder_read ON institution.course_holder FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[]))));
 
 
 --
@@ -11717,7 +11757,7 @@ CREATE POLICY course_member_owner ON institution.course_member TO ductus_identit
 -- Name: course_member course_member_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY course_member_read ON institution.course_member FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text) OR ((role = 'teacher'::text) AND (member_to IS NULL) AND (institution.actor_course_role(course_id) IS NOT NULL))));
+CREATE POLICY course_member_read ON institution.course_member FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[])) OR ((role = 'teacher'::text) AND (member_to IS NULL) AND (course_id = ANY (( SELECT institution.actor_course_ids('{teacher,student}'::text[]) AS actor_course_ids)::uuid[])))));
 
 
 --
@@ -11731,7 +11771,7 @@ CREATE POLICY course_owner ON institution.course TO ductus_identity USING (true)
 -- Name: course course_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY course_read ON institution.course FOR SELECT TO ductus_app USING ((institution.actor_course_role(id) IS NOT NULL));
+CREATE POLICY course_read ON institution.course FOR SELECT TO ductus_app USING ((id = ANY (( SELECT institution.actor_course_ids('{teacher,student}'::text[]) AS actor_course_ids)::uuid[])));
 
 
 --
@@ -11877,7 +11917,7 @@ CREATE POLICY notice_acknowledgment_owner ON institution.notice_acknowledgment T
 -- Name: notice_acknowledgment notice_acknowledgment_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY notice_acknowledgment_read ON institution.notice_acknowledgment FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((institution.actor_assignment_role(assignment_id) = 'teacher'::text) OR ((student_id = ( SELECT app.current_user_id() AS current_user_id)) AND (institution.actor_assignment_role(assignment_id) = 'student'::text)))));
+CREATE POLICY notice_acknowledgment_read ON institution.notice_acknowledgment FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((assignment_id = ANY (( SELECT institution.actor_assignment_ids('{teacher}'::text[]) AS actor_assignment_ids)::uuid[])) OR ((student_id = ( SELECT app.current_user_id() AS current_user_id)) AND (assignment_id = ANY (( SELECT institution.actor_assignment_ids('{student}'::text[]) AS actor_assignment_ids)::uuid[]))))));
 
 
 --
@@ -11916,7 +11956,7 @@ CREATE POLICY seminar_group_member_owner ON institution.seminar_group_member TO 
 -- Name: seminar_group_member seminar_group_member_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY seminar_group_member_read ON institution.seminar_group_member FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+CREATE POLICY seminar_group_member_read ON institution.seminar_group_member FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[]))));
 
 
 --
@@ -11930,7 +11970,7 @@ CREATE POLICY seminar_group_owner ON institution.seminar_group TO ductus_identit
 -- Name: seminar_group seminar_group_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY seminar_group_read ON institution.seminar_group FOR SELECT TO ductus_app USING ((institution.actor_course_role(course_id) = 'teacher'::text));
+CREATE POLICY seminar_group_read ON institution.seminar_group FOR SELECT TO ductus_app USING ((course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[])));
 
 
 --
@@ -11950,7 +11990,7 @@ CREATE POLICY seminar_group_teacher_owner ON institution.seminar_group_teacher T
 -- Name: seminar_group_teacher seminar_group_teacher_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY seminar_group_teacher_read ON institution.seminar_group_teacher FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+CREATE POLICY seminar_group_teacher_read ON institution.seminar_group_teacher FOR SELECT TO ductus_app USING (((user_id = ( SELECT app.current_user_id() AS current_user_id)) OR (course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[]))));
 
 
 --
@@ -11970,7 +12010,7 @@ CREATE POLICY team_substitution_owner ON institution.team_substitution TO ductus
 -- Name: team_substitution team_substitution_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY team_substitution_read ON institution.team_substitution FOR SELECT TO ductus_app USING (((absent_id = ( SELECT app.current_user_id() AS current_user_id)) OR (substitute_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_course_role(course_id) = 'teacher'::text)));
+CREATE POLICY team_substitution_read ON institution.team_substitution FOR SELECT TO ductus_app USING (((absent_id = ( SELECT app.current_user_id() AS current_user_id)) OR (substitute_id = ( SELECT app.current_user_id() AS current_user_id)) OR (course_id = ANY (( SELECT institution.actor_course_ids('{teacher}'::text[]) AS actor_course_ids)::uuid[]))));
 
 
 --
@@ -12010,7 +12050,7 @@ CREATE POLICY work_grant_owner ON institution.work_grant TO ductus_identity USIN
 -- Name: work_grant work_grant_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY work_grant_read ON institution.work_grant FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((grantee_id = ( SELECT app.current_user_id() AS current_user_id)) OR (student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_assignment_role(assignment_id) = 'teacher'::text))));
+CREATE POLICY work_grant_read ON institution.work_grant FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((grantee_id = ( SELECT app.current_user_id() AS current_user_id)) OR (student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (assignment_id = ANY (( SELECT institution.actor_assignment_ids('{teacher}'::text[]) AS actor_assignment_ids)::uuid[])))));
 
 
 --
@@ -12030,7 +12070,7 @@ CREATE POLICY work_language_override_owner ON institution.work_language_override
 -- Name: work_language_override work_language_override_read; Type: POLICY; Schema: institution; Owner: -
 --
 
-CREATE POLICY work_language_override_read ON institution.work_language_override FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (institution.actor_assignment_role(assignment_id) = 'teacher'::text))));
+CREATE POLICY work_language_override_read ON institution.work_language_override FOR SELECT TO ductus_app USING (((institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) AND ((student_id = ( SELECT app.current_user_id() AS current_user_id)) OR (assignment_id = ANY (( SELECT institution.actor_assignment_ids('{teacher}'::text[]) AS actor_assignment_ids)::uuid[])))));
 
 
 --
@@ -12358,4 +12398,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108110100'),
     ('20261108110200'),
     ('20261108120000'),
-    ('20261108130000');
+    ('20261108130000'),
+    ('20261108140000');
