@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-15 — Panel Rad (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 6 · DAN-600 · prijedlog slike · M7.UX-R</div>
+  <h1>S-15 — Panel Rad</h1>
+  <p>Kartica „Rad” bočnog panela radnog prostora, uz Upute, Literaturu i Komentare. Pokazuje stanje rada i rok te vodi na korake predaje (S-30 do S-33). Nazivi stanja su prijedlog iz #1782. Etape se ne grade (D-249, D-136) i nisu nacrtane. Stari prototip <code>../editor-v11.dc.html</code> nije preslikan. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="p1">
+    <div class="ref-tag">Stanje 1 · popunjeno, u pisanju</div>
+    <div class="panel side-panel">
+      <div class="tabs" role="tablist" aria-label="Bočni panel"><button role="tab" type="button" aria-selected="false">Upute</button><button role="tab" type="button" aria-selected="false">Literatura</button><button role="tab" type="button" aria-selected="false">Komentari</button><button role="tab" type="button" id="t-rad" aria-selected="true">Rad</button></div>
+      <div class="panel-body" role="tabpanel" aria-labelledby="t-rad">
+        <h2 id="p1">U pisanju</h2>
+        <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59</b></div>
+        <section class="state"><h3>Dogovoreno na konzultacijama</h3><p class="meta">12. 11. 2026. · zapis mentora</p>
+          <ul class="facts"><li>Razdvojiti metodu i rezultate.</li><li>Navesti izvor tablice 1.</li></ul></section>
+        <section class="state"><h3>Uz rad</h3><ul class="facts links">
+          <li><a href="#p1">Uvoz postojećeg teksta</a></li>
+          <li><a href="#p1">Izjava o korištenju generativne umjetne inteligencije</a></li>
+          <li><a href="#p1">Sažetak procesa</a></li>
+        </ul></section>
+        <button class="btn" type="button">Pregled prije predaje</button>
+      </div></div>
+    <p class="meta">Dogovoreno je tekst iz zapisa konzultacije, bez kvačica i bez oznake izvršenog (D-62); student i mentor vide isti zapis (D-47). „Pregled prije predaje” otvara korak 3 toka (S-30).</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p2">
+    <div class="ref-tag">Stanje 2 · poslano na pregled, rok produljen</div>
+    <div class="panel side-panel"><div class="panel-body">
+      <h2 id="p2">Poslano na pregled 13. 11. 2026. u 18:50</h2>
+      <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59</b></div>
+      <p><span class="tag">Rok produljen do 27. 11. 2026.</span></p>
+      <p class="note">Možete nastaviti pisati. Mentor vidi verziju koju ste poslali.</p>
+      <ul class="facts links"><li><a href="#p2">Sažetak procesa</a></li></ul>
+      <button class="btn" type="button">Pregled prije predaje</button>
+    </div></div>
+    <p class="meta">Produljen rok je oznaka uz rok, bez boje (#1782, N-13).</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p3">
+    <div class="ref-tag">Stanje 3 · predano</div>
+    <div class="panel side-panel"><div class="panel-body">
+      <h2 id="p3">Predano 20. 11. 2026. u 22:14</h2>
+      <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59</b></div>
+      <ul class="facts links"><li><a href="#p3">Potvrda predaje</a></li><li><a href="#p3">Sažetak procesa</a></li></ul>
+    </div></div>
+    <p class="meta">Nakon roka naslov je „Predano {vrijeme}, nakon roka”, istim stilom i bojom (D-128). Dok potvrda čeka potpis, naslov je „Predaja u obradi” (S-32 stanje 2).</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p4">
+    <div class="ref-tag">Stanje 4 · predaja nije dovršena</div>
+    <div class="panel side-panel"><div class="panel-body">
+      <h2 id="p4">Predaja nije dovršena: zamjenski postupak</h2>
+      <p class="note">Vrijeme Vašeg zahtjeva je zabilježeno. Fakultet nastavlja predaju zamjenskim postupkom: Obratite se nastavniku kolegija.</p>
+      <ul class="facts links"><li><a href="#p4">Sažetak procesa</a></li></ul>
+    </div></div>
+    <p class="meta">Kontakt zamjenskog postupka je parametar fakulteta (Q-3), kao u S-30.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p5">
+    <div class="ref-tag">Stanje 5 · prazno (nije započeto)</div>
+    <div class="panel side-panel"><div class="panel-body">
+      <h2 id="p5">Nije započeto</h2>
+      <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59</b></div>
+      <p class="note">Stanje rada, rok i prilozi prikazuju se ovdje kad počnete pisati.</p>
+      <ul class="facts links"><li><a href="#p5">Uvoz postojećeg teksta</a></li></ul>
+    </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="p6">
+    <div class="ref-tag">Stanje 6 · učitavanje</div>
+    <div class="panel side-panel" aria-busy="true"><div class="panel-body">
+      <h2 id="p6">Rad</h2><p class="note" role="status">Učitavanje…</p><div class="skel w80"></div><div class="skel w60"></div>
+    </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="p7">
+    <div class="ref-tag">Stanje 7 · greška</div>
+    <div class="panel side-panel"><div class="panel-body">
+      <h2 id="p7">Rad</h2>
+      <p class="note" role="alert">Sadržaj trenutačno nije moguće učitati. Osvježite stranicu.</p>
+      <p class="meta">Tekst rada je u uređivaču i ova greška ga ne mijenja.</p>
+    </div></div>
+    <p class="meta">Tekstovi stanja 6 i 7 postojeći su ključevi <code>panelLoading</code> i <code>panelUnavailable</code>.</p>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): 1 kartice panela (strelice lijevo i desno), 2 naslov stanja, 3 rok, 4 dogovoreno, 5 poveznice „Uz rad”, 6 Pregled prije predaje.</p>
+</main>
+</body>
+</html>
