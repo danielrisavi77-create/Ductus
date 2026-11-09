@@ -24,7 +24,9 @@ describe("instrumentation register()", () => {
     const exit = exitSpy();
     await expect(register(exit)).rejects.toThrow("exit 1");
     expect(exit).toHaveBeenCalledWith(1);
-    expect(error).toHaveBeenCalledWith("Ductus cannot start: APP_DATABASE_URL is not set");
+    expect(error).toHaveBeenCalledTimes(1);
+    const line = JSON.parse(String(error.mock.calls[0]?.[0]));
+    expect(line).toMatchObject({ level: "error", event: "Ductus cannot start", fields: { problems: ["APP_DATABASE_URL is not set"] } });
   });
 
   it("never prints the value of a wrong variable", async () => {
