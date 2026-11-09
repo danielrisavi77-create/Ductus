@@ -99,7 +99,7 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
 
 ### Sažetak procesa (S-33)
 
-- Stavke su redom iz `docs/PRODUCT.md` §7: stanje zapisa, razdoblje rada, sesije, aktivno vrijeme uređivanja, verzije, lijepljenja, uvozi, AI pomoćnik, zahtjevi za doradu, konzultacije, prilagodba, izmjene nastavnika, praznine u zapisu, izjava, napomene studenta, karta podrijetla.
+- Stavke su redom iz tablice u `docs/PRODUCT.md` §7: razdoblje rada, sesije, aktivno vrijeme uređivanja, verzije, lijepljenja, uvozi, AI pomoćnik, zahtjevi za doradu, konzultacije, prilagodba, izmjene nastavnika, praznine u zapisu, izjava, napomene studenta, stanje zapisa. Karta podrijetla slijedi tablicu, kao u §7.
 - Student vidi isti sažetak kao nastavnik (pravilo 5), u svakom trenutku, i prije predaje (§6 nastavnik t. 8). Prije predaje to piše na vrhu.
 - Svaka brojka ima jedinicu, nazivnik i metodu (C-12). Prag stoji uz brojku na koju utječe: sesija je niz promjena bez prekida duljeg od 30 minuta (P-01), popisano je lijepljenje dulje od 200 znakova (P-02). Oba su postavke fakulteta.
 - Aktivno vrijeme je zbroj trajanja navedenih sesija, uz rečenicu „Vrijeme uređivanja nije mjera truda ni vremena razmišljanja.”
@@ -123,7 +123,7 @@ Slika ova pitanja označava kao otvorena i ne odlučuje ih:
 - **Kratka lijepljenja (S-33).** §7 kaže da se lijepljenja do praga „samo broje”. Slika taj broj ne prikazuje, jer #1789 traži da uz lijepljenje nema zbroja. Treba li broj kraćih lijepljenja, otvoreno je.
 - **Sesije preko praznine (S-33).** Slika predlaže da se raspon praznine ne uračunava u sesije ni aktivno vrijeme.
 - **Pragovi P-01 i P-02.** Vrijednosti 30 minuta i 200 znakova čekaju potvrdu (Q-2).
-- **Konzultacije u sažetku (S-15, S-33).** Prikazano je samo „Dogovoreno”. D-135 ovisi o D-55; zapis mentora nije prikazan.
+- **Konzultacije u sažetku (S-15, S-33).** S-33 prikazuje datum, temu, verziju rada i „Dogovoreno” (§7, D-47); S-15 prikazuje samo „Dogovoreno”. „Bilješka mentora” (privatni radni zapis, D-130) nije prikazana nigdje. Dvodijelni zapis iz D-135 čeka pravno mišljenje D-55, pa je oblik zapisa konzultacije otvoren.
 - **Zahtjevi za doradu (S-33).** Oblik ovisi o arhitekturi komentara (Q-6, D-133).
 - **„Napisano u Ducturi” i karta podrijetla (D-127, O-2).** Sažetak samo vodi na N-10; uključivanje prikaza nacrtano je ondje.
 - **Prazno stanje panela (S-15).** Postojeći tekst `workEmpty` spominje etape, koje se ne grade (D-249). Slika koristi novi tekst; zamjena ključa je otvorena.
