@@ -104,6 +104,74 @@ describe("checkOperations: one step per input class", () => {
   });
 });
 
+// Review c.6744073156 and QA c.6744081333 on #1803 (contract #1091 c.6744231330,
+// confirmed in c.6744314188):
+// a line belongs to a step only where CommonMark puts it in the list item.
+const NONE = ["Pokretanje#1: step has neither Naredba: nor Nositelj:"];
+const NINE = Array.from({ length: 9 }, (_, i) => `${i + 1}. Korak. Nositelj: \`vlasnik\`.`).join("\n");
+
+describe("checkOperations: a line belongs to a step only inside the list item", () => {
+  it.each([
+    ["N1 blank line, indent 0 is prose", "1. Odluči.\n\nNositelj: `vlasnik`.", NONE],
+    ["N1 blank line, indent 1 is prose", "1. Odluči.\n\n Nositelj: `vlasnik`.", NONE],
+    ["N1 blank line, indent 2 is prose", "1. Odluči.\n\n  Nositelj: `vlasnik`.", NONE],
+    ["N1 blank line, indent 3 is in the step", "1. Odluči.\n\n   Nositelj: `vlasnik`.", []],
+    ["N1 blank line, indent 4 is in the step", "1. Odluči.\n\n    Nositelj: `vlasnik`.", []],
+    ["N1 blank line, indent 6 is in the step", "1. Odluči.\n\n      Nositelj: `vlasnik`.", []],
+    ["N1 blank line, a tab reaches column 4", "1. Odluči.\n\n\tNositelj: `vlasnik`.", []],
+    ["N1 step 10, indent 3 is prose", `${NINE}\n10. Deseti.\n\n   Nositelj: \`vlasnik\`.`, ["Pokretanje#10: step has neither Naredba: nor Nositelj:"]],
+    ["N1 step 10, indent 4 is in the step", `${NINE}\n10. Deseti.\n\n    Nositelj: \`vlasnik\`.`, []],
+    ["N1 step 10, a tab is in the step", `${NINE}\n10. Deseti.\n\n\tNositelj: \`vlasnik\`.`, []],
+    ["N1 step indented by one, indent 3 is prose", " 1. Odluči.\n\n   Nositelj: `vlasnik`.", NONE],
+    ["N1 two spaces after the number, indent 3 is prose", "1.  Odluči.\n\n   Nositelj: `vlasnik`.", NONE],
+    ["N1 tab after the number, indent 3 is prose", "1.\tOdluči.\n\n   Nositelj: `vlasnik`.", NONE],
+    ["N1 tab after the number, a tab is in the step", "1.\tOdluči.\n\n\tNositelj: `vlasnik`.", []],
+    ["N1 five or more spaces after the number count as one", "1.      Odluči.\n\n   Nositelj: `vlasnik`.", []],
+    ["N1 lazy line after an indented paragraph", "1. Odluči.\n\n   Dalje.\nNositelj: `vlasnik`.", []],
+    ["N1 bullet in column 0 ends the step", "1. Odluči.\n- Nositelj: `vlasnik`.", NONE],
+    ["N1 quote in column 0 ends the step", "1. Odluči.\n> Nositelj: `vlasnik`.", NONE],
+    ["N1 thematic break in column 0 ends the step", "1. Odluči.\n---\nNositelj: `vlasnik`.", NONE],
+    ["N1 fence in column 0 ends the step", "1. Odluči.\n```\nx\n```\nNositelj: `vlasnik`.", NONE],
+    ["N1 indented bullet is in the step", "1. Odluči.\n   - Nositelj: `vlasnik`.", []],
+    ["N1 indented quote is in the step", "1. Odluči.\n   > Nositelj: `vlasnik`.", []],
+    ["N1 no lazy line after a closed indented fence", "1. Odluči.\n   ```\n   x\n   ```\nNositelj: `vlasnik`.", NONE],
+  ] as const)("%s", (_name, steps, expected) => {
+    expect(messages(doc(steps))).toEqual(expected);
+  });
+});
+
+describe("checkOperations: curl names exactly one plain URL", () => {
+  const curl = (args: string) => `1. Provjeri. Naredba: \`curl ${args}\`.`;
+  const ready = "http://localhost:3000/api/ready";
+  const health = "http://localhost:3000/api/health";
+  const nope = "http://localhost:3000/api/nope";
+  const missing = ["Pokretanje#1: no route app/api/nope/route.ts"];
+  const several = (...urls: string[]) => [`Pokretanje#1: curl names more than one URL: ${urls.join(" ")}`];
+  it.each([
+    ["N2 one URL that exists", `-fsS ${ready}`, []],
+    ["N2 one URL that does not exist", `-fsS ${nope}`, missing],
+    ["N2 two URLs that exist", `-fsS ${ready} ${health}`, several(ready, health)],
+    ["N2 two URLs, the first missing", `-fsS ${nope} ${ready}`, several(nope, ready)],
+    ["N2 two URLs, the second missing", `-fsS ${ready} ${nope}`, several(ready, nope)],
+    ["N2 three URLs, the first missing", `${nope} ${ready} ${health}`, several(nope, ready, health)],
+    ["N2 three URLs, the second missing", `${ready} ${nope} ${health}`, several(ready, nope, health)],
+    ["N2 three URLs, the third missing", `${ready} ${health} ${nope}`, several(ready, health, nope)],
+    ["N2 a URL without a scheme", "-fsS localhost:3000/api/ready", ["Pokretanje#1: curl argument is not an http(s) URL: localhost:3000/api/ready"]],
+    ["N2 --url is not an allowed option", `--url ${nope} ${ready}`, ["Pokretanje#1: curl option not allowed: --url"]],
+    ["N2 an option with a file", `-o out ${ready}`, ["Pokretanje#1: curl option not allowed: -o"]],
+    ["N2 a config file", `-K cfg ${ready}`, ["Pokretanje#1: curl option not allowed: -K"]],
+    ["N2 a header", `-H X-Test:1 ${ready}`, ["Pokretanje#1: curl option not allowed: -H"]],
+    ["N2 a value joined to short flags", `-fsSo out ${ready}`, ["Pokretanje#1: curl option not allowed: -fsSo"]],
+    ["N2 a value joined to an option", `-oout ${ready}`, ["Pokretanje#1: curl option not allowed: -oout"]],
+    ["N2 a long option with a value", `--config=cfg ${ready}`, ["Pokretanje#1: curl option not allowed: --config=cfg"]],
+    ["N2 allowed flags", `--fail --silent --show-error -i ${ready}`, []],
+    ["N2 a brace glob", "http://localhost:3000/api/{ready,nope}", ["Pokretanje#1: curl URL globbing is not allowed: http://localhost:3000/api/{ready,nope}"]],
+    ["N2 a range glob", `${ready}[1-2]`, [`Pokretanje#1: curl URL globbing is not allowed: ${ready}[1-2]`]],
+  ] as const)("%s", (_name, args, expected) => {
+    expect(messages(doc(curl(args)))).toEqual(expected);
+  });
+});
+
 describe("checkOperations: document structure", () => {
   it("7 a numbered line in a fence at the top level is not a step", () => {
     const steps = "1. Prvi. Nositelj: `vlasnik`.\n\n```\n2. nije korak\n```";

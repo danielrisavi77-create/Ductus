@@ -26,7 +26,13 @@ const ENV_RE = /^[A-Z_][A-Z0-9_]*=/;
 const PLACEHOLDER_RE = /<[\p{L}\d_-]+>/gu;
 // Shell chains, pipes, redirects and substitutions: only one command per span.
 const SHELL_OPERATOR_RE = /[;&|<>]|\$\(/;
+// Blocks that end a paragraph, so a line starting one is never a lazy
+// continuation (CommonMark): fence, bullet, quote, thematic break.
+const INTERRUPT_RE = /^ {0,3}(?:`{3,}|~{3,}|[-+*][ \t]+\S|>|([-*_])(?:[ \t]*\1){2,}[ \t]*$)/;
 const BUILT_IN_PNPM = new Set(["install"]);
+// curl reads every argument that is not an option as a URL, so options are a
+// closed list without values: no option can carry a URL or a config file.
+const CURL_FLAGS_RE = /^(?:-[fsSi]+|--fail|--fail-with-body|--silent|--show-error|--include)$/;
 const STOP_SIGNALS = new Set(["-TERM", "-INT", "-SIGTERM", "-SIGINT"]);
 
 /**
@@ -39,17 +45,31 @@ const STOP_SIGNALS = new Set(["-TERM", "-INT", "-SIGTERM", "-SIGINT"]);
  */
 
 /**
- * Leading whitespace width, a tab reaching the next multiple of four (CommonMark).
- * @param {string} line
+ * The column after the spaces and tabs at the start of `text`, which starts at
+ * column `from`; a tab advances to the next multiple of four.
+ * @param {string} text
+ * @param {number} [from]
  */
-function indentWidth(line) {
-  let width = 0;
-  for (const char of line) {
-    if (char === " ") width += 1;
-    else if (char === "\t") width += 4 - (width % 4);
+function indentEnd(text, from = 0) {
+  let column = from;
+  for (const char of text) {
+    if (char === " ") column += 1;
+    else if (char === "\t") column += 4 - (column % 4);
     else break;
   }
-  return width;
+  return column;
+}
+
+/**
+ * The content column of a list item (CommonMark): after the marker and the
+ * spaces that follow it, or one column after the marker when five or more follow.
+ * @param {string} line
+ * @param {RegExpExecArray} match
+ */
+function contentColumn(line, match) {
+  const markerEnd = (match[1] ?? "").length + (match[2] ?? "").length + 1;
+  const end = indentEnd(line.slice(markerEnd), markerEnd);
+  return end - markerEnd >= 5 ? markerEnd + 1 : end;
 }
 
 /** @param {string} row */
@@ -79,7 +99,9 @@ export function parseOperations(text) {
   let section = "";
   /** @type {Procedure | null} */
   let procedure = null;
-  /** @type {{ step: Step, parts: string[], blank: boolean, offset: number } | null} */
+  // `paragraph`: a paragraph of the step is open, so a less indented line may
+  // continue it lazily.
+  /** @type {{ step: Step, parts: string[], paragraph: boolean, offset: number } | null} */
   let open = null;
   /** @type {string | null} */
   let fence = null;
@@ -93,7 +115,10 @@ export function parseOperations(text) {
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
     if (fence !== null) {
-      if (line.trim().startsWith(fence)) fence = null;
+      if (line.trim().startsWith(fence)) {
+        fence = null;
+        if (open) open.paragraph = false;
+      }
       return;
     }
     const fenceOpen = FENCE_RE.exec(line);
@@ -137,13 +162,13 @@ export function parseOperations(text) {
         closeStep();
         const step = { number: Number(start[2]), line: lineNumber, text: "" };
         procedure.steps.push(step);
-        open = { step, parts: [line.slice(start[0].length)], blank: false, offset: start[0].length };
+        open = { step, parts: [line.slice(start[0].length)], paragraph: true, offset: contentColumn(line, start) };
       } else if (open && line.trim() === "") {
-        open.blank = true;
-      } else if (open && (!open.blank || indentWidth(line) >= open.offset)) {
-        // A lazy continuation right after the step, or, after a blank line, a
-        // line indented to the step's content; anything less is outside it.
+        open.paragraph = false;
+      } else if (open && (indentEnd(line) >= open.offset || (open.paragraph && !INTERRUPT_RE.test(line)))) {
+        // A line indented to the step's content, or a lazy paragraph continuation.
         if (!fenceOpen) open.parts.push(line.trim());
+        open.paragraph = !fenceOpen;
       } else {
         closeStep();
       }
@@ -178,6 +203,25 @@ function spansAfter(rest) {
 }
 
 /**
+ * @param {string} url
+ * @param {Context} context
+ * @returns {string | null}
+ */
+function curlUrlProblem(url, context) {
+  if (!/^https?:\/\//.test(url)) return `curl argument is not an http(s) URL: ${url}`;
+  // curl expands {a,b} and [1-2] into several URLs.
+  if (/[{}[\]]/.test(url)) return `curl URL globbing is not allowed: ${url}`;
+  let pathname;
+  try {
+    pathname = new URL(url).pathname.replace(/\/+$/, "");
+  } catch {
+    return `curl URL is not under /api/: ${url}`;
+  }
+  if (!pathname.startsWith("/api/")) return `curl URL is not under /api/: ${url}`;
+  return context.routeExists(pathname) ? null : `no route app${pathname}/route.ts`;
+}
+
+/**
  * @param {string} command
  * @param {Context} context
  * @returns {string | null}
@@ -207,19 +251,15 @@ function commandProblem(command, context) {
       return context.fileExists(file) ? null : `node file does not exist: ${file}`;
     }
     case "curl": {
+      const options = args.filter((arg) => arg.startsWith("-"));
+      const refused = options.find((arg) => !CURL_FLAGS_RE.test(arg));
+      if (refused) return `curl option not allowed: ${refused}`;
       // curl fetches every non-option argument, so exactly one may follow.
       const urls = args.filter((arg) => !arg.startsWith("-"));
       const url = urls[0];
       if (!url) return "curl command names no URL";
       if (urls.length > 1) return `curl names more than one URL: ${urls.join(" ")}`;
-      let pathname;
-      try {
-        pathname = new URL(url).pathname.replace(/\/+$/, "");
-      } catch {
-        return `curl URL is not under /api/: ${url}`;
-      }
-      if (!pathname.startsWith("/api/")) return `curl URL is not under /api/: ${url}`;
-      return context.routeExists(pathname) ? null : `no route app${pathname}/route.ts`;
+      return curlUrlProblem(url, context);
     }
     case "docker":
       return args[0] === "compose" && args[1] && !args[1].startsWith("-")
