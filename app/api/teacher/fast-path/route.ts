@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { counted } from "@/server/auth/activity";
 import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -17,7 +18,7 @@ function unavailable(): Response {
 // The teacher's fast path through the works of one assignment (B-11, #757).
 // POST, so the assignment id never lands in a URL; the origin comes from the
 // configured OIDC callback, and the thresholds are the process summary's.
-export async function POST(request: NextRequest): Promise<Response> {
+async function post(request: NextRequest): Promise<Response> {
   const origin = expectedOrigin();
   if (!origin) return unavailable();
   return handleFastPathRequest(request, {
@@ -28,3 +29,5 @@ export async function POST(request: NextRequest): Promise<Response> {
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }
+
+export const POST = counted(post);

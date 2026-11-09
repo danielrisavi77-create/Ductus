@@ -8,6 +8,7 @@ import { readShellRole } from "@/components/shell/shell-role";
 import Submission from "@/components/student/Submission";
 import { assignmentParam, readWorkContext } from "@/components/student/work-context-read";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -31,6 +32,7 @@ export default async function SubmissionPage({ params }: { params: Promise<{ ass
   const { assignmentId: raw } = await params;
   const assignmentId = assignmentParam(raw);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   // The cookie digest and the server time of this render (D-118).
   const { tag, at } = shellSession(token);
   const [principal, read, role, doc] = await Promise.all([

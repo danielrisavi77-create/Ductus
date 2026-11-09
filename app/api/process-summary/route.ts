@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { counted } from "@/server/auth/activity";
 import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -19,7 +20,7 @@ function unavailable(): Response {
 // The process summary of one document (B-13). POST, so the document id never
 // lands in a URL; the origin comes from the configured OIDC callback. Payloads
 // come from the storage domain of the institution the read RPC names.
-export async function POST(request: NextRequest): Promise<Response> {
+async function post(request: NextRequest): Promise<Response> {
   const origin = expectedOrigin();
   if (!origin) return unavailable();
   return handleProcessSummaryRequest(request, {
@@ -30,3 +31,5 @@ export async function POST(request: NextRequest): Promise<Response> {
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }
+
+export const POST = counted(post);

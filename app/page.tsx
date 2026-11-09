@@ -12,6 +12,7 @@ import SessionObserver from "@/components/shell/SessionObserver";
 import { shellSession } from "@/components/shell/shell-session";
 import { readHome } from "@/components/shell/shell-role";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -24,6 +25,7 @@ export default async function HomePage() {
   // and a sign-in that replaces the cookie ends the earlier session's tabs
   // (SessionObserver).
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   // Without a session cookie the public home page (FE-H1, #476).
   if (token === undefined) {
     return (

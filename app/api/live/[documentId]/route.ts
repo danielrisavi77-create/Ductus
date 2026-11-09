@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { counted } from "@/server/auth/activity";
 import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { handleLivePublishRequest, handleLiveReadRequest } from "@/server/collaboration/live-route";
@@ -14,7 +15,7 @@ type Context = { params: Promise<{ documentId: string }> };
 // The live view (B-LIVE, docs/BACKEND.md 4.12 point 6): the last state of one
 // document. PUT publishes it (the student owner only), GET reads it (the same
 // bytes for the owner and the teacher). The database decides who may do which.
-export async function PUT(request: NextRequest, context: Context): Promise<Response> {
+async function put(request: NextRequest, context: Context): Promise<Response> {
   const { documentId } = await context.params;
   return handleLivePublishRequest(request, documentId, {
     withActor,
@@ -30,3 +31,5 @@ export async function GET(request: NextRequest, context: Context): Promise<Respo
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }
+
+export const PUT = counted(put);

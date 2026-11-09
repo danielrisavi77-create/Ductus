@@ -6,6 +6,7 @@ import { shellSession } from "@/components/shell/shell-session";
 import StudentWorkspace from "@/components/student/StudentWorkspace";
 import { paramOf } from "@/components/student/student-workspace-view";
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { readStudentWorkspace, type StudentWorkspaceRead } from "@/server/institution/student-workspace";
@@ -25,6 +26,7 @@ export default async function MyWorksPage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const params = await searchParams;
   const account = await readShellAccountOrFailure(token, withActor);
   const read: StudentWorkspaceRead = account === null

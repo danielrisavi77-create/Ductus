@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { counted } from "@/server/auth/activity";
 import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -13,7 +14,7 @@ export const revalidate = 0;
 // A student's submission of the revision they saw (B-12, docs/BACKEND.md 4.6):
 // the database clock at the click, the reconstruction of that revision and,
 // only when it matches, the submission and its signed receipt.
-export async function POST(request: NextRequest): Promise<Response> {
+async function post(request: NextRequest): Promise<Response> {
   return handleSubmissionRequest(request, {
     withActor,
     ...evidenceIngestDeps(),
@@ -21,3 +22,5 @@ export async function POST(request: NextRequest): Promise<Response> {
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
   });
 }
+
+export const POST = counted(post);
