@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-05 — Čuvanje i pravno zadržavanje (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 16 · DAN-604 · prijedlog slike · M10.UX-R</div>
+  <h1>A-05 — Čuvanje i pravno zadržavanje</h1>
+  <p>Stranica administratora fakulteta. Prototipa nema; složena je po retku A-05 iz <code>docs/design/EKRANI.md</code>. Rokovi čuvanja samo se prikazuju i ne mijenjaju se u sučelju (D-275 MQ13, D-30). Zadržavanje postavlja administrator s brojem slučaja; skida ga drugi administrator ili održavatelj (D-274 MQ11). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant wide" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Čuvanje i pravno zadržavanje</h2></div>
+      <div class="panel-body cols">
+        <div class="stack">
+          <h3 class="sub">Rokovi čuvanja</h3>
+          <div class="kv"><span>Verzija pravila čuvanja</span><b>nije upisana</b></div>
+          <p class="note">Rokovi se ovdje ne mijenjaju. Verziju pravila upisuje održavatelj Ducture nakon što je fakultet potvrdi.</p>
+          <ul class="list">
+            <li class="item"><div class="row-top"><span class="title">Predani rad</span><span class="tag open">čeka potvrdu fakulteta</span></div><span class="meta">Prijedlog: prema pravilniku fakulteta</span></li>
+            <li class="item"><div class="row-top"><span class="title">Zapis pristupa radu</span><span class="tag open">čeka potvrdu fakulteta</span></div><span class="meta">Prijedlog: dulje od predaje</span></li>
+            <li class="item"><div class="row-top"><span class="title">Revizije dokumenta</span><span class="tag open">čeka potvrdu fakulteta</span></div><span class="meta">Prijedlog: do kraja akademske godine</span></li>
+            <li class="item"><div class="row-top"><span class="title">Sesije prijave i odjave</span><span class="tag">zapisano odlukom</span></div><span class="meta">30 dana nakon kraja sesije</span></li>
+            <li class="item"><div class="row-top"><span class="title">Izvozni paket</span><span class="tag">zapisano odlukom</span></div><span class="meta">24 sata, koliko vrijedi poveznica</span></li>
+          </ul>
+          <button class="btn secondary" type="button">Prikaži sve klase podataka</button>
+        </div>
+        <div class="stack">
+          <h3 class="sub">Pravna zadržavanja</h3>
+          <p class="note">Dok zadržavanje vrijedi, podaci rada ne brišu se po roku čuvanja. Više zadržavanja na istom radu vrijedi neovisno.</p>
+          <ul class="list">
+            <li class="item">
+              <div class="row-top"><span class="title">Broj slučaja 2026-014</span><span class="tag">vrijedi</span></div>
+              <span>Student D · Seminar · Lokalna samouprava</span>
+              <span class="meta">Postavio Administrator A, 2. 3. 2027.</span>
+              <span class="meta">Vi ste ga postavili. Skida ga drugi administrator fakulteta ili održavatelj Ducture.</span>
+            </li>
+            <li class="item">
+              <div class="row-top"><span class="title">Broj slučaja 2026-019</span><span class="tag">vrijedi</span></div>
+              <span>Student D · Seminar · Lokalna samouprava</span>
+              <span class="meta">Postavio Administrator F, 5. 3. 2027.</span>
+              <div class="acts"><button class="btn secondary small" type="button">Skini zadržavanje 2026-019</button></div>
+            </li>
+          </ul>
+          <button class="btn" type="button">Postavi zadržavanje</button>
+          <p class="meta">Postavljanje i skidanje upisuje se u revizijski trag.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="pravno-zadrzavanje">
+    <div class="ref-tag">Stanje 2 · pravno zadržavanje</div>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="t2">
+      <h2 id="t2">Postavi pravno zadržavanje</h2>
+      <div class="field"><label for="hold-rad">Rad</label>
+        <select id="hold-rad" class="input"><option>Student D · Seminar · Lokalna samouprava</option></select></div>
+      <div class="field"><label for="hold-broj">Broj slučaja</label>
+        <input id="hold-broj" class="input" type="text" value="2026-021"></div>
+      <p class="note">Upisuje se samo broj slučaja. Pravni opis se ne upisuje.</p>
+      <p class="meta">Zadržavanje ne mijenja rad ni predaju. Skida ga drugi administrator fakulteta ili održavatelj Ducture, ne Vi.</p>
+      <div class="acts"><button class="btn" type="button">Postavi zadržavanje</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 3 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t3">Čuvanje i pravno zadržavanje</h2></div>
+      <div class="panel-body">
+        <p class="note">Nijedno pravno zadržavanje nije postavljeno. Podaci se čuvaju i brišu po rokovima čuvanja.</p>
+        <button class="btn" type="button">Postavi zadržavanje</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 4 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t4">Čuvanje i pravno zadržavanje</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam rokove i zadržavanja.</p><div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 5 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t5">Čuvanje i pravno zadržavanje</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Popis trenutačno nije moguće učitati. Postavljena zadržavanja i dalje vrijede.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Stanje roka i zadržavanja je riječ u okviru („čeka potvrdu fakulteta” ima isprekidan rub), ne boja. Administrator koji je postavio zadržavanje nema gumb za skidanje, nego rečenicu tko ga skida.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Čuvanje i pravno zadržavanje, 2. Prikaži sve klase podataka, 3. zadržavanja redom i Skini zadržavanje, 4. Postavi zadržavanje; u prozoru: Rad, Broj slučaja, Postavi zadržavanje, Odustani.</p>
+</main>
+</body>
+</html>
