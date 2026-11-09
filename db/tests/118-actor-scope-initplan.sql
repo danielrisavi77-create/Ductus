@@ -351,9 +351,26 @@ SELECT is(
   (SELECT n FROM calls WHERE tbl = 'course_member'),
   'reading course_member reads the session as often with five more rows in it'
 );
-SELECT ok(
-  (SELECT max(n) <= 5 FROM calls),
-  'no read of the 14 tables reads the session more than five times'
+-- The bound of each table comes from its installed read policy: every
+-- (SELECT ...) there is an InitPlan and runs at most once per statement.
+-- app.current_user_id() and app.current_institution_id() read the session
+-- once; actor_course_ids() twice (app.current_actor() and actor_has_role());
+-- actor_assignment_ids() four times (actor_course_ids() and the two of its
+-- mentorship branch). How many of these run depends on the version's order
+-- of evaluating OR and on the data, never on the number of rows; a failure
+-- names each table with its count and bound.
+SELECT is(
+  (SELECT string_agg(format('%s %s > %s', c.tbl, c.n, coalesce(b.bound::text, 'no policy')), ', ' ORDER BY c.tbl)
+   FROM calls c
+   LEFT JOIN (SELECT p.tablename AS tbl,
+                (SELECT count(*) FROM regexp_matches(p.qual, 'SELECT app\.current_(user|institution)_id\(\)', 'g'))
+                + 2 * (SELECT count(*) FROM regexp_matches(p.qual, 'actor_course_ids\(', 'g'))
+                + 4 * (SELECT count(*) FROM regexp_matches(p.qual, 'actor_assignment_ids\(', 'g')) AS bound
+         FROM pg_policies p
+         WHERE p.schemaname = 'institution' AND p.policyname = p.tablename || '_read') b ON b.tbl = c.tbl
+   WHERE b.bound IS NULL OR c.n > b.bound),
+  NULL,
+  'no read of the 14 tables reads the session more often than its policy has scalar subqueries that read it'
 );
 
 -- 8. The plans: the scope is an InitPlan, and no helper of a row is left.
