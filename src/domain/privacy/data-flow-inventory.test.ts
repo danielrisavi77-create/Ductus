@@ -222,13 +222,11 @@ describe(INVENTORY, () => {
   // The student reads their own work through the same functions as the
   // teacher, and each function records the access only for the teacher role.
   it.each([
-    ["process_summary", "db/migrations/20261021130000_audit_access_log_write.sql", "src/components/student/Submission.tsx", /fetchProcessSummary\(/],
-    ["live_view", "db/migrations/20261026163000_live_state_after_submission.sql", "src/components/student/TeacherViewSheet.tsx", /useLiveView\(/],
-    ["replay", "db/migrations/20261028121000_replay_source.sql", "src/server/evidence/replay-route.ts", /app\.read_replay_source\(/],
-  ])("lists the student as a reader of %s and the teacher-only access record", (surface, migration, entry, call) => {
-    expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(
-      new RegExp(`IF v_role = 'teacher' THEN\\s+PERFORM audit\\.record_work_opening\\([^;]*'${surface}'\\);`),
-    );
+    ["process_summary", "db/migrations/20261021130000_audit_access_log_write.sql", /IF v_role = 'teacher' THEN\s+PERFORM audit\.record_work_opening\([^;]*'process_summary'\);/, "src/components/student/Submission.tsx", /fetchProcessSummary\(/],
+    ["live_view", "db/migrations/20261026163000_live_state_after_submission.sql", /IF v_role = 'teacher' THEN\s+PERFORM audit\.record_work_opening\([^;]*'live_view'\);/, "src/components/student/TeacherViewSheet.tsx", /useLiveView\(/],
+    ["replay", "db/migrations/20261028121000_replay_source.sql", /IF v_role = 'teacher' THEN\s+PERFORM audit\.record_work_opening\([^;]*'replay'\);/, "src/server/evidence/replay-route.ts", /app\.read_replay_source\(/],
+  ])("lists the student as a reader of %s and the teacher-only access record", (_surface, migration, record, entry, call) => {
+    expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(record);
     expect(readFileSync(join(ROOT, entry), "utf8")).toMatch(call);
     const rows = tableUnder(readFileSync(join(ROOT, INVENTORY), "utf8"), FLOWS_HEADING).filter(([, , , paths]) => {
       const cited = codeSpans(paths ?? "");
