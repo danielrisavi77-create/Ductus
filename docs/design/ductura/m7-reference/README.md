@@ -104,7 +104,7 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
 - Svaka brojka ima jedinicu, nazivnik i metodu (C-12). Prag stoji uz brojku na koju utječe: sesija je niz promjena bez prekida duljeg od 30 minuta (P-01), popisano je lijepljenje dulje od 200 znakova (P-02). Oba su postavke fakulteta.
 - Aktivno vrijeme je zbroj trajanja navedenih sesija, uz rečenicu „Vrijeme uređivanja nije mjera truda ni vremena razmišljanja.”
 - Uz lijepljenja, uvoze i AI nema zbroja, udjela u radu ni broja u naslovu stavke (§7 „Zabranjeno u sažetku”, #1789). Nema ocjene ni boje procjene.
-- Vrsta dokaza (D-44) je riječ u oznaci: „opaženo” s punim rubom, „izjavljeno” s isprekidanim. Oznaka studenta uz lijepljenje je „izjavljeno”, uz zabilježeni „Izvor nije opažen”.
+- Svaka stavka nosi vrstu dokaza (D-44, §7) kao riječ u oznaci: „opaženo” s punim rubom, „izjavljeno” s isprekidanim, „uvezeno” uz uvoz. Oznaka stoji uz naslov stavke, a gdje se vrste miješaju, uz pojedini unos. Prilagodba je studentova oznaka, pa je „izjavljeno”; isto vrijedi za studentov navod da je zahtjev za doradu proveden i za oznaku studenta uz lijepljenje, uz zabilježeni „Izvor nije opažen”. Zapis mentora o konzultacijama i izmjene nastavnika nastali su u Ducturi i nose „opaženo”.
 - Tekst prenesen iz AI pomoćnika prikazan je kao citat s pružateljem, modelom i svrhom. Razgovori se nastavniku prikazuju samo kao prilog izjavi (D-41).
 - Vrijeme lijepljenja je zaokruženo na odsječak zapisa („odsječak oko 14:05”).
 - „Prikaži mjesto u radu” i „Prikaži oznake u tekstu” vode na kartu podrijetla u tekstu (D-57, N-10 u `../m7-reference-b`).
