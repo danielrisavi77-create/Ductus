@@ -6,6 +6,15 @@ labels: ""
 assignees: ""
 ---
 
+**Što:** <što treba napraviti, jednom ili dvjema rečenicama, običnim jezikom>
+
+**Zašto:** <zašto je to potrebno sada, opisano riječima>
+
+**Rizik i provjera:** <što bi moglo poći krivo i kako će se provjeriti da radi>
+
+<details>
+<summary>Detalji za agente</summary>
+
 ## ZADATAK
 
 **ID:**  
@@ -43,3 +52,5 @@ Ništa / PR # / issue #.
 ### Napomena
 
 GitHub je izvor istine za cross-account predaju. Session/chat URL može biti dodatak, ali ne smije biti jedino mjesto s kontekstom.
+
+</details>

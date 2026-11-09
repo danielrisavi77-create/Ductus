@@ -6,6 +6,12 @@ labels: ""
 assignees: ""
 ---
 
+**Što:** <što ne radi, jednom rečenicom, običnim jezikom>
+
+**Zašto:** <koga to pogađa i zašto je važno>
+
+**Rizik i provjera:** <koliko je ozbiljno i kako se kvar može ponoviti>
+
 ## Okolina
 
 Commit / deployment:

@@ -6,6 +6,12 @@ labels: ""
 assignees: ""
 ---
 
+**Što:** <što predlažeš, jednom ili dvjema rečenicama, običnim jezikom>
+
+**Zašto:** <koji problem korisnika to rješava>
+
+**Rizik i provjera:** <što bi moglo poći krivo i kako ćemo znati da pomaže>
+
 ## Problem
 
 ## Dokaz
