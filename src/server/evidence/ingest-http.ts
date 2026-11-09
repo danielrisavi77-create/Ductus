@@ -23,7 +23,9 @@ export function unavailable(stage: string): Response {
   return reply(503, { status: "unavailable", stage }, { "retry-after": "5" });
 }
 
-export type GuardedRequest = { ok: true; token: string; bytes: Uint8Array } | { ok: false; response: Response };
+export type GuardedRequest =
+  | { ok: true; token: string; bytes: Uint8Array; protocol: string }
+  | { ok: false; response: Response };
 
 /**
  * Method, origin, protocol, media type and session cookie from the headers,
@@ -31,13 +33,14 @@ export type GuardedRequest = { ok: true; token: string; bytes: Uint8Array } | { 
  * `liveSession`, the session is asked of the database before the first body
  * byte (F-098): a large body is never held for a cookie that only has the
  * right form. A closed, expired or unknown session is 401, a database that
- * cannot answer is 503 `context`.
+ * cannot answer is 503 `context`. `protocols` are the exact header values
+ * the route takes; any other value, a repeated header included, is 426.
  */
 export async function readGuardedBody(
   request: Request,
   expectedOrigin: string | null,
   sessionToken: string | undefined,
-  limits: { maxBytes: number; timeoutMs: number; liveSession?: WithActor },
+  limits: { maxBytes: number; timeoutMs: number; liveSession?: WithActor; protocols?: readonly string[] },
 ): Promise<GuardedRequest> {
   const refuse = (response: Response) => ({ ok: false, response }) as const;
   if (expectedOrigin === null) return refuse(unavailable("context"));
@@ -50,7 +53,8 @@ export async function readGuardedBody(
   if (!allowed.ok) {
     return refuse(reply(allowed.status, { status: allowed.status === 405 ? "method_not_allowed" : "forbidden" }));
   }
-  if (request.headers.get("ductus-protocol") !== DUCTUS_PROTOCOL_VERSION) {
+  const protocol = request.headers.get("ductus-protocol");
+  if (protocol === null || !(limits.protocols ?? [DUCTUS_PROTOCOL_VERSION]).includes(protocol)) {
     return refuse(reply(426, { status: "upgrade_required" }));
   }
   if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") {
@@ -68,7 +72,7 @@ export async function readGuardedBody(
     const status = body.status === 413 ? "too_large" : body.status === 408 ? "timeout" : "bad_request";
     return refuse(reply(body.status, { status }));
   }
-  return { ok: true, token: sessionToken, bytes: body.bytes };
+  return { ok: true, token: sessionToken, bytes: body.bytes, protocol };
 }
 
 /**

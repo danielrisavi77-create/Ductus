@@ -2,14 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
-import { MAX_COMMIT_REQUEST_BYTES } from "@/domain/evidence/commit-envelope";
+import { DUCTUS_ASYNC_COMMIT_PROTOCOL, MAX_COMMIT_REQUEST_BYTES } from "@/domain/evidence/commit-envelope";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
+import type { EvidenceReceiptPayloadV2 } from "@/domain/forensics/evidence-receipt";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
 import { commitResponse, handleEvidenceCommitRequest, type EvidenceCommitRouteDeps } from "./commit-route";
 import type { EvidenceCommitRequestOutcome } from "./evidence-commit-request";
+import { evidenceAsyncSigning } from "./ingest-deps";
 
 // The invented first segment of the golden chain and the document it ends in.
 const chain = loadGoldenVectors().chain;
@@ -70,7 +72,7 @@ function untouchedBody(headers: Record<string, string | undefined> = {}, method 
 
 const LIVE = { user_id: "00000000-0000-4000-8000-0000000000e1", institution_id: CONTEXT_ROW.institution_id };
 
-function setup(over: Partial<EvidenceCommitRouteDeps> = {}, session: object | Error = LIVE) {
+function setup(over: Partial<EvidenceCommitRouteDeps> = {}, session: object | Error = LIVE, commitRow: object = STALE) {
   const events: string[] = [];
   const withActor = vi.fn(async (_token: string | null, fn: (tx: ActorTransaction) => Promise<unknown>) => {
     let kind = "";
@@ -79,7 +81,7 @@ function setup(over: Partial<EvidenceCommitRouteDeps> = {}, session: object | Er
         kind = text.includes("current_actor") ? "session" : text.includes("evidence_commit_context") ? "context" : "commit";
         events.push(`${kind}:query`);
         if (kind === "session" && session instanceof Error) throw session;
-        const row = kind === "session" ? session : kind === "context" ? CONTEXT_ROW : STALE;
+        const row = kind === "session" ? session : kind === "context" ? CONTEXT_ROW : commitRow;
         return { rows: [row] as never[], rowCount: 1 };
       },
     };
@@ -233,13 +235,15 @@ describe("POST /api/evidence/commit: the outcomes on the wire (4.13 t. 4)", () =
     [{ status: "unavailable", stage: "storage", code: "storage_conflict" }, 503, { status: "unavailable", stage: "storage" }],
     [{ status: "unavailable", stage: "repository", code: "commit_failed" }, 503, { status: "unavailable", stage: "repository" }],
     [{ status: "unavailable", stage: "context", code: "context_failed" }, 503, { status: "unavailable", stage: "context" }],
+    [{ status: "committed_pending", revision: 5 }, 202, { status: "committed", revision: 5, receipt: { status: "pending_signature" } }],
+    [{ status: "duplicate_pending", revision: 5 }, 202, { status: "duplicate", revision: 5, receipt: { status: "pending_signature" } }],
     [{ status: "pending_signature" } as never, 503, { status: "unavailable", stage: "repository" }],
   ])("maps %j", async (outcome, status, body) => {
     const response = commitResponse(outcome);
     expect(response.status).toBe(status);
     expect(await response.json()).toEqual(body);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("retry-after")).toBe(status === 503 ? "5" : null);
+    expect(response.headers.get("retry-after")).toBe(status === 503 ? "5" : status === 202 ? "2" : null);
   });
 });
 
@@ -265,5 +269,124 @@ describe("POST /api/evidence/commit: the log (#155 item 31)", () => {
       expect(JSON.stringify(answers)).not.toContain(secret);
     }
     expect(log).toHaveBeenLastCalledWith("evidence commit", "unavailable", "storage", "storage_unavailable");
+  });
+});
+
+// The receipt the database reserves for ENVELOPE at revision 4, unsigned (DAN-518).
+const PENDING_PAYLOAD: EvidenceReceiptPayloadV2 = {
+  receiptSchema: "ductus-evidence-receipt-v2",
+  receiptId: "00000000-0000-4000-8000-0000000000c1",
+  evidenceDomainId: CONTEXT_ROW.evidence_domain_id,
+  evidencePackageId: CONTEXT_ROW.evidence_package_id,
+  documentId: golden.segment.documentId,
+  revision: 4,
+  clientTransactionId: ENVELOPE.clientTransactionId,
+  principalId: LIVE.user_id,
+  sessionId: golden.segment.sessionId,
+  segmentId: golden.segment.segmentId,
+  segmentHash: golden.segmentHash,
+  predecessorSegmentHash: golden.segment.predecessorSegmentHash,
+  previousReceiptId: null,
+  evidenceSchema: golden.segment.evidenceSchema,
+  evidenceProfileId: golden.segment.evidenceProfileId,
+  sequenceFrom: golden.segment.sequenceFrom,
+  sequenceTo: golden.segment.sequenceTo,
+  eventCount: golden.segment.events.length,
+  payloadBytes: SEGMENT.byteLength,
+  acceptedAt: "2026-10-19T06:00:00.000Z",
+};
+const pendingRow = (outcome: "reserved" | "duplicate_pending") => ({
+  outcome,
+  committed_revision: "4",
+  receipt_payload: canonicalizeJcs(PENDING_PAYLOAD),
+  receipt_id: PENDING_PAYLOAD.receiptId,
+  signature: null,
+});
+
+describe("POST /api/evidence/commit: Ductus-Protocol and the async signing flag (DAN-518)", () => {
+  // Space around a field value is not part of it (RFC 9110 5.5), and Fetch
+  // strips it before the route sees the header: " 2" is "2" on the wire too.
+  const values: [string, string | undefined][] = [
+    ["missing", undefined],
+    ["1", "1"],
+    ["2", "2"],
+    ["3", "3"],
+    ["0", "0"],
+    ["02", "02"],
+    ["2 with a leading space", " 2"],
+    ["2 with a trailing space", "2 "],
+    ["2,1", "2,1"],
+    ["1, 2 (a repeated header)", "1, 2"],
+    ["empty", ""],
+    ["v2", "v2"],
+  ];
+  it.each(values.flatMap(([name, value]) => [false, true].map((flag) => [name, value, flag] as const)))(
+    "Ductus-Protocol %s with the flag %s",
+    async (_, value, flag) => {
+      const { deps, withActor } = setup({ asyncSigning: flag }, LIVE, pendingRow("reserved"));
+      const { request, state } = untouchedBody({ "ductus-protocol": value });
+      const field = value?.trim();
+      const passes = field === "1" || (field === DUCTUS_ASYNC_COMMIT_PROTOCOL && flag);
+      const response = await handleEvidenceCommitRequest(request, deps).catch(() => null);
+      if (passes) {
+        // Past the protocol, into the session and the body this test refuses to give.
+        expect(withActor).toHaveBeenCalled();
+        expect(state.read).toBe(true);
+      } else {
+        expect([response?.status, await response?.json()]).toEqual([426, { status: "upgrade_required" }]);
+        expect(state.read).toBe(false);
+        expect(withActor).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each([
+    ["reserved", "committed"],
+    ["duplicate_pending", "duplicate"],
+  ] as const)("answers %s under protocol 2 with 202 pending_signature and Retry-After, never signing", async (outcome, status) => {
+    const signer = { ...refusingSigner, sign: vi.fn(refusingSigner.sign) };
+    const { deps, events } = setup({ asyncSigning: true, signer }, LIVE, pendingRow(outcome));
+    const response = await handleEvidenceCommitRequest(post(ENVELOPE, { "ductus-protocol": "2" }), deps);
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ status, revision: 4, receipt: { status: "pending_signature" } });
+    expect(response.headers.get("retry-after")).toBe("2");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(signer.sign).not.toHaveBeenCalled();
+    expect(events.filter((e) => e.startsWith("commit"))).toEqual(["commit:query", "commit:end"]);
+    expect(deps.log).not.toHaveBeenCalled();
+  });
+
+  it("never answers 202 under protocol 1, with the flag on: a reserved row is signed inline", async () => {
+    const signer = { ...refusingSigner, sign: vi.fn(refusingSigner.sign) };
+    const { deps, log } = setup({ asyncSigning: true, signer }, LIVE, pendingRow("reserved"));
+    const response = await handleEvidenceCommitRequest(post(ENVELOPE), deps);
+    expect([response.status, await response.json()]).toEqual([503, { status: "unavailable", stage: "signing" }]);
+    expect(signer.sign).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith("evidence commit", "unavailable", "signing", expect.any(String));
+  });
+
+  it("never answers 202 under protocol 1 for a pending duplicate: 503 repository", async () => {
+    const { deps } = setup({ asyncSigning: true }, LIVE, pendingRow("duplicate_pending"));
+    const response = await handleEvidenceCommitRequest(post(ENVELOPE), deps);
+    expect([response.status, await response.json()]).toEqual([503, { status: "unavailable", stage: "repository" }]);
+    expect(response.headers.get("retry-after")).toBe("5");
+  });
+
+  it("answers a pending row that is not this request's receipt with 503, never 202", async () => {
+    const row = { ...pendingRow("reserved"), committed_revision: "5" };
+    const { deps } = setup({ asyncSigning: true }, LIVE, row);
+    const response = await handleEvidenceCommitRequest(post(ENVELOPE, { "ductus-protocol": "2" }), deps);
+    expect([response.status, await response.json()]).toEqual([503, { status: "unavailable", stage: "repository" }]);
+  });
+
+  it.each([
+    ["1", true],
+    ["0", false],
+    ["true", false],
+    ["", false],
+    [" 1", false],
+    [undefined, false],
+  ] as const)("reads DUCTUS_EVIDENCE_ASYNC_SIGNING=%j as %s", (value, on) => {
+    expect(evidenceAsyncSigning({ DUCTUS_EVIDENCE_ASYNC_SIGNING: value })).toBe(on);
   });
 });

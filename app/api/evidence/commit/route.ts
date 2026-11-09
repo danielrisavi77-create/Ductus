@@ -4,7 +4,7 @@ import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { handleEvidenceCommitRequest } from "@/server/evidence/commit-route";
-import { evidenceIngestDeps } from "@/server/evidence/ingest-deps";
+import { evidenceAsyncSigning, evidenceIngestDeps } from "@/server/evidence/ingest-deps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,5 +18,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     ...evidenceIngestDeps(),
     expectedOrigin: expectedOrigin(),
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
+    asyncSigning: evidenceAsyncSigning(),
   });
 }
