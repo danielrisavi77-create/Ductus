@@ -1,0 +1,25 @@
+/* Paket 16 (DAN-604): tokeni i dijelovi iz m5-reference i m5-reference-c; ovdje samo dodaci za čuvanje, revizijski trag i izlaz iz usluge. */
+@import url("../m5-reference-c/reference.css");
+
+.wide { grid-column: 1 / -1; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.stack { display: grid; gap: 8px; align-content: start; min-width: 0; }
+h3.sub { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; margin: 6px 0 0; color: var(--ink-2); }
+.item .row-top { display: flex; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; align-items: baseline; }
+
+/* Redak traga: vrijeme, tko i uloga, koji rad, što je otvoreno. Sadržaj rada se ne prikazuje. */
+.log { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.log li { display: grid; grid-template-columns: 7.5em repeat(3, minmax(0, 1fr)); gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--rule-2); }
+.log time { font: 500 13px/1.5 var(--ff-mono); color: var(--ink-2); }
+.filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+
+/* Koraci izlaza: riječ i oblik oznake (puna točka, prsten, prazno), ne samo boja. */
+.steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: flex; gap: 8px; align-items: baseline; }
+.steps li::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; border: 1px solid var(--rule); }
+.steps li.done::before { background: var(--synced); border-color: var(--synced); }
+.steps li.now::before { border: 3px solid var(--accent); }
+.steps li.now { font-weight: 600; }
+
+@media (max-width: 1050px) { .cols { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .log li, .filters { grid-template-columns: 1fr; } }
