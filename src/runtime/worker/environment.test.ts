@@ -84,7 +84,7 @@ describe("worker environment: the numbers", () => {
     const room = { WORKER_JOB_EXPIRE_SECONDS: "3600", WORKER_JOB_DEADLINE_MS: "1" };
     for (const value of [min, max]) {
       const env = { WORKER_DATABASE_URL: URL_OK, ...room, [name]: String(value) };
-      if (name === "WORKER_JOB_EXPIRE_SECONDS") env.WORKER_JOB_DEADLINE_MS = String(value * 1000 - 1);
+      if (name === "WORKER_JOB_EXPIRE_SECONDS") env.WORKER_JOB_DEADLINE_MS = String(value * 1000 - 500);
       expect(problems(env), `${name}=${value}`).toEqual([]);
     }
   });
@@ -92,14 +92,21 @@ describe("worker environment: the numbers", () => {
   it.each([
     ["equal to the expiry", "2", "2000"],
     ["above the expiry", "2", "2001"],
+    ["one millisecond below the expiry", "2", "1999"],
+    ["one millisecond inside the half second", "2", "1501"],
+    ["one millisecond inside the half second of the shortest expiry", "1", "501"],
     ["the default deadline against a short expiry", "30", undefined],
-  ])("a deadline %s is refused: the handler must stop before the queue takes the job back", (_label, expire, deadline) => {
+  ])("a deadline %s is refused: the fence must fit between the deadline and the expiry", (_label, expire, deadline) => {
     const env = { WORKER_DATABASE_URL: URL_OK, WORKER_JOB_EXPIRE_SECONDS: expire, WORKER_JOB_DEADLINE_MS: deadline };
-    expect(problems(env)).toEqual(["WORKER_JOB_DEADLINE_MS is not below WORKER_JOB_EXPIRE_SECONDS"]);
+    expect(problems(env)).toEqual(["WORKER_JOB_DEADLINE_MS is not half a second below WORKER_JOB_EXPIRE_SECONDS"]);
   });
 
-  it("a deadline one millisecond below the expiry is accepted", () => {
-    const env = { WORKER_DATABASE_URL: URL_OK, WORKER_JOB_EXPIRE_SECONDS: "2", WORKER_JOB_DEADLINE_MS: "1999" };
+  it.each([
+    ["2", "1500"],
+    ["1", "500"],
+    ["3600", "3599500"],
+  ])("a deadline exactly half a second below an expiry of %s s is accepted", (expire, deadline) => {
+    const env = { WORKER_DATABASE_URL: URL_OK, WORKER_JOB_EXPIRE_SECONDS: expire, WORKER_JOB_DEADLINE_MS: deadline };
     expect(problems(env)).toEqual([]);
   });
 });
@@ -167,7 +174,7 @@ describe("worker environment: the whole", () => {
   });
 
   it("no problem ever carries a value: only names of variables and fixed words", () => {
-    const shape = /^WORKER_[A-Z_]+ (is not set|is not a URL|is not a postgres URL|names no host|is not a whole number|is out of range|is not below WORKER_JOB_EXPIRE_SECONDS)$/;
+    const shape = /^WORKER_[A-Z_]+ (is not set|is not a URL|is not a postgres URL|names no host|is not a whole number|is out of range|is not half a second below WORKER_JOB_EXPIRE_SECONDS)$/;
     const hostile = [SECRET, `http://db.example/${SECRET}`, `postgres:///${SECRET}`, `${SECRET} 12`, "99999999", "0"];
     for (const value of hostile) {
       const env: Record<string, string> = { WORKER_DATABASE_URL: value };

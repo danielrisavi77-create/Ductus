@@ -22,11 +22,13 @@ export const WORKER_NUMBERS = {
   WORKER_RETRY_LIMIT: [3, 0, 20],
   WORKER_RETRY_DELAY_SECONDS: [30, 0, 3600],
   WORKER_JOB_EXPIRE_SECONDS: [120, 1, 3600],
-  WORKER_JOB_DEADLINE_MS: [60_000, 1, 3_599_999],
+  WORKER_JOB_DEADLINE_MS: [60_000, 1, 3_599_500],
   WORKER_KEEP_SECONDS: [7 * DAY, 1, 365 * DAY],
   WORKER_SWEEP_SECONDS: [10, 1, 3600],
 } as const;
 
+const DEADLINE_GAP_MS = 500;
+const DEADLINE_GAP = "is not half a second below WORKER_JOB_EXPIRE_SECONDS";
 const PROTOCOLS = new Set(["postgres:", "postgresql:"]);
 // Digits only, no sign, no leading zero: a value is never guessed at.
 const WHOLE = /^(0|[1-9][0-9]{0,8})$/;
@@ -66,8 +68,9 @@ export function parseWorkerEnvironment(env: Env): WorkerEnvironment {
   const deadlineMs = read("WORKER_JOB_DEADLINE_MS");
   const deleteAfterSeconds = read("WORKER_KEEP_SECONDS");
   const sweepSeconds = read("WORKER_SWEEP_SECONDS");
-  // NaN (a problem already reported) compares false, so this adds nothing then.
-  if (deadlineMs >= expireSeconds * 1000) problems.push("WORKER_JOB_DEADLINE_MS is not below WORKER_JOB_EXPIRE_SECONDS");
+  // The queue asks for half a second between the two: the fence that ends an attempt which ignores its
+  // deadline fires in that gap. NaN (a problem already reported) compares false, so this adds nothing then.
+  if (deadlineMs > expireSeconds * 1000 - DEADLINE_GAP_MS) problems.push(`WORKER_JOB_DEADLINE_MS ${DEADLINE_GAP}`);
 
   if (problems.length > 0) return { ok: false, problems };
   const connectionString = env.WORKER_DATABASE_URL as string;

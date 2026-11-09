@@ -189,16 +189,23 @@ describe("worker process: jobs in flight", () => {
     expect(await jobs(def.name)).toMatchObject([{ state: "active", retry_count: 0 }]);
   });
 
-  it("W-3: a job whose process was killed is completed by the next process, as a second attempt", async () => {
+  it.each<[string, boolean]>([
+    ["was killed", true],
+    ["was ended by the fence because its handler ignored the deadline", false],
+  ])("W-3, W-4: a job whose process %s is completed by the next process, as a second attempt", async (_label, kill) => {
     const def = definition();
-    const timing = settings({ expireSeconds: 2, deadlineMs: 1_900 });
+    const timing = settings({ expireSeconds: 2, deadlineMs: 1_000 });
     const queue = await open(def, timing);
     expect(await queue.enqueue(def.name, { checkId: randomUUID() })).toBe("queued");
 
     const first = drive(def, "hang", { settings: timing });
     await expect.poll(() => states(def.name), { timeout: 20_000, interval: 20 }).toEqual(["active"]);
-    first.child.kill("SIGKILL");
+    const seen = Date.now();
+    if (kill) first.child.kill("SIGKILL");
+    // Nobody else ends it in the second row: the fence does, before the queue's two seconds are over.
     expect(await first.exited).toEqual({ code: null, signal: "SIGKILL" });
+    expect(Date.now() - seen).toBeLessThan(2_000);
+    expect(events(first.lines(), "worker_job")).toEqual([]);
     expect(await jobs(def.name)).toMatchObject([{ state: "active", retry_count: 0 }]);
 
     const second = drive(def, "ok", { settings: timing });
