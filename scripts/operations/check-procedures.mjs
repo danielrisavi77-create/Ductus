@@ -17,10 +17,11 @@
 // - a fence of three or more backticks at column 0 with an optional one-word
 //   info string, closed by a line of at least as many backticks and nothing else.
 // On those lines code is single backticks closed on the same line; a run of two
-// or more backticks, a backslash before a backtick and HTML outside code are
-// refused. Anywhere in the document a tilde fence, an indented fence, an
-// indented heading, an HTML block, a setext underline and an unclosed fence are
-// refused, because each could hide or move a heading, step or marker.
+// or more backticks, a backslash before a backtick, HTML outside code and, on
+// a step line, `Naredba:` or `Nositelj:` inside a code span are refused.
+// Anywhere in the document a tilde fence, an indented fence, an indented
+// heading, an HTML block, a setext underline and an unclosed fence are refused,
+// because each could hide or move a heading, step or marker.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -78,12 +79,16 @@ function cells(row) {
 /**
  * Why a line's inline content is outside the subset, or null.
  * @param {string} line
+ * @param {boolean} [step] a step line, whose markers are read
  * @returns {string | null}
  */
-function inlineProblem(line) {
+function inlineProblem(line, step = false) {
   if (line.includes("\\`")) return "backslash before a backtick";
   if (line.includes("``")) return "two or more backticks in a row";
   if ((line.match(/`/g) ?? []).length % 2 === 1) return "code span not closed on its line";
+  if (step && (line.match(CODE_SPAN_RE) ?? []).some((span) => /(?:naredba|nositelj):/i.test(span))) {
+    return "marker inside a code span";
+  }
   if (HTML_RE.test(line.replace(CODE_SPAN_RE, ""))) return "inline HTML";
   return null;
 }
@@ -186,7 +191,7 @@ export function parseOperations(text) {
       const number = digits.length <= 9 ? Number(digits) : null;
       if (procedure === null) return refuse(lineNumber, "step outside a procedure");
       const form = STEP_RE.exec(line);
-      const problem = !form ? "step form" : prev === "prose" || prev === "table" ? "step right after a paragraph" : inlineProblem(line);
+      const problem = !form ? "step form" : prev === "prose" || prev === "table" ? "step right after a paragraph" : inlineProblem(line, true);
       step = number === null ? null : { number, line: lineNumber, text: form ? line.slice(form[0].length) : "", refused: problem !== null };
       if (step) procedure.steps.push(step);
       if (problem) refuse(lineNumber, problem);
@@ -386,11 +391,8 @@ export function checkOperations(text, context) {
       if (step.refused) continue;
 
       const body = step.text.replace(/\*\*(Naredba|Nositelj):\*\*/g, "$1:");
-      // A marker written inside a code span is an example, not a marker.
-      const codeSpans = [...body.matchAll(CODE_SPAN_RE)].map((m) => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
-      const markers = [...body.matchAll(MARKER_RE)].filter(
-        (m) => !codeSpans.some(([from, to]) => (m.index ?? 0) >= from && (m.index ?? 0) < to),
-      );
+      // A marker inside a code span was refused by the parser, so none is left.
+      const markers = [...body.matchAll(MARKER_RE)];
       if (markers.length === 0) report(step.number, step.line, "step has neither Naredba: nor Nositelj:");
       for (const marker of markers) {
         const kind = marker[1];
