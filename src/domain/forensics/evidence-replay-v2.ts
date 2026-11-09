@@ -1,5 +1,5 @@
 import { sha256WebCrypto } from "./crypto";
-import type { EvidenceChainDiscontinuityV2 } from "./evidence-chain-v2";
+import { findEvidenceBreakV2, type EvidenceChainDiscontinuityV2 } from "./evidence-chain-v2";
 import type { EvidenceEventV3, EvidenceSegment } from "./evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
@@ -101,20 +101,9 @@ export async function findEvidenceStartBreakV2<TDocument>(
     return { ok: false, reason: "invalid_document" };
   }
 
-  const documentHashBreak = first.initialDocumentHash !== startHash;
-  if (first.sequenceFrom === 1 && !documentHashBreak) {
-    return { ok: true, discontinuity: null };
-  }
   return {
     ok: true,
-    discontinuity: {
-      index: 0,
-      previousSequenceTo: 0,
-      sequenceFrom: first.sequenceFrom,
-      sequence:
-        first.sequenceFrom === 1 ? "continuous" : first.sequenceFrom > 1 ? "gap" : "regression",
-      documentHashBreak,
-    },
+    discontinuity: findEvidenceBreakV2(0, { sequenceTo: 0, finalDocumentHash: startHash }, first),
   };
 }
 

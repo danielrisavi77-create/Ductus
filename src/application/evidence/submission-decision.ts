@@ -58,7 +58,10 @@ export function decideSubmission(outcome: EvidenceReconstructionOutcome): Submis
         decision: "blocked",
         reason: outcome.reason === "receipt_missing" ? "segment_unsigned" : "record_mismatch",
       };
+    // A replay across gaps still has the gaps: the policy that would let a
+    // recorded gap through is not built yet, so it blocks like any break.
     case "discontinuity":
+    case "match_across_gaps":
       return { decision: "blocked", reason: "record_discontinuous" };
     case "no_evidence":
       return { decision: "blocked", reason: "no_evidence" };

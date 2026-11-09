@@ -1,5 +1,7 @@
 import type {
   EvidenceChainReader,
+  EvidenceCheckpointReader,
+  EvidenceCheckpointReadResult,
   EvidenceChainReadResult,
   EvidencePayloadReader,
   EvidencePayloadReadResult,
@@ -12,6 +14,7 @@ import {
   type EvidenceChainFailureV2,
   type EvidenceChainHeadV2,
 } from "@/domain/forensics/evidence-chain-v2";
+import { evidenceCheckpointHashesV2, replayEvidenceAcrossGapsV2 } from "@/domain/forensics/evidence-checkpoint-v2";
 import {
   digestEvidenceReceiptPayload,
   isSignedEvidenceReceipt,
@@ -72,6 +75,8 @@ type ReconstructionDependencies<TDocument> = {
   chain: EvidenceChainReader<unknown>;
   payloads: EvidencePayloadReader;
   replayer: EvidenceStepReplayerV2<TDocument>;
+  /** Without it no break is ever crossed: the first one is the outcome. */
+  checkpoints?: EvidenceCheckpointReader;
 } & (
   | { signer: Pick<SigningKeyProvider, "verify">; receipts?: undefined }
   | { receipts: EvidenceReceiptCheck; signer?: undefined }
@@ -84,6 +89,7 @@ export type EvidenceReconstructionFailure =
   | "receipt_missing"
   | "receipt_mismatch"
   | "receipt_signature_invalid"
+  | "checkpoint_invalid"
   | "invalid_target"
   | "target_mismatch";
 
@@ -102,8 +108,7 @@ export type EvidenceReconstructionFailure =
  * `discontinuity.index` does not continue what stands before it, so nothing
  * from there on is replayed and the target is not compared. Only the first
  * break is reported; a later one, even a `regression`, is not in this outcome.
- * This pass has no checkpoints and no recorded gaps; B-12 compares the break
- * with the recorded gaps and restarts from the checkpoint after it.
+ * With a checkpoint reader, see `match_across_gaps`.
  *
  * `index: 0` is a break at the start of the record. The first segment
  * continues a virtual start (`previousSequenceTo: 0`, the hash of
@@ -114,6 +119,15 @@ export type EvidenceReconstructionFailure =
  * checkpoint (ARCHITECTURE §5 and §6) starts after event 1 on purpose, but
  * the input has no event number for the starting document, so that start is
  * a break here too (the closed side) until B-12 adds one.
+ *
+ * `match_across_gaps` (B-12, D-191 t. 4) is reached only with a checkpoint
+ * reader: the record reproduces the target, but only by continuing past
+ * `breaks` (every break of the record, in order, never empty) from verified
+ * checkpoints. Only a `gap` is crossed, and only from bytes that are the
+ * canonical form of the document the chain names at the end of the gap. The
+ * gaps stay in the outcome (D-11) and it is not a `match`. A checkpoint that
+ * fails that check is `checkpoint_invalid` at the break; a gap with no
+ * checkpoint, or a break that is not a gap, is `discontinuity` for that break.
  *
  * `no_evidence` means nothing was accepted for the package, or the store does
  * not know the package. An empty record proves nothing about any document,
@@ -128,6 +142,12 @@ export type EvidenceReconstructionOutcome =
       index: number | null;
     }
   | { status: "discontinuity"; discontinuity: EvidenceChainDiscontinuityV2 }
+  | {
+      status: "match_across_gaps";
+      head: EvidenceChainHeadV2;
+      documentSha256: string;
+      breaks: EvidenceChainDiscontinuityV2[];
+    }
   | { status: "no_evidence" }
   | {
       status: "unavailable";
@@ -191,10 +211,16 @@ function unavailable(
  * 8. Replay, per segment and only of the segments before that break (none
  *    for a break at the start): `unsupported_format`,
  *    `document_hash_mismatch`, `step_failed`.
- * 9. `discontinuity`, for the break of step 7.
- * 10. `invalid_target`, then `target_mismatch`; a target given by its hash
+ * 9. Without a checkpoint reader, or when the break of step 7 is not a
+ *    gap: `discontinuity` for that break.
+ * 10. With a reader, one read for the checkpoint hashes of every gap:
+ *    `unavailable` (storage, also when the port rejects). Then the replay
+ *    of the whole record across the gaps, in record order: the replay
+ *    faults of step 8 and `checkpoint_invalid` are a `mismatch`, a gap with
+ *    no checkpoint or a later break that is not a gap is `discontinuity`.
+ * 11. `invalid_target`, then `target_mismatch`; a target given by its hash
  *    is compared with the hash of the replayed document.
- * 11. `match`.
+ * 12. `match`, or `match_across_gaps` when a gap was crossed.
  *
  * So the three outcomes that are not a fault (`no_evidence`, `discontinuity`,
  * `match`) are reached only after steps 1 to 3, and the last two only after
@@ -304,24 +330,74 @@ export async function reconstructAndCompareEvidence<TDocument>(
     dependencies.replayer,
   );
   if (!replayed.ok) return mismatch(replayed.reason, replayed.segmentIndex);
-  if (firstBreak) return { status: "discontinuity", discontinuity: firstBreak };
+  if (!firstBreak) {
+    return (
+      targetFault(input, replayed) ?? {
+        status: "match",
+        head: verifiedChain.head,
+        documentSha256: replayed.documentSha256,
+      }
+    );
+  }
+  if (dependencies.checkpoints === undefined || firstBreak.sequence !== "gap") {
+    return { status: "discontinuity", discontinuity: firstBreak };
+  }
 
+  // Only the checkpoints at the gaps are asked for, so one offered anywhere
+  // else is never read and never stands in for a replayed event.
+  const breaks = [...(start.discontinuity ? [start.discontinuity] : []), ...verifiedChain.discontinuities];
+  let read: EvidenceCheckpointReadResult;
+  try {
+    read = await dependencies.checkpoints.readCheckpoints({
+      evidencePackageId: input.evidencePackageId,
+      documentHashes: evidenceCheckpointHashesV2(segments, breaks),
+    });
+  } catch (error) {
+    return unavailable("storage", error);
+  }
+  if (read.status === "unavailable") {
+    return { status: "unavailable", stage: "storage", reason: read.reason };
+  }
+
+  const across = await replayEvidenceAcrossGapsV2(
+    input.initialDocument,
+    segments,
+    dependencies.replayer,
+    read.checkpoints,
+  );
+  if (!across.ok) {
+    if (across.reason === "checkpoint_missing" || across.reason === "break_not_resumable") {
+      return { status: "discontinuity", discontinuity: across.discontinuity };
+    }
+    return mismatch(across.reason, across.segmentIndex);
+  }
+  return (
+    targetFault(input, across) ?? {
+      status: "match_across_gaps",
+      head: verifiedChain.head,
+      documentSha256: across.documentSha256,
+      breaks: across.breaks,
+    }
+  );
+}
+
+/** `invalid_target` or `target_mismatch`, or `null` when the replay reproduces the target. */
+function targetFault(
+  input:
+    | { expectedDocument: JcsJsonValue; expectedDocumentSha256?: undefined }
+    | { expectedDocumentSha256: string; expectedDocument?: undefined },
+  replayed: { canonicalDocument: string; documentSha256: string },
+): EvidenceReconstructionOutcome | null {
   if (input.expectedDocumentSha256 !== undefined) {
     if (!SHA256_HEX.test(input.expectedDocumentSha256)) return mismatch("invalid_target", null);
     if (replayed.documentSha256 !== input.expectedDocumentSha256) return mismatch("target_mismatch", null);
-  } else {
-    let expected: string;
-    try {
-      expected = canonicalizeJcs(input.expectedDocument);
-    } catch {
-      return mismatch("invalid_target", null);
-    }
-    if (replayed.canonicalDocument !== expected) return mismatch("target_mismatch", null);
+    return null;
   }
-
-  return {
-    status: "match",
-    head: verifiedChain.head,
-    documentSha256: replayed.documentSha256,
-  };
+  let expected: string;
+  try {
+    expected = canonicalizeJcs(input.expectedDocument);
+  } catch {
+    return mismatch("invalid_target", null);
+  }
+  return replayed.canonicalDocument === expected ? null : mismatch("target_mismatch", null);
 }
