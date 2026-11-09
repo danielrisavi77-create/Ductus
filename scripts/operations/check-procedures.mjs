@@ -18,7 +18,8 @@
 //   info string, closed by a line of at least as many backticks and nothing else.
 // On those lines code is single backticks closed on the same line; a run of two
 // or more backticks, a backslash before a backtick, HTML outside code and, on
-// a step line, `Naredba:` or `Nositelj:` inside a code span are refused.
+// a step line, `Naredba:` or `Nositelj:` inside a code span and a `[` outside
+// code (a link or an image) are refused.
 // Anywhere in the document a tilde fence, an indented fence, an indented
 // heading, an HTML block, a setext underline and an unclosed fence are refused,
 // because each could hide or move a heading, step or marker.
@@ -90,6 +91,8 @@ function inlineProblem(line, step = false) {
     return "marker inside a code span";
   }
   if (HTML_RE.test(line.replace(CODE_SPAN_RE, ""))) return "inline HTML";
+  // A link title or an image alt text can carry a marker that is not shown.
+  if (step && line.replace(CODE_SPAN_RE, "").includes("[")) return "square bracket outside code (link or image)";
   return null;
 }
 
