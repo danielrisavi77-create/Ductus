@@ -48,7 +48,7 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 1. Instaliraj ovisnosti točno prema lockfileu. Naredba: `pnpm install --frozen-lockfile`. `izgrađeno`
 2. Podigni lokalni stog, primijeni migracije na lokalnu bazu, upiši sintetičke podatke i pokreni aplikaciju na `localhost:3000`. Naredba: `pnpm local:up`. Aplikacija odbija start bez valjanog `APP_DATABASE_URL` (`src/server/env.ts`). `izgrađeno`
 3. Provjeri da proces odgovara. Naredba: `curl -fsS http://localhost:3000/api/health`. `izgrađeno`
-4. Provjeri spremnost po sposobnosti: `database`, `storage`, `signing`, `queue` (`ok`, `nedostupno` ili `nije_konfigurirano`). Naredba: `curl --fail-with-body -sS http://localhost:3000/api/ready`; odgovor `503` znači da baza nije spremna i promet se ne pušta na repliku (DAN-585). `izgrađeno`
+4. Provjeri spremnost po sposobnosti: `database`, `storage`, `signing`, `queue` (`ok`, `nedostupno` ili `nije_konfigurirano`). Naredba: `curl --fail-with-body -sS http://localhost:3000/api/ready`; odgovor `503` sa stanjem `draining` znači da se proces gasi, a `503` sa sposobnošću koja nije `ok` znači da ta sposobnost (npr. `database`) nije spremna; u oba slučaja promet se ne pušta na repliku (DAN-585, `app/api/ready/route.ts`). `izgrađeno`
 5. Deploy zamrznutog izdanja na produkciju i primjena migracija na produkcijsku bazu. Nositelj: `vlasnik`. Agent ne primjenjuje migracije na produkciju (`CLAUDE.md`). `[PRAVILO]`; deploy je `planirano`.
 6. U fazama A i B upiši izdanje (puni commit SHA) i stanje spremnosti u dnevni zapis. Nositelj: `vlasnik`.
 
@@ -65,7 +65,7 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 1. Odluči što se vraća (kod na prethodno izdanje ili podaci iz kopije), na koje izdanje i zašto; ako povrat prati incident, upiši njegov ID. Nositelj: `vlasnik`.
 2. Ugasi aplikaciju po postupku „Gašenje”. Naredba: `kill -TERM <pid>`.
 3. Vrati prethodno zamrznuto izdanje (puni commit SHA iz dnevnog zapisa) na produkciju. Nositelj: `vlasnik`. `planirano`
-4. Vrati bazu i pohranu iz kopije. Nositelj: `vlasnik`. `planirano`: kopije i proba povrata su M11.2-P04 (D-277 NQ05). Dok proba povrata ne prođe, povrat iz kopije nije dokazan. `[DOKAZ]`
+4. Samo ako je u koraku 1 odlučeno da se vraćaju podaci (ne samo kod): vrati bazu i pohranu iz kopije; inače preskoči korak jer bi novije podatke prepisao stariji. Nositelj: `vlasnik`. `planirano`: kopije i proba povrata su M11.2-P04 (D-277 NQ05). Dok proba povrata ne prođe, povrat iz kopije nije dokazan. `[DOKAZ]`
 5. Provjeri stanje migracija. Naredba: `pnpm db:status`. Naredba gleda samo lokalnu bazu; usporedba s `db/migrations.sum` (D-91) na produkciji ide uz korak 3.
 6. Pokreni po postupku „Pokretanje” i provjeri spremnost. Naredba: `pnpm local:up`, `curl --fail-with-body -sS http://localhost:3000/api/ready`.
 7. Provjeri rekonstrukciju predanih radova na vraćenom izdanju; prag je 100 %, a svako odstupanje blokira izdanje (`docs/PRODUCT.md` §12). Nositelj: `vlasnik`. `[PRAVILO]`; alat je `[DOKAZ]`.
