@@ -4,13 +4,14 @@
 // served roots of the running container, fetches each over HTTP and hands the
 // bodies, headers and status codes to this check (contract on #1091, w185a).
 //
+//   served-bundle.mjs list  <tree>              prints the files of a copied /app
 //   served-bundle.mjs urls  < container paths   prints one URL per path
 //   served-bundle.mjs check <dir>               reads <dir>/index.tsv
 //
 // index.tsv has one line per file: URL, HTTP status, and the status of
 // "<URL>.map" ("-" when not probed). Line n has its body in body/n and its
 // response headers in head/n. Exit 1 on findings, 2 on usage errors.
-import { readFileSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +60,35 @@ function wasmReference(bytes, text) {
   return names === null ? text.includes(WASM_MAP) : names.includes(WASM_MAP);
 }
 
+/**
+ * The files under the served roots of <tree>, a copy of the container's /app
+ * made with "docker cp", which keeps a symbolic link a link. Next follows a
+ * link under a served root (#1752 review c.6729118211), so a link, wherever it
+ * points, and any entry that is neither a file nor a directory is a finding;
+ * so is a missing root. Paths are the container's, sorted.
+ */
+export function listServed(tree) {
+  const paths = [];
+  const findings = [];
+  const walk = (path) => {
+    let entry;
+    try {
+      entry = lstatSync(join(tree, path));
+    } catch {
+      findings.push({ code: "served-root", url: path, detail: "missing" });
+      return;
+    }
+    if (entry.isFile()) paths.push(path);
+    else if (entry.isDirectory()) for (const name of readdirSync(join(tree, path))) walk(`${path}/${name}`);
+    else {
+      const kind = entry.isSymbolicLink() ? "symbolic link" : entry.isFIFO() ? "FIFO" : entry.isSocket() ? "socket" : "device";
+      findings.push({ code: "served-type", url: path, detail: `${kind}, not a regular file or directory` });
+    }
+  };
+  for (const [root] of ROOTS) walk(root.slice(0, -1));
+  return { paths: paths.sort(), findings };
+}
+
 /** The URL a container path is served at, or null outside the served roots. */
 export function servedUrl(path) {
   if (/[\u0000-\u001f\u007f]/.test(path)) return null;
@@ -71,17 +101,31 @@ export function servedUrl(path) {
   return null;
 }
 
+/**
+ * Every text a browser may read the body as. latin1 keeps every byte, so a
+ * marker inside a binary file is still seen; UTF-8 turns a multi-byte space
+ * (U+00A0, U+2028, U+FEFF, …) into \s. UTF-16 is the only encoding a browser
+ * applies (by BOM or charset) that is not ASCII compatible (#1752 QA
+ * c.6729113556), so both byte orders are read at both alignments, BOM or not.
+ */
+function decodings(bytes, text) {
+  const texts = [text, bytes.toString("utf8")];
+  for (const at of [0, 1]) {
+    const even = bytes.subarray(at, at + ((bytes.length - at) & ~1));
+    texts.push(even.toString("utf16le"), Buffer.from(even).swap16().toString("utf16le"));
+  }
+  return texts;
+}
+
 /** Findings for one served file: { url, status, mapStatus, body, headers }. */
 export function checkServed({ url, status, mapStatus, body, headers }) {
   const findings = [];
   const add = (code, detail) => findings.push({ code, url, detail });
   if (status !== "200") add("served-status", `answered ${status}, not 200`);
   if (/\.map$/i.test(url)) add("source-map-file", "a source map is served");
-  // latin1 keeps every byte, so a marker inside a binary file is still seen;
-  // UTF-8 turns a multi-byte space (U+00A0, U+2028, U+FEFF, …) into \s.
   const bytes = Buffer.from(body);
   const text = bytes.toString("latin1");
-  if (REFERENCE.test(text) || REFERENCE.test(bytes.toString("utf8"))) add("source-map-reference", "sourceMappingURL in the body");
+  if (decodings(bytes, text).some((decoded) => REFERENCE.test(decoded))) add("source-map-reference", "sourceMappingURL in the body");
   else if (wasmReference(bytes, text)) add("source-map-reference", "sourceMappingURL custom section in a WebAssembly module");
   if (HEADER.test(headers)) add("source-map-header", "SourceMap response header");
   if (mapStatus !== "-" && mapStatus !== "404") add("source-map-served", `${url}.map answered ${mapStatus}, not 404`);
@@ -108,6 +152,12 @@ function readSet(dir) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [mode, dir] = process.argv.slice(2);
+  if (mode === "list" && dir) {
+    const { paths, findings } = listServed(dir);
+    for (const path of paths) console.log(path);
+    for (const f of findings) console.error(`${f.url}: ${f.code} (${f.detail})`);
+    process.exit(findings.length > 0 ? 1 : 0);
+  }
   if (mode === "urls") {
     let failed = false;
     for (const path of readFileSync(0, "utf8").split("\n").filter((line) => line !== "")) {
@@ -120,7 +170,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exit(failed ? 1 : 0);
   }
   if (mode !== "check" || !dir) {
-    console.error("usage: served-bundle.mjs urls < paths | served-bundle.mjs check <dir>");
+    console.error("usage: served-bundle.mjs list <tree> | served-bundle.mjs urls < paths | served-bundle.mjs check <dir>");
     process.exit(2);
   }
   const entries = readSet(dir);
