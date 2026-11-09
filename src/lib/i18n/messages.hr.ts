@@ -1277,6 +1277,9 @@ export const hr = {
     // Unsaved text (#1331): sign-out is still allowed (D-118) but named for what it costs.
     logoutConfirmUnsaved: "Odjavi se bez izvoza",
     logoutStay: "Ostani",
+    // DAN-296: the server could not close the session, so the device stays signed in.
+    logoutFailedTitle: "Odjava nije dovršena",
+    logoutFailedBody: "Odjavu trenutačno nije moguće zabilježiti, pa ste na ovom uređaju i dalje prijavljeni. Pokušajte ponovno za nekoliko minuta.",
     logoutPlain: "Odjava zatvara sesiju na ovom uređaju.",
     logoutPending: {
       one: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",

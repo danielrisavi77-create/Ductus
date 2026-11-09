@@ -30,12 +30,6 @@
     "reason": "Interni korak bez EXECUTE za aplikacijske uloge; zovu ga collaboration.resolve_thread i reopen_thread, koje imaju rutu."
   },
   {
-    "function": "identity.close_all_sessions_for_identity",
-    "status": "ruta dolazi",
-    "reason": "Odjava sa svih uređaja (close_reason logout_all); RPC postoji za ductus_app, ruta još nije spojena.",
-    "ticket": "DAN-296"
-  },
-  {
     "function": "identity.close_user_sessions",
     "status": "bez rute",
     "reason": "Operaterska radnja zatvaranja svih sesija jednog korisnika; nijedna aplikacijska uloga ni PUBLIC je ne smije pozvati (F-036)."

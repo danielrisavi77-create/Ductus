@@ -36,6 +36,11 @@ export interface AuthDeps {
   openSession: OpenSessionPort;
   /** Closes the session behind a raw cookie token; false when there was none. */
   closeSession: (token: string) => Promise<boolean>;
+  /**
+   * Closes every live session of the account behind a raw cookie token, this
+   * one included (DAN-296); nothing when the token names no live session.
+   */
+  closeAllSessions: (token: string) => Promise<void>;
 }
 
 /** The pending login attempt: state, nonce, PKCE verifier and where to go after. */
@@ -105,18 +110,34 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** The neutral page every failure ends on. */
-export function failurePage(status: 400 | 403 | 503, extraHeaders: Headers = new Headers()): Response {
-  const body = status === 503 ? t.auth.unavailableBody : t.auth.failedBody;
+function page(status: number, title: string, body: string, links: string, extraHeaders: Headers): Response {
   const html = `<!doctype html>
 <html lang="hr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(t.auth.failedTitle)} · ${escapeHtml(t.app.name)}</title></head>
-<body><main><h1>${escapeHtml(t.auth.failedTitle)}</h1><p>${escapeHtml(body)}</p>
-<p><a href="/api/auth/login">${escapeHtml(t.auth.retry)}</a> · <a href="/">${escapeHtml(t.auth.home)}</a></p></main></body></html>`;
+<title>${escapeHtml(title)} · ${escapeHtml(t.app.name)}</title></head>
+<body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p>
+<p>${links}</p></main></body></html>`;
   const headers = new Headers(extraHeaders);
   for (const [k, v] of Object.entries(NO_STORE)) headers.set(k, v);
   headers.set("content-type", "text/html; charset=utf-8");
   return new Response(html, { status, headers });
+}
+
+const homeLink = () => `<a href="/">${escapeHtml(t.auth.home)}</a>`;
+
+/** The neutral page every failure ends on. */
+export function failurePage(status: 400 | 403 | 503, extraHeaders: Headers = new Headers()): Response {
+  const body = status === 503 ? t.auth.unavailableBody : t.auth.failedBody;
+  const links = `<a href="/api/auth/login">${escapeHtml(t.auth.retry)}</a> · ${homeLink()}`;
+  return page(status, t.auth.failedTitle, body, links, extraHeaders);
+}
+
+/**
+ * A logout the database could not record (DAN-296): the session stays open,
+ * so the page says so and sets no cookie; the device stays signed in and the
+ * logout can be repeated.
+ */
+function logoutFailedPage(): Response {
+  return page(503, t.auth.logoutFailedTitle, t.auth.logoutFailedBody, homeLink(), new Headers());
 }
 
 function redirect(location: string, cookies: string[]): Response {
@@ -209,18 +230,38 @@ export function isSameOrigin(request: Request, origin: string): boolean {
 
 /** POST /api/auth/logout */
 export async function logout(request: Request, deps: AuthDeps): Promise<Response> {
+  return endSessions(request, deps, "logout", (token) => deps.closeSession(token));
+}
+
+/** POST /api/auth/logout-all: this session and every other live one of the account (DAN-296). */
+export async function logoutAll(request: Request, deps: AuthDeps): Promise<Response> {
+  return endSessions(request, deps, "logout_all", (token) => deps.closeAllSessions(token));
+}
+
+/**
+ * The cookie is cleared only once the server has nothing left open behind it:
+ * the close succeeded, or there was nothing to close. When the database fails
+ * the cookie stays and no redirect follows, so the device remains signed in
+ * and can try again rather than leave a live session it no longer holds. The
+ * answer is the same whether a session existed or not.
+ */
+async function endSessions(
+  request: Request,
+  deps: AuthDeps,
+  stage: string,
+  close: (token: string) => Promise<unknown>,
+): Promise<Response> {
   if (!isSameOrigin(request, deps.config.redirectUri.origin)) {
-    logFailure("logout", "cross_origin");
+    logFailure(stage, "cross_origin");
     return failurePage(403);
   }
-  const clearedSession = cookie(SESSION_COOKIE_NAME, "", "Max-Age=0");
   const token = readCookie(request, SESSION_COOKIE_NAME);
   if (token) {
     try {
-      await deps.closeSession(token);
+      await close(token);
     } catch (error) {
-      // The cookie is cleared all the same; the session then ends at expiry.
-      logFailure("logout", errorCode(error));
+      logFailure(stage, errorCode(error));
+      return logoutFailedPage();
     }
   }
   // Only then the provider (DAN-212), also without a live Ductus session: the
@@ -233,5 +274,5 @@ export async function logout(request: Request, deps: AuthDeps): Promise<Response
   } catch (error) {
     logFailure("end_session", errorCode(error));
   }
-  return redirect(location, [clearedSession]);
+  return redirect(location, [cookie(SESSION_COOKIE_NAME, "", "Max-Age=0")]);
 }

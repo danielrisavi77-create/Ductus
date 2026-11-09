@@ -1274,6 +1274,9 @@ const en = {
     // Unsaved text (#1331): sign-out is still allowed (D-118) but named for what it costs.
     logoutConfirmUnsaved: "Sign out without exporting",
     logoutStay: "Stay",
+    // DAN-296: the server could not close the session, so the device stays signed in.
+    logoutFailedTitle: "Sign-out not completed",
+    logoutFailedBody: "The sign-out cannot be recorded right now, so you are still signed in on this device. Try again in a few minutes.",
     logoutPlain: "Signing out closes the session on this device.",
     logoutPending: {
       one: "{n} change exists only on this device. Signing out closes the session.",

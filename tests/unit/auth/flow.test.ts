@@ -31,6 +31,7 @@ beforeEach(() => {
     oidc: createOidcClient(config, idp.fetch),
     openSession: vi.fn(async () => ({ ok: true as const, expires: EXPIRES })),
     closeSession: vi.fn(async () => true),
+    closeAllSessions: vi.fn(async () => {}),
   };
   errors = vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -361,10 +362,12 @@ describe("logout", () => {
     expect(setCookies(response).has(SESSION_COOKIE_NAME)).toBe(false);
   });
 
-  it("clears the cookie even when the database is unavailable", async () => {
+  // DAN-296: the cookie goes only once the server has closed the session.
+  it("keeps the cookie and answers 503 when the database is unavailable", async () => {
     deps.closeSession.mockRejectedValueOnce(Object.assign(new Error("down"), { code: "ECONNREFUSED" }));
     const response = await post({ "sec-fetch-site": "same-origin", origin: APP });
-    expect(response.status).toBe(303);
-    expect(setCookies(response).get(SESSION_COOKIE_NAME)).toMatch(/Max-Age=0$/);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("location")).toBeNull();
+    expect(setCookies(response).has(SESSION_COOKIE_NAME)).toBe(false);
   });
 });

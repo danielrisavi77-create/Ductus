@@ -316,7 +316,7 @@ Pravila koja vrijede neovisno o dobavljaču (BACKEND §3, §4.7, §4.8):
 - Tajne: GitHub Environments sa zaštitom za CI, na VM-u `sops` + `age`; `age` ključ i pričuvne kopije tajni drži vlasnik izvan VM-a. Tajne nikad u repou.
 - Bez sadržaja radova u logovima, predmemoriji i analitici (BACKEND §4.9): `log_statement=none`, Caddy log bez query stringova, praćenje grešaka bez tijela zahtjeva, canary test u CI-ju i na stagingu.
 - Bez server-side renderiranja sadržaja: rute sa sadržajem su API rute s `dynamic = 'force-dynamic'` i `revalidate = 0`, uz ESLint pravilo i E2E test s dva korisnika.
-- Odjava uvijek zatvara sesiju i kolačić (D-118). Lokalni journal vezan je uz studenta: druga osoba ga ne vidi, a nepredani zapis nastavlja se pri ponovnoj prijavi istog studenta.
+- Odjava uvijek zatvara sesiju i kolačić (D-118); kolačić se briše tek kad je sesija na poslužitelju zatvorena, a kad baza nije dostupna odjava vraća 503 i može se ponoviti (DAN-296). Lokalni journal vezan je uz studenta: druga osoba ga ne vidi, a nepredani zapis nastavlja se pri ponovnoj prijavi istog studenta.
 - Akcije u CI-ju pinane na SHA; Gitleaks, zizmor, Semgrep i OSV; Dependabot s odgodom.
 - Deploy na produkciju samo iz zelenog `main`-a.
 - Kontrolna lista za svaku backend komponentu (BACKEND §6) je uvjet za spajanje.
