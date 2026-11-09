@@ -14,7 +14,13 @@ import {
   type EvidenceChainFailureV2,
   type EvidenceChainHeadV2,
 } from "@/domain/forensics/evidence-chain-v2";
-import { evidenceCheckpointHashesV2, replayEvidenceAcrossGapsV2 } from "@/domain/forensics/evidence-checkpoint-v2";
+import {
+  evidenceCheckpointHashesV2,
+  evidenceResumeHashesV2,
+  replayEvidenceAcrossGapsV2,
+  replayEvidenceFromCheckpointV2,
+  type EvidenceGapReplayResultV2,
+} from "@/domain/forensics/evidence-checkpoint-v2";
 import {
   digestEvidenceReceiptPayload,
   isSignedEvidenceReceipt,
@@ -155,6 +161,55 @@ export type EvidenceReconstructionOutcome =
       reason: string;
     };
 
+/**
+ * What a reconstruction that may start at a checkpoint returns (B-12,
+ * ARCHITECTURE §6 t. 3). `match_from_checkpoint` says the record reproduces
+ * the target from the checkpoint the chain vouches for at segment
+ * `resumedAt` (never 0), with every break after it crossed as in
+ * `match_across_gaps`; `breaks` is every break of the record, also those
+ * before `resumedAt`.
+ *
+ * It is not a `match` and not a `match_across_gaps`, and no submission is
+ * decided on it: the segments before `resumedAt` were verified against the
+ * head and their receipts, but not replayed, so a step in them that does not
+ * apply is not seen. The checkpoint comes from the client; the chain proves
+ * only that its bytes are the document the segment at `resumedAt` names as
+ * its start.
+ */
+export type EvidenceResumedReconstructionOutcome =
+  | EvidenceReconstructionOutcome
+  | {
+      status: "match_from_checkpoint";
+      head: EvidenceChainHeadV2;
+      documentSha256: string;
+      breaks: EvidenceChainDiscontinuityV2[];
+      resumedAt: number;
+    };
+
+type ReconstructionInput = {
+  evidencePackageId: string;
+  initialDocument: JcsJsonValue;
+} & (
+  | { expectedDocument: JcsJsonValue; expectedDocumentSha256?: undefined }
+  /** The target by its hash (a stored revision's `content_hash`, BACKEND 4.10 t. 1). */
+  | { expectedDocumentSha256: string; expectedDocument?: undefined }
+);
+
+/** The record after steps 1 to 7 below: verified, with every break located. */
+type VerifiedRecord = {
+  head: EvidenceChainHeadV2;
+  segments: EvidenceSegment[];
+  /** Every break of the record in order, the one at the start first. */
+  breaks: EvidenceChainDiscontinuityV2[];
+};
+
+/**
+ * How many of the newest positions a resumed reconstruction asks checkpoints
+ * for. A bound on one read, not a cadence: with no checkpoint among them the
+ * replay starts at the beginning, which is slower and gives the same outcome.
+ */
+const RESUME_CANDIDATES = 32;
+
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 function mismatch(
@@ -234,15 +289,99 @@ function unavailable(
  */
 export async function reconstructAndCompareEvidence<TDocument>(
   dependencies: ReconstructionDependencies<TDocument>,
-  input: {
-    evidencePackageId: string;
-    initialDocument: JcsJsonValue;
-  } & (
-    | { expectedDocument: JcsJsonValue; expectedDocumentSha256?: undefined }
-    /** The target by its hash (a stored revision's `content_hash`, BACKEND 4.10 t. 1). */
-    | { expectedDocumentSha256: string; expectedDocument?: undefined }
-  ),
+  input: ReconstructionInput,
 ): Promise<EvidenceReconstructionOutcome> {
+  return reconstruct(dependencies, input);
+}
+
+/**
+ * The same pass, started at the newest checkpoint the chain vouches for
+ * instead of at the beginning (B-12, D-191 t. 4), for a worker that runs a
+ * reconstruction again or picks one up after a gap. Steps 1 to 7 are those of
+ * `reconstructAndCompareEvidence`: every segment and receipt of the record is
+ * verified whatever the start. Then:
+ *
+ * 8. One read for the checkpoints at the gaps and at the newest
+ *    `RESUME_CANDIDATES` positions before the first break that is not a gap
+ *    (no read when there is no such position): `unavailable` (storage, also
+ *    when the port rejects).
+ * 9. The replay starts at the newest of those positions whose checkpoint the
+ *    chain vouches for, before the first break the full replay cannot cross;
+ *    a checkpoint that is missing, damaged or of another document is passed
+ *    over and an older one, or the beginning, is the start. Faults from the
+ *    start on are reported as in steps 8 and 10 above.
+ * 10. `invalid_target`, then `target_mismatch`.
+ * 11. `match_from_checkpoint` when the start was a checkpoint; otherwise
+ *    `match`, or `match_across_gaps` when a gap was crossed.
+ *
+ * With the same checkpoints the outcome is the one of the full pass, except
+ * that a success from a checkpoint is `match_from_checkpoint` and that a
+ * replay fault before the start is not seen (see the outcome type). The
+ * checkpoints are read once, so one written during the pass is not used and
+ * cannot change the start between two steps; a second pass may start later
+ * and gives the same verdict on the segments both replay.
+ */
+export async function reconstructEvidenceFromCheckpoint<TDocument>(
+  dependencies: ReconstructionDependencies<TDocument> & { checkpoints: EvidenceCheckpointReader },
+  input: ReconstructionInput,
+): Promise<EvidenceResumedReconstructionOutcome> {
+  return reconstruct(dependencies, input, async ({ head, segments, breaks }) => {
+    const documentHashes = [
+      ...new Set([
+        ...evidenceCheckpointHashesV2(segments, breaks),
+        ...evidenceResumeHashesV2(segments, breaks, RESUME_CANDIDATES),
+      ]),
+    ].sort();
+    let checkpoints: ReadonlyMap<string, Uint8Array> = new Map();
+    if (documentHashes.length > 0) {
+      const read = await readCheckpoints(dependencies.checkpoints, input.evidencePackageId, documentHashes);
+      if (read.status !== "found") return read;
+      checkpoints = read.checkpoints;
+    }
+    const resumed = await replayEvidenceFromCheckpointV2(
+      input.initialDocument,
+      segments,
+      dependencies.replayer,
+      checkpoints,
+    );
+    if (!resumed.ok) return replayStop(resumed);
+    const { documentSha256, resumedAt } = resumed;
+    const fault = targetFault(input, resumed);
+    if (fault) return fault;
+    if (resumedAt > 0) return { status: "match_from_checkpoint", head, documentSha256, breaks: resumed.breaks, resumedAt };
+    if (resumed.breaks.length > 0) return { status: "match_across_gaps", head, documentSha256, breaks: resumed.breaks };
+    return { status: "match", head, documentSha256 };
+  });
+}
+
+/** One read of the checkpoints under `documentHashes`; a port that rejects did not answer. */
+async function readCheckpoints(
+  reader: EvidenceCheckpointReader,
+  evidencePackageId: string,
+  documentHashes: string[],
+): Promise<Extract<EvidenceCheckpointReadResult, { status: "found" }> | EvidenceReconstructionOutcome> {
+  let read: EvidenceCheckpointReadResult;
+  try {
+    read = await reader.readCheckpoints({ evidencePackageId, documentHashes });
+  } catch (error) {
+    return unavailable("storage", error);
+  }
+  return read.status === "unavailable" ? { status: "unavailable", stage: "storage", reason: read.reason } : read;
+}
+
+/** A replay that stopped: at a break it could not cross, or on a fault. */
+function replayStop(stop: Exclude<EvidenceGapReplayResultV2, { ok: true }>): EvidenceReconstructionOutcome {
+  if (stop.reason === "checkpoint_missing" || stop.reason === "break_not_resumable") {
+    return { status: "discontinuity", discontinuity: stop.discontinuity };
+  }
+  return mismatch(stop.reason, stop.segmentIndex);
+}
+
+async function reconstruct<TDocument, TResumed = never>(
+  dependencies: ReconstructionDependencies<TDocument>,
+  input: ReconstructionInput,
+  resume?: (record: VerifiedRecord) => Promise<EvidenceReconstructionOutcome | TResumed>,
+): Promise<EvidenceReconstructionOutcome | TResumed> {
   const checkReceipt = dependencies.receipts ?? signerReceiptCheck(dependencies.signer);
   let chain: EvidenceChainReadResult<unknown>;
   try {
@@ -320,6 +459,8 @@ export async function reconstructAndCompareEvidence<TDocument>(
     dependencies.replayer,
   );
   if (!start.ok) return mismatch(start.reason, null);
+  const breaks = [...(start.discontinuity ? [start.discontinuity] : []), ...verifiedChain.discontinuities];
+  if (resume) return resume({ head: verifiedChain.head, segments, breaks });
 
   // Never replay across a break: with one, only the segments before it are
   // replayed, so a fault in them is still a `mismatch`.
@@ -345,19 +486,12 @@ export async function reconstructAndCompareEvidence<TDocument>(
 
   // Only the checkpoints at the gaps are asked for, so one offered anywhere
   // else is never read and never stands in for a replayed event.
-  const breaks = [...(start.discontinuity ? [start.discontinuity] : []), ...verifiedChain.discontinuities];
-  let read: EvidenceCheckpointReadResult;
-  try {
-    read = await dependencies.checkpoints.readCheckpoints({
-      evidencePackageId: input.evidencePackageId,
-      documentHashes: evidenceCheckpointHashesV2(segments, breaks),
-    });
-  } catch (error) {
-    return unavailable("storage", error);
-  }
-  if (read.status === "unavailable") {
-    return { status: "unavailable", stage: "storage", reason: read.reason };
-  }
+  const read = await readCheckpoints(
+    dependencies.checkpoints,
+    input.evidencePackageId,
+    evidenceCheckpointHashesV2(segments, breaks),
+  );
+  if (read.status !== "found") return read;
 
   const across = await replayEvidenceAcrossGapsV2(
     input.initialDocument,
@@ -365,12 +499,7 @@ export async function reconstructAndCompareEvidence<TDocument>(
     dependencies.replayer,
     read.checkpoints,
   );
-  if (!across.ok) {
-    if (across.reason === "checkpoint_missing" || across.reason === "break_not_resumable") {
-      return { status: "discontinuity", discontinuity: across.discontinuity };
-    }
-    return mismatch(across.reason, across.segmentIndex);
-  }
+  if (!across.ok) return replayStop(across);
   return (
     targetFault(input, across) ?? {
       status: "match_across_gaps",
@@ -383,9 +512,7 @@ export async function reconstructAndCompareEvidence<TDocument>(
 
 /** `invalid_target` or `target_mismatch`, or `null` when the replay reproduces the target. */
 function targetFault(
-  input:
-    | { expectedDocument: JcsJsonValue; expectedDocumentSha256?: undefined }
-    | { expectedDocumentSha256: string; expectedDocument?: undefined },
+  input: ReconstructionInput,
   replayed: { canonicalDocument: string; documentSha256: string },
 ): EvidenceReconstructionOutcome | null {
   if (input.expectedDocumentSha256 !== undefined) {
