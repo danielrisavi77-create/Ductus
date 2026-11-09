@@ -7,6 +7,9 @@
 -- domain, starts at the oldest. The receipt named may be signed by now: its
 -- place in the order is enough. Nothing else changes: v2 only, at most 100,
 -- the worker role alone (D-71, D-74).
+-- Istodobnost: the function is STABLE, so the cursor lookup and the read
+-- share one snapshot; a receipt committed later behind the cursor is read
+-- once the reconciler wraps to the oldest (092, reconciler unit tests).
 -- migrate:up
 
 SET LOCAL ROLE ductus_migrator;
@@ -15,6 +18,7 @@ GRANT CREATE ON SCHEMA evidence, app TO ductus_evidence;
 
 SET LOCAL ROLE ductus_evidence;
 
+-- squawk-ignore ban-drop-function
 DROP FUNCTION app.worker_pending_receipts(uuid, integer);
 
 CREATE FUNCTION app.worker_pending_receipts(p_evidence_domain_id uuid, p_limit integer, p_after_receipt_id uuid)

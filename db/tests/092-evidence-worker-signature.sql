@@ -186,6 +186,25 @@ SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '10', pg_temp.
 SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', p, pg_temp.rid('late-v2')), '22023: invalid worker request',
   'a limit of ' || p || ' is refused also after a receipt') FROM unnest(ARRAY['0', '101', 'NULL']) AS p;
 
+-- Late commit (Istodobnost): a receipt whose created_at is older than the
+-- cursor but which becomes visible only after the cursor passed it is not in
+-- the list after the cursor; the read from the oldest, which the reconciler
+-- makes once the list after the cursor runs out, returns it first.
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d2', '10', pg_temp.rid('request-b1')), '',
+  'before the late receipt: nothing follows Tomo''s receipt in d2');
+SET LOCAL ROLE ductus_evidence;
+INSERT INTO evidence.receipt (id, evidence_package_id, institution_id, evidence_domain_id, segment_id, principal_id,
+  client_request_id, payload_sha256, descriptor, receipt_payload, status, created_at)
+SELECT gen_random_uuid(), 'pkg-b', pg_temp.id('fak_b'), '00000000-0000-4000-8000-0000000000d2', 'segment-b-1', pg_temp.id('tomo'),
+  'late-commit-b', repeat('a', 64), '{}', '{"acceptedAt":"2026-01-01T00:00:00.000Z","receiptSchema":"ductus-evidence-receipt-v2"}',
+  'pending_signature', created_at - interval '1 hour'
+FROM evidence.receipt WHERE client_request_id = 'request-b1';
+RESET ROLE;
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d2', '10', pg_temp.rid('request-b1')), '',
+  'a receipt that becomes visible behind the cursor is not read after it');
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d2'), 'late-commit-b,request-b1',
+  'the read from the oldest returns the late receipt first, so the wrap reaches it');
+
 -- The receipt keys of a domain (N-6): receipt keys only, revoked and retired
 -- ones with their state, never a key of another domain or purpose.
 SELECT is(pg_temp.worker($$ SELECT string_agg(key_id || ':' || (revoked_at IS NOT NULL) || ':' || (valid_to IS NOT NULL), ',' ORDER BY key_id)

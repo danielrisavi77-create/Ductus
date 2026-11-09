@@ -456,6 +456,99 @@ describe("reconcilePendingReceipts: receipts stuck at the head of a domain do no
   });
 });
 
+/**
+ * A fake of `app.worker_pending_receipts` over one domain: rows in
+ * (created_at, id) order; a signed row leaves the pending list but stays a
+ * valid cursor; an unknown cursor reads from the oldest, as the SQL does.
+ */
+function domainTable(n: number, held: (i: number) => boolean) {
+  const rows = Array.from({ length: n }, (_, k) => ({ row: row(k + 1), pending: true, held: held(k + 1) }));
+  const reads: { limit: number; after: string | null }[] = [];
+  const attempts: string[][] = [];
+  const queue: PendingReceiptQueue = {
+    backlog: async () => {
+      const count = rows.filter((r) => r.pending).length;
+      return { status: "ok", rows: count > 0 ? [backlogRow(D1, OLD, count)] : [] };
+    },
+    pendingReceipts: async (_domain: string, limit: number, after: string | null = null) => {
+      reads.push({ limit, after });
+      const at = after === null ? -1 : rows.findIndex((r) => r.row.receiptId === after);
+      return { status: "ok", rows: rows.slice(at + 1).filter((r) => r.pending).slice(0, limit).map((r) => r.row) };
+    },
+  };
+  const signPendingReceipt = async (r: PendingReceiptRow): Promise<SignPendingReceiptOutcome> => {
+    attempts.at(-1)?.push(r.receiptId);
+    const entry = rows.find((e) => e.row.receiptId === r.receiptId);
+    if (!entry || entry.held) return { status: "held", reason: "object_absent" } as SignPendingReceiptOutcome;
+    entry.pending = false;
+    return { status: "signed", signedReceipt: {} } as SignPendingReceiptOutcome;
+  };
+  const make = (batchLimit: number) => {
+    const run = createReconcilePendingReceipts({
+      queue, signPendingReceipt, now: () => NOW, graceMs: GRACE, batchLimit, maxDomains: 10,
+    });
+    return async () => {
+      attempts.push([]);
+      return run();
+    };
+  };
+  return { rows, reads, attempts, make };
+}
+
+describe("reconcilePendingReceipts: the read moves past receipts that stay held (P-10)", () => {
+  const patterns: [string, (i: number) => boolean][] = [
+    ["all held", () => true],
+    ["all healthy", () => false],
+    ["the first 100 held", (i) => i <= 100],
+    ["every other held", (i) => i % 2 === 1],
+  ];
+  const cases = [1, 100, 101, 5000].flatMap((n) =>
+    patterns.flatMap(([name, held]) => [100, 7].map((batch) => [n, name, batch, held] as const)),
+  );
+  it.each(cases)("%i pending, %s, batch %i: every receipt is reached within ceil(n / batch) + 1 passes", async (n, _, batch, held) => {
+    const t = domainTable(n, held);
+    const pass = t.make(batch);
+    for (let i = 0; i < Math.ceil(n / batch) + 1; i += 1) await pass();
+    const attempted = new Set(t.attempts.flat());
+    for (const e of t.rows) {
+      expect(attempted.has(e.row.receiptId)).toBe(true);
+      expect(e.pending).toBe(e.held);
+    }
+    expect(Math.max(...t.reads.map((r) => r.limit))).toBeLessThanOrEqual(Math.min(batch, 100));
+    expect(Math.max(...t.attempts.map((a) => a.length))).toBeLessThanOrEqual(batch);
+  });
+
+  it("no pending receipt: an empty backlog reads nothing, an emptied domain signs nothing", async () => {
+    const empty = domainTable(0, () => true);
+    expect((await empty.make(100)()).status).toBe("completed");
+    expect(empty.reads).toEqual([]);
+    const h = harness({ backlog: ok([backlogRow(D1)]), receipts: { [D1]: [] } });
+    const out = await h.run();
+    expect(out.domains.swept).toBe(1);
+    expect(h.signPendingReceipt).not.toHaveBeenCalled();
+  });
+
+  it("concurrency: the cursor receipt signed by the worker between passes skips nothing", async () => {
+    const t = domainTable(5, () => true);
+    const pass = t.make(2);
+    await pass();
+    (t.rows[1] as { pending: boolean }).pending = false;
+    await pass();
+    expect(t.attempts).toEqual([[rid(1), rid(2)], [rid(3), rid(4)]]);
+  });
+
+  it("concurrency: a receipt that becomes visible behind the cursor is signed after the wrap", async () => {
+    const t = domainTable(4, () => true);
+    const pass = t.make(2);
+    await pass();
+    t.rows.unshift({ row: row(0x99), pending: true, held: false });
+    await pass();
+    await pass();
+    expect(t.rows[0]?.pending).toBe(false);
+    expect(t.attempts).toEqual([[rid(1), rid(2)], [rid(3), rid(4)], [rid(0x99), rid(1)]]);
+  });
+});
+
 describe("createReconcilePendingReceipts: configuration", () => {
   const base = (): ReconcileDeps => ({
     queue: { backlog: async () => ({ status: "ok", rows: [] }), pendingReceipts: async () => ({ status: "ok", rows: [] }) },
