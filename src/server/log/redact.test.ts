@@ -176,6 +176,26 @@ describe("redact keeps what an operator needs", () => {
     });
   });
 
+  // Codex P2 on #1772: a digit run inside a kept UUID's last group was cut to `[number]`.
+  const numericTailUuids: Array<[string, string]> = [
+    ["last group of twelve digits", "6f1c2b0e-3d4a-4f5b-8c6d-123456789012"],
+    ["nine digits between letters", "6f1c2b0e-3d4a-4f5b-8c6d-a123456789bc"],
+    ["eleven digits after a letter", "6f1c2b0e-3d4a-4f5b-8c6d-f12345678901"],
+    ["upper case", "6F1C2B0E-3D4A-4F5B-8C6D-123456789012"],
+    ["digits in every group", "12345678-1234-4123-8123-123456789012"],
+  ];
+
+  it.each(numericTailUuids)("keeps a UUID whose last group holds a long digit run: %s", (_name, id) => {
+    expect(redact({ document_id: id })).toEqual({ document_id: id });
+    expect(redact(`doc ${id} ok`)).toBe(`doc ${id} ok`);
+    expect(redact(`doc ${id} broj 12345678901`)).toBe(`doc ${id} broj [number]`);
+  });
+
+  it("still turns a digit run into a number inside a long run that is not a UUID", () => {
+    expect(redact("run --------123456789012--------")).toBe("run --------[number]--------");
+    expect(redact({ stage: "12345678901234567890123" })).toEqual({ stage: "[number]" });
+  });
+
   it("keeps a quoted single word and a JSON key, and marks a scan-limited text as cut", () => {
     expect(redact('{"stage": "context"}')).toBe('{"stage": "context"}');
     expect(redact(`expected "context"`)).toBe(`expected "context"`);

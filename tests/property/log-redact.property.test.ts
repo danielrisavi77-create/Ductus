@@ -81,3 +81,24 @@ test.prop([fc.anything({ withBigInt: true, withDate: true, withMap: true, withSe
     expect(() => JSON.parse(out)).not.toThrow();
   },
 );
+
+// Codex P2 on #1772: a UUID stays whole even when its last group holds nine or
+// more digits in a row, while a bare digit run next to it is still a number.
+const hex = (length: number) => fc.stringMatching(new RegExp(`^[0-9a-f]{${length}}$`));
+const numericTailUuid = fc
+  .integer({ min: 9, max: 12 })
+  .chain((digits) =>
+    fc.tuple(hex(8), hex(4), hex(4), hex(4), fc.stringMatching(new RegExp(`^[0-9]{${digits}}$`)), hex(12 - digits), fc.boolean(), fc.boolean()),
+  )
+  .map(([a, b, c, d, digits, fill, digitsFirst, upper]) => {
+    const id = `${a}-${b}-${c}-${d}-${digitsFirst ? `${digits}${fill}` : `${fill}${digits}`}`;
+    return upper ? id.toUpperCase() : id;
+  });
+
+test.prop([numericTailUuid, fc.stringMatching(/^[0-9]{9,15}$/)])(
+  "a UUID with a long digit run in its last group stays whole, a bare digit run does not",
+  (id, digits) => {
+    expect(redact({ document_id: id })).toEqual({ document_id: id });
+    expect(redact(`doc ${id} broj ${digits}`)).toBe(`doc ${id} broj [number]`);
+  },
+);

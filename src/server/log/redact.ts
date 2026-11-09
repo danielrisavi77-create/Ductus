@@ -134,6 +134,11 @@ const TOKEN_RUN = /[A-Za-z0-9+/_=-]{20,}/g;
 const QUOTED_WORDS = /"[^"\s:,{}[\]][^"\n]*\s[^"\n]*?[^"\s:,{}[\]]"|„[^“”\n]*[“”]/g;
 const SCAN_LIMIT = 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Token runs and digit runs in one pass: a run that is a whole token is judged
+ * first, so a kept UUID is never cut again by a later digit scan.
+ */
+const RUNS = new RegExp(`(${TOKEN_RUN.source})|${DIGIT_RUN.source}`, "g");
 
 /** A URL keeps its scheme, host and path; userinfo, query and fragment go. */
 export function stripUrl(text: string): string {
@@ -148,7 +153,13 @@ export function stripUrl(text: string): string {
 
 function scrubTokenRun(run: string): string {
   if (UUID.test(run)) return run;
-  return /[A-Za-z]/.test(run) && /\d/.test(run) ? REDACTED : run;
+  if (/[A-Za-z]/.test(run) && /\d/.test(run)) return REDACTED;
+  return run.replace(DIGIT_RUN, "[number]");
+}
+
+/** A whole token run is judged as a token; a shorter digit run is a number. */
+function scrubRun(_match: string, token: string | undefined): string {
+  return token === undefined ? "[number]" : scrubTokenRun(token);
 }
 
 /**
@@ -199,9 +210,9 @@ export function redactString(text: string, max = MAX_STRING): string {
   )
     .replace(QUOTED_WORDS, (match) => (match.startsWith("„") ? `„${REDACTED}“` : `"${REDACTED}"`))
     .replace(EMAIL, "[email]")
-    // Whole tokens first, so a digit run cannot cut a token below its shape.
-    .replace(TOKEN_RUN, scrubTokenRun)
-    .replace(DIGIT_RUN, "[number]");
+    // Whole tokens first, so a digit run cannot cut a token below its shape
+    // and a kept UUID keeps a numeric last group.
+    .replace(RUNS, scrubRun);
   return scanned.length > max || head !== text ? `${scanned.slice(0, max)}[cut]` : scanned;
 }
 
