@@ -3538,6 +3538,44 @@ $$;
 
 
 --
+-- Name: enforce_session_limit(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.enforce_session_limit() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.expires_at <= pg_catalog.now()
+     OR NEW.last_seen_at <= pg_catalog.now() - interval '2 hours' THEN
+    RETURN NULL;
+  END IF;
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  PERFORM 1 FROM identity.user_account WHERE id = NEW.user_id FOR NO KEY UPDATE;
+  -- Keeps the four most recently active others; the order is total, so the
+  -- same rows always go.
+  UPDATE identity.session
+  SET closed_at = pg_catalog.now(), close_reason = 'superseded'
+  WHERE id IN (
+      SELECT s.id
+      FROM identity.session s
+      WHERE s.user_id = NEW.user_id
+        AND s.id <> NEW.id
+        AND s.closed_at IS NULL
+        AND s.expires_at > pg_catalog.now()
+        AND s.last_seen_at > pg_catalog.now() - interval '2 hours'
+      ORDER BY s.last_seen_at DESC, s.created_at DESC, s.id DESC
+      OFFSET 4
+    )
+    AND closed_at IS NULL;
+  RETURN NULL;
+END
+$$;
+
+
+--
 -- Name: open_session(text, text, text, text, bytea); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -7325,7 +7363,7 @@ CREATE TABLE identity.session (
     oidc_sid_hash bytea,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
-    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text]))),
+    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text, 'superseded'::text]))),
     CONSTRAINT session_last_seen_check CHECK ((last_seen_at >= created_at)),
     CONSTRAINT session_oidc_sid_hash_check CHECK ((octet_length(oidc_sid_hash) = 32)),
     CONSTRAINT session_oidc_sid_hash_closed_check CHECK (((closed_at IS NULL) OR (oidc_sid_hash IS NULL))),
@@ -9953,6 +9991,13 @@ CREATE TRIGGER close_sessions_on_issuer_truncate AFTER TRUNCATE ON identity.inst
 
 
 --
+-- Name: session enforce_session_limit; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER enforce_session_limit AFTER INSERT ON identity.session FOR EACH ROW WHEN ((new.closed_at IS NULL)) EXECUTE FUNCTION identity.enforce_session_limit();
+
+
+--
 -- Name: assignment_version assignment_version_immutable; Type: TRIGGER; Schema: institution; Owner: -
 --
 
@@ -12408,4 +12453,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108120000'),
     ('20261108130000'),
     ('20261108140000'),
-    ('20261109030000');
+    ('20261109030000'),
+    ('20261109200000');

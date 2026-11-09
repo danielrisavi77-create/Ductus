@@ -32,6 +32,7 @@ import { resolveCitationStyle } from "@/domain/institution-config";
 import {
   LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalDemoInstitution, resolveLocalScope,
 } from "@/lib/journal/local-scope";
+import { pageActivity } from "@/server/auth/activity";
 import { sessionPrincipalWithInstitution, sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -137,6 +138,7 @@ export default async function WorkspacePage({
   const { zadatak: rawParam, prikaz } = await searchParams;
   const assignmentId = assignmentParam(rawParam);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const [{ scope, signedIn, signInAgain, tag, at, institution }, read, role, doc] = await Promise.all([
     journalFor(token),
     readWorkContext(token, assignmentId, withActor),

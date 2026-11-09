@@ -285,6 +285,11 @@ SELECT throws_ok(
 UPDATE identity.institution SET aai_home_org = 'fak-a.example' WHERE id = pg_temp.id('fak_a');
 SELECT is(pg_temp.login('ana', 'sid-ana-login'), encode(pg_temp.sid('sid-ana-login'), 'hex'),
   'E1: a login with a sid keeps its SHA-256');
+-- DAN-296: an account keeps five live sessions, and the logins below would
+-- make more. They all share this transaction's now(), so only the id would
+-- order them; the session the back-channel closes at the end of this section
+-- is dated a minute ahead, so it is never the one superseded.
+UPDATE identity.session SET last_seen_at = now() + interval '1 minute' WHERE oidc_sid_hash = pg_temp.sid('sid-ana-login');
 SELECT is(pg_temp.login('ana', l.sid), 'no sid', 'E5: a login with ' || l.what || ' stands without a sid')
 FROM (VALUES (NULL, 'no sid'), ('', 'an empty sid'), (repeat('s', 256), 'a sid of 256 characters'),
              ('sid' || chr(9) || 'x', 'a tab in the sid'), ('sid' || chr(127) || 'x', 'a DEL in the sid')) AS l (sid, what);

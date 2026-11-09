@@ -11,6 +11,7 @@ import { accessShellScope } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -30,6 +31,7 @@ export const runtime = "nodejs";
 // institution's own years, after them (coursesPage joins the two answers).
 const resolveScreen = cache(async (asked: string | undefined) => {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const [years, principal] = await Promise.all([
     token === undefined ? null : readAcademicYears(token, withActor),
     sessionPrincipal(token, withActor),

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { counted } from "@/server/auth/activity";
 import { expectedOrigin } from "@/server/auth/config";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -12,7 +13,7 @@ export const revalidate = 0;
 
 // One evidence segment and the document after it (B-8, docs/BACKEND.md 4.13).
 // The document id travels in the body, never in the URL.
-export async function POST(request: NextRequest): Promise<Response> {
+async function post(request: NextRequest): Promise<Response> {
   return handleEvidenceCommitRequest(request, {
     withActor,
     ...evidenceIngestDeps(),
@@ -21,3 +22,5 @@ export async function POST(request: NextRequest): Promise<Response> {
     asyncSigning: evidenceAsyncSigning(),
   });
 }
+
+export const POST = counted(post);

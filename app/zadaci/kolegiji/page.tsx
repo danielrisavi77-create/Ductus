@@ -6,6 +6,7 @@ import EnrollForm from "@/components/student/EnrollForm";
 import StudentHome from "@/components/student/StudentHome";
 import { readStudentHome } from "@/components/student/student-home-read";
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -20,6 +21,7 @@ export const metadata = { title: `${title} · ${messagesHr.app.name}` };
 // filters nothing; every assignment still goes through /rad.
 export default async function MyCoursesPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   // The session is checked before the courses are read (readStudentHome).
   const { read, account: { role, scope } } = await readStudentHome(token, withActor);
   return (
