@@ -594,6 +594,71 @@ describe("deferred signing against the database (DAN-518)", () => {
     expect(signCalls).toBe(0);
     expect(await stored()).toEqual(after);
   });
+
+  // Istodobnost (DAN-593): the reconciler and the worker attach a signature to
+  // the same pending receipt at once. The second attach waits on the row lock
+  // and then answers already_signed with the first signature, never its own.
+  it("keeps the first of two concurrent worker attaches, and the second gets that signature, not its own", async () => {
+    const input = next(`tx-${suffix}-async-race`);
+    expect(await commitEvidenceSegment({ withActor, signer: countingSigner() }, token, input, "deferred")).toMatchObject({
+      status: "committed_pending",
+    });
+    advance(input);
+    const { rows } = await admin.query<{ id: string; receipt_payload: string }>(
+      `SELECT r.id, r.receipt_payload FROM evidence.receipt r JOIN evidence.package p ON p.id = r.evidence_package_id
+        WHERE p.document_id = $1 AND r.status = 'pending_signature'`,
+      [documentId],
+    );
+    expect(rows).toHaveLength(1);
+    const digest = await digestEvidenceReceiptPayloadV2(JSON.parse(rows[0].receipt_payload));
+    const first = await signerFor(join(dir, "seed")).sign(digest.signingInput);
+    const second = await signerFor(await seedFile("race")).sign(digest.signingInput);
+    expect(second).not.toEqual(first);
+    const before = await stored();
+
+    const url = new URL(SAFE_ADMIN_URL);
+    url.username = workerLogin;
+    url.password = workerPassword;
+    const other = new pg.Client({ connectionString: url.href });
+    await other.connect();
+    const attach = "SELECT outcome, signature FROM app.worker_attach_receipt_signature($1::uuid, $2, $3::jsonb)";
+    const worker = workerClient!;
+    try {
+      const otherPid = (await other.query<{ pid: number }>("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+      await worker.query("BEGIN");
+      try {
+        const a = await worker.query<{ outcome: string }>(attach, [rows[0].id, digest.sha256, JSON.stringify(first)]);
+        expect(a.rows[0].outcome).toBe("signed");
+        const b = other.query<{ outcome: string; signature: unknown }>(attach, [
+          rows[0].id,
+          digest.sha256,
+          JSON.stringify(second),
+        ]);
+        // The second attach is waiting on the row lock, not finished before it.
+        let waiting = false;
+        for (let i = 0; i < 100 && !waiting; i += 1) {
+          const lock = await admin.query("SELECT 1 FROM pg_stat_activity WHERE pid = $1 AND wait_event_type = 'Lock'", [
+            otherPid,
+          ]);
+          waiting = lock.rowCount === 1;
+          if (!waiting) await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        expect(waiting).toBe(true);
+        await worker.query("COMMIT");
+        const late = await b;
+        expect(late.rows[0]).toEqual({ outcome: "already_signed", signature: first });
+      } catch (error) {
+        await worker.query("ROLLBACK").catch(() => {});
+        throw error;
+      }
+    } finally {
+      await other.end().catch(() => {});
+    }
+    const after = await stored();
+    expect(after).toMatchObject({ receipts: before.receipts, signed: String(Number(before.signed) + 1) });
+    const kept = await admin.query<{ signature: unknown }>("SELECT signature FROM evidence.receipt WHERE id = $1", [rows[0].id]);
+    expect(kept.rows[0].signature).toEqual(first);
+  });
 });
 
 describe("evidence routes (B-8 step 5)", () => {
