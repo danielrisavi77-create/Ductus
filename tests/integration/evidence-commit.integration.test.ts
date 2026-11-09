@@ -19,6 +19,7 @@ import { createEvidenceReceiptSigner } from "@/server/evidence/receipt-signer";
 import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import { digestEvidenceReceiptPayloadV2 } from "@/domain/forensics/evidence-receipt";
 import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request";
 import { handleEvidenceCommitRequest } from "@/server/evidence/commit-route";
 import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
@@ -492,6 +493,108 @@ function countedDeps() {
   };
   return { deps, counts };
 }
+
+// DAN-518: deferred signing (protocol 2) against the real database. The
+// process accepts and never signs; a login that inherits ductus_worker stands
+// in for the worker. The retry while the worker holds the receipt row must
+// answer pending at once, never wait on that lock and never sign itself.
+describe("deferred signing against the database (DAN-518)", () => {
+  const workerLogin = `it_commit_w_${suffix}`;
+  const workerPassword = randomBytes(24).toString("hex");
+  let workerClient: pg.Client | undefined;
+  let pending: EvidenceCommitInput;
+  let signCalls = 0;
+  const countingSigner = () => {
+    const real = signerFor(join(dir, "seed"));
+    return {
+      verify: real.verify.bind(real),
+      publicVerificationKey: real.publicVerificationKey.bind(real),
+      sign: (message: Uint8Array) => {
+        signCalls += 1;
+        return real.sign(message);
+      },
+    };
+  };
+
+  beforeAll(async () => {
+    const ddl = await admin.query<{ ddl: string }>(
+      "SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L IN ROLE ductus_worker', $1::text, $2::text) AS ddl",
+      [workerLogin, workerPassword],
+    );
+    await admin.query(ddl.rows[0].ddl);
+    const url = new URL(SAFE_ADMIN_URL);
+    url.username = workerLogin;
+    url.password = workerPassword;
+    workerClient = new pg.Client({ connectionString: url.href });
+    await workerClient.connect();
+  });
+
+  afterAll(async () => {
+    await workerClient?.end().catch(() => {});
+    const drop = await admin.query<{ ddl: string }>("SELECT format('DROP ROLE IF EXISTS %I', $1::text) AS ddl", [workerLogin]);
+    await admin.query(drop.rows[0].ddl);
+  });
+
+  it("answers two identical concurrent v2 requests with one pending acceptance and one pending duplicate, signing nothing", async () => {
+    pending = next(`tx-${suffix}-async-1`);
+    const before = await stored();
+    const deps = { withActor, signer: countingSigner() };
+    const both = await Promise.all([
+      commitEvidenceSegment(deps, token, pending, "deferred"),
+      commitEvidenceSegment(deps, token, pending, "deferred"),
+    ]);
+    expect(both.map((o) => o.status).sort()).toEqual(["committed_pending", "duplicate_pending"]);
+    for (const outcome of both) expect(outcome).toMatchObject({ revision: chain.revision + 1 });
+    expect(signCalls).toBe(0);
+    expect(await stored()).toMatchObject({
+      revision: String(chain.revision + 1),
+      receipts: String(Number(before.receipts) + 1),
+      signed: before.signed,
+    });
+    advance(pending);
+  });
+
+  it("answers a retry while the worker holds the receipt with pending at once, and the signed receipt after its commit", async () => {
+    const { rows } = await admin.query<{ id: string; receipt_payload: string }>(
+      `SELECT r.id, r.receipt_payload FROM evidence.receipt r JOIN evidence.package p ON p.id = r.evidence_package_id
+        WHERE p.document_id = $1 AND r.status = 'pending_signature'`,
+      [documentId],
+    );
+    expect(rows).toHaveLength(1);
+    const digest = await digestEvidenceReceiptPayloadV2(JSON.parse(rows[0].receipt_payload));
+    const signature = await signerFor(join(dir, "seed")).sign(digest.signingInput);
+    const before = await stored();
+    const deps = { withActor, signer: countingSigner() };
+    const worker = workerClient!;
+    await worker.query("BEGIN");
+    try {
+      const attached = await worker.query<{ outcome: string }>(
+        "SELECT outcome FROM app.worker_attach_receipt_signature($1::uuid, $2, $3::jsonb)",
+        [rows[0].id, digest.sha256, JSON.stringify(signature)],
+      );
+      expect(attached.rows[0].outcome).toBe("signed");
+      // The worker's transaction is open and holds the receipt row FOR UPDATE.
+      const retry = commitEvidenceSegment(deps, token, pending, "deferred");
+      const waited = new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 2_000));
+      expect(await Promise.race([retry, waited])).toEqual({ status: "duplicate_pending", revision: chain.revision });
+      await worker.query("COMMIT");
+    } catch (error) {
+      await worker.query("ROLLBACK").catch(() => {});
+      throw error;
+    }
+    expect(signCalls).toBe(0);
+    const after = await stored();
+    expect(after).toMatchObject({ receipts: before.receipts, signed: String(Number(before.signed) + 1) });
+
+    for (const signing of ["deferred", "inline"] as const) {
+      const again = await commitEvidenceSegment(deps, token, pending, signing);
+      expect(again).toMatchObject({ status: "duplicate", revision: chain.revision });
+      expect(again.status === "duplicate" && again.signedReceipt.signature).toEqual(signature);
+    }
+    expect(signCalls).toBe(0);
+    expect(await stored()).toEqual(after);
+  });
+});
 
 describe("evidence routes (B-8 step 5)", () => {
   it("opens the same work again with its current state and the registered receipt key", async () => {

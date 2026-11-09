@@ -9,6 +9,13 @@ import { MAX_EVIDENCE_SEGMENT_BYTES } from "../forensics/evidence-chain-v2";
 /** The value of the `Ductus-Protocol` header; any other value is 426. */
 export const DUCTUS_PROTOCOL_VERSION = "1";
 
+/**
+ * Version 2 of the commit route only (4.13 t. 1): the acceptance is answered
+ * 202 `pending_signature` and the worker signs it later. Off unless the
+ * server is configured for it; while off it is 426 like any other value.
+ */
+export const DUCTUS_ASYNC_COMMIT_PROTOCOL = "2";
+
 /** Room for the keys, the document id, the idempotency key and the revision. */
 export const COMMIT_ENVELOPE_OVERHEAD_BYTES = 4 * 1024;
 

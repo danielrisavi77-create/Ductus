@@ -17,3 +17,12 @@ export function evidenceIngestDeps(): { signer: SigningKeyProvider; payloads: Pr
   signer ??= createEvidenceReceiptSigner({ ...process.env, NODE_ENV: process.env.NODE_ENV }, process.cwd());
   return { signer, payloads: evidencePayloadReader() };
 }
+
+/**
+ * Protocol 2 of the commit route (DAN-518): the worker signs. Only the exact
+ * value "1" turns it on; anything else, or no value, leaves it off, so the
+ * demo keeps no unsigned acceptance (ADR 2026-10-11, decision 6).
+ */
+export function evidenceAsyncSigning(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  return env.DUCTUS_EVIDENCE_ASYNC_SIGNING === "1";
+}

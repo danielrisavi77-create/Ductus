@@ -30,6 +30,12 @@ import { readEvidenceDomainKeys } from "./evidence-domain-keys";
  * happen or none does (ADR 2026-10-11, owner decision 6). A retry gets the
  * stored receipt only after it verifies under a key from the registry, and
  * never a new signature. Every fault is a closed code, never a message.
+ *
+ * With `deferred` signing (protocol 2, DAN-518) this process never signs and
+ * never attaches: the acceptance commits with its receipt in
+ * `pending_signature` and the worker signs it. The receipt is checked here
+ * the same way, and a retry of a receipt the worker has signed gets it
+ * verified as above.
  */
 
 export type EvidenceCommitContext = {
@@ -159,11 +165,16 @@ export type EvidenceCommitFault =
 
 export type EvidenceCommitOutcome =
   | { status: "committed" | "duplicate"; revision: number; signedReceipt: SignedEvidenceReceiptV2 }
+  /** Deferred signing only: accepted, its receipt still `pending_signature`. */
+  | { status: "committed_pending" | "duplicate_pending"; revision: number }
   | { status: "stale_base" | "chain_conflict" | "not_continuous"; state: EvidenceCommitState }
   | { status: "txid_reused" | "invalid" | "too_large" | "not_accepting" | "not_found" }
   | { status: "unavailable"; stage: "signing" | "repository"; code: EvidenceCommitFault };
 
 export type EvidenceCommitDependencies = { withActor: WithActor; signer: SigningKeyProvider };
+
+/** `inline`: signed in the acceptance's transaction (protocol 1); `deferred`: by the worker (protocol 2). */
+export type EvidenceCommitSigning = "inline" | "deferred";
 
 const COMMIT_SQL = `SELECT outcome, committed_revision, receipt_payload, receipt_id, signature,
        current_revision, document_hash, head_segment_hash, last_sequence_to
@@ -313,10 +324,23 @@ async function storedReceipt(
   return { status: "duplicate", revision: payload.revision, signedReceipt };
 }
 
+/** An acceptance whose receipt the worker signs; checked as any returned receipt, never signed here. */
+async function pendingReceipt(
+  row: CommitRow,
+  input: EvidenceCommitInput,
+  status: "committed_pending" | "duplicate_pending",
+): Promise<EvidenceCommitOutcome> {
+  const { payload } = await returnedReceipt(row, input);
+  // A pending receipt has no signature; one with a signature is no pending receipt.
+  if (row.signature !== null && row.signature !== undefined) fault("repository", "receipt_malformed");
+  return { status, revision: payload.revision };
+}
+
 async function runCommit(
   tx: ActorTransaction,
   signer: SigningKeyProvider,
   input: EvidenceCommitInput,
+  signing: EvidenceCommitSigning,
 ): Promise<EvidenceCommitOutcome> {
   const { rows } = await tx.query<CommitRow>(COMMIT_SQL, [
     input.context.evidencePackageId,
@@ -334,7 +358,9 @@ async function runCommit(
   // The closed mapping of 4.13 t. 4; an outcome not named here is never a success.
   switch (row.outcome) {
     case "reserved":
-      return signReserved(tx, signer, row, input);
+      return signing === "deferred"
+        ? pendingReceipt(row, input, "committed_pending")
+        : signReserved(tx, signer, row, input);
     case "duplicate_signed":
       return storedReceipt(tx, row, input);
     case "unauthorized":
@@ -352,8 +378,10 @@ async function runCommit(
     case "not_continuous":
       return { status: row.outcome, state: conflictState(row) };
     case "duplicate_pending":
-      // Cannot exist in the demo (ADR decision 6); never signed here.
-      return fault("repository", "duplicate_pending");
+      // Under inline signing it cannot exist in the demo (ADR decision 6); never signed here.
+      return signing === "deferred"
+        ? pendingReceipt(row, input, "duplicate_pending")
+        : fault("repository", "duplicate_pending");
     default:
       return fault("repository", "outcome_unknown");
   }
@@ -362,15 +390,17 @@ async function runCommit(
 /**
  * One transaction under the session behind `token`. A thrown fault, a failed
  * query or a failed COMMIT rolls back everything the RPC wrote, so there is
- * no revision, segment, snapshot or receipt without its signature.
+ * no revision, segment, snapshot or receipt without its signature. Deferred
+ * signing commits the receipt in `pending_signature` instead.
  */
 export async function commitEvidenceSegment(
   dependencies: EvidenceCommitDependencies,
   token: string | null,
   input: EvidenceCommitInput,
+  signing: EvidenceCommitSigning = "inline",
 ): Promise<EvidenceCommitOutcome> {
   try {
-    return await dependencies.withActor(token, (tx) => runCommit(tx, dependencies.signer, input));
+    return await dependencies.withActor(token, (tx) => runCommit(tx, dependencies.signer, input, signing));
   } catch (error) {
     return error instanceof CommitFault
       ? { status: "unavailable", stage: error.stage, code: error.code }

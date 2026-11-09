@@ -178,6 +178,7 @@ describe("POST /api/evidence/open", () => {
   it.each([
     ["another Origin", { origin: "https://evil.example" }, 403],
     ["no Ductus-Protocol", { "ductus-protocol": undefined }, 426],
+    ["Ductus-Protocol 2, which only the commit route may take (DAN-518)", { "ductus-protocol": "2" }, 426],
     ["text/plain", { "content-type": "text/plain" }, 415],
     ["a body over 1 KiB", { "content-length": "1025" }, 413],
   ] as const)("keeps the guards of the commit route: %s", async (_, headers, status) => {

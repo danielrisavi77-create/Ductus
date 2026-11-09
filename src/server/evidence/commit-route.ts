@@ -1,4 +1,8 @@
-import { MAX_COMMIT_REQUEST_BYTES } from "@/domain/evidence/commit-envelope";
+import {
+  DUCTUS_ASYNC_COMMIT_PROTOCOL,
+  DUCTUS_PROTOCOL_VERSION,
+  MAX_COMMIT_REQUEST_BYTES,
+} from "@/domain/evidence/commit-envelope";
 import type { WithActor } from "@/server/db/with-actor";
 
 import {
@@ -16,9 +20,16 @@ import { consoleLog, parseClosedObject, readGuardedBody, reply, unavailable, typ
  * encode back to the same text, and every outcome of step 4d goes on the
  * wire through one closed mapping. The log carries the outcome, stage and
  * code only: never bytes, text, the idempotency key or the client's ids.
+ *
+ * DAN-518: with `asyncSigning` the route also takes `Ductus-Protocol: 2`,
+ * under which it never signs: an acceptance is 202 `pending_signature` with
+ * `Retry-After`, and a retry after the worker has signed is the verified 200
+ * `duplicate`. Without it, "2" is 426 like any other value.
  */
 
 const BODY_TIMEOUT_MS = 60_000;
+/** Seconds until a client asks again for a receipt the worker has not signed yet. */
+const PENDING_RETRY_AFTER = "2";
 const KEYS = ["documentId", "clientTransactionId", "baseRevision", "segments", "document"] as const;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
@@ -27,6 +38,8 @@ export type EvidenceCommitRouteDeps = EvidenceCommitRequestDependencies & {
   expectedOrigin: string | null;
   sessionToken?: string;
   log?: Log;
+  /** Protocol 2, signed by the worker; only `true` turns it on. */
+  asyncSigning?: boolean;
 };
 
 /** Standard base64 with padding that encodes back to the same text, into a buffer of its own. */
@@ -66,6 +79,17 @@ export function commitResponse(outcome: EvidenceCommitRequestOutcome): Response 
         revision: outcome.revision,
         receipt: { status: "signed", signedReceipt: outcome.signedReceipt },
       });
+    case "committed_pending":
+    case "duplicate_pending":
+      return reply(
+        202,
+        {
+          status: outcome.status === "committed_pending" ? "committed" : "duplicate",
+          revision: outcome.revision,
+          receipt: { status: "pending_signature" },
+        },
+        { "retry-after": PENDING_RETRY_AFTER },
+      );
     case "stale_base":
     case "chain_conflict":
     case "not_continuous":
@@ -96,13 +120,18 @@ export async function handleEvidenceCommitRequest(request: Request, deps: Eviden
     timeoutMs: BODY_TIMEOUT_MS,
     // The largest body of all: the session is checked first (F-098).
     liveSession: deps.withActor,
+    protocols:
+      deps.asyncSigning === true ? [DUCTUS_PROTOCOL_VERSION, DUCTUS_ASYNC_COMMIT_PROTOCOL] : [DUCTUS_PROTOCOL_VERSION],
   });
   if (!read.ok) return read.response;
   const envelope = parseCommitEnvelope(read.bytes);
   if (envelope === null) return reply(422, { status: "invalid" });
 
-  const outcome = await commitEvidenceRequest(deps, read.token, envelope);
+  const signing = read.protocol === DUCTUS_ASYNC_COMMIT_PROTOCOL ? "deferred" : "inline";
+  const outcome = await commitEvidenceRequest(deps, read.token, envelope, signing);
   if (outcome.status === "unavailable") log("evidence commit", outcome.status, outcome.stage, outcome.code);
-  else if (outcome.status !== "committed" && outcome.status !== "duplicate") log("evidence commit", outcome.status);
+  else if (!["committed", "duplicate", "committed_pending", "duplicate_pending"].includes(outcome.status)) {
+    log("evidence commit", outcome.status);
+  }
   return commitResponse(outcome);
 }
