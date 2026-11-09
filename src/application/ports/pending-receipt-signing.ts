@@ -54,3 +54,32 @@ export interface PendingReceiptStore {
     command: AttachReceiptSignatureCommand,
   ): Promise<AttachReceiptSignatureOutcome>;
 }
+
+/**
+ * One row of `app.worker_pending_backlog`: how many receipts of one domain
+ * wait for a signature, and since when by the database clock (ISO 8601).
+ * No receipt id or payload is in it (plan #1021 P-10, P-20).
+ */
+export type PendingBacklogRow = {
+  evidenceDomainId: string;
+  pendingCount: number;
+  oldestCreatedAt: string;
+};
+
+export type PendingBacklogRead =
+  | { status: "ok"; rows: readonly PendingBacklogRow[] }
+  | { status: "unavailable"; reason: string };
+
+export type PendingReceiptsRead =
+  | { status: "ok"; rows: readonly PendingReceiptRow[] }
+  | { status: "unavailable"; reason: string };
+
+/**
+ * The worker's read side of the pending receipts: the backlog per domain and
+ * the oldest pending v2 receipts of one domain (`app.worker_pending_receipts`,
+ * at most 100). Only the worker process holds it (D-71, D-102).
+ */
+export interface PendingReceiptQueue {
+  backlog(): Promise<PendingBacklogRead>;
+  pendingReceipts(evidenceDomainId: string, limit: number): Promise<PendingReceiptsRead>;
+}
