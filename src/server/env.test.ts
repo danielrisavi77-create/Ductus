@@ -56,7 +56,11 @@ describe("instrumentation register()", () => {
     const { register } = await import("../../instrumentation");
     await register(exit);
     expect(codes).toEqual([1]);
-    expect(errors).toHaveBeenCalledWith("Ductus cannot start: APP_DATABASE_URL is not a URL");
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(errors.mock.calls[0]?.[0]))).toMatchObject({
+      event: "Ductus cannot start",
+      fields: { problems: ["APP_DATABASE_URL is not a URL"] },
+    });
     expect(JSON.stringify(errors.mock.calls)).not.toContain("invented-secret");
     errors.mockRestore();
   });
