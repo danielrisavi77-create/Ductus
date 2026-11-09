@@ -1,0 +1,236 @@
+// DAN-517 (D-71, D-74; docs/backend/poslovi-i-predaja.md 4.5): the worker's
+// side of the pg-boss queue. The only file that imports pg-boss. It opens the
+// queue for a login that is a worker and nothing more, puts identifiers only
+// into a job, takes one job at a time and settles exactly the attempt it took.
+// The schema is the one the migrations installed: nothing here builds a table.
+import pg from "pg";
+import { PgBoss } from "pg-boss";
+
+import { isJobDefinition, parseJobBody, type JobBody, type JobDefinition } from "@/application/jobs/job-body";
+
+export type JobQueueErrorCode =
+  | "definition_invalid"
+  | "settings_invalid"
+  | "queue_unreachable"
+  | "role_not_worker"
+  | "queue_mismatch"
+  | "definition_unknown"
+  | "queue_failed";
+
+/** The message is the code: no connection string and no driver text leaves this file. */
+export class JobQueueError extends Error {
+  readonly code: JobQueueErrorCode;
+  constructor(code: JobQueueErrorCode) {
+    super(code);
+    this.name = "JobQueueError";
+    this.code = code;
+  }
+}
+
+export type JobQueueSettings = {
+  readonly connectionString: string;
+  readonly definitions: readonly JobDefinition[];
+  /** Attempts after the first one. */
+  readonly retryLimit: number;
+  readonly retryDelaySeconds: number;
+  /** The handler is asked to stop after this long; always before the queue takes the job back. */
+  readonly deadlineMs: number;
+  /** A job active this long belongs to a worker that is gone; the sweep hands it out again. */
+  readonly expireSeconds: number;
+  readonly deleteAfterSeconds: number;
+  /** Least time between two sweeps of one queue, whoever asks. */
+  readonly sweepSeconds: number;
+  /** A failure of the queue's own background work. Only that it happened is reported. */
+  readonly onError?: (code: "queue_error") => void;
+};
+
+/** Refuses with a short code (`[a-z][a-z0-9_]*`); anything else is stored as `handler_failed`. */
+export type JobHandler = (body: JobBody, signal: AbortSignal) => Promise<{ ok: true } | { ok: false; code: string }>;
+
+/** `lost`: the attempt was taken back before it was settled, so nothing was written for it. */
+export type JobOutcome =
+  | { readonly status: "idle" | "completed" | "lost" }
+  | { readonly status: "failed"; readonly code: string };
+
+export type JobQueue = {
+  /** `duplicate`: a job for the same subject is already waiting or running. */
+  enqueue(name: string, input: unknown): Promise<"queued" | "duplicate" | "rejected">;
+  runOnce(name: string, handler: JobHandler): Promise<JobOutcome>;
+  sweep(name: string): Promise<void>;
+  /** Jobs waiting, waiting for a retry or running. */
+  depth(name: string): Promise<number>;
+  stop(): Promise<void>;
+};
+
+const CODE = /^[a-z][a-z0-9_]{0,39}$/;
+const DAY = 86_400;
+const DEPTH_SQL =
+  "SELECT count(*)::int AS n FROM pgboss.job WHERE name = $1 AND state IN ('created', 'retry', 'active')";
+// True only for a login with no elevated attribute whose one role is
+// ductus_worker and which cannot build in the queue schema: a login that is
+// also the web role, the queue owner or the migrator must not run jobs.
+const ROLE_SQL = `
+  SELECT CASE
+    WHEN r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication THEN false
+    WHEN (SELECT pg_catalog.array_agg(g.rolname::text ORDER BY g.rolname) FROM pg_catalog.pg_roles g
+           WHERE g.oid <> r.oid AND pg_catalog.pg_has_role(r.oid, g.oid, 'MEMBER'))
+         IS DISTINCT FROM ARRAY['ductus_worker'] THEN false
+    WHEN pg_catalog.has_schema_privilege(r.oid, 'pgboss', 'CREATE') THEN false
+    ELSE NOT pg_catalog.has_table_privilege(r.oid, 'pgboss.version', 'UPDATE')
+  END AS ok
+  FROM pg_catalog.pg_roles r WHERE r.rolname = current_user`;
+
+function whole(value: number, min: number, max: number): boolean {
+  return Number.isInteger(value) && value >= min && value <= max;
+}
+
+function validSettings(s: JobQueueSettings): boolean {
+  return (
+    typeof s.connectionString === "string" && s.connectionString !== "" &&
+    whole(s.retryLimit, 0, 20) && whole(s.retryDelaySeconds, 0, 3600) && whole(s.expireSeconds, 1, 3600) &&
+    whole(s.deadlineMs, 1, s.expireSeconds * 1000 - 1) && whole(s.deleteAfterSeconds, 1, 365 * DAY) &&
+    whole(s.sweepSeconds, 1, 3600)
+  );
+}
+
+async function requireWorkerLogin(connectionString: string): Promise<void> {
+  const client = new pg.Client({ connectionString, application_name: "ductus-worker-guard", connectionTimeoutMillis: 10_000 });
+  client.on("error", () => {});
+  try {
+    await client.connect();
+  } catch {
+    await client.end().catch(() => {});
+    throw new JobQueueError("queue_unreachable");
+  }
+  try {
+    const { rows } = await client.query<{ ok: boolean }>(ROLE_SQL);
+    if (rows.length !== 1 || rows[0].ok !== true) throw new JobQueueError("role_not_worker");
+  } catch {
+    throw new JobQueueError("role_not_worker");
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+/** Runs the handler once and returns null when it succeeded, else the code to store. */
+async function attempt(handler: JobHandler, body: JobBody, deadlineMs: number): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), deadlineMs);
+  try {
+    const result = await handler(body, controller.signal);
+    // Work that finished is recorded even past the deadline; the queue itself
+    // refuses the record if the attempt has been taken back meanwhile.
+    if (result.ok === true) return null;
+    if (controller.signal.aborted) return "timeout";
+    return typeof result.code === "string" && CODE.test(result.code) ? result.code : "handler_failed";
+  } catch {
+    // What was thrown is not kept: it may carry text.
+    return controller.signal.aborted ? "timeout" : "handler_threw";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function affected(response: unknown): number {
+  const value = typeof response === "object" && response !== null ? (response as { affected?: unknown }).affected : undefined;
+  return typeof value === "number" ? value : 0;
+}
+
+/**
+ * Opens the queue for the given job definitions. Throws a JobQueueError when
+ * the settings are wrong, the database cannot be reached, the login is not a
+ * plain worker login, or a queue exists with other settings than these. Every
+ * later failure of the queue is a JobQueueError too (`queue_failed`).
+ */
+export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue> {
+  const definitions = new Map<string, JobDefinition>();
+  for (const definition of settings.definitions) {
+    if (!isJobDefinition(definition) || definitions.has(definition.name)) throw new JobQueueError("definition_invalid");
+    definitions.set(definition.name, definition);
+  }
+  if (definitions.size === 0) throw new JobQueueError("definition_invalid");
+  if (!validSettings(settings)) throw new JobQueueError("settings_invalid");
+  await requireWorkerLogin(settings.connectionString);
+
+  const expected = {
+    policy: "exclusive",
+    retryLimit: settings.retryLimit,
+    retryDelay: settings.retryDelaySeconds,
+    expireInSeconds: settings.expireSeconds,
+    deleteAfterSeconds: settings.deleteAfterSeconds,
+  } as const;
+  let boss: PgBoss;
+  try {
+    // No background work of the package runs: the caller sweeps, and what
+    // needs rights the worker does not have (migration, reindex) is off.
+    boss = new PgBoss({
+      connectionString: settings.connectionString, application_name: "ductus-worker", max: 4,
+      schema: "pgboss", migrate: false, supervise: false, schedule: false, monitorVacuum: false, reindex: false,
+      monitorIntervalSeconds: settings.sweepSeconds, maintenanceIntervalSeconds: settings.sweepSeconds,
+    });
+  } catch {
+    throw new JobQueueError("settings_invalid");
+  }
+  boss.on("error", () => settings.onError?.("queue_error"));
+  try {
+    await boss.start();
+    for (const name of definitions.keys()) {
+      await boss.createQueue(name, expected);
+      const queue = await boss.getQueue(name);
+      const same = queue !== null && queue.partition !== true &&
+        (Object.keys(expected) as Array<keyof typeof expected>).every((key) => queue[key] === expected[key]);
+      if (!same) throw new JobQueueError("queue_mismatch");
+    }
+  } catch (error) {
+    await boss.stop({ timeout: 1000 }).catch(() => {});
+    throw error instanceof JobQueueError ? error : new JobQueueError("queue_unreachable");
+  }
+
+  function known(name: string): JobDefinition {
+    const definition = definitions.get(name);
+    if (definition === undefined) throw new JobQueueError("definition_unknown");
+    return definition;
+  }
+
+  /** What the driver or the package throws stops here as a code: it may carry text. */
+  async function closed<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      throw error instanceof JobQueueError ? error : new JobQueueError("queue_failed");
+    }
+  }
+
+  return {
+    enqueue: (name, input) => closed(async () => {
+      const definition = definitions.get(name);
+      const parsed = definition === undefined ? undefined : parseJobBody(input, definition.fields);
+      if (definition === undefined || parsed === undefined || !parsed.ok) return "rejected";
+      const id = await boss.send(name, parsed.body, { singletonKey: parsed.body[definition.subject] });
+      return id === null ? "duplicate" : "queued";
+    }),
+    runOnce: (name, handler) => closed(async () => {
+      const definition = known(name);
+      const [job] = await boss.fetch(name, { batchSize: 1 });
+      if (job === undefined) return { status: "idle" };
+      // The row is read again as untrusted: another writer of the table is not this code.
+      const parsed = parseJobBody(job.data, definition.fields);
+      const code = parsed.ok ? await attempt(handler, parsed.body, settings.deadlineMs) : "invalid_body";
+      // Settled by attempt (id and retry count), not by id alone: an attempt
+      // the sweep has taken back changes nothing.
+      const response = code === null ? await boss.complete(name, job) : await boss.fail(name, job, { code });
+      if (affected(response) !== 1) return { status: "lost" };
+      return code === null ? { status: "completed" } : { status: "failed", code };
+    }),
+    sweep: (name) => closed(async () => {
+      known(name);
+      await boss.supervise(name);
+    }),
+    depth: (name) => closed(async () => {
+      known(name);
+      const { rows } = await boss.getDb().executeSql(DEPTH_SQL, [name]);
+      return Number(rows[0].n);
+    }),
+    stop: () => closed(() => boss.stop({ timeout: 5000 })),
+  };
+}
