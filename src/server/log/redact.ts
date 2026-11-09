@@ -102,21 +102,29 @@ const SENSITIVE_EXACT = new Set([
 ]);
 
 export function isSensitiveKey(key: string): boolean {
-  const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // Letters with marks become plain letters first (`sadržaj` → `sadrzaj`,
+  // `e-pošta` → `eposta`); only then are separators dropped.
+  const normalized = key
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]/g, "");
   return SENSITIVE_EXACT.has(normalized) || SENSITIVE_PARTS.some((part) => normalized.includes(part));
 }
 
 const URL_IN_TEXT = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
-const AUTH_SCHEME = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+/** The scheme marks what follows as a credential, so its length does not matter. */
+const AUTH_SCHEME = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+/gi;
 /** Digest credentials are a list of parameters: all of them go to the end of the line. */
 const DIGEST_PARAMS = /\b(digest)\s+(?=[A-Za-z0-9_-]+\s*=)[^\n]*/gi;
 const JWT = /\beyJ[\w-]*\.[\w-]*\.[\w-]*/g;
 /**
- * A quoted value is taken whole, escapes included, so no word of it stays. An
- * array or object value runs to the end of the line, so a sensitive key loses
- * all of it; a harmless key's value is scanned again (`scrubPair`).
+ * A quoted value is taken whole, escapes included, so no word of it stays. Any
+ * other value under a sensitive key, empty included, runs to the end of the
+ * line, as nothing else marks where it ends (`scrubPairs`).
  */
-const KEY_VALUE = /(["']?)([A-Za-z0-9_-]{2,40})\1(\s*[:=]\s*)([[{][^\n]*|"(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?|[^\s"'&,;}]+)/g;
+const KEY_VALUE = /(["']?)([A-Za-z0-9_čćžšđČĆŽŠĐ-]{2,40})\1(\s*[:=]\s*)("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?)?/g;
 /** A credential header written as text: everything to the end of the line. */
 const HEADER_LINE = /\b((?:proxy-)?authorization|(?:set-)?cookie)(\s*:\s*)[^\n]*/gi;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -144,14 +152,36 @@ function scrubTokenRun(run: string): string {
 }
 
 /**
- * A sensitive key loses its value. A harmless key keeps it, but the value is
- * scanned again, so `request: password=x` cannot hide a pair inside a pair.
- * Each pass reads a strictly shorter text, so the work stays bounded.
+ * A sensitive key loses its value: a quoted one up to its closing quote, any
+ * other to the end of the line. A harmless key keeps its value, and the scan
+ * goes on from the value's first character, so `request: password=x` cannot
+ * hide a pair inside a pair. Every step moves past a non-empty key, so one
+ * pass over the text is the whole work.
  */
-function scrubPair(_match: string, quote: string, key: string, separator: string, value: string): string {
-  if (!isSensitiveKey(key)) return `${quote}${key}${quote}${separator}${value.replace(KEY_VALUE, scrubPair)}`;
-  const valueQuote = value.startsWith('"') || value.startsWith("'") ? value[0] : "";
-  return `${quote}${key}${quote}${separator}${valueQuote}${REDACTED}${valueQuote}`;
+function scrubPairs(text: string): string {
+  const pattern = new RegExp(KEY_VALUE.source, "g");
+  let out = "";
+  let from = 0;
+  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+    const [whole, , key = "", , quoted] = match;
+    const valueStart = match.index + whole.length - (quoted?.length ?? 0);
+    out += text.slice(from, valueStart);
+    if (!isSensitiveKey(key)) {
+      from = valueStart;
+      pattern.lastIndex = valueStart;
+      continue;
+    }
+    if (quoted !== undefined) {
+      out += `${quoted[0]}${REDACTED}${quoted[0]}`;
+      from = valueStart + quoted.length;
+    } else {
+      const lineEnd = text.slice(valueStart).search(/[\r\n]/);
+      out += REDACTED;
+      from = lineEnd < 0 ? text.length : valueStart + lineEnd;
+    }
+    pattern.lastIndex = from;
+  }
+  return out + text.slice(from);
 }
 
 /** Scans free text in a fixed order; each step only ever removes data. */
@@ -159,13 +189,14 @@ export function redactString(text: string, max = MAX_STRING): string {
   // Scanning cost stays bounded: only the head is read, and a word cut in two
   // by that limit is dropped so no fragment of a token survives unscanned.
   const head = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT).replace(/\S*$/, "") : text;
-  const scanned = head
-    .replace(URL_IN_TEXT, stripUrl)
-    .replace(AUTH_SCHEME, (_match, scheme: string) => `${scheme} ${REDACTED}`)
-    .replace(DIGEST_PARAMS, (_match, scheme: string) => `${scheme} ${REDACTED}`)
-    .replace(JWT, REDACTED)
-    .replace(HEADER_LINE, (_match, name: string, separator: string) => `${name}${separator}${REDACTED}`)
-    .replace(KEY_VALUE, scrubPair)
+  const scanned = scrubPairs(
+    head
+      .replace(URL_IN_TEXT, stripUrl)
+      .replace(AUTH_SCHEME, (_match, scheme: string) => `${scheme} ${REDACTED}`)
+      .replace(DIGEST_PARAMS, (_match, scheme: string) => `${scheme} ${REDACTED}`)
+      .replace(JWT, REDACTED)
+      .replace(HEADER_LINE, (_match, name: string, separator: string) => `${name}${separator}${REDACTED}`),
+  )
     .replace(QUOTED_WORDS, (match) => (match.startsWith("„") ? `„${REDACTED}“` : `"${REDACTED}"`))
     .replace(EMAIL, "[email]")
     // Whole tokens first, so a digit run cannot cut a token below its shape.

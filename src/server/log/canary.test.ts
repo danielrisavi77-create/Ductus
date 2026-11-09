@@ -88,6 +88,32 @@ describe("canary through every server log path", () => {
   });
 });
 
+describe("K16 sensitive values in text through createLogger", () => {
+  // Contract w586c (#1091): quoted, unquoted, multi-word, structured, empty,
+  // spaced and next-line values under a sensitive key; Croatian keys; short credentials.
+  const short = "YTpi";
+  const rows: Array<[string, Record<string, unknown>]> = [
+    ["quoted", { error: new Error(`text: "Uvod u kanarinac"`) }],
+    ["unquoted with spaces", { error: new Error("text: Uvod u kanarinac povijest") }],
+    ["unquoted inside a harmless pair", { note: "request: text=Uvod u kanarinac" }],
+    ["structured", { error: new Error("text: {Uvod, kanarinac}") }],
+    ["empty then words", { error: new Error("text: , Uvod kanarinac") }],
+    ["spaces around the separator", { error: new Error("text  :  Uvod kanarinac") }],
+    ["value on the next line", { error: new Error("text:\nUvod kanarinac") }],
+    ["Croatian keys", { sadržaj: "Uvod u kanarinac", "e-pošta": "kanarinac", error: new Error("sadržaj: kanarinac") }],
+    ["short Basic credential", { error: new Error(`request refused: Basic ${short}`) }],
+    ["short Bearer credential", { error: new Error("request refused: Bearer abc123"), note: "Bearer abc123" }],
+  ];
+
+  it.each(rows)("%s never reaches the line", (_name, fields) => {
+    const lines: string[] = [];
+    createLogger((_level, line) => lines.push(line), () => new Date(0))("error", "x", fields);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toContain("kanarinac");
+    for (const part of [short, "abc123"]) expect(lines[0]).not.toContain(part);
+  });
+});
+
 describe("logger shape", () => {
   it("writes exactly one JSON line per call, with time, level, event and fields", () => {
     const lines: Array<[LogLevel, string]> = [];

@@ -108,6 +108,8 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
     ["K15 object under a sensitive key", new Error(`{"password":{"value":"kanarinac"}}`)],
     ["K15 container after a harmless pair", `stage: [x] then password: {"v":"kanarinac"}`],
     ["K15 digest parameters", new Error(`request refused: Digest username="kanarinac", realm="example", nonce="abcdef1234"`)],
+    // K16 Codex round 4: every shape of a value under a sensitive key in text, Croatian keys, short credentials
+    ...k16Rows,
   ];
 
   it.each(rows)("%s never shows the canary", (_name, value) => {
@@ -182,6 +184,18 @@ describe("redact keeps what an operator needs", () => {
     expect(redact("x ".repeat(600))).toMatch(/\[cut\]$/);
   });
 
+  it("drops a sensitive value only to the end of its line, and a quoted one only to its closing quote", () => {
+    expect(redact("text: Uvod u povijest\nstage: context")).toBe("text: [redacted]\nstage: context");
+    expect(redact('{"password":"a b","stage":"context"}')).toBe('{"password":"[redacted]","stage":"context"}');
+  });
+
+  it("drops a short credential after Basic or Bearer, where no token shape gives it away", () => {
+    for (const credential of ["YTpi", "abc123", "x"]) {
+      expect(redact(`request refused: Basic ${credential}`)).toBe("request refused: Basic [redacted]");
+      expect(redact(new Error(`refused: Bearer ${credential}`))).toEqual({ name: "Error", message: "refused: Bearer [redacted]" });
+    }
+  });
+
   it("never touches a number or the logger's own time, only a digit run in a string", () => {
     expect(redact({ bytes: 1234567890123, at: 1762632000000 })).toEqual({ bytes: 1234567890123, at: 1762632000000 });
     expect(redact({ stage: "oib 12345678901" })).toEqual({ stage: "oib [number]" });
@@ -206,6 +220,29 @@ describe("redact keeps what an operator needs", () => {
     });
   });
 });
+
+/**
+ * K16 input classes for a sensitive key's value in free text (contract
+ * w586c on #1091): quoted, unquoted one word, unquoted with spaces,
+ * structured, empty, spaces around the separator and a value on the next
+ * line; plus Croatian letters in a key. Short credentials after a scheme have
+ * their own test below, since they are shorter than the canary word.
+ */
+const k16Rows: Array<[string, unknown]> = [
+  ["K16 quoted", new Error(`text: "Uvod u kanarinac povijest"`)],
+  ["K16 single-quoted", new Error(`password='a b kanarinac'`)],
+  ["K16 unquoted one word", new Error(`password=kanarinac`)],
+  ["K16 unquoted with spaces", new Error(`text: Uvod u kanarinac povijest`)],
+  ["K16 unquoted password of many words", `password=zeleni kanarinac konj`],
+  ["K16 unquoted inside a harmless pair", `request: text=Uvod u kanarinac`],
+  ["K16 structured", new Error(`text: [Uvod, kanarinac]`)],
+  ["K16 empty then words", new Error(`text: , Uvod kanarinac`)],
+  ["K16 empty then semicolon", `password=; kanarinac`],
+  ["K16 spaces around the separator", new Error(`text   =   Uvod kanarinac`)],
+  ["K16 value on the next line", new Error(`text:\n  Uvod u kanarinac povijest`)],
+  ["K16 Croatian key in an object", { sadržaj: "Uvod u kanarinac", "e-pošta": "kanarinac", Naslov: "kanarinac" }],
+  ["K16 Croatian key in text", new Error(`sadržaj: Uvod u kanarinac`)],
+];
 
 function deep(levels: number, leaf: unknown): unknown {
   let value = leaf;
