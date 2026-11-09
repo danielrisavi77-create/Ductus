@@ -74,7 +74,7 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
   - rok iz `dueAt`;
   - „nakon roka” iz `afterDeadline`;
   - „Potpisivanje potvrde započelo” iz `signedAt`. Prema ugovoru v2 to je početak izdavanja potpisa, ne trenutak dovršetka. Slika ga ne predstavlja kao vremenski žig treće strane.
-- Vremena su po zagrebačkom vremenu s oznakom zone u istom retku, „(UTC+1)”, ljeti „(UTC+2)” (prijedlog iz #1788). Točne vrijednosti iz potvrde u UTC-u su u pojedinostima.
+- Vremena su po zagrebačkom vremenu s oznakom zone u istom retku, „(UTC+1)”, ljeti „(UTC+2)” (prijedlog iz #1788). Točne vrijednosti iz potvrde u UTC-u su u pojedinostima, neskraćene, sa šest decimala sekunde kako ih zapisuje ugovor v2.
 - „Otisak predanog teksta” ima 64 heksadekadske znamenke u skupinama radi čitanja, uz objašnjenje.
   - „Kopiraj otisak” u međuspremnik stavlja 64 znaka bez razmaka.
   - Poveznica „Provjera potvrde” vodi na `/provjera` (J-03, D-49), bez prijave.
