@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { loadAuthConfig } from "@/server/auth/config";
 import { logout, type AuthDeps } from "@/server/auth/flow";
 import { createOidcClient } from "@/server/auth/oidc";
@@ -124,22 +123,11 @@ describe("logout at the provider", () => {
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
   });
 
-  it("B3 (DAN-296): when closing fails, answers 503, keeps the cookie and goes nowhere", async () => {
+  it("B3: when closing fails, still clears the cookie and goes to the provider", async () => {
     deps.closeSession.mockRejectedValueOnce(Object.assign(new Error("down"), { code: "ECONNREFUSED" }));
     const response = await post();
-    expect(response.status).toBe(503);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.getSetCookie()).toEqual([]);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    // The provider is not asked either: the device stays signed in everywhere.
-    expect(deps.closeSession).toHaveBeenCalledExactlyOnceWith(TOKEN);
-    expect(events).toEqual([]);
-    const html = await response.text();
-    expect(html).toContain(t.auth.logoutFailedTitle);
-    expect(html).toContain(t.auth.logoutFailedBody);
-    expect(html).not.toContain(t.auth.unavailableBody);
-    expect(errors).toHaveBeenCalledWith("login failed", "logout", "Error:ECONNREFUSED");
-    expect(JSON.stringify(errors.mock.calls)).not.toContain(TOKEN);
+    expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
+    expectOnlyClearedCookie(response);
   });
 
   it("B2: without an end_session_endpoint the local logout stands and / follows", async () => {

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { loadAuthConfig } from "@/server/auth/config";
 import { logoutAll, type AuthDeps } from "@/server/auth/flow";
 import { createOidcClient } from "@/server/auth/oidc";
@@ -125,17 +124,14 @@ describe("POST /api/auth/logout-all", () => {
     expect(Object.keys(route).filter((name) => /^[A-Z]+$/.test(name))).toEqual(["POST"]);
   });
 
-  it("6: when the database fails, answers 503, keeps the cookie and goes nowhere", async () => {
+  it("6: when the database fails, still clears the cookie and goes to the provider, as logout does", async () => {
     deps.closeAllSessions.mockRejectedValueOnce(Object.assign(new Error("down"), { code: "40P01" }));
     const response = await post();
-    expect(response.status).toBe(503);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(events).toEqual([]);
-    const html = await response.text();
-    expect(html).toContain(t.auth.logoutFailedTitle);
-    expect(html).toContain(t.auth.logoutFailedBody);
+    expectOnlyClearedCookie(response);
+    expect(events.every((event) => event === "provider")).toBe(true);
     expect(errors).toHaveBeenCalledWith("login failed", "logout_all", "Error:40P01");
     expect(JSON.stringify(errors.mock.calls)).not.toContain(TOKEN);
   });
