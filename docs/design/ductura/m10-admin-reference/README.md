@@ -32,7 +32,7 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 
 - **Čuvanje i pravno zadržavanje (A-05).**
   - Rokovi čuvanja samo se prikazuju. Ustanova ih u sučelju ne uređuje; verziju pravila upisuje održavatelj Ducture nakon potvrde fakulteta (D-275 MQ13).
-  - Nijedan rok nije odobren (D-30 PRIJEDLOG, `docs/privacy/07`). Slika zato pokazuje „Verzija pravila čuvanja: nije upisana”. Klase s prijedlogom nose oznaku „čeka potvrdu fakulteta”, a samo rokovi zapisani odlukom (sesije 30 dana, izvozni paket 24 sata, D-273 MQ08) nose „zapisano odlukom”.
+  - Nijedan rok nije odobren (D-30 PRIJEDLOG, `docs/privacy/07`). Slika zato pokazuje „Verzija pravila čuvanja: nije upisana”. Klase s prijedlogom nose oznaku „čeka potvrdu fakulteta”, a samo rokovi zapisani odlukom (sesije 30 dana, izvozni paket 24 sata, D-273 MQ08) nose „zapisano odlukom”. Briše se samo po rokovima zapisanim odlukom; ostalo do potvrde fakulteta radi samo kao probni prolaz i ništa ne briše (D-273 MQ08). Zato i prazno stanje kaže da se po rokovima koji čekaju potvrdu ništa ne briše.
   - Zadržavanje postavlja administrator fakulteta s brojem slučaja; pravni opis se ne upisuje. Skida ga drugi administrator ili održavatelj Ducture, ne onaj koji ga je postavio. Više zadržavanja vrijedi neovisno (D-274 MQ11). Dok vrijedi, brisanje po roku čuvanja stoji (`docs/PROGRAM-RAZRADA.md`).
   - **Tumačenje:** zadržavanje je u slici vezano uz jedan rad. Ako je opseg drugačiji (osoba, kolegij), stanje se precrtava.
 - **Revizijski trag pristupa (A-06).**
