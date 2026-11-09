@@ -2070,22 +2070,30 @@ $$;
 
 
 --
--- Name: worker_pending_receipts(uuid, integer); Type: FUNCTION; Schema: app; Owner: -
+-- Name: worker_pending_receipts(uuid, integer, uuid); Type: FUNCTION; Schema: app; Owner: -
 --
 
-CREATE FUNCTION app.worker_pending_receipts(p_evidence_domain_id uuid, p_limit integer) RETURNS TABLE(receipt_id uuid, receipt_payload text)
+CREATE FUNCTION app.worker_pending_receipts(p_evidence_domain_id uuid, p_limit integer, p_after_receipt_id uuid) RETURNS TABLE(receipt_id uuid, receipt_payload text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
+DECLARE
+  v_after_at timestamptz;
 BEGIN
   IF p_evidence_domain_id IS NULL OR p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN
     RAISE EXCEPTION 'invalid worker request' USING ERRCODE = '22023';
+  END IF;
+  IF p_after_receipt_id IS NOT NULL THEN
+    SELECT a.created_at INTO v_after_at
+      FROM evidence.receipt a
+     WHERE a.id = p_after_receipt_id AND a.evidence_domain_id = p_evidence_domain_id;
   END IF;
   RETURN QUERY
     SELECT r.id, r.receipt_payload
       FROM evidence.receipt r
      WHERE r.evidence_domain_id = p_evidence_domain_id AND r.status = 'pending_signature'
        AND (r.receipt_payload::jsonb ->> 'receiptSchema') = 'ductus-evidence-receipt-v2'
+       AND (v_after_at IS NULL OR (r.created_at, r.id) > (v_after_at, p_after_receipt_id))
      ORDER BY r.created_at, r.id
      LIMIT p_limit;
 END
@@ -12399,4 +12407,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108110200'),
     ('20261108120000'),
     ('20261108130000'),
-    ('20261108140000');
+    ('20261108140000'),
+    ('20261109030000');
