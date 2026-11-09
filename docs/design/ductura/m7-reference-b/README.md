@@ -72,7 +72,7 @@ Slika ova pitanja označava kao otvorena i ne odlučuje ih:
 
 - **Oblik razloga produljenja (Q-5).** Slobodan tekst ili kategorije, tko još vidi razlog i koliko se čuva odlučuje ADR §8a do 8d (rok 30. 11. 2026.). Slika crta slobodan tekst s uputom. Prema #1784 nijedan UI PR za N-13 ne ide prije Q-5.
 - **Tko traži produljenje (#1784).** Nije specificirano; slika crta samo nastavnika koji ga daje.
-- **Broj lijepljenja u N-05.** „Lijepljenja bez izvora: 2” slijedi aplikaciju (`src/components/teacher/fast-path.ts`) i D-170. Stoji blizu pravila PRODUCT §5 o broju uz izvor. Treba potvrdu da je broj događaja dopušten.
+- **Broj lijepljenja u N-05.** Slika uz „Lijepljenja bez izvora” ne prikazuje broj, nego „Ima ih · popis u punom sažetku (S-33)”, jer PRODUCT §5 zabranjuje broj uz izvor (review c.6745368661). D-170 imenuje redak, ali ne i oblik vrijednosti, a aplikacija danas prikazuje broj (`src/components/teacher/fast-path.ts`). Vlasnik odlučuje smije li redak nositi broj događaja ili samo kaže ima li ih; dotad slika broj ne prikazuje.
 - **Brojevi uz događaje poglavlja (D-61, #1786).** Primjer u D-61 stavlja broj ispred prijenosa iz AI pomoćnika, a rječnik ne dopušta broj uz AI. Slika crta vrste događaja bez broja dok orkestrator ili vlasnik ne potvrde oblik.
 - **Naziv u legendi.** D-137 kaže „mjesto za izvor”, #1786 i D-61 „otvoreno mjesto”. Slika koristi „Mjesto za izvor”.
 - **Zadano stanje „Napisano u Ducturi” (D-127, O-2).** Slika crta isključeno.
