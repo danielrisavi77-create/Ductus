@@ -181,7 +181,7 @@ Pragovi za KPI-07 do KPI-10 i način brojanja iz KPI-02, KPI-03, KPI-04 i KPI-09
 3. **Dobrovoljnost.** Sudjelovanje u evaluaciji je dobrovoljno i odgovor ne utječe na ocjenu. `[PRIJEDLOG, nije odluka]`; odlučuje FPZG.
 4. **Bez novih predaja.** Rokovi zadataka iz faze B su prije 4. 6. 2027. (O01), pa se u fazi C ne predaju novi radovi u pilotu. `[PRIJEDLOG, nije odluka]`
 5. **Završno izvješće** sadrži `[PRIJEDLOG, nije odluka]`; odobrava vlasnik:
-   - KPI-01 do KPI-10 s brojnikom i nazivnikom, odvojeno za fazu A i fazu B (§3);
+   - KPI-01 do KPI-10 s brojnikom i nazivnikom, odvojeno po fazi u kojoj su izmjereni (A, B ili C; §3); KPI-05 iz faze C navodi se kao procjena rada u fazi B (§4), a KPI-06 i KPI-07 iz faze C odvojeno od kruga prije prelaska u B;
    - usporedbu s pragom samo gdje je prag upisan u `docs/DECISIONS.md`; ostalo bez ocjene „prošlo” ili „nije prošlo”;
    - neprovjerene dijelove zasebno;
    - svaki STOP i incident samo s ID-om i statusom;
