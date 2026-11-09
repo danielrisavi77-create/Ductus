@@ -29,6 +29,7 @@ Zadatak: DAN-430, M11.8-P01 (D-257: jedna DPIA). Inventar je napravljen nad `mai
 | Nastava | Uklanjanje studenta i dopuštenje povratka | nastavnik → baza i revizijski trag | `app/api/institution/courses/[courseId]/students/[studentId]/removal/route.ts`, `app/api/institution/courses/[courseId]/students/[studentId]/return-permission/route.ts`, `src/server/institution/student-removal-route.ts`, `src/server/institution/student-return-route.ts` | 4, 26 | nastavnik kolegija | izgrađeno |
 | Nastava | Uloga nastavnika: potvrda i opoziv | administrator ustanove → baza i revizijski trag | `app/api/institution/teachers/[teacherId]/role-confirmation/route.ts`, `app/api/institution/teachers/[teacherId]/role-revocation/route.ts`, `src/server/institution/teacher-role-confirmation-route.ts`, `src/server/institution/teacher-role-revocation-route.ts` | 5, 26 | administrator ustanove | izgrađeno |
 | Nastava | Zadatak i verzije zadatka | nastavnik → baza | `app/api/institution/courses/[courseId]/assignments/route.ts`, `app/api/institution/assignments/[assignmentId]/versions/route.ts`, `src/server/institution/assignment-route.ts`, `src/server/institution/assignment-version-route.ts` | 9 | nastavnik, studenti kolegija | izgrađeno |
+| Nastava | Obavijest o novoj verziji zadatka | objava verzije zadatka → baza: okidač `assignment_version_notify` upisuje u `institution.notification` po jedan redak za svakog aktivnog studenta kolegija (primatelj, ustanova, zadatak, vrijeme nastanka) | `src/server/institution/assignment-version-route.ts`, `db/migrations/20261028150000_notification_store.sql` | 6 | nitko u aplikaciji: čitanja u sučelju još nema | izgrađeno (upis); čitanje u sučelju planirano |
 | Nastava | Jezik rada za zadatak i za studenta | nastavnik → baza | `app/api/institution/assignments/[assignmentId]/work-language/route.ts`, `app/api/institution/assignments/[assignmentId]/students/[studentId]/work-language/route.ts`, `src/server/institution/work-language-route.ts` | 10 | nastavnik, student | izgrađeno |
 | Nastava | Oznaka prilagodbe rada | baza → nastavnik | `src/server/institution/work-accommodation.ts`, `src/components/teacher/work-accommodations-read.ts`, `app/nastavnik/page.tsx` | 10 | nastavnik | izgrađeno (čitanje); put kojim se oznaka upisuje nije provjeren |
 | Nastava | Potvrda obavijesti uz zadatak | student → baza | `app/api/institution/assignments/[assignmentId]/acknowledgment/route.ts`, `src/server/institution/acknowledgment-route.ts` | 7 | student, nastavnik | izgrađeno |
@@ -63,7 +64,7 @@ Zadatak: DAN-430, M11.8-P01 (D-257: jedna DPIA). Inventar je napravljen nad `mai
 Napomene uz tablicu:
 
 - Revizijske funkcije za mentorstva, objavu pravila fakulteta i imenovanje ili opoziv administratora ustanove postoje u bazi, ali ih aplikacija ne poziva; zato ih tablica ne navodi kao tok.
-- Obavijesti u aplikaciji (klasa 6) i kopije (klasa 29) na `main` nemaju tok u kodu aplikacije.
+- Obavijesti u aplikaciji (klasa 6) na `main` nastaju samo uz objavu nove verzije zadatka (redak iznad); čitanja u sučelju još nema. Kopije (klasa 29) na `main` nemaju tok u kodu aplikacije.
 
 ## 3. Otvoreno
 

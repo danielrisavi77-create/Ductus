@@ -190,13 +190,18 @@ describe(INVENTORY, () => {
     expect(inventoryErrors(readFileSync(join(ROOT, INVENTORY), "utf8"), { exists, routes, classCodes })).toEqual([]);
   });
 
-  it("lists class 14 on the commit flow while the commit RPC writes the full-text checkpoint", () => {
-    const rpc = readFileSync(join(ROOT, "db/migrations/20261028000000_evidence_segment_v3.sql"), "utf8");
-    expect(rpc).toMatch(/INSERT INTO evidence\.document_checkpoint \(document_id, institution_id, revision, body\)/);
-    const commit = parseFlows(readFileSync(join(ROOT, INVENTORY), "utf8")).filter((f) =>
-      f.paths.includes("app/api/evidence/commit/route.ts"),
+  // Writes the database makes on its own (inside an RPC or a trigger), which no
+  // route name reveals. While the migration still writes, the flow that cites
+  // the triggering code lists the class.
+  it.each([
+    ["14", "src/server/evidence/evidence-commit.ts", "db/migrations/20261028000000_evidence_segment_v3.sql", /INSERT INTO evidence\.document_checkpoint \(document_id, institution_id, revision, body\)/],
+    ["6", "src/server/institution/assignment-version-route.ts", "db/migrations/20261028150000_notification_store.sql", /INSERT INTO institution\.notification \(/],
+  ])("lists class %s on the flow through %s while %s writes it", (cls, code, migration, write) => {
+    expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(write);
+    const flows = parseFlows(readFileSync(join(ROOT, INVENTORY), "utf8")).filter(
+      (f) => f.paths.includes(code) && f.paths.includes(migration),
     );
-    expect(commit.length).toBeGreaterThan(0);
-    for (const f of commit) expect(f.classes.split(",").map((c) => c.trim())).toContain("14");
+    expect(flows.length).toBeGreaterThan(0);
+    for (const f of flows) expect(f.classes.split(",").map((c) => c.trim())).toContain(cls);
   });
 });
