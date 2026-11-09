@@ -14,12 +14,17 @@ const OWNERS_HEADING = "Nositelji";
 const PROCEDURES_HEADING = "Postupci";
 // A role, never a placeholder: letters, digits, spaces and hyphens only.
 const PLAIN_ROLE_RE = /^[\p{L}\d](?:[\p{L}\d -]*[\p{L}\d])?$/u;
-const STEP_RE = /^(\d+)\.\s+/;
+// A list item may start after up to three spaces (CommonMark).
+const STEP_RE = /^( {0,3})(\d+)\.\s+/;
 const FENCE_RE = /^\s*(`{3,}|~{3,})/;
 const MARKER_RE = /(?<!\p{L})(Naredba|Nositelj):/gu;
 // After a code span, another span follows only after a comma or a joining word.
 const NEXT_SPAN_RE = /^(?:\s*,\s*|\s+(?:i|ili|pa)\s+)(?=`)/u;
 const ENV_RE = /^[A-Z_][A-Z0-9_]*=/;
+// A placeholder such as <pid> is a value, not a redirect.
+const PLACEHOLDER_RE = /<[\p{L}\d_-]+>/gu;
+// Shell chains, pipes, redirects and substitutions: only one command per span.
+const SHELL_OPERATOR_RE = /[;&|<>]|\$\(/;
 const BUILT_IN_PNPM = new Set(["install"]);
 const STOP_SIGNALS = new Set(["-TERM", "-INT", "-SIGTERM", "-SIGINT"]);
 
@@ -62,7 +67,7 @@ export function parseOperations(text) {
   let section = "";
   /** @type {Procedure | null} */
   let procedure = null;
-  /** @type {{ step: Step, parts: string[], blank: boolean } | null} */
+  /** @type {{ step: Step, parts: string[], blank: boolean, offset: number } | null} */
   let open = null;
   /** @type {string | null} */
   let fence = null;
@@ -113,12 +118,14 @@ export function parseOperations(text) {
     }
 
     if (procedure) {
-      const start = fenceOpen ? null : STEP_RE.exec(line);
+      const match = fenceOpen ? null : STEP_RE.exec(line);
+      // A numbered line indented to the open step's content is nested in it.
+      const start = match && (!open || (match[1] ?? "").length < open.offset) ? match : null;
       if (start) {
         closeStep();
-        const step = { number: Number(start[1]), line: lineNumber, text: "" };
+        const step = { number: Number(start[2]), line: lineNumber, text: "" };
         procedure.steps.push(step);
-        open = { step, parts: [line.slice(start[0].length)], blank: false };
+        open = { step, parts: [line.slice(start[0].length)], blank: false, offset: start[0].length };
       } else if (open && line.trim() === "") {
         open.blank = true;
       } else if (open && (isIndented(line) || !open.blank)) {
@@ -163,6 +170,9 @@ function spansAfter(rest) {
  * @returns {string | null}
  */
 function commandProblem(command, context) {
+  if (SHELL_OPERATOR_RE.test(command.replace(PLACEHOLDER_RE, ""))) {
+    return `command chains, pipes or redirects are not allowed: ${command}`;
+  }
   const tokens = command.split(/\s+/).filter(Boolean);
   while (tokens[0] && ENV_RE.test(tokens[0])) tokens.shift();
   const [program, ...args] = tokens;

@@ -6,7 +6,8 @@ import { REQUIRED_PROCEDURES, checkOperations } from "../../scripts/operations/c
 // DAN-540 (M11.3-P04), contract on #1091: for any document of the four
 // required procedures, the check reports a problem exactly for the steps that
 // name neither a known command nor a known owner, with the right procedure and
-// step number. Prose between procedures, outside a step, changes nothing.
+// step number, whether the step starts in the first column or after up to two
+// spaces. Prose between procedures, outside a step, changes nothing.
 
 const OWNERS = "## Nositelji\n\n| Nositelj | Odgovornost |\n| --- | --- |\n| `vlasnik` | kvarovi |\n| `koordinator pilota` | pitanja |\n";
 
@@ -25,6 +26,7 @@ const STEPS = [
   { body: "**Nositelj:** `koordinator pilota`.", bad: false },
   { body: "Naredba: `pnpm prod:up`.", bad: true },
   { body: "Naredba: `rm -rf data`.", bad: true },
+  { body: "Naredba: `pnpm install && pnpm prod:up`.", bad: true },
   { body: "Nositelj: `dežurni`.", bad: true },
   { body: "Pogledaj `pnpm local:up` u dokumentu.", bad: true },
   { body: "Odluči što dalje.", bad: true },
@@ -32,15 +34,20 @@ const STEPS = [
 
 const PROSE = ["", "Kratka napomena bez naredbe.\n\n", "> Citat: `pnpm nope`.\n\n", "```\n1. nije korak\n```\n\n"] as const;
 
-const procedureArb = fc.array(fc.integer({ min: 0, max: STEPS.length - 1 }), { minLength: 1, maxLength: 6 });
+const stepArb = fc.record({ kind: fc.integer({ min: 0, max: STEPS.length - 1 }), indent: fc.integer({ min: 0, max: 2 }) });
+const procedureArb = fc.array(stepArb, { minLength: 1, maxLength: 6 });
 const documentArb = fc.record({
   steps: fc.tuple(procedureArb, procedureArb, procedureArb, procedureArb),
   prose: fc.tuple(...REQUIRED_PROCEDURES.map(() => fc.constantFrom(...PROSE))),
 });
 
-function render(steps: number[][], prose: readonly string[]): string {
+type StepCase = { kind: number; indent: number };
+
+function render(steps: StepCase[][], prose: readonly string[]): string {
   const sections = REQUIRED_PROCEDURES.map((name, p) => {
-    const list = (steps[p] ?? []).map((kind, i) => `${i + 1}. Korak. ${STEPS[kind]?.body ?? ""}`).join("\n");
+    const list = (steps[p] ?? [])
+      .map(({ kind, indent }, i) => `${" ".repeat(indent)}${i + 1}. Korak. ${STEPS[kind]?.body ?? ""}`)
+      .join("\n");
     return `### ${name}\n\n${prose[p] ?? ""}${list}\n`;
   });
   return `# Operacije\n\n${OWNERS}\n## Postupci\n\n${sections.join("\n")}`;
@@ -49,7 +56,7 @@ function render(steps: number[][], prose: readonly string[]): string {
 test.prop([documentArb])("reports exactly the steps without a known command or owner", ({ steps, prose }) => {
   const problems = checkOperations(render(steps, prose), CONTEXT).map((p) => `${p.procedure}#${p.step ?? "-"}`);
   const expected = REQUIRED_PROCEDURES.flatMap((name, p) =>
-    (steps[p] ?? []).flatMap((kind, i) => (STEPS[kind]?.bad ? [`${name}#${i + 1}`] : [])),
+    (steps[p] ?? []).flatMap(({ kind }, i) => (STEPS[kind]?.bad ? [`${name}#${i + 1}`] : [])),
   );
   expect(problems).toEqual(expected);
 });
