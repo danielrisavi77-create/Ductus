@@ -39,7 +39,7 @@ async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
  * order mark is kept as a character (which then fails to parse) rather than
  * dropped. A lenient decoder would map different bytes to the same text.
  */
-function decodeStrictUtf8(bytes: Uint8Array): string | null {
+export function decodeStrictUtf8(bytes: Uint8Array): string | null {
   try {
     return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch {
@@ -47,7 +47,7 @@ function decodeStrictUtf8(bytes: Uint8Array): string | null {
   }
 }
 
-function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+export function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.byteLength !== right.byteLength) return false;
   for (let index = 0; index < left.byteLength; index++) {
     if (left[index] !== right[index]) return false;
@@ -161,6 +161,34 @@ export type EvidenceChainDiscontinuityV2 = {
   documentHashBreak: boolean;
 };
 
+/**
+ * The one rule for a break between two consecutive positions of a record:
+ * the chain check, the start of a replay and the replay across gaps all use
+ * it, so they cannot disagree on where a break is or what kind it is.
+ * `null` when `next` continues `previous` in both event number and document.
+ */
+export function findEvidenceBreakV2(
+  index: number,
+  previous: { sequenceTo: number; finalDocumentHash: string },
+  next: { sequenceFrom: number; initialDocumentHash: string },
+): EvidenceChainDiscontinuityV2 | null {
+  const sequence =
+    next.sequenceFrom === previous.sequenceTo + 1
+      ? "continuous"
+      : next.sequenceFrom > previous.sequenceTo
+        ? "gap"
+        : "regression";
+  const documentHashBreak = next.initialDocumentHash !== previous.finalDocumentHash;
+  if (sequence === "continuous" && !documentHashBreak) return null;
+  return {
+    index,
+    previousSequenceTo: previous.sequenceTo,
+    sequenceFrom: next.sequenceFrom,
+    sequence,
+    documentHashBreak,
+  };
+}
+
 export type EvidenceChainVerificationV2 =
   | {
       ok: true;
@@ -237,23 +265,8 @@ export async function verifyEvidenceChainV2(
       if (segment.documentId !== previous.documentId) {
         return { ok: false, reason: "document_mismatch", index };
       }
-      const sequence =
-        segment.sequenceFrom === previous.sequenceTo + 1
-          ? "continuous"
-          : segment.sequenceFrom > previous.sequenceTo
-            ? "gap"
-            : "regression";
-      const documentHashBreak =
-        segment.initialDocumentHash !== previous.finalDocumentHash;
-      if (sequence !== "continuous" || documentHashBreak) {
-        discontinuities.push({
-          index,
-          previousSequenceTo: previous.sequenceTo,
-          sequenceFrom: segment.sequenceFrom,
-          sequence,
-          documentHashBreak,
-        });
-      }
+      const discontinuity = findEvidenceBreakV2(index, previous, segment);
+      if (discontinuity !== null) discontinuities.push(discontinuity);
     }
     previous = segment;
     previousHash = verified.sha256;
