@@ -64,7 +64,7 @@ Vrijede za KPI-01 do KPI-10 u svim fazama.
 1. **Samo zbirno.** Pokazatelj se izvještava za fazu kao cjelinu. Nikad po studentu, bez usporedbe studenata i bez rangiranja. Izvedeno iz `docs/PRODUCT.md` §12 i „Zabranjeno u sažetku” (§7), koji to propisuju za proizvod; za izvješće pilota `[PRIJEDLOG, nije odluka]`.
 2. **Bez posljedice.** Nijedan pokazatelj ne ulazi u ocjenu i ne pokreće postupak prema studentu (`docs/PRODUCT.md` §12). `[PRAVILO]`
 3. **Bez podjele teksta po podrijetlu.** Nijedan pokazatelj ne dijeli tekst rada po podrijetlu uz zajednički nazivnik. Za prikaze u proizvodu to je `[PRAVILO]` (`docs/PRODUCT.md` „Zabranjeno u sažetku”, C-6); primjena na izvješće pilota je `[PRIJEDLOG, nije odluka]`. Zato pilot ne mjeri udio AI pomoći, lijepljenja ni diktiranja u radovima.
-4. **Broj i nazivnik.** Svaki rezultat navodi brojnik i nazivnik. Postotak se smije dodati samo uz njih.
+4. **Broj i nazivnik.** Svaki rezultat navodi brojnik i nazivnik. Postotak se smije dodati samo uz njih. Iznimka su pokazatelji tipa medijan (KPI-05): oni umjesto brojnika navode N i medijan (§4).
 5. **Prag samo iz izvora.** Dok prag nije upisan, rezultat se izvještava brojem i nazivnikom, bez ocjene „prošlo” ili „nije prošlo”. Za korisnost i razumijevanje to je `[PRAVILO]` (`docs/UX-EVAL.md` §2); za ostale pokazatelje bez praga `[PRIJEDLOG, nije odluka]`.
 6. **Neprovjereno odvojeno.** Što nije provjereno ili nije dostupno u buildu ne zbraja se s uspjehom i navodi se zasebno. Za KPI-06 i KPI-07 to je `[PRAVILO]` (`docs/UX-EVAL.md` §6); za ostale pokazatelje `[PRIJEDLOG, nije odluka]`.
 7. **Faze se ne zbrajaju.** Sintetički radovi iz faze A i stvarni radovi iz faze B izvještavaju se odvojeno.
@@ -76,7 +76,7 @@ Pravila 4, 7 i 9 i dijelovi pravila 1, 3, 5 i 6 označeni kao prijedlog su `[PRI
 
 ## 4. Pokazatelji KPI-01 do KPI-10
 
-Za svaki pokazatelj: što se broji (brojnik), nazivnik, faze, izvor podatka i prag. Izvori označeni `planirano` ili `[DOKAZ]` još ne postoje na `main`; dok ne postoje, pokazatelj je neprovjeren.
+Za svaki pokazatelj: što se broji (brojnik), nazivnik, faze, izvor podatka i prag. Pokazatelj tipa medijan (KPI-05) umjesto brojnika ima izračun i izvještava N, medijan i interkvartilni raspon. Izvori označeni `planirano` ili `[DOKAZ]` još ne postoje na `main`; dok ne postoje, pokazatelj je neprovjeren.
 
 ### KPI-01 Rekonstrukcija predanih radova
 
@@ -112,12 +112,13 @@ Za svaki pokazatelj: što se broji (brojnik), nazivnik, faze, izvor podatka i pr
 
 ### KPI-05 Korisnost za nastavnike i mentore
 
-- **Što se mjeri:** vrijeme nastavnika ili mentora potrebno za razumijevanje nastanka rada s Ductusom, u odnosu na sadašnji postupak (`docs/PRODUCT.md` §12). Izvještava se medijan za oba postupka.
-- **Nazivnik:** nastavnici i mentori koji su dali vrijeme za oba postupka.
+- **Što se mjeri:** vrijeme nastavnika ili mentora potrebno za razumijevanje nastanka rada s Ductusom, u odnosu na sadašnji postupak (`docs/PRODUCT.md` §12). Jedinica su minute po radu. Svaki sudionik daje jedno vrijeme za Ductus i jedno za sadašnji postupak.
+- **Izračun:** KPI-05 je medijan, ne omjer, pa nema brojnika. Računaju se dva medijana nad sudionicima s valjanim mjerenjem: medijan vremena s Ductusom i medijan vremena sa sadašnjim postupkom. Uz njih se navode interkvartilni raspon za svaki medijan i N. Razlika medijana smije se dodati samo uz ta dva medijana i N.
+- **Nazivnik (N):** broj nastavnika i mentora koji su dali valjano vrijeme za oba postupka. Isključuju se sudionici s praznim ili nepotpunim odgovorom za jedan od postupaka; njihov broj se navodi zasebno.
 - **Faze:** C (procjena se odnosi na rad u fazi B).
 - **Izvor:** evaluacija u fazi C (O06). `planirano`
 - **Metoda mjerenja** (samoprocjena u anketi ili mjerenje u razgovoru): `[ODLUKA]`; odlučuju FPZG i evaluator.
-- **Prag:** **OTVORENO** (Q-12, O04). Definira se s FPZG-om prije pilota (GO uvjet).
+- **Prag:** otvoreno, Q-12 (O04). Definira se s FPZG-om prije pilota (GO uvjet).
 
 ### KPI-06 Razumijevanje: studenti
 
@@ -181,7 +182,7 @@ Pragovi za KPI-07 do KPI-10 i način brojanja iz KPI-02, KPI-03, KPI-04 i KPI-09
 3. **Dobrovoljnost.** Sudjelovanje u evaluaciji je dobrovoljno i odgovor ne utječe na ocjenu. `[PRIJEDLOG, nije odluka]`; odlučuje FPZG.
 4. **Bez novih predaja.** Rokovi zadataka iz faze B su prije 4. 6. 2027. (O01), pa se u fazi C ne predaju novi radovi u pilotu. `[PRIJEDLOG, nije odluka]`
 5. **Završno izvješće** sadrži `[PRIJEDLOG, nije odluka]`; odobrava vlasnik:
-   - KPI-01 do KPI-10 s brojnikom i nazivnikom, odvojeno po fazi u kojoj su izmjereni (A, B ili C; §3); KPI-05 iz faze C navodi se kao procjena rada u fazi B (§4), a KPI-06 i KPI-07 iz faze C odvojeno od kruga prije prelaska u B;
+   - KPI-01 do KPI-10 s brojnikom i nazivnikom (KPI-05 kao medijan: N, medijani za oba postupka i interkvartilni raspon, umjesto brojnika), odvojeno po fazi u kojoj su izmjereni (A, B ili C; §3); KPI-05 iz faze C navodi se kao procjena rada u fazi B (§4), a KPI-06 i KPI-07 iz faze C odvojeno od kruga prije prelaska u B;
    - usporedbu s pragom samo gdje je prag upisan u `docs/DECISIONS.md`; ostalo bez ocjene „prošlo” ili „nije prošlo”;
    - neprovjerene dijelove zasebno;
    - svaki STOP i incident samo s ID-om i statusom;
