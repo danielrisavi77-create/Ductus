@@ -207,8 +207,11 @@ function commandProblem(command, context) {
       return context.fileExists(file) ? null : `node file does not exist: ${file}`;
     }
     case "curl": {
-      const url = args.find((arg) => /^https?:\/\//.test(arg));
+      // curl fetches every non-option argument, so exactly one may follow.
+      const urls = args.filter((arg) => !arg.startsWith("-"));
+      const url = urls[0];
       if (!url) return "curl command names no URL";
+      if (urls.length > 1) return `curl names more than one URL: ${urls.join(" ")}`;
       let pathname;
       try {
         pathname = new URL(url).pathname.replace(/\/+$/, "");

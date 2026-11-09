@@ -58,6 +58,8 @@ describe("checkOperations: one step per input class", () => {
     ["3 curl route that does not exist", "1. Zdravlje. Naredba: `curl -fsS http://localhost:3000/api/live-ness`.", ["Pokretanje#1: no route app/api/live-ness/route.ts"]],
     ["3 curl outside /api", "1. Zdravlje. Naredba: `curl http://localhost:3000/`.", ["Pokretanje#1: curl URL is not under /api/: http://localhost:3000/"]],
     ["3 curl without a URL", "1. Zdravlje. Naredba: `curl -fsS`.", ["Pokretanje#1: curl command names no URL"]],
+    ["3 curl with a second URL", "1. Zdravlje. Naredba: `curl -fsS http://localhost:3000/api/ready http://localhost:3000/api/nepostojeca`.", ["Pokretanje#1: curl names more than one URL: http://localhost:3000/api/ready http://localhost:3000/api/nepostojeca"]],
+    ["3 curl with a URL without a scheme", "1. Zdravlje. Naredba: `curl -fsS http://localhost:3000/api/ready localhost:3000/api/ready`.", ["Pokretanje#1: curl names more than one URL: http://localhost:3000/api/ready localhost:3000/api/ready"]],
     ["4 program outside the list", "1. Briši. Naredba: `rm -rf data`.", ["Pokretanje#1: program not allowed: rm"]],
     ["4 empty inline code", "1. Ništa. Naredba: ``.", ["Pokretanje#1: Naredba: is not followed by a command in inline code"]],
     ["4 marker without code", "1. Ništa. Naredba: pokreni aplikaciju.", ["Pokretanje#1: Naredba: is not followed by a command in inline code"]],

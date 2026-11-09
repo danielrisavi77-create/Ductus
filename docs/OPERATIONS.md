@@ -4,7 +4,7 @@ Stanje: 9. 11. 2026. (DAN-540, M11.3-P04). Ovaj dokument je dokaz za GO redak �
 
 Dokument ima četiri dijela: nositelje („Nositelji”), kontakt za podršku, četiri operativna postupka („Postupci”: pokretanje, gašenje, povrat, incident) i poglavlje „Pilot (M12)” (DAN-588, M12.1b).
 
-**Provjera.** Svaki korak postupka imenuje naredbu koja postoji u repou (`Naredba:` i naredba u kodu) ili nositelja iz tablice „Nositelji” (`Nositelj:` i ključ u kodu). To provjerava `node scripts/operations/check-procedures.mjs`, a test `tests/unit/operations-procedures.test.ts` pokreće istu provjeru nad ovim dokumentom u CI-ju. Dopuštene naredbe su skripte iz `package.json`, `pnpm install`, `node` s datotekom koja postoji, `curl` na rutu `/api/...` koja postoji u `app/api/`, `docker compose <naredba>` i `kill -TERM` ili `kill -INT`. Provjera ne dokazuje da naredba radi na produkciji, ni da je nositelj imenovan; to piše uz svaki korak.
+**Provjera.** Svaki korak postupka imenuje naredbu koja postoji u repou (`Naredba:` i naredba u kodu) ili nositelja iz tablice „Nositelji” (`Nositelj:` i ključ u kodu). To provjerava `node scripts/operations/check-procedures.mjs`, a test `tests/unit/operations-procedures.test.ts` pokreće istu provjeru nad ovim dokumentom u CI-ju. Dopuštene naredbe su skripte iz `package.json`, `pnpm install`, `node` s datotekom koja postoji, `curl` s jednim URL-om, na rutu `/api/...` koja postoji u `app/api/`, `docker compose <naredba>` i `kill -TERM` ili `kill -INT`. Provjera ne dokazuje da naredba radi na produkciji, ni da je nositelj imenovan; to piše uz svaki korak.
 
 Oznake su iste kao u `docs/privacy/README.md`:
 
