@@ -77,7 +77,7 @@ function escapedFirst(text: string): string {
   return `{"text":"${escape}${JSON.stringify(text.slice(1)).slice(1)}}`;
 }
 
-type Boundary = "none" | "gap" | "regression" | "hash_only";
+type Boundary = "none" | "gap" | "gap_back" | "regression" | "hash_only";
 type SegmentSpec = { before: Boundary; skipped: string[]; texts: string[] };
 
 const text = fc.string({ unit: "grapheme", minLength: 1, maxLength: 4 });
@@ -108,13 +108,15 @@ async function buildChain(spec: SegmentSpec[]): Promise<BuiltChain> {
   let document = "";
   let sequence = 1;
   let lastSequenceTo = 0;
+  const starts: string[] = [];
   everyDocument.set(await sha256(canonicalBytes(document)), canonicalBytes(document));
 
   for (const [index, segment] of spec.entries()) {
-    if (segment.before === "gap") {
+    if (segment.before === "gap" || segment.before === "gap_back") {
       // Events that never reached the server: the document moves on and their
-      // numbers are skipped.
-      document += segment.skipped.join("");
+      // numbers are skipped. `gap_back`: they undid the previous segment, so
+      // this segment starts at the document that one started at.
+      document = segment.before === "gap_back" && index > 0 ? starts[index - 1] : document + segment.skipped.join("");
       sequence += segment.skipped.length;
       checkpoints.set(await sha256(canonicalBytes(document)), canonicalBytes(document));
       breaks.push(index);
@@ -125,6 +127,7 @@ async function buildChain(spec: SegmentSpec[]): Promise<BuiltChain> {
       document += segment.skipped.join("");
       breaks.push(index);
     }
+    starts.push(document);
     const initialDocumentHash = await sha256(canonicalBytes(document));
     everyDocument.set(initialDocumentHash, canonicalBytes(document));
     const events: EvidenceEventV3[] = [];
@@ -352,7 +355,11 @@ describe("evidence checkpoints v2", () => {
 
 type Offer = "honest" | "absent" | keyof typeof MUTATIONS;
 const anyBoundary = fc.constantFrom<Boundary>("none", "none", "gap", "regression", "hash_only");
-const anyChain = fc.array(fc.record({ before: anyBoundary, skipped: honestSegment.map((s) => s.skipped), texts: honestSegment.map((s) => s.texts) }), { minLength: 1, maxLength: 6 });
+const chainOf = (before: fc.Arbitrary<Boundary>) =>
+  fc.array(fc.record({ before, skipped: honestSegment.map((s) => s.skipped), texts: honestSegment.map((s) => s.texts) }), { minLength: 1, maxLength: 6 });
+const anyChain = chainOf(anyBoundary);
+/** Chains in which the record may return to an earlier document, so positions share a hash. */
+const revisitingChain = chainOf(fc.constantFrom<Boundary>("none", "gap", "gap_back", "gap_back", "regression", "hash_only"));
 const offer = fc.oneof(
   { weight: 4, arbitrary: fc.constant<Offer>("honest") },
   { weight: 2, arbitrary: fc.constant<Offer>("absent") },
@@ -491,8 +498,8 @@ describe("resuming a replay from a checkpoint v2", () => {
     expect(Math.max(...reads.values())).toBe(1);
   });
 
-  test.prop([anyChain, fc.integer({ min: 1, max: 8 })])(
-    "resume candidates are the newest positions the replay may start from, never the first and never past a break it cannot cross",
+  test.prop([fc.oneof(anyChain, revisitingChain), fc.integer({ min: 1, max: 8 })])(
+    "resume candidates are the newest distinct documents the replay may start from, never the first position and never past a break it cannot cross",
     async (spec, limit) => {
       const built = await buildChain(spec);
       const found = await findEvidenceBreaksV2(INITIAL, built.segments, replayer);
@@ -500,7 +507,22 @@ describe("resuming a replay from a checkpoint v2", () => {
       const hashes = evidenceResumeHashesV2(built.segments, found.breaks, limit);
       const end = found.breaks.find((item) => item.sequence !== "gap")?.index ?? built.segments.length;
       const eligible = built.segments.slice(1, Math.max(1, end)).map((segment) => segment.initialDocumentHash);
-      expect(hashes).toEqual([...new Set(eligible.slice(-limit))].sort());
+      const newest = new Set<string>();
+      for (const hash of eligible.reverse()) if (newest.size < limit) newest.add(hash);
+      expect(hashes).toEqual([...newest].sort());
     },
   );
+
+  test("the limit counts documents, not positions: a document the record returns to does not push an older one out", async () => {
+    const segment = (before: Boundary): SegmentSpec => ({ before, skipped: ["x"], texts: ["a"] });
+    const built = await buildChain([segment("none"), segment("none"), segment("none"), segment("gap_back")]);
+    const found = await findEvidenceBreaksV2(INITIAL, built.segments, replayer);
+    if (!found.ok) throw new Error("fixture: breaks");
+    const [, first, second, third] = built.segments.map((item) => item.initialDocumentHash);
+    expect(third).toBe(second);
+    expect(evidenceResumeHashesV2(built.segments, found.breaks, 2)).toEqual([first, second].sort());
+    // Either position of the repeated document may carry the resume; the newest one does.
+    const resumed = await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, built.everyDocument);
+    expect(resumed).toEqual({ ...(await replayEvidenceAcrossGapsV2(INITIAL, built.segments, replayer, built.checkpoints)), resumedAt: 3 });
+  });
 });
