@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-32 — Potvrda predaje (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 6 · DAN-600 · prijedlog slike · M7.UX-R</div>
+  <h1>S-32 — Potvrda predaje</h1>
+  <p>Korak 5 toka predaje (#1781), polja potvrde v2 (<code>docs/contracts/submission-receipt-v2.md</code>). Vrijeme predaje je vrijeme zahtjeva (requestedAt); potpis (signedAt) stiže kasnije i ne mijenja ga. Vrijeme potpisa je sat poslužitelja, ne vremenski žig treće strane. Potvrda se može ponovno otvoriti. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section class="variant" aria-labelledby="p1">
+    <div class="ref-tag">Stanje 1 · popunjeno, potpisano</div>
+    <div class="panel"><div class="panel-top"><h2 id="p1">Predano 20. 11. 2026. u 22:14</h2><span class="tag">Seminarski rad 2</span></div>
+      <div class="panel-body">
+        <ol class="steps" aria-label="Koraci predaje"><li>1 Tekst</li><li>2 Izjava</li><li>3 Prije predaje</li><li>4 Predaja</li><li aria-current="step">5 Potvrda</li></ol>
+        <div class="kv"><span>Vrijeme predaje</span><b>20. 11. 2026. u 22:14</b></div>
+        <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59</b></div>
+        <div class="kv"><span>Potvrda potpisana</span><b>20. 11. 2026. u 22:14</b></div>
+        <h3>Otisak predanog teksta</h3>
+        <p class="mono">3f9a c2e1 7b04 d58e 61a9 0c3f e8b2 4d17 a6c0 95e3 2b7f 1d84 c0a5 7e39 b2d6 4f18</p>
+        <p class="meta">Niz znakova izračunan iz točnog predanog teksta. Ako se tekst promijeni i za jedan znak, otisak više nije isti.</p>
+        <button class="btn secondary" type="button">Kopiraj otisak</button>
+        <p class="note">Potpis potvrde provjerava se na stranici Provjera potvrde, bez prijave.</p>
+        <a href="#p1">Provjera potvrde</a>
+        <a href="#p1">Preuzmi zapis (PDF s QR kodom)</a>
+      </div></div>
+    <p class="meta">Otisak je u skupinama radi čitanja; „Kopiraj otisak” u međuspremnik stavlja 64 znaka bez razmaka. Poveznica vodi na /provjera (J-03, D-49).</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p2">
+    <div class="ref-tag">Stanje 2 · potvrda čeka potpis</div>
+    <div class="panel"><div class="panel-top"><h2 id="p2">Predaja u obradi</h2><span class="tag">Seminarski rad 2</span></div>
+      <div class="panel-body">
+        <p class="note" role="status">Predaja je zabilježena 20. 11. 2026. u 22:14. Potpis potvrde još se izdaje; vrijeme predaje se time ne mijenja.</p>
+        <div class="kv"><span>Vrijeme predaje</span><b>20. 11. 2026. u 22:14</b></div>
+        <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59</b></div>
+        <div class="kv"><span>Potvrda potpisana</span><b>još nije</b></div>
+        <a href="#p2">Otvori radni prostor</a>
+      </div></div>
+    <p class="meta">Kad potpis stigne, dodaje se „Potvrda potpisana {signedAt}.” i stranica prelazi u stanje 1. Preuzimanje zapisa i provjera nude se tek s potpisom. Naziv „Predaja u obradi” iz #1782.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p3">
+    <div class="ref-tag">Stanje 3 · nakon roka</div>
+    <div class="panel"><div class="panel-top"><h2 id="p3">Predano 21. 11. 2026. u 00:12, nakon roka</h2></div>
+      <div class="panel-body">
+        <div class="kv"><span>Vrijeme predaje</span><b>21. 11. 2026. u 00:12</b></div>
+        <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59</b></div>
+        <div class="kv"><span>Potvrda potpisana</span><b>21. 11. 2026. u 00:13</b></div>
+        <p class="note">Potpis potvrde provjerava se na stranici Provjera potvrde, bez prijave.</p>
+        <a href="#p3">Provjera potvrde</a>
+      </div></div>
+    <p class="meta">Činjenica, bez boje (D-128). Rok je onaj zamrznut pri zahtjevu (Q07); kasniji potpis ne mijenja „nakon roka”.</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p4">
+    <div class="ref-tag">Stanje 4 · zapis ima praznine</div>
+    <div class="panel"><div class="panel-top"><h2 id="p4">Predano 20. 11. 2026. u 22:14</h2></div>
+      <div class="panel-body">
+        <div class="kv"><span>Vrijeme predaje</span><b>20. 11. 2026. u 22:14</b></div>
+        <p class="note">Zapis ima praznine.</p>
+        <a href="#p4">Otvori sažetak procesa</a>
+      </div></div>
+    <p class="meta">Praznina u zapisu ne mijenja predaju ni vrijeme predaje; nastavnik vidi isto (pravilo 5).</p>
+  </section>
+
+  <section class="variant" aria-labelledby="p5">
+    <div class="ref-tag">Stanje 5 · prazno (rad nije predan)</div>
+    <div class="panel"><div class="panel-top"><h2 id="p5">Potvrda predaje</h2></div>
+      <div class="panel-body">
+        <p class="note">Ovaj rad još nije predan, pa potvrde nema.</p>
+        <a href="#p5">Otvori radni prostor</a>
+      </div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="p6">
+    <div class="ref-tag">Stanje 6 · učitavanje</div>
+    <div class="panel" aria-busy="true"><div class="panel-top"><h2 id="p6">Potvrda predaje</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam potvrdu s poslužitelja.</p><div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div></div></div>
+  </section>
+
+  <section class="variant" aria-labelledby="p7">
+    <div class="ref-tag">Stanje 7 · greška</div>
+    <div class="panel"><div class="panel-top"><h2 id="p7">Potvrda predaje</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Potvrdu trenutačno nije moguće učitati. Ako je rad predan, predaja i vrijeme predaje time se ne mijenjaju.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div></div>
+  </section>
+
+</div>
+<p class="meta">Tipkovnica (EQ6): koraci, retci potvrde, otisak, Kopiraj otisak, Provjera potvrde, Preuzmi zapis; u ostalim stanjima poruka pa poveznica ili gumb.</p>
+</main>
+</body>
+</html>
