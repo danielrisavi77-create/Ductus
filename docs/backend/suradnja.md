@@ -420,3 +420,160 @@ Nastavnik ne odgovara u ime studenta, a student ne stvara, ne prihvaća i ne pov
 - **Dvostruko stvaranje.** Stvaranje nema očekivani brojač, pa dvostruki klik može stvoriti dva jednaka zahtjeva, kao kod komentara u §4.11. Suvišni se povlači.
 - **Vidljivost prema D-37 i P-03** veže B-11, kao u §4.11.
 - Mentorski redak čeka DAN-349. Put brisanja po roku i povlačenja studenta (D-12) još ne postoji na `main`: korak 2 uvodi `delete_revision_requests` i pgTAP redak, a poziva ga PR koji uvodi taj put.
+
+### 4.15 Prijedlozi i izravne izmjene nastavnika (D-34, D-244, DAN-597)
+
+Ugovor prije koda (M6.0-S1, DAN-597) za prijedloge (M6.3, DAN-419, plan napada #1489) i izravne izmjene nastavnika s postavkom načina (M6.4, DAN-420, plan napada #1808). Gradi samo na odlučenom: D-34, D-21, D-244 i D-203 (B1 i t. 6), uz `docs/PRODUCT.md` §5 pravilo 8, §6 (student t. 7, nastavnik t. 7), §7 i §9. Napadi iz oba plana su kriterij prihvata. Ono što ovisi o otvorenom pitanju vlasnika ovdje se ne bira. Svaki takav dio je u tablici „Otvoreno” na kraju, uz korake koje blokira.
+
+Prijedlog je **zaseban zapis sa sidrom** u shemi `collaboration`, kao zahtjev za doradu u §4.14 i kao komentar prema D-133 (ODLUČENO u D-266 t. 1: izvedeni prikaz zasebnog zapisa sa sidrom, `docs/ARCHITECTURE.md` §5a, ne oznaka u shemi Tiptapa). Nije vrsta niti komentara. Navod kao čvor-atom (D-134, D-266 t. 1) ovaj sloj ne mijenja: sadržaj prijedloga prolazi istu shemu editora kao dokument.
+
+**Odlučene invarijante.** Svaki korak ih čuva i svaka ima test u tablici napada.
+
+1. **Jedan pisač** (D-34). Dokument, reviziju, odsječak i paket piše samo student vlasnik, kroz svoj klijent i postojeći `commit_evidence_segment`. Nijedan RPC ovog sloja ne čita ni ne piše shemu `evidence`. Nastavnik ni uz izravne izmjene ne dobiva pravo commita (#1808 B1, B2).
+2. **Prijedlog sprema poslužitelj pod nastavnikovom sesijom** (D-34). Autor dolazi iz `app.current_actor()` i nikad nije parametar. Spremljeni sadržaj prijedloga se nikad ne prepisuje, jer na njemu počiva pripisivanje (t. 4). Smije li se prijedlog povući ili izmijeniti određuje Pitanje #1489-3. Izmjena, ako bude dopuštena, je novi zapis.
+3. **Izvor u zapisu.** Odsječak primjene nosi izvor `applied-suggestion` i polje `suggestionId`, koji su već rezervirani u formatu (t. 9). Naziv u sučelju („primijenjeni” ili „prihvaćeni prijedlog”) određuje Pitanje #1489-2.
+4. **Pripisivanje računa poslužitelj iz pohranjenog prijedloga, nikad iz tvrdnje klijenta** (D-34, pravilo 8). Nastavniku se pripisuje samo ono što se podudara sa spremljenim prijedlogom, a razlika je studentova promjena. Odsječak koji se poziva na prijedlog koji ne postoji, pripada drugom dokumentu ili ustanovi, već je primijenjen ili se ne podudara nikad se ne pripisuje nastavniku (#1489 B2 do B4, #1808 D2 do D4). Odbija li se takav odsječak ili se pripisuje studentu određuje PR koraka 4, uz tablični test. Oba su ishoda unutar invarijante. Usporedba ne smije tražiti stanje dokumenta na poslužitelju pri prihvatu odsječka (`docs/backend/evidencija.md`, odluka o `removedSha256`).
+5. **Izravna izmjena je prijedlog koji studentov klijent automatski primjenjuje** (D-34). Nema drugog puta upisa: isti zapis prijedloga, isto spremanje, isti izvor odsječka i isto pripisivanje. Razlikuje se samo tko pokreće primjenu. Automatska primjena nema nuspojava koje ručno prihvaćen prijedlog nema (#1808 B8).
+6. **Postavka načina** (D-244, D-21). Zadano su prijedlozi. Izravne izmjene uključuje samo student vlasnik. Opoziv vrijedi odmah i bez potvrde druge strane. Smije li nastavnik vratiti način na prijedloge određuje Pitanje #1808-3, a dok odgovor ne stigne, uključivanje i opoziv su samo studentova radnja.
+7. **Način prijedloga određuje se pri spremanju, pod bravom, iz spremljene postavke**, nikad iz nastavnikova klijenta ili parametra. Spremljeni način se poslije ne mijenja. Ponovno uključivanje ne djeluje unatrag, a prijedlog spremljen nakon opoziva je običan prijedlog (#1808 C2, C4, C5).
+8. **Vidljivost i pripisivanje** (D-21, D-244, pravilo 5). Postavka je vidljiva na radu objema stranama, istim izlazom iste funkcije. Svaki prijedlog i svaka promjena postavke imaju autora i vrijeme baze. Povijest postavke se ne prepisuje i ne sažima (#1808 A6).
+9. **Format** (D-34, D-203 t. 6). `applied-suggestion`, `suggestionId`, `own-variant`, `variantId` i `ductus-evidence-variant-v1` su rezervirani i odbijeni u v2, v3 i v4 (`src/domain/forensics/evidence-segment-v2.ts`, `docs/contracts/evidence-segment-v4.md` redak „Rezervacije”). Rezervacija se podiže samo novom verzijom formata nakon v4, s vlastitim zlatnim vektorima, uz nepromijenjene bajtove svih starijih vektora. Broj verzije se ovdje ne dodjeljuje. Prije podizanja treba odgovor na Pitanje #1808-4 (razlikuje li zapis automatsku i ručnu primjenu, i je li promjena postavke dio evidencije). Svaki dodatni ključ kasnije bi bio nova verzija, a mjesto se rezervira prije prve stvarne evidencije (D-34).
+10. **Ništa se ne mijenja automatski.** Prijedlog, njegova primjena i promjena postavke ne mijenjaju stanje zahtjeva za doradu (§4.14), komentara (§4.11) ni prikaza uživo (§4.12). Pokreće li izmjena prihvaćenog odlomka ponovni pregled određuje Pitanje #1489-4.
+11. **Prikaz.** Stavka sažetka „Izmjene nastavnika” je popis s vremenom i veličinom (`docs/PRODUCT.md` §7), bez postotka, udjela, zbroja, poretka i ocjene. Student izravne izmjene vidi označene (§6 student t. 7).
+
+**Shema i vlasništvo.** Kao §4.11 i §4.14:
+
+- Tablice i RPC-ovi su u vlasništvu `ductus_identity`.
+- Opseg dokumenta daje `collaboration.document_scope`, a ulogu `collaboration.actor_role`, pri svakom pozivu i bez predmemorije.
+- Nema stranog ključa prema `evidence.document` i nema ovlasti na shemi `evidence`.
+- Tablice imaju `ENABLE` i `FORCE ROW LEVEL SECURITY` sa samo vlasnikovom politikom.
+- `ductus_app`, `ductus_worker` i `ductus_retention` nemaju nikakvu ovlast na tablicama, ni `SELECT`.
+- Svaka nova tablica i svaki RPC imaju retke u pgTAP matrici.
+
+Imena i stupci određuju se u koracima 2 i 3, a radna imena su `collaboration.suggestion` i `collaboration.edit_mode`. Već je određeno sljedeće:
+
+- **Prijedlog:**
+  - opseg (`institution_id`, `assignment_id`, `owner_id`) iz `document_scope` pri spremanju;
+  - `anchor` uz `CHECK (collaboration.is_text_anchor(anchor))`, nepromjenjiv;
+  - autor iz `current_actor()`;
+  - nepromjenjiv sadržaj;
+  - način spremljen pri nastanku (`suggestion` ili `direct`, t. 7);
+  - stanje;
+  - `row_seq` iz jedne sekvence bez ciklusa, kao §4.14.
+- **Stanja koja su odlučena:** čeka, prihvaćen i odbijen (§6 student t. 7, §9). Dodatna stanja i prijelaze za povlačenje, izmjenu, gubitak članstva, opoziv i neuspjelu automatsku primjenu određuju pitanja #1489-3, #1808-2 i #1808-5.
+- **Svaki par (stanje, radnja)** izvan tablice prijelaza koju propiše korak 2 daje `ZD409`, a tablični test je potpun, ne uzorak (kao §4.14 B1, B2).
+- **Postavka:**
+  - trenutačna vrijednost iz zatvorenog skupa `suggestions`, `direct`, zadano `suggestions`;
+  - povijest promjena s autorom i vremenom, koja se samo dodaje.
+  - Je li postavka po radu ili po paru rad–nastavnik određuje Pitanje #1808-1. O tome ovisi ključ tablice, pa korak 3 ne kreće bez odgovora.
+- **Kako prijedlog dobiva stanje „prihvaćen”** određuje korak 2. Granice su ove:
+  - jedini dokaz primjene je odsječak s potpisanom potvrdom (F-3, F-8);
+  - put commita evidencije ne uzima nijednu bravu sheme `collaboration`;
+  - tvrdnja klijenta bez potvrđenog odsječka ne mijenja pripisivanje.
+
+**Tko što smije.**
+
+| Akter | Čita prijedloge i postavku | Sprema prijedlog | Uključuje ili opoziva postavku | Prihvaća ili odbija |
+| --- | --- | --- | --- | --- |
+| Student vlasnik dokumenta | da | `ZD403` (#1489 A4) | da | da |
+| Nastavnik zadatka s otvorenim članstvom | da; prijedlozi drugog nastavnika: Pitanje #1489-9 | da | `ZD403`; vraćanje na prijedloge: Pitanje #1808-3 | `ZD403` |
+| Mentor rada | kao nastavnik zadatka u ulozi `teacher`; redak `mentorship` dolazi s DAN-349 (kao §4.14) | | | |
+| Student B, nastavnik drugog kolegija, zatvoreno članstvo, druga ustanova, administrator | `ZD403` | `ZD403` | `ZD403` | `ZD403` |
+| Bez sesije | `ZD401` | `ZD401` | `ZD401` | `ZD401` |
+
+**Redoslijed provjera i kodovi.** Isto kao §4.14. Ovlast se provjerava prije ulaza, a svaki odbijen slučaj, uključujući nepostojeći dokument ili prijedlog, daje isti `ZD403`. Redoslijed:
+
+1. sesija;
+2. opseg i uloga;
+3. zaključavanje i predan rad;
+4. ulaz (`ZD422`);
+5. očekivani brojač (`conflict`);
+6. prijelaz (`ZD409`);
+7. upis.
+
+Nakon upisane predaje svako pisanje daje `ZD403`, kao §4.14. Smije li nastavnik predlagati nakon predaje određuje Pitanje #1489-5. Kasnije dopuštanje je jeftina promjena provjere 3. Ništa se ne primjenjuje na predan rad (`not_accepting`, #1808 F4).
+
+**Klase ulaza.** Svaki korak koji uvodi validator ima tablični test i fast-check: klijentski validator, `CHECK` u bazi i provjera pri prihvatu daju isti ishod za svaku klasu.
+
+| Ulaz | Klase |
+| --- | --- |
+| ID prijedloga | ispravan UUID; nije UUID; prazan; predug; ispravan, ali drugog dokumenta, rada ili ustanove; već primijenjen |
+| `anchor` | sve klase iz §4.11 (`is_text_anchor`) |
+| Sadržaj prijedloga | unutar sheme editora; nepoznat čvor; `<script>`; veza `javascript:`; nul znak; nesparen surogat; tekst od 10 MB; primjena koja dokument diže iznad 2 MiB (#1489 C6, C7, #1808 B6) |
+| Postavka | `suggestions`; `direct`; druga veličina slova; razmak; `null`; broj; nepoznata vrijednost |
+| `p_expected_seq` | klase iz §4.14 (nedostaje, `NULL`, decimalni, negativan, `2^53`, string, zastario, iz budućnosti, drugog zapisa) |
+| Odsječak primjene (korak 4) | izvor bez `suggestionId` i obrnuto; nepoznato polje uz izvor; `suggestionId` koji nije UUID; rezervirani ključ u starijoj verziji (#1808 E1, E3) |
+
+Tijelo HTTP zahtjeva ima granicu, a nepoznato polje, dvostruki ključ i krivi JSON tip se odbijaju, ne ignoriraju (§4.14 „Granice ulaza”). Prikaz je uvijek tekst ili sadržaj provjeren shemom editora, nikad sirovi HTML.
+
+**Istodobnost.**
+
+- **Opoziv i spremanje.** Spremanje prijedloga i promjena postavke istog dokumenta serijaliziraju se na retku postavke (`FOR UPDATE`), pa spremanje čita postavku pod bravom (t. 7). U oba redoslijeda ishod je određen i bez deadlocka (#1808 C2).
+- **Brojač.** Promjena postavke i svaki prijelaz prijedloga primaju `p_expected_seq` s ishodima `applied`, `conflict`, `ZD409` i `ZD422`, točno kao §4.14. Dvostruki klik i ponovljen zahtjev nikad ne daju dva prijelaza (#1489 D1, D4, D6).
+- **Predaja.** Svako pisanje uzima `collaboration.lock_document_for_write` (`FOR SHARE`) i tek zatim provjerava predaju, kao §4.14 „Zaključavanje s predajom”.
+- **Redoslijed brava:** postavka, prijedlog, dokument. Put commita i predaje ne uzima brave sheme `collaboration`, pa ciklusa nema.
+- **Jedna primjena.** Dvije kartice istog studenta daju točno jedan odsječak primjene s tim `suggestionId`. Drugi odsječak s istim `suggestionId` nikad ne dobiva drugo pripisivanje nastavniku (#1489 D2, D3, #1808 B4).
+- **Članstvo.** Zatvaranje članstva usred poziva daje jedan čist ishod prema snimci transakcije.
+- **Testovi.** Integracijski testovi s dvije stvarne veze, negativni, u oba redoslijeda dobivanja brava:
+  - opoziv protiv spremanja;
+  - predaja protiv spremanja i promjene postavke;
+  - dva prijelaza istog prijedloga.
+
+  Nijedna veza ne dobiva `40P01`.
+
+**Čitanje: isti izlaz za obje strane** (pravilo 5, #1489 A8, #1808 A8). Jedna funkcija za prijedloge i jedna za postavku s poviješću. Vraćaju `*_is_own` umjesto ID-a osobe, vremena zaokružena na prozor P-03 od 5 minuta i nemaju stupac vidljiv samo jednoj strani. Jesu li odbijeni prijedlozi u izlazu, sažetku i reprodukciji određuje Pitanje #1489-6.
+
+**Logovi.** Samo ID-ovi i ishodi. Nikad sadržaj prijedloga, sidro ni tekst dokumenta (§4.9, canary; #1489 B7, #1808 F5).
+
+**Brisanje.** Prijedlozi i postavka brišu se s radom, funkcijom koju izvršava samo `ductus_retention`, u istoj transakciji kao brisanje dokumenta (kao `delete_revision_requests`, §4.14). Rokovi čuvanja su PRIJEDLOG (D-30) i ne upisuju se u kod.
+
+**Napadi na testove** (u zagradi je korak u kojem nastaje dokaz).
+
+| Napadi | Dokaz |
+| --- | --- |
+| #1489 A1–A7; #1808 A1–A3, A7, A9 | pgTAP (2, 3): tablica ovlasti; izravan DML pod tri uloge daje `42501`; katalog (`bag_eq`) RPC-ova po ulozi; RLS i retci matrice za svaku tablicu |
+| #1808 A4–A6, C2, C4, C5 | pgTAP (3): samo student mijenja postavku; povijest se samo dodaje; način prijedloga jednak je postavci pod bravom; integracijski test s dvije veze za opoziv i spremanje |
+| #1489 B1–B5, G1–G4; #1808 D1–D4, E1–E3, E5 | unit, property i zlatni vektori (4): nova verzija formata; bajtovi v2 do v4 nepromijenjeni; pripisivanje iz pohranjenog prijedloga; B-12 replay s `removedSha256` |
+| #1489 C1–C7; #1808 B5, B6 | unit i property (5, 6): razrješenje sidra (`resolveTextAnchor`) ne pogađa drugo pojavljivanje; granica 2 MiB i shema editora |
+| #1489 D1–D6, E1–E5, H1, H2; #1808 B3, B4, B7, C1, C3 | unit i integracijski (5, 6): journal, drain i ACK; nema izgubljenog znaka; jedna primjena po prijedlogu |
+| #1489 H3; #1808 F4 | pgTAP (2, 3): predan rad daje `ZD403` na pisanju; integracijski test s dvije veze za predaju |
+| #1489 B6, B7, H4; #1808 F1, F5 | unit (2 do 4): isti izlaz za obje strane; canary nije u logu; sažetak bez postotka |
+| #1489 F1–F4, H5; #1808 F2, F3, F6 | sučelje (7): odobrena referentna slika N-08 i S-12 (D-245); skener zabranjenih izraza |
+
+**Koraci.** Svaki je zaseban PR vezan uz DAN-419 ili DAN-420.
+
+1. Ovaj ugovor.
+2. Prijedlozi: migracija, RLS, RPC-ovi spremanja, čitanja i prijelaza, pgTAP.
+3. Postavka načina: tablica s poviješću, RPC uključivanja i opoziva, pgTAP.
+4. Format: nova verzija nakon v4 s vektorima i pripisivanje iz pohranjenog prijedloga.
+5. Klijent: prihvaćanje i odbijanje kroz journal.
+6. Automatska primjena.
+7. Sučelje.
+
+Korak 4 mora biti spojen prije prve stvarne evidencije (D-34).
+
+**Otvoreno** (Owner queue, `docs/ORKESTRATOR.md` §4a; ugovor ništa od ovoga ne bira).
+
+| Pitanje | Blokira korak |
+| --- | --- |
+| #1489-2 naziv izvora u sučelju | 7 |
+| #1489-3 povlačenje i izmjena prijedloga, gubitak članstva | 2 (stanja), 5 |
+| #1489-4 ponovni pregled prihvaćenog odlomka | 5, 7 |
+| #1489-5 prijedlog nakon predaje | ne blokira; do odgovora `ZD403` |
+| #1489-6 vidljivost i čuvanje odbijenih | 2 (izlaz čitanja), 7 |
+| #1489-7 kanonski zapis B-12 | 4 |
+| #1489-9 dva nastavnika | 2 (čitanje), 3 |
+| #1808-1 postavka po radu ili po nastavniku | 3 |
+| #1808-2 izmjene koje čekaju pri opozivu | 2 (stanja), 6 |
+| #1808-3 smije li nastavnik vratiti način | 3 |
+| #1808-4 razlika automatske i ručne primjene u zapisu, postavka u evidenciji | 3, 4 |
+| #1808-5 neuspjela automatska primjena | 2 (stanja), 6 |
+| #1808-6 što nastavnik vidi dok izmjena čeka | 6, 7 |
+
+Pitanje #1489-1 (nedostaje ugovor) zatvara ovaj odjeljak kad prođe gate. Pitanje #1489-8 (rezervacija u formatu) na `main` je provedeno rezervacijom iz t. 9. Ostaje samo dio koji pokriva #1808-4.
+
+**Poznate granice.**
+
+- Mentorski redak čeka DAN-349.
+- Put brisanja po roku i pri povlačenju studenta (D-12) još ne postoji na `main`. Funkciju brisanja uvode koraci 2 i 3, a poziva je PR koji uvodi taj put.
+- Vidljivost prema D-37 i P-03 veže B-11, kao u §4.11.
