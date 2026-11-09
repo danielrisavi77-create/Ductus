@@ -109,11 +109,48 @@ type ProtocolVersion = typeof DUCTUS_PROTOCOL_VERSION | typeof DUCTUS_ASYNC_COMM
  * The `Ductus-Protocol` one tab speaks to the commit route. It starts at "2"
  * and turns to "1" only on a 426 `upgrade_required` answered to "2"; nothing
  * else changes it, and it never goes back to "2" within the tab.
+ *
+ * DAN-595 (QA c.6731112408): until the server has answered "2" once, only one
+ * request of the tab goes out under "2" (`probe`); every other send waits for
+ * that answer and then goes out under the version it settled, so a tab pays at
+ * most one 426 even when two works send at the same time. `agreed` is set by
+ * an answer to "2" that the route gives only after it has read the header
+ * (`settlesProtocol`); a request that got no answer, a 5xx, or a 403/405 from
+ * the origin check settles nothing and the next send probes again.
  */
-export type CommitProtocol = { version: ProtocolVersion };
+export type CommitProtocol = {
+  version: ProtocolVersion;
+  agreed: boolean;
+  probe: Promise<void> | null;
+};
 
 export function createCommitProtocol(): CommitProtocol {
-  return { version: DUCTUS_ASYNC_COMMIT_PROTOCOL };
+  return { version: DUCTUS_ASYNC_COMMIT_PROTOCOL, agreed: false, probe: null };
+}
+
+/** The route checks method and origin (403, 405) before `Ductus-Protocol` and answers 426 at that check. */
+function settlesProtocol(httpStatus: number): boolean {
+  return httpStatus < 500 && httpStatus !== 403 && httpStatus !== 405 && httpStatus !== 426;
+}
+
+/**
+ * Waits while another request of the tab probes "2". Returns the release of
+ * this request's own probe when it is the one to probe, else null.
+ */
+async function enterProtocol(protocol: CommitProtocol): Promise<(() => void) | null> {
+  while (protocol.version === DUCTUS_ASYNC_COMMIT_PROTOCOL && !protocol.agreed) {
+    if (protocol.probe === null) {
+      let open: () => void = () => {};
+      const probe = new Promise<void>((resolve) => { open = resolve; });
+      protocol.probe = probe;
+      return () => {
+        if (protocol.probe === probe) protocol.probe = null;
+        open();
+      };
+    }
+    await protocol.probe;
+  }
+  return null;
 }
 
 async function post(
@@ -285,15 +322,23 @@ export async function commitEvidence(
     segments: [encodeBase64(input.segment)],
     document: encodeBase64(input.document),
   });
+  const release = await enterProtocol(protocol);
   let sentUnder = protocol.version;
-  let response = await post(fetchImpl, "/api/evidence/commit", payload, sentUnder);
-  if (response === null) return { status: "transport_error" };
-  let body = await jsonOf(response);
-  if (
-    response.status === 426 && sentUnder === DUCTUS_ASYNC_COMMIT_PROTOCOL &&
-    isObject(body) && body.status === "upgrade_required"
-  ) {
-    protocol.version = DUCTUS_PROTOCOL_VERSION;
+  let response: Response | null;
+  let body: unknown;
+  let upgradeRequired = false;
+  try {
+    response = await post(fetchImpl, "/api/evidence/commit", payload, sentUnder);
+    if (response === null) return { status: "transport_error" };
+    body = await jsonOf(response);
+    upgradeRequired = response.status === 426 && sentUnder === DUCTUS_ASYNC_COMMIT_PROTOCOL &&
+      isObject(body) && body.status === "upgrade_required";
+    if (upgradeRequired) protocol.version = DUCTUS_PROTOCOL_VERSION;
+    else if (sentUnder === DUCTUS_ASYNC_COMMIT_PROTOCOL && settlesProtocol(response.status)) protocol.agreed = true;
+  } finally {
+    release?.();
+  }
+  if (upgradeRequired) {
     sentUnder = DUCTUS_PROTOCOL_VERSION;
     response = await post(fetchImpl, "/api/evidence/commit", payload, sentUnder);
     if (response === null) return { status: "transport_error" };

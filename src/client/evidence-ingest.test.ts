@@ -3,7 +3,7 @@ import { createHash, generateKeyPairSync, sign as nodeSign } from "node:crypto";
 
 import Dexie from "dexie";
 import { IDBKeyRange, indexedDB } from "fake-indexeddb";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { emptyDocument, type DocumentTransaction } from "@/domain/document";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
@@ -250,6 +250,80 @@ describe("DAN-595: the Ductus-Protocol header", () => {
     expect(protocolsOf(calls)).toEqual(["2", "2", "2", "2", "2", "2"]);
   });
 
+  /** A server that answers only when the test says so, oldest request first, so requests can overlap. */
+  function held() {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const waiting: ((answer: Response | Error) => void)[] = [];
+    const fetchImpl: FetchLike = (url, init) => {
+      calls.push({ url, init });
+      return new Promise((resolve, reject) => {
+        waiting.push((answer) => (answer instanceof Error ? reject(answer) : resolve(answer)));
+      });
+    };
+    const answer = (next: Response | Error) => waiting.shift()!(next);
+    const sent = async (count: number) => {
+      await vi.waitFor(() => expect(calls).toHaveLength(count));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(calls).toHaveLength(count);
+    };
+    return { calls, fetchImpl, answer, sent };
+  }
+  const OTHER_WORK = { ...INPUT, documentId: "dokument-izmisljeni-2", clientTransactionId: "tx-izmisljena-druga" };
+
+  it("two works that send before the first answer pay one 426: the second waits for it, then goes under 1 (QA c.6731112408)", async () => {
+    const protocol = createCommitProtocol();
+    const server = held();
+    const first = commitEvidence(INPUT, server.fetchImpl, protocol);
+    const second = commitEvidence(OTHER_WORK, server.fetchImpl, protocol);
+    await server.sent(1);
+    server.answer(upgrade());
+    await server.sent(3);
+    expect(protocolsOf(server.calls)).toEqual(["2", "1", "1"]);
+    expect(server.calls[1]!.init.body).toBe(server.calls[0]!.init.body);
+    server.answer(json(503, { status: "unavailable", stage: "repository" }));
+    server.answer(json(503, { status: "unavailable", stage: "repository" }));
+    expect(await first).toEqual({ status: "transport_error" });
+    expect(await second).toEqual({ status: "transport_error" });
+    expect(protocol.version).toBe("1");
+  });
+
+  it.each([
+    ["a lost answer", () => new TypeError("offline")],
+    ["a 503", () => json(503, { status: "unavailable", stage: "repository" })],
+    ["a 403 from the origin check", () => json(403, { status: "forbidden" })],
+  ])("%s to the first 2 settles nothing: the waiting send asks under 2 itself, one at a time", async (_, unsettled) => {
+    const protocol = createCommitProtocol();
+    const server = held();
+    const first = commitEvidence(INPUT, server.fetchImpl, protocol);
+    const second = commitEvidence(OTHER_WORK, server.fetchImpl, protocol);
+    await server.sent(1);
+    server.answer(unsettled());
+    await first;
+    await server.sent(2);
+    server.answer(upgrade());
+    await server.sent(3);
+    server.answer(json(503, { status: "unavailable", stage: "repository" }));
+    expect(await second).toEqual({ status: "transport_error" });
+    expect(protocolsOf(server.calls)).toEqual(["2", "2", "1"]);
+  });
+
+  it("once the server has answered 2, sends of the tab go out side by side under 2", async () => {
+    const protocol = createCommitProtocol();
+    const server = held();
+    const opening = commitEvidence(INPUT, server.fetchImpl, protocol);
+    await server.sent(1);
+    server.answer(pending("committed", BASE.revision));
+    expect(await opening).toMatchObject({ receipt: { status: "pending_signature" } });
+    const first = commitEvidence(INPUT, server.fetchImpl, protocol);
+    const second = commitEvidence(OTHER_WORK, server.fetchImpl, protocol);
+    await server.sent(3);
+    expect(protocolsOf(server.calls)).toEqual(["2", "2", "2"]);
+    server.answer(pending("duplicate", BASE.revision));
+    server.answer(pending("committed", BASE.revision));
+    expect(await first).toMatchObject({ status: "duplicate" });
+    expect(await second).toMatchObject({ status: "committed" });
+  });
+
   it("the open route stays on protocol 1", async () => {
     const { calls, fetchImpl } = scripted(json(200, openBody()));
     await openWork("zadatak-izmisljeni", fetchImpl);
@@ -486,7 +560,7 @@ describe("F-8 3c: state transitions through the drain runner and the real journa
       const { journal, runner, net, runnerFor } = await setup(pending("committed", BASE.revision), committed("duplicate", BASE.revision, trusted.sign({})));
       expect(await runner.step(DOC)).toMatchObject({ state: "SYNCING" });
       const old = scripted(json(503, { status: "unavailable", stage: "repository" }));
-      const otherTab = runnerFor(old.fetchImpl, { version: "1" });
+      const otherTab = runnerFor(old.fetchImpl, { ...createCommitProtocol(), version: "1" });
       expect(await otherTab.step(DOC)).toMatchObject({ kind: "sent", ackedRevision: null });
       expect(protocolsOf(old.calls)).toEqual(["1"]);
       const held = await journal.read(DOC);
