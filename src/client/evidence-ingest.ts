@@ -14,9 +14,14 @@
  * - SYNCED needs a receipt that verifies under a receipt key from the open
  *   route, never under a key from the response that carries the receipt, and
  *   whose `segmentHash` is the hash of the segment this client sent.
+ * - DAN-595: the commit goes out under `Ductus-Protocol: 2` (4.13 t. 1). A
+ *   202 `pending_signature` is a stored commit without a receipt yet: the
+ *   row stays held and the same key is sent again, never SYNCED. A server
+ *   that does not take "2" answers 426 before reading the body, so the same
+ *   request is sent once more under "1" and that tab stays on "1".
  */
 
-import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
+import { DUCTUS_ASYNC_COMMIT_PROTOCOL, DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
 import { isReceiptClientTransactionId } from "@/domain/forensics/evidence-receipt";
@@ -98,14 +103,66 @@ export function decodeBase64(text: unknown): Uint8Array | null {
   }
 }
 
-async function post(fetchImpl: FetchLike, path: string, body: unknown): Promise<Response | null> {
+type ProtocolVersion = typeof DUCTUS_PROTOCOL_VERSION | typeof DUCTUS_ASYNC_COMMIT_PROTOCOL;
+
+/**
+ * The `Ductus-Protocol` one tab speaks to the commit route. It starts at "2"
+ * and turns to "1" only on a 426 `upgrade_required` answered to "2"; nothing
+ * else changes it, and it never goes back to "2" within the tab.
+ *
+ * DAN-595 (QA c.6731112408): until the server has answered "2" once, only one
+ * request of the tab goes out under "2" (`probe`); every other send waits for
+ * that answer and then goes out under the version it settled, so a tab pays at
+ * most one 426 even when two works send at the same time. `agreed` is set by
+ * an answer to "2" that the route gives only after it has read the header
+ * (`settlesProtocol`); a request that got no answer, a 5xx, or a 403/405 from
+ * the origin check settles nothing and the next send probes again.
+ */
+export type CommitProtocol = {
+  version: ProtocolVersion;
+  agreed: boolean;
+  probe: Promise<void> | null;
+};
+
+export function createCommitProtocol(): CommitProtocol {
+  return { version: DUCTUS_ASYNC_COMMIT_PROTOCOL, agreed: false, probe: null };
+}
+
+/** The route checks method and origin (403, 405) before `Ductus-Protocol` and answers 426 at that check. */
+function settlesProtocol(httpStatus: number): boolean {
+  return httpStatus < 500 && httpStatus !== 403 && httpStatus !== 405 && httpStatus !== 426;
+}
+
+/**
+ * Waits while another request of the tab probes "2". Returns the release of
+ * this request's own probe when it is the one to probe, else null.
+ */
+async function enterProtocol(protocol: CommitProtocol): Promise<(() => void) | null> {
+  while (protocol.version === DUCTUS_ASYNC_COMMIT_PROTOCOL && !protocol.agreed) {
+    if (protocol.probe === null) {
+      let open: () => void = () => {};
+      const probe = new Promise<void>((resolve) => { open = resolve; });
+      protocol.probe = probe;
+      return () => {
+        if (protocol.probe === probe) protocol.probe = null;
+        open();
+      };
+    }
+    await protocol.probe;
+  }
+  return null;
+}
+
+async function post(
+  fetchImpl: FetchLike, path: string, body: string, protocol: ProtocolVersion = DUCTUS_PROTOCOL_VERSION,
+): Promise<Response | null> {
   try {
     return await fetchImpl(path, {
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
-      headers: { "content-type": "application/json", "ductus-protocol": DUCTUS_PROTOCOL_VERSION },
-      body: JSON.stringify(body),
+      headers: { "content-type": "application/json", "ductus-protocol": protocol },
+      body,
     });
   } catch {
     return null;
@@ -176,7 +233,9 @@ export function openedWorkFrom(value: unknown): OpenedWork | null {
 export async function openWork(
   assignmentId: string, fetchImpl: FetchLike = fetch, options: { start?: boolean } = {},
 ): Promise<OpenOutcome> {
-  const response = await post(fetchImpl, "/api/evidence/open", options.start === true ? { assignmentId, start: true } : { assignmentId });
+  const response = await post(
+    fetchImpl, "/api/evidence/open", JSON.stringify(options.start === true ? { assignmentId, start: true } : { assignmentId }),
+  );
   if (response === null) return { status: "unavailable" };
   const body = await jsonOf(response);
   const status = isObject(body) ? body.status : undefined;
@@ -206,11 +265,23 @@ const REFUSALS: Readonly<Record<string, readonly [number, DrainOutcome]>> = {
 
 const CONFLICTS: ReadonlySet<unknown> = new Set(["stale_base", "chain_conflict", "not_continuous"]);
 
-/** One answer of the commit route as a drain outcome (4.13 t. 4). */
-export function commitOutcomeFrom(httpStatus: number, body: unknown): DrainOutcome {
+/**
+ * One answer of the commit route as a drain outcome (4.13 t. 4), for the
+ * protocol it was sent under. A 200 carries only a signed receipt and a 202
+ * only `pending_signature`, and a 202 is read only under "2"; a receipt in
+ * the other code is `invalid`, so a pending answer never reaches the
+ * verifier as signed and a signed one is never read as pending.
+ */
+export function commitOutcomeFrom(
+  httpStatus: number, body: unknown, protocol: ProtocolVersion = DUCTUS_PROTOCOL_VERSION,
+): DrainOutcome {
   const status = isObject(body) ? body.status : undefined;
-  if (httpStatus === 200 && (status === "committed" || status === "duplicate")) {
-    return parseCommitOutcome(body);
+  const accepted = status === "committed" || status === "duplicate";
+  if (accepted && (httpStatus === 200 || (httpStatus === 202 && protocol === DUCTUS_ASYNC_COMMIT_PROTOCOL))) {
+    const outcome = parseCommitOutcome(body);
+    if (outcome.status !== "committed" && outcome.status !== "duplicate") return outcome;
+    const pending = outcome.receipt.status === "pending_signature";
+    return pending === (httpStatus === 202) ? outcome : { status: "invalid" };
   }
   // Our own commit cannot be overwritten: any of the three asks the author to reconcile.
   if (httpStatus === 409 && CONFLICTS.has(status)) {
@@ -231,23 +302,50 @@ export function commitOutcomeFrom(httpStatus: number, body: unknown): DrainOutco
 /**
  * Sends one segment and the snapshot after it. Never throws: a request that
  * could not be made or whose answer was lost is `transport_error`.
+ *
+ * `protocol` is the tab's own (one per tab, `evidence-session-deps.ts`). A 426 `upgrade_required`
+ * to "2" is answered before the route reads the body, so nothing was stored:
+ * the identical body, same key included, goes once more under "1", and
+ * "1" stays for the tab. A 426 to "1" is `invalid` as before.
  */
-export async function commitEvidence(input: EvidenceCommitInput, fetchImpl: FetchLike = fetch): Promise<DrainOutcome> {
+export async function commitEvidence(
+  input: EvidenceCommitInput, fetchImpl: FetchLike = fetch, protocol: CommitProtocol = createCommitProtocol(),
+): Promise<DrainOutcome> {
   if (!isReceiptClientTransactionId(input.clientTransactionId)) return { status: "invalid_client_transaction_id" };
   if (exceedsEvidenceSegmentLimit(input.segment.byteLength) || input.document.byteLength > MAX_DOCUMENT_SNAPSHOT_BYTES) {
     return { status: "too_large" };
   }
-  const response = await post(fetchImpl, "/api/evidence/commit", {
+  const payload = JSON.stringify({
     documentId: input.documentId,
     clientTransactionId: input.clientTransactionId,
     baseRevision: input.baseRevision,
     segments: [encodeBase64(input.segment)],
     document: encodeBase64(input.document),
   });
-  if (response === null) return { status: "transport_error" };
-  const body = await jsonOf(response);
+  const release = await enterProtocol(protocol);
+  let sentUnder = protocol.version;
+  let response: Response | null;
+  let body: unknown;
+  let upgradeRequired = false;
+  try {
+    response = await post(fetchImpl, "/api/evidence/commit", payload, sentUnder);
+    if (response === null) return { status: "transport_error" };
+    body = await jsonOf(response);
+    upgradeRequired = response.status === 426 && sentUnder === DUCTUS_ASYNC_COMMIT_PROTOCOL &&
+      isObject(body) && body.status === "upgrade_required";
+    if (upgradeRequired) protocol.version = DUCTUS_PROTOCOL_VERSION;
+    else if (sentUnder === DUCTUS_ASYNC_COMMIT_PROTOCOL && settlesProtocol(response.status)) protocol.agreed = true;
+  } finally {
+    release?.();
+  }
+  if (upgradeRequired) {
+    sentUnder = DUCTUS_PROTOCOL_VERSION;
+    response = await post(fetchImpl, "/api/evidence/commit", payload, sentUnder);
+    if (response === null) return { status: "transport_error" };
+    body = await jsonOf(response);
+  }
   if (body === undefined && response.status >= 500) return { status: "transport_error" };
-  return commitOutcomeFrom(response.status, body);
+  return commitOutcomeFrom(response.status, body, sentUnder);
 }
 
 /**

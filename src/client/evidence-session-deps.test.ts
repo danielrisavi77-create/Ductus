@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SyncMeta } from "@/domain/sync/journal-types";
-import type { FetchLike } from "./evidence-ingest";
+import type { QueuedTransaction, SyncMeta } from "@/domain/sync/journal-types";
+import { createEvidenceTransport } from "@/lib/sync/evidence-transport";
+import type { FetchLike, OpenedWork } from "./evidence-ingest";
 import {
   browserEvidenceSessionDeps, guardedFetch, SignedOutError, watchClosedBySubmission, type BrowserEvidenceInput,
 } from "./evidence-session-deps";
+
+vi.mock("@/lib/sync/evidence-transport", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sync/evidence-transport")>();
+  return { ...actual, createEvidenceTransport: vi.fn(actual.createEvidenceTransport) };
+});
 
 const source = { navigator: { onLine: false }, addEventListener: () => {}, removeEventListener: () => {} };
 
@@ -154,5 +160,52 @@ describe("F-155 confirmation under the F-154 guard", () => {
     });
     expect((await built.open()).status).toBe("unavailable");
     expect(raw).not.toHaveBeenCalled();
+  });
+});
+
+describe("DAN-595: one Ductus-Protocol state for the life of the tab (QA c.6730803432)", () => {
+  const tx = {
+    kind: "EVIDENCE_SEGMENT",
+    clientTransactionId: "tx-synthetic-1",
+    baseRevision: 0,
+    segment: new Uint8Array([1, 2, 3]),
+    segmentHash: "0".repeat(64),
+    document: new Uint8Array([4, 5, 6]),
+    sequenceFrom: 1,
+    sequenceTo: 1,
+    createdAt: 0,
+  } as unknown as QueuedTransaction;
+
+  it("a work opened again without a reload stays on 1 after the tab's 426 and pays no second 426", async () => {
+    const protocols: (string | undefined)[] = [];
+    const fetchImpl: FetchLike = async (_url, init) => {
+      const protocol = (init?.headers as Record<string, string> | undefined)?.["ductus-protocol"];
+      protocols.push(protocol);
+      return protocol === "2"
+        ? Response.json({ status: "upgrade_required" }, { status: 426 })
+        : Response.json({ status: "not_found" }, { status: 404 });
+    };
+    const openOnce = async () => {
+      const built = browserEvidenceSessionDeps({
+        journal: {} as BrowserEvidenceInput["journal"],
+        documentId: "doc-1",
+        assignmentId: "assignment-1",
+        current: () => true,
+        fetchImpl,
+        source: source as unknown as BrowserEvidenceInput["source"],
+      });
+      built.createRunner({} as OpenedWork);
+      const transport = vi.mocked(createEvidenceTransport).mock.results.at(-1)?.value as ReturnType<typeof createEvidenceTransport>;
+      await transport("doc-1", tx);
+    };
+
+    await openOnce();
+    expect(protocols).toEqual(["2", "1"]);
+    protocols.length = 0;
+    // The same tab opens the work again (client-side navigation): a new
+    // session, a new runner, a new transport, but the tab already heard 426.
+    await openOnce();
+    expect(protocols).toEqual(["1"]);
+    expect(vi.mocked(createEvidenceTransport)).toHaveBeenCalledTimes(2);
   });
 });

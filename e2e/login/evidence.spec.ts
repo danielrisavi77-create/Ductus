@@ -34,6 +34,28 @@ function recordRequests(page: Page, pattern = /^\/api\/evidence\//): Request[] {
 }
 const commitsOf = (requests: Request[]) => requests.filter((r) => pathOf(r) === "/api/evidence/commit");
 
+type SentSegment = { events: { source: string; steps: unknown[] }[] };
+
+/**
+ * The segments of every commit from now on, each distinct body once: a body
+ * sent again unchanged (a retry, or DAN-595's same bytes under "1" after a 426
+ * to "2") is the same commit, not a second one.
+ */
+async function sentSegments(page: Page): Promise<SentSegment[]> {
+  const segments: SentSegment[] = [];
+  const seen = new Set<string>();
+  await page.route(COMMIT, async (route) => {
+    const text = route.request().postData() ?? "";
+    if (!seen.has(text)) {
+      seen.add(text);
+      const sent = JSON.parse(text) as { segments: string[] };
+      for (const segment of sent.segments) segments.push(JSON.parse(Buffer.from(segment, "base64").toString("utf8")) as SentSegment);
+    }
+    await route.continue();
+  });
+  return segments;
+}
+
 /** A writable sheet of a new invented assignment; returns its document id. */
 async function openSheet(page: Page): Promise<{ assignment: string; documentId: string }> {
   await signIn(page, "/rad");
@@ -150,7 +172,10 @@ test("3d-2c2: a reload continues the chain", async ({ page }) => {
   await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
   await type(page, " Nakon osvježavanja.");
   await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
-  expect(answers.every((status) => status === 200)).toBe(true);
+  // DAN-595: a stack without protocol 2 answers the tab's first "2" with 426
+  // before reading the body, once per page load; everything else is 200.
+  expect(answers.filter((status) => status !== 200 && status !== 426)).toEqual([]);
+  expect(answers.filter((status) => status === 426).length).toBeLessThanOrEqual(2);
   expect((await serverOf(documentId))!.revision).toBeGreaterThan(first);
   await sameOnServer(page, documentId);
 });
@@ -245,11 +270,13 @@ test("3d-2c2: after a 409 conflict a reload stays read-only with the conflict no
 
 // 3d-2c2 §3 and e2e t. 7: a refusal for good (413), a 426 and an unreadable
 // answer are never sent again by themselves; the chip says "Greška" and the
-// notice `sendRefused` says a reload sends the text again.
-for (const [name, status, body] of [
-  ["413", 413, { status: "too_large" }],
-  ["426", 426, { status: "upgrade_required" }],
-  ["an unreadable answer", 200, { status: "nepoznato" }],
+// notice `sendRefused` says a reload sends the text again. DAN-595: a 426 to
+// protocol "2" is asked once more under "1" with the same body; the 426 to
+// "1" is the refusal, so a 426 answers two requests and never more.
+for (const [name, status, body, protocols] of [
+  ["413", 413, { status: "too_large" }, ["2"]],
+  ["426", 426, { status: "upgrade_required" }, ["2", "1"]],
+  ["an unreadable answer", 200, { status: "nepoznato" }, ["2"]],
 ] as const) {
   test(`3d-2c2: ${name} is not retried in a loop`, async ({ page }) => {
     await openSheet(page);
@@ -259,7 +286,8 @@ for (const [name, status, body] of [
     await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR", { timeout: OPEN });
     await networkBack(page);
     await page.waitForTimeout(10_000);
-    expect(commitsOf(requests)).toHaveLength(1);
+    expect(commitsOf(requests).map((request) => request.headers()["ductus-protocol"])).toEqual(protocols);
+    expect(new Set(commitsOf(requests).map((request) => request.postData())).size).toBe(1);
     await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR");
     await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(1);
     if (status === 413) await shoot(page, "3d-2c2-posluzitelj-nije-primio");
@@ -269,7 +297,7 @@ for (const [name, status, body] of [
     await expect(chipOf(page)).toHaveAttribute("data-state", /^(LOCAL_DURABLE|ERROR)$/, { timeout: OPEN });
     await page.waitForTimeout(5000);
     await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(1);
-    expect(commitsOf(requests)).toHaveLength(1);
+    expect(commitsOf(requests)).toHaveLength(protocols.length);
   });
 }
 
@@ -277,12 +305,7 @@ test("3d-2c2: a real paste is recorded as paste", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await openSheet(page);
   const PASTED = "Izmišljeni zalijepljeni odlomak.";
-  const segments: { events: { source: string; steps: unknown[] }[] }[] = [];
-  await page.route(COMMIT, async (route) => {
-    const sent = route.request().postDataJSON() as { segments: string[] };
-    for (const segment of sent.segments) segments.push(JSON.parse(Buffer.from(segment, "base64").toString("utf8")));
-    await route.continue();
-  });
+  const segments = await sentSegments(page);
   await type(page, "Prije lijepljenja. ");
   await page.evaluate((text) => navigator.clipboard.writeText(text), PASTED);
   await page.keyboard.press("Control+V");
@@ -301,12 +324,7 @@ test("DAN-484: the Literatura tab's text reaches the server as citation-form", a
   const s = t.workspace.sources;
   await page.setViewportSize({ width: 1440, height: 900 });
   const { documentId } = await openSheet(page);
-  const segments: { events: { source: string; steps: unknown[] }[] }[] = [];
-  await page.route(COMMIT, async (route) => {
-    const sent = route.request().postDataJSON() as { segments: string[] };
-    for (const segment of sent.segments) segments.push(JSON.parse(Buffer.from(segment, "base64").toString("utf8")));
-    await route.continue();
-  });
+  const segments = await sentSegments(page);
   await type(page, "Izmišljeni odlomak ");
   const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
   await panel.getByRole("tab", { name: t.workspace.tabSources }).click();
