@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ import test from "node:test";
 
 import fc from "fast-check";
 
-import { checkServed, checkServedSet, servedUrl, wasmCustomSections } from "./served-bundle.mjs";
+import { checkServed, checkServedSet, listServed, servedUrl, wasmCustomSections } from "./served-bundle.mjs";
 
 // DAN-185 (M11.9-P02): what the production image serves to the browser holds
 // no source map, no reference to one and no SourceMap header. Input classes of
@@ -75,6 +75,41 @@ for (const [name, overrides, expected] of FILES) {
   test(`checkServed: ${name}`, () => assert.deepEqual(codes(checkServed(entry(overrides))), expected));
 }
 
+// Encodings (#1752 QA c.6729113556): a browser decodes a script or stylesheet
+// by its BOM or its charset, and UTF-16 is the only encoding it may apply that
+// is not ASCII compatible, so the marker counts in every one of them.
+const BOM8 = Buffer.from([0xef, 0xbb, 0xbf]);
+const utf16be = (text) => Buffer.from(text, "utf16le").swap16();
+const ENCODINGS = [
+  ["UTF-8", (text) => Buffer.from(text, "utf8")],
+  ["UTF-8 with BOM", (text) => Buffer.concat([BOM8, Buffer.from(text, "utf8")])],
+  ["UTF-16LE with BOM", (text) => Buffer.from(`\ufeff${text}`, "utf16le")],
+  ["UTF-16BE with BOM", (text) => utf16be(`\ufeff${text}`)],
+  ["UTF-16LE without BOM", (text) => Buffer.from(text, "utf16le")],
+  ["UTF-16BE without BOM", (text) => utf16be(text)],
+  ["invalid UTF-8 bytes around the text", (text) => Buffer.concat([Buffer.from([0xc3, 0x28, 0xff]), Buffer.from(text), Buffer.from([0xe2, 0x82])])],
+  ["UTF-16LE with a lone surrogate", (text) => Buffer.from(`\ufeff\ud800${text}\udc00`, "utf16le")],
+  ["UTF-16BE with a lone surrogate", (text) => utf16be(`\ufeff\udfff${text}\ud800`)],
+  ["UTF-16LE of odd length", (text) => Buffer.concat([Buffer.from(`\ufeff${text}`, "utf16le"), Buffer.from([0x41])])],
+  ["UTF-16BE of odd length", (text) => Buffer.concat([utf16be(`\ufeff${text}`), Buffer.from([0x00])])],
+  ["cut off BOM before UTF-16LE", (text) => Buffer.concat([Buffer.from([0xff]), Buffer.from(text, "utf16le")])],
+];
+const BODIES = [
+  ["CSS", "/x.css", "a{color:red}\n/*# sourceMappingURL=data:application/json;base64,e30= */\n", "a{color:red}\n/* sourceMapping */\n"],
+  ["JS", "/_next/static/chunks/x.js", "self.x=1;\n//# sourceMappingURL=x.js.map\n", "self.x=1;\n// sourceMappingURL is a word\n"],
+  ["JS with an ideographic space", "/x.mjs", "self.x=1;\n//@\u3000sourceMappingURL\u00a0=x.map", "self.x=1;\n//@\u3000source=x"],
+];
+for (const [encoding, encode] of ENCODINGS) {
+  for (const [kind, url, marked, clean] of BODIES) {
+    test(`checkServed encoding: ${kind} in ${encoding} with the marker`, () => {
+      assert.deepEqual(codes(checkServed(entry({ url, body: encode(marked) }))), ["source-map-reference"]);
+    });
+    test(`checkServed encoding: ${kind} in ${encoding} without the marker`, () => {
+      assert.deepEqual(codes(checkServed(entry({ url, body: encode(clean) }))), []);
+    });
+  }
+}
+
 // WebAssembly: a custom section named sourceMappingURL (ECMA-426 §11.1.2.3),
 // built byte by byte; the module bodies are invented.
 const leb = (n) => (n < 0x80 ? [n] : [(n & 0x7f) | 0x80, ...leb(n >>> 7)]);
@@ -128,6 +163,16 @@ test("fast-check: a body without the marker word has no finding; an inserted mar
   }));
 });
 
+test("fast-check: UTF-16 text with an inserted marker always has a finding, without it never", () => {
+  const encode = fc.constantFrom((t) => Buffer.from(t, "utf16le"), (t) => utf16be(t), (t) => Buffer.from(`\ufeff${t}`, "utf16le"), (t) => utf16be(`\ufeff${t}`));
+  fc.assert(fc.property(encode, SAFE, (enc, body) => {
+    assert.deepEqual(checkServed(entry({ body: enc(body) })), []);
+  }));
+  fc.assert(fc.property(encode, SAFE, MARK, SAFE, (enc, before, mark, after) => {
+    assert.deepEqual(codes(checkServed(entry({ body: enc(before + mark + after) }))), ["source-map-reference"]);
+  }));
+});
+
 test("fast-check: a module is flagged exactly when one of its custom sections is the map section", () => {
   const sections = fc.array(fc.tuple(SAFE, SAFE).map(([name, data]) => custom(name, Buffer.from(data))), { maxLength: 5 });
   fc.assert(fc.property(sections, fc.nat(), fc.boolean(), (list, at, withMap) => {
@@ -148,6 +193,50 @@ test("fast-check: a served path never maps outside its root or keeps a parent se
     assert.equal(url.split("/").length - 1, parts.length + (root.includes("static") ? 2 : 0));
   }));
 });
+
+// Entry kinds (#1752 review c.6729118211): Next follows a symbolic link under a
+// served root, so a link, wherever it points, and any entry that is neither a
+// file nor a directory fails the check instead of being skipped. Real trees on
+// disk, laid out as the container's /app; the file contents are invented.
+const STATIC = "app/.next/static";
+const PUBLIC = "app/public";
+const tree = (build) => {
+  const dir = mkdtempSync(join(tmpdir(), "served-tree-"));
+  mkdirSync(join(dir, STATIC, "chunks"), { recursive: true });
+  mkdirSync(join(dir, PUBLIC), { recursive: true });
+  writeFileSync(join(dir, STATIC, "chunks", "main.js"), "self.x=1;");
+  writeFileSync(join(dir, "outside.txt"), "outside");
+  build(dir);
+  return dir;
+};
+const BASE = ["/app/.next/static/chunks/main.js"];
+const KINDS = [
+  ["regular file", (d) => writeFileSync(join(d, PUBLIC, "a.txt"), "a"), ["/app/public/a.txt"], []],
+  ["regular file in a subdirectory", (d) => { mkdirSync(join(d, PUBLIC, "motivi")); writeFileSync(join(d, PUBLIC, "motivi", "b.webp"), "b"); }, ["/app/public/motivi/b.webp"], []],
+  ["empty directory", (d) => mkdirSync(join(d, PUBLIC, "empty")), [], []],
+  ["link to a file", (d) => { writeFileSync(join(d, PUBLIC, "payload.txt"), "{}"); symlinkSync("payload.txt", join(d, PUBLIC, "leak.map")); }, ["/app/public/payload.txt"], ["/app/public/leak.map"]],
+  ["link to a directory", (d) => { mkdirSync(join(d, PUBLIC, "real")); writeFileSync(join(d, PUBLIC, "real", "c.js"), "c"); symlinkSync("real", join(d, PUBLIC, "alias")); }, ["/app/public/real/c.js"], ["/app/public/alias"]],
+  ["link outside the root", (d) => symlinkSync("../../outside.txt", join(d, PUBLIC, "out.txt")), [], ["/app/public/out.txt"]],
+  ["absolute link", (d) => symlinkSync("/etc/hostname", join(d, STATIC, "chunks", "host.js")), [], ["/app/.next/static/chunks/host.js"]],
+  ["broken link", (d) => symlinkSync("missing.css", join(d, PUBLIC, "gone.css")), [], ["/app/public/gone.css"]],
+  ["link in a subdirectory", (d) => { mkdirSync(join(d, STATIC, "css")); symlinkSync("../chunks/main.js", join(d, STATIC, "css", "x.css")); }, [], ["/app/.next/static/css/x.css"]],
+  ["FIFO", (d) => { const made = spawnSync("mkfifo", [join(d, PUBLIC, "pipe")]); assert.equal(made.status, 0, String(made.error ?? made.stderr)); }, [], ["/app/public/pipe"]],
+  ["root that is a link", (d) => { rmSync(join(d, PUBLIC), { recursive: true }); mkdirSync(join(d, "elsewhere")); writeFileSync(join(d, "elsewhere", "d.txt"), "d"); symlinkSync("../elsewhere", join(d, PUBLIC)); }, [], ["/app/public"]],
+  ["missing root", (d) => rmSync(join(d, PUBLIC), { recursive: true }), [], ["/app/public"]],
+];
+for (const [name, build, files, flagged] of KINDS) {
+  test(`listServed: ${name}`, () => {
+    const dir = tree(build);
+    try {
+      const { paths, findings } = listServed(dir);
+      assert.deepEqual(paths, [...BASE, ...files].sort());
+      assert.deepEqual(findings.map((finding) => finding.url).sort(), flagged.sort());
+      for (const finding of findings) assert.match(finding.code, /^served-(?:type|root)$/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
 
 const run = (...args) => spawnSync(process.execPath, [script, ...args], { encoding: "utf8" });
 const fixture = (rows) => {
@@ -187,5 +276,22 @@ test("CLI check: passes a clean set, fails with every finding, rejects bad usage
     assert.equal(run("nothing").status, 2);
   } finally {
     for (const dir of [clean, dirty, empty]) rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CLI list: prints regular files, fails on a link with the path, rejects bad usage", () => {
+  const clean = tree((d) => writeFileSync(join(d, PUBLIC, "a b.txt"), "a"));
+  const linked = tree((d) => symlinkSync("../.next/static/chunks/main.js", join(d, PUBLIC, "leak.map")));
+  try {
+    const ok = run("list", clean);
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.equal(ok.stdout, "/app/.next/static/chunks/main.js\n/app/public/a b.txt\n");
+    const bad = run("list", linked);
+    assert.equal(bad.status, 1);
+    assert.match(bad.stderr, /^\/app\/public\/leak\.map: served-type \(symbolic link/m);
+    assert.equal(bad.stdout, "/app/.next/static/chunks/main.js\n");
+    assert.equal(run("list").status, 2);
+  } finally {
+    for (const dir of [clean, linked]) rmSync(dir, { recursive: true, force: true });
   }
 });
