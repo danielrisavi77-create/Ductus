@@ -36,8 +36,10 @@ LANGUAGE sql AS $$
     coalesce(p_digest, (SELECT pg_temp.sha(receipt_payload) FROM evidence.receipt WHERE client_request_id = p_request)),
     p_signature::text))
 $$;
--- The pending list of a domain as request ids in the order returned.
-CREATE FUNCTION pg_temp.pending(p_domain text, p_limit text DEFAULT '10') RETURNS text LANGUAGE sql AS $$
+-- The pending list of a domain as request ids in the order returned, after
+-- the receipt given (DAN-593) or from the oldest.
+CREATE FUNCTION pg_temp.pending(p_domain text, p_limit text DEFAULT '10', p_after uuid DEFAULT NULL) RETURNS text
+LANGUAGE sql AS $$
   SELECT CASE WHEN w ~ '^[0-9a-f,-]*$' THEN
     (SELECT coalesce(string_agg(r.client_request_id, ',' ORDER BY x.ord), '')
        FROM unnest(string_to_array(w, ',')) WITH ORDINALITY AS x (id, ord)
@@ -45,8 +47,8 @@ CREATE FUNCTION pg_temp.pending(p_domain text, p_limit text DEFAULT '10') RETURN
     ELSE w END
   FROM pg_temp.worker(format(
     $q$ SELECT coalesce(string_agg(receipt_id::text, ',' ORDER BY ord), '')
-          FROM app.worker_pending_receipts(%L::uuid, %s) WITH ORDINALITY AS w (receipt_id, receipt_payload, ord) $q$,
-    p_domain, p_limit)) AS w
+          FROM app.worker_pending_receipts(%L::uuid, %s, %L::uuid) WITH ORDINALITY AS w (receipt_id, receipt_payload, ord) $q$,
+    p_domain, p_limit, p_after)) AS w
 $$;
 CREATE FUNCTION pg_temp.sorted(p_list text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT string_agg(x, ',' ORDER BY x) FROM unnest(string_to_array(p_list, ',')) AS x
@@ -87,7 +89,7 @@ RESET ROLE;
 -- invoker functions of its pg-boss queue (106).
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
-      WHERE p.oid IN ('app.worker_pending_receipts(uuid,integer)'::regprocedure, 'app.worker_receipt_keys(uuid)'::regprocedure,
+      WHERE p.oid IN ('app.worker_pending_receipts(uuid,integer,uuid)'::regprocedure, 'app.worker_receipt_keys(uuid)'::regprocedure,
                       'app.worker_attach_receipt_signature(uuid,text,jsonb)'::regprocedure)
         AND (NOT p.prosecdef OR p.proowner <> 'ductus_evidence'::regrole OR NOT 'search_path=""' = ANY (p.proconfig)) $$,
   'the three worker RPCs are SECURITY DEFINER functions of the evidence role with an empty search_path');
@@ -96,14 +98,14 @@ SELECT bag_eq(
       WHERE n.nspname NOT LIKE 'pg\_%' AND n.nspname NOT IN ('information_schema', 'public')
         AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
         AND has_function_privilege('ductus_worker', p.oid, 'EXECUTE') $$,
-  $$ VALUES ('app.worker_pending_receipts(uuid,integer)'), ('app.worker_receipt_keys(uuid)'),
+  $$ VALUES ('app.worker_pending_receipts(uuid,integer,uuid)'), ('app.worker_receipt_keys(uuid)'),
             ('app.worker_attach_receipt_signature(uuid,text,jsonb)'), ('app.worker_pending_backlog()'),
             ('app.worker_receipt_object(uuid,uuid)'), ('pgboss.job_now()'), ('pgboss.create_queue(text,jsonb)') $$,
   'the worker role executes exactly the three worker RPCs, the backlog (107-worker-pending-backlog.sql), the receipt object locator (115-worker-receipt-object.sql) and the two pg-boss functions of its queue (DAN-517)');
 SELECT is_empty(
   $$ SELECT r || ' ' || p.oid::regprocedure::text FROM pg_proc p
       CROSS JOIN unnest(ARRAY['ductus_app', 'ductus_retention', 'ductus_auth', 'ductus_identity', 'ductus_test_stranger']) AS r
-      WHERE p.oid IN ('app.worker_pending_receipts(uuid,integer)'::regprocedure, 'app.worker_receipt_keys(uuid)'::regprocedure,
+      WHERE p.oid IN ('app.worker_pending_receipts(uuid,integer,uuid)'::regprocedure, 'app.worker_receipt_keys(uuid)'::regprocedure,
                       'app.worker_attach_receipt_signature(uuid,text,jsonb)'::regprocedure)
         AND has_function_privilege(r, p.oid, 'EXECUTE') $$,
   'no other runtime role executes a worker RPC');
@@ -113,7 +115,7 @@ SELECT ok(has_schema_privilege('ductus_worker', 'app', 'USAGE') AND NOT has_sche
 SELECT is(pg_get_function_arguments('app.worker_attach_receipt_signature(uuid,text,jsonb)'::regprocedure),
   'p_receipt_id uuid, p_payload_digest_sha256 text, p_signature jsonb',
   'the attach takes no person, institution or key domain: they come from the receipt');
-SELECT is(pg_get_function_result('app.worker_pending_receipts(uuid,integer)'::regprocedure),
+SELECT is(pg_get_function_result('app.worker_pending_receipts(uuid,integer,uuid)'::regprocedure),
   'TABLE(receipt_id uuid, receipt_payload text)', 'the list carries the receipt id and its stored text only (N-5)');
 SELECT is(pg_get_indexdef('evidence.evidence_receipt_pending_idx'::regclass),
   'CREATE INDEX evidence_receipt_pending_idx ON evidence.receipt USING btree (evidence_domain_id, created_at, id) WHERE (status = ''pending_signature''::text)',
@@ -150,12 +152,39 @@ SELECT is(pg_temp.sorted(pg_temp.pending('00000000-0000-4000-8000-0000000000d1')
   'the list holds every pending v2 receipt of the domain and nothing of another domain');
 SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d2'), 'request-b1', 'the worker of domain d2 sees only Tomo''s receipt');
 SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d3'), '', 'a domain without pending receipts lists nothing');
-SELECT is(pg_temp.worker($$ SELECT receipt_payload FROM app.worker_pending_receipts('00000000-0000-4000-8000-0000000000d2', 1) $$),
+SELECT is(pg_temp.worker($$ SELECT receipt_payload FROM app.worker_pending_receipts('00000000-0000-4000-8000-0000000000d2', 1, NULL) $$),
   (SELECT receipt_payload FROM evidence.receipt WHERE client_request_id = 'request-b1'),
   'the listed text is the stored receipt text, byte for byte (P-3)');
 SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', p), '22023: invalid worker request',
   'a limit of ' || p || ' is refused') FROM unnest(ARRAY['0', '101', 'NULL']) AS p;
 SELECT is(pg_temp.pending(NULL), '22023: invalid worker request', 'a list without a domain is refused');
+
+-- Reading on past a receipt (DAN-593, plan #1021 P-10): the list continues
+-- after it in the same order (created_at, id), so receipts that stay pending
+-- at the head never hide the ones behind them. request-1 and request-2 share
+-- created_at, so their order is that of their ids.
+CREATE TEMP TABLE page AS
+  SELECT pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '1') AS p1;
+ALTER TABLE page ADD COLUMN p2 text, ADD COLUMN p3 text, ADD COLUMN p4 text;
+UPDATE page SET p2 = pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '1', pg_temp.rid(p1));
+UPDATE page SET p3 = pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '1', pg_temp.rid(p2));
+UPDATE page SET p4 = pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '1', pg_temp.rid(p3));
+SELECT is((SELECT format('%s|%s|%s', p1, pg_temp.sorted(p2 || ',' || p3), p4) FROM page), 'late-v2|request-1,request-2|',
+  'one receipt at a time, each read after the last one reaches every pending v2 receipt once and then nothing');
+SELECT is((SELECT p2 FROM page),
+  CASE WHEN pg_temp.rid('request-1') < pg_temp.rid('request-2') THEN 'request-1' ELSE 'request-2' END,
+  'receipts accepted at the same instant follow in id order');
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '10', pg_temp.rid('late-v2')),
+  (SELECT p2 || ',' || p3 FROM page), 'the list after the oldest receipt holds the rest in order');
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '10', a),
+  pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '10'), 'a list after ' || l || ' starts at the oldest')
+  FROM (VALUES (pg_temp.rid('request-b1'), 'a receipt of another domain'),
+               ('00000000-0000-4000-8000-00000000ffff'::uuid, 'an unknown receipt id')) AS t (a, l);
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '10', pg_temp.rid('legacy-v1')),
+  pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '10'),
+  'a receipt that is never listed still has its place: the v1 receipt is older than every v2 one');
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', p, pg_temp.rid('late-v2')), '22023: invalid worker request',
+  'a limit of ' || p || ' is refused also after a receipt') FROM unnest(ARRAY['0', '101', 'NULL']) AS p;
 
 -- The receipt keys of a domain (N-6): receipt keys only, revoked and retired
 -- ones with their state, never a key of another domain or purpose.
@@ -185,6 +214,9 @@ SELECT is(pg_temp.attach('request-2', pg_temp.sig('key-a', '1', 'B')), 'already_
   'another signature never overwrites the stored one (P-8)');
 SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '100'), 'late-v2,request-1',
   'a signed receipt leaves the list');
+SELECT is(pg_temp.pending('00000000-0000-4000-8000-0000000000d1', '100', pg_temp.rid('request-2')),
+  CASE WHEN pg_temp.rid('request-2') < pg_temp.rid('request-1') THEN 'request-1' ELSE '' END,
+  'a receipt signed in the meantime still marks where the list goes on');
 
 -- Refusals on request-1; each leaves every row as it was.
 INSERT INTO ref SELECT 'print_before', pg_temp.evidence_print();
@@ -241,7 +273,7 @@ SELECT matches(pg_temp.worker($$ SELECT outcome FROM app.commit_evidence_segment
   '^42501:', 'the worker cannot accept evidence');
 SELECT matches(pg_temp.ask('tomo', format($q$ SELECT outcome FROM app.worker_attach_receipt_signature(%L::uuid, %L, %L::jsonb) $q$,
     pg_temp.rid('request-b1'), repeat('0', 64), pg_temp.sig('key-b'))), '^42501:', 'the web role cannot use the worker attach');
-SELECT matches(pg_temp.ask('tomo', $$ SELECT count(*) FROM app.worker_pending_receipts('00000000-0000-4000-8000-0000000000d2', 1) $$),
+SELECT matches(pg_temp.ask('tomo', $$ SELECT count(*) FROM app.worker_pending_receipts('00000000-0000-4000-8000-0000000000d2', 1, NULL) $$),
   '^42501:', 'the web role cannot list pending receipts');
 SELECT matches(pg_temp.ask('tomo', $$ SELECT count(*) FROM app.worker_receipt_keys('00000000-0000-4000-8000-0000000000d2') $$),
   '^42501:', 'the web role cannot use the worker key read');

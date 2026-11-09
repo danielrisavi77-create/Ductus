@@ -76,10 +76,13 @@ export type PendingReceiptsRead =
 
 /**
  * The worker's read side of the pending receipts: the backlog per domain and
- * the oldest pending v2 receipts of one domain (`app.worker_pending_receipts`,
- * at most 100). Only the worker process holds it (D-71, D-102).
+ * at most 100 pending v2 receipts of one domain, oldest first
+ * (`app.worker_pending_receipts`). With `afterReceiptId` the list starts
+ * after that receipt in the same order (created_at, id); null, or a receipt
+ * of another domain, starts at the oldest. Only the worker process holds it
+ * (D-71, D-102).
  */
 export interface PendingReceiptQueue {
   backlog(): Promise<PendingBacklogRead>;
-  pendingReceipts(evidenceDomainId: string, limit: number): Promise<PendingReceiptsRead>;
+  pendingReceipts(evidenceDomainId: string, limit: number, afterReceiptId: string | null): Promise<PendingReceiptsRead>;
 }

@@ -54,10 +54,14 @@ function harness(opts: {
 }) {
   const queue = {
     backlog: vi.fn(async () => opts.backlog()),
-    pendingReceipts: vi.fn(async (domain: string, limit: number) => {
+    // Like app.worker_pending_receipts: the rows after `after`, or all of them
+    // when `after` is null or unknown. It returns more than `limit` on
+    // purpose, so the reconciler's own cap is tested too.
+    pendingReceipts: vi.fn(async (domain: string, _limit: number, after: string | null) => {
       const entry = opts.receipts?.[domain] ?? [];
       if (typeof entry === "function") return entry() as PendingReceiptsRead;
-      return { status: "ok" as const, rows: entry.slice(0, Math.max(limit, entry.length)) };
+      const at = after === null ? -1 : entry.findIndex((r) => (r as { receiptId?: unknown } | null)?.receiptId === after);
+      return { status: "ok" as const, rows: entry.slice(at + 1) };
     }),
   } satisfies PendingReceiptQueue;
   const signPendingReceipt = vi.fn(async (r: PendingReceiptRow) =>
@@ -232,7 +236,7 @@ describe("reconcilePendingReceipts: pending receipt input classes", () => {
       receipts: { [D1]: [row(1), row(1), row(2), row(3), row(4)] },
     });
     await h.run();
-    expect(h.queue.pendingReceipts).toHaveBeenCalledWith(D1, 3);
+    expect(h.queue.pendingReceipts).toHaveBeenCalledWith(D1, 3, null);
     expect(h.signedIds()).toEqual([rid(1), rid(2)]);
   });
 });
@@ -373,11 +377,11 @@ describe("reconcilePendingReceipts: receipts stuck at the head of a domain do no
     });
     await h.run();
     await h.run();
-    expect(h.queue.pendingReceipts).toHaveBeenCalledWith(D1, 2);
+    expect(h.queue.pendingReceipts).toHaveBeenLastCalledWith(D1, 1, rid(1));
     expect(h.signedIds()).toEqual([rid(1), rid(2)]);
   });
 
-  it("wraps after the last row and starts from the head once a whole read was attempted", async () => {
+  it("reads on after the last receipt attempted and starts from the head after a short read", async () => {
     const h = harness({
       backlog: ok([backlogRow(D1, OLD, 3)]),
       receipts: { [D1]: [row(1), row(2), row(3)] },
@@ -385,7 +389,35 @@ describe("reconcilePendingReceipts: receipts stuck at the head of a domain do no
       deps: { batchLimit: 2 },
     });
     for (let i = 0; i < 3; i += 1) await h.run();
-    expect(h.signedIds()).toEqual([rid(1), rid(2), rid(3), rid(1), rid(2), rid(3)]);
+    expect(h.signedIds()).toEqual([rid(1), rid(2), rid(3), rid(1), rid(2)]);
+    expect(h.queue.pendingReceipts.mock.calls.map(([, , after]) => after)).toEqual([null, rid(2), null]);
+  });
+
+  it("reaches a healthy receipt behind 100 that stay held (QA on #1765)", async () => {
+    const rows = Array.from({ length: 101 }, (_, i) => row(i + 1));
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLD, 101)]),
+      receipts: { [D1]: rows },
+      sign: (r) => (r.receiptId === rid(101) ? go("signed", { signedReceipt: {} }) : go("held", { reason: "object_absent" })),
+      deps: { batchLimit: 100 },
+    });
+    expect((await h.run()).receipts).toMatchObject({ held: 100, signed: 0 });
+    expect((await h.run()).receipts).toMatchObject({ held: 0, signed: 1 });
+    expect(h.queue.pendingReceipts).toHaveBeenLastCalledWith(D1, 100, rid(100));
+    expect(h.signedIds().at(-1)).toBe(rid(101));
+  });
+
+  it("starts from the head in the same pass when nothing is left after the cursor", async () => {
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLD, 2)]),
+      receipts: { [D1]: [row(1), row(2)] },
+      sign: () => go("held", { reason: "object_absent" }),
+      deps: { batchLimit: 2 },
+    });
+    await h.run();
+    await h.run();
+    expect(h.signedIds()).toEqual([rid(1), rid(2), rid(1), rid(2)]);
+    expect(h.queue.pendingReceipts.mock.calls.map(([, , after]) => after)).toEqual([null, rid(2), null]);
   });
 
   it("starts from the head when every pending row fits in one batch", async () => {
@@ -399,10 +431,10 @@ describe("reconcilePendingReceipts: receipts stuck at the head of a domain do no
     expect(h.signedIds()).toEqual([rid(1), rid(2), rid(1), rid(2)]);
   });
 
-  it("never asks for more than 100 rows, whatever the backlog count", async () => {
+  it("asks for batchLimit rows, whatever the backlog count", async () => {
     const h = harness({ backlog: ok([backlogRow(D1, OLD, 5000)]), receipts: { [D1]: [row(1)] } });
     await h.run();
-    expect(h.queue.pendingReceipts).toHaveBeenCalledWith(D1, 100);
+    expect(h.queue.pendingReceipts).toHaveBeenCalledWith(D1, 3, null);
   });
 
   it("a stopped sweep keeps the receipt cursor, so the same receipt is retried", async () => {

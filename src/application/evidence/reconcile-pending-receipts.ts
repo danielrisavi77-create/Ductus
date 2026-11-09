@@ -144,9 +144,9 @@ export function createReconcilePendingReceipts(deps: ReconcileDeps) {
     }
   }
 
-  async function readReceipts(domainId: string, limit: number): Promise<unknown[] | null> {
+  async function readReceipts(domainId: string, after: string | null): Promise<unknown[] | null> {
     try {
-      const read: unknown = await queue.pendingReceipts(domainId, limit);
+      const read: unknown = await queue.pendingReceipts(domainId, batchLimit, after);
       return isPlainObject(read) && read.status === "ok" && Array.isArray(read.rows) ? read.rows : null;
     } catch {
       return null;
@@ -177,23 +177,27 @@ export function createReconcilePendingReceipts(deps: ReconcileDeps) {
 
   // Where the next pass's window starts when more domains are due than fit.
   let cursor: string | null = null;
-  // Per domain, the last receipt attempted when the domain had more than one batch.
+  // Per domain, the last receipt attempted when its read filled a whole batch.
   const receiptCursor = new Map<string, string>();
 
   /**
-   * Reads up to `min(100, max(pendingCount, batchLimit))` of the domain's
-   * oldest rows and attempts at most `batchLimit`, starting after the last
-   * receipt attempted in an earlier pass and wrapping. Receipts that stay
-   * `held` or `refused` keep their place at the head of the queue, so without
-   * this they would take every batch and starve the healthy ones behind them.
+   * Attempts at most `batchLimit` receipts of the domain, read after the last
+   * receipt attempted in an earlier pass. Receipts that stay `held` or
+   * `refused` keep their place at the head of the queue, so a read from the
+   * head would return them on every pass and never reach the ones behind
+   * them, however many there are (QA on #1765). A read shorter than a batch
+   * ends the round and the next pass starts at the oldest again; so does a
+   * read after the cursor that finds nothing, once more in the same pass.
    */
   async function sweepDomain(domain: Domain, summary: ReconcileSummary): Promise<Step | null> {
-    const readLimit = Math.min(MAX_RECONCILE_BATCH, Math.max(domain.count, batchLimit));
-    const read = await readReceipts(domain.id, readLimit);
+    const previous = receiptCursor.get(domain.id) ?? null;
+    let read = await readReceipts(domain.id, previous);
+    if (read !== null && read.length === 0 && previous !== null) read = await readReceipts(domain.id, null);
     if (read === null) return null;
+    const batch = read.slice(0, batchLimit);
     const rows: PendingReceiptRow[] = [];
     const seen = new Set<string>();
-    for (const value of read.slice(0, readLimit)) {
+    for (const value of batch) {
       if (!isReceiptRow(value)) {
         summary.receipts.malformed += 1;
         continue;
@@ -202,21 +206,17 @@ export function createReconcilePendingReceipts(deps: ReconcileDeps) {
       seen.add(value.receiptId);
       rows.push(value);
     }
-    const previous = receiptCursor.get(domain.id);
-    const start = previous === undefined ? 0 : rows.findIndex((r) => r.receiptId === previous) + 1;
-    const count = Math.min(batchLimit, rows.length);
     let step: Step = "continue";
-    let attempted = 0;
     let last: string | undefined;
-    for (; attempted < count && step === "continue"; attempted += 1) {
-      const next = rows[(start + attempted) % rows.length] as PendingReceiptRow;
-      last = next.receiptId;
-      step = await signOne(next, summary);
+    for (const row of rows) {
+      last = row.receiptId;
+      step = await signOne(row, summary);
+      if (step !== "continue") break;
     }
     // A stopped sweep keeps the cursor, so the next pass retries the same receipt.
     if (step !== "continue" && step !== "domain") return step;
-    if (step === "continue" && attempted === rows.length) receiptCursor.delete(domain.id);
-    else if (last !== undefined) receiptCursor.set(domain.id, last);
+    if (last === undefined || (step === "continue" && batch.length < batchLimit)) receiptCursor.delete(domain.id);
+    else receiptCursor.set(domain.id, last);
     return step;
   }
 
