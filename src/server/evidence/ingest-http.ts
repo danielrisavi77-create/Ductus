@@ -2,6 +2,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 import { sessionPrincipal } from "@/server/auth/principal";
 import type { WithActor } from "@/server/db/with-actor";
 import { checkMutationRequest, declaredLengthRefusal, readBodyWithLimit } from "@/server/http/mutation-request";
+import { codesLog } from "@/server/log/logger";
 
 /**
  * What both evidence routes do before and while reading a body (BACKEND 4.13
@@ -13,7 +14,8 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 export type Log = (message: string, ...codes: string[]) => void;
 
-export const consoleLog: Log = (message, ...codes) => console.error(message, ...codes);
+/** One redacted JSON line per call (DAN-586); the name stays for the routes that default to it. */
+export const consoleLog: Log = codesLog;
 
 export function reply(status: number, body: Record<string, unknown>, headers: Record<string, string> = {}): Response {
   return Response.json(body, { status, headers: { ...headers, "cache-control": "no-store" } });
