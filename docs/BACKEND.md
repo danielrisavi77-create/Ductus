@@ -34,6 +34,7 @@ Tekst plana je po temama u `docs/backend/`; ovdje je samo indeks. Brojevi odjelj
 - 4.12 Prikaz uživo (B-LIVE): [`backend/suradnja.md`](backend/suradnja.md)
 - 4.13 Ruta `ingest` (B-8): [`backend/evidencija.md`](backend/evidencija.md)
 - 4.14 Zahtjev za doradu (D-45): [`backend/suradnja.md`](backend/suradnja.md)
+- 4.15 Prijedlozi i izravne izmjene nastavnika (D-34, D-244): [`backend/suradnja.md`](backend/suradnja.md)
 
 ## 5. Što još nije potvrđeno (spike prije odluke)
 
