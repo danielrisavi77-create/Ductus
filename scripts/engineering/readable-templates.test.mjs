@@ -56,12 +56,22 @@ for (const rel of [PR_TEMPLATE, ...ISSUE_TEMPLATES]) {
   });
 }
 
-test("the PR template keeps the machine part inside one <details> below the human lines", () => {
+// Every template: the three human lines, then at once the collapsed machine part, closed at the end.
+// A whole-line HTML comment (guidance for the author) is invisible to people and may sit between.
+for (const rel of [PR_TEMPLATE, ...ISSUE_TEMPLATES]) {
+  test(`${rel} keeps the machine part inside one <details> right below the human lines`, () => {
+    const lines = contentLines(read(rel)).filter((l) => !/^<!--.*-->$/.test(l));
+    assert.equal(lines[3], "<details>");
+    assert.equal(lines[4], "<summary>Detalji za agente</summary>");
+    assert.equal(lines.at(-1), "</details>");
+    assert.equal(lines.filter((l) => l === "<details>").length, 1);
+    assert.equal(lines.filter((l) => l === "</details>").length, 1);
+  });
+}
+
+test("the PR template keeps Agent, Risk and Task inside <details>", () => {
   const lines = contentLines(read(PR_TEMPLATE));
   const open = lines.indexOf("<details>");
-  assert.ok(open >= 3, "details opens after the three human lines");
-  assert.equal(lines[open + 1], "<summary>Detalji za agente</summary>");
-  assert.equal(lines.at(-1), "</details>");
   for (const name of ["Agent", "Risk", "Task"]) {
     assert.ok(lines.findIndex((l) => l.startsWith(`${name}:`)) > open, `${name}: is inside details`);
   }

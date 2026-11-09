@@ -12,6 +12,9 @@ assignees: ""
 
 **Rizik i provjera:** <koliko je ozbiljno i kako se kvar može ponoviti>
 
+<details>
+<summary>Detalji za agente</summary>
+
 ## Okolina
 
 Commit / deployment:
@@ -53,3 +56,5 @@ Console/log/screenshot/video bez osobnih podataka:
 ## Napomena
 
 Bug Hunter ne popravlja nalaz u istoj sesiji. Orkestrator dodjeljuje implementaciju.
+
+</details>
