@@ -103,6 +103,11 @@ describe("redact: one row per input class of the DAN-586 contract", () => {
     ["K14 pair inside a pair", new Error(`request: password=${CANARY}`)],
     ["K14 text inside a pair", `request: text=kanarinac`],
     ["K14 token with a digit run", { stage: "kanarinacABCDEFGHIJKLMN123456789" }],
+    // K15 Codex round 3: a container under a sensitive key in text, Digest parameters
+    ["K15 array under a sensitive key", new Error(`{"text":["Uvod","kanarinac"]}`)],
+    ["K15 object under a sensitive key", new Error(`{"password":{"value":"kanarinac"}}`)],
+    ["K15 container after a harmless pair", `stage: [x] then password: {"v":"kanarinac"}`],
+    ["K15 digest parameters", new Error(`request refused: Digest username="kanarinac", realm="example", nonce="abcdef1234"`)],
   ];
 
   it.each(rows)("%s never shows the canary", (_name, value) => {
@@ -173,6 +178,7 @@ describe("redact keeps what an operator needs", () => {
   it("keeps a quoted single word and a JSON key, and marks a scan-limited text as cut", () => {
     expect(redact('{"stage": "context"}')).toBe('{"stage": "context"}');
     expect(redact(`expected "context"`)).toBe(`expected "context"`);
+    expect(redact("Digest mismatch for segment")).toBe("Digest mismatch for segment");
     expect(redact("x ".repeat(600))).toMatch(/\[cut\]$/);
   });
 

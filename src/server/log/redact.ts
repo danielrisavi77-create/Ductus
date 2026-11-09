@@ -107,10 +107,16 @@ export function isSensitiveKey(key: string): boolean {
 }
 
 const URL_IN_TEXT = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
-const AUTH_SCHEME = /\b(bearer|basic|digest)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+const AUTH_SCHEME = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+/** Digest credentials are a list of parameters: all of them go to the end of the line. */
+const DIGEST_PARAMS = /\b(digest)\s+(?=[A-Za-z0-9_-]+\s*=)[^\n]*/gi;
 const JWT = /\beyJ[\w-]*\.[\w-]*\.[\w-]*/g;
-/** A quoted value is taken whole, escapes included, so no word of it stays. */
-const KEY_VALUE = /(["']?)([A-Za-z0-9_-]{2,40})\1(\s*[:=]\s*)("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?|[^\s"'&,;}]+)/g;
+/**
+ * A quoted value is taken whole, escapes included, so no word of it stays. An
+ * array or object value runs to the end of the line, so a sensitive key loses
+ * all of it; a harmless key's value is scanned again (`scrubPair`).
+ */
+const KEY_VALUE = /(["']?)([A-Za-z0-9_-]{2,40})\1(\s*[:=]\s*)([[{][^\n]*|"(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?|[^\s"'&,;}]+)/g;
 /** A credential header written as text: everything to the end of the line. */
 const HEADER_LINE = /\b((?:proxy-)?authorization|(?:set-)?cookie)(\s*:\s*)[^\n]*/gi;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -156,6 +162,7 @@ export function redactString(text: string, max = MAX_STRING): string {
   const scanned = head
     .replace(URL_IN_TEXT, stripUrl)
     .replace(AUTH_SCHEME, (_match, scheme: string) => `${scheme} ${REDACTED}`)
+    .replace(DIGEST_PARAMS, (_match, scheme: string) => `${scheme} ${REDACTED}`)
     .replace(JWT, REDACTED)
     .replace(HEADER_LINE, (_match, name: string, separator: string) => `${name}${separator}${REDACTED}`)
     .replace(KEY_VALUE, scrubPair)
