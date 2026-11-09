@@ -81,7 +81,7 @@ describe("checkOperations: one step per input class", () => {
     ["6 neither command nor owner", "1. Odluči što dalje.", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
     ["6 code that is not after a marker", "1. Pogledaj `pnpm local:up` u dokumentu.", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
     ["7 marker on an indented continuation line", "1. Odluči.\n   Nositelj: `vlasnik`.", []],
-    ["7 marker on a lazy continuation line", "1. Odluči.\nNositelj: `vlasnik`.", []],
+    ["7 marker on a lazy continuation line is refused", "1. Odluči.\nNositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: lazy continuation", "Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
     ["7 marker after a blank line, indented", "1. Odluči.\n\n   Nositelj: `vlasnik`.", []],
     ["7 marker after a blank line, not indented, is prose", "1. Odluči.\n\nNositelj: `vlasnik`.", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
     ["7 marker after a blank line, one space short of the step, is prose", "1. Odluči.\n\n Nositelj: `vlasnik`.", ["Pokretanje#1: step has neither Naredba: nor Nositelj:"]],
@@ -118,25 +118,159 @@ describe("checkOperations: a line belongs to a step only inside the list item", 
     ["N1 blank line, indent 3 is in the step", "1. Odluči.\n\n   Nositelj: `vlasnik`.", []],
     ["N1 blank line, indent 4 is in the step", "1. Odluči.\n\n    Nositelj: `vlasnik`.", []],
     ["N1 blank line, indent 6 is in the step", "1. Odluči.\n\n      Nositelj: `vlasnik`.", []],
-    ["N1 blank line, a tab reaches column 4", "1. Odluči.\n\n\tNositelj: `vlasnik`.", []],
+    ["N1 blank line, a tab in the indentation is refused", "1. Odluči.\n\n\tNositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: tab in indentation", ...NONE]],
     ["N1 step 10, indent 3 is prose", `${NINE}\n10. Deseti.\n\n   Nositelj: \`vlasnik\`.`, ["Pokretanje#10: step has neither Naredba: nor Nositelj:"]],
     ["N1 step 10, indent 4 is in the step", `${NINE}\n10. Deseti.\n\n    Nositelj: \`vlasnik\`.`, []],
-    ["N1 step 10, a tab is in the step", `${NINE}\n10. Deseti.\n\n\tNositelj: \`vlasnik\`.`, []],
+    ["N1 step 10, a tab in the indentation is refused", `${NINE}\n10. Deseti.\n\n\tNositelj: \`vlasnik\`.`, ["Pokretanje#10: unsupported markdown: tab in indentation", "Pokretanje#10: step has neither Naredba: nor Nositelj:"]],
     ["N1 step indented by one, indent 3 is prose", " 1. Odluči.\n\n   Nositelj: `vlasnik`.", NONE],
     ["N1 two spaces after the number, indent 3 is prose", "1.  Odluči.\n\n   Nositelj: `vlasnik`.", NONE],
-    ["N1 tab after the number, indent 3 is prose", "1.\tOdluči.\n\n   Nositelj: `vlasnik`.", NONE],
-    ["N1 tab after the number, a tab is in the step", "1.\tOdluči.\n\n\tNositelj: `vlasnik`.", []],
-    ["N1 five or more spaces after the number count as one", "1.      Odluči.\n\n   Nositelj: `vlasnik`.", []],
-    ["N1 lazy line after an indented paragraph", "1. Odluči.\n\n   Dalje.\nNositelj: `vlasnik`.", []],
+    ["N1 tab after the number is refused", "1.\tOdluči.\n\n   Nositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: list item form", ...NONE]],
+    ["N1 tab after the number and in the indentation are refused", "1.\tOdluči.\n\n\tNositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: list item form", "Pokretanje#-: unsupported markdown: tab in indentation", ...NONE]],
+    ["N1 five or more spaces after the number are refused", "1.      Odluči.\n\n   Nositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: list item form", ...NONE]],
+    ["N1 lazy line after an indented paragraph is refused", "1. Odluči.\n\n   Dalje.\nNositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: lazy continuation", ...NONE]],
     ["N1 bullet in column 0 ends the step", "1. Odluči.\n- Nositelj: `vlasnik`.", NONE],
-    ["N1 quote in column 0 ends the step", "1. Odluči.\n> Nositelj: `vlasnik`.", NONE],
-    ["N1 thematic break in column 0 ends the step", "1. Odluči.\n---\nNositelj: `vlasnik`.", NONE],
+    ["N1 quote in column 0 is refused", "1. Odluči.\n> Nositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: block quote", ...NONE]],
+    ["N1 thematic break in column 0 is refused", "1. Odluči.\n---\nNositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: thematic break", ...NONE]],
     ["N1 fence in column 0 ends the step", "1. Odluči.\n```\nx\n```\nNositelj: `vlasnik`.", NONE],
     ["N1 indented bullet is in the step", "1. Odluči.\n   - Nositelj: `vlasnik`.", []],
-    ["N1 indented quote is in the step", "1. Odluči.\n   > Nositelj: `vlasnik`.", []],
+    ["N1 indented quote is refused", "1. Odluči.\n   > Nositelj: `vlasnik`.", ["Pokretanje#1: unsupported markdown: block quote", ...NONE]],
     ["N1 no lazy line after a closed indented fence", "1. Odluči.\n   ```\n   x\n   ```\nNositelj: `vlasnik`.", NONE],
   ] as const)("%s", (_name, steps, expected) => {
     expect(messages(doc(steps))).toEqual(expected);
+  });
+});
+
+// Review c.6745140337 and QA c.6745187879 on #1803 (contract #1091
+// c.6745350612): inside a required procedure the check reads a strict subset of
+// Markdown and fails closed. A line it cannot classify with certainty is a
+// problem with its line, never a step boundary guessed one way or the other.
+const UNSUPPORTED = (what: string, step = "1") => `Pokretanje#${step}: unsupported markdown: ${what}`;
+const THEMATIC = ["***", "---", "___"] as const;
+const SPACES = [0, 1, 2, 3] as const;
+const FENCES = ["```", "~~~"] as const;
+
+describe("checkOperations: a thematic break in a procedure is refused", () => {
+  const rows = THEMATIC.flatMap((mark) =>
+    SPACES.flatMap((n) => {
+      const ind = " ".repeat(n);
+      return [
+        [`${mark} at ${n} after a step's paragraph`, `1. Odluči.\n${ind}${mark}\nNositelj: \`vlasnik\`.`, [UNSUPPORTED("thematic break"), ...NONE]],
+        [`${mark} at ${n} after a blank line`, `1. Odluči.\n\n${ind}${mark}\nNositelj: \`vlasnik\`.`, [UNSUPPORTED("thematic break"), ...NONE]],
+        [`${mark} at ${n} before the first step`, `${ind}${mark}\n\n1. Prvi. Nositelj: \`vlasnik\`.`, [UNSUPPORTED("thematic break", "-")]],
+      ] as const;
+    }),
+  );
+  it.each([
+    ...rows,
+    ["spaced * * * after a blank line", "1. Odluči.\n\n   * * *\nNositelj: `vlasnik`.", [UNSUPPORTED("thematic break"), ...NONE]],
+    ["--- after a list marker", "1. Odluči.\n   - ---\n   Nositelj: `vlasnik`.", [UNSUPPORTED("thematic break"), ...NONE]],
+    // Review c.6745140337, verbatim.
+    ["review: indented *** after a blank line", "1. Odluči.\n\n   ***\nNositelj: `vlasnik`.", [UNSUPPORTED("thematic break"), ...NONE]],
+    // QA c.6745187879, verbatim.
+    ["QA: indented *** before an unindented owner", "1. Postupi.\n\n   ***\nNositelj: `vlasnik`.", [UNSUPPORTED("thematic break"), ...NONE]],
+  ] as const)("%s", (_name, steps, expected) => {
+    expect(messages(doc(steps))).toEqual(expected);
+  });
+});
+
+describe("checkOperations: a fence in a procedure opens and closes only in one form", () => {
+  const opening = FENCES.flatMap((f) =>
+    SPACES.flatMap((n) => {
+      const ind = " ".repeat(n);
+      return [
+        [
+          `${f} at ${n} before the first step`,
+          `${ind}${f}\nx\n${ind}${f}\n\n1. Prvi. Nositelj: \`vlasnik\`.`,
+          n === 0 ? [] : [UNSUPPORTED("fence indentation", "-")],
+        ],
+        [
+          `${f} at ${n} after a step's paragraph`,
+          `1. Odluči.\n${ind}${f}\n${ind}Nositelj: \`vlasnik\`\n${ind}${f}`,
+          n === 0 || n === 3 ? NONE : [UNSUPPORTED("fence indentation"), ...NONE],
+        ],
+      ] as const;
+    }),
+  );
+  const closing = FENCES.flatMap((f) => {
+    const body = (close: string) => `1. Odluči.\n   ${f}\n   x\n${close}\n   Nositelj: \`vlasnik\`.`;
+    const refused = [UNSUPPORTED("fence closing line with text or another indentation"), UNSUPPORTED("fence in a step ends before its closing line"), ...NONE];
+    return [
+      [`${f} closed exactly`, body(`   ${f}`), []],
+      [`${f} closed with trailing spaces`, body(`   ${f}   `), []],
+      [`${f} closed with a trailing tab`, body(`   ${f}\t`), []],
+      [`${f} closed by a longer mark`, body(`   ${f}${f[0]}`), []],
+      [`${f} closing mark with text`, body(`   ${f} nije kraj`), refused],
+      [`${f} closing mark with a tab and text`, body(`   ${f}\tnije kraj`), refused],
+      [`${f} closing mark in column 0`, body(f), refused],
+      [`${f} closing mark at the step's content plus four`, body(`       ${f}`), refused],
+      [`${f} closing mark at the step's content plus one`, body(`    ${f}`), refused],
+      [`${f} closing mark shorter than the opening`, body(`   ${f.slice(1)}`), [UNSUPPORTED("fence in a step ends before its closing line"), ...NONE]],
+      [`${f} with a tab in the indentation`, `1. Odluči.\n\t${f}\n\tx\n\t${f}\n   Nositelj: \`vlasnik\`.`, [UNSUPPORTED("fence indentation"), ...NONE]],
+      [`${f} after a list marker`, `1. Odluči.\n   - ${f}\n     Nositelj: \`vlasnik\`.`, [UNSUPPORTED("fence after a list marker"), ...NONE]],
+      [`${f} never closed in a step`, `1. Odluči.\n   ${f}\n   Nositelj: \`vlasnik\`.`, [UNSUPPORTED("fence in a step ends before its closing line"), ...NONE]],
+    ] as const;
+  });
+  it.each([
+    ...opening,
+    ...closing,
+    ["backtick fence with a backtick in the info string", "1. Odluči.\n   ```a`b\n   Nositelj: `vlasnik`.", [UNSUPPORTED("fence info string with a backtick"), ...NONE]],
+  ] as const)("%s", (_name, steps, expected) => {
+    expect(messages(doc(steps))).toEqual(expected);
+  });
+
+  it("an unclosed fence in the last procedure is refused at its opening line", () => {
+    const text = doc("1. Odluči. Nositelj: `vlasnik`.", { extra: "\n~~~\nx\n" });
+    const opening = text.split("\n").indexOf("~~~") + 1;
+    expect(checkOperations(text, CONTEXT).filter((p) => p.message.startsWith("unsupported"))).toEqual([
+      { procedure: "Incident", step: null, line: opening, message: "unsupported markdown: unclosed fence" },
+    ]);
+  });
+
+  // QA c.6745187879, verbatim: `~~~ nije kraj` does not close the fence, so the
+  // owner after it is inside the fence and Incident is the last procedure.
+  it("QA: a tilde mark with text does not close the fence", () => {
+    const text = doc("1. Odluči. Nositelj: `vlasnik`.").replace(
+      `### Incident\n\n1. ${VALID_STEP}\n`,
+      "### Incident\n\n1. Postupi.\n   ~~~text\n   ~~~ nije kraj\n   Nositelj: `vlasnik`.\n",
+    );
+    expect(messages(text)).toEqual([
+      "Incident#1: unsupported markdown: fence closing line with text or another indentation",
+      "Incident#1: unsupported markdown: unclosed fence",
+      "Incident#1: step has neither Naredba: nor Nositelj:",
+    ]);
+    const lines = text.split("\n");
+    expect(checkOperations(text, CONTEXT)[0]?.line).toBe(lines.indexOf("   ~~~ nije kraj") + 1);
+    expect(checkOperations(text, CONTEXT)[1]?.line).toBe(lines.indexOf("   ~~~text") + 1);
+  });
+});
+
+describe("checkOperations: other lines a procedure cannot classify are refused", () => {
+  it.each([
+    ["tab before a step's content line", "1. Odluči.\n \tNositelj: `vlasnik`.", [UNSUPPORTED("tab in indentation"), ...NONE]],
+    ["tab before prose after a blank line", "1. Prvi. Nositelj: `vlasnik`.\n\n\tNapomena.", [UNSUPPORTED("tab in indentation")]],
+    ["lazy line in column 0", "1. Odluči.\nNositelj: `vlasnik`.", [UNSUPPORTED("lazy continuation"), ...NONE]],
+    ["lazy line at indent 2", "1. Odluči.\n  Nositelj: `vlasnik`.", [UNSUPPORTED("lazy continuation"), ...NONE]],
+    ["HTML comment in a step", "1. Odluči.\n   <!-- Nositelj: `vlasnik`. -->", [UNSUPPORTED("HTML block"), ...NONE]],
+    ["HTML block in prose", "1. Prvi. Nositelj: `vlasnik`.\n\n<div>\n2. Drugi.\n</div>", [UNSUPPORTED("HTML block"), UNSUPPORTED("HTML block", "2"), "Pokretanje#2: step has neither Naredba: nor Nositelj:"]],
+    ["indented code after a blank line", "1. Odluči.\n\n       Nositelj: `vlasnik`.", [UNSUPPORTED("indented code"), ...NONE]],
+    ["indented heading", "1. Prvi. Nositelj: `vlasnik`.\n\n  ### Gašenje", [UNSUPPORTED("indented heading")]],
+    ["empty list item", "1. Prvi. Nositelj: `vlasnik`.\n2.\n   Bez markera.", [UNSUPPORTED("list item form", "2"), "Pokretanje#2: step has neither Naredba: nor Nositelj:"]],
+    ["empty nested bullet", "1. Odluči.\n   -\n   Nositelj: `vlasnik`.", [UNSUPPORTED("list item form"), ...NONE]],
+    ["number of ten digits", "1234567890. Odluči. Nositelj: `vlasnik`.", [UNSUPPORTED("list item form", "-"), "Pokretanje#-: procedure has no steps"]],
+    ["step right after a paragraph", "Uvod.\n1. Odluči. Nositelj: `vlasnik`.", [UNSUPPORTED("list item right after a paragraph"), ...NONE]],
+    ["step right after a bullet", "- Uvod.\n2. Odluči. Nositelj: `vlasnik`.", [UNSUPPORTED("list item right after a paragraph", "2"), "Pokretanje#2: step is numbered 2, expected 1", "Pokretanje#2: step has neither Naredba: nor Nositelj:"]],
+    ["quote after a list marker", "1. Odluči.\n   - > Nositelj: `vlasnik`.", [UNSUPPORTED("block quote"), ...NONE]],
+    ["inline HTML comment around the owner", "1. Odluči. <!-- Nositelj: `vlasnik`. -->", [UNSUPPORTED("inline HTML"), ...NONE]],
+    ["inline tag on a content line", "1. Odluči.\n   Nositelj: <span>`vlasnik`</span>.", [UNSUPPORTED("inline HTML"), ...NONE]],
+    ["link reference definition in a step", "1. [x]: /a \"Nositelj: `vlasnik`\"", [UNSUPPORTED("link reference definition"), ...NONE]],
+    ["a placeholder in code is not HTML", "1. Stani. Naredba: `kill -TERM <pid>`; Nositelj: `vlasnik`.", []],
+  ] as const)("%s", (_name, steps, expected) => {
+    expect(messages(doc(steps))).toEqual(expected);
+  });
+
+  it("an HTML block before the procedures is refused, so it cannot hide one", () => {
+    const text = doc("1. Odluči. Nositelj: `vlasnik`.").replace("## Postupci\n\n", "## Postupci\n\n<!--\n### Skriveni\n\n1. Korak. Nositelj: `vlasnik`.\n\n-->\n\n");
+    expect(messages(text)).toContain("Postupci#-: unsupported markdown: HTML block");
   });
 });
 

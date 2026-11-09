@@ -33,7 +33,7 @@ const STEPS = [
   { body: "Odluči što dalje.", bad: true },
 ] as const;
 
-const PROSE = ["", "Kratka napomena bez naredbe.\n\n", "> Citat: `pnpm nope`.\n\n", "```\n1. nije korak\n```\n\n"] as const;
+const PROSE = ["", "Kratka napomena bez naredbe.\n\n", "- Napomena: `pnpm nope`.\n\n", "```\n1. nije korak\n```\n\n"] as const;
 
 const stepArb = fc.record({ kind: fc.integer({ min: 0, max: STEPS.length - 1 }), indent: fc.integer({ min: 0, max: 2 }), delimiter: fc.constantFrom(".", ")") });
 const procedureArb = fc.array(stepArb, { minLength: 1, maxLength: 6 });

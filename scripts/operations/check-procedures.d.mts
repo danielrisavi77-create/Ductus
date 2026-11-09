@@ -16,6 +16,8 @@ export interface Operations {
   owners: { name: string; line: number }[];
   procedures: Procedure[];
   proceduresLine: number | null;
+  /** Lines inside a required procedure outside the strict Markdown subset. */
+  unsupported: Problem[];
 }
 
 export interface Problem {
