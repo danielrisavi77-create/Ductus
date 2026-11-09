@@ -13,7 +13,7 @@ Stranice su složene iz dijelova `../m2-nastavnik-reference` (ljuska nastavnika,
 | Stranica | Stanja | Izvori |
 |---|---|---|
 | `n05-brz-put.html` | popunjeno (tekst rada), popunjeno (sažetak procesa), prazno, učitavanje, greška i zastarjeli popis, mobitel | #1785, #1789, D-170, D-128, pravilo 5, `src/lib/i18n/messages.hr.ts` (`fastPath`) |
-| `n10-karta-podrijetla.html` | popunjeno, pojedinosti oznake, „Napisano u Ducturi” uključeno, prazno, učitavanje, greška, mobitel | #1786, D-57, D-61, D-127, D-137, pravilo 5 |
+| `n10-karta-podrijetla.html` | popunjeno, pojedinosti oznake, „Napisano u Ducturi” uključeno, „Podrijetlo teksta” isključen, prazno, učitavanje, greška, mobitel | #1786, D-57, D-61, D-127, D-137, pravilo 5 |
 | `n11-usporedba-verzija.html` | popunjeno, zaglavlja verzija (runde), prazno, učitavanje, greška, mobitel | D-202 t. 3, D-237, D-263 Q08, pravilo 5 |
 | `n13-produljenje-roka.html` | popunjeno, sukob s rokom, što vidi student, prazno, učitavanje, greška, mobitel | #1784, D-128, D-263 Q07, PRODUCT §6 t. 10, Q-5 (ADR `docs/adr/2026-11-06-zabiljezeni-pristup-podrske.md` §8a do 8d) |
 
@@ -47,7 +47,8 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
 - „Zalijepljeno (izvor nije opažen)” i „mjesto za izvor” su odvojeni (D-137). Mjesto za izvor je zaseban okvir iza zalijepljenog odlomka.
 - Karta nema zbroj, udio ni postotak (D-57).
 - Poglavlja nose vrste događaja bez broja (vidi „Otvoreno za vlasnika”).
-- „Napisano u Ducturi” je prekidač, isključen u slici. Uz njega uvijek stoji „Ductus ne zna tko je tipkao” (D-127).
+- Prekidač „Podrijetlo teksta” uključuje i isključuje sve oznake na karti (D-57). Isključen je u stanju 3a: u tekstu tada nema nijedne oznake, a „Napisano u Ducturi” je onemogućen (D-127).
+- „Napisano u Ducturi” je drugi prekidač, isključen u stanju 1. Može se uključiti samo dok je „Podrijetlo teksta” uključen. Uz njega uvijek stoji „Ductus ne zna tko je tipkao” (D-127).
 - Pojedinosti oznake: model „M-2” i vrijeme za prijenos iz AI pomoćnika, „oznaka podrijetla nije dodana” za zalijepljeno, ime nastavnika za izmjenu. Vrsta dokaza je „opaženo”.
 
 ### Usporedba verzija (N-11)
@@ -75,7 +76,7 @@ Slika ova pitanja označava kao otvorena i ne odlučuje ih:
 - **Broj lijepljenja u N-05.** Slika uz „Lijepljenja bez izvora” ne prikazuje broj, nego „Ima ih · popis u punom sažetku (S-33)”, jer PRODUCT §5 zabranjuje broj uz izvor (review c.6745368661). D-170 imenuje redak, ali ne i oblik vrijednosti, a aplikacija danas prikazuje broj (`src/components/teacher/fast-path.ts`). Vlasnik odlučuje smije li redak nositi broj događaja ili samo kaže ima li ih; dotad slika broj ne prikazuje.
 - **Brojevi uz događaje poglavlja (D-61, #1786).** Primjer u D-61 stavlja broj ispred prijenosa iz AI pomoćnika, a rječnik ne dopušta broj uz AI. Slika crta vrste događaja bez broja dok orkestrator ili vlasnik ne potvrde oblik.
 - **Naziv u legendi.** D-137 kaže „mjesto za izvor”, #1786 i D-61 „otvoreno mjesto”. Slika koristi „Mjesto za izvor”.
-- **Zadano stanje „Napisano u Ducturi” (D-127, O-2).** Slika crta isključeno.
+- **Zadano stanje prekidača „Podrijetlo teksta” (D-127, O-2).** Izvor predlaže isključeno; slika crta oba stanja (uključeno u stanjima 1 i 3, isključeno u 3a) i ne bira zadano. Ni za „Napisano u Ducturi” slika ne bira zadano stanje.
 - **Nazivi stanja (#1782).** „Predaja u obradi” je iz prijedloga u #1782, koji još nije potvrđen.
 - **Usporedba u oba profila.** PRODUCT (redak 189 te 197 i 198) i D-237 se ne slažu; upis ide kroz Q-18.
 - **Oznake ekrana.** U `docs/FEATURES.md` N-05, N-10 i N-11 znače druge funkcije (promjene od zadnjeg pregleda, predlošci, pregled kolegija). Slika koristi oznake iz `docs/design/EKRANI.md`.

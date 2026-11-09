@@ -21,11 +21,11 @@
     <header>
       <div class="ref-tag">Referenca paketa 7 · DAN-600 · N-10 · prijedlog slike · stari prototipi analiza.dc.html i demo-tok-v2.dc.html nisu preslikani · podaci su izmišljeni</div>
       <h1>Sažetak i karta podrijetla</h1>
-      <p>Karta pokazuje mjesta lijepljenja, uvoza, prijenosa iz AI pomoćnika i izmjena nastavnika, bez zbroja, udjela i postotka (D-57). Student i nastavnik vide isti prikaz (PRODUCT §5 pravilo 5). Oznake se razlikuju oblikom crte i tekstom, ne samo bojom. Tipkovnički redoslijed (EQ6): 1 sažetak, 2 legenda i prekidač, 3 poglavlja, 4 tekst s oznakama redom kojim stoje, 5 pojedinosti oznake.</p>
+      <p>Karta pokazuje mjesta lijepljenja, uvoza, prijenosa iz AI pomoćnika i izmjena nastavnika, bez zbroja, udjela i postotka (D-57). Student i nastavnik vide isti prikaz (PRODUCT §5 pravilo 5). Oznake se prikazuju samo dok je uključen prekidač „Podrijetlo teksta”; njegova zadana vrijednost je otvorena (D-127, O-2). Oznake se razlikuju oblikom crte i tekstom, ne samo bojom. Tipkovnički redoslijed (EQ6): 1 sažetak, 2 legenda i prekidači („Podrijetlo teksta”, zatim „Napisano u Ducturi”), 3 poglavlja, 4 tekst s oznakama redom kojim stoje, 5 pojedinosti oznake.</p>
     </header>
 
     <section class="state" aria-labelledby="h-pop">
-      <div class="ref-tag">N-10 · stanje 1 · popunjeno, prekidač „Napisano u Ducturi” isključen</div>
+      <div class="ref-tag">N-10 · stanje 1 · popunjeno, „Podrijetlo teksta” uključen, „Napisano u Ducturi” isključen</div>
       <h2 id="h-pop">Lana Probić · Odlučivanje u malim skupinama</h2>
       <div class="card">
         <h3>Sažetak procesa</h3>
@@ -47,7 +47,7 @@
             <p><span class="pm pm-import">Prvi obrazac opisan je u bilješkama s terenskog dijela istraživanja, provedenog u tri projektna tima.</span><span class="pm-tag">uvezeno</span> Drugi obrazac nastaje kad <span class="pm pm-ai">skupina zadrži prvi izvedivi prijedlog i dalje ga samo dorađuje</span><span class="pm-tag">iz AI pomoćnika</span>.</p>
             <p>Treći obrazac <span class="pm pm-teacher">vrijedi samo za timove s imenovanim voditeljem</span><span class="pm-tag">izmjena nastavnika</span>, što se vidi iz zapisnika sastanaka.</p>
           </div>
-          <p class="meta">Tekst napisan u Ducturi ostaje bez oznake dok je prekidač isključen.</p>
+          <p class="meta">Tekst napisan u Ducturi ostaje bez oznake dok je prekidač „Napisano u Ducturi” isključen.</p>
         </div>
         <div class="card">
           <h3 id="h-leg">Legenda</h3>
@@ -58,6 +58,7 @@
             <li><span class="sw"><span class="pm pm-teacher">tekst</span></span> Izmjena nastavnika</li>
             <li><span class="sw"><span class="pm-slot">mjesto za izvor</span></span> Mjesto za izvor</li>
           </ul>
+          <div class="tool"><label><input type="checkbox" checked> Podrijetlo teksta</label><span class="meta">uključeno</span></div>
           <div class="tool"><label><input type="checkbox"> Napisano u Ducturi</label><span class="meta">isključeno</span></div>
           <p class="meta">Napisano u Ducturi: Ductus ne zna tko je tipkao.</p>
           <h3 id="h-pog">Poglavlja</h3>
@@ -91,13 +92,14 @@
     </section>
 
     <section class="state" aria-labelledby="h-duc">
-      <div class="ref-tag">N-10 · stanje 3 · prekidač „Napisano u Ducturi” uključen (zadana vrijednost otvorena, D-127 O-2)</div>
+      <div class="ref-tag">N-10 · stanje 3 · „Podrijetlo teksta” uključen, „Napisano u Ducturi” uključen</div>
       <h2 id="h-duc">Isti odlomak s oznakom pisanja u Ducturi</h2>
       <div class="cols">
         <div class="sheet">
           <p><span class="pm-ductus">Odluke u malim skupinama rijetko nastaju glasanjem.</span> <span class="pm pm-paste">Prema klasičnom opisu skupnog mišljenja, skupina koja rano postigne slaganje prestaje provjeravati pretpostavke na kojima ga je postigla.</span><span class="pm-tag">zalijepljeno</span></p>
         </div>
         <div class="card">
+          <div class="tool"><label><input type="checkbox" checked> Podrijetlo teksta</label><span class="meta">uključeno</span></div>
           <div class="tool"><label><input type="checkbox" checked> Napisano u Ducturi</label><span class="meta">uključeno</span></div>
           <p><strong>Napisano u Ducturi: Ductus ne zna tko je tipkao.</strong></p>
           <p class="meta">Rečenica stoji uz prekidač uvijek, i kad je isključen. Oznaka je okomita crta na lijevom rubu, drugog oblika od ostalih oznaka.</p>
@@ -105,11 +107,28 @@
       </div>
     </section>
 
+    <section class="state" aria-labelledby="h-off">
+      <div class="ref-tag">N-10 · stanje 3a · prekidač „Podrijetlo teksta” isključen (zadana vrijednost otvorena, D-127 O-2)</div>
+      <h2 id="h-off">Isti odlomak bez oznaka podrijetla</h2>
+      <div class="cols">
+        <div class="sheet">
+          <p>Prvi obrazac opisan je u bilješkama s terenskog dijela istraživanja, provedenog u tri projektna tima. Drugi obrazac nastaje kad skupina zadrži prvi izvedivi prijedlog i dalje ga samo dorađuje.</p>
+        </div>
+        <div class="card">
+          <div class="tool"><label><input type="checkbox"> Podrijetlo teksta</label><span class="meta">isključeno</span></div>
+          <div class="tool"><label><input type="checkbox" disabled aria-describedby="duc-off"> Napisano u Ducturi</label><span class="meta">isključeno</span></div>
+          <p class="meta" id="duc-off">„Napisano u Ducturi” može se uključiti tek kad je uključeno „Podrijetlo teksta”.</p>
+          <p class="meta">Napisano u Ducturi: Ductus ne zna tko je tipkao.</p>
+        </div>
+      </div>
+      <p class="meta">Dok je „Podrijetlo teksta” isključen, u tekstu nema nijedne oznake podrijetla (lijepljenje, uvoz, prijenos iz AI pomoćnika, izmjena nastavnika; D-57) ni oznake „Napisano u Ducturi” (D-127). Tekst rada je isti. Je li prekidač zadano uključen ili isključen, odlučuje vlasnik (O-2).</p>
+    </section>
+
     <section class="state" aria-labelledby="h-pra">
       <div class="ref-tag">N-10 · stanje 4 · prazno</div>
       <h2 id="h-pra">Karta bez oznaka</h2>
       <div class="grid">
-        <div class="frame"><h3>Karta podrijetla</h3><p>U ovom radu nema zabilježenih lijepljenja, uvoza ni prijenosa.</p><p class="meta">Bez pohvale i bez boje. Legenda i prekidač ostaju vidljivi.</p></div>
+        <div class="frame"><h3>Karta podrijetla</h3><p>U ovom radu nema zabilježenih lijepljenja, uvoza ni prijenosa.</p><p class="meta">Bez pohvale i bez boje. Legenda i prekidači ostaju vidljivi.</p></div>
         <div class="frame"><h3>Rad nije započet</h3><p>Za ovaj rad još nema zapisa.</p></div>
       </div>
     </section>
@@ -126,7 +145,7 @@
     <section class="state" aria-labelledby="h-mob">
       <div class="ref-tag">N-10 · stanje 7 · mobitel (400 px)</div>
       <h2 id="h-mob">Isti prikaz na uskom zaslonu</h2>
-      <p class="lead">Na snimci od 400 px legenda, prekidač i poglavlja prelaze ispod teksta. Oznake na listu ostaju iste, a pojedinosti oznake otvaraju se ispod odlomka.</p>
+      <p class="lead">Na snimci od 400 px legenda, prekidači i poglavlja prelaze ispod teksta. Oznake na listu ostaju iste, a pojedinosti oznake otvaraju se ispod odlomka.</p>
     </section>
   </main>
 </div>
