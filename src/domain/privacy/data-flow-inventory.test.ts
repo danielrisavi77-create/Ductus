@@ -196,8 +196,15 @@ describe(INVENTORY, () => {
   it.each([
     ["14", "src/server/evidence/evidence-commit.ts", "db/migrations/20261028000000_evidence_segment_v3.sql", /INSERT INTO evidence\.document_checkpoint \(document_id, institution_id, revision, body\)/],
     ["6", "src/server/institution/assignment-version-route.ts", "db/migrations/20261028150000_notification_store.sql", /INSERT INTO institution\.notification \(/],
-  ])("lists class %s on the flow through %s while %s writes it", (cls, code, migration, write) => {
-    expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(write);
+    ["21", "src/server/evidence/open-route.ts", "db/migrations/20261031200000_open_work_explicit_start.sql", /INSERT INTO evidence\.package \(/],
+    ["14", "src/server/collaboration/live-route.ts", "db/migrations/20261026163000_live_state_after_submission.sql", /LEFT JOIN evidence\.document_checkpoint c/],
+    ["16", "src/server/collaboration/live-route.ts", "db/migrations/20261026163000_live_state_after_submission.sql", /FROM app\.submitted_document_text\(p_document_id\)/],
+    ["7", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /FROM institution\.notice_acknowledgment n/],
+    ["9", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /JOIN institution\.assignment_version v/],
+    ["11", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /LEFT JOIN evidence\.document d/],
+    ["16", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /LEFT JOIN evidence\.submission s/],
+  ])("lists class %s on the flow through %s while %s writes or returns it", (cls, code, migration, touch) => {
+    expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(touch);
     const flows = parseFlows(readFileSync(join(ROOT, INVENTORY), "utf8")).filter(
       (f) => f.paths.includes(code) && f.paths.includes(migration),
     );
