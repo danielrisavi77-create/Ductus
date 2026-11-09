@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadAuthConfig } from "@/server/auth/config";
-import { logoutAll, type AuthDeps } from "@/server/auth/flow";
+import { logout, logoutAll, type AuthDeps } from "@/server/auth/flow";
 import { createOidcClient } from "@/server/auth/oidc";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
@@ -124,16 +124,34 @@ describe("POST /api/auth/logout-all", () => {
     expect(Object.keys(route).filter((name) => /^[A-Z]+$/.test(name))).toEqual(["POST"]);
   });
 
-  it("6: when the database fails, still clears the cookie and goes to the provider, as logout does", async () => {
+  it("6: when the database fails, answers 503, keeps the cookie and does not go to the provider", async () => {
     deps.closeAllSessions.mockRejectedValueOnce(Object.assign(new Error("down"), { code: "40P01" }));
     const response = await post();
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expectOnlyClearedCookie(response);
-    expect(events.every((event) => event === "provider")).toBe(true);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(events).toEqual([]);
     expect(errors).toHaveBeenCalledWith("login failed", "logout_all", "Error:40P01");
     expect(JSON.stringify(errors.mock.calls)).not.toContain(TOKEN);
+    expect(await response.text()).not.toContain(TOKEN);
+  });
+
+  it("7: the same database failure clears the cookie on logout, as on main, but not on logout-all", async () => {
+    const failure = () => Object.assign(new Error("down"), { code: "57P01" });
+    deps.closeSession.mockRejectedValueOnce(failure());
+    deps.closeAllSessions.mockRejectedValueOnce(failure());
+    const request = (path: string) =>
+      new Request(`${APP}${path}`, { method: "POST", headers: { cookie: `${SESSION_COOKIE_NAME}=${TOKEN}`, ...SAME_ORIGIN } });
+    const one = await logout(request("/api/auth/logout"), deps);
+    const all = await logoutAll(request("/api/auth/logout-all"), deps);
+    expect(one.status).toBe(303);
+    expectOnlyClearedCookie(one);
+    expect(all.status).toBe(503);
+    expect(all.headers.getSetCookie()).toEqual([]);
+    expect(errors).toHaveBeenCalledWith("login failed", "logout", "Error:57P01");
+    expect(errors).toHaveBeenCalledWith("login failed", "logout_all", "Error:57P01");
   });
 
   it("when the provider fails, the local sign-out stands and / follows", async () => {

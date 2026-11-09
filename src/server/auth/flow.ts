@@ -214,25 +214,28 @@ export function isSameOrigin(request: Request, origin: string): boolean {
 
 /** POST /api/auth/logout */
 export async function logout(request: Request, deps: AuthDeps): Promise<Response> {
-  return endSessions(request, deps, "logout", (token) => deps.closeSession(token));
+  return endSessions(request, deps, "logout", (token) => deps.closeSession(token), "clear");
 }
 
 /** POST /api/auth/logout-all: this session and every other live one of the account (DAN-296). */
 export async function logoutAll(request: Request, deps: AuthDeps): Promise<Response> {
-  return endSessions(request, deps, "logout_all", (token) => deps.closeAllSessions(token));
+  return endSessions(request, deps, "logout_all", (token) => deps.closeAllSessions(token), "keep");
 }
 
 /**
- * Closes on the server, then clears the cookie and goes to the provider. When
- * the database fails the cookie is cleared all the same, as logout always did;
- * what stays open then ends at expiry or idle. The answer is the same whether
- * a session existed or not.
+ * Closes on the server, then clears the cookie and goes to the provider. The
+ * answer is the same whether a session existed or not. When the database
+ * fails, logout clears the cookie all the same, as it always did, and the
+ * session ends at expiry or idle; logout-all answers 503 and keeps the cookie,
+ * so it never reports a sign-out while the account's other sessions live and
+ * can be sent again (contract addendum on #1091, item 3).
  */
 async function endSessions(
   request: Request,
   deps: AuthDeps,
   stage: string,
   close: (token: string) => Promise<unknown>,
+  onCloseFailure: "clear" | "keep",
 ): Promise<Response> {
   if (!isSameOrigin(request, deps.config.redirectUri.origin)) {
     logFailure(stage, "cross_origin");
@@ -244,8 +247,8 @@ async function endSessions(
     try {
       await close(token);
     } catch (error) {
-      // The cookie is cleared all the same; the session then ends at expiry.
       logFailure(stage, errorCode(error));
+      if (onCloseFailure === "keep") return failurePage(503);
     }
   }
   // Only then the provider (DAN-212), also without a live Ductus session: the
