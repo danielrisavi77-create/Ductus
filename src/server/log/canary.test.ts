@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { consoleLog } from "@/server/evidence/ingest-http";
 import { createEvidencePayloadReader } from "@/server/evidence/payload-reader";
 
-import { basic, CANARY, DIGIT_TAIL_TOKEN, pair, SHORT, SHORT_BEARER, urlWithUser } from "./invented.fixture";
+import { basic, CANARY, DIGIT_TAIL_TOKEN, jsonPair, pair, SHORT, SHORT_BEARER, urlWithUser } from "./invented.fixture";
 import { codesLog, createLogger, logEvent, type LogLevel } from "./logger";
 
 // DAN-586 canary: one invented value pushed through every server logging path
@@ -154,5 +154,44 @@ describe("logger shape", () => {
       throw new Error(CANARY);
     });
     expect(() => throwingSink("error", "x")).not.toThrow();
+  });
+});
+
+/**
+ * K18, QA on #1772 (round 2): a sensitive key in text written with `.`, `-`
+ * or `_` between its words, or in camel case, is the same key `isSensitiveKey`
+ * finds in an object. Its short value carries no token shape, so only the key
+ * can give it away. Each row goes through `logEvent` inside an `Error`.
+ */
+const k18Keys = ["api.key", "api-key", "api_key", "apiKey", "API.Key", "client.secret", "x.api.key", "db.password", "auth.token", "user.name", "e.pošta"];
+const k18Separators = ["=", ":", ": ", " = "];
+
+describe("K18: a dotted, dashed or underscored sensitive key in text", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(k18Keys.flatMap((key) => k18Separators.map((separator) => [key, separator] as const)))(
+    "%s%s drops its short value in the message, the cause and the event",
+    (key, separator) => {
+      const printed = captureConsole();
+      const text = pair(key, separator, SHORT);
+      logEvent("error", `request refused: ${text}`, {
+        error: new Error(`request refused: ${text}`, { cause: new Error(`inner ${text}`) }),
+      });
+      expect(printed()).toContain("[redacted]");
+      expect(printed()).not.toContain(SHORT);
+    },
+  );
+
+  it.each(["api.key", "api-key", "api_key", "apiKey"])("%s as a quoted JSON key drops its value", (key) => {
+    const printed = captureConsole();
+    logEvent("error", "parse failed", { error: new Error(`bad body ${jsonPair(key, SHORT)}`) });
+    expect(printed()).not.toContain(SHORT);
+  });
+
+  it("keeps the value of a harmless dotted key", () => {
+    const printed = captureConsole();
+    logEvent("error", "failed", { error: new Error("retry app.stage=context, db.pool.size=4") });
+    expect(printed()).toContain("app.stage=context");
+    expect(printed()).toContain("db.pool.size=4");
   });
 });

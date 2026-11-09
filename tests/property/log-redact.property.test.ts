@@ -1,7 +1,8 @@
 import { fc, test } from "@fast-check/vitest";
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 
-import { urlWithUser } from "@/server/log/invented.fixture";
+import { pair, urlWithUser } from "@/server/log/invented.fixture";
+import { logEvent } from "@/server/log/logger";
 import { redact } from "@/server/log/redact";
 
 // DAN-586: whatever structure a canary is hidden in, the redacted output is
@@ -100,5 +101,33 @@ test.prop([numericTailUuid, fc.stringMatching(/^[0-9]{9,15}$/)])(
   (id, digits) => {
     expect(redact({ document_id: id })).toEqual({ document_id: id });
     expect(redact(`doc ${id} broj ${digits}`)).toBe(`doc ${id} broj [number]`);
+  },
+);
+
+// QA on #1772 (round 2): a sensitive key in text whose words are joined by
+// `.`, `-`, `_` or camel case, in any letter case and under a harmless dotted
+// prefix, drops a short value that has no token shape, through logEvent.
+const textKey = fc
+  .tuple(
+    fc.constantFrom(["api", "key"], ["client", "secret"], ["access", "token"], ["private", "key"], ["session", "id"], ["e", "mail"], ["pass", "word"]),
+    fc.constantFrom(".", "-", "_", ""),
+    fc.constantFrom("", "app.", "cfg.", "db.conn."),
+  )
+  .map(([words, joiner, prefix]) => prefix + words.map((word, i) => (joiner === "" && i > 0 ? word[0]?.toUpperCase() + word.slice(1) : word)).join(joiner))
+  .chain((key) => fc.array(fc.boolean(), { minLength: key.length, maxLength: key.length }).map((upper) => [...key].map((ch, i) => (upper[i] ? ch.toUpperCase() : ch)).join("")));
+
+test.prop([textKey, fc.constantFrom("=", ":", ": ", " = "), fc.stringMatching(/^[a-z]{3,8}$/)])(
+  "a sensitive key in an Error message drops its short value whatever joins its words",
+  (key, separator, tail) => {
+    const value = `kx${tail}`;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      logEvent("error", "request refused", { error: new Error(`retry ${pair(key, separator, value)}`) });
+      const printed = JSON.stringify(error.mock.calls).toLowerCase();
+      expect(printed).toContain("[redacted]");
+      expect(printed).not.toContain(value);
+    } finally {
+      error.mockRestore();
+    }
   },
 );

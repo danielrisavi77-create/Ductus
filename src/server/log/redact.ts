@@ -122,9 +122,11 @@ const JWT = /\beyJ[\w-]*\.[\w-]*\.[\w-]*/g;
 /**
  * A quoted value is taken whole, escapes included, so no word of it stays. Any
  * other value under a sensitive key, empty included, runs to the end of the
- * line, as nothing else marks where it ends (`scrubPairs`).
+ * line, as nothing else marks where it ends (`scrubPairs`). A key in text may
+ * hold `.`, `-` and `_`, the separators `isSensitiveKey` drops, so `api.key`
+ * is one key here as it is in an object.
  */
-const KEY_VALUE = /(["']?)([A-Za-z0-9_čćžšđČĆŽŠĐ-]{2,40})\1(\s*[:=]\s*)("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?)?/g;
+const KEY_VALUE = /(["']?)([A-Za-z0-9_.čćžšđČĆŽŠĐ-]{2,40})\1(\s*[:=]\s*)("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?)?/g;
 /** A credential header written as text: everything to the end of the line. */
 const HEADER_LINE = /\b((?:proxy-)?authorization|(?:set-)?cookie)(\s*:\s*)[^\n]*/gi;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -163,6 +165,16 @@ function scrubRun(_match: string, token: string | undefined): string {
 }
 
 /**
+ * A dotted key in text is a flat key and a path at once: `api.key` is the key
+ * `apiKey`, `user.name` the key `name` under `user`. So the whole key and every
+ * part after a dot are judged by `isSensitiveKey`, the one rule for keys.
+ */
+function isSensitiveTextKey(key: string): boolean {
+  const parts = key.split(".");
+  return parts.some((_part, index) => isSensitiveKey(parts.slice(index).join(".")));
+}
+
+/**
  * A sensitive key loses its value: a quoted one up to its closing quote, any
  * other to the end of the line. A harmless key keeps its value, and the scan
  * goes on from the value's first character, so `request: password=x` cannot
@@ -177,7 +189,7 @@ function scrubPairs(text: string): string {
     const [whole, , key = "", , quoted] = match;
     const valueStart = match.index + whole.length - (quoted?.length ?? 0);
     out += text.slice(from, valueStart);
-    if (!isSensitiveKey(key)) {
+    if (!isSensitiveTextKey(key)) {
       from = valueStart;
       pattern.lastIndex = valueStart;
       continue;
