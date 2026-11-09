@@ -53,6 +53,7 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
   - ishod nepoznat (`unavailable`).
 - Svako odbijanje kaže što student sada radi (#1780) i ne govori o studentu (pravilo 3).
 - `recordMismatch` vodi na zamjenski postupak. Kontakt je „Obratite se nastavniku kolegija”.
+- Greška učitavanja ne tvrdi da predaja postoji ili ne postoji. Traži ponovni pokušaj prije nove predaje.
 
 ### Izjava (S-31)
 
@@ -73,6 +74,7 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
   - rok iz `dueAt`;
   - „nakon roka” iz `afterDeadline`;
   - vrijeme potpisa iz `signedAt`. Slika ga ne predstavlja kao vremenski žig treće strane.
+- Vremena su po zagrebačkom vremenu s oznakom zone u istom retku, „(UTC+1)”, ljeti „(UTC+2)” (prijedlog iz #1788). Točne vrijednosti iz potvrde u UTC-u su u pojedinostima.
 - „Otisak predanog teksta” ima 64 heksadekadske znamenke u skupinama radi čitanja, uz objašnjenje.
   - „Kopiraj otisak” u međuspremnik stavlja 64 znaka bez razmaka.
   - Poveznica „Provjera potvrde” vodi na `/provjera` (J-03, D-49), bez prijave.
@@ -89,6 +91,7 @@ Slika ova pitanja označava kao otvorena i ne odlučuje ih:
 - **Zaustavlja li išta predaju (D-129).** Dok FPZG to ne potvrdi, ništa ne zaustavlja.
 - **Kontakt zamjenskog postupka (Q-3).** To je parametar fakulteta. Do odgovora FPZG-a tekst je „Obratite se nastavniku kolegija”.
 - **Nazivi stanja (#1782).** „Predaja nije dovršena: zamjenski postupak” i „Predaja u obradi” preuzeti su iz prijedloga u #1782, koji još nije potvrđen.
+- **Zona vremena (#1788).** S-32 prikazuje zagrebačko vrijeme s oznakom zone. J-03 u `../m7-reference-c` prikazuje UTC. Usklađivanje J-03 je otvoreno.
 - **Naslov izjave.** #1783 predlaže „Izjava o korištenju generativne umjetne inteligencije”. `../m9-reference-b/s31-ai.html` koristi „Izjava o uporabi AI u predaji”. Usklađivanje je otvoreno.
 
 ## Nije nacrtano
