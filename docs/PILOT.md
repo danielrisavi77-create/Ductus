@@ -61,18 +61,18 @@ Okidač STOP-a u fazi A znači da izlaz A nije postignut. Proba se nastavlja s n
 
 Vrijede za KPI-01 do KPI-10 u svim fazama.
 
-1. **Samo zbirno.** Pokazatelj se izvještava za fazu kao cjelinu. Nikad po studentu, bez usporedbe studenata i bez rangiranja (`docs/PRODUCT.md` §12 i „Zabranjeno u sažetku”). `[PRAVILO]`
+1. **Samo zbirno.** Pokazatelj se izvještava za fazu kao cjelinu. Nikad po studentu, bez usporedbe studenata i bez rangiranja. Izvedeno iz `docs/PRODUCT.md` §12 i „Zabranjeno u sažetku” (§7), koji to propisuju za proizvod; za izvješće pilota `[PRIJEDLOG, nije odluka]`.
 2. **Bez posljedice.** Nijedan pokazatelj ne ulazi u ocjenu i ne pokreće postupak prema studentu (`docs/PRODUCT.md` §12). `[PRAVILO]`
-3. **Bez podjele teksta po podrijetlu.** Nijedan pokazatelj ne dijeli tekst rada po podrijetlu uz zajednički nazivnik (`docs/PRODUCT.md` „Zabranjeno u sažetku”, C-6). Zato pilot ne mjeri udio AI pomoći, lijepljenja ni diktiranja u radovima. `[PRAVILO]`
+3. **Bez podjele teksta po podrijetlu.** Nijedan pokazatelj ne dijeli tekst rada po podrijetlu uz zajednički nazivnik. Za prikaze u proizvodu to je `[PRAVILO]` (`docs/PRODUCT.md` „Zabranjeno u sažetku”, C-6); primjena na izvješće pilota je `[PRIJEDLOG, nije odluka]`. Zato pilot ne mjeri udio AI pomoći, lijepljenja ni diktiranja u radovima.
 4. **Broj i nazivnik.** Svaki rezultat navodi brojnik i nazivnik. Postotak se smije dodati samo uz njih.
-5. **Prag samo iz izvora.** Dok prag nije upisan, rezultat se izvještava brojem i nazivnikom, bez ocjene „prošlo” ili „nije prošlo” (`docs/UX-EVAL.md` §2). `[PRAVILO]`
-6. **Neprovjereno odvojeno.** Što nije provjereno ili nije dostupno u buildu ne zbraja se s uspjehom i navodi se zasebno (`docs/UX-EVAL.md` §6). `[PRAVILO]`
+5. **Prag samo iz izvora.** Dok prag nije upisan, rezultat se izvještava brojem i nazivnikom, bez ocjene „prošlo” ili „nije prošlo”. Za korisnost i razumijevanje to je `[PRAVILO]` (`docs/UX-EVAL.md` §2); za ostale pokazatelje bez praga `[PRIJEDLOG, nije odluka]`.
+6. **Neprovjereno odvojeno.** Što nije provjereno ili nije dostupno u buildu ne zbraja se s uspjehom i navodi se zasebno. Za KPI-06 i KPI-07 to je `[PRAVILO]` (`docs/UX-EVAL.md` §6); za ostale pokazatelje `[PRIJEDLOG, nije odluka]`.
 7. **Faze se ne zbrajaju.** Sintetički radovi iz faze A i stvarni radovi iz faze B izvještavaju se odvojeno.
 8. **Evaluacija odvojeno od evidencije.** Ankete i razgovori (KPI-05, KPI-06, KPI-07 u fazi C) pohranjuju se odvojeno od evidencije pisanja i ne povezuju se s njom (C-22). `[PRAVILO]`
 9. **Izdanje.** KPI-01 do KPI-04 vežu se uz identifikator izdanja iz dnevnog zapisa (`docs/OPERATIONS.md`, „Zamrznuto izdanje”).
 10. **Mala skupina.** Najmanja veličina skupine ispod koje se rezultat ne objavljuje u raščlambi (npr. po kolegiju) nije određena. `[ODLUKA]`; odlučuju FPZG i DPO. Do odluke se izvještava samo za fazu kao cjelinu.
 
-Pravila 4, 7 i 9 su `[PRIJEDLOG, nije odluka]`; odobrava vlasnik.
+Pravila 4, 7 i 9 i dijelovi pravila 1, 3, 5 i 6 označeni kao prijedlog su `[PRIJEDLOG, nije odluka]`; odobravaju vlasnik i FPZG.
 
 ## 4. Pokazatelji KPI-01 do KPI-10
 
@@ -169,9 +169,9 @@ Pragovi za KPI-07 do KPI-10 i način brojanja iz KPI-02, KPI-03, KPI-04 i KPI-09
 4. **Povlačenje.** Student se može povući; već predani radovi ostaju po pravilima fakulteta, a sve ostalo se briše (D-12). `[PRAVILO]` Povlačenje nema posljedica za studenta (O03). `[PRIJEDLOG, nije odluka]`
 5. **Rokovi i podrška.** Rokovi su radnim danom u podne; podrška ide po modelu iz D-69: netehnička pitanja koordinator FPZG-a, tehnički kvarovi vlasnik, AAI račun AAI administrator FPZG-a. `[PRAVILO]` Uloge su u `docs/OPERATIONS.md`, „Uloge”.
 6. **Zamjenski postupak.** FPZG unaprijed propisuje zamjenski postupak ako Ductus ne radi u zadnja 24 sata prije roka (D-69). `[PRAVILO]` Sadržaj postupka propisuje FPZG. `[ODLUKA]`
-7. **Obavijest.** Obavijest o privatnosti je objavljena i ugrađena u obavijest o zadatku prije prve predaje (`docs/PROGRAM.md`, GO). `[PRAVILO]`
+7. **Obavijest.** Obavijest o privatnosti je objavljena i ugrađena u obavijest o zadatku (`docs/PROGRAM.md`, GO). `[PRAVILO]`
 8. **Zamrznuto izdanje i dnevni zapis.** Vode se po `docs/OPERATIONS.md`. U zadnja 24 sata prije roka ne uvodi se promjena izdanja, osim ispravka okidača STOP-a. `[PRIJEDLOG, nije odluka]`
-9. **STOP.** Okidači i postupak su u `docs/OPERATIONS.md`, „STOP”. Zaustavljanje nema posljedica za studenta (`docs/PRODUCT.md` §12). `[PRAVILO]`
+9. **STOP.** Okidači su u `docs/PROGRAM.md` (rečenica ispod tablice GO uvjeta) `[PRAVILO]`, a postupak u `docs/OPERATIONS.md`, „STOP”.
 10. **Podaci izvan repoa.** U javni repo ne ide nijedan stvarni osobni ni studentski podatak, a od sigurnosnog nalaza samo ID i status (`CLAUDE.md`). `[PRAVILO]` Gdje se drže zbirni rezultati KPI-ja iz faze B dok je repo javan: `[ODLUKA]` vlasnika.
 
 ## 6. Pravila faze C (evaluacija)
