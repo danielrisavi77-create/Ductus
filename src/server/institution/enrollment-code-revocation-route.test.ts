@@ -167,7 +167,7 @@ describe("teacher enrollment code revocation HTTP boundary", () => {
   });
 
   it("wires the real POST adapter to its path, cookie and configured origin", async () => {
-    const { withActor } = port();
+    const { withActor, query } = port();
     vi.mocked(appWithActor).mockImplementation(withActor);
     const context = { params: Promise.resolve({ courseId: COURSE }) };
     const req = () => new NextRequest(request(undefined, {
@@ -187,6 +187,9 @@ describe("teacher enrollment code revocation HTTP boundary", () => {
     forged.headers.set("origin", "https://evil.example");
     expect((await POST(forged, context)).status).toBe(403);
     expect(forged.bodyUsed).toBe(false);
-    expect(withActor).toHaveBeenCalledTimes(1);
+    // The accepted request alone is counted as session activity (DAN-296): a second
+    // transaction that only touches the session; the refused one adds nothing.
+    expect(withActor).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith("SELECT identity.touch_current_session() AS touched");
   });
 });

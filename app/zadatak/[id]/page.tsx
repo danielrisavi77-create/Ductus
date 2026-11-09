@@ -12,6 +12,7 @@ import { readMyAssignments } from "@/components/student/my-assignments-read";
 import NoticeCourse from "@/components/student/NoticeCourse";
 import { noticeWindow } from "@/components/student/notice-window";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -25,6 +26,7 @@ export const metadata = { title: `${t.student.title} · ${t.app.name}` };
 export default async function AssignmentNoticePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const [read, { role, scope }] = await Promise.all([readNotice(token, id, withActor), readShellAccount(token, withActor)]);
   const here = `/zadatak/${encodeURIComponent(id)}`;
   // One server time for the render: the shell's session mark and the notice window.
