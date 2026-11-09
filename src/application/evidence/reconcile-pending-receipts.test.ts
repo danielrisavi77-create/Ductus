@@ -357,6 +357,73 @@ describe("reconcilePendingReceipts: domains past maxDomains are not starved", ()
   });
 });
 
+describe("reconcilePendingReceipts: receipts stuck at the head of a domain do not starve the rest", () => {
+  const go = (status: string, extra: Record<string, unknown> = {}) => ({ status, ...extra });
+  const stuckOutcomes: [string, unknown][] = [
+    ["held", go("held", { reason: "object_absent" })],
+    ["refused", go("refused", { reason: "not_canonical" })],
+    ["unavailable at the store", go("unavailable", { stage: "store" })],
+  ];
+  it.each(stuckOutcomes)("an older receipt that stays %s does not take every batch", async (_, stuck) => {
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLD, 2)]),
+      receipts: { [D1]: [row(1), row(2)] },
+      sign: (r) => (r.receiptId === rid(1) ? stuck : go("signed", { signedReceipt: {} })),
+      deps: { batchLimit: 1 },
+    });
+    await h.run();
+    await h.run();
+    expect(h.queue.pendingReceipts).toHaveBeenCalledWith(D1, 2);
+    expect(h.signedIds()).toEqual([rid(1), rid(2)]);
+  });
+
+  it("wraps after the last row and starts from the head once a whole read was attempted", async () => {
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLD, 3)]),
+      receipts: { [D1]: [row(1), row(2), row(3)] },
+      sign: () => go("held", { reason: "object_absent" }),
+      deps: { batchLimit: 2 },
+    });
+    for (let i = 0; i < 3; i += 1) await h.run();
+    expect(h.signedIds()).toEqual([rid(1), rid(2), rid(3), rid(1), rid(2), rid(3)]);
+  });
+
+  it("starts from the head when every pending row fits in one batch", async () => {
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLD, 2)]),
+      receipts: { [D1]: [row(1), row(2)] },
+      sign: () => go("held", { reason: "object_absent" }),
+    });
+    await h.run();
+    await h.run();
+    expect(h.signedIds()).toEqual([rid(1), rid(2), rid(1), rid(2)]);
+  });
+
+  it("never asks for more than 100 rows, whatever the backlog count", async () => {
+    const h = harness({ backlog: ok([backlogRow(D1, OLD, 5000)]), receipts: { [D1]: [row(1)] } });
+    await h.run();
+    expect(h.queue.pendingReceipts).toHaveBeenCalledWith(D1, 100);
+  });
+
+  it("a stopped sweep keeps the receipt cursor, so the same receipt is retried", async () => {
+    let calls = 0;
+    const h = harness({
+      backlog: ok([backlogRow(D1, OLD, 3)]),
+      receipts: { [D1]: [row(1), row(2), row(3)] },
+      sign: (r) => {
+        calls += 1;
+        if (calls === 2) return go("unavailable", { stage: "signing" });
+        return r.receiptId === rid(1) ? go("held", { reason: "object_absent" }) : go("signed", { signedReceipt: {} });
+      },
+      deps: { batchLimit: 1 },
+    });
+    await h.run();
+    expect((await h.run()).status).toBe("stopped");
+    await h.run();
+    expect(h.signedIds()).toEqual([rid(1), rid(2), rid(2)]);
+  });
+});
+
 describe("createReconcilePendingReceipts: configuration", () => {
   const base = (): ReconcileDeps => ({
     queue: { backlog: async () => ({ status: "ok", rows: [] }), pendingReceipts: async () => ({ status: "ok", rows: [] }) },
