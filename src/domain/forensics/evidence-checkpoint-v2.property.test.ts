@@ -6,8 +6,10 @@ import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "./evidence-chain-v2";
 import {
   evidenceCheckpointHashesV2,
+  evidenceResumeHashesV2,
   findEvidenceBreaksV2,
   replayEvidenceAcrossGapsV2,
+  replayEvidenceFromCheckpointV2,
   verifyEvidenceCheckpointV2,
 } from "./evidence-checkpoint-v2";
 import type { EvidenceStepReplayerV2 } from "./evidence-replay-v2";
@@ -337,6 +339,168 @@ describe("evidence checkpoints v2", () => {
         segmentIndex: at,
         sequence: event.sequence,
       });
+    },
+  );
+});
+
+/**
+ * Resuming from a checkpoint (DAN-293, M3.3-P02): the replay may start at the
+ * newest position whose checkpoint the chain vouches for instead of at the
+ * start. Measured against the full replay given the same checkpoints: the same
+ * document, the same breaks, the same stop at a break it cannot cross.
+ */
+
+type Offer = "honest" | "absent" | keyof typeof MUTATIONS;
+const anyBoundary = fc.constantFrom<Boundary>("none", "none", "gap", "regression", "hash_only");
+const anyChain = fc.array(fc.record({ before: anyBoundary, skipped: honestSegment.map((s) => s.skipped), texts: honestSegment.map((s) => s.texts) }), { minLength: 1, maxLength: 6 });
+const offer = fc.oneof(
+  { weight: 4, arbitrary: fc.constant<Offer>("honest") },
+  { weight: 2, arbitrary: fc.constant<Offer>("absent") },
+  { weight: 1, arbitrary: fc.constantFrom<Offer>(...Object.keys(MUTATIONS)) },
+);
+
+const documentText = (bytes: Uint8Array) => JSON.parse(new TextDecoder().decode(bytes)).text as string;
+
+/** What a store might hold for each position of the record: honest, nothing or forged. */
+function offered(built: BuiltChain, offers: Offer[], seed: number): Map<string, Uint8Array> {
+  const result = new Map<string, Uint8Array>();
+  for (const [index, segment] of built.segments.entries()) {
+    const kind = offers[index % offers.length];
+    const honest = built.everyDocument.get(segment.initialDocumentHash)!;
+    if (kind === "absent") continue;
+    if (kind === "honest") result.set(segment.initialDocumentHash, honest);
+    else {
+      const mutate = fc.sample(MUTATIONS[kind], { numRuns: 1, seed: seed + index })[0];
+      result.set(segment.initialDocumentHash, mutate(honest, documentText(honest), canonicalBytes("iz drugog lanca")));
+    }
+  }
+  return result;
+}
+
+/** The newest position after the first whose offered bytes are the document the chain names there. */
+function newestVerified(built: BuiltChain, checkpoints: ReadonlyMap<string, Uint8Array>): number {
+  for (let index = built.segments.length - 1; index >= 1; index--) {
+    const hash = built.segments[index].initialDocumentHash;
+    const bytes = checkpoints.get(hash);
+    if (bytes !== undefined && Buffer.from(bytes).equals(Buffer.from(built.everyDocument.get(hash)!))) return index;
+  }
+  return 0;
+}
+
+describe("resuming a replay from a checkpoint v2", () => {
+  test.prop([anyChain, fc.array(offer, { minLength: 1, maxLength: 6 }), fc.nat({ max: 1000 }), fc.array(fc.tuple(fc.stringMatching(/^[0-9a-f]{64}$/), fc.uint8Array()))])(
+    "gives what the full replay gives with the same checkpoints, from the newest verified position",
+    async (spec, offers, seed, junk) => {
+      const built = await buildChain(spec);
+      const checkpoints = new Map([...junk, ...offered(built, offers, seed)]);
+      const full = await replayEvidenceAcrossGapsV2(INITIAL, built.segments, replayer, checkpoints);
+      const resumed = await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, checkpoints);
+      if (full.ok) {
+        expect(resumed).toEqual({ ...full, resumedAt: newestVerified(built, checkpoints) });
+      } else {
+        // The same break, the same reason, no resume position reported.
+        expect(resumed).toEqual(full);
+      }
+    },
+  );
+
+  test.prop([honestChain, fc.nat(), fc.nat()])(
+    "a fault inside a segment is reported as by the full replay when the resume is at or before it, and is not seen when the resume is after it",
+    async (spec, faultPick, checkpointPick) => {
+      fc.pre(spec.length > 1);
+      const built = await buildChain(spec);
+      const fault = faultPick % built.segments.length;
+      const position = 1 + (checkpointPick % (built.segments.length - 1));
+      const step = built.segments[fault].events[0].steps[0] as unknown as { slice: { content: { text: string }[] } };
+      step.slice.content[0].text += "x";
+      const checkpoints = new Map(built.checkpoints);
+      const key = built.segments[position].initialDocumentHash;
+      checkpoints.set(key, built.everyDocument.get(key)!);
+
+      const full = await replayEvidenceAcrossGapsV2(INITIAL, built.segments, replayer, checkpoints);
+      expect(full).toMatchObject({ ok: false, reason: "document_hash_mismatch", segmentIndex: fault });
+      const resumedAt = newestVerified(built, checkpoints);
+      const resumed = await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, checkpoints);
+      if (resumedAt <= fault) {
+        expect(resumed).toEqual(full);
+      } else {
+        // The known limit: segments before the resume position are not replayed,
+        // so their fault is not seen. `resumedAt` says where the replay started.
+        expect(resumed).toMatchObject({ ok: true, resumedAt, documentSha256: built.segments.at(-1)!.finalDocumentHash });
+      }
+    },
+  );
+
+  const plain: SegmentSpec[] = ["a", "b", "c", "d"].map((value) => ({ before: "none", skipped: ["-"], texts: [value] }));
+  const withGap: SegmentSpec[] = plain.map((segment, index) => (index === 1 ? { ...segment, before: "gap" } : segment));
+  type Row = { name: string; spec: SegmentSpec[]; at: Record<number, Offer>; expected: object };
+  const rows: Row[] = [
+    { name: "a verified checkpoint", spec: plain, at: { 3: "honest" }, expected: { ok: true, resumedAt: 3, breaks: [] } },
+    { name: "a checkpoint with a wrong hash, an older verified one", spec: plain, at: { 3: "other_valid_document", 1: "honest" }, expected: { ok: true, resumedAt: 1 } },
+    { name: "a checkpoint with a wrong hash only", spec: plain, at: { 3: "other_valid_document" }, expected: { ok: true, resumedAt: 0 } },
+    { name: "a checkpoint of another chain", spec: plain, at: { 3: "other_break_bytes" }, expected: { ok: true, resumedAt: 0 } },
+    { name: "no checkpoint", spec: plain, at: {}, expected: { ok: true, resumedAt: 0, breaks: [] } },
+    { name: "damaged bytes, an older verified one", spec: plain, at: { 3: "truncated", 2: "honest" }, expected: { ok: true, resumedAt: 2 } },
+    { name: "a checkpoint after a gap", spec: withGap, at: { 1: "honest", 3: "honest" }, expected: { ok: true, resumedAt: 3, breaks: [expect.objectContaining({ index: 1, sequence: "gap" })] } },
+    { name: "a checkpoint at the gap itself", spec: withGap, at: { 1: "honest" }, expected: { ok: true, resumedAt: 1, breaks: [expect.objectContaining({ index: 1, sequence: "gap" })] } },
+    { name: "a checkpoint after a gap with no checkpoint", spec: withGap, at: { 3: "honest" }, expected: { ok: false, reason: "checkpoint_missing", segmentIndex: 1 } },
+    { name: "a checkpoint after a gap with a damaged checkpoint", spec: withGap, at: { 1: "invalid_utf8", 3: "honest" }, expected: { ok: false, reason: "checkpoint_invalid", segmentIndex: 1 } },
+  ];
+
+  it.each(rows)("input class: $name", async ({ spec, at, expected }) => {
+    const built = await buildChain(spec);
+    const offers = built.segments.map((_segment, index) => at[index] ?? "absent");
+    const checkpoints = offered(built, offers, 7);
+    const resumed = await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, checkpoints);
+    expect(resumed).toMatchObject(expected);
+    const full = await replayEvidenceAcrossGapsV2(INITIAL, built.segments, replayer, checkpoints);
+    if (full.ok) expect(resumed).toMatchObject(full);
+    else expect(resumed).toEqual(full);
+  });
+
+  it("a repeated job and two jobs at once give the same result and leave their input as it was", async () => {
+    const built = await buildChain(withGap);
+    const checkpoints = offered(built, ["absent", "honest", "truncated", "honest"], 3);
+    const before = JSON.stringify([built.segments, [...checkpoints].map(([hash, bytes]) => [hash, [...bytes]])]);
+    const first = await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, checkpoints);
+    const again = await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, checkpoints);
+    const together = await Promise.all([1, 2].map(() => replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, checkpoints)));
+    expect(first).toMatchObject({ ok: true, resumedAt: 3 });
+    expect([again, ...together]).toEqual([first, first, first]);
+    expect(JSON.stringify([built.segments, [...checkpoints].map(([hash, bytes]) => [hash, [...bytes]])])).toBe(before);
+  });
+
+  it("reads each checkpoint once, so a store that changes during a job cannot split its answer", async () => {
+    const built = await buildChain(withGap);
+    const gap = built.segments[1].initialDocumentHash;
+    // Only the gap has a checkpoint, so the scan for a start comes back to it.
+    const honest = offered(built, ["absent", "honest", "absent", "absent"], 1);
+    const reads = new Map<string, number>();
+    // Honest on the first read of a hash, forged on every later one.
+    const changing = {
+      get(hash: string) {
+        const count = (reads.get(hash) ?? 0) + 1;
+        reads.set(hash, count);
+        return count === 1 ? honest.get(hash) : canonicalBytes("zamijenjeno");
+      },
+    } as ReadonlyMap<string, Uint8Array>;
+    const resumed = await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, changing);
+    expect(resumed).toMatchObject({ ok: true, resumedAt: 1 });
+    expect(resumed).toEqual(await replayEvidenceFromCheckpointV2(INITIAL, built.segments, replayer, honest));
+    expect(reads.get(gap)).toBe(1);
+    expect(Math.max(...reads.values())).toBe(1);
+  });
+
+  test.prop([anyChain, fc.integer({ min: 1, max: 8 })])(
+    "resume candidates are the newest positions the replay may start from, never the first and never past a break it cannot cross",
+    async (spec, limit) => {
+      const built = await buildChain(spec);
+      const found = await findEvidenceBreaksV2(INITIAL, built.segments, replayer);
+      if (!found.ok) throw new Error("fixture: breaks");
+      const hashes = evidenceResumeHashesV2(built.segments, found.breaks, limit);
+      const end = found.breaks.find((item) => item.sequence !== "gap")?.index ?? built.segments.length;
+      const eligible = built.segments.slice(1, Math.max(1, end)).map((segment) => segment.initialDocumentHash);
+      expect(hashes).toEqual([...new Set(eligible.slice(-limit))].sort());
     },
   );
 });
