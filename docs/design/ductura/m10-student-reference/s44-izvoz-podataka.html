@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-44 — Izvoz vlastitih podataka (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 15 · DAN-604 · prijedlog slike · M10.UX-R</div>
+  <h1>S-44 — Izvoz vlastitih podataka</h1>
+  <p>Stranica studenta. Prototipa nema; složena je po retku S-44 iz <code>docs/design/EKRANI.md</code>. Paket sadrži PDF teksta, potpisanu potvrdu predaje i manifest s otiscima; poveznica vrijedi 24 sata (D-173). Ponovni izvoz je novi posao nad istom verzijom (D-273 MQ08). Bivši student bez računa AAI@EduHr ide preko referade (D-271 MQ02). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant" data-state="zahtjev">
+    <div class="ref-tag">Stanje 1 · zahtjev</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Izvoz vlastitog rada</h2></div>
+      <div class="panel-body">
+        <div class="field"><label for="rad">Rad</label>
+          <select id="rad" class="input"><option>Seminar · Lokalna samouprava · predana verzija 2</option></select></div>
+        <p class="note">Paket sadrži:</p>
+        <ul class="facts"><li>PDF teksta predane verzije</li><li>potpisanu potvrdu predaje</li><li>manifest s otiscima datoteka</li></ul>
+        <p class="meta">Poveznica za preuzimanje vrijedi 24 sata.</p>
+        <button class="btn" type="button">Zatraži izvoz</button>
+        <p class="meta">Ako više nemate račun AAI@EduHr, izvoz tražite u referadi fakulteta.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="posao-u-tijeku">
+    <div class="ref-tag">Stanje 2 · posao u tijeku</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t2">Izvoz vlastitog rada</h2></div>
+      <div class="panel-body">
+        <ol class="steps" role="status">
+          <li class="done">Zahtjev zaprimljen u 14:02</li>
+          <li class="now">Paket se slaže</li>
+          <li>Poveznica spremna</li>
+        </ol>
+        <p class="note">Možete zatvoriti stranicu. Poveznica će Vas čekati ovdje.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="preuzimanje">
+    <div class="ref-tag">Stanje 3 · preuzimanje</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t3">Izvoz vlastitog rada</h2></div>
+      <div class="panel-body">
+        <ol class="steps">
+          <li class="done">Zahtjev zaprimljen u 14:02</li>
+          <li class="done">Paket složen u 14:06</li>
+          <li class="now">Poveznica spremna</li>
+        </ol>
+        <div class="kv"><span>Vrijedi do</span><b>3. 3. u 14:06</b></div>
+        <div class="kv"><span>Otisak manifesta</span><b>9f2c…41ad</b></div>
+        <button class="btn" type="button">Preuzmi paket (ZIP, 2,4 MB)</button>
+        <p class="meta">Preuzimanje se upisuje u revizijski trag.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="istek">
+    <div class="ref-tag">Stanje 4 · istek</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t4">Izvoz vlastitog rada</h2></div>
+      <div class="panel-body">
+        <p class="note">Poveznica je istekla 3. 3. u 14:06 i paket je uklonjen. Vaš rad i predaja nisu promijenjeni.</p>
+        <p class="meta">Novi izvoz slaže paket iz iste predane verzije.</p>
+        <button class="btn" type="button">Zatraži novi izvoz</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 5 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t5">Izvoz vlastitog rada</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Paket nije složen. Vaš rad i predaja nisu promijenjeni.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Korak se razlikuje riječju i oblikom oznake: puna točka (gotovo), debeli prsten i podebljan tekst (sada), tanki krug (slijedi). Boja nikad nije jedini znak.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Izvoz vlastitog rada, 2. izbor rada, 3. Zatraži izvoz ili Preuzmi paket, 4. Pokušaj ponovno.</p>
+</main>
+</body>
+</html>
