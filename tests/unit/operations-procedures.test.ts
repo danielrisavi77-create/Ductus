@@ -264,8 +264,21 @@ describe("checkOperations: other lines a procedure cannot classify are refused",
     ["inline tag on a content line", "1. Odluči.\n   Nositelj: <span>`vlasnik`</span>.", [UNSUPPORTED("inline HTML"), ...NONE]],
     ["link reference definition in a step", "1. [x]: /a \"Nositelj: `vlasnik`\"", [UNSUPPORTED("link reference definition"), ...NONE]],
     ["a placeholder in code is not HTML", "1. Stani. Naredba: `kill -TERM <pid>`; Nositelj: `vlasnik`.", []],
+    ["bot: Nositelj: inside a code span is not a marker", "1. Odluči što se vraća. Primjer zapisa: ``Nositelj: `vlasnik` ``.", NONE],
+    ["Naredba: inside a code span is not a marker", "1. Pokreni. Primjer: ``Naredba: `rm -rf /` ``. Nositelj: `vlasnik`.", []],
+    ["a marker after a single-backtick span still counts", "1. Odluči o `x`. Nositelj: `vlasnik`.", []],
+    ["an unmatched `` is literal, so the next ` opens a span over the marker", "1. Odluči ``a`. Nositelj: `vlasnik`.", NONE],
+    ["setext = underline after prose", "1. Prvi. Nositelj: `vlasnik`.\n\nDodatak\n=======", [UNSUPPORTED("setext heading underline", "-")]],
+    ["setext -- underline after prose", "1. Prvi. Nositelj: `vlasnik`.\n\nDodatak\n--", [UNSUPPORTED("setext heading underline", "-")]],
+    ["setext = underline in a step's content", "1. Odluči.\n   ===\n   Nositelj: `vlasnik`.", [UNSUPPORTED("setext heading underline"), ...NONE]],
+    ["a single = is an underline too", "1. Odluči.\n   =\n   Nositelj: `vlasnik`.", [UNSUPPORTED("setext heading underline"), ...NONE]],
   ] as const)("%s", (_name, steps, expected) => {
     expect(messages(doc(steps))).toEqual(expected);
+  });
+
+  it("bot: a setext heading before the next section is refused", () => {
+    const text = doc("1. Odluči. Nositelj: `vlasnik`.", { extra: "\nDodatak\n=======\n\n9. Nešto. Nositelj: `vlasnik`.\n\n## Pilot (M12)\n" });
+    expect(messages(text)).toContain(`${REQUIRED_PROCEDURES.at(-1)}#-: unsupported markdown: setext heading underline`);
   });
 
   it("an HTML block before the procedures is refused, so it cannot hide one", () => {

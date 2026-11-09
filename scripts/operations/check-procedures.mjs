@@ -24,11 +24,13 @@ const STEP_FORM_RE = /^ {0,3}(\d{1,9})[.)] {1,4}(?=\S)/;
 const FENCE_LINE_RE = /^([ \t]*)(`{3,}|~{3,})(.*)$/;
 const HEADING_RE = /^(#{1,6})(?:[ \t]+(.*))?$/;
 const THEMATIC_RE = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+// A setext underline; a single `-` stays an empty list item.
+const SETEXT_RE = /^[ \t]*(?:=+|-{2,})[ \t]*$/;
 const BULLET_RE = /^ {0,3}[-+*] +\S/;
 const LIST_MARKER_RE = /^(?:[-+*]|\d{1,9}[.)])(?=[ \t]|$)/;
 const HTML_START_RE = /^<[A-Za-z/!?]/;
-// A code span: a run of backticks up to the next run of the same length.
-const CODE_SPAN_RE = /(`+)[\s\S]*?(?<!`)\1(?!`)/g;
+// A code span: a whole run of backticks up to the next run of the same length.
+const CODE_SPAN_RE = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g;
 const MARKER_RE = /(?<!\p{L})(Naredba|Nositelj):/gu;
 // After a code span, another span follows only after a comma or a joining word.
 const NEXT_SPAN_RE = /^(?:\s*,\s*|\s+(?:i|ili|pa)\s+)(?=`)/u;
@@ -247,6 +249,7 @@ export function parseOperations(text) {
     };
     if (lead.includes("\t")) return refuseLine("tab in indentation");
     if (THEMATIC_RE.test(line)) return refuseLine("thematic break");
+    if (SETEXT_RE.test(line)) return refuseLine("setext heading underline");
     const inContent = open !== null && lead.length >= open.offset;
     if (!inContent && lead !== "" && HEADING_RE.test(content)) return refuseLine("indented heading");
 
@@ -433,7 +436,11 @@ export function checkOperations(text, context) {
       previous = step.number;
 
       const body = step.text.replace(/\*\*(Naredba|Nositelj):\*\*/g, "$1:");
-      const markers = [...body.matchAll(MARKER_RE)];
+      // A marker written inside a code span is an example, not a marker.
+      const codeSpans = [...body.matchAll(CODE_SPAN_RE)].map((m) => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
+      const markers = [...body.matchAll(MARKER_RE)].filter(
+        (m) => !codeSpans.some(([from, to]) => (m.index ?? 0) >= from && (m.index ?? 0) < to),
+      );
       if (markers.length === 0) report(step.number, step.line, "step has neither Naredba: nor Nositelj:");
       for (const marker of markers) {
         const kind = marker[1];
