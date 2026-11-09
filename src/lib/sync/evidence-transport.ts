@@ -8,13 +8,16 @@
  * - A row that is not a segment is refused without a request.
  * - A receipt counts only when its `segmentHash` is the hash the journal stored
  *   with the row that was sent, never one taken from the answer (I5).
- * - DAN-595: one `Ductus-Protocol` state per transport, so per tab; a 426
- *   to "2" turns this tab to "1" and touches no other tab.
+ * - DAN-595: the `Ductus-Protocol` state comes from the caller. The browser
+ *   passes the tab's one state (`evidence-session-deps.ts`), so a 426 to "2"
+ *   keeps every work opened in this tab on "1" until a reload and touches no
+ *   other tab (QA c.6730803432). Without one, the transport keeps its own.
  */
 
 import {
   commitEvidence,
   createCommitProtocol,
+  type CommitProtocol,
   createReceiptVerifier,
   type FetchLike,
   type OpenedWork,
@@ -23,8 +26,10 @@ import type { QueuedRow, SignedCommitReceiptVerifier } from "../../domain/sync/d
 import type { QueuedTransaction } from "../../domain/sync/journal-types";
 import type { CommitTransport } from "./drain-runner";
 
-export function createEvidenceTransport(fetchImpl?: FetchLike): CommitTransport<QueuedTransaction> {
-  const protocol = createCommitProtocol();
+export function createEvidenceTransport(
+  fetchImpl?: FetchLike,
+  protocol: CommitProtocol = createCommitProtocol(),
+): CommitTransport<QueuedTransaction> {
   return async (documentId, tx) => {
     if (tx?.kind !== "EVIDENCE_SEGMENT") return { status: "invalid_document" };
     return commitEvidence({

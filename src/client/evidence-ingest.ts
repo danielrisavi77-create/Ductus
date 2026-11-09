@@ -266,7 +266,7 @@ export function commitOutcomeFrom(
  * Sends one segment and the snapshot after it. Never throws: a request that
  * could not be made or whose answer was lost is `transport_error`.
  *
- * `protocol` is the tab's own (one per transport). A 426 `upgrade_required`
+ * `protocol` is the tab's own (one per tab, `evidence-session-deps.ts`). A 426 `upgrade_required`
  * to "2" is answered before the route reads the body, so nothing was stored:
  * the identical body, same key included, goes once more under "1", and
  * "1" stays for the tab. A 426 to "1" is `invalid` as before.
