@@ -6,7 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // The five-session limit on two connections (DAN-296, D-200 P2). Two logins
 // of one account at once are put in a row by the lock on its user_account
 // row, so the second counts the first one's session; a touch that races the
-// login that supersedes its session does not revive it; and a login under a
+// login that supersedes its session does not revive it, whichever of the two
+// holds the row first; and a login under a
 // snapshot isolation level is refused. Logins run as a ductus_auth login,
 // touches as a ductus_app login.
 // Every identifier, token and password below is random and synthetic.
@@ -195,6 +196,36 @@ describe("five sessions per account on two connections", () => {
     expect(touched).toBe(false);
     expect(await sessionState(fifth.tokenHash)).toBe("superseded");
     expect(await counts("dora")).toEqual({ live: 5, superseded: 1 });
+  });
+
+  it("a login that waits on a touch of the least active session supersedes the next one instead", async () => {
+    const old = await fourLogins("lea");
+    const fifth = newToken();
+    const auth = await client(AUTH_LOGIN);
+    await auth.c.query(OPEN, openArgs(fifth.tokenHash, "lea"));
+    await admin.query(
+      "UPDATE identity.session SET created_at = now() - interval '1 hour', last_seen_at = now() - interval '55 minutes' WHERE token_hash = $1",
+      [fifth.tokenHash],
+    );
+    const app = await client(APP_LOGIN);
+    const login = await client(AUTH_LOGIN);
+    const sixth = newToken();
+
+    // The touch has written the least active session and holds its row.
+    await app.c.query("BEGIN");
+    await app.c.query("SELECT pg_catalog.set_config('app.session_token', $1, true)", [fifth.token]);
+    const touched = (await app.c.query<{ touched: boolean }>("SELECT identity.touch_current_session() AS touched")).rows[0].touched;
+    const other = outcome(login.c.query(OPEN, openArgs(sixth.tokenHash, "lea")));
+    const waited = await settlesOrWaits(other, login.pid);
+    await app.c.query("COMMIT");
+
+    expect(touched).toBe(true);
+    expect(waited).toBe(true);
+    expect(await other).toBe("ok");
+    expect(await sessionState(fifth.tokenHash)).toBe("open");
+    expect(await sessionState(old[0].tokenHash)).toBe("superseded");
+    expect(await sessionState(sixth.tokenHash)).toBe("open");
+    expect(await counts("lea")).toEqual({ live: 5, superseded: 1 });
   });
 
   // A snapshot taken before another login committed would hide its session,

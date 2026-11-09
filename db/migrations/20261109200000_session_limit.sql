@@ -15,8 +15,11 @@
 -- the trigger fires before any other row is locked by the login. No session
 -- path locks user_account; institution.require_admin_request takes FOR SHARE
 -- on the admin's own row and touches no session row, so one only waits for
--- the other and there is no lock order to invert. Under REPEATABLE READ the second login would count from its old
--- snapshot and miss the first one's session, so the trigger refuses it.
+-- the other and there is no lock order to invert. Under REPEATABLE READ the
+-- second login would count from its old snapshot and miss the first one's
+-- session, so the trigger refuses it. A touch of the session being chosen
+-- (identity.touch_current_session) is the one write that can change the
+-- choice while the login waits; the guarded passes below handle it.
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
@@ -33,6 +36,9 @@ ALTER TABLE identity.session ADD CONSTRAINT session_close_reason_check CHECK (
 CREATE FUNCTION identity.enforce_session_limit() RETURNS trigger
 LANGUAGE plpgsql SET search_path = ''
 AS $$
+DECLARE
+  v_pass integer;
+  v_live bigint;
 BEGIN
   IF NEW.expires_at <= pg_catalog.now()
      OR NEW.last_seen_at <= pg_catalog.now() - interval '2 hours' THEN
@@ -43,22 +49,41 @@ BEGIN
   END IF;
   PERFORM 1 FROM identity.user_account WHERE id = NEW.user_id FOR NO KEY UPDATE;
   -- Keeps the four most recently active others; the order is total, so the
-  -- same rows always go.
-  UPDATE identity.session
-  SET closed_at = pg_catalog.now(), close_reason = 'superseded'
-  WHERE id IN (
-      SELECT s.id
-      FROM identity.session s
-      WHERE s.user_id = NEW.user_id
-        AND s.id <> NEW.id
-        AND s.closed_at IS NULL
-        AND s.expires_at > pg_catalog.now()
-        AND s.last_seen_at > pg_catalog.now() - interval '2 hours'
-      ORDER BY s.last_seen_at DESC, s.created_at DESC, s.id DESC
-      OFFSET 4
-    )
-    AND closed_at IS NULL;
-  RETURN NULL;
+  -- same rows always go. A row is closed only while it still has the
+  -- last_seen_at it was chosen by: a touch that commits while this waits for
+  -- its row changes that value, the row is skipped, and the next pass chooses
+  -- again from a fresh snapshot. A touch writes a session at most once a
+  -- minute, so the passes are few; the bound turns a runaway into a retryable
+  -- failure rather than a loop.
+  FOR v_pass IN 1..10 LOOP
+    UPDATE identity.session s
+    SET closed_at = pg_catalog.now(), close_reason = 'superseded'
+    FROM (
+        SELECT o.id, o.last_seen_at
+        FROM identity.session o
+        WHERE o.user_id = NEW.user_id
+          AND o.id <> NEW.id
+          AND o.closed_at IS NULL
+          AND o.expires_at > pg_catalog.now()
+          AND o.last_seen_at > pg_catalog.now() - interval '2 hours'
+        ORDER BY o.last_seen_at DESC, o.created_at DESC, o.id DESC
+        OFFSET 4
+      ) c
+    WHERE s.id = c.id
+      AND s.closed_at IS NULL
+      AND s.last_seen_at = c.last_seen_at;
+    SELECT pg_catalog.count(*) INTO v_live
+    FROM identity.session o
+    WHERE o.user_id = NEW.user_id
+      AND o.id <> NEW.id
+      AND o.closed_at IS NULL
+      AND o.expires_at > pg_catalog.now()
+      AND o.last_seen_at > pg_catalog.now() - interval '2 hours';
+    IF v_live <= 4 THEN
+      RETURN NULL;
+    END IF;
+  END LOOP;
+  RAISE EXCEPTION 'session limit not settled' USING ERRCODE = '40001';
 END
 $$;
 
