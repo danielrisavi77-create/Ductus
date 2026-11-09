@@ -10,6 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "worker": "node scripts/worker/start.mjs",
     "lint": "node scripts/engineering/eslint-cached.mjs",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --project unit",
