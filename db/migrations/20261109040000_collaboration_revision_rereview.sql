@@ -25,6 +25,9 @@ ALTER TABLE collaboration.revision_request_version
     CONSTRAINT revision_request_version_opened_as_check CHECK (opened_as IN ('instruction', 'rereview')),
   ADD COLUMN observed_range_hash text
     CONSTRAINT revision_request_version_observed_hash_check CHECK (observed_range_hash ~ '^[0-9a-f]{64}$'),
+  -- The scan under the lock is accepted: the table holds one row per version
+  -- of a request, and every existing row passes (the new column is null).
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT revision_request_version_observed_rereview_check
     CHECK (observed_range_hash IS NULL OR opened_as = 'rereview');
 
