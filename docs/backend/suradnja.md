@@ -425,7 +425,7 @@ Nastavnik ne odgovara u ime studenta, a student ne stvara, ne prihvaća i ne pov
 
 Ugovor prije koda (M6.0-S1, DAN-597) za prijedloge (M6.3, DAN-419, plan napada #1489) i izravne izmjene nastavnika s postavkom načina (M6.4, DAN-420, plan napada #1808). Gradi samo na odlučenom: D-34, D-21, D-244 i D-203 (B1 i t. 6), uz `docs/PRODUCT.md` §5 pravilo 8, §6 (student t. 7, nastavnik t. 7), §7 i §9. Napadi iz oba plana su kriterij prihvata. Ono što ovisi o otvorenom pitanju vlasnika ovdje se ne bira. Svaki takav dio je u tablici „Otvoreno” na kraju, uz korake koje blokira.
 
-Prijedlog je **zaseban zapis sa sidrom** u shemi `collaboration`, kao zahtjev za doradu u §4.14. Nije vrsta niti komentara i ne ovisi o D-133 ni D-134. Nesklad oko njihova statusa ostaje otvoren: `docs/DECISIONS.md` D-266 piše ODLUČENO, a `STATE.md` Q-6 piše da čekaju vlasnika. Ugovor se ne mijenja ni za jedan ishod.
+Prijedlog je **zaseban zapis sa sidrom** u shemi `collaboration`, kao zahtjev za doradu u §4.14 i kao komentar prema D-133 (ODLUČENO u D-266 t. 1: izvedeni prikaz zasebnog zapisa sa sidrom, `docs/ARCHITECTURE.md` §5a, ne oznaka u shemi Tiptapa). Nije vrsta niti komentara. Navod kao čvor-atom (D-134, D-266 t. 1) ovaj sloj ne mijenja: sadržaj prijedloga prolazi istu shemu editora kao dokument.
 
 **Odlučene invarijante.** Svaki korak ih čuva i svaka ima test u tablici napada.
 
