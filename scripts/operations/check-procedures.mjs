@@ -3,6 +3,24 @@
 // docs/OPERATIONS.md names a command that exists in this repository
 // ("Naredba: `...`") or an owner from the "Nositelji" table ("Nositelj: `...`").
 // Usage: node scripts/operations/check-procedures.mjs [path]. Exit 1 lists problems.
+//
+// The check does not interpret CommonMark (#1803, contract #1091 c.6750197325).
+// In the sections "Nositelji" and "Postupci" it reads only this line subset and
+// refuses every other line with `unsupported markdown: <what>`:
+// - a blank line, or a heading `#`, `##` or `###` at column 0;
+// - a step: one line `N. ` (one to nine digits, a dot, one space) followed by a
+//   letter or `**`, at column 0, inside a `###` procedure, after a blank line,
+//   a heading, a fence or another step; a step never continues on the next line;
+// - a paragraph line starting with a letter or `**`, not right after a step;
+// - in "Nositelji", one table: a header row after a blank line or heading, then
+//   a separator row of `---` cells with the same column count, then rows;
+// - a fence of three or more backticks at column 0 with an optional one-word
+//   info string, closed by a line of at least as many backticks and nothing else.
+// On those lines code is single backticks closed on the same line; a run of two
+// or more backticks, a backslash before a backtick and HTML outside code are
+// refused. Anywhere in the document a tilde fence, an indented fence, an
+// indented heading, an HTML block, a setext underline and an unclosed fence are
+// refused, because each could hide or move a heading, step or marker.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -12,25 +30,18 @@ export const REQUIRED_PROCEDURES = Object.freeze(["Pokretanje", "Gašenje", "Pov
 
 const OWNERS_HEADING = "Nositelji";
 const PROCEDURES_HEADING = "Postupci";
+const STRICT_SECTIONS = new Set([OWNERS_HEADING, PROCEDURES_HEADING]);
 // A role, never a placeholder: letters, digits, spaces and hyphens only.
 const PLAIN_ROLE_RE = /^[\p{L}\d](?:[\p{L}\d -]*[\p{L}\d])?$/u;
-// Inside a required procedure the check reads a strict subset of Markdown and
-// fails closed: a line it cannot classify with certainty is a problem, never a
-// guessed step boundary (#1803, contract #1091 c.6745350612).
-// A step: up to three spaces, one to nine digits, `.` or `)`, one to four
-// spaces, then content.
-const STEP_START_RE = /^( {0,3})(\d+)[.)](?=[ \t]|$)/;
-const STEP_FORM_RE = /^ {0,3}(\d{1,9})[.)] {1,4}(?=\S)/;
-const FENCE_LINE_RE = /^([ \t]*)(`{3,}|~{3,})(.*)$/;
 const HEADING_RE = /^(#{1,6})(?:[ \t]+(.*))?$/;
-const THEMATIC_RE = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
-// A setext underline; a single `-` stays an empty list item.
-const SETEXT_RE = /^[ \t]*(?:=+|-{2,})[ \t]*$/;
-const BULLET_RE = /^ {0,3}[-+*] +\S/;
-const LIST_MARKER_RE = /^(?:[-+*]|\d{1,9}[.)])(?=[ \t]|$)/;
-const HTML_START_RE = /^<[A-Za-z/!?]/;
-// A code span: a whole run of backticks up to the next run of the same length.
-const CODE_SPAN_RE = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g;
+const FENCE_OPEN_RE = /^([ \t]*)(`{3,})(.*)$/;
+const STEP_LIKE_RE = /^(\d+)[.)](?:[ \t]|$)/;
+const STEP_RE = /^(\d{1,9})\. (?=(?:\*\*)?\p{L})/u;
+const PROSE_RE = /^(?:\*\*)?\p{L}/u;
+const SEPARATOR_CELL_RE = /^:?-{3,}:?$/;
+const HTML_RE = /<[A-Za-z/!?]/;
+// A code span: one backtick up to the next one on the same line.
+const CODE_SPAN_RE = /`[^`]*`/g;
 const MARKER_RE = /(?<!\p{L})(Naredba|Nositelj):/gu;
 // After a code span, another span follows only after a comma or a joining word.
 const NEXT_SPAN_RE = /^(?:\s*,\s*|\s+(?:i|ili|pa)\s+)(?=`)/u;
@@ -46,38 +57,13 @@ const CURL_FLAGS_RE = /^(?:-[fsSi]+|--fail|--fail-with-body|--silent|--show-erro
 const STOP_SIGNALS = new Set(["-TERM", "-INT", "-SIGTERM", "-SIGINT"]);
 
 /**
- * @typedef {{ number: number, line: number, text: string }} Step
+ * @typedef {{ number: number, line: number, text: string, refused?: boolean }} Step
  * @typedef {{ name: string, line: number, steps: Step[] }} Procedure
  * @typedef {{ name: string, line: number }} Owner
  * @typedef {{ owners: Owner[], procedures: Procedure[], proceduresLine: number | null, unsupported: Problem[] }} Operations
  * @typedef {{ procedure: string, step: number | null, line: number, message: string }} Problem
  * @typedef {{ scripts: Set<string>, fileExists: (path: string) => boolean, routeExists: (route: string) => boolean }} Context
  */
-
-/**
- * Why a line's content (without its indentation) is outside the subset, after
- * any list markers: an empty item or one followed by a tab or more than four
- * spaces, a quote, HTML outside code spans, a link reference definition, or a
- * fence or thematic break inside a list item: each can hide or move a marker.
- * @param {string} content
- * @returns {string | null}
- */
-function blockProblem(content) {
-  let rest = content;
-  for (let marker = LIST_MARKER_RE.exec(rest); marker; marker = LIST_MARKER_RE.exec(rest)) {
-    const after = rest.slice(marker[0].length);
-    const gap = /^[ \t]*/.exec(after)?.[0] ?? "";
-    if (gap === after || gap.includes("\t") || gap.length > 4) return "list item form";
-    rest = after.slice(gap.length);
-  }
-  if (rest.startsWith(">")) return "block quote";
-  if (HTML_START_RE.test(rest)) return "HTML block";
-  if (/^\[[^\]]*\]:/.test(rest)) return "link reference definition";
-  if (rest !== content && FENCE_LINE_RE.test(rest)) return "fence after a list marker";
-  if (rest !== content && THEMATIC_RE.test(rest)) return "thematic break";
-  if (/<[A-Za-z/!?]/.test(rest.replace(CODE_SPAN_RE, ""))) return "inline HTML";
-  return null;
-}
 
 /** @param {string} row */
 function cells(row) {
@@ -90,9 +76,23 @@ function cells(row) {
 }
 
 /**
- * Reads the owners table and the procedures under "## Postupci". Lines inside
- * code fences are never headings, steps or markers. Inside a procedure a line
- * outside the strict subset goes to `unsupported` with its line.
+ * Why a line's inline content is outside the subset, or null.
+ * @param {string} line
+ * @returns {string | null}
+ */
+function inlineProblem(line) {
+  if (line.includes("\\`")) return "backslash before a backtick";
+  if (line.includes("``")) return "two or more backticks in a row";
+  if ((line.match(/`/g) ?? []).length % 2 === 1) return "code span not closed on its line";
+  if (HTML_RE.test(line.replace(CODE_SPAN_RE, ""))) return "inline HTML";
+  return null;
+}
+
+/**
+ * Reads the owners table and the procedures under "## Postupci" in the line
+ * subset described at the top of this file. A refused line goes to
+ * `unsupported` with its line and changes nothing else; a refused step is kept
+ * for numbering, with `refused`, and its markers are not read.
  * @param {string} text
  * @returns {Operations}
  */
@@ -109,191 +109,140 @@ export function parseOperations(text) {
   let section = "";
   /** @type {Procedure | null} */
   let procedure = null;
-  // `paragraph`: the step's last line was paragraph text, so a less indented
-  // line could continue it lazily. `offset`: the step's content column.
-  /** @type {{ step: Step, parts: string[], paragraph: boolean, offset: number } | null} */
-  let open = null;
-  // `prose`: the last line in the procedure was paragraph text outside a step.
-  let prose = false;
-  // `strict`: opened inside a procedure; `inStep`: opened at the step's content.
-  /** @type {{ indent: string, mark: string, line: number, strict: boolean, inStep: boolean, procedure: string, step: number | null } | null} */
+  /** @type {Step | null} the open step: its line was the last line */
+  let step = null;
+  /** @type {"blank" | "heading" | "fence" | "prose" | "step" | "table"} */
+  let prev = "blank";
+  /** @type {{ line: number, length: number, procedure: string } | null} */
   let fence = null;
-  let tableHeaderSeen = false;
+  /** @type {{ state: "separator" | "body" | "bad", columns: number } | null} */
+  let table = null;
+  let prevNonBlank = false;
 
-  const closeStep = () => {
-    if (open) open.step.text = open.parts.join("\n");
-    open = null;
-  };
-  /** @param {number} line @param {string} what @param {number | null} [step] */
-  const refuse = (line, what, step = open ? open.step.number : null) =>
-    unsupported.push({ procedure: procedure?.name ?? (section || "-"), step, line, message: `unsupported markdown: ${what}` });
-  /** @param {string} indent @param {RegExpExecArray} match @param {number} line @param {boolean} inStep */
-  const openFence = (indent, match, line, inStep) => {
-    fence = {
-      indent,
-      mark: match[2] ?? "",
-      line,
-      strict: procedure !== null,
-      inStep,
-      procedure: procedure?.name ?? (section || "-"),
-      step: inStep && open ? open.step.number : null,
-    };
+  /** @param {number} line @param {string} what */
+  const refuse = (line, what) =>
+    unsupported.push({ procedure: procedure?.name ?? (section || "-"), step: step?.number ?? null, line, message: `unsupported markdown: ${what}` });
+  /** @param {number} line */
+  const endTable = (line) => {
+    if (table?.state === "separator") refuse(line, "table without a separator row");
+    table = null;
   };
 
-  /** @param {string} line @param {number} lineNumber @returns {boolean} the line was a heading */
-  const readHeading = (line, lineNumber) => {
-    const heading = HEADING_RE.exec(line);
-    if (!heading) return false;
-    closeStep();
-    prose = false;
-    const level = heading[1]?.length ?? 0;
-    const title = (heading[2] ?? "").trim();
-    if (level <= 2) {
-      section = level === 2 ? title : "";
-      procedure = null;
-      tableHeaderSeen = false;
-      if (section === PROCEDURES_HEADING && proceduresLine === null) proceduresLine = lineNumber;
-    } else if (level === 3 && section === PROCEDURES_HEADING) {
-      procedure = { name: title, line: lineNumber, steps: [] };
-      procedures.push(procedure);
-    } else if (level === 3) {
-      procedure = null;
+  /** @param {string} line @param {number} lineNumber */
+  const read = (line, lineNumber) => {
+    if (fence !== null) {
+      if (new RegExp(`^\`{${fence.length},}$`).test(line)) {
+        fence = null;
+        prev = "fence";
+      } else if (/^[ \t]*(?:`{3,}|~{3,})/.test(line)) refuse(lineNumber, "fence line inside a fence");
+      return;
     }
-    return true;
+    const strict = STRICT_SECTIONS.has(section);
+    if (/^[ \t]*~{3,}/.test(line)) return refuse(lineNumber, "tilde fence");
+    const open = FENCE_OPEN_RE.exec(line);
+    if (open) {
+      if (open[1]) return refuse(lineNumber, "indented fence");
+      if (!/^[A-Za-z0-9_+-]*$/.test((open[3] ?? "").trimStart())) return refuse(lineNumber, "fence form");
+      endTable(lineNumber);
+      fence = { line: lineNumber, length: open[2]?.length ?? 3, procedure: procedure?.name ?? (section || "-") };
+      step = null;
+      prev = "fence";
+      return;
+    }
+    const heading = HEADING_RE.exec(line);
+    if (heading) {
+      const level = heading[1]?.length ?? 0;
+      if (strict && level > 3) return refuse(lineNumber, "heading level");
+      endTable(lineNumber);
+      step = null;
+      prev = "heading";
+      const title = (heading[2] ?? "").trim();
+      if (level <= 2) {
+        section = level === 2 ? title : "";
+        procedure = null;
+        if (section === PROCEDURES_HEADING && proceduresLine === null) proceduresLine = lineNumber;
+      } else if (level === 3) {
+        procedure = section === PROCEDURES_HEADING ? { name: title, line: lineNumber, steps: [] } : null;
+        if (procedure) procedures.push(procedure);
+      }
+      return;
+    }
+    if (/^ {1,3}#{1,6}(?:[ \t]|$)/.test(line)) return refuse(lineNumber, "indented heading");
+    if (/^ {0,3}<[A-Za-z/!?]/.test(line)) return refuse(lineNumber, "HTML block");
+    if (prevNonBlank && /^ {0,3}(?:=+|-+)$/.test(line)) return refuse(lineNumber, "setext heading underline");
+    if (!strict) return;
+
+    if (line === "") {
+      endTable(lineNumber);
+      step = null;
+      prev = "blank";
+      return;
+    }
+    if (/^[ \t]/.test(line)) return refuse(lineNumber, "indented line");
+
+    const stepLike = STEP_LIKE_RE.exec(line);
+    if (stepLike) {
+      const digits = stepLike[1] ?? "";
+      const number = digits.length <= 9 ? Number(digits) : null;
+      if (procedure === null) return refuse(lineNumber, "step outside a procedure");
+      const form = STEP_RE.exec(line);
+      const problem = !form ? "step form" : prev === "prose" || prev === "table" ? "step right after a paragraph" : inlineProblem(line);
+      step = number === null ? null : { number, line: lineNumber, text: form ? line.slice(form[0].length) : "", refused: problem !== null };
+      if (step) procedure.steps.push(step);
+      if (problem) refuse(lineNumber, problem);
+      prev = "step";
+      return;
+    }
+
+    if (line.startsWith("|")) {
+      if (section !== OWNERS_HEADING) return refuse(lineNumber, "line form");
+      const row = cells(line);
+      const problem = inlineProblem(line);
+      if (table === null) {
+        if (prev !== "blank" && prev !== "heading") {
+          table = { state: "bad", columns: 0 };
+          refuse(lineNumber, "table right after a paragraph");
+        } else if (problem) {
+          table = { state: "bad", columns: 0 };
+          refuse(lineNumber, problem);
+        } else table = { state: "separator", columns: row.length };
+      } else if (table.state === "separator") {
+        const separator = row.every((cell) => SEPARATOR_CELL_RE.test(cell));
+        if (separator && row.length === table.columns) table.state = "body";
+        else {
+          table.state = "bad";
+          refuse(lineNumber, separator ? "table separator does not match the header" : "table without a separator row");
+        }
+      } else if (table.state === "body") {
+        if (problem) refuse(lineNumber, problem);
+        else {
+          const name = (row[0] ?? "").replace(/^`(.*)`$/, "$1").trim();
+          if (name) owners.push({ name, line: lineNumber });
+        }
+      }
+      prev = "table";
+      return;
+    }
+
+    if (PROSE_RE.test(line)) {
+      if (step !== null) return refuse(lineNumber, "lazy continuation");
+      if (prev === "table") return refuse(lineNumber, "line right after a table");
+      const problem = inlineProblem(line);
+      if (problem) return refuse(lineNumber, problem);
+      prev = "prose";
+      return;
+    }
+    refuse(lineNumber, "line form");
   };
 
   lines.forEach((line, index) => {
-    const lineNumber = index + 1;
-    const lead = /^[ \t]*/.exec(line)?.[0] ?? "";
-    const content = line.slice(lead.length);
-    const fenceLine = FENCE_LINE_RE.exec(line);
-
-    if (fence !== null) {
-      const sameMark = fenceLine !== null && (fenceLine[2] ?? "")[0] === fence.mark[0];
-      const closes =
-        sameMark &&
-        (fenceLine?.[2] ?? "").length >= fence.mark.length &&
-        (fenceLine?.[3] ?? "").trim() === "" &&
-        (fence.strict ? lead === fence.indent : /^ {0,3}$/.test(lead));
-      if (closes) {
-        fence = null;
-        if (open) open.paragraph = false;
-        prose = false;
-        return;
-      }
-      const leaves = fence.inStep && content !== "" && !lead.startsWith(fence.indent);
-      if (sameMark && fence.strict) {
-        refuse(lineNumber, "fence closing line with text or another indentation", fence.step);
-      }
-      if (!leaves) return;
-      // A less indented line ends the step, and the fence with it (CommonMark).
-      refuse(lineNumber, "fence in a step ends before its closing line", fence.step);
-      fence = null;
-      closeStep();
-      prose = false;
-      readHeading(line, lineNumber);
-      return;
-    }
-
-    if (readHeading(line, lineNumber)) return;
-
-    if (procedure === null) {
-      // An HTML block can hide a heading anywhere, so the document refuses it.
-      if (/^ {0,3}$/.test(lead) && HTML_START_RE.test(content)) {
-        refuse(lineNumber, "HTML block");
-        return;
-      }
-      if (fenceLine && /^ {0,3}$/.test(lead) && !(fenceLine[2]?.startsWith("`") && fenceLine[3]?.includes("`"))) {
-        openFence(lead, fenceLine, lineNumber, false);
-        return;
-      }
-      if (section === OWNERS_HEADING && content.startsWith("|")) {
-        const row = cells(line);
-        if (row.every((cell) => /^:?-{3,}:?$/.test(cell))) return;
-        if (!tableHeaderSeen) {
-          tableHeaderSeen = true;
-          return;
-        }
-        const name = (row[0] ?? "").replace(/^`(.*)`$/, "$1").trim();
-        if (name) owners.push({ name, line: lineNumber });
-      }
-      return;
-    }
-
-    if (content === "") {
-      if (open) open.paragraph = false;
-      prose = false;
-      return;
-    }
-
-    if (fenceLine) {
-      const atStep = open !== null && lead === " ".repeat(open.offset);
-      if (fenceLine[2]?.startsWith("`") && fenceLine[3]?.includes("`")) {
-        refuse(lineNumber, "fence info string with a backtick");
-        closeStep();
-        return;
-      }
-      if (lead !== "" && !atStep) refuse(lineNumber, "fence indentation");
-      if (atStep && open) open.paragraph = false;
-      else closeStep();
-      openFence(lead, fenceLine, lineNumber, atStep);
-      prose = false;
-      return;
-    }
-
-    /** @param {string} what */
-    const refuseLine = (what) => {
-      refuse(lineNumber, what);
-      closeStep();
-      prose = false;
-    };
-    if (lead.includes("\t")) return refuseLine("tab in indentation");
-    if (THEMATIC_RE.test(line)) return refuseLine("thematic break");
-    if (SETEXT_RE.test(line)) return refuseLine("setext heading underline");
-    const inContent = open !== null && lead.length >= open.offset;
-    if (!inContent && lead !== "" && HEADING_RE.test(content)) return refuseLine("indented heading");
-
-    const start = inContent ? null : STEP_START_RE.exec(line);
-    if (start) {
-      const digits = start[2] ?? "";
-      const number = digits.length <= 9 ? Number(digits) : null;
-      const form = STEP_FORM_RE.exec(line);
-      const afterProse = open === null && prose;
-      closeStep();
-      if (afterProse) refuse(lineNumber, "list item right after a paragraph", number);
-      else if (!form) refuse(lineNumber, "list item form", number);
-      const problem = form && !afterProse ? blockProblem(content) : null;
-      if (problem) refuse(lineNumber, problem, number);
-      prose = false;
-      if (number === null) return;
-      const step = { number, line: lineNumber, text: "" };
-      procedure.steps.push(step);
-      if (form && !afterProse && !problem) {
-        open = { step, parts: [line.slice(form[0].length)], paragraph: true, offset: form[0].length };
-      }
-      return;
-    }
-
-    if (open && inContent) {
-      if (lead.length >= open.offset + 4) return refuseLine("indented code");
-      const problem = blockProblem(content);
-      if (problem) return refuseLine(problem);
-      open.parts.push(content);
-      open.paragraph = true;
-      return;
-    }
-
-    const problem = blockProblem(content);
-    if (problem) return refuseLine(problem);
-    if (open && open.paragraph && !BULLET_RE.test(line)) return refuseLine("lazy continuation");
-    closeStep();
-    prose = true;
+    read(line, index + 1);
+    prevNonBlank = line.trim() !== "";
   });
-
-  if (fence !== null && fence.strict) {
-    unsupported.push({ procedure: fence.procedure, step: fence.step, line: fence.line, message: "unsupported markdown: unclosed fence" });
+  endTable(lines.length);
+  if (fence !== null) {
+    unsupported.push({ procedure: fence.procedure, step: null, line: fence.line, message: "unsupported markdown: unclosed fence" });
   }
-  closeStep();
 
   return { owners, procedures, proceduresLine, unsupported };
 }
@@ -434,6 +383,7 @@ export function checkOperations(text, context) {
         report(step.number, step.line, `step is numbered ${step.number}, expected ${previous + 1}`);
       }
       previous = step.number;
+      if (step.refused) continue;
 
       const body = step.text.replace(/\*\*(Naredba|Nositelj):\*\*/g, "$1:");
       // A marker written inside a code span is an example, not a marker.

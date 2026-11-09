@@ -6,9 +6,10 @@ import { REQUIRED_PROCEDURES, checkOperations } from "../../scripts/operations/c
 // DAN-540 (M11.3-P04), contract on #1091: for any document of the four
 // required procedures, the check reports a problem exactly for the steps that
 // name neither a known command nor a known owner, with the right procedure and
-// step number, whether the step starts in the first column or after up to two
-// spaces, and whether it is numbered `1.` or `1)`. Prose between procedures,
-// outside a step, changes nothing.
+// step number. A step is one canonical line `N. ` at column 0 (#1803 round 3,
+// contract #1091 c.6750197325). Prose between procedures, outside a step,
+// changes nothing, and any change that takes a step line out of the subset is
+// refused at that line.
 
 const OWNERS = "## Nositelji\n\n| Nositelj | Odgovornost |\n| --- | --- |\n| `vlasnik` | kvarovi |\n| `koordinator pilota` | pitanja |\n";
 
@@ -33,21 +34,21 @@ const STEPS = [
   { body: "Odluči što dalje.", bad: true },
 ] as const;
 
-const PROSE = ["", "Kratka napomena bez naredbe.\n\n", "- Napomena: `pnpm nope`.\n\n", "```\n1. nije korak\n```\n\n"] as const;
+const PROSE = ["", "Kratka napomena bez naredbe.\n\n", "**Napomena:** `pnpm nope` nije korak.\n\n", "```\n1. nije korak\n```\n\n"] as const;
 
-const stepArb = fc.record({ kind: fc.integer({ min: 0, max: STEPS.length - 1 }), indent: fc.integer({ min: 0, max: 2 }), delimiter: fc.constantFrom(".", ")") });
+const stepArb = fc.record({ kind: fc.integer({ min: 0, max: STEPS.length - 1 }) });
 const procedureArb = fc.array(stepArb, { minLength: 1, maxLength: 6 });
 const documentArb = fc.record({
   steps: fc.tuple(procedureArb, procedureArb, procedureArb, procedureArb),
   prose: fc.tuple(...REQUIRED_PROCEDURES.map(() => fc.constantFrom(...PROSE))),
 });
 
-type StepCase = { kind: number; indent: number; delimiter: string };
+type StepCase = { kind: number };
 
 function render(steps: StepCase[][], prose: readonly string[]): string {
   const sections = REQUIRED_PROCEDURES.map((name, p) => {
     const list = (steps[p] ?? [])
-      .map(({ kind, indent, delimiter }, i) => `${" ".repeat(indent)}${i + 1}${delimiter} Korak. ${STEPS[kind]?.body ?? ""}`)
+      .map(({ kind }, i) => `${i + 1}. Korak. ${STEPS[kind]?.body ?? ""}`)
       .join("\n");
     return `### ${name}\n\n${prose[p] ?? ""}${list}\n`;
   });
@@ -67,3 +68,32 @@ test.prop([documentArb])("prose outside the steps does not change the result", (
   const strip = (text: string) => checkOperations(text, CONTEXT).map((p) => `${p.procedure}#${p.step ?? "-"}: ${p.message}`);
   expect(strip(render(steps, prose))).toEqual(strip(render(steps, plain)));
 });
+
+/** Changes that take a step line out of the subset. */
+const MUTATIONS = [
+  (line: string, n: number) => `${" ".repeat(1 + (n % 3))}${line}`,
+  (line: string) => line.replace(/^(\d+)\./, "$1)"),
+  (line: string) => line.replace(/^(\d+)\. /, "$1.  "),
+  (line: string) => line.replace(/^(\d+)\. /, "$1.\t"),
+  (line: string, n: number) => {
+    const at = line.indexOf(" ") + 1 + (n % (line.length - line.indexOf(" ")));
+    return `${line.slice(0, at)}${"`".repeat(2 + (n % 4))}${line.slice(at)}`;
+  },
+  (line: string, n: number) => {
+    const at = line.indexOf(" ") + 1 + (n % (line.length - line.indexOf(" ")));
+    return `${line.slice(0, at)}\\\`${line.slice(at)}`;
+  },
+] as const;
+
+test.prop([documentArb, fc.nat(), fc.integer({ min: 0, max: MUTATIONS.length - 1 }), fc.nat()])(
+  "a step line taken out of the subset is refused at that line",
+  ({ steps, prose }, pick, mutation, n) => {
+    const lines = render(steps, prose).split("\n");
+    const stepLines = lines.flatMap((line, i) => (/^\d+\. Korak\./.test(line) ? [i] : []));
+    const index = stepLines[pick % stepLines.length] ?? 0;
+    lines[index] = MUTATIONS[mutation]?.(lines[index] ?? "", n) ?? "";
+    const refused = checkOperations(lines.join("\n"), CONTEXT).filter((p) => p.message.startsWith("unsupported markdown: "));
+    expect(refused.length).toBeGreaterThan(0);
+    expect(refused.map((p) => p.line)).toEqual(refused.map(() => index + 1));
+  },
+);

@@ -4,6 +4,8 @@ export interface Step {
   number: number;
   line: number;
   text: string;
+  /** The line is outside the subset; it is reported once as unsupported. */
+  refused?: boolean;
 }
 
 export interface Procedure {
@@ -16,7 +18,7 @@ export interface Operations {
   owners: { name: string; line: number }[];
   procedures: Procedure[];
   proceduresLine: number | null;
-  /** Lines inside a required procedure outside the strict Markdown subset. */
+  /** Lines in Nositelji and Postupci (and fences, HTML, headings anywhere) outside the strict line subset. */
   unsupported: Problem[];
 }
 
