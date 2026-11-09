@@ -1,9 +1,15 @@
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import type { JobBody, JobDefinition } from "@/application/jobs/job-body";
+import type { AttemptFence } from "@/server/attempt-fence";
 import { openJobQueue, type JobHandler, type JobQueue, type JobQueueSettings } from "@/server/db/job-queue";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
@@ -54,10 +60,26 @@ function definition(): JobDefinition {
 const id = (k: number): string => `00000000-0000-4000-8000-${k.toString(16).padStart(12, "0")}`;
 const body = (k: number): JobBody => ({ domainId: id(1), packageId: id(k) });
 
+// The real fence ends the process it runs in, so inside the test runner a
+// recorder stands in for it: what was armed, and what would have fired. The
+// real one runs in the child processes further down.
+const fence = { armed: [] as number[], fired: [] as number[] };
+function recordingFence(): AttemptFence {
+  return {
+    arm(ms) {
+      fence.armed.push(ms);
+      const timer = setTimeout(() => fence.fired.push(ms), ms);
+      return () => clearTimeout(timer);
+    },
+    close: async () => {},
+  };
+}
+
 function settings(def: JobDefinition, connectionString: string, overrides: Partial<JobQueueSettings>): JobQueueSettings {
   return {
     connectionString, definitions: [def], retryLimit: 2, retryDelaySeconds: 0, deadlineMs: 30_000,
-    expireSeconds: 60, deleteAfterSeconds: 3600, sweepSeconds: 1, onError: (code) => errors.push(code), ...overrides,
+    expireSeconds: 60, deleteAfterSeconds: 3600, sweepSeconds: 1, onError: (code) => errors.push(code),
+    fence: recordingFence, ...overrides,
   };
 }
 
@@ -89,6 +111,58 @@ async function refusal(run: Promise<unknown>): Promise<unknown> {
 }
 const refused = (code: string): object => ({ name: "JobQueueError", message: code });
 
+function withParameter(name: string, value: string): string {
+  const target = new URL(url(`it_jobq_${RUN}_nobody`));
+  target.searchParams.set(name, value);
+  return target.toString();
+}
+
+// A real worker process: plain node, the adapter as it is in src/, the real
+// fence. Its settings travel in the environment and are never printed.
+const work = mkdtempSync(path.join(tmpdir(), "ductus-jobq-"));
+const SRC = `${pathToFileURL(path.resolve(__dirname, "../../src")).href}/`;
+type Ending = { code: number | null; signal: NodeJS.Signals | null };
+type WorkerProcess = { readonly started: Promise<void>; readonly ended: Promise<Ending>; ending(): Ending | undefined; stdout(): string; kill(): void };
+
+function spawnWorker(def: JobDefinition, timing: Partial<JobQueueSettings>, handlerBody: string): WorkerProcess {
+  const file = path.join(work, `${def.name}.mjs`);
+  writeFileSync(
+    file,
+    `import { registerHooks } from "node:module";
+const SRC = ${JSON.stringify(SRC)};
+registerHooks({ resolve: (specifier, context, next) => next(specifier.startsWith("@/") ? SRC + specifier.slice(2) + ".ts" : specifier, context) });
+const { openJobQueue } = await import(SRC + "server/db/job-queue.ts");
+const { name, ...settings } = JSON.parse(process.env.DUCTUS_JOBQ_CASE);
+const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const queue = await openJobQueue(settings);
+const outcome = await queue.runOnce(name, async () => { console.log("started"); ${handlerBody} });
+console.log("returned " + outcome.status);
+await queue.stop();
+`,
+  );
+  // What cannot travel as text stays behind: the child reports nothing and runs the real fence.
+  const plain = { ...settings(def, url(role("workerA")), timing), onError: undefined, fence: undefined };
+  const child = spawn(process.execPath, [file], {
+    env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", DUCTUS_JOBQ_CASE: JSON.stringify({ name: def.name, ...plain }) },
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  let stdout = "";
+  let ending: Ending | undefined;
+  let begin = (): void => {};
+  let refuse: (reason: Error) => void = () => {};
+  const started = new Promise<void>((resolve, reject) => { begin = resolve; refuse = reject; });
+  child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); if (stdout.includes("started\n")) begin(); });
+  const ended = new Promise<Ending>((resolve) => {
+    child.on("close", (code, signal) => {
+      ending = { code, signal };
+      // Only how it ended: what a failed start wrote may carry text.
+      refuse(new Error(`worker process ended before its handler started: ${JSON.stringify(ending)}`));
+      resolve(ending);
+    });
+  });
+  return { started, ended, ending: () => ending, stdout: () => stdout, kill: () => void child.kill("SIGKILL") };
+}
+
 beforeAll(async () => {
   // /api/ready counts any connected worker login: its test and this file take turns.
   releasePresence = await holdWorkerPresence(ADMIN_URL);
@@ -104,6 +178,8 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await Promise.all(opened.splice(0).map((queue) => queue.stop().catch(() => {})));
+  fence.armed.length = 0;
+  fence.fired.length = 0;
 });
 
 afterAll(async () => {
@@ -112,6 +188,7 @@ afterAll(async () => {
   for (const login of Object.keys(LOGINS) as Login[]) await admin.query(`DROP ROLE IF EXISTS ${role(login)}`);
   await admin.end();
   await releasePresence?.();
+  rmSync(work, { recursive: true, force: true });
 });
 
 describe("job queue: one job, one attempt at a time", () => {
@@ -125,6 +202,8 @@ describe("job queue: one job, one attempt at a time", () => {
     expect(seen).toEqual([body(10)]);
     expect(Object.isFrozen(seen[0])).toBe(true);
     expect(await jobs(def.name)).toEqual([{ state: "completed", retry_count: 0, output: null, data: body(10) }]);
+    // Every take, the idle one too, ran fenced at the midpoint between the deadline and expiry, and was released.
+    expect(fence).toEqual({ armed: [45_000, 45_000], fired: [] });
   });
 
   it("W-7: a refused job is retried retryLimit times and then stays failed, with the code as its only output", async () => {
@@ -176,6 +255,40 @@ describe("job queue: one job, one attempt at a time", () => {
       new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
     expect(await queue.runOnce(def.name, stopped)).toEqual({ status: "failed", code: "timeout" });
     expect((await jobs(def.name))[0].output).toEqual({ code: "timeout" });
+  });
+
+  // The thread is held right after the job was asked for: the take lasts at least that long.
+  const hold = (ms: number): void => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+  it("W-4: after a slow take the handler is still told to stop before the fence fires", async () => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit: 0, expireSeconds: 2, deadlineMs: 1000 });
+    await queue.enqueue(def.name, body(41));
+    const waited: number[] = [];
+    const stopped: JobHandler = (_job, signal) => {
+      const from = Date.now();
+      return new Promise((_resolve, reject) => signal.addEventListener("abort", () => { waited.push(Date.now() - from); reject(new Error("aborted")); }));
+    };
+    const run = queue.runOnce(def.name, stopped);
+    hold(600);
+    expect(await run).toEqual({ status: "failed", code: "timeout" });
+    // The deadline counted from before the take, so the fence (armed for 1500 ms) had not fired.
+    expect(fence).toEqual({ armed: [1500], fired: [] });
+    expect(waited).toHaveLength(1);
+    expect(waited[0]).toBeLessThan(900);
+  });
+
+  it("W-4: a take that lasted longer than the deadline is stored as timeout and its handler is not run", async () => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit: 0, expireSeconds: 1, deadlineMs: 300 });
+    await queue.enqueue(def.name, body(42));
+    let runs = 0;
+    const run = queue.runOnce(def.name, async () => { runs += 1; return { ok: true }; });
+    hold(350);
+    expect(await run).toEqual({ status: "failed", code: "timeout" });
+    expect(runs).toBe(0);
+    expect(await jobs(def.name)).toEqual([{ state: "failed", retry_count: 0, output: { code: "timeout" }, data: body(42) }]);
+    expect(fence).toEqual({ armed: [650], fired: [] });
   });
 
   it("W-5: twenty enqueues of one subject from two workers leave one job", async () => {
@@ -237,6 +350,9 @@ describe("job queue: one job, one attempt at a time", () => {
     const first = a.runOnce(def.name, async () => { startedA.open(); await releaseA.wait; return { ok: true }; });
     await startedA.wait;
     await expect.poll(async () => { await b.sweep(def.name); return (await jobs(def.name))[0].state; }, { timeout: 20_000, interval: 250 }).toBe("retry");
+    // The fence of the first attempt had fired before the job could be taken again: outside a test that ends its process.
+    expect(fence).toEqual({ armed: [650], fired: [650] });
+    expect(await jobs(def.name)).toEqual([{ state: "retry", retry_count: 0, output: { code: "expired" }, data: body(70) }]);
     expect(await b.enqueue(def.name, body(70))).toBe("duplicate");
     const startedB = gate();
     const releaseB = gate();
@@ -248,6 +364,71 @@ describe("job queue: one job, one attempt at a time", () => {
     releaseB.open();
     expect(await second).toEqual({ status: "completed" });
     expect(await jobs(def.name)).toMatchObject([{ state: "completed", retry_count: 1 }]);
+  });
+
+  it("W-3, W-12: an attempt the sweep took back for good is stored as the code expired, never as the package's sentence", async () => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit: 0, expireSeconds: 1, deadlineMs: 300 });
+    await queue.enqueue(def.name, body(71));
+    const started = gate();
+    const release = gate();
+    const first = queue.runOnce(def.name, async () => { started.open(); await release.wait; return { ok: true }; });
+    await started.wait;
+    await expect.poll(async () => { await queue.sweep(def.name); return (await jobs(def.name))[0].state; }, { timeout: 20_000, interval: 250 }).toBe("failed");
+    const rows = await jobs(def.name);
+    expect(rows).toEqual([{ state: "failed", retry_count: 0, output: { code: "expired" }, data: body(71) }]);
+    expect(JSON.stringify(rows)).not.toContain("timed out");
+    release.open();
+    expect(await first).toEqual({ status: "lost" });
+    expect(await jobs(def.name)).toEqual(rows);
+  });
+
+  it.each<[string, string]>([
+    ["ignores the stop signal", `setInterval(() => {}, 1000); await new Promise(() => {});`],
+    ["blocks the thread", `for (;;) {}`],
+    ["finishes after its time", `await later(6000); return { ok: true };`],
+  ])("W-3, W-4 (Istodobnost, negative): a worker process whose handler %s is gone before its job is handed out again", async (_label, handlerBody) => {
+    const def = definition();
+    const timing = { expireSeconds: 2, deadlineMs: 200 };
+    const b = await open(def, "workerB", timing);
+    await b.enqueue(def.name, body(75));
+    const child = spawnWorker(def, timing, handlerBody);
+    try {
+      await child.started;
+      // The first attempt is running in the other process. Before every sweep: is that process still there?
+      const alive: boolean[] = [];
+      await expect.poll(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+        alive.push(child.ending() === undefined);
+        await b.sweep(def.name);
+        return (await jobs(def.name))[0].state;
+      }, { timeout: 20_000, interval: 100 }).toBe("retry");
+      expect(alive.at(-1)).toBe(false);
+      expect(alive[0]).toBe(true);
+      expect(await child.ended).toEqual({ code: null, signal: "SIGKILL" });
+      expect(child.stdout()).toBe("started\n");
+      let second = 0;
+      expect(await b.runOnce(def.name, async () => { second += 1; return { ok: true }; })).toEqual({ status: "completed" });
+      expect(second).toBe(1);
+      expect(await jobs(def.name)).toEqual([{ state: "completed", retry_count: 1, output: null, data: body(75) }]);
+    } finally {
+      child.kill();
+    }
+  });
+
+  it("W-3 (control): a worker process whose handler finishes in time lives on, records the job and exits 0", async () => {
+    const def = definition();
+    const timing = { expireSeconds: 2, deadlineMs: 200 };
+    const b = await open(def, "workerB", timing);
+    await b.enqueue(def.name, body(76));
+    const child = spawnWorker(def, timing, `await later(50); return { ok: true };`);
+    try {
+      expect(await child.ended).toEqual({ code: 0, signal: null });
+      expect(child.stdout()).toBe("started\nreturned completed\n");
+      expect(await jobs(def.name)).toEqual([{ state: "completed", retry_count: 0, output: null, data: body(76) }]);
+    } finally {
+      child.kill();
+    }
   });
 });
 
@@ -273,6 +454,8 @@ describe("job queue: what it refuses", () => {
     ["two definitions of one queue", (def) => ({ definitions: [def, def] }), "definition_invalid"],
     ["no definitions", () => ({ definitions: [] }), "definition_invalid"],
     ["a deadline that is not before expiry", () => ({ expireSeconds: 5, deadlineMs: 5000 }), "settings_invalid"],
+    ["a deadline closer than half a second to expiry", () => ({ expireSeconds: 1, deadlineMs: 501 }), "settings_invalid"],
+    ["a connection string that names a certificate file that is not there", () => ({ connectionString: withParameter("sslrootcert", "/nonexistent/synthetic-root.crt") }), "settings_invalid"],
     ["a negative retry limit", () => ({ retryLimit: -1 }), "settings_invalid"],
     ["a fractional retry delay", () => ({ retryDelaySeconds: 0.5 }), "settings_invalid"],
     ["a sweep interval of zero", () => ({ sweepSeconds: 0 }), "settings_invalid"],
@@ -283,11 +466,27 @@ describe("job queue: what it refuses", () => {
     expect(await refusal(openJobQueue(settings(def, url(`it_jobq_${RUN}_nobody`), overrides(def))))).toEqual(refused(code));
   });
 
+  it("W-14: a fence that cannot be started refuses the queue by code, without the cause", async () => {
+    const outcome = await refusal(open(definition(), "workerA", { fence: () => { throw new Error("synthetic marker 5c1d"); } }));
+    expect(outcome).toEqual(refused("settings_invalid"));
+    expect(JSON.stringify(outcome)).not.toContain("5c1d");
+  });
+
+  it("W-14: a deadline exactly half a second before expiry passes the settings check", async () => {
+    const outcome = await refusal(openJobQueue(settings(definition(), url(`it_jobq_${RUN}_nobody`), { expireSeconds: 1, deadlineMs: 500 })));
+    expect(outcome).toEqual(refused("queue_unreachable"));
+  });
+
   it("W-9: refuses a queue that exists with other settings, and a queue name it was not opened for", async () => {
     const def = definition();
     const queue = await open(def);
     expect(await refusal(open(def, "workerB", { retryLimit: 3 }))).toEqual(refused("queue_mismatch"));
     expect(await refusal(open(def, "workerB", { expireSeconds: 61 }))).toEqual(refused("queue_mismatch"));
+    // A queue that expects a heartbeat would take running jobs back: nothing here renews one.
+    await admin.query("UPDATE pgboss.queue SET heartbeat_seconds = 30 WHERE name = $1", [def.name]);
+    expect(await refusal(open(def, "workerB"))).toEqual(refused("queue_mismatch"));
+    await admin.query("UPDATE pgboss.queue SET heartbeat_seconds = NULL WHERE name = $1", [def.name]);
+    await open(def, "workerB");
     const other = definition().name;
     expect(await queue.enqueue(other, body(80))).toBe("rejected");
     const runs = [queue.runOnce(other, ok), queue.sweep(other), queue.depth(other)];
@@ -322,6 +521,21 @@ describe("job queue: what it refuses", () => {
     expect(await queue.runOnce(def.name, async () => { ran += 1; return { ok: true }; })).toEqual({ status: "failed", code: "invalid_body" });
     expect(ran).toBe(0);
     expect(await jobs(def.name)).toMatchObject([{ state: "failed", output: { code: "invalid_body" } }]);
+  });
+
+  it.each<[string, string]>([
+    ["a heartbeat nothing here renews", "heartbeat_seconds = 30"],
+    ["an expiry shorter than the queue's", "expire_seconds = 1"],
+    ["an expiry longer than the queue's", "expire_seconds = 600"],
+  ])("W-3: a job that carries %s is not run and is stored as invalid_lease", async (_label, change) => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit: 0 });
+    await queue.enqueue(def.name, body(92));
+    await admin.query(`UPDATE pgboss.job SET ${change} WHERE name = $1`, [def.name]);
+    let ran = 0;
+    expect(await queue.runOnce(def.name, async () => { ran += 1; return { ok: true }; })).toEqual({ status: "failed", code: "invalid_lease" });
+    expect(ran).toBe(0);
+    expect(await jobs(def.name)).toEqual([{ state: "failed", retry_count: 0, output: { code: "invalid_lease" }, data: body(92) }]);
   });
 });
 

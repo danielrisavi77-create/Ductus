@@ -2,11 +2,14 @@
 // side of the pg-boss queue. The only file that imports pg-boss. It opens the
 // queue for a login that is a worker and nothing more, puts identifiers only
 // into a job, takes one job at a time and settles exactly the attempt it took.
-// The schema is the one the migrations installed: nothing here builds a table.
+// An attempt that is still running when the queue could hand its job out again
+// ends this process (attempt-fence.ts), so two attempts of one job never run at
+// once. The schema is the one the migrations installed: nothing here builds a table.
 import pg from "pg";
 import { PgBoss } from "pg-boss";
 
 import { isJobDefinition, parseJobBody, type JobBody, type JobDefinition } from "@/application/jobs/job-body";
+import { startAttemptFence, type AttemptFence } from "@/server/attempt-fence";
 
 export type JobQueueErrorCode =
   | "definition_invalid"
@@ -33,7 +36,7 @@ export type JobQueueSettings = {
   /** Attempts after the first one. */
   readonly retryLimit: number;
   readonly retryDelaySeconds: number;
-  /** The handler is asked to stop after this long; always before the queue takes the job back. */
+  /** The handler is asked to stop this long after the job was asked for; at least half a second before the queue takes it back. */
   readonly deadlineMs: number;
   /** A job active this long belongs to a worker that is gone; the sweep hands it out again. */
   readonly expireSeconds: number;
@@ -42,6 +45,8 @@ export type JobQueueSettings = {
   readonly sweepSeconds: number;
   /** A failure of the queue's own background work. Only that it happened is reported. */
   readonly onError?: (code: "queue_error") => void;
+  /** What ends an attempt that outlives its time. Left out, it is the process fence; a test replaces it. */
+  readonly fence?: () => AttemptFence;
 };
 
 /** Refuses with a short code (`[a-z][a-z0-9_]*`); anything else is stored as `handler_failed`. */
@@ -66,6 +71,13 @@ const CODE = /^[a-z][a-z0-9_]{0,39}$/;
 const DAY = 86_400;
 const DEPTH_SQL =
   "SELECT count(*)::int AS n FROM pgboss.job WHERE name = $1 AND state IN ('created', 'retry', 'active')";
+// The package stores a sentence as the outcome of an attempt it took back.
+// Every stored outcome is one code, so the sweep rewrites what is not.
+const EXPIRED_SQL = `
+  UPDATE pgboss.job SET output = '{"code":"expired"}'::jsonb
+  WHERE name = $1 AND state IN ('retry', 'active', 'failed') AND output IS NOT NULL
+    AND NOT COALESCE(output = jsonb_build_object('code', output ->> 'code')
+                     AND output ->> 'code' ~ '^[a-z][a-z0-9_]{0,39}$', false)`;
 // True only for a login with no elevated attribute whose one role is
 // ductus_worker and which cannot build in the queue schema: a login that is
 // also the web role, the queue owner or the migrator must not run jobs.
@@ -88,13 +100,19 @@ function validSettings(s: JobQueueSettings): boolean {
   return (
     typeof s.connectionString === "string" && s.connectionString !== "" &&
     whole(s.retryLimit, 0, 20) && whole(s.retryDelaySeconds, 0, 3600) && whole(s.expireSeconds, 1, 3600) &&
-    whole(s.deadlineMs, 1, s.expireSeconds * 1000 - 1) && whole(s.deleteAfterSeconds, 1, 365 * DAY) &&
+    whole(s.deadlineMs, 1, s.expireSeconds * 1000 - 500) && whole(s.deleteAfterSeconds, 1, 365 * DAY) &&
     whole(s.sweepSeconds, 1, 3600)
   );
 }
 
 async function requireWorkerLogin(connectionString: string): Promise<void> {
-  const client = new pg.Client({ connectionString, application_name: "ductus-worker-guard", connectionTimeoutMillis: 10_000 });
+  let client: pg.Client;
+  try {
+    // The driver reads files the connection string names while it is built, and throws their paths.
+    client = new pg.Client({ connectionString, application_name: "ductus-worker-guard", connectionTimeoutMillis: 10_000 });
+  } catch {
+    throw new JobQueueError("settings_invalid");
+  }
   client.on("error", () => {});
   try {
     await client.connect();
@@ -159,7 +177,10 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     expireInSeconds: settings.expireSeconds,
     deleteAfterSeconds: settings.deleteAfterSeconds,
   } as const;
+  // The fence fires after the handler was asked to stop and before the queue takes the job back.
+  const fenceMs = settings.deadlineMs + Math.floor((settings.expireSeconds * 1000 - settings.deadlineMs) / 2);
   let boss: PgBoss;
+  let fence: AttemptFence;
   try {
     // No background work of the package runs: the caller sweeps, and what
     // needs rights the worker does not have (migration, reindex) is off.
@@ -168,6 +189,7 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
       schema: "pgboss", migrate: false, supervise: false, schedule: false, monitorVacuum: false, reindex: false,
       monitorIntervalSeconds: settings.sweepSeconds, maintenanceIntervalSeconds: settings.sweepSeconds,
     });
+    fence = (settings.fence ?? startAttemptFence)();
   } catch {
     throw new JobQueueError("settings_invalid");
   }
@@ -177,12 +199,14 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     for (const name of definitions.keys()) {
       await boss.createQueue(name, expected);
       const queue = await boss.getQueue(name);
-      const same = queue !== null && queue.partition !== true &&
+      // Nothing here renews a heartbeat, so a queue that expects one would take running jobs back.
+      const same = queue !== null && queue.partition !== true && queue.heartbeatSeconds === null &&
         (Object.keys(expected) as Array<keyof typeof expected>).every((key) => queue[key] === expected[key]);
       if (!same) throw new JobQueueError("queue_mismatch");
     }
   } catch (error) {
     await boss.stop({ timeout: 1000 }).catch(() => {});
+    await fence.close().catch(() => {});
     throw error instanceof JobQueueError ? error : new JobQueueError("queue_unreachable");
   }
 
@@ -201,6 +225,20 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     }
   }
 
+  /**
+   * Runs the work with the fence armed. It is armed before the job is taken, so
+   * its time is never later than the queue's, and released before the outcome
+   * is settled: settling is guarded by the queue's own check of the attempt.
+   */
+  async function fenced<T>(work: () => Promise<T>): Promise<T> {
+    const release = fence.arm(fenceMs);
+    try {
+      return await work();
+    } finally {
+      release();
+    }
+  }
+
   return {
     enqueue: (name, input) => closed(async () => {
       const definition = definitions.get(name);
@@ -211,11 +249,23 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     }),
     runOnce: (name, handler) => closed(async () => {
       const definition = known(name);
-      const [job] = await boss.fetch(name, { batchSize: 1 });
-      if (job === undefined) return { status: "idle" };
-      // The row is read again as untrusted: another writer of the table is not this code.
-      const parsed = parseJobBody(job.data, definition.fields);
-      const code = parsed.ok ? await attempt(handler, parsed.body, settings.deadlineMs) : "invalid_body";
+      const from = performance.now();
+      const taken = await fenced(async () => {
+        const [job] = await boss.fetch(name, { batchSize: 1 });
+        if (job === undefined) return null;
+        // The row is read again as untrusted: another writer of the table is not this code.
+        const parsed = parseJobBody(job.data, definition.fields);
+        if (!parsed.ok) return { job, code: "invalid_body" };
+        // One that carries its own expiry or a heartbeat is not run: the fence is set for this queue's expiry.
+        const leased = job.expireInSeconds === settings.expireSeconds && job.heartbeatSeconds === null;
+        if (!leased) return { job, code: "invalid_lease" };
+        // The handler's time counts from before the fence was armed, so it is asked to stop before the
+        // fence fires however long the take lasted. A take that used the time up is not run.
+        const left = settings.deadlineMs - Math.ceil(performance.now() - from);
+        return { job, code: left < 1 ? "timeout" : await attempt(handler, parsed.body, left) };
+      });
+      if (taken === null) return { status: "idle" };
+      const { job, code } = taken;
       // Settled by attempt (id and retry count), not by id alone: an attempt
       // the sweep has taken back changes nothing.
       const response = code === null ? await boss.complete(name, job) : await boss.fail(name, job, { code });
@@ -225,12 +275,19 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     sweep: (name) => closed(async () => {
       known(name);
       await boss.supervise(name);
+      await boss.getDb().executeSql(EXPIRED_SQL, [name]);
     }),
     depth: (name) => closed(async () => {
       known(name);
       const { rows } = await boss.getDb().executeSql(DEPTH_SQL, [name]);
       return Number(rows[0].n);
     }),
-    stop: () => closed(() => boss.stop({ timeout: 5000 })),
+    stop: () => closed(async () => {
+      try {
+        await boss.stop({ timeout: 5000 });
+      } finally {
+        await fence.close();
+      }
+    }),
   };
 }
