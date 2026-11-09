@@ -3,7 +3,7 @@ import { createHash, generateKeyPairSync, sign as nodeSign } from "node:crypto";
 
 import Dexie from "dexie";
 import { IDBKeyRange, indexedDB } from "fake-indexeddb";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { emptyDocument, type DocumentTransaction } from "@/domain/document";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
@@ -12,17 +12,20 @@ import type { EvidenceReceiptPayloadV2, SignedEvidenceReceiptV2 } from "@/domain
 import type { EvidenceDomainKey } from "@/domain/forensics/evidence-receipt-verifier";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import { ackedRevision, isRetryable } from "@/domain/sync/drain";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import { createDrainRunner } from "@/lib/sync/drain-runner";
 
 import {
   commitEvidence,
   commitOutcomeFrom,
+  createCommitProtocol,
   createReceiptVerifier,
   decodeBase64,
   encodeBase64,
   openWork,
   openedWorkFrom,
+  type CommitProtocol,
   type FetchLike,
 } from "./evidence-ingest";
 
@@ -96,6 +99,11 @@ function scripted(...answers: (Response | Error)[]) {
 const json = (status: number, body: unknown) => Response.json(body, { status });
 const committed = (status: "committed" | "duplicate", revision: number, signedReceipt: unknown) =>
   json(200, { status, revision, receipt: { status: "signed", signedReceipt } });
+/** The answer of protocol 2 while the worker has not signed yet (4.13 t. 9, #1758). */
+const pending = (status: "committed" | "duplicate", revision: number) =>
+  Response.json({ status, revision, receipt: { status: "pending_signature" } }, { status: 202, headers: { "retry-after": "2" } });
+const protocolsOf = (calls: { init: RequestInit }[]) =>
+  calls.map(({ init }) => (init.headers as Record<string, string>)["ductus-protocol"]);
 
 const INPUT = { documentId: DOC, clientTransactionId: BASE.clientTransactionId, baseRevision: 0, segment: SEGMENT, document: SNAPSHOT };
 
@@ -106,7 +114,7 @@ describe("F-8 3c: the commit envelope", () => {
     const [{ url, init }] = calls as [{ url: string; init: RequestInit }];
     expect(url).toBe("/api/evidence/commit");
     expect(init).toMatchObject({ method: "POST", credentials: "same-origin", cache: "no-store" });
-    expect(init.headers).toEqual({ "content-type": "application/json", "ductus-protocol": "1" });
+    expect(init.headers).toEqual({ "content-type": "application/json", "ductus-protocol": "2" });
     const body = JSON.parse(init.body as string);
     expect(Object.keys(body).sort()).toEqual(["baseRevision", "clientTransactionId", "document", "documentId", "segments"]);
     expect(decodeBase64(body.segments[0])).toEqual(SEGMENT);
@@ -167,6 +175,159 @@ describe("F-8 3c: every answer of 4.13 t. 4 as a drain outcome", () => {
     expect(await commitEvidence(INPUT, cut.fetchImpl)).toEqual({ status: "transport_error" });
     const garbled = scripted(new Response("{", { status: 200 }));
     expect(await commitEvidence(INPUT, garbled.fetchImpl)).toEqual({ status: "invalid" });
+  });
+});
+
+describe("DAN-595: the 202 answer of protocol 2 as a drain outcome", () => {
+  const PENDING = { status: "pending_signature" };
+  const SIGNED = { status: "signed", signedReceipt: { payload: {}, signature: {} } };
+  const at = (revision: unknown, receipt: unknown = PENDING) => ({ status: "committed", revision, receipt });
+  const INVALID = { status: "invalid" };
+  it.each([
+    ["committed, pending, under 2", 202, at(3), "2", { status: "committed", revision: 3, receipt: PENDING }],
+    ["duplicate, pending, under 2", 202, { ...at(3), status: "duplicate" }, "2", { status: "duplicate", revision: 3, receipt: PENDING }],
+    ["pending to a request under 1", 202, at(3), "1", INVALID],
+    ["a signed receipt in a 202", 202, at(3, SIGNED), "2", INVALID],
+    ["pending that also carries signedReceipt", 202, at(3, { ...PENDING, signedReceipt: {} }), "2", INVALID],
+    ["no receipt", 202, { status: "committed", revision: 3 }, "2", INVALID],
+    ["an unknown receipt status", 202, at(3, { status: "queued" }), "2", INVALID],
+    ["revision 0", 202, at(0), "2", INVALID],
+    ["a fractional revision", 202, at(2.5), "2", INVALID],
+    ["a negative revision", 202, at(-1), "2", INVALID],
+    ["an unsafe revision", 202, at(2 ** 53), "2", INVALID],
+    ["a revision as text", 202, at("3"), "2", INVALID],
+    ["stale_base", 202, { status: "stale_base", currentRevision: 1 }, "2", INVALID],
+    ["an unknown status", 202, { status: "pending", revision: 3, receipt: PENDING }, "2", INVALID],
+    ["no body", 202, undefined, "2", INVALID],
+    ["an array", 202, [at(3)], "2", INVALID],
+    ["pending in a 200 under 2", 200, at(3), "2", INVALID],
+    ["pending in a 200 under 1", 200, { ...at(3), status: "duplicate" }, "1", INVALID],
+  ])("HTTP %#: %s", (_name, http, body, protocol, expected) => {
+    const outcome = commitOutcomeFrom(http as number, body, protocol as "1" | "2");
+    expect(outcome).toEqual(expected);
+    // Pending is repeated by itself and never acknowledged; nothing else in this table is either.
+    expect(isRetryable(outcome)).toBe(expected !== INVALID);
+    expect(ackedRevision(outcome)).toBeNull();
+  });
+
+  it("a signed receipt is read alike under either protocol", () => {
+    const body = at(3, SIGNED);
+    expect(commitOutcomeFrom(200, body, "2")).toEqual(commitOutcomeFrom(200, body, "1"));
+    expect(commitOutcomeFrom(200, body, "2")).toMatchObject({ receipt: { status: "signed" } });
+  });
+});
+
+describe("DAN-595: the Ductus-Protocol header", () => {
+  const upgrade = () => json(426, { status: "upgrade_required" });
+
+  it("refused before the body was read, the same bytes go out once more under 1", async () => {
+    const { calls, fetchImpl } = scripted(upgrade(), committed("committed", BASE.revision, trusted.sign({})));
+    expect(await commitEvidence(INPUT, fetchImpl)).toMatchObject({ status: "committed", revision: BASE.revision });
+    expect(protocolsOf(calls)).toEqual(["2", "1"]);
+    expect(calls[1]!.init.body).toBe(calls[0]!.init.body);
+  });
+
+  it("one refusal keeps the transport on 1, and a 426 under 1 is not repeated", async () => {
+    const protocol: CommitProtocol = createCommitProtocol();
+    const { calls, fetchImpl } = scripted(upgrade(), json(503, { status: "unavailable", stage: "repository" }), upgrade());
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toEqual({ status: "transport_error" });
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toEqual({ status: "invalid" });
+    expect(protocolsOf(calls)).toEqual(["2", "1", "1"]);
+  });
+
+  it("only upgrade_required changes the protocol: a lost answer, a 503, a 202 or another 426 keep it", async () => {
+    const protocol = createCommitProtocol();
+    const { calls, fetchImpl } = scripted(
+      new TypeError("offline"), json(503, { status: "unavailable", stage: "signing" }), pending("committed", 3),
+      json(426, { status: "forbidden" }), new Response("", { status: 426 }), pending("duplicate", 3),
+    );
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toEqual({ status: "transport_error" });
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toEqual({ status: "transport_error" });
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toMatchObject({ receipt: { status: "pending_signature" } });
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toEqual({ status: "invalid" });
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toEqual({ status: "invalid" });
+    expect(await commitEvidence(INPUT, fetchImpl, protocol)).toMatchObject({ status: "duplicate" });
+    expect(protocolsOf(calls)).toEqual(["2", "2", "2", "2", "2", "2"]);
+  });
+
+  /** A server that answers only when the test says so, oldest request first, so requests can overlap. */
+  function held() {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const waiting: ((answer: Response | Error) => void)[] = [];
+    const fetchImpl: FetchLike = (url, init) => {
+      calls.push({ url, init });
+      return new Promise((resolve, reject) => {
+        waiting.push((answer) => (answer instanceof Error ? reject(answer) : resolve(answer)));
+      });
+    };
+    const answer = (next: Response | Error) => waiting.shift()!(next);
+    const sent = async (count: number) => {
+      await vi.waitFor(() => expect(calls).toHaveLength(count));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(calls).toHaveLength(count);
+    };
+    return { calls, fetchImpl, answer, sent };
+  }
+  const OTHER_WORK = { ...INPUT, documentId: "dokument-izmisljeni-2", clientTransactionId: "tx-izmisljena-druga" };
+
+  it("two works that send before the first answer pay one 426: the second waits for it, then goes under 1 (QA c.6731112408)", async () => {
+    const protocol = createCommitProtocol();
+    const server = held();
+    const first = commitEvidence(INPUT, server.fetchImpl, protocol);
+    const second = commitEvidence(OTHER_WORK, server.fetchImpl, protocol);
+    await server.sent(1);
+    server.answer(upgrade());
+    await server.sent(3);
+    expect(protocolsOf(server.calls)).toEqual(["2", "1", "1"]);
+    expect(server.calls[1]!.init.body).toBe(server.calls[0]!.init.body);
+    server.answer(json(503, { status: "unavailable", stage: "repository" }));
+    server.answer(json(503, { status: "unavailable", stage: "repository" }));
+    expect(await first).toEqual({ status: "transport_error" });
+    expect(await second).toEqual({ status: "transport_error" });
+    expect(protocol.version).toBe("1");
+  });
+
+  it.each([
+    ["a lost answer", () => new TypeError("offline")],
+    ["a 503", () => json(503, { status: "unavailable", stage: "repository" })],
+    ["a 403 from the origin check", () => json(403, { status: "forbidden" })],
+  ])("%s to the first 2 settles nothing: the waiting send asks under 2 itself, one at a time", async (_, unsettled) => {
+    const protocol = createCommitProtocol();
+    const server = held();
+    const first = commitEvidence(INPUT, server.fetchImpl, protocol);
+    const second = commitEvidence(OTHER_WORK, server.fetchImpl, protocol);
+    await server.sent(1);
+    server.answer(unsettled());
+    await first;
+    await server.sent(2);
+    server.answer(upgrade());
+    await server.sent(3);
+    server.answer(json(503, { status: "unavailable", stage: "repository" }));
+    expect(await second).toEqual({ status: "transport_error" });
+    expect(protocolsOf(server.calls)).toEqual(["2", "2", "1"]);
+  });
+
+  it("once the server has answered 2, sends of the tab go out side by side under 2", async () => {
+    const protocol = createCommitProtocol();
+    const server = held();
+    const opening = commitEvidence(INPUT, server.fetchImpl, protocol);
+    await server.sent(1);
+    server.answer(pending("committed", BASE.revision));
+    expect(await opening).toMatchObject({ receipt: { status: "pending_signature" } });
+    const first = commitEvidence(INPUT, server.fetchImpl, protocol);
+    const second = commitEvidence(OTHER_WORK, server.fetchImpl, protocol);
+    await server.sent(3);
+    expect(protocolsOf(server.calls)).toEqual(["2", "2", "2"]);
+    server.answer(pending("duplicate", BASE.revision));
+    server.answer(pending("committed", BASE.revision));
+    expect(await first).toMatchObject({ status: "duplicate" });
+    expect(await second).toMatchObject({ status: "committed" });
+  });
+
+  it("the open route stays on protocol 1", async () => {
+    const { calls, fetchImpl } = scripted(json(200, openBody()));
+    await openWork("zadatak-izmisljeni", fetchImpl);
+    expect(protocolsOf(calls)).toEqual(["1"]);
   });
 });
 
@@ -308,15 +469,17 @@ describe("F-8 3c: state transitions through the drain runner and the real journa
     await journal.saveLocal(DOC, tx, "2026-10-09T12:00:00.000Z", 0);
     const net = scripted(...answers);
     let clock = 0;
-    const runner = createDrainRunner({
+    /** One tab: its own runner and its own memory of the protocol, over the shared journal. */
+    const runnerFor = (fetchImpl: FetchLike, protocol: CommitProtocol = createCommitProtocol()) => createDrainRunner({
       journal,
       // The segment bytes are fixed here: capture into the journal is step 3d.
-      transport: (documentId, row) => commitEvidence({ ...INPUT, documentId, clientTransactionId: row.clientTransactionId, baseRevision: row.baseRevision }, net.fetchImpl),
+      transport: (documentId, row) => commitEvidence({ ...INPUT, documentId, clientTransactionId: row.clientTransactionId, baseRevision: row.baseRevision }, fetchImpl, protocol),
       verify: createReceiptVerifier({ evidenceDomainId: DOMAIN, receiptKeys: [trusted.key] }, () => SEGMENT_HASH),
       now: () => (clock += 60_000),
       jitter: () => 0.5,
     });
-    return { journal, runner, net };
+    const runner = runnerFor(net.fetchImpl);
+    return { journal, runner, net, runnerFor, tx };
   }
 
   it("reaches SYNCED only with a verified receipt", async () => {
@@ -343,5 +506,68 @@ describe("F-8 3c: state transitions through the drain runner and the real journa
     expect(await runner.step(DOC)).toMatchObject({ kind: "sent", state: "CONFLICT" });
     expect(await runner.step(DOC)).toMatchObject({ kind: "stalled" });
     expect(net.calls).toHaveLength(1);
+  });
+
+  describe("DAN-595: pending_signature through the runner (Istodobnost)", () => {
+    const keysOf = (calls: { init: RequestInit }[]) =>
+      calls.map(({ init }) => JSON.parse(init.body as string).clientTransactionId);
+
+    it("(b) 202 holds the row, the same key goes out again, and only the signed receipt is SYNCED", async () => {
+      const { journal, runner, net } = await setup(
+        pending("committed", BASE.revision), pending("duplicate", BASE.revision), committed("duplicate", BASE.revision, trusted.sign({})),
+      );
+      for (let attempt = 0; attempt < 2; attempt++) {
+        expect(await runner.step(DOC)).toEqual({ kind: "sent", state: "SYNCING", ackedRevision: null });
+        const held = await journal.read(DOC);
+        expect(held.meta?.state).toBe("SYNCING");
+        expect(held.pending).toHaveLength(1);
+      }
+      expect(await runner.step(DOC)).toMatchObject({ kind: "sent", state: "SYNCED", ackedRevision: BASE.revision });
+      expect((await journal.read(DOC)).pending).toEqual([]);
+      expect(keysOf(net.calls)).toEqual([BASE.clientTransactionId, BASE.clientTransactionId, BASE.clientTransactionId]);
+      expect(protocolsOf(net.calls)).toEqual(["2", "2", "2"]);
+    });
+
+    it("a 202 whose receipt is signed and verifies is never SYNCED", async () => {
+      const lying = Response.json(
+        { status: "committed", revision: BASE.revision, receipt: { status: "signed", signedReceipt: trusted.sign({}) } },
+        { status: 202 },
+      );
+      const { journal, runner } = await setup(lying);
+      const result = await runner.step(DOC);
+      expect(result).toMatchObject({ kind: "sent", ackedRevision: null });
+      expect(result).not.toMatchObject({ state: "SYNCED" });
+      expect((await journal.read(DOC)).pending).toHaveLength(1);
+    });
+
+    it("(a) a signed receipt that lands after a new local save is not SYNCED", async () => {
+      const { journal, runner, net, tx } = await setup(
+        pending("committed", BASE.revision), committed("duplicate", BASE.revision, trusted.sign({})),
+      );
+      expect(await runner.step(DOC)).toMatchObject({ state: "SYNCING" });
+      const before = await journal.read(DOC);
+      await journal.saveLocal(DOC, { ...tx, clientTransactionId: "tx-izmisljena-2", createdAt: "2026-10-09T12:01:00.000Z" }, "2026-10-09T12:01:00.000Z", before.meta!.localSeq);
+      const result = await runner.step(DOC);
+      expect(result).toMatchObject({ kind: "sent", ackedRevision: BASE.revision });
+      expect(result).not.toMatchObject({ state: "SYNCED" });
+      const after = await journal.read(DOC);
+      expect(after.meta?.state).not.toBe("SYNCED");
+      expect(after.pending.map((row) => row.tx.clientTransactionId)).toEqual(["tx-izmisljena-2"]);
+      expect(keysOf(net.calls)).toEqual([BASE.clientTransactionId, BASE.clientTransactionId]);
+    });
+
+    it("(c) a second tab on protocol 1 meets the unsigned key as a retry, never as a refusal", async () => {
+      const { journal, runner, net, runnerFor } = await setup(pending("committed", BASE.revision), committed("duplicate", BASE.revision, trusted.sign({})));
+      expect(await runner.step(DOC)).toMatchObject({ state: "SYNCING" });
+      const old = scripted(json(503, { status: "unavailable", stage: "repository" }));
+      const otherTab = runnerFor(old.fetchImpl, { ...createCommitProtocol(), version: "1" });
+      expect(await otherTab.step(DOC)).toMatchObject({ kind: "sent", ackedRevision: null });
+      expect(protocolsOf(old.calls)).toEqual(["1"]);
+      const held = await journal.read(DOC);
+      expect(held.meta?.state).not.toBe("SYNCED");
+      expect(held.pending).toHaveLength(1);
+      expect(await runner.step(DOC)).toMatchObject({ kind: "sent", state: "SYNCED", ackedRevision: BASE.revision });
+      expect(keysOf([...net.calls, ...old.calls])).toEqual([BASE.clientTransactionId, BASE.clientTransactionId, BASE.clientTransactionId]);
+    });
   });
 });

@@ -543,9 +543,13 @@ describe("3d-2c2 evidence session: the drain", () => {
     expect(session.snapshot().state).toBe("SYNCED");
   });
 
+  // DAN-595: a 426 to "2" is answered before the body is read, so the same
+  // bytes go once more under "1"; a 426 to "1" as well is the refusal, and
+  // after it nothing more goes in ten minutes.
   it("16: 413 and 426 are sent once in ten simulated minutes", async () => {
-    for (const answer of [json(413, { status: "too_large" }), json(426, { status: "upgrade_required" })]) {
-      const net = server(R0, () => answer.clone());
+    const cases = [[json(413, { status: "too_large" }), 1], [json(426, { status: "upgrade_required" }), 2]] as const;
+    for (const [answer, sent] of cases) {
+      const net = server(R0, ...Array.from({ length: sent }, () => () => answer.clone()));
       const online = network();
       const { session, advance } = setup({ net, online });
       await ready(session);
@@ -557,7 +561,8 @@ describe("3d-2c2 evidence session: the drain", () => {
         online.set(true);
         await session.settled();
       }
-      expect(net.calls).toHaveLength(1);
+      expect(net.calls).toHaveLength(sent);
+      expect(new Set(net.calls.map(({ text }) => text)).size).toBe(1);
       expect(session.snapshot().state).toBe("ERROR");
       await cleanup();
     }
@@ -574,7 +579,9 @@ describe("3d-2c2 evidence session: the drain", () => {
       [json(200, { status: "nepoznato" }), true],
     ] as const;
     for (const [answer, refused] of cases) {
-      const net = server(R0, () => answer.clone());
+      // DAN-595: a 426 to "2" goes once more under "1", where it is refused too.
+      const sent = answer.status === 426 ? 2 : 1;
+      const net = server(R0, ...Array.from({ length: sent }, () => () => answer.clone()));
       const { session, advance } = setup({ net });
       await ready(session);
       const sheet = editorFor(session);
@@ -587,7 +594,7 @@ describe("3d-2c2 evidence session: the drain", () => {
         advance(60_000);
         await session.settled();
         expect(session.snapshot().state).toBe("ERROR");
-        expect(net.calls).toHaveLength(1);
+        expect(net.calls).toHaveLength(sent);
         expect(session.snapshot().refused).toBe(true);
         // Review #811 (c.6419592134, 1): typing on saves LOCAL_DURABLE, the
         // same row stays held, and the notice stays with it.
@@ -596,7 +603,7 @@ describe("3d-2c2 evidence session: the drain", () => {
         advance(60_000);
         await session.settled();
         expect(session.snapshot().state).not.toBe("SYNCED");
-        expect(net.calls).toHaveLength(1);
+        expect(net.calls).toHaveLength(sent);
       }
       expect(session.snapshot().refused).toBe(refused);
       session.close();

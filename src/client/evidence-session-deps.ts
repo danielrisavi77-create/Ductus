@@ -12,10 +12,18 @@ import type { QueuedTransaction } from "@/domain/sync/journal-types";
 import { createDrainRunner, type DrainJournal } from "@/lib/sync/drain-runner";
 import { createEvidenceTransport, evidenceVerifierFor } from "@/lib/sync/evidence-transport";
 
-import { openWork, type FetchLike } from "./evidence-ingest";
+import { createCommitProtocol, openWork, type FetchLike } from "./evidence-ingest";
 import { readOnline, type OnlineSource } from "./online-status";
 
 const COMMIT_PATH = "/api/evidence/commit";
+
+/**
+ * DAN-595 (QA c.6730803432): one `Ductus-Protocol` state for the life of the
+ * tab, not one per opened work. A 426 to "2" keeps the tab on "1" until a
+ * reload, also for a work opened again through client-side navigation, so the
+ * tab pays that 426 once.
+ */
+const tabCommitProtocol = createCommitProtocol();
 
 /**
  * 3d-2c2a §4, O1 (a) (#476 c.6397490151): the commit client maps a 409
@@ -119,7 +127,7 @@ export function browserEvidenceSessionDeps(input: BrowserEvidenceInput): Evidenc
     replayer: createBrowserEditStepsV1Replayer,
     createRunner: (work) => createDrainRunner<QueuedTransaction>({
       journal: input.journal,
-      transport: createEvidenceTransport(closed.fetchImpl),
+      transport: createEvidenceTransport(closed.fetchImpl, tabCommitProtocol),
       verifyFor: evidenceVerifierFor(work),
     }),
     watchSubmission: closed.watch,
