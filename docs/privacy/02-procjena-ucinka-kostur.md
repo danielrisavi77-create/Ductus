@@ -61,3 +61,7 @@ Stupci: izgrađeno / planirano / što nedostaje. Težina i vjerojatnost ocjenjuj
 ## 4. Savjetovanje i potpisi (prazno)
 
 Mišljenje službenika za zaštitu podataka: `[ ]`. Prikupljeni stavovi studenata (čl. 35. st. 9.), ako ih ustanova traži: `[ ]`. Odluka voditelja o preostalim rizicima: `[ ]`. Datum sljedećeg pregleda: `[ ]`. Pregled mora uslijediti i prije svake promjene obuhvata, osobito prije bilježenja vremena po promjeni sa stvarnim studentima (D-143).
+
+## 5. Inventar tokova iz koda
+
+Stvarni tokovi podataka na `main`, s putanjama i klasama iz `06-klase-podataka.md`, su u `08-inventar-tokova-podataka.md` (DAN-430). Opis u §1 ovog kostura stariji je od tog inventara; gdje se razlikuju, za ono što danas postoji vrijedi `08`.
