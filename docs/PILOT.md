@@ -160,7 +160,7 @@ Za svaki pokazatelj: što se broji (brojnik), nazivnik, faze, izvor podatka i pr
 - **Izvor:** gumb „Prijavi problem” (D-69), dnevni zapis, polje „Prijave problema”. `planirano`
 - **Prag:** nema.
 
-Pragovi za KPI-07 do KPI-10 i način brojanja iz KPI-02, KPI-03, KPI-04 i KPI-09 su `[PRIJEDLOG, nije odluka]`; odobravaju vlasnik i FPZG.
+Izostanak praga za KPI-07, KPI-09 i KPI-10 i način brojanja iz KPI-02, KPI-03, KPI-04 i KPI-09 su `[PRIJEDLOG, nije odluka]`; odobravaju vlasnik i FPZG.
 
 ## 5. Pravila faze B (nastava)
 
@@ -183,7 +183,22 @@ Pragovi za KPI-07 do KPI-10 i način brojanja iz KPI-02, KPI-03, KPI-04 i KPI-09
 4. **Bez novih predaja.** Rokovi zadataka iz faze B su prije 4. 6. 2027. (O01), pa se u fazi C ne predaju novi radovi u pilotu. `[PRIJEDLOG, nije odluka]`
 5. **Završno izvješće** sadrži `[PRIJEDLOG, nije odluka]`; odobrava vlasnik:
    - KPI-01 do KPI-10 s brojnikom i nazivnikom (KPI-05 kao medijan: N, medijani za oba postupka i interkvartilni raspon, umjesto brojnika), odvojeno po fazi u kojoj su izmjereni (A, B ili C; §3); KPI-05 iz faze C navodi se kao procjena rada u fazi B (§4), a KPI-06 i KPI-07 iz faze C odvojeno od kruga prije prelaska u B;
-   - usporedbu s pragom iz mjerodavnog kanonskog izvora, izričito `docs/PRODUCT.md` §12 za KPI-01 do KPI-03 i `docs/DECISIONS.md` za ostale pokazatelje; gdje praga nema, piše „prag: otvoreno, Q-12” i rezultat je bez ocjene „prošlo” ili „nije prošlo”;
+   - usporedbu s pragom prema tablici ispod. Ocjena „prošlo” ili „nije prošlo” daje se samo uz status „zapisan”; u ostalim redcima rezultat ide bez te ocjene, kako piše u stupcu „Status praga”:
+
+     | Pokazatelj | Mjerodavni izvor praga | Status praga |
+     | --- | --- | --- |
+     | KPI-01 | `docs/PRODUCT.md` §12, „Mjerila uspjeha”, redak „Rekonstrukcija predanih radova” | zapisan: 100 %; svako odstupanje blokira izdanje |
+     | KPI-02 | `docs/PRODUCT.md` §12, „Mjerila uspjeha”, redak „Izgubljen rad” | zapisan: 0 slučajeva |
+     | KPI-03 | `docs/PRODUCT.md` §12, „Mjerila uspjeha”, redak „Neovlašten pristup” | zapisan: 0 slučajeva |
+     | KPI-04 | nema praga: `docs/PRODUCT.md` §12 nema tu mjeru; `docs/PROGRAM.md`, „GO uvjeti za stvarne studente”, rečenica ispod tablice, čini svaki slučaj okidačem STOP-a | bez praga, samo opis; svaki slučaj se navodi uz STOP |
+     | KPI-05 | `docs/PRODUCT.md` §12, „Mjerila uspjeha”, redak „Korisnost”; vrijednost se upisuje u `docs/DECISIONS.md` (D-266 t. 5, `docs/PROGRAM.md` GO redak „Nastavni”, O04) | prag otvoren, Q-12 |
+     | KPI-06 | `docs/PRODUCT.md` §12, „Mjerila uspjeha”, redak „Razumijevanje”; vrijednost se upisuje u `docs/DECISIONS.md` (D-266 t. 5, `docs/PROGRAM.md` GO redak „Nastavni”, O04) | prag otvoren, Q-12 |
+     | KPI-07 | nema praga: `docs/PRODUCT.md` §12 mjeri razumijevanje samo za studente; `docs/UX-EVAL.md` §6 traži samo objavu za obje skupine | bez praga, samo opis; prag mogu odrediti FPZG i evaluator (§7) |
+     | KPI-08 | `docs/PRODUCT.md` §12, „Mjerila uspjeha”, redak „Pravednost” | analiza svakog slučaja |
+     | KPI-09 | nema praga: ni `docs/PRODUCT.md` §12 ni `docs/DECISIONS.md` (D-69 propisuje samo zamjenski postupak) | bez praga, samo opis |
+     | KPI-10 | nema praga: ni `docs/PRODUCT.md` §12 ni `docs/DECISIONS.md` (D-69 propisuje samo kanal prijave) | bez praga, samo opis |
+
+     `docs/DECISIONS.md` danas nema vrijednost praga ni za jedan pokazatelj: D-266 t. 5 i D-276 (NQ13) traže upis pragova korisnosti i razumijevanja, ali vrijednosti ne određuju.
    - neprovjerene dijelove zasebno;
    - svaki STOP i incident samo s ID-om i statusom;
    - zaključak analize svakog slučaja iz KPI-08, bez podataka o studentu;
