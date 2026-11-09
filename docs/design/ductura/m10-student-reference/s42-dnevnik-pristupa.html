@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-42 — Dnevnik pristupa (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 15 · DAN-604 · prijedlog slike · M10.UX-R</div>
+  <h1>S-42 — Dnevnik pristupa</h1>
+  <p>Stranica studenta. Prototipa nema; složena je po retku S-42 iz <code>docs/design/EKRANI.md</code>. Student vidi tko je i kada otvorio njegov rad (pravilo 17, C-4). Retci su po 5 minuta, grupirani po danu, bez zbroja posjeta i trajanja (D-274 MQ10). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant wide" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t1">Tko je otvorio Vaš rad</h2></div>
+      <div class="panel-body">
+        <div class="kv"><span>Rad</span><b>Seminar · Lokalna samouprava</b></div>
+        <p class="note">Ovdje vidite tko je i kada otvorio Vaš rad i što je otvoreno. Vrijeme je zaokruženo na 5 minuta. Mentorove radne bilješke nisu dio dnevnika.</p>
+        <h3 class="day">Utorak, 2. 3.</h3>
+        <ul class="log">
+          <li><time>14:10–14:15</time><span>Nastavnik B · mentor</span><span>Pregled rada</span></li>
+          <li><time>09:00–09:05</time><span>Nastavnik B · mentor</span><span>Predana verzija 2</span></li>
+        </ul>
+        <h3 class="day">Ponedjeljak, 1. 3.</h3>
+        <ul class="log">
+          <li><time>16:25–16:30</time><span>Nastavnik C · nastavnik kolegija</span><span>Sažetak promjena</span></li>
+          <li><time>11:40–11:45</time><span>Nastavnik B · mentor</span><span>Pregled rada</span></li>
+        </ul>
+        <button class="btn secondary" type="button">Prikaži starije dane</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="opoziv">
+    <div class="ref-tag">Stanje 2 · opoziv</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t2">Tko je otvorio Vaš rad</h2></div>
+      <div class="panel-body">
+        <div class="item">
+          <span class="title">Nastavnik C više nema pristup Vašem radu</span>
+          <span class="meta">Od 4. 3. · promjena upisa na kolegiju</span>
+        </div>
+        <p class="note">Retci prije tog datuma ostaju u dnevniku. Novi pristup bio bi upisan kao i svaki drugi.</p>
+        <h3 class="day">Ponedjeljak, 1. 3.</h3>
+        <ul class="log">
+          <li><time>16:25–16:30</time><span>Nastavnik C · nastavnik kolegija</span><span>Sažetak promjena</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 3 · prazno</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t3">Tko je otvorio Vaš rad</h2></div>
+      <div class="panel-body">
+        <p class="note">Vaš rad još nitko nije otvorio. Kad ga netko otvori, ovdje ćete vidjeti tko, kada i što.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 4 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="t4">Tko je otvorio Vaš rad</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam dnevnik pristupa.</p><div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 5 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="t5">Tko je otvorio Vaš rad</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Dnevnik trenutačno nije moguće učitati. To ne utječe na upisivanje pristupa.</p>
+        <button class="btn secondary" type="button">Pokušaj ponovno</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Opoziv je oznaka riječima u okviru, ne boja. Redak ima tri dijela (vrijeme, tko, što) i u uskom okviru te na 400 px slaže se u stupac.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Tko je otvorio Vaš rad, 2. dani i retci redom, novi dan prvi, 3. Prikaži starije dane, 4. Pokušaj ponovno.</p>
+</main>
+</body>
+</html>
