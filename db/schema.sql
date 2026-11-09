@@ -3599,6 +3599,66 @@ $$;
 
 
 --
+-- Name: enforce_session_limit(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.enforce_session_limit() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_pass integer;
+  v_live bigint;
+BEGIN
+  IF NEW.expires_at <= pg_catalog.now()
+     OR NEW.last_seen_at <= pg_catalog.now() - interval '2 hours' THEN
+    RETURN NULL;
+  END IF;
+  IF pg_catalog.current_setting('transaction_isolation') NOT IN ('read committed', 'read uncommitted') THEN
+    RAISE EXCEPTION 'read committed required' USING ERRCODE = '25000';
+  END IF;
+  PERFORM 1 FROM identity.user_account WHERE id = NEW.user_id FOR NO KEY UPDATE;
+  -- Keeps the four most recently active others; the order is total, so the
+  -- same rows always go. A row is closed only while it still has the
+  -- last_seen_at it was chosen by: a touch that commits while this waits for
+  -- its row changes that value, the row is skipped, and the next pass chooses
+  -- again from a fresh snapshot. A touch writes a session at most once a
+  -- minute, so the passes are few; the bound turns a runaway into a retryable
+  -- failure rather than a loop.
+  FOR v_pass IN 1..10 LOOP
+    UPDATE identity.session s
+    SET closed_at = pg_catalog.now(), close_reason = 'superseded'
+    FROM (
+        SELECT o.id, o.last_seen_at
+        FROM identity.session o
+        WHERE o.user_id = NEW.user_id
+          AND o.id <> NEW.id
+          AND o.closed_at IS NULL
+          AND o.expires_at > pg_catalog.now()
+          AND o.last_seen_at > pg_catalog.now() - interval '2 hours'
+        ORDER BY o.last_seen_at DESC, o.created_at DESC, o.id DESC
+        OFFSET 4
+      ) c
+    WHERE s.id = c.id
+      AND s.closed_at IS NULL
+      AND s.last_seen_at = c.last_seen_at;
+    SELECT pg_catalog.count(*) INTO v_live
+    FROM identity.session o
+    WHERE o.user_id = NEW.user_id
+      AND o.id <> NEW.id
+      AND o.closed_at IS NULL
+      AND o.expires_at > pg_catalog.now()
+      AND o.last_seen_at > pg_catalog.now() - interval '2 hours';
+    IF v_live <= 4 THEN
+      RETURN NULL;
+    END IF;
+  END LOOP;
+  RAISE EXCEPTION 'session limit not settled' USING ERRCODE = '40001';
+END
+$$;
+
+
+--
 -- Name: open_session(text, text, text, text, bytea); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -7391,7 +7451,7 @@ CREATE TABLE identity.session (
     oidc_sid_hash bytea,
     CONSTRAINT session_check CHECK ((expires_at > created_at)),
     CONSTRAINT session_check1 CHECK (((closed_at IS NULL) = (close_reason IS NULL))),
-    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text]))),
+    CONSTRAINT session_close_reason_check CHECK ((close_reason = ANY (ARRAY['logout'::text, 'backchannel_logout'::text, 'logout_all'::text, 'institution_changed'::text, 'issuer_removed'::text, 'operator'::text, 'superseded'::text]))),
     CONSTRAINT session_last_seen_check CHECK ((last_seen_at >= created_at)),
     CONSTRAINT session_oidc_sid_hash_check CHECK ((octet_length(oidc_sid_hash) = 32)),
     CONSTRAINT session_oidc_sid_hash_closed_check CHECK (((closed_at IS NULL) OR (oidc_sid_hash IS NULL))),
@@ -10019,6 +10079,13 @@ CREATE TRIGGER close_sessions_on_issuer_truncate AFTER TRUNCATE ON identity.inst
 
 
 --
+-- Name: session enforce_session_limit; Type: TRIGGER; Schema: identity; Owner: -
+--
+
+CREATE TRIGGER enforce_session_limit AFTER INSERT ON identity.session FOR EACH ROW WHEN ((new.closed_at IS NULL)) EXECUTE FUNCTION identity.enforce_session_limit();
+
+
+--
 -- Name: assignment_version assignment_version_immutable; Type: TRIGGER; Schema: institution; Owner: -
 --
 
@@ -12475,4 +12542,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108130000'),
     ('20261108140000'),
     ('20261109030000'),
-    ('20261109040000');
+    ('20261109200000'),
+    ('20261109210000');

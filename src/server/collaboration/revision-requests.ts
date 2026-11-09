@@ -16,7 +16,7 @@ import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-
 /**
  * DAN-314 step 2f HTTP boundary (docs/backend/suradnja.md 4.14, #1506). The
  * SECURITY DEFINER RPCs of migrations 20261106160000, 20261106190000,
- * 20261106220000 (revision ceiling) and 20261109040000 (rereview) decide who
+ * 20261106220000 (revision ceiling) and 20261109210000 (rereview) decide who
  * may read or write, which transition is allowed, which revision is too new
  * and whether an accepted range counts as changed; this only refuses
  * malformed requests before the database, in an order that needs no database

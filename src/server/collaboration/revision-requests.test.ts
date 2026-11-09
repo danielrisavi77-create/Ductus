@@ -541,9 +541,12 @@ describe("DAN-314 2f: the real POST route wires action, configured origin and co
     const res = await POST(routeRequest(VALID.list), context("list"));
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(withActor).toHaveBeenCalledTimes(1);
+    // The accepted request is counted as session activity (DAN-296): a second
+    // transaction that only touches the session.
+    expect(withActor).toHaveBeenCalledTimes(2);
     expect(withActor).toHaveBeenCalledWith(TOKEN, expect.any(Function));
     expect(query).toHaveBeenCalledWith(expect.stringContaining("list_revision_requests"), [DOC]);
+    expect(query).toHaveBeenLastCalledWith("SELECT identity.touch_current_session() AS touched");
 
     const forged = routeRequest(VALID.list, { origin: "https://evil.example" });
     expect((await POST(forged, context("list"))).status).toBe(403);
@@ -553,7 +556,7 @@ describe("DAN-314 2f: the real POST route wires action, configured origin and co
     const moved = routeRequest(VALID.list);
     expect((await POST(moved, context("list"))).status).toBe(403);
     expect(moved.bodyUsed).toBe(false);
-    expect(withActor).toHaveBeenCalledTimes(1);
+    expect(withActor).toHaveBeenCalledTimes(2);
   });
 
   it("only the __Host- session cookie is the token", async () => {

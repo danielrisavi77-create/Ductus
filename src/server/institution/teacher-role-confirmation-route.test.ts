@@ -180,10 +180,13 @@ describe("teacher role confirmation HTTP boundary", () => {
     vi.stubEnv("OIDC_REDIRECT_URI", `${ORIGIN}/api/auth/callback`);
     expect((await POST(req(), context)).status).toBe(200);
     expect(withActor).toHaveBeenCalledWith(TOKEN, expect.any(Function));
-    expect(query).toHaveBeenLastCalledWith(CONFIRM_SQL, [CANDIDATE]);
+    expect(query).toHaveBeenNthCalledWith(2, CONFIRM_SQL, [CANDIDATE]);
     const forged = req();
     forged.headers.set("origin", "https://evil.example");
     expect((await POST(forged, context)).status).toBe(403);
-    expect(withActor).toHaveBeenCalledTimes(1);
+    // The accepted request alone is counted as session activity (DAN-296): a second
+    // transaction that only touches the session; the refused one adds nothing.
+    expect(withActor).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith("SELECT identity.touch_current_session() AS touched");
   });
 });

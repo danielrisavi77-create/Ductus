@@ -6,6 +6,7 @@ import LiveWorkView from "@/components/teacher/LiveWorkView";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { isDocumentId } from "@/domain/collaboration";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -24,6 +25,7 @@ export const metadata = { title: `${t.liveView.context} · ${t.app.name}` };
 export default async function LiveWorkPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   // The cookie digest and the server time of this render (D-118).
   const { tag, at } = shellSession(token);
   const principal = await sessionPrincipal(token, withActor);

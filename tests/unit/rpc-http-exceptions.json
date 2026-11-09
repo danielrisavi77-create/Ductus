@@ -46,12 +46,6 @@
     "reason": "Čišćenje završenih sesija po pravilu zadržavanja; poziva ga samo ductus_retention."
   },
   {
-    "function": "identity.touch_current_session",
-    "status": "ruta dolazi",
-    "reason": "Bilježi aktivnost sesije (D-200 P2); poziva ga poslužitelj na zahtjevima koji se broje kao aktivnost, a taj poziv još nije spojen.",
-    "ticket": "DAN-296"
-  },
-  {
     "function": "institution.appoint_institution_admin",
     "status": "bez rute",
     "reason": "Operatersko imenovanje administratora ustanove na pisani zahtjev fakulteta (D-262 Q04, DAN-525); nijedna aplikacijska uloga ni PUBLIC je ne smije pozvati."

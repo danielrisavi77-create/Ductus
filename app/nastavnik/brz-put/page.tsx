@@ -8,6 +8,7 @@ import { assignmentParam } from "@/components/student/work-context-read";
 import { FastPath, FastPathLive } from "@/components/teacher/FastPath";
 import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -25,6 +26,7 @@ export const metadata = { title: `${t.fastPath.title} · ${t.app.name}` };
 export default async function FastPathPage({ searchParams }: { searchParams: Promise<{ zadatak?: string | string[] }> }) {
   const assignmentId = assignmentParam((await searchParams).zadatak);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const { tag, at } = shellSession(token);
   // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
   const { access, principal } = await teacherPageRead(token, withActor);
