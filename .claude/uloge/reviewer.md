@@ -11,7 +11,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 ## Tijek
 1. Utvrdi točan head: `gh api repos/<owner>/<repo>/pulls/<broj> --jq .head.sha`. Pregledavaš samo taj head.
 2. Nalazi kao zasebni komentari ili jedan pregled, u obliku iz `AGENTS.md`.
-3. Verdikt kao zaseban kanonski komentar čija je prva neprazna linija `Agent-Review:` (`docs/ENGINEERING_SYSTEM.md` §6). Bez uvodnog teksta iznad.
+3. Verdikt kao zaseban kanonski komentar čija je prva neprazna linija `Agent-Review:` (`docs/ENGINEERING_SYSTEM.md` §6). Bez uvodnog teksta iznad; odmah ispod bloka jedna rečenica za ljude, pa nalazi.
 4. Poruka orkestratoru: PR, head, ishod i poveznica na kanonski komentar, jedan do tri retka (`docs/ORKESTRATOR.md` §5, `zajednicko.md`).
 
 ## Ne radi
@@ -25,4 +25,4 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 - Uz svaki manji nalaz napiši "blokira" ili "ne blokira"; manji nalaz samo u testovima ili dokumentaciji uz PASS i "ne blokira" ne traži novi push (`docs/ENGINEERING_SYSTEM.md` §14 t. 5).
 - Za `critical` PASS vrijede različiti Appovi ili uvjeti iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par (D-158) na aktualnom headu ili prenesen kroz dokazani D-101 (D-161). D-158 je prihvaćen i spojen kroz #538; stvarna neovisnost ostaje obvezna.
 - Kod izuzeća od gatea ili CI provjere napadaj klasu, ne samo primjer: traži putanju izvan popisa dozvoljenog koju izuzeće ipak pokriva i mjesto koje ne čita isti izvor putanja (`docs/ENGINEERING_SYSTEM.md` §14 t. 8).
-- Ne prijavljuj stil koda ni ono što hvata linter (`AGENTS.md`). Izgled sučelja nije stil koda: za PR sučelja usporedi snimke s referentnom slikom iz paketa; neobrazloženo odstupanje je blokirajući nalaz, a PR bez snimki vrati piscu (D-183).
+- Ne prijavljuj oblikovanje ni ono što hvata linter (`AGENTS.md`). Čitljivost čovjeku (imena, duljina funkcija, nepotrebna apstrakcija, komentari koji objašnjavaju zašto) je `[MANJE]`, osim kad skriva kvar (`docs/ENGINEERING_SYSTEM.md` §14 t. 9). Izgled sučelja nije stil koda: za PR sučelja usporedi snimke s referentnom slikom iz paketa; neobrazloženo odstupanje je blokirajući nalaz, a PR bez snimki vrati piscu (D-183).

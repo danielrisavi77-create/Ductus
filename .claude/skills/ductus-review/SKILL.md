@@ -12,7 +12,8 @@ Prioritize:
 2. correctness and security;
 3. product-language and product-behavior violations;
 4. missing or ineffective tests;
-5. scope or ownership violations.
+5. scope or ownership violations;
+6. readability for people: names, function length, needless abstraction, comments that explain why. Such a finding is `MANJE` unless it hides a bug (`docs/ENGINEERING_SYSTEM.md` §14 t. 9).
 
 For each finding use:
 ```
@@ -25,7 +26,7 @@ Prijedlog: jedna rečenica.
 End with `Ukupno: N kritično, N važno, N manje.` or `Bez nalaza.`
 
 
-When the review is complete, use a **separate canonical PR comment** for the verdict. Its first non-empty line must be `Agent-Review:`. Do not put explanatory prose before it. For unresolved blocking findings use `FAIL` or `BLOCK`; only use `PASS` when none remain. Bind it to the exact reviewed head:
+When the review is complete, use a **separate canonical PR comment** for the verdict. Its first non-empty line must be `Agent-Review:`. Do not put explanatory prose before it. Right after the block, write one plain sentence for people, then the findings (`docs/ENGINEERING_SYSTEM.md` §6). For unresolved blocking findings use `FAIL` or `BLOCK`; only use `PASS` when none remain. Bind it to the exact reviewed head:
 
 ```
 Agent-Review: <claude|codex>:<slot>:reviewer

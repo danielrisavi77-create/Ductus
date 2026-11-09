@@ -147,6 +147,8 @@ Risk: low | standard | critical
 Task: <ID ili kratki identifikator>
 ```
 
+Opis PR-a i issuea počinje s tri retka za ljude, ovim redom: **Što**, **Zašto** i **Rizik i provjera** (vlasnik 9. 11. 2026., #87 `issuecomment-6748119578`). Pišu se običnim jezikom, bez oznaka odluka, slotova i SHA-ova. Strojni redci (`Agent:`, `Risk:`, `Task:`, `Closes`, ugovor i `IZVJEŠTAJ`) ostaju ispod; u predlošku su unutar `<details>` s naslovom „Detalji za agente”. Parser ih čita bez obzira na položaj, a `scripts/engineering/readable-templates.test.mjs` provjerava da ih tri retka ne zasjenjuju ni ne zamjenjuju.
+
 Review komentar je zaseban kanonski komentar. **Prva neprazna linija mora biti `Agent-Review:`**; primjer u code blocku ili tekst nakon preambule ne vrijedi kao verdict.
 
 ```
@@ -165,6 +167,8 @@ QA-Head: <40-znamenkasti SHA>
 QA-Verdict: PASS | FAIL | BLOCK
 QA-Scope: <što je adversarialno provjereno>
 ```
+
+Odmah iza strojnog bloka reviewa ili QA-e dolazi jedna rečenica za ljude, a tek onda nalazi. Iznad bloka nema ničega, jer gate čita prvu nepraznu liniju. Ta rečenica ne smije imati oblik polja iz ovog odjeljka (npr. `Review-…:`), jer takav redak `checkReport` odbija. Vanjski botovi komentiraju najviše jednom po headu i ne komentiraju kad nemaju nalaz (`CLAUDE.md`, „Vanjski botovi i preuzimanje posla”).
 
 Za `critical` PR reviewer i QA moraju biti strojno različiti po autentificiranom GitHub Appu koji je objavio komentar, osim uz uvjete neovisnog Codex para (D-158), kvotnog fallbacka ili druge Claude sesije (D-139) opisane niže. To ograničenje vrijedi za **PASS**. Međutim, svaki valjani ne-autorski QA `FAIL` ili `BLOCK` drži gate blokiranim bez obzira na to je li isti App već dao reviewer PASS. Trenutno se prihvaća Claude App (`claude`) za `claude:*:reviewer|qa`, ChatGPT/Codex App (`chatgpt-codex-connector`) za `chatgpt:*|codex:*`, te Grok by xAI App (`grok-by-xai`) za `grok:*`. Runtime `grok:*` je podržan i za gate. Stvarni Grok komentar potvrđen je kao GitHub App `grok-by-xai` (Grok by xAI), pa se prihvaća samo mapping `grok-by-xai → grok`. Jedan isti GitHub App ne može zadovoljiti i review i QA samo promjenom deklariranog runtimea. **Grok CLI (D-162).** Review ili QA koji vlasnik pokrene iz Grok CLI-ja (`scripts/grok-review.ps1`) objavljuje se s vlasnikova računa, bez Appa. Takav komentar broji se kao App `grok-by-xai` samo ako ga je objavio račun vlasnika repoa i sadrži redak `Review-Channel: grok-cli` izvan code blocka uz kanonska polja; status gatea tada navodi "Grok CLI review (D-162, owner account)", jer isti račun mogu koristiti i sesije s vlasnikovim tokenom; verdikt daje vlasnik, ne model. Svi ostali uvjeti ostaju (aktualni head, različit App za QA kod `critical`, autor ne reviewa sebe). Vlasnik time ne dobiva ovlast koju nema: Owner Override već postoji (§7). **Codex CLI (D-193).** Review ili QA koji orkestrator ili vlasnik pokrene iz lokalnog Codex CLI-ja (`codex exec`) objavljuje se s vlasnikova računa, bez Appa, kao Grok CLI. Takav komentar broji se kao App `chatgpt-codex-connector` (runtime `codex` ili `chatgpt`) samo ako ga je objavio račun vlasnika repoa i sadrži redak `Review-Channel: codex-cli` izvan code blocka uz kanonska polja. Komentar s oba retka (`grok-cli` i `codex-cli`) ne broji se ni kao jedan App. Status gatea tada na početku navodi "Codex CLI review (D-193, owner account)", jer isti račun koriste i sesije s vlasnikovim tokenom; verdikt formalno daje vlasnik, ne model. Svi ostali uvjeti ostaju: aktualni head i prijenos D-101, prevlast FAIL/BLOCK, autor ne reviewa sebe, a za `critical` review i QA moraju biti različiti principali (Codex par D-158/D-161 ili različit App). Dva Codex CLI komentara s različitim slotovima tako mogu dati `critical` PASS kroz Codex par; to je poznata granica, jer vlasnik isto već može Owner Overrideom. Codex CLI komentar nije dokaz Codex reviewa za D-139 ni kvotni dokaz.
 
@@ -247,6 +251,8 @@ flowchart TD
 ```
 
 Za `critical` review i QA kreću istodobno na istom headu, uz izuzeća iz §5 i neovisnost iz §6/§15 (D-155). Dokazi se pripremaju u postojećem `IZVJEŠTAJ`-u prije poziva sesija (`ORKESTRATOR.md` §8).
+
+Pisac javlja „Spreman za review” samo na koordinacijskom issueu #1091, ne na PR-u. Nijedan alat ne čita taj komentar na PR-u; orkestrator kreće od preflighta na točnom headu (`ORKESTRATOR.md` §8).
 
 Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u implementaciju.
 
@@ -345,7 +351,7 @@ Cilj nije maksimalan broj paralelnih agenata nego minimalno vrijeme od zadatka d
 
 ## 14. Pravila rada za critical PR (D-106)
 
-Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Točka 6 (najviše dva kruga) vrijedi za PR svake razine rizika (vlasnik, 7. 11. 2026., #87 [c.6706748222](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6706748222) t. 22). Izvor je vlasnikova odluka od 11. 10. 2026. (D-106). Kartice u `.claude/uloge/`, pravila u `.claude/rules/` i skillovi upućuju na ovaj odjeljak, ne na komentare na issueima.
+Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Točka 6 (najviše dva kruga) vrijedi za PR svake razine rizika (vlasnik, 7. 11. 2026., #87 [c.6706748222](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6706748222) t. 22), a točka 9 (čitljivost) za review svake razine (vlasnik, 9. 11. 2026., #87 `issuecomment-6748119578`). Izvor je vlasnikova odluka od 11. 10. 2026. (D-106). Kartice u `.claude/uloge/`, pravila u `.claude/rules/` i skillovi upućuju na ovaj odjeljak, ne na komentare na issueima.
 
 1. **Ugovor prije koda.** Prije pisanja, u planu napada ili opisu PR-a stoje ova polja:
    - **Invarijanta:** jedna rečenica.
@@ -368,6 +374,7 @@ Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Točka 
    - **Preskočeni koraci:** za svaki korak koji izuzeće preskače, što taj korak inače hvata i zašto to za izuzete putanje ne treba.
 
    Bez tih polja orkestrator PR ne dodjeljuje ni ne stavlja u red za review. Reviewer i QA napadaju klasu, ne samo primjer iz ugovora: traže putanju koja nije na popisu dozvoljenog, a izuzeće je ipak pokriva.
+9. **Čitljivost čovjeku.** Review provjerava i može li kod pročitati čovjek: imena kažu što stvar jest, funkcija se čita bez skakanja po datoteci, apstrakcija postoji samo kad je traži stvarna potreba, a komentar objašnjava zašto, ne što. Takav nalaz je manji (`[MANJE]`), osim kad nečitljivost skriva kvar; tada je nalaz taj kvar i ocjenjuje se po njemu. Za manji nalaz vrijedi točka 5. Oblikovanje i ono što hvata linter i dalje se ne prijavljuje.
 
 ## 15. Gate i spajanje (D-106)
 

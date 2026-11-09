@@ -6,6 +6,15 @@ labels: ""
 assignees: ""
 ---
 
+**Što:** <što ne radi, jednom rečenicom, običnim jezikom>
+
+**Zašto:** <koga to pogađa i zašto je važno>
+
+**Rizik i provjera:** <koliko je ozbiljno i kako se kvar može ponoviti>
+
+<details>
+<summary>Detalji za agente</summary>
+
 ## Okolina
 
 Commit / deployment:
@@ -47,3 +56,5 @@ Console/log/screenshot/video bez osobnih podataka:
 ## Napomena
 
 Bug Hunter ne popravlja nalaz u istoj sesiji. Orkestrator dodjeljuje implementaciju.
+
+</details>

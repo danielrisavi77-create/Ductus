@@ -53,7 +53,7 @@ Traži, po važnosti:
 5. **Opseg**: PR koji radi više od jednog koraka iz `STATE.md` ili prelazi oko 400 promijenjenih redaka koda bez obrazloženja.
 6. **Vizualna vjernost**: za vidljivu promjenu usporedi odobrenu referencu i stvarni prikaz prema `docs/SESSIONS.md` §6. Nedostajući dokaz navedi kao neprovedenu provjeru, ne kao potvrđenu podudarnost.
 
-Ne prijavljuj stil koda, imenovanje ni sitnice koje hvata linter. Odstupanje izgleda od odobrenog dizajna dio je pregleda.
+Ne prijavljuj oblikovanje ni sitnice koje hvata linter. Čitljivost čovjeku (imena, duljina funkcija, nepotrebna apstrakcija, komentari koji objašnjavaju zašto) prijavi kao `[MANJE]`, osim kad skriva kvar (`docs/ENGINEERING_SYSTEM.md` §14 t. 9). Odstupanje izgleda od odobrenog dizajna dio je pregleda.
 
 Za svaki nalaz piši na hrvatskom:
 
