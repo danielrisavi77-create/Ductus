@@ -20,7 +20,12 @@
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
+-- The CHECK is replaced by a wider one: every value the old one allowed is
+-- still allowed, so each row passes; validating it at once scans
+-- identity.session under the lock this transaction holds.
+-- squawk-ignore ban-drop-constraint
 ALTER TABLE identity.session DROP CONSTRAINT session_close_reason_check;
+-- squawk-ignore constraint-missing-not-valid
 ALTER TABLE identity.session ADD CONSTRAINT session_close_reason_check CHECK (
   close_reason IN ('logout', 'backchannel_logout', 'logout_all', 'institution_changed', 'issuer_removed', 'operator', 'superseded')
 );
