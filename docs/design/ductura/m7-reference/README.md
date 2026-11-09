@@ -44,7 +44,7 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
 - Napomena uz predaju nije obavezna i vodi na S-43.
 - Nakon roka predaja izgleda jednako kao prije roka: isti tekst, rub i boja, bez crvene (D-128). „Nakon roka” ovisi samo o vremenu zahtjeva i o roku zamrznutom pri zahtjevu (Q07).
 - Produljen rok se prikazuje kao oznaka uz rok.
-- Bez mreže se predaja ne nudi. Tekst je spremljen na uređaju, a gumb „Predaj rad” je onemogućen s objašnjenjem. Vrijeme predaje je vrijeme zahtjeva koji je stigao na poslužitelj.
+- Bez mreže se predaja ne nudi. Tekst je spremljen na uređaju, a gumb „Predaj rad” je onemogućen s objašnjenjem. Vrijeme predaje je trenutak kad zahtjev stigne na poslužitelj (`requestedAt`), ne trenutak klika. To piše i u koracima 4 prije i nakon roka.
 - Odbijanja poslužitelja imaju zaseban tekst:
   - nije započet (`notStarted`);
   - zapis nije potvrđen (`blocked`);
@@ -73,7 +73,7 @@ Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SH
   - vrijeme predaje iz `requestedAt`;
   - rok iz `dueAt`;
   - „nakon roka” iz `afterDeadline`;
-  - vrijeme potpisa iz `signedAt`. Slika ga ne predstavlja kao vremenski žig treće strane.
+  - „Potpisivanje potvrde započelo” iz `signedAt`. Prema ugovoru v2 to je početak izdavanja potpisa, ne trenutak dovršetka. Slika ga ne predstavlja kao vremenski žig treće strane.
 - Vremena su po zagrebačkom vremenu s oznakom zone u istom retku, „(UTC+1)”, ljeti „(UTC+2)” (prijedlog iz #1788). Točne vrijednosti iz potvrde u UTC-u su u pojedinostima.
 - „Otisak predanog teksta” ima 64 heksadekadske znamenke u skupinama radi čitanja, uz objašnjenje.
   - „Kopiraj otisak” u međuspremnik stavlja 64 znaka bez razmaka.

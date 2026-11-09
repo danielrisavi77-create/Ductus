@@ -10,7 +10,7 @@
 <header class="ref-head">
   <div class="ref-tag">Referenca paketa 6 · DAN-600 · prijedlog slike · M7.UX-R</div>
   <h1>S-32 — Potvrda predaje</h1>
-  <p>Korak 5 toka predaje (#1781), polja potvrde v2 (<code>docs/contracts/submission-receipt-v2.md</code>). Vrijeme predaje je vrijeme zahtjeva (requestedAt); potpis (signedAt) stiže kasnije i ne mijenja ga. Vrijeme potpisa je sat poslužitelja, ne vremenski žig treće strane. Potvrda se može ponovno otvoriti. Podaci su izmišljeni.</p>
+  <p>Korak 5 toka predaje (#1781), polja potvrde v2 (<code>docs/contracts/submission-receipt-v2.md</code>). Vrijeme predaje je vrijeme zahtjeva (requestedAt); signedAt je početak izdavanja potpisa, ne trenutak dovršetka; bilježi se nakon zahtjeva i ne mijenja ga. To je sat poslužitelja, ne vremenski žig treće strane. Potvrda se može ponovno otvoriti. Podaci su izmišljeni.</p>
 </header>
 <main class="page"><div class="variants">
 
@@ -21,7 +21,7 @@
         <ol class="steps" aria-label="Koraci predaje"><li>1 Tekst</li><li>2 Izjava</li><li>3 Prije predaje</li><li>4 Predaja</li><li aria-current="step">5 Potvrda</li></ol>
         <div class="kv"><span>Vrijeme predaje</span><b>20. 11. 2026. u 22:14 (UTC+1)</b></div>
         <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59 (UTC+1)</b></div>
-        <div class="kv"><span>Potvrda potpisana</span><b>20. 11. 2026. u 22:14 (UTC+1)</b></div>
+        <div class="kv"><span>Potpisivanje potvrde započelo</span><b>20. 11. 2026. u 22:14 (UTC+1)</b></div>
         <details><summary>Točne vrijednosti iz potvrde (UTC)</summary><p class="mono">requestedAt 2026-11-20T21:14:07Z<br>dueAt 2026-11-20T22:59:59Z<br>signedAt 2026-11-20T21:14:09Z</p></details>
         <h3>Otisak predanog teksta</h3>
         <p class="mono">3f9a c2e1 7b04 d58e 61a9 0c3f e8b2 4d17 a6c0 95e3 2b7f 1d84 c0a5 7e39 b2d6 4f18</p>
@@ -41,10 +41,10 @@
         <p class="note" role="status">Predaja je zabilježena 20. 11. 2026. u 22:14. Potpis potvrde još se izdaje; vrijeme predaje se time ne mijenja.</p>
         <div class="kv"><span>Vrijeme predaje</span><b>20. 11. 2026. u 22:14 (UTC+1)</b></div>
         <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59 (UTC+1)</b></div>
-        <div class="kv"><span>Potvrda potpisana</span><b>još nije</b></div>
+        <div class="kv"><span>Potpisivanje potvrde započelo</span><b>još nije zabilježeno</b></div>
         <a href="#p2">Otvori radni prostor</a>
       </div></div>
-    <p class="meta">Kad potpis stigne, dodaje se „Potvrda potpisana {signedAt}.” i stranica prelazi u stanje 1. Preuzimanje zapisa i provjera nude se tek s potpisom. Naziv „Predaja u obradi” iz #1782.</p>
+    <p class="meta">Kad je potpis izdan, dodaje se „Potpisivanje potvrde započelo {signedAt}” i stranica prelazi u stanje 1. signedAt je početak izdavanja potpisa prema ugovoru v2, ne trenutak dovršetka. Preuzimanje zapisa i provjera nude se tek s potpisom. Naziv „Predaja u obradi” iz #1782.</p>
   </section>
 
   <section class="variant" aria-labelledby="p3">
@@ -53,7 +53,7 @@
       <div class="panel-body">
         <div class="kv"><span>Vrijeme predaje</span><b>21. 11. 2026. u 00:12 (UTC+1)</b></div>
         <div class="kv"><span>Rok</span><b>20. 11. 2026. u 23:59 (UTC+1)</b></div>
-        <div class="kv"><span>Potvrda potpisana</span><b>21. 11. 2026. u 00:13 (UTC+1)</b></div>
+        <div class="kv"><span>Potpisivanje potvrde započelo</span><b>21. 11. 2026. u 00:13 (UTC+1)</b></div>
         <p class="note">Potpis potvrde provjerava se na stranici Provjera potvrde, bez prijave.</p>
         <a href="#p3">Provjera potvrde</a>
       </div></div>
