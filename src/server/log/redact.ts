@@ -128,7 +128,8 @@ const KEY_VALUE = /(["']?)([A-Za-z0-9_čćžšđČĆŽŠĐ-]{2,40})\1(\s*[:=]\s*
 /** A credential header written as text: everything to the end of the line. */
 const HEADER_LINE = /\b((?:proxy-)?authorization|(?:set-)?cookie)(\s*:\s*)[^\n]*/gi;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const DIGIT_RUN = /\d{9,}/g;
+/** A UUID is matched whole, so its digit-only groups are not cut as a number. */
+const DIGIT_RUN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\d{9,}/gi;
 const TOKEN_RUN = /[A-Za-z0-9+/_=-]{20,}/g;
 /** Quoted free text of two or more words, as a parser error quotes a snippet. */
 const QUOTED_WORDS = /"[^"\s:,{}[\]][^"\n]*\s[^"\n]*?[^"\s:,{}[\]]"|„[^“”\n]*[“”]/g;
@@ -201,7 +202,7 @@ export function redactString(text: string, max = MAX_STRING): string {
     .replace(EMAIL, "[email]")
     // Whole tokens first, so a digit run cannot cut a token below its shape.
     .replace(TOKEN_RUN, scrubTokenRun)
-    .replace(DIGIT_RUN, "[number]");
+    .replace(DIGIT_RUN, (match) => (match.includes("-") ? match : "[number]"));
   return scanned.length > max || head !== text ? `${scanned.slice(0, max)}[cut]` : scanned;
 }
 

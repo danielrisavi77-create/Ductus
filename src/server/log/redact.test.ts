@@ -176,6 +176,13 @@ describe("redact keeps what an operator needs", () => {
     });
   });
 
+  it("keeps a UUID whose last group is all digits, and still masks a bare digit run beside it", () => {
+    const id = "6f1c2b0e-3d4a-4f5b-8c6d-123456789012";
+    expect(redact({ document_id: id })).toEqual({ document_id: id });
+    expect(redact(`document ${id} 1234567890123`)).toBe(`document ${id} [number]`);
+    expect(redact("1234567890123")).toBe("[number]");
+  });
+
   it("keeps a quoted single word and a JSON key, and marks a scan-limited text as cut", () => {
     expect(redact('{"stage": "context"}')).toBe('{"stage": "context"}');
     expect(redact(`expected "context"`)).toBe(`expected "context"`);
