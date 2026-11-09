@@ -152,14 +152,21 @@ describe("reconcilePendingReceipts: backlog input classes", () => {
     expect(h.signedIds()).toEqual([rid(1)]);
   });
 
-  it("applies no grace when the clock is not a number", async () => {
+  const badClocks: [string, () => number][] = [
+    ["NaN", () => Number.NaN],
+    ["Infinity", () => Number.POSITIVE_INFINITY],
+    ["a string", () => "1" as unknown as number],
+    ["a throw", () => { throw new Error("clock"); }],
+  ];
+  it.each(badClocks)("applies no grace when the clock gives %s", async (_, now) => {
     const h = harness({
       backlog: ok([backlogRow(D1, FRESH)]),
       receipts: { [D1]: [row(1)] },
-      deps: { now: () => Number.NaN },
+      deps: { now },
     });
-    await h.run();
+    const out = await h.run();
     expect(h.signedIds()).toEqual([rid(1)]);
+    expect(out.oldestPendingAgeMs).toBeNull();
   });
 
   it("sweeps the oldest domains first and defers the rest past maxDomains", async () => {
