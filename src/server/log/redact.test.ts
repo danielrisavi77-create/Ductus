@@ -224,8 +224,8 @@ describe("invented.fixture builds the secret shapes the rows rely on", () => {
   // Without this, a helper that stopped producing a secret shape would let a
   // row pass for the wrong reason: nothing to redact instead of redaction.
   it("builds a key=value pair, a JSON pair, a URL with a user, Basic and a JWT", () => {
-    expect(pair("password", "=", "kanarinac").split("=")).toEqual(["password", "kanarinac"]);
-    expect(JSON.parse(jsonPair("password", 'a" b'))).toEqual({ password: 'a" b' });
+    expect(pair("k", "=", "v").split("=")).toEqual(["k", "v"]);
+    expect(JSON.parse(jsonPair("k", 'a" b'))).toEqual({ k: 'a" b' });
     const url = new URL(urlWithUser("postgres", "app", CANARY, "db.example.test/ductus"));
     expect([url.protocol, url.username, url.password, url.host]).toEqual(["postgres:", "app", CANARY, "db.example.test"]);
     expect(basic("a", "b")).toMatch(/^[A-Za-z0-9+/]+=*$/);

@@ -21,12 +21,12 @@ export const SHORT = join("zel", "eni");
 /** A short invented bearer credential. */
 export const SHORT_BEARER = join("abc", "123");
 
-/** `key`, a separator and `value`, e.g. `pair("password", "=", "x")`. */
+/** `key`, a separator and `value`, e.g. `pair("k", "=", "v")`. */
 export function pair(key: string, separator: string, value: string): string {
   return join(key, separator, value);
 }
 
-/** A JSON object text with one key, e.g. `{"password":"x"}`. */
+/** A JSON object text with one key, e.g. `{"k":"v"}`. */
 export function jsonPair(key: string, value: unknown): string {
   return JSON.stringify(Object.fromEntries([[key, value]]));
 }
