@@ -7,7 +7,8 @@ import { REQUIRED_PROCEDURES, checkOperations } from "../../scripts/operations/c
 // required procedures, the check reports a problem exactly for the steps that
 // name neither a known command nor a known owner, with the right procedure and
 // step number, whether the step starts in the first column or after up to two
-// spaces. Prose between procedures, outside a step, changes nothing.
+// spaces, and whether it is numbered `1.` or `1)`. Prose between procedures,
+// outside a step, changes nothing.
 
 const OWNERS = "## Nositelji\n\n| Nositelj | Odgovornost |\n| --- | --- |\n| `vlasnik` | kvarovi |\n| `koordinator pilota` | pitanja |\n";
 
@@ -34,19 +35,19 @@ const STEPS = [
 
 const PROSE = ["", "Kratka napomena bez naredbe.\n\n", "> Citat: `pnpm nope`.\n\n", "```\n1. nije korak\n```\n\n"] as const;
 
-const stepArb = fc.record({ kind: fc.integer({ min: 0, max: STEPS.length - 1 }), indent: fc.integer({ min: 0, max: 2 }) });
+const stepArb = fc.record({ kind: fc.integer({ min: 0, max: STEPS.length - 1 }), indent: fc.integer({ min: 0, max: 2 }), delimiter: fc.constantFrom(".", ")") });
 const procedureArb = fc.array(stepArb, { minLength: 1, maxLength: 6 });
 const documentArb = fc.record({
   steps: fc.tuple(procedureArb, procedureArb, procedureArb, procedureArb),
   prose: fc.tuple(...REQUIRED_PROCEDURES.map(() => fc.constantFrom(...PROSE))),
 });
 
-type StepCase = { kind: number; indent: number };
+type StepCase = { kind: number; indent: number; delimiter: string };
 
 function render(steps: StepCase[][], prose: readonly string[]): string {
   const sections = REQUIRED_PROCEDURES.map((name, p) => {
     const list = (steps[p] ?? [])
-      .map(({ kind, indent }, i) => `${" ".repeat(indent)}${i + 1}. Korak. ${STEPS[kind]?.body ?? ""}`)
+      .map(({ kind, indent, delimiter }, i) => `${" ".repeat(indent)}${i + 1}${delimiter} Korak. ${STEPS[kind]?.body ?? ""}`)
       .join("\n");
     return `### ${name}\n\n${prose[p] ?? ""}${list}\n`;
   });

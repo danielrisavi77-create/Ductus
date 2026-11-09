@@ -48,7 +48,7 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 1. Instaliraj ovisnosti točno prema lockfileu. Naredba: `pnpm install --frozen-lockfile`. `izgrađeno`
 2. Podigni lokalni stog, primijeni migracije na lokalnu bazu, upiši sintetičke podatke i pokreni aplikaciju na `localhost:3000`. Naredba: `pnpm local:up`. Aplikacija odbija start bez valjanog `APP_DATABASE_URL` (`src/server/env.ts`). `izgrađeno`
 3. Provjeri da proces odgovara. Naredba: `curl -fsS http://localhost:3000/api/health`. `izgrađeno`
-4. Provjeri spremnost po sposobnosti: `database`, `storage`, `signing`, `queue` (`ok`, `nedostupno` ili `nije_konfigurirano`). Naredba: `curl -fsS http://localhost:3000/api/ready`; odgovor `503` znači da baza nije spremna i promet se ne pušta na repliku (DAN-585). `izgrađeno`
+4. Provjeri spremnost po sposobnosti: `database`, `storage`, `signing`, `queue` (`ok`, `nedostupno` ili `nije_konfigurirano`). Naredba: `curl --fail-with-body -sS http://localhost:3000/api/ready`; odgovor `503` znači da baza nije spremna i promet se ne pušta na repliku (DAN-585). `izgrađeno`
 5. Deploy zamrznutog izdanja na produkciju i primjena migracija na produkcijsku bazu. Nositelj: `vlasnik`. Agent ne primjenjuje migracije na produkciju (`CLAUDE.md`). `[PRAVILO]`; deploy je `planirano`.
 6. U fazama A i B upiši izdanje (puni commit SHA) i stanje spremnosti u dnevni zapis. Nositelj: `vlasnik`.
 
@@ -67,7 +67,7 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 3. Vrati prethodno zamrznuto izdanje (puni commit SHA iz dnevnog zapisa) na produkciju. Nositelj: `vlasnik`. `planirano`
 4. Vrati bazu i pohranu iz kopije. Nositelj: `vlasnik`. `planirano`: kopije i proba povrata su M11.2-P04 (D-277 NQ05). Dok proba povrata ne prođe, povrat iz kopije nije dokazan. `[DOKAZ]`
 5. Provjeri stanje migracija. Naredba: `pnpm db:status`. Naredba gleda samo lokalnu bazu; usporedba s `db/migrations.sum` (D-91) na produkciji ide uz korak 3.
-6. Pokreni po postupku „Pokretanje” i provjeri spremnost. Naredba: `pnpm local:up`, `curl -fsS http://localhost:3000/api/ready`.
+6. Pokreni po postupku „Pokretanje” i provjeri spremnost. Naredba: `pnpm local:up`, `curl --fail-with-body -sS http://localhost:3000/api/ready`.
 7. Provjeri rekonstrukciju predanih radova na vraćenom izdanju; prag je 100 %, a svako odstupanje blokira izdanje (`docs/PRODUCT.md` §12). Nositelj: `vlasnik`. `[PRAVILO]`; alat je `[DOKAZ]`.
 8. Upiši povrat u dnevni zapis: izdanje prije i poslije, razlog i ID incidenta. Nositelj: `vlasnik`.
 
@@ -76,7 +76,7 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 ### Incident
 
 1. Otvori zapis incidenta s ID-om i vremenom (UTC). U dnevni zapis i javni repo ide samo ID; pojedinosti sigurnosnog nalaza nikad ne idu u javni repo (`CLAUDE.md`, „Vanjski botovi”). Nositelj: `vlasnik` ili `zamjenik vlasnika`. `[PRAVILO]` za javni repo.
-2. Provjeri spremnost po sposobnosti. Naredba: `curl -fsS http://localhost:3000/api/ready`.
+2. Provjeri spremnost po sposobnosti. Naredba: `curl --fail-with-body -sS http://localhost:3000/api/ready`.
 3. Pregledaj zapise poslužitelja: JSON redci na stdout i stderr, bez osobnih podataka i sadržaja rada (`src/server/log/logger.ts`, DAN-586). Nositelj: `vlasnik`.
 4. U pilotu: ako je incident okidač STOP-a (neovlašten pristup, gubitak rada, lažan status), odluka o zaustavljanju ide po odjeljku „STOP”. Nositelj: `zaustavlja pilot`.
 5. Ako incident uključuje povredu osobnih podataka, odluči o prijavi AZOP-u u roku od 72 sata. Nositelj: `prijavljuje povredu`, `DPO ustanove`.

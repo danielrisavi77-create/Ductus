@@ -14,8 +14,9 @@ const OWNERS_HEADING = "Nositelji";
 const PROCEDURES_HEADING = "Postupci";
 // A role, never a placeholder: letters, digits, spaces and hyphens only.
 const PLAIN_ROLE_RE = /^[\p{L}\d](?:[\p{L}\d -]*[\p{L}\d])?$/u;
-// A list item may start after up to three spaces (CommonMark).
-const STEP_RE = /^( {0,3})(\d+)\.\s+/;
+// A list item may start after up to three spaces and end its number with `.`
+// or `)` (CommonMark).
+const STEP_RE = /^( {0,3})(\d+)[.)]\s+/;
 const FENCE_RE = /^\s*(`{3,}|~{3,})/;
 const MARKER_RE = /(?<!\p{L})(Naredba|Nositelj):/gu;
 // After a code span, another span follows only after a comma or a joining word.
