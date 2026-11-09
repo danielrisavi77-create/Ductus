@@ -15,6 +15,7 @@ import {
   readEvidenceCommitContext,
   type EvidenceCommitDependencies,
   type EvidenceCommitOutcome,
+  type EvidenceCommitSigning,
 } from "./evidence-commit";
 
 /**
@@ -62,6 +63,7 @@ async function prepareAndCommit(
   deps: EvidenceCommitRequestDependencies,
   token: string | null,
   request: EvidenceCommitRequest,
+  signing: EvidenceCommitSigning,
 ): Promise<EvidenceCommitRequestOutcome> {
   // t. 3.1: the form and the size limits, before any state is read.
   const { documentId, clientTransactionId, baseRevision, segment, document } = request;
@@ -159,7 +161,7 @@ async function prepareAndCommit(
     storageRef = stored.storageRef;
   }
 
-  // t. 3.6: one transaction, signed in it (step 4c).
+  // t. 3.6: one transaction, signed in it (step 4c) or left to the worker (protocol 2).
   return commitEvidenceSegment(deps, token, {
     context,
     documentId,
@@ -170,7 +172,7 @@ async function prepareAndCommit(
     descriptor,
     storageRef,
     snapshot: snapshot.text,
-  });
+  }, signing);
 }
 
 /** Never throws; a fault of the runtime is a closed code, never its message. */
@@ -178,9 +180,10 @@ export async function commitEvidenceRequest(
   deps: EvidenceCommitRequestDependencies,
   token: string | null,
   request: EvidenceCommitRequest,
+  signing: EvidenceCommitSigning = "inline",
 ): Promise<EvidenceCommitRequestOutcome> {
   try {
-    return await prepareAndCommit(deps, token, request);
+    return await prepareAndCommit(deps, token, request, signing);
   } catch {
     return { status: "unavailable", stage: "repository", code: "prepare_failed" };
   }

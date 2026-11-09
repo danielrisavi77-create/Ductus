@@ -304,6 +304,78 @@ describe("commitEvidenceSegment", () => {
     expect(db.ran).toEqual(["commit"]);
   });
 
+  describe("deferred signing (protocol 2, DAN-518)", () => {
+    it.each([
+      ["reserved", "committed_pending"],
+      ["duplicate_pending", "duplicate_pending"],
+    ])("answers %s pending, never signing, attaching or reading keys", async (outcome, status) => {
+      const db = database({ commit: [reserved({ outcome })], keys: [KEY_ROW], attach: [{ outcome: "signed" }] });
+      const s = signer();
+      expect(await commitEvidenceSegment({ withActor: db.withActor, signer: s.provider }, "t", INPUT, "deferred")).toEqual({
+        status,
+        revision: 1,
+      });
+      expect(s.calls).toHaveLength(0);
+      expect(db.ran).toEqual(["commit"]);
+      // The acceptance is kept, its receipt still pending.
+      expect(db.ended).toEqual(["commit"]);
+    });
+
+    it("gives a double commit the same revision: reserved, then the retry pending", async () => {
+      const s = signer();
+      const answers = [];
+      for (const outcome of ["reserved", "duplicate_pending"]) {
+        const db = database({ commit: [reserved({ outcome })] });
+        answers.push(await commitEvidenceSegment({ withActor: db.withActor, signer: s.provider }, "t", INPUT, "deferred"));
+      }
+      expect(answers).toEqual([
+        { status: "committed_pending", revision: 1 },
+        { status: "duplicate_pending", revision: 1 },
+      ]);
+      expect(s.calls).toHaveLength(0);
+    });
+
+    it("answers a retry the worker has signed with the stored receipt, verified", async () => {
+      const db = database({ commit: [reserved({ outcome: "duplicate_signed", signature: await storedSignature() })], keys: [KEY_ROW] });
+      const s = signer();
+      const outcome = await commitEvidenceSegment({ withActor: db.withActor, signer: s.provider }, "t", INPUT, "deferred");
+      expect(outcome).toMatchObject({ status: "duplicate", revision: 1, signedReceipt: { payload: PAYLOAD } });
+      expect(s.calls).toHaveLength(0);
+      expect(db.ran).toEqual(["commit", "keys"]);
+    });
+
+    it("never answers pending for a signed retry whose signature does not verify", async () => {
+      const signature = { ...(await storedSignature()), signatureBase64Url: "A".repeat(86) };
+      const db = database({ commit: [reserved({ outcome: "duplicate_signed", signature })], keys: [KEY_ROW] });
+      expect(await commitEvidenceSegment({ withActor: db.withActor, signer: signer().provider }, "t", INPUT, "deferred")).toEqual({
+        status: "unavailable",
+        stage: "repository",
+        code: "stored_receipt_unverified",
+      });
+    });
+
+    it.each([
+      ["reserved", "a text that is not JCS", { receipt_payload: JSON.stringify(PAYLOAD) }, "receipt_malformed"],
+      ["reserved", "another transaction", { receipt_payload: canonicalizeJcs({ ...PAYLOAD, clientTransactionId: "tx-2" }) }, "receipt_mismatch"],
+      ["reserved", "a revision other than base + 1", { committed_revision: "2" }, "receipt_mismatch"],
+      ["reserved", "another receipt id", { receipt_id: "00000000-0000-4000-8000-0000000000c2" }, "receipt_mismatch"],
+      ["reserved", "a signature", { signature: { keyId: "k" } }, "receipt_malformed"],
+      ["duplicate_pending", "no payload", { receipt_payload: null }, "receipt_malformed"],
+      ["duplicate_pending", "another document", { receipt_payload: canonicalizeJcs({ ...PAYLOAD, documentId: "doc-2" }) }, "receipt_mismatch"],
+      ["duplicate_pending", "a signature", { signature: { keyId: "k" } }, "receipt_malformed"],
+    ])("rolls back %s with %s instead of answering pending", async (outcome, _, extra, code) => {
+      const db = database({ commit: [reserved({ outcome, ...extra })] });
+      const s = signer();
+      expect(await commitEvidenceSegment({ withActor: db.withActor, signer: s.provider }, "t", INPUT, "deferred")).toEqual({
+        status: "unavailable",
+        stage: "repository",
+        code,
+      });
+      expect(s.calls).toHaveLength(0);
+      expect(db.ended).toEqual(["rollback"]);
+    });
+  });
+
   const state = { current_revision: "3", document_hash: "e".repeat(64), head_segment_hash: null, last_sequence_to: "9" };
   it.each([
     ["unauthorized", {}, { status: "not_found" }],
@@ -323,10 +395,12 @@ describe("commitEvidenceSegment", () => {
     ["concurrent_conflict", {}, { status: "unavailable", stage: "repository", code: "outcome_unknown" }],
     ["committed", {}, { status: "unavailable", stage: "repository", code: "outcome_unknown" }],
   ] as [string, Record<string, unknown>, unknown][])("maps %s to its closed outcome without signing", async (outcome, extra, expected) => {
-    const db = database({ commit: [{ outcome, ...extra }] });
-    const s = signer();
-    expect(await commitEvidenceSegment({ withActor: db.withActor, signer: s.provider }, "t", INPUT)).toEqual(expected);
-    expect(s.calls).toHaveLength(0);
+    for (const signing of ["inline", "deferred"] as const) {
+      const db = database({ commit: [{ outcome, ...extra }] });
+      const s = signer();
+      expect(await commitEvidenceSegment({ withActor: db.withActor, signer: s.provider }, "t", INPUT, signing)).toEqual(expected);
+      expect(s.calls).toHaveLength(0);
+    }
   });
 
   it.each([
