@@ -203,9 +203,13 @@ describe(INVENTORY, () => {
     ["9", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /JOIN institution\.assignment_version v/],
     ["11", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /LEFT JOIN evidence\.document d/],
     ["16", "src/server/institution/student-workspace.ts", "db/migrations/20261102150000_student_workspace.sql", /LEFT JOIN evidence\.submission s/],
+    // A change of the assignment's language is a new version, which notifies.
+    ["9", "app/api/institution/assignments/[assignmentId]/work-language/route.ts", "db/migrations/20261108120000_work_language.sql", /INSERT INTO institution\.assignment_version \(/],
+    ["6", "app/api/institution/assignments/[assignmentId]/work-language/route.ts", "db/migrations/20261028150000_notification_store.sql", /AFTER INSERT ON institution\.assignment_version/],
     // Reads of segment payloads from S3 behind a route that does not name them.
     ["21", "src/server/evidence/submission.ts", "src/application/evidence/evidence-reconstruction.ts", /payloads\.readImmutable\(/],
     ["21", "src/server/projection/process-summary.ts", "src/application/projection/process-summary-reader.ts", /storage\.readImmutable\(/],
+    ["21", "src/server/teacher/fast-path.ts", "src/application/projection/process-summary-reader.ts", /storage\.readImmutable\(/],
   ])("lists class %s on the flow through %s while %s writes or returns it", (cls, code, migration, touch) => {
     expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(touch);
     const flows = parseFlows(readFileSync(join(ROOT, INVENTORY), "utf8")).filter(
@@ -215,17 +219,20 @@ describe(INVENTORY, () => {
     for (const f of flows) expect(f.classes.split(",").map((c) => c.trim())).toContain(cls);
   });
 
-  // The student reads the summary of their own work on the submission page, and
-  // the source function records the access only for a teacher or mentor.
-  it("lists the student as a reader of the process summary and the teacher-only access record", () => {
-    const migration = "db/migrations/20261021130000_audit_access_log_write.sql";
+  // The student reads their own work through the same functions as the
+  // teacher, and each function records the access only for the teacher role.
+  it.each([
+    ["process_summary", "db/migrations/20261021130000_audit_access_log_write.sql", "src/components/student/Submission.tsx", /fetchProcessSummary\(/],
+    ["live_view", "db/migrations/20261026163000_live_state_after_submission.sql", "src/components/student/TeacherViewSheet.tsx", /useLiveView\(/],
+    ["replay", "db/migrations/20261028121000_replay_source.sql", "src/server/evidence/replay-route.ts", /app\.read_replay_source\(/],
+  ])("lists the student as a reader of %s and the teacher-only access record", (surface, migration, entry, call) => {
     expect(readFileSync(join(ROOT, migration), "utf8")).toMatch(
-      /IF v_role = 'teacher' THEN\s+PERFORM audit\.record_work_opening\([^;]*'process_summary'\);/,
+      new RegExp(`IF v_role = 'teacher' THEN\\s+PERFORM audit\\.record_work_opening\\([^;]*'${surface}'\\);`),
     );
-    expect(readFileSync(join(ROOT, "src/components/student/Submission.tsx"), "utf8")).toMatch(/fetchProcessSummary\(/);
+    expect(readFileSync(join(ROOT, entry), "utf8")).toMatch(call);
     const rows = tableUnder(readFileSync(join(ROOT, INVENTORY), "utf8"), FLOWS_HEADING).filter(([, , , paths]) => {
       const cited = codeSpans(paths ?? "");
-      return cited.includes("src/components/student/Submission.tsx") && cited.includes(migration);
+      return cited.includes(entry) && cited.includes(migration);
     });
     expect(rows).toHaveLength(1);
     const [, , how, , , readers] = rows[0];
