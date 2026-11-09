@@ -15,6 +15,7 @@ Stanje: nacrt od 11. 10. 2026. na `main` (zadatak 1.7 iz issuea #239). Namjena: 
 | `05-otvorena-pitanja.md` | Pitanja za ustanovu i vlasnika, po redoslijedu blokade; dokazi potrebni prije pilota |
 | `06-klase-podataka.md` | Klase podataka (DATA-CLASS): svrha, okidač, rok i stanje po klasi; svaka tablica iz migracija u jednoj klasi |
 | `07-prijedlog-rokova-cuvanja.md` | Prilog zahtjevu FPZG-u i DPO-u: po klasi određeno / prijedlog / nepoznato; nijedan rok nije odobren |
+| `08-inventar-tokova-podataka.md` | Inventar tokova podataka iz koda na `main` (evidencija, prikaz, predaja, izvoz, logovi) s putanjama i klasama; nacrt za DPO uz DPIA (D-257) |
 
 ## Oznake koje se koriste u svim datotekama
 
