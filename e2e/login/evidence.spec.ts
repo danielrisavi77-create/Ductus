@@ -150,7 +150,10 @@ test("3d-2c2: a reload continues the chain", async ({ page }) => {
   await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
   await type(page, " Nakon osvježavanja.");
   await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
-  expect(answers.every((status) => status === 200)).toBe(true);
+  // DAN-595: a stack without protocol 2 answers the tab's first "2" with 426
+  // before reading the body, once per page load; everything else is 200.
+  expect(answers.filter((status) => status !== 200 && status !== 426)).toEqual([]);
+  expect(answers.filter((status) => status === 426).length).toBeLessThanOrEqual(2);
   expect((await serverOf(documentId))!.revision).toBeGreaterThan(first);
   await sameOnServer(page, documentId);
 });
@@ -245,11 +248,13 @@ test("3d-2c2: after a 409 conflict a reload stays read-only with the conflict no
 
 // 3d-2c2 §3 and e2e t. 7: a refusal for good (413), a 426 and an unreadable
 // answer are never sent again by themselves; the chip says "Greška" and the
-// notice `sendRefused` says a reload sends the text again.
-for (const [name, status, body] of [
-  ["413", 413, { status: "too_large" }],
-  ["426", 426, { status: "upgrade_required" }],
-  ["an unreadable answer", 200, { status: "nepoznato" }],
+// notice `sendRefused` says a reload sends the text again. DAN-595: a 426 to
+// protocol "2" is asked once more under "1" with the same body; the 426 to
+// "1" is the refusal, so a 426 answers two requests and never more.
+for (const [name, status, body, protocols] of [
+  ["413", 413, { status: "too_large" }, ["2"]],
+  ["426", 426, { status: "upgrade_required" }, ["2", "1"]],
+  ["an unreadable answer", 200, { status: "nepoznato" }, ["2"]],
 ] as const) {
   test(`3d-2c2: ${name} is not retried in a loop`, async ({ page }) => {
     await openSheet(page);
@@ -259,7 +264,8 @@ for (const [name, status, body] of [
     await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR", { timeout: OPEN });
     await networkBack(page);
     await page.waitForTimeout(10_000);
-    expect(commitsOf(requests)).toHaveLength(1);
+    expect(commitsOf(requests).map((request) => request.headers()["ductus-protocol"])).toEqual(protocols);
+    expect(new Set(commitsOf(requests).map((request) => request.postData())).size).toBe(1);
     await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR");
     await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(1);
     if (status === 413) await shoot(page, "3d-2c2-posluzitelj-nije-primio");
@@ -269,7 +275,7 @@ for (const [name, status, body] of [
     await expect(chipOf(page)).toHaveAttribute("data-state", /^(LOCAL_DURABLE|ERROR)$/, { timeout: OPEN });
     await page.waitForTimeout(5000);
     await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(1);
-    expect(commitsOf(requests)).toHaveLength(1);
+    expect(commitsOf(requests)).toHaveLength(protocols.length);
   });
 }
 
