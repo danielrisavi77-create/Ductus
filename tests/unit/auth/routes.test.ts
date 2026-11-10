@@ -3,11 +3,13 @@ import { join, relative } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// D-09: AAI@EduHr is the only login. The auth API is exactly these four
+// D-09: AAI@EduHr is the only login. The auth API is exactly these five
 // routes; another (a password form, a magic link, another provider) fails
 // here and needs a decision first (attacks 27, 28). The fourth,
 // back-channel logout, came with one (D-200 P4, DAN-474): the provider posts
 // a signed logout token and the route only closes sessions, never opens one.
+// The fifth, sign-out on every device (DAN-296, D-200 P2), likewise only
+// closes the sessions of the account behind the cookie.
 const ROOT = join(process.cwd(), "app");
 
 function routes(dir: string): string[] {
@@ -19,11 +21,12 @@ function routes(dir: string): string[] {
 }
 
 describe("auth route inventory", () => {
-  it("has login, callback, logout and back-channel logout under app/api/auth and nothing else", () => {
+  it("has login, callback, logout, logout-all and back-channel logout under app/api/auth and nothing else", () => {
     expect(routes(join(ROOT, "api", "auth")).sort()).toEqual([
       "api/auth/backchannel-logout/route.ts",
       "api/auth/callback/route.ts",
       "api/auth/login/route.ts",
+      "api/auth/logout-all/route.ts",
       "api/auth/logout/route.ts",
     ]);
   });

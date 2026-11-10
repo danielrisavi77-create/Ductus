@@ -46,6 +46,7 @@ beforeEach(() => {
       events.push("close");
       return true;
     }),
+    closeAllSessions: vi.fn(),
   };
   errors = vi.spyOn(console, "error").mockImplementation(() => {});
 });

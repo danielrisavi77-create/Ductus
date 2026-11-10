@@ -36,6 +36,11 @@ export interface AuthDeps {
   openSession: OpenSessionPort;
   /** Closes the session behind a raw cookie token; false when there was none. */
   closeSession: (token: string) => Promise<boolean>;
+  /**
+   * Closes every live session of the account behind a raw cookie token, this
+   * one included (DAN-296); nothing when the token names no live session.
+   */
+  closeAllSessions: (token: string) => Promise<void>;
 }
 
 /** The pending login attempt: state, nonce, PKCE verifier and where to go after. */
@@ -209,18 +214,41 @@ export function isSameOrigin(request: Request, origin: string): boolean {
 
 /** POST /api/auth/logout */
 export async function logout(request: Request, deps: AuthDeps): Promise<Response> {
+  return endSessions(request, deps, "logout", (token) => deps.closeSession(token), "clear");
+}
+
+/** POST /api/auth/logout-all: this session and every other live one of the account (DAN-296). */
+export async function logoutAll(request: Request, deps: AuthDeps): Promise<Response> {
+  return endSessions(request, deps, "logout_all", (token) => deps.closeAllSessions(token), "keep");
+}
+
+/**
+ * Closes on the server, then clears the cookie and goes to the provider. The
+ * answer is the same whether a session existed or not. When the database
+ * fails, logout clears the cookie all the same, as it always did, and the
+ * session ends at expiry or idle; logout-all answers 503 and keeps the cookie,
+ * so it never reports a sign-out while the account's other sessions live and
+ * can be sent again (contract addendum on #1091, item 3).
+ */
+async function endSessions(
+  request: Request,
+  deps: AuthDeps,
+  stage: string,
+  close: (token: string) => Promise<unknown>,
+  onCloseFailure: "clear" | "keep",
+): Promise<Response> {
   if (!isSameOrigin(request, deps.config.redirectUri.origin)) {
-    logFailure("logout", "cross_origin");
+    logFailure(stage, "cross_origin");
     return failurePage(403);
   }
   const clearedSession = cookie(SESSION_COOKIE_NAME, "", "Max-Age=0");
   const token = readCookie(request, SESSION_COOKIE_NAME);
   if (token) {
     try {
-      await deps.closeSession(token);
+      await close(token);
     } catch (error) {
-      // The cookie is cleared all the same; the session then ends at expiry.
-      logFailure("logout", errorCode(error));
+      logFailure(stage, errorCode(error));
+      if (onCloseFailure === "keep") return failurePage(503);
     }
   }
   // Only then the provider (DAN-212), also without a live Ductus session: the
