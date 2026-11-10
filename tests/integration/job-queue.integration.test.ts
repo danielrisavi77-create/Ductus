@@ -247,6 +247,40 @@ describe("job queue: one job, one attempt at a time", () => {
     expect(JSON.stringify(rows)).not.toContain("7f3a");
   });
 
+  // Each class of what a refusal can carry as its code. A getter is read once:
+  // the value checked is the value stored (QA c.6755637234).
+  const TEXT = "synthetic marker 9c2e: not an identifier";
+  const getter = (values: unknown[], reads: { n: number }) => ({
+    ok: false,
+    get code(): unknown {
+      reads.n += 1;
+      const value = values[Math.min(reads.n, values.length) - 1];
+      if (value instanceof Error) throw value;
+      return value;
+    },
+  });
+  it.each<[string, (reads: { n: number }) => unknown, string, number | null]>([
+    ["a valid code", () => ({ ok: false, code: "synthetic_refusal" }), "synthetic_refusal", null],
+    ["free text", () => ({ ok: false, code: TEXT }), "handler_failed", null],
+    ["a number", () => ({ ok: false, code: 7 }), "handler_failed", null],
+    ["an object", () => ({ ok: false, code: { toString: () => "synthetic_refusal" } }), "handler_failed", null],
+    ["no code", () => ({ ok: false }), "handler_failed", null],
+    ["a getter: valid, valid, then text", (reads) => getter(["synthetic_refusal", "synthetic_refusal", TEXT], reads), "synthetic_refusal", 1],
+    ["a getter: text, then valid", (reads) => getter([TEXT, "synthetic_refusal"], reads), "handler_failed", 1],
+    ["a getter that throws", (reads) => getter([new Error(TEXT)], reads), "handler_threw", 1],
+  ])("W-12 (negative): a refusal carrying %s stores only a checked code, read once", async (_label, make, code, readsExpected) => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit: 0 });
+    await queue.enqueue(def.name, body(32));
+    const reads = { n: 0 };
+    const handler = (async () => make(reads)) as JobHandler;
+    expect(await queue.runOnce(def.name, handler)).toEqual({ status: "failed", code });
+    const rows = await jobs(def.name);
+    expect(rows.map((row) => row.output)).toEqual([{ code }]);
+    expect(JSON.stringify(rows)).not.toContain("9c2e");
+    if (readsExpected !== null) expect(reads.n).toBe(readsExpected);
+  });
+
   it("W-4: a handler past its deadline is told to stop and the attempt is stored as timeout", async () => {
     const def = definition();
     const queue = await open(def, "workerA", { retryLimit: 0, deadlineMs: 100 });

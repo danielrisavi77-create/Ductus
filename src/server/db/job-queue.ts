@@ -162,7 +162,8 @@ async function attempt(handler: JobHandler, body: JobBody, deadlineMs: number): 
     // refuses the record if the attempt has been taken back meanwhile.
     if (result.ok === true) return null;
     if (controller.signal.aborted) return "timeout";
-    return typeof result.code === "string" && CODE.test(result.code) ? result.code : "handler_failed";
+    const code: unknown = result.code;
+    return typeof code === "string" && CODE.test(code) ? code : "handler_failed";
   } catch {
     // What was thrown is not kept: it may carry text.
     return controller.signal.aborted ? "timeout" : "handler_threw";
