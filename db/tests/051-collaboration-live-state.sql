@@ -107,7 +107,7 @@ SELECT bag_eq(
             ('collaboration.accept_revision_request(uuid,bigint,bigint,text)'),
             ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
             ('collaboration.withdraw_revision_request(uuid,bigint)'),
-            ('collaboration.rereview_revision_request(uuid,bigint,bigint,text)') $$,
+            ('collaboration.rereview_revision_request(uuid,bigint)') $$,
   'the web role executes exactly the comment RPCs, the two live RPCs and the seven revision-request RPCs of 110, 112 and 119');
 SELECT bag_eq(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p

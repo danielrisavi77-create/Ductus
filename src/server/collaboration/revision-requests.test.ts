@@ -39,7 +39,7 @@ const VALID: Record<Action, Record<string, unknown>> = {
   respond: { expectedSeq: 2, explanation: `Student A: ${CANARY}`, kind: "done", requestId: REQ, responseRevision: 4 },
   accept: { acceptedRevision: 4, expectedSeq: 3, rangeHash: HASH, requestId: REQ },
   reopen: { expectedSeq: 3, instruction: `Nastavnik N1: ${CANARY}`, requestId: REQ, requestedRevision: 5 },
-  rereview: { currentRevision: 6, expectedSeq: 4, rangeHash: HASH, requestId: REQ },
+  rereview: { expectedSeq: 4, requestId: REQ },
   withdraw: { expectedSeq: 2, requestId: REQ },
   list: { documentId: DOC },
 };
@@ -147,7 +147,7 @@ describe("DAN-314 2f revision request API: success", () => {
     ["respond", "respond_revision_request($1::uuid, $2::bigint, $3, $4, $5::bigint)", [REQ, 2, "done", VALID.respond.explanation, 4]],
     ["accept", "accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4)", [REQ, 3, 4, HASH]],
     ["reopen", "reopen_revision_request($1::uuid, $2::bigint, $3, $4::bigint)", [REQ, 3, VALID.reopen.instruction, 5]],
-    ["rereview", "rereview_revision_request($1::uuid, $2::bigint, $3::bigint, $4)", [REQ, 4, 6, HASH]],
+    ["rereview", "rereview_revision_request($1::uuid, $2::bigint)", [REQ, 4]],
     ["withdraw", "withdraw_revision_request($1::uuid, $2::bigint)", [REQ, 2]],
   ] as const)("%s: applied is 200 with the current counter", async (action, fn, params) => {
     const { res, json, query } = await call(action, VALID[action]);
@@ -335,7 +335,7 @@ describe("DAN-314 2f: refusals before the database", () => {
 
   it("a revision is a safe integer from 0 (class 7)", async () => {
     const fields = [["create", "requestedRevision"], ["respond", "responseRevision"], ["accept", "acceptedRevision"],
-      ["reopen", "requestedRevision"], ["rereview", "currentRevision"]] as const;
+      ["reopen", "requestedRevision"]] as const;
     for (const [action, field] of fields) {
       for (const bad of ["3", 3.5, -1, 2 ** 53, null, true]) {
         await refused(action, { ...VALID[action], [field]: bad }, 422, "invalid_input");
@@ -366,20 +366,24 @@ describe("DAN-314 2f: refusals before the database", () => {
     expect((await call("respond", { ...VALID.respond, kind: "declined" })).res.status).toBe(200);
     for (const rangeHash of [HASH.toUpperCase(), HASH.slice(1), `${HASH}0`, "", 1]) {
       await refused("accept", { ...VALID.accept, rangeHash }, 422, "invalid_input");
-      await refused("rereview", { ...VALID.rereview, rangeHash }, 422, "invalid_input");
     }
   });
 
-  it("rereview takes a null hash for a range that no longer resolves, and no text, state or role", async () => {
-    const ok = await call("rereview", { ...VALID.rereview, rangeHash: null });
+  it("rereview takes the request and its counter only: no hash, revision, text, state or role (c.6754364680)", async () => {
+    const ok = await call("rereview", VALID.rereview);
     expect(ok.res.status).toBe(200);
-    expect(ok.query.mock.calls[0]?.[1]).toEqual([REQ, 4, 6, null]);
+    expect(ok.query.mock.calls[0]?.[1]).toEqual([REQ, 4]);
+    // The caller cannot say whether the range changed: every such claim is an
+    // extra key, refused before the database is asked anything.
+    const claims: Record<string, unknown>[] = [{ rangeHash: null }, { rangeHash: HASH }, { rangeHash: "f".repeat(64) },
+      { currentRevision: 6 }, { currentRevision: 6, rangeHash: null }, { currentRevision: 6, rangeHash: HASH }];
+    for (const claim of claims) {
+      await refused("rereview", { ...VALID.rereview, ...claim }, 422, "invalid_input");
+    }
     for (const extra of ["quote", "text", "state", "role", "instruction", "anchor"]) {
       await refused("rereview", { ...VALID.rereview, [extra]: "x" }, 422, "invalid_input");
     }
-    for (const key of ["currentRevision", "expectedSeq", "rangeHash"]) {
-      await refused("rereview", without(VALID.rereview, key), 422, "invalid_input");
-    }
+    await refused("rereview", without(VALID.rereview, "expectedSeq"), 422, "invalid_input");
   });
 
   it("the anchor shape is exact (class 10, G8)", async () => {

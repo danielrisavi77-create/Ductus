@@ -95,15 +95,15 @@ const SPECS: Record<RevisionAction, Spec> = {
     sql: `${TRANSITION}collaboration.reopen_revision_request($1::uuid, $2::bigint, $3, $4::bigint)`,
     params: (i) => [i.requestId, i.expectedSeq, i.instruction, i.requestedRevision],
   },
-  // The hash of the accepted range as it resolves now, or null when it no
-  // longer resolves; the text of the range is never sent.
+  // Only the request and its counter: the database reads the current work
+  // itself and decides whether the accepted range changed. A hash, a revision
+  // or text sent here is an extra key and is refused before the database.
   rereview: {
-    keys: ["currentRevision", "expectedSeq", "rangeHash", "requestId"],
+    keys: ["expectedSeq", "requestId"],
     id: "requestId",
-    valid: (i) => isExpectedSeq(i.expectedSeq) && isRevisionNumber(i.currentRevision)
-      && (i.rangeHash === null || isRangeHash(i.rangeHash)),
-    sql: `${TRANSITION}collaboration.rereview_revision_request($1::uuid, $2::bigint, $3::bigint, $4)`,
-    params: (i) => [i.requestId, i.expectedSeq, i.currentRevision, i.rangeHash],
+    valid: (i) => isExpectedSeq(i.expectedSeq),
+    sql: `${TRANSITION}collaboration.rereview_revision_request($1::uuid, $2::bigint)`,
+    params: (i) => [i.requestId, i.expectedSeq],
   },
   withdraw: {
     keys: ["expectedSeq", "requestId"],

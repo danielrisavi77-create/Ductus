@@ -3,6 +3,8 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { resolveTextAnchor, type TextAnchor } from "@/domain/collaboration/anchor";
+import { snapshotHash } from "@/domain/collaboration/snapshot-hash";
 import { createWithActor, type ActorTransaction } from "@/server/db/with-actor";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
@@ -16,8 +18,10 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // random ids of one random institution, removed afterwards. Loopback only.
 // Step 2b adds two transitions with the same expected counter: the second
 // waits on the request row, then sees the new counter and writes nothing.
-// M6.5-P02 (contract c.6752687836) adds the rereview: two at once, and one
-// against the acceptance it follows. Boris's document is at revision 2.
+// M6.5-P02 (contract c.6752687836, narrowed by c.6754441692) adds the
+// rereview: two at once, one against the acceptance it follows, an unchanged
+// range that is never reopened, and the database's reading of a range against
+// resolveTextAnchor. Boris's document is at revision 2, with a checkpoint.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The revision request race test runs only against a loopback database (DATABASE_URL).");
@@ -39,11 +43,29 @@ const documents = { ana: `doc-ana-${suffix}`, dora: `doc-dora-${suffix}`, boris:
 const TEXT = `{"nodes":[{"children":[{"text":"Izmisljeni tekst ${suffix}.","type":"text"}],"id":"00000000-0000-4000-8000-000000000001","type":"paragraph"}],"schemaVersion":1}`;
 const HASH = createHash("sha256").update(TEXT, "utf8").digest("hex");
 const ANCHOR = { nodeId: "0f0e0d0c-0b0a-4000-8000-000000000001", quote: "prvi odlomak", prefix: "", suffix: " teksta", startHint: 0, endHint: 12 };
+// Revision 2 of Boris's document. Block 1 no longer holds ANCHOR's quote;
+// block 2 holds ANCHOR_SAME's quote across two inline texts, as it always did.
+const block = (n: number) => `0f0e0d0c-0b0a-4000-8000-${String(n).padStart(12, "0")}`;
+const para = (n: number, ...texts: string[]) => ({ children: texts.map((text) => ({ text, type: "text" })), id: block(n), type: "paragraph" });
+const BORIS_NODES = [
+  para(1, `Prvi, dopunjeni odlomak teksta ${suffix}.`),
+  para(2, "Drugi odlomak ", "ostaje isti."),
+  para(3, "isti izraz i isti izraz"),
+  para(4, "aaa"),
+  para(5, "čaša 😀 čaša"),
+  para(6, `xab${" ab".repeat(999)}`),
+  para(7, `xab${" ab".repeat(1000)}`),
+  // A citation is an inline atom without text (schema v2): it adds nothing to the block's text.
+  { children: [{ text: "Tvrdnja ", type: "text" }, { sourceId: "izvor-1", type: "citation" }, { text: "s izvorom.", type: "text" }], id: block(8), type: "paragraph" },
+];
+const BORIS_TEXT = JSON.stringify({ nodes: BORIS_NODES, schemaVersion: 2 });
+const BORIS_HASH = createHash("sha256").update(BORIS_TEXT, "utf8").digest("hex");
+const ANCHOR_SAME = { nodeId: block(2), quote: "odlomak ostaje", prefix: "Drugi ", suffix: " isti", startHint: 6, endHint: 20 };
 
 type Created = { request_id: string; row_seq: string; version: number; state: string };
 const createSql = "SELECT request_id, row_seq, version, state FROM collaboration.create_revision_request($1, $2::jsonb, $3, $4)";
-const create = (document: string) => async (tx: ActorTransaction) =>
-  (await tx.query<Created>(createSql, [document, JSON.stringify(ANCHOR), "Dodaj izvor za ovu tvrdnju.", 1])).rows[0];
+const create = (document: string, anchor: object = ANCHOR) => async (tx: ActorTransaction) =>
+  (await tx.query<Created>(createSql, [document, JSON.stringify(anchor), "Dodaj izvor za ovu tvrdnju.", 1])).rows[0];
 type Moved = { outcome: string; row_seq: string; version: number; state: string };
 const respond = (id: string, seq: string) => async (tx: ActorTransaction) => (await tx.query<Moved>(
   "SELECT outcome, row_seq, version, state FROM collaboration.respond_revision_request($1, $2, 'done', 'Dodao sam izvor.', 1)",
@@ -150,15 +172,19 @@ beforeAll(async () => {
         [`project-${document}`, institutionId, assignmentId, id]);
       await client.query(
         `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_revision, current_content_hash)
-         VALUES ($1, $2, $3, $4, $6, $5)`, [document, institutionId, `project-${document}`, id, HASH, student === "boris" ? 2 : 1]);
+         VALUES ($1, $2, $3, $4, $6, $5)`,
+        [document, institutionId, `project-${document}`, id, student === "boris" ? BORIS_HASH : HASH, student === "boris" ? 2 : 1]);
       await client.query(
         `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
          VALUES ($1, $2, 0, NULL, $3, $4), ($1, $2, 1, 0, $3, $5)`, [document, institutionId, id, "a".repeat(64), HASH]);
       if (student === "boris") await client.query(
         `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
-         VALUES ($1, $2, 2, 1, $3, $4)`, [document, institutionId, id, HASH]);
+         VALUES ($1, $2, 2, 1, $3, $4)`, [document, institutionId, id, BORIS_HASH]);
       await client.query("INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES ($1, $2, 1, $3)",
         [document, institutionId, TEXT]);
+      if (student === "boris") await client.query(
+        "INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES ($1, $2, 2, $3)",
+        [document, institutionId, BORIS_TEXT]);
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -310,16 +336,20 @@ describe("two transitions with the same expected counter, over two real connecti
   });
 });
 
-const ACCEPTED_HASH = "e".repeat(64);
-const SEEN_HASH = "f".repeat(64);
-const accept = (id: string, seq: string) => async (tx: ActorTransaction) => (await tx.query<Moved>(
-  "SELECT outcome, row_seq, version, state FROM collaboration.accept_revision_request($1, $2, 1, $3)", [id, seq, ACCEPTED_HASH])).rows[0];
-const rereview = (id: string, seq: string, hash: string | null) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+// The acceptance stores the hash of the accepted range: the quote's bytes (snapshotHash).
+const accept = (id: string, seq: string, quote = ANCHOR.quote) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+  "SELECT outcome, row_seq, version, state FROM collaboration.accept_revision_request($1, $2, 1, $3)", [id, seq, snapshotHash(quote)])).rows[0];
+const rereview = (id: string, seq: string) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+  "SELECT outcome, row_seq, version, state FROM collaboration.rereview_revision_request($1, $2)", [id, seq])).rows[0];
+// The call of the first version of this step, which carried the caller's revision and hash.
+const rereviewWithHash = (id: string, seq: string, hash: string | null) => async (tx: ActorTransaction) => (await tx.query<Moved>(
   "SELECT outcome, row_seq, version, state FROM collaboration.rereview_revision_request($1, $2, 2, $3)", [id, seq, hash])).rows[0];
 const versions = async (id: string) => (await admin.query<{ version: number; opened_as: string; instruction: string; observed: string | null; closed: string | null }>(
   `SELECT version, opened_as, instruction, observed_range_hash AS observed, closed_as AS closed
      FROM collaboration.revision_request_version WHERE request_id = $1 ORDER BY version`, [id])).rows;
 const FIRST = { version: 1, opened_as: "instruction", instruction: "Dodaj izvor za ovu tvrdnju.", observed: null, closed: "accepted" };
+// The range no longer resolves, so the database has no hash to store for the new version.
+const SECOND = { ...FIRST, version: 2, opened_as: "rereview", closed: null };
 
 describe("changed after acceptance, over two real connections (M6.5-P02)", () => {
   it("two rereviews at once: the second waits on the request, then is a conflict and opens no version", async () => {
@@ -327,21 +357,21 @@ describe("changed after acceptance, over two real connections (M6.5-P02)", () =>
     const answered = await withActor(people.boris.token, respond(created.request_id, created.row_seq));
     const accepted = await withActor(people.vesna.token, accept(created.request_id, answered.row_seq));
     expect(accepted).toMatchObject({ outcome: "applied", version: 1, state: "accepted" });
-    const first = hold(people.boris.token, rereview(created.request_id, accepted.row_seq, SEEN_HASH));
+    const first = hold(people.boris.token, rereview(created.request_id, accepted.row_seq));
     let one: Moved;
     let second: ReturnType<typeof settle<Moved>>;
     try {
       one = await first.answered;
       expect(one).toMatchObject({ outcome: "applied", version: 2, state: "reopened" });
-      second = settle(withActor(people.vesna.token, rereview(created.request_id, accepted.row_seq, null)));
+      second = settle(withActor(people.vesna.token, rereview(created.request_id, accepted.row_seq)));
       await waitForBlocked("rereview_revision_request");
     } finally {
       first.release();
     }
     await first.done;
     expect(await second).toEqual({ value: { outcome: "conflict", row_seq: one.row_seq, version: 2, state: "reopened" }, code: null });
-    // One new version, with the teacher's instruction and the hash of the call that was applied; the answer of version 1 stays.
-    expect(await versions(created.request_id)).toEqual([FIRST, { ...FIRST, version: 2, opened_as: "rereview", observed: SEEN_HASH, closed: null }]);
+    // One new version, with the teacher's instruction; the answer of version 1 stays.
+    expect(await versions(created.request_id)).toEqual([FIRST, SECOND]);
     expect(await answers(created.request_id)).toEqual({ state: "reopened", rowSeq: one.row_seq, responses: 1, closed: null });
   });
 
@@ -354,7 +384,7 @@ describe("changed after acceptance, over two real connections (M6.5-P02)", () =>
     try {
       one = await first.answered;
       expect(one).toMatchObject({ outcome: "applied", version: 1, state: "accepted" });
-      second = settle(withActor(people.boris.token, rereview(created.request_id, answered.row_seq, SEEN_HASH)));
+      second = settle(withActor(people.boris.token, rereview(created.request_id, answered.row_seq)));
       await waitForBlocked("rereview_revision_request");
     } finally {
       first.release();
@@ -362,8 +392,75 @@ describe("changed after acceptance, over two real connections (M6.5-P02)", () =>
     await first.done;
     expect(await second).toEqual({ value: { outcome: "conflict", row_seq: one.row_seq, version: 1, state: "accepted" }, code: null });
     expect(await versions(created.request_id)).toEqual([FIRST]);
-    const next = await withActor(people.boris.token, rereview(created.request_id, one.row_seq, SEEN_HASH));
+    const next = await withActor(people.boris.token, rereview(created.request_id, one.row_seq));
     expect(next).toMatchObject({ outcome: "applied", version: 2, state: "reopened" });
-    expect(await versions(created.request_id)).toEqual([FIRST, { ...FIRST, version: 2, opened_as: "rereview", observed: SEEN_HASH, closed: null }]);
+    expect(await versions(created.request_id)).toEqual([FIRST, SECOND]);
+  });
+});
+
+// Review c.6754364680, decision c.6754441692: the database decides whether the
+// accepted range changed; nothing the caller sends can.
+describe("the range is read by the database, not sent by the caller (M6.5-P02)", () => {
+  it("an unchanged range is never reopened, although another paragraph changed: not by the student, not by the teacher, not with a null or an invented hash", async () => {
+    const created = await withActor(people.vesna.token, create(documents.boris, ANCHOR_SAME));
+    const answered = await withActor(people.boris.token, respond(created.request_id, created.row_seq));
+    const accepted = await withActor(people.vesna.token, accept(created.request_id, answered.row_seq, ANCHOR_SAME.quote));
+    expect(accepted).toMatchObject({ outcome: "applied", version: 1, state: "accepted" });
+    const kept = { state: "accepted", rowSeq: accepted.row_seq, responses: 1, closed: "accepted" };
+    for (const name of ["boris", "vesna"] as const) {
+      expect(await settle(withActor(people[name].token, rereview(created.request_id, accepted.row_seq)))).toEqual({ value: null, code: "ZD409" });
+      // 42883: no function takes a hash any more, so neither value reaches a decision.
+      for (const hash of [null, "f".repeat(64)]) {
+        expect(await settle(withActor(people[name].token, rereviewWithHash(created.request_id, accepted.row_seq, hash))))
+          .toEqual({ value: null, code: "42883" });
+      }
+      expect(await versions(created.request_id)).toEqual([FIRST]);
+      expect(await answers(created.request_id)).toEqual(kept);
+    }
+  });
+
+  it("a changed range is reopened once, and the same call on the new version is refused", async () => {
+    const created = await withActor(people.vesna.token, create(documents.boris));
+    const answered = await withActor(people.boris.token, respond(created.request_id, created.row_seq));
+    const accepted = await withActor(people.vesna.token, accept(created.request_id, answered.row_seq));
+    const reopened = await withActor(people.vesna.token, rereview(created.request_id, accepted.row_seq));
+    expect(reopened).toMatchObject({ outcome: "applied", version: 2, state: "reopened" });
+    expect(await settle(withActor(people.boris.token, rereview(created.request_id, reopened.row_seq)))).toEqual({ value: null, code: "ZD409" });
+    expect(await versions(created.request_id)).toEqual([FIRST, SECOND]);
+  });
+
+  // [block, quote, prefix, suffix, does the range resolve]
+  const RANGES: [number, string, string, string, boolean][] = [
+    [1, "prvi odlomak", "", " teksta", false],
+    [1, "dopunjeni odlomak", "Prvi, ", " teksta", true],
+    [2, "odlomak ostaje", "Drugi ", " isti", true],
+    [2, "Drugi", "x", " odlomak", true],
+    [2, "isti.", "ostaje ", "x", true],
+    [3, "isti izraz", "", "", false],
+    [3, "isti izraz", "i ", "", true],
+    [3, "isti izraz", "", " i", true],
+    [3, "isti izraz", "i ", " i", false],
+    [4, "aa", "", "", false],
+    [4, "aa", "a", "", true],
+    [5, "čaša", "😀 ", "", true],
+    [5, "čaša", "", "", false],
+    [5, "😀", "čaša ", " čaša", true],
+    [6, "ab", "x", "", true],
+    [7, "ab", "x", "", false],
+    [8, "Tvrdnja s izvorom", "", ".", true],
+    [9, "Drugi", "", "", false],
+  ];
+  it("the database resolves a range as resolveTextAnchor does and hashes it as snapshotHash does", async () => {
+    const texts = new Map(BORIS_NODES.map((node) => [node.id, node.children.map((child) => ("text" in child ? child.text : "")).join("")]));
+    for (const [n, quote, prefix, after, resolves] of RANGES) {
+      const anchor = { nodeId: block(n), quote, prefix, suffix: after, startHint: 0, endHint: quote.length } as TextAnchor;
+      const text = texts.get(anchor.nodeId);
+      const status = text === undefined ? "missing" : resolveTextAnchor(anchor, anchor.nodeId, text).status;
+      expect([n, quote, prefix, after, status === "exact" || status === "moved"]).toEqual([n, quote, prefix, after, resolves]);
+      const read = await admin.query<{ revision: string; range_hash: string | null }>(
+        "SELECT revision, range_hash FROM collaboration.current_range_hash($1, $2, $3::jsonb)",
+        [documents.boris, institutionId, JSON.stringify(anchor)]);
+      expect([n, quote, prefix, after, read.rows]).toEqual([n, quote, prefix, after, [{ revision: "2", range_hash: resolves ? snapshotHash(quote) : null }]]);
+    }
   });
 });
