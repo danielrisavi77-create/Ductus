@@ -44,6 +44,11 @@ const PERSONAL_DATA_SHAPES: readonly [string, RegExp][] = [
   ["oib or jmbag", /(?<!\d)\d{10,11}(?!\d)/u],
   ["phone", /(?:\+385|\b0\d{1,2})[\s/-]?\d{3}[\s/-]?\d{3,4}\b/u],
   ["url", /\b(?:https?:\/\/|www\.)(?![\w.-]*(?:example\.org|\.invalid)\b)/iu],
+  // Only roles with a letter ("Student A", "Autorica B") stand for people, so
+  // no name in the corpus can be taken for a real person at the faculty.
+  ["name", /\p{Lu}\p{Ll}+\s+\p{Lu}\p{Ll}+/u],
+  ["name", /\p{Lu}\p{Ll}+,\s*(?:\p{Lu}\.\s*)?\(?\d{4}/u],
+  ["name", /\p{Lu}\p{Ll}+,\s+\p{Lu}\p{Ll}+,/u],
 ];
 
 function sameKeys(value: object, keys: readonly string[]): boolean {
@@ -126,6 +131,10 @@ describe("synthetic Croatian evaluation corpus", () => {
     ["oib", (c) => void (c.items[0]!.input += " OIB 12345678903"), "oib or jmbag"],
     ["jmbag", (c) => void (c.items[0]!.instruction += " JMBAG 0067123456"), "oib or jmbag"],
     ["phone", (c) => void (c.items[0]!.input += " nazovite 091 234 5678"), "phone"],
+    ["full name", (c) => void (c.items[0]!.input += " Razgovor je vodila Ana Kovač."), "name"],
+    ["surname in a citation", (c) => void (c.items[0]!.input += " (Babić, 2020: 14)"), "name"],
+    ["surname with an initial", (c) => void (c.items[0]!.input += " Babić, I. (2020)"), "name"],
+    ["surname with a given name", (c) => void (c.items[0]!.input += " Babić, Iva, Naslov"), "name"],
     ["real url", (c) => void (c.items[0]!.input += " https://www.fpzg.unizg.hr/"), "url"],
     ["unknown item field", (c) => void Object.assign(c.items[0]!, { author: "x" }), "fields"],
     ["unknown criterion field", (c) => void Object.assign(c.criteria[0]!, { weight: 1 }), "fields"],
@@ -138,5 +147,10 @@ describe("synthetic Croatian evaluation corpus", () => {
 
   it("allows a reserved example address", () => {
     expect(corpusProblems(broken((c) => void (c.items[0]!.input += " https://example.org/clanak")))).toEqual([]);
+  });
+
+  it("allows roles with a letter in place of names", () => {
+    const roles = " Student A i Mentorica B citiraju (Autorica C, 2020: 14) i Autor D (2021).";
+    expect(corpusProblems(broken((c) => void (c.items[0]!.input += roles)))).toEqual([]);
   });
 });

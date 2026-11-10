@@ -19,8 +19,8 @@
       "id": "formatting-1",
       "purpose": "formatting",
       "level": 1,
-      "instruction": "Oblikuj popis literature prema kućnom stilu: prezime, inicijal imena, godina u zagradi, naslov u kurzivu, mjesto i izdavač.",
-      "input": "Horvat, Ana, Lokalna samouprava u promjeni, Zagreb: Politička misao, 2019. / Kovač, I. (2021), Izborni sustavi malih država, Rijeka, Primjer d.o.o.",
+      "instruction": "Oblikuj popis literature prema kućnom stilu: autor, godina u zagradi, naslov u kurzivu, mjesto i izdavač.",
+      "input": "Autorica A, Lokalna samouprava u promjeni, Grad X: Izdavač Y, 2019. / Autor B (2021), Izborni sustavi malih država, Grad Z, Izdavač W.",
       "criteria": ["uputa", "brojke", "potpunost"]
     },
     {
@@ -36,7 +36,7 @@
       "purpose": "proofreading",
       "level": 1,
       "instruction": "Ispravi pravopisne i gramatičke pogreške, ne mijenjaj stil i označi svaku izmjenu.",
-      "input": "Prema podacima iz 2018. izlaznost na lokalnim izborima pala je na 41 %, sto autori tumače slabljenjem povjerenja u stranke (Horvat, 2019: 23). Gradjani su sve manje zainteresirani za općinske poslove i rijetko dolaze na sjednice vijeca.",
+      "input": "Prema podacima iz 2018. izlaznost na lokalnim izborima pala je na 41 %, sto autori tumače slabljenjem povjerenja u stranke (Autorica A, 2019: 23). Gradjani su sve manje zainteresirani za općinske poslove i rijetko dolaze na sjednice vijeca.",
       "criteria": ["jezik", "izmjene", "brojke", "smisao"]
     },
     {
@@ -84,7 +84,7 @@
       "purpose": "translation",
       "level": 1,
       "instruction": "Prevedi na hrvatski. Navode u zagradama i brojke ostavi kako jesu.",
-      "input": "The coalition agreement of 2017 reduced the number of ministries from 20 to 16 (Smith, 2018: 45). Critics argued that the merger weakened parliamentary oversight of the new departments.",
+      "input": "The coalition agreement of 2017 reduced the number of ministries from 20 to 16 (Author C, 2018: 45). Critics argued that the merger weakened parliamentary oversight of the new departments.",
       "criteria": ["brojke", "nazivlje", "smisao", "potpunost"]
     },
     {
@@ -92,7 +92,7 @@
       "purpose": "translation",
       "level": 1,
       "instruction": "Prevedi sažetak na engleski, zadrži stručne nazive i oznake izvora.",
-      "input": "Rad analizira ulogu županijskih skupština u razdoblju od 2001. do 2013. Na uzorku od 21 izmišljene županije pokazuje se da je broj sjednica rastao, a broj usvojenih prijedloga oporbe ostao gotovo nepromijenjen (Kovač, 2021).",
+      "input": "Rad analizira ulogu županijskih skupština u razdoblju od 2001. do 2013. Na uzorku od 21 izmišljene županije pokazuje se da je broj sjednica rastao, a broj usvojenih prijedloga oporbe ostao gotovo nepromijenjen (Autor B, 2021).",
       "criteria": ["brojke", "nazivlje", "smisao", "potpunost"]
     },
     {

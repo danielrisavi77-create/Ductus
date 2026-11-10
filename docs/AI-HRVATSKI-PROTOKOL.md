@@ -27,7 +27,7 @@ Korpus ima po dva izmišljena zadatka za svaku od deset svrha, ukupno 20. Svaki 
 | `input` | Izmišljen tekst ili bilješke nad kojima pomoćnik radi. |
 | `criteria` | Oznake mjerila iz popisa `criteria` koja vrijede za taj zadatak. |
 
-Svi tekstovi su izmišljeni. Nema stvarnih studentskih radova, imena, adresa, brojeva telefona, OIB-a, JMBAG-a ni stvarnih poveznica; države i županije u zadacima su izmišljene, a navodi poput „(Horvat, 2019)” ne upućuju na stvarna djela. Test `src/domain/assistant/croatian-eval-corpus.test.ts` to čuva: odbija svrhu izvan kataloga, krivu razinu, svrhu s manje od dva zadatka, nepoznato mjerilo ili polje, mjerilo kojemu predmet nije izlaz modela, izraz iz rječnika zabranjenih izraza te oblike e-adrese, OIB-a ili JMBAG-a, telefona i stvarne poveznice. Dopuštene su samo rezervirane adrese (`example.org`, `.invalid`).
+Svi tekstovi su izmišljeni. Nema stvarnih studentskih radova, osobnih imena, adresa, brojeva telefona, OIB-a, JMBAG-a ni stvarnih poveznica; države i županije u zadacima su izmišljene, a osobe su samo uloge sa slovom („Student A”, „Autorica B”), pa i navodi poput „(Autorica A, 2019)” ne upućuju na stvarna djela ni ljude. Test `src/domain/assistant/croatian-eval-corpus.test.ts` to čuva: odbija svrhu izvan kataloga, krivu razinu, svrhu s manje od dva zadatka, nepoznato mjerilo ili polje, mjerilo kojemu predmet nije izlaz modela, izraz iz rječnika zabranjenih izraza te oblike e-adrese, OIB-a ili JMBAG-a, telefona, stvarne poveznice i imena u obliku „Ime Prezime”, „Prezime, godina” ili „Prezime, Ime”. Dopuštene su samo rezervirane adrese (`example.org`, `.invalid`).
 
 ## 3. Mjerila
 
