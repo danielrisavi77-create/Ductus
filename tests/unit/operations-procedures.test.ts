@@ -507,17 +507,18 @@ describe("checkOperations: pnpm run always names a package.json script", () => {
 describe("checkOperations: a closing run of # is not part of a heading (CommonMark ATX)", () => {
   const BAD = "1. Odluči što dalje.";
   const MISSING = REQUIRED_PROCEDURES.map((name) => `${name}#-: required procedure is missing`);
+  // w540m (#1836 c.6766447922): a heading with a character outside the allowed set is also refused.
   const postupci = (heading: string) => doc(BAD).replace("\n## Postupci\n", `\n${heading}\n`);
   it.each([
     ["H1 closing run after a space", postupci("## Postupci ##"), NONE],
     ["H2 closing run of one #", postupci("## Postupci #"), NONE],
     ["H2 closing run longer than the opening", postupci("## Postupci ##########"), NONE],
     ["H3 closing run after a tab, tabs around the title", postupci("##\tPostupci\t##\t"), NONE],
-    ["H4 # without a space before it stays in the title", postupci("## Postupci##"), MISSING],
-    ["H5 only the last run is a closing run", postupci("## Postupci # #"), MISSING],
+    ["H4 # without a space before it stays in the title", postupci("## Postupci##"), ["-#-: unsupported markdown: heading character U+0023", ...MISSING]],
+    ["H5 only the last run is a closing run", postupci("## Postupci # #"), ["-#-: unsupported markdown: heading character U+0023", ...MISSING]],
     ["H6 a heading of # only is empty", postupci("## ##"), MISSING],
     ["H6 a heading of one # is empty", postupci("## #"), MISSING],
-    ["H7 an escaped # is not a closing run", postupci("## Postupci \\##"), MISSING],
+    ["H7 an escaped # is not a closing run", postupci("## Postupci \\##"), ["-#-: unsupported markdown: heading character U+005C", ...MISSING]],
     ["H8 a procedure heading with a closing run", doc(BAD).replace("### Pokretanje\n", "### Pokretanje ###\n"), NONE],
     ["H9 the owners heading with a closing run", doc("1. Odluči. Nositelj: `vlasnik`.").replace("## Nositelji\n", "## Nositelji ##\n"), []],
     [
@@ -735,5 +736,96 @@ describe("docs/OPERATIONS.md on this branch", () => {
     expect(context.routeExists("/api/ready")).toBe(true);
     expect(context.routeExists("/api/nope")).toBe(false);
     expect(context.routeExists("/api/../package.json")).toBe(false);
+  });
+});
+
+// Review FAIL c.6766230163 and QA FAIL c.6766251125 on a5f068ac (#1803),
+// contract #1836 c.6766447922 (w540m): an owners table row is `| ... |` without
+// a backslash, and a heading uses only the characters the real headings use.
+// Every other form is refused, not skipped.
+describe("checkOperations: closed forms for owners table rows and headings", () => {
+  const real = readFileSync(new URL("../../docs/OPERATIONS.md", import.meta.url), "utf8");
+  const context = repoContext(new URL("../..", import.meta.url));
+  /** Refusals of `text`, as `line: message`. */
+  const refused = (text: string, ctx = context) =>
+    checkOperations(text, ctx)
+      .filter((p) => p.message.startsWith("unsupported markdown: "))
+      .map((p) => `${p.line}: ${p.message.replace("unsupported markdown: ", "")}`);
+  const header = "| Nositelj | Odgovornost | Tko | Izvor | Stanje |";
+  const separator = "| --- | --- | --- | --- | --- |";
+  const body = "| `vlasnik` | tehnički kvarovi, deploy, migracije na produkciju, kopije, povrat, zapis incidenta | vlasnik |";
+  const lineOf = (needle: string) => real.split("\n").findIndex((line) => line.startsWith(needle)) + 1;
+  const bodyLine = real.split("\n")[lineOf(body) - 1] ?? "";
+
+  it.each([
+    ["T1 review: an escaped separator in the header", header, "| Nositelj \\| Odgovornost | Tko | Izvor | Stanje |", "backslash in a table row"],
+    ["T2 an escaped separator in the separator row", separator, "| --- \\| --- | --- | --- | --- | --- |", "backslash in a table row"],
+    ["T3 an escaped separator in a body row", body, "| `vlasnik` \\| x | tehnički kvarovi, deploy, migracije na produkciju, kopije, povrat, zapis incidenta | vlasnik |", "backslash in a table row"],
+    ["T3 a backslash anywhere in a body row", body, "| `vlasnik` | tehnički\\ kvarovi, deploy, migracije na produkciju, kopije, povrat, zapis incidenta | vlasnik |", "backslash in a table row"],
+    ["T4 a header row without a closing pipe", header, "| Nositelj | Odgovornost | Tko | Izvor | Stanje", "table row form"],
+    ["T4 a body row without a closing pipe", bodyLine, bodyLine.replace(/ \|$/, ""), "table row form"],
+    ["T5 a no-break space after the closing pipe", header, `${header} `, "table row form"],
+    ["T5 a no-break space around an owner", body, body.replace("| `vlasnik` |", "| `vlasnik` |"), null],
+  ] as const)("%s is refused at its line", (_name, from, to, what) => {
+    const at = lineOf(from);
+    expect(at).toBeGreaterThan(0);
+    const text = real.replace(from, to);
+    expect(text).not.toBe(real);
+    const found = checkOperations(text, context);
+    expect(found.length).toBeGreaterThan(0);
+    if (what) expect(refused(text)).toContain(`${at}: ${what}`);
+    else expect(found.map((p) => p.line)).toContain(at);
+  });
+
+  const BAD_TITLES = [
+    ["N1 named entity", "P&#111;stupci".replace("&#111;", "&amp;")],
+    ["N1 named entity &quot;", "&quot;Postupci&quot;"],
+    ["N2 decimal entity", "P&#111;stupci"],
+    ["N3 hexadecimal entity", "P&#x6F;stupci"],
+    ["N3 hexadecimal entity, capital X", "P&#X6f;stupci"],
+    ["N6 inline HTML", "<span>Postupci</span>"],
+    ["N6 HTML comment", "Post<!-- -->upci"],
+    ["N7 code span", "`Postupci`"],
+    ["N8 escaped character", "Postupci \\#"],
+    ["N8 backslash", "Post\\upci"],
+    ["N9 Cyrillic o", "Pоstupci"],
+    ["N9 combining mark", "Gašenje"],
+    ["N9 zero-width space", "Post​upci"],
+    ["N9 emphasis", "*Postupci*"],
+  ] as const;
+
+  it.each(BAD_TITLES)("%s in the QA heading after valid procedures is refused", (_name, title) => {
+    // QA c.6766251125: an extra section after the valid procedures hides its steps.
+    const text = `${real}\n## ${title}\n\n### Pokretanje\n\n1. Izvrši korak bez naredbe i nositelja.\n`;
+    const at = text.split("\n").indexOf(`## ${title}`) + 1;
+    expect(refused(text)).toEqual(expect.arrayContaining([expect.stringMatching(new RegExp(`^${at}: heading character U\\+[0-9A-F]{4}$`))]));
+  });
+
+  it.each([1, 2, 3, 4, 5, 6])("N10 a level %i heading with an entity after valid procedures is refused", (level) => {
+    const heading = `${"#".repeat(level)} P&#111;stupci`;
+    const text = `${real}\n${heading}\n\n1. Korak.\n`;
+    expect(refused(text)).toContain(`${text.split("\n").indexOf(heading) + 1}: heading character U+0026`);
+  });
+
+  it.each([
+    ["N4 setext =", "==="],
+    ["N4 setext = with an indent", "   ="],
+    ["N5 setext -", "---"],
+    ["N5 setext - with an indent", "  --"],
+  ] as const)("%s after valid procedures is refused", (_name, underline) => {
+    const text = `${real}\nPostupci\n${underline}\n\n### Pokretanje\n\n1. Izvrši korak bez naredbe i nositelja.\n`;
+    expect(refused(text)).toContain(`${text.split("\n").indexOf(underline) + 1}: setext heading underline`);
+  });
+
+  it("a refused Postupci heading opens no section, so its procedures are missing", () => {
+    const text = doc("1. Prvi. Nositelj: `vlasnik`.").replace("\n## Postupci\n", "\n## P&#111;stupci\n");
+    expect(messages(text)).toEqual(expect.arrayContaining(REQUIRED_PROCEDURES.map((name) => `${name}#-: required procedure is missing`)));
+  });
+
+  it("every heading of docs/OPERATIONS.md is in the allowed form and the document passes", () => {
+    const headings = real.split("\n").filter((line) => /^#{1,6} /.test(line));
+    expect(headings).toContain("## Pilot (M12)");
+    expect(headings).toContain("### Gašenje");
+    expect(checkOperations(real, context)).toEqual([]);
   });
 });

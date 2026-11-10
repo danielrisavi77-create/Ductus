@@ -257,3 +257,79 @@ test("F3 every command of docs/OPERATIONS.md passes and uses only listed charact
   }
   expect(checkOperations(DOC_TEXT, REPO)).toEqual([]);
 });
+
+// Review FAIL c.6766230163 and QA FAIL c.6766251125 on a5f068ac (#1803),
+// contract #1836 c.6766447922 (w540m): the real docs/OPERATIONS.md (no fences)
+// with one heading or setext form outside the allowed list inserted at any line,
+// or one owners table row taken out of the `| ... |` form, never passes, and the
+// refusal is at the changed line. The document as it is passes.
+const REAL = readFileSync(new URL("../../docs/OPERATIONS.md", import.meta.url), "utf8");
+const REAL_CONTEXT = repoContext(new URL("../..", import.meta.url));
+const TITLES = ["Postupci", "Nositelji", "Pokretanje", "Gašenje", "Pilot (M12)"] as const;
+const BAD_FRAGMENTS = [
+  "&amp;", "&quot;", "&lt;", "&#111;", "&#0111;", "&#x6F;", "&#X6f;", "\\", "\\#", "\\|", "<span>", "</span>", "<!-- -->",
+  "<br/>", "`", "`x`", "*", "_", "[x]", "~", " ", "​", " ", "о", "́", "﻿", ".", ":",
+] as const;
+
+const headingArb = fc.record({
+  level: fc.integer({ min: 1, max: 6 }),
+  title: fc.constantFrom(...TITLES),
+  fragment: fc.constantFrom(...BAD_FRAGMENTS),
+  at: fc.nat(),
+  closing: fc.boolean(),
+});
+const setextArb = fc.record({ title: fc.constantFrom(...TITLES), underline: fc.stringMatching(/^ {0,3}(?:=+|-+)$/) });
+
+test("the real docs/OPERATIONS.md has no fence and passes", () => {
+  expect(REAL).not.toContain("```");
+  expect(checkOperations(REAL, REAL_CONTEXT)).toEqual([]);
+});
+
+test.prop([fc.oneof(headingArb.map((h) => ({ kind: "heading" as const, ...h })), setextArb.map((s) => ({ kind: "setext" as const, ...s }))), fc.nat()])(
+  "one heading or setext form outside the allowed list anywhere is refused at its line",
+  (form, position) => {
+    const lines = REAL.split("\n");
+    const index = position % (lines.length + 1);
+    let inserted: string[];
+    let refusedAt: number;
+    if (form.kind === "heading") {
+      const at = form.at % (form.title.length + 1);
+      const title = `${form.title.slice(0, at)}${form.fragment}${form.title.slice(at)}`;
+      inserted = [`${"#".repeat(form.level)} ${title}${form.closing ? " ##" : ""}`];
+      refusedAt = index + 1;
+    } else {
+      inserted = [form.title, form.underline];
+      refusedAt = index + 2;
+    }
+    lines.splice(index, 0, ...inserted);
+    const problems = checkOperations(lines.join("\n"), REAL_CONTEXT);
+    expect(problems.length).toBeGreaterThan(0);
+    expect(problems.filter((p) => p.message.startsWith("unsupported markdown: ")).map((p) => p.line)).toContain(refusedAt);
+  },
+);
+
+const ROW_MUTATIONS = [
+  (row: string, n: number) => `${row.slice(0, 1 + (n % (row.length - 1)))}\\${row.slice(1 + (n % (row.length - 1)))}`,
+  (row: string, n: number) => {
+    const pipes = [...row.matchAll(/\|/g)].map((m) => m.index ?? 0);
+    const at = pipes[n % pipes.length] ?? 0;
+    return `${row.slice(0, at)}\\${row.slice(at)}`;
+  },
+  (row: string) => row.replace(/\|$/, ""),
+  (row: string, n: number) => `${row}${[" ", " ", "　", "﻿"][n % 4]}`,
+] as const;
+
+test.prop([fc.nat(), fc.integer({ min: 0, max: ROW_MUTATIONS.length - 1 }), fc.nat()])(
+  "an owners table row with a backslash or outside the | ... | form is refused at its line",
+  (pick, mutation, n) => {
+    const lines = REAL.split("\n");
+    const start = lines.indexOf("## Nositelji");
+    const end = lines.findIndex((line, i) => i > start && line.startsWith("## "));
+    const rows = lines.flatMap((line, i) => (i > start && i < end && line.startsWith("|") ? [i] : []));
+    expect(rows.length).toBeGreaterThan(2);
+    const index = rows[pick % rows.length] ?? 0;
+    lines[index] = ROW_MUTATIONS[mutation]?.(lines[index] ?? "", n) ?? "";
+    const problems = checkOperations(lines.join("\n"), REAL_CONTEXT);
+    expect(problems.filter((p) => p.message.startsWith("unsupported markdown: ")).map((p) => p.line)).toContain(index + 1);
+  },
+);

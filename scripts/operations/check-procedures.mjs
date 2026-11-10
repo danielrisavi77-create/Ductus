@@ -9,12 +9,17 @@
 // refuses every other line with `unsupported markdown: <what>`:
 // - a blank line, or a heading `#`, `##` or `###` at column 0 (a closing run
 //   of `#` after a space or tab is not part of the title, as in CommonMark);
+//   anywhere in the document a heading title uses only the characters the
+//   real headings use (HEADING_TITLE_RE), so an entity, escape, code span,
+//   HTML or look-alike letter is refused, never skipped (#1803 w540m);
 // - a step: one line `N. ` (one to nine digits, a dot, one space) followed by a
 //   letter or `**`, at column 0, inside a `###` procedure, after a blank line,
 //   a heading, a fence or another step; a step never continues on the next line;
 // - a paragraph line starting with a letter or `**`, not right after a step;
 // - in "Nositelji", one table: a header row after a blank line or heading, then
-//   a separator row of `---` cells with the same column count, then rows;
+//   a separator row of `---` cells with the same column count, then rows; each
+//   row is `| ... |` without a backslash, because GitHub reads `\|` as text and
+//   not as a cell boundary (#1803 w540m);
 // - a fence of three or more backticks at column 0 with an optional one-word
 //   info string, closed by a line of at least as many backticks and nothing else.
 // On those lines code is single backticks closed on the same line; a run of two
@@ -37,6 +42,13 @@ const STRICT_SECTIONS = new Set([OWNERS_HEADING, PROCEDURES_HEADING]);
 // A role, never a placeholder: letters, digits, spaces and hyphens only.
 const PLAIN_ROLE_RE = /^[\p{L}\d](?:[\p{L}\d -]*[\p{L}\d])?$/u;
 const HEADING_RE = /^(#{1,6})(?:[ \t]+(.*))?$/;
+// The only characters a heading title may contain: those the headings of
+// docs/OPERATIONS.md use. `&`, `\`, `<`, backticks, emphasis, Unicode spaces,
+// combining marks and look-alike letters change what GitHub shows or what the
+// title compares equal to (review FAIL c.6766230163, QA FAIL c.6766251125).
+const HEADING_TITLE_RE = /^[A-Za-z0-9ČĆĐŠŽčćđšž ()]*$/;
+// A table row: a pipe at both ends, no backslash, no other edge character.
+const TABLE_ROW_RE = /^\|.*\|$/;
 const FENCE_OPEN_RE = /^([ \t]*)(`{3,})(.*)$/;
 const STEP_LIKE_RE = /^(\d+)[.)](?:[ \t]|$)/;
 const STEP_RE = /^(\d{1,9})\. (?=(?:\*\*)?\p{L})/u;
@@ -81,12 +93,12 @@ const STOP_SIGNALS = new Set(["-TERM", "-INT", "-SIGTERM", "-SIGINT"]);
 
 /** @param {string} row */
 function cells(row) {
+  // Called only on a TABLE_ROW_RE row without `\`, so every `|` is a boundary.
+  // Only spaces and tabs are trimmed; any other space stays in the cell.
   return row
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
+    .slice(1, -1)
     .split("|")
-    .map((cell) => cell.trim());
+    .map((cell) => cell.replace(/^[ \t]+|[ \t]+$/g, ""));
 }
 
 /**
@@ -182,6 +194,14 @@ export function parseOperations(text) {
       // of the title, and a title of `#` only is empty (#1803, contract #1836).
       const raw = (heading[2] ?? "").replace(/^[ \t]+|[ \t]+$/g, "");
       const title = /^#+$/.test(raw) ? "" : raw.replace(/[ \t]+#+$/, "");
+      const bad = [...title].find((char) => !HEADING_TITLE_RE.test(char));
+      if (bad !== undefined) {
+        // A refused heading still ends what came before and opens nothing.
+        if (level <= 2) section = "";
+        if (level <= 3) procedure = null;
+        const code = (bad.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0");
+        return refuse(lineNumber, `heading character U+${code}`);
+      }
       if (level <= 2) {
         section = level === 2 ? title : "";
         procedure = null;
@@ -221,8 +241,9 @@ export function parseOperations(text) {
 
     if (line.startsWith("|")) {
       if (section !== OWNERS_HEADING) return refuse(lineNumber, "line form");
-      const row = cells(line);
-      const problem = inlineProblem(line);
+      const formProblem = line.includes("\\") ? "backslash in a table row" : TABLE_ROW_RE.test(line) ? null : "table row form";
+      const row = formProblem ? [] : cells(line);
+      const problem = formProblem ?? inlineProblem(line);
       if (table === null) {
         if (prev !== "blank" && prev !== "heading") {
           table = { state: "bad", columns: 0 };
@@ -231,6 +252,9 @@ export function parseOperations(text) {
           table = { state: "bad", columns: 0 };
           refuse(lineNumber, problem);
         } else table = { state: "separator", columns: row.length };
+      } else if (table.state === "separator" && problem) {
+        table.state = "bad";
+        refuse(lineNumber, problem);
       } else if (table.state === "separator") {
         const separator = row.every((cell) => SEPARATOR_CELL_RE.test(cell));
         if (separator && row.length === table.columns) table.state = "body";
