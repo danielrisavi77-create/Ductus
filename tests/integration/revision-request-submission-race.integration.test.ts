@@ -21,7 +21,8 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // M6.5-P02 (contract c.6752687836, narrowed by c.6754441692) adds the
 // rereview: two at once, one against the acceptance it follows, an unchanged
 // range that is never reopened, and the database's reading of a range against
-// resolveTextAnchor. Boris's document is at revision 2, with a checkpoint.
+// resolveTextAnchor. Boris's document is at revision 2, with a checkpoint of
+// revision 1 (where every acceptance here is made) and of revision 2.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The revision request race test runs only against a loopback database (DATABASE_URL).");
@@ -43,8 +44,8 @@ const documents = { ana: `doc-ana-${suffix}`, dora: `doc-dora-${suffix}`, boris:
 const TEXT = `{"nodes":[{"children":[{"text":"Izmisljeni tekst ${suffix}.","type":"text"}],"id":"00000000-0000-4000-8000-000000000001","type":"paragraph"}],"schemaVersion":1}`;
 const HASH = createHash("sha256").update(TEXT, "utf8").digest("hex");
 const ANCHOR = { nodeId: "0f0e0d0c-0b0a-4000-8000-000000000001", quote: "prvi odlomak", prefix: "", suffix: " teksta", startHint: 0, endHint: 12 };
-// Revision 2 of Boris's document. Block 1 no longer holds ANCHOR's quote;
-// block 2 holds ANCHOR_SAME's quote across two inline texts, as it always did.
+// Boris's document. Revision 1 holds ANCHOR's quote in block 1; revision 2 no
+// longer does. Block 2 holds ANCHOR_SAME's quote across two inline texts in both.
 const block = (n: number) => `0f0e0d0c-0b0a-4000-8000-${String(n).padStart(12, "0")}`;
 const para = (n: number, ...texts: string[]) => ({ children: texts.map((text) => ({ text, type: "text" })), id: block(n), type: "paragraph" });
 const BORIS_NODES = [
@@ -60,6 +61,8 @@ const BORIS_NODES = [
 ];
 const BORIS_TEXT = JSON.stringify({ nodes: BORIS_NODES, schemaVersion: 2 });
 const BORIS_HASH = createHash("sha256").update(BORIS_TEXT, "utf8").digest("hex");
+const BORIS_FIRST_TEXT = JSON.stringify({ nodes: [para(1, `Ovo je prvi odlomak teksta ${suffix}.`), ...BORIS_NODES.slice(1)], schemaVersion: 2 });
+const BORIS_FIRST_HASH = createHash("sha256").update(BORIS_FIRST_TEXT, "utf8").digest("hex");
 const ANCHOR_SAME = { nodeId: block(2), quote: "odlomak ostaje", prefix: "Drugi ", suffix: " isti", startHint: 6, endHint: 20 };
 
 type Created = { request_id: string; row_seq: string; version: number; state: string };
@@ -176,12 +179,13 @@ beforeAll(async () => {
         [document, institutionId, `project-${document}`, id, student === "boris" ? BORIS_HASH : HASH, student === "boris" ? 2 : 1]);
       await client.query(
         `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
-         VALUES ($1, $2, 0, NULL, $3, $4), ($1, $2, 1, 0, $3, $5)`, [document, institutionId, id, "a".repeat(64), HASH]);
+         VALUES ($1, $2, 0, NULL, $3, $4), ($1, $2, 1, 0, $3, $5)`,
+        [document, institutionId, id, "a".repeat(64), student === "boris" ? BORIS_FIRST_HASH : HASH]);
       if (student === "boris") await client.query(
         `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
          VALUES ($1, $2, 2, 1, $3, $4)`, [document, institutionId, id, BORIS_HASH]);
       await client.query("INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES ($1, $2, 1, $3)",
-        [document, institutionId, TEXT]);
+        [document, institutionId, student === "boris" ? BORIS_FIRST_TEXT : TEXT]);
       if (student === "boris") await client.query(
         "INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES ($1, $2, 2, $3)",
         [document, institutionId, BORIS_TEXT]);
@@ -336,9 +340,9 @@ describe("two transitions with the same expected counter, over two real connecti
   });
 });
 
-// The acceptance stores the hash of the accepted range: the quote's bytes (snapshotHash).
-const accept = (id: string, seq: string, quote = ANCHOR.quote) => async (tx: ActorTransaction) => (await tx.query<Moved>(
-  "SELECT outcome, row_seq, version, state FROM collaboration.accept_revision_request($1, $2, 1, $3)", [id, seq, snapshotHash(quote)])).rows[0];
+// The acceptance is made at revision 1 and stores the hash of the accepted range: the quote's bytes (snapshotHash).
+const accept = (id: string, seq: string, quote = ANCHOR.quote, hash = snapshotHash(quote)) => async (tx: ActorTransaction) => (await tx.query<Moved>(
+  "SELECT outcome, row_seq, version, state FROM collaboration.accept_revision_request($1, $2, 1, $3)", [id, seq, hash])).rows[0];
 const rereview = (id: string, seq: string) => async (tx: ActorTransaction) => (await tx.query<Moved>(
   "SELECT outcome, row_seq, version, state FROM collaboration.rereview_revision_request($1, $2)", [id, seq])).rows[0];
 // The call of the first version of this step, which carried the caller's revision and hash.
@@ -348,7 +352,7 @@ const versions = async (id: string) => (await admin.query<{ version: number; ope
   `SELECT version, opened_as, instruction, observed_range_hash AS observed, closed_as AS closed
      FROM collaboration.revision_request_version WHERE request_id = $1 ORDER BY version`, [id])).rows;
 const FIRST = { version: 1, opened_as: "instruction", instruction: "Dodaj izvor za ovu tvrdnju.", observed: null, closed: "accepted" };
-// The range no longer resolves, so the database has no hash to store for the new version.
+// At revision 2 the range no longer resolves, so the database has no hash to store for the new version.
 const SECOND = { ...FIRST, version: 2, opened_as: "rereview", closed: null };
 
 describe("changed after acceptance, over two real connections (M6.5-P02)", () => {
@@ -419,6 +423,28 @@ describe("the range is read by the database, not sent by the caller (M6.5-P02)",
     }
   });
 
+  it("an acceptance whose hash the database does not compute in the accepted revision is never reopened, whatever the document holds now", async () => {
+    // [anchor, stored hash]: an invented hash of an unchanged and of an edited range; the true hash of a
+    // quote that revision 1 did not hold and revision 2 does; and of one that no revision holds.
+    const LATER = { nodeId: block(1), quote: "dopunjeni odlomak", prefix: "Prvi, ", suffix: " teksta", startHint: 6, endHint: 23 };
+    const NEVER = { nodeId: block(9), quote: "Drugi", prefix: "", suffix: "", startHint: 0, endHint: 5 };
+    const CASES: [typeof ANCHOR, string][] = [
+      [ANCHOR_SAME, "e".repeat(64)], [ANCHOR, "e".repeat(64)], [LATER, snapshotHash(LATER.quote)], [NEVER, snapshotHash(NEVER.quote)],
+    ];
+    for (const [anchor, hash] of CASES) {
+      const created = await withActor(people.vesna.token, create(documents.boris, anchor));
+      const answered = await withActor(people.boris.token, respond(created.request_id, created.row_seq));
+      const accepted = await withActor(people.vesna.token, accept(created.request_id, answered.row_seq, anchor.quote, hash));
+      expect(accepted).toMatchObject({ outcome: "applied", version: 1, state: "accepted" });
+      for (const name of ["boris", "vesna"] as const) {
+        expect([anchor.quote, await settle(withActor(people[name].token, rereview(created.request_id, accepted.row_seq)))])
+          .toEqual([anchor.quote, { value: null, code: "ZD409" }]);
+      }
+      expect(await versions(created.request_id)).toEqual([FIRST]);
+      expect(await answers(created.request_id)).toEqual({ state: "accepted", rowSeq: accepted.row_seq, responses: 1, closed: "accepted" });
+    }
+  });
+
   it("a changed range is reopened once, and the same call on the new version is refused", async () => {
     const created = await withActor(people.vesna.token, create(documents.boris));
     const answered = await withActor(people.boris.token, respond(created.request_id, created.row_seq));
@@ -457,10 +483,19 @@ describe("the range is read by the database, not sent by the caller (M6.5-P02)",
       const text = texts.get(anchor.nodeId);
       const status = text === undefined ? "missing" : resolveTextAnchor(anchor, anchor.nodeId, text).status;
       expect([n, quote, prefix, after, status === "exact" || status === "moved"]).toEqual([n, quote, prefix, after, resolves]);
-      const read = await admin.query<{ revision: string; range_hash: string | null }>(
-        "SELECT revision, range_hash FROM collaboration.current_range_hash($1, $2, $3::jsonb)",
-        [documents.boris, institutionId, JSON.stringify(anchor)]);
-      expect([n, quote, prefix, after, read.rows]).toEqual([n, quote, prefix, after, [{ revision: "2", range_hash: resolves ? snapshotHash(quote) : null }]]);
+      // NULL is the current revision; naming it reads the same checkpoint.
+      for (const revision of [null, 2]) {
+        const read = await admin.query<{ revision: string; range_hash: string | null }>(
+          "SELECT revision, range_hash FROM collaboration.range_hash_at($1, $2, $3::jsonb, $4)",
+          [documents.boris, institutionId, JSON.stringify(anchor), revision]);
+        expect([n, quote, prefix, after, read.rows]).toEqual([n, quote, prefix, after, [{ revision: "2", range_hash: resolves ? snapshotHash(quote) : null }]]);
+      }
     }
+    // The accepted revision is read from its own checkpoint: there block 1 still holds ANCHOR's quote.
+    const then = async (anchor: object) => (await admin.query<{ revision: string; range_hash: string | null }>(
+      "SELECT revision, range_hash FROM collaboration.range_hash_at($1, $2, $3::jsonb, 1)",
+      [documents.boris, institutionId, JSON.stringify(anchor)])).rows;
+    expect(await then(ANCHOR)).toEqual([{ revision: "1", range_hash: snapshotHash(ANCHOR.quote) }]);
+    expect(await then({ ...ANCHOR, quote: "dopunjeni odlomak", prefix: "Prvi, " })).toEqual([{ revision: "1", range_hash: null }]);
   });
 });

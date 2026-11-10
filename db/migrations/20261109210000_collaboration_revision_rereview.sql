@@ -4,14 +4,18 @@
 -- later revision of the document goes back to review as a new version. One
 -- RPC, no trigger and no worker. The database decides whether the range
 -- changed: it resolves the request's stored anchor in the checkpoint of the
--- document's current revision and compares the hash of the resolved range
--- with the one the acceptance stored. The caller (the student owner or a
+-- accepted revision and in the checkpoint of the document's current
+-- revision, and compares the two hashes. The caller (the student owner or a
 -- teacher of the course) sends only the request and its counter, never a
--- hash, a revision or text. A different hash, or none because the range no
--- longer resolves, opens version v + 1 with the teacher's instruction of
--- version v. The accepted version stays accepted. Nothing is graded, decided
--- or concluded about the author: the new version only says that it was opened
--- by a rereview and which hash the database computed.
+-- hash, a revision or text. The stored acceptance is trusted only when its
+-- hash is the one the database computes at the accepted revision; an
+-- acceptance without a hash, with another hash, or of a range that did not
+-- resolve when it was accepted cannot be compared and is never "changed". A
+-- comparable acceptance whose range no longer resolves opens version v + 1
+-- with the teacher's instruction of version v. The accepted version stays
+-- accepted. Nothing is graded, decided or concluded about the author: the
+-- new version only says that it was opened by a rereview and which hash the
+-- database computed.
 -- migrate:up
 
 SET LOCAL ROLE ductus_migrator;
@@ -19,9 +23,12 @@ SET LOCAL ROLE ductus_migrator;
 GRANT CREATE ON SCHEMA collaboration TO ductus_identity;
 GRANT USAGE, CREATE ON SCHEMA collaboration TO ductus_evidence;
 
--- The current revision of a document and the hash of the range an anchor
--- resolves to in that revision's checkpoint; the hash is NULL when the range
--- does not resolve. Owned by the evidence role, which alone reads the text,
+-- A revision of a document (the current one when p_revision is NULL) and
+-- the hash of the range an anchor resolves to in that revision's checkpoint;
+-- the hash is NULL when the range does not resolve. Every revision has a
+-- checkpoint, bound to the revision's content hash by a foreign key; the
+-- current one is also checked against the document's own content hash.
+-- Owned by the evidence role, which alone reads the text,
 -- and the text never leaves this function. Resolution follows
 -- resolveTextAnchor (src/domain/collaboration/anchor.ts): the first block
 -- with the anchor's id, its inline texts joined, every occurrence of the
@@ -33,7 +40,7 @@ GRANT USAGE, CREATE ON SCHEMA collaboration TO ductus_evidence;
 -- hash is the hash of the quote's bytes (snapshotHash). A missing checkpoint
 -- or one that is not a document fails closed: unreadable is never "changed".
 SET LOCAL ROLE ductus_evidence;
-CREATE FUNCTION collaboration.current_range_hash(p_document_id text, p_institution_id uuid, p_anchor jsonb)
+CREATE FUNCTION collaboration.range_hash_at(p_document_id text, p_institution_id uuid, p_anchor jsonb, p_revision bigint)
 RETURNS TABLE (revision bigint, range_hash text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -53,11 +60,12 @@ DECLARE
   v_best integer := -1;
   v_winners integer := 0;
 BEGIN
-  SELECT d.current_revision, c.body INTO v_revision, v_body
+  SELECT coalesce(p_revision, d.current_revision), c.body INTO v_revision, v_body
     FROM evidence.document d
     LEFT JOIN evidence.document_checkpoint c
       ON c.document_id = d.id AND c.institution_id = d.institution_id
-     AND c.revision = d.current_revision AND c.content_hash = d.current_content_hash
+     AND c.revision = coalesce(p_revision, d.current_revision)
+     AND (p_revision IS NOT NULL OR c.content_hash = d.current_content_hash)
    WHERE d.id = p_document_id AND d.institution_id = p_institution_id;
   IF v_body IS NULL OR NOT pg_catalog.pg_input_is_valid(v_body, 'jsonb')
      OR pg_catalog.jsonb_typeof(v_body::jsonb -> 'nodes') IS DISTINCT FROM 'array' THEN
@@ -104,8 +112,8 @@ BEGIN
 END
 $$;
 
-REVOKE ALL ON FUNCTION collaboration.current_range_hash(text, uuid, jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION collaboration.current_range_hash(text, uuid, jsonb) TO ductus_identity;
+REVOKE ALL ON FUNCTION collaboration.range_hash_at(text, uuid, jsonb, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION collaboration.range_hash_at(text, uuid, jsonb, bigint) TO ductus_identity;
 
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
@@ -113,7 +121,9 @@ SET LOCAL ROLE ductus_identity;
 
 -- How the version was opened: by a teacher's instruction (create, reopen) or
 -- by a rereview; and for a rereview the hash the database computed for the
--- range, NULL when the range no longer resolved.
+-- range, NULL when the range no longer resolved. Only an acceptance whose
+-- range resolved is rereviewed, and a range that still resolves has the same
+-- hash, so today a rereview always stores NULL here.
 ALTER TABLE collaboration.revision_request_version
   ADD COLUMN opened_as text NOT NULL DEFAULT 'instruction'
     CONSTRAINT revision_request_version_opened_as_check CHECK (opened_as IN ('instruction', 'rereview')),
@@ -129,10 +139,14 @@ ALTER TABLE collaboration.revision_request_version
 -- transitions: session, request and role, lock and submission, input shape,
 -- counter, state and version ceiling, then the change rule. The rule reads
 -- the document under the lock that holds back a commit: the transition is
--- allowed only when the document has a revision after the accepted one and
--- the range's hash there differs from the accepted one. An acceptance without
--- a hash cannot be compared, so it is never rereviewed here; the teacher's
--- reopen remains.
+-- allowed only when the range's hash in the current revision differs from
+-- the accepted one. The accepted hash is a value the teacher's client sent,
+-- so it is compared only when the database computes the same hash in the
+-- checkpoint of the accepted revision: an acceptance without a hash (refused
+-- before any text is read), with another hash, or of a range that did not
+-- resolve then is never rereviewed here, whatever the document holds now;
+-- the teacher's reopen remains. The revisions need no comparison of their
+-- own: the accepted revision itself has one checkpoint and so one hash.
 CREATE FUNCTION collaboration.rereview_revision_request(p_request_id uuid, p_expected_seq bigint)
 RETURNS TABLE (outcome text, row_seq bigint, version integer, state text)
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
@@ -143,6 +157,8 @@ DECLARE
   v_role text;
   r record;
   a record;
+  t record;
+  v_then text;
   now_at record;
   v_seq bigint;
 BEGIN
@@ -170,11 +186,15 @@ BEGIN
   IF a.accepted_range_hash IS NULL THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
+  SELECT q.document_id, q.anchor INTO t FROM collaboration.revision_request q WHERE q.id = r.request_id;
+  SELECT h.range_hash INTO v_then
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, t.anchor, a.accepted_revision) h;
+  IF v_then IS DISTINCT FROM a.accepted_range_hash THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
   SELECT h.revision, h.range_hash INTO now_at
-    FROM collaboration.revision_request q
-   CROSS JOIN LATERAL collaboration.current_range_hash(q.document_id, q.institution_id, q.anchor) h
-   WHERE q.id = r.request_id;
-  IF now_at.revision <= a.accepted_revision OR now_at.range_hash IS NOT DISTINCT FROM a.accepted_range_hash THEN
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, t.anchor, NULL) h;
+  IF now_at.range_hash IS NOT DISTINCT FROM a.accepted_range_hash THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
   v_seq := nextval('collaboration.revision_request_seq');
@@ -209,7 +229,7 @@ ALTER TABLE collaboration.revision_request_version
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 SET LOCAL ROLE ductus_evidence;
-DROP FUNCTION collaboration.current_range_hash(text, uuid, jsonb);
+DROP FUNCTION collaboration.range_hash_at(text, uuid, jsonb, bigint);
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA collaboration FROM ductus_identity;

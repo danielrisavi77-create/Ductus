@@ -1,10 +1,12 @@
 -- DAN-314, changed after acceptance (docs/backend/suradnja.md 4.14, contract
 -- #1091 c.6752687836 as narrowed by #1091 c.6754441692): an accepted request
 -- goes to a new version only when the database itself finds that its anchored
--- range changed in a later revision of the document. The caller sends the
--- request and its counter, never a hash, a revision or text. The classes of
--- the stored work as tables, the reader, the counter, the roles and what is
--- stored. Every person, document and text below is invented.
+-- range changed: it resolves the anchor in the checkpoint of the accepted
+-- revision and in that of the current one, and compares the two with the hash
+-- stored at the acceptance. The caller sends the request and its counter,
+-- never a hash, a revision or text. The classes of the stored work as tables,
+-- the reader, the counter, the roles and what is stored. Every person,
+-- document and text below is invented.
 BEGIN;
 SET LOCAL lc_messages TO 'C';
 \ir fixtures/evidence-acceptance.inc
@@ -34,15 +36,17 @@ INSERT INTO page VALUES
   ('scalar', '"prvi odlomak"'),
   ('no_nodes', '{"schemaVersion":1,"nodes":{}}'),
   ('no_children', '{"schemaVersion":1,"nodes":[{"type":"paragraph","id":"0f0e0d0c-0b0a-4000-8000-000000000001","children":"prvi odlomak"}]}'),
+  ('twins', '{"schemaVersion":1,"nodes":[{"type":"paragraph","id":"0f0e0d0c-0b0a-4000-8000-000000000008","children":[{"type":"text","text":"Ovdje je prvi blizanac."}]},{"type":"paragraph","id":"0f0e0d0c-0b0a-4000-8000-000000000008","children":[{"type":"text","text":"Ovdje je drugi blizanac."}]}]}'),
   ('main', pg_temp.work('Ovo je prvi, dopunjeni odlomak teksta.')),
   ('restored', pg_temp.work('Ovo je prvi odlomak teksta o izmišljenoj temi.')),
   ('elsewhere', pg_temp.work('Ovo je prvi odlomak teksta o izmišljenoj temi.', p_third => 'isti izraz i isti izraz, pa treći.')),
   ('edited', pg_temp.work('Ovo je prvi, dopunjeni odlomak teksta.', p_third => 'isti izraz i isti izraz, pa treći.')),
-  ('later', pg_temp.work('Ovo je prvi, dopunjeni odlomak teksta.', 'Ovo je drugi odlomak rada. Dodana je rečenica.')),
+  ('later', pg_temp.work('Ovo je prvi, dopunjeni odlomak teksta.', 'Ovo je drugi, prošireni odlomak rada.')),
   ('submitted', pg_temp.work('Ovo je prvi, dopunjeni i predani odlomak teksta.'));
--- The next revision of Ana's document, with the named page as its checkpoint
--- or with none. Returns the new revision.
-CREATE FUNCTION pg_temp.revise(p_page text DEFAULT NULL) RETURNS bigint LANGUAGE plpgsql AS $$
+-- The next revision of Ana's document, with the named page as its content
+-- and, unless withheld, as its checkpoint; without a page there is no
+-- checkpoint. Returns the new revision.
+CREATE FUNCTION pg_temp.revise(p_page text DEFAULT NULL, p_checkpoint boolean DEFAULT true) RETURNS bigint LANGUAGE plpgsql AS $$
 DECLARE
   v_fak uuid := pg_temp.id('fak_a');
   v_ana uuid := pg_temp.id('ana');
@@ -57,12 +61,25 @@ BEGIN
   SELECT current_revision + 1 INTO v_next FROM evidence.document WHERE id = 'doc-a';
   INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
   VALUES ('doc-a', v_fak, v_next, v_next - 1, v_ana, v_hash);
-  IF v_body IS NOT NULL THEN
+  IF v_body IS NOT NULL AND p_checkpoint THEN
     INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES ('doc-a', v_fak, v_next, v_body);
   END IF;
   UPDATE evidence.document SET current_revision = v_next, current_content_hash = v_hash WHERE id = 'doc-a';
   RESET ROLE;
   RETURN v_next;
+END
+$$;
+-- The withheld checkpoint of a revision, stored afterwards.
+CREATE FUNCTION pg_temp.checkpoint(p_revision bigint, p_page text) RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE
+  v_fak uuid := pg_temp.id('fak_a');
+  v_body text := (SELECT body FROM page WHERE name = p_page);
+BEGIN
+  SET LOCAL ROLE ductus_evidence;
+  INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body)
+  VALUES ('doc-a', v_fak, p_revision, v_body);
+  RESET ROLE;
+  RETURN p_revision;
 END
 $$;
 
@@ -76,13 +93,17 @@ INSERT INTO ref VALUES
 
 -- One valid call per action, with :id, :seq and :rev (the document's current
 -- revision) to fill in, and who makes it. An acceptance stores the hash the
--- teacher's client computed for the range, which is the hash of the quote.
+-- teacher's client computed for the range, which is the hash of the quote;
+-- accept_other stores a hash no range of the document has. Revision 5, where
+-- most acceptances are made, holds the page "restored", in which the quotes
+-- of anchor, anchor_u and anchor_pre resolve.
 CREATE TEMP TABLE action (name text PRIMARY KEY, actor text NOT NULL, call text NOT NULL);
 INSERT INTO action VALUES
   ('respond', 'ana', $$ respond_revision_request(:id, :seq, 'done', 'Dodala sam izvor.', 5) $$),
   ('accept', 'vesna', format('accept_revision_request(:id, :seq, 5, %L)', pg_temp.sha('prvi odlomak'))),
   ('accept_now', 'vesna', format('accept_revision_request(:id, :seq, :rev, %L)', pg_temp.sha('prvi odlomak'))),
   ('accept_u', 'vesna', format('accept_revision_request(:id, :seq, 5, %L)', pg_temp.sha('drugi odlomak'))),
+  ('accept_u_now', 'vesna', format('accept_revision_request(:id, :seq, :rev, %L)', pg_temp.sha('drugi odlomak'))),
   ('accept_other', 'vesna', format('accept_revision_request(:id, :seq, 5, %L)', repeat('e', 64))),
   ('accept_gone', 'vesna', format('accept_revision_request(:id, :seq, 5, %L)', pg_temp.sha('nestali odlomak'))),
   ('accept_tie', 'vesna', format('accept_revision_request(:id, :seq, 5, %L)', pg_temp.sha('isti izraz'))),
@@ -93,13 +114,16 @@ INSERT INTO action VALUES
 -- A request driven to a state: its anchor and the steps after its creation.
 CREATE TEMP TABLE shape (state text PRIMARY KEY, anchor text NOT NULL, steps text[] NOT NULL);
 INSERT INTO shape VALUES
-  ('open', 'anchor', '{}'), ('responded', 'anchor', '{respond}'), ('reopened', 'anchor', '{reopen}'),
+  ('open', 'anchor', '{}'), ('responded', 'anchor', '{respond}'), ('responded_u', 'anchor_u', '{respond}'),
+  ('reopened', 'anchor', '{reopen}'),
   ('withdrawn', 'anchor', '{withdraw}'),
   ('accepted', 'anchor', '{respond,accept}'),
   ('accepted_now', 'anchor', '{respond,accept_now}'),
+  ('accepted_u_now', 'anchor_u', '{respond,accept_u_now}'),
   ('accepted_nohash', 'anchor', '{respond,accept_nohash}'),
   ('accepted_same', 'anchor_u', '{respond,accept_u}'),
   ('accepted_other', 'anchor_u', '{respond,accept_other}'),
+  ('accepted_other_gone', 'anchor', '{respond,accept_other}'),
   ('accepted_gone', 'anchor_gone', '{respond,accept_gone}'),
   ('accepted_tie', 'anchor_tie', '{respond,accept_tie}'),
   ('accepted_pre', 'anchor_pre', '{respond,accept_tie}');
@@ -178,15 +202,18 @@ BEGIN
   RETURN v_out || '|' || CASE WHEN pg_temp.snapshot(v_id) = v_before AND v_same_print THEN 'unchanged' ELSE 'changed' END;
 END
 $$;
--- The reader called directly, as the role that may: revision|hash, or
--- revision|none when the range does not resolve.
+-- The reader called directly, as the role that may, at the current revision
+-- or at a named one: revision|hash, or revision|none when the range does not
+-- resolve.
 CREATE FUNCTION pg_temp.read(p_node integer, p_quote text, p_prefix text DEFAULT '', p_suffix text DEFAULT '',
-  p_document text DEFAULT 'doc-a', p_institution text DEFAULT 'fak_a', p_role text DEFAULT 'ductus_identity')
+  p_document text DEFAULT 'doc-a', p_institution text DEFAULT 'fak_a', p_role text DEFAULT 'ductus_identity',
+  p_revision bigint DEFAULT NULL)
 RETURNS text LANGUAGE sql AS $$
   SELECT pg_temp.ask_as(p_role, 'vesna', format(
-    $q$ SELECT concat_ws('|', revision, coalesce(range_hash, 'none')) FROM collaboration.current_range_hash(%L, %L, %L::jsonb) $q$,
+    $q$ SELECT concat_ws('|', revision, coalesce(range_hash, 'none')) FROM collaboration.range_hash_at(%L, %L, %L::jsonb, %s) $q$,
     p_document, pg_temp.id(p_institution), jsonb_build_object('nodeId', '0f0e0d0c-0b0a-4000-8000-00000000000' || p_node,
-      'quote', p_quote, 'prefix', p_prefix, 'suffix', p_suffix, 'startHint', 0, 'endHint', char_length(p_quote))))
+      'quote', p_quote, 'prefix', p_prefix, 'suffix', p_suffix, 'startHint', 0, 'endHint', char_length(p_quote)),
+    coalesce(p_revision::text, 'NULL')))
 $$;
 
 -- Catalogue.
@@ -210,15 +237,15 @@ SELECT is((SELECT string_agg(p.oid::regprocedure::text, ',') FROM pg_proc p
   'there is one rereview, and none that takes a hash or a revision from the caller (c.6754364680)');
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
-      WHERE p.oid = 'collaboration.current_range_hash(text,uuid,jsonb)'::regprocedure
+      WHERE p.oid = 'collaboration.range_hash_at(text,uuid,jsonb,bigint)'::regprocedure
         AND (NOT p.prosecdef OR p.proowner <> 'ductus_evidence'::regrole OR NOT 'search_path=""' = ANY (p.proconfig)
              OR p.provolatile <> 's') $$,
   'the reader of the range is a stable SECURITY DEFINER function of the evidence role with an empty search_path');
 SELECT bag_eq(
   $$ SELECT r FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_identity', 'ductus_test_stranger', 'public']) AS r
-      WHERE has_function_privilege(r, 'collaboration.current_range_hash(text,uuid,jsonb)', 'EXECUTE') $$,
+      WHERE has_function_privilege(r, 'collaboration.range_hash_at(text,uuid,jsonb,bigint)', 'EXECUTE') $$,
   $$ VALUES ('ductus_identity') $$, 'only the identity role executes the reader: the web role cannot ask it');
-SELECT is(pg_get_function_result('collaboration.current_range_hash(text,uuid,jsonb)'::regprocedure),
+SELECT is(pg_get_function_result('collaboration.range_hash_at(text,uuid,jsonb,bigint)'::regprocedure),
   'TABLE(revision bigint, range_hash text)', 'the reader returns a revision and a hash, never text');
 SELECT ok(NOT has_schema_privilege('ductus_identity', 'collaboration', 'CREATE'),
   'after the migration the identity role keeps no CREATE on the schema');
@@ -233,14 +260,24 @@ SELECT bag_eq(
   'a version gains how it was opened and the observed hash, and no grade, verdict or authorship column (PRODUCT 5, rule 7)');
 
 -- Work the database cannot read is never "changed": the rereview fails
--- closed and writes nothing. Revisions 1 to 5 have no checkpoint; 6 to 9 have
--- one that is not a document.
-INSERT INTO ref SELECT 'rev5', max(r) FROM (SELECT pg_temp.revise() AS r FROM generate_series(1, 5)) AS x;
+-- closed and writes nothing. Revisions 1 to 3 have no checkpoint; revision 4
+-- holds two paragraphs with one id, for the reader below; revision 5 gets its
+-- checkpoint only after the first calls; 6 to 9 have one that is not a
+-- document.
+SELECT is((SELECT max(r) FROM (SELECT pg_temp.revise() AS r FROM generate_series(1, 3)) AS x), 3::bigint, 'fixture: revisions 1 to 3 have no checkpoint');
+SELECT is(pg_temp.revise('twins'), 4::bigint, 'fixture: revision 4 holds two paragraphs with one id');
+INSERT INTO ref SELECT 'rev5', pg_temp.revise('restored', false);
 SELECT is(pg_temp.try('accepted', p.name), 'ZD503: work unavailable|unchanged',
-  'without a checkpoint of the current revision the rereview of ' || p.name || ' is unavailable, not applied')
+  'without a checkpoint of the accepted revision the rereview of ' || p.name || ' is unavailable, not applied')
+FROM (VALUES ('ana'), ('vesna')) AS p (name);
+SELECT is(pg_temp.try('accepted_nohash', 'ana'), 'ZD409: transition not allowed|unchanged',
+  'an acceptance without a hash is refused before any work is read: not unavailable');
+SELECT is(pg_temp.checkpoint(5, 'restored'), 5::bigint, 'fixture: revision 5 has its checkpoint');
+SELECT is(pg_temp.try('accepted', p.name), 'ZD409: transition not allowed|unchanged',
+  'a rereview by ' || p.name || ' at the accepted revision itself is refused: one checkpoint, one hash')
 FROM (VALUES ('ana'), ('vesna')) AS p (name);
 SELECT is(pg_temp.revise(u.page) || '|' || pg_temp.try('accepted', 'ana'), u.revision || '|ZD503: work unavailable|unchanged',
-  'a checkpoint ' || u.what || ' is unavailable, not applied')
+  'a current checkpoint ' || u.what || ' is unavailable, not applied')
 FROM (VALUES
   (6, 'not_json', 'that is not JSON'),
   (7, 'scalar', 'that is a JSON string'),
@@ -251,14 +288,22 @@ SELECT is(pg_temp.try(o.state, o.actor, o.call), o.outcome, 'with unreadable wor
 FROM (VALUES
   ('open', 'ana', 'rereview_revision_request(:id, :seq)', 'ZD409: transition not allowed|unchanged', 'the state is still checked first'),
   ('accepted_nohash', 'ana', 'rereview_revision_request(:id, :seq)', 'ZD409: transition not allowed|unchanged',
-   'an acceptance without a hash is refused before the work is read'),
+   'an acceptance without a hash is still refused'),
   ('accepted', 'ana', 'rereview_revision_request(:id, 0)', 'ZD422: invalid input|unchanged', 'the shape of the counter is still checked first'),
   ('accepted', 'dora', 'rereview_revision_request(:id, :seq)', 'ZD403: forbidden|unchanged', 'a student who does not own it is still forbidden')
 ) AS o (state, actor, call, outcome, what);
 
+-- An acceptance at revision 9, whose checkpoint is not a document.
+INSERT INTO ref SELECT 'u9', pg_temp.make('accepted_now');
+INSERT INTO ref SELECT 'u9_before', pg_temp.snapshot(pg_temp.id('u9'));
+
 -- Revision 10 is a readable document in which paragraph 1 was edited.
 INSERT INTO ref SELECT 'rev10', pg_temp.revise('main');
 SELECT is((SELECT val FROM ref WHERE name = 'rev10'), '10', 'fixture: the document is at revision 10');
+SELECT is(pg_temp.act('rereview', pg_temp.id('u9'), pg_temp.seq(pg_temp.id('u9')), p.name), 'ZD503: work unavailable',
+  'with readable current work, an acceptance at a revision whose checkpoint is not a document is unavailable to ' || p.name || ', not applied')
+FROM (VALUES ('ana'), ('vesna')) AS p (name);
+SELECT is(pg_temp.snapshot(pg_temp.id('u9')), (SELECT val FROM ref WHERE name = 'u9_before'), 'and that rereview wrote nothing');
 -- A checkpoint is read only while it is the checkpoint of the document's
 -- current content: with another current hash the work is unavailable again.
 CREATE FUNCTION pg_temp.content_hash(p_hash text) RETURNS text LANGUAGE plpgsql AS $$
@@ -278,7 +323,8 @@ SELECT is(pg_temp.content_hash((SELECT val FROM ref WHERE name = 'hash10')), pg_
   'fixture: the document has the hash of its checkpoint again');
 CREATE TEMP TABLE print_main AS SELECT pg_temp.evidence_print() AS v;
 
--- The reader: resolveTextAnchor over the checkpoint of the current revision.
+-- The reader: resolveTextAnchor over the checkpoint of the current revision,
+-- or of the revision it is asked for.
 SELECT is(pg_temp.read(c.node, c.quote, c.prefix, c.suffix), '10|' || coalesce(pg_temp.sha(c.resolved), 'none'), 'the reader: ' || c.what)
 FROM (VALUES
   (2, 'drugi odlomak', 'Ovo je ', ' rada', 'drugi odlomak', 'a quote across two inline texts resolves to the hash of the quote'),
@@ -304,22 +350,50 @@ FROM (VALUES
   ('doc-x', 'fak_a', 'an unknown document is unavailable'),
   ('doc-b', 'fak_b', 'a document without a checkpoint is unavailable')
 ) AS c (document, institution, what);
-SELECT matches(pg_temp.read(2, 'drugi odlomak', p_role => r), '^42501', 'the reader: ' || r || ' cannot call it')
-FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention']) AS r;
+SELECT is(pg_temp.read(1, 'prvi odlomak', p_suffix => ' teksta', p_revision => c.revision), c.outcome, 'the reader: ' || c.what)
+FROM (VALUES
+  (5, '5|' || pg_temp.sha('prvi odlomak'), 'asked for revision 5 it resolves the quote in the checkpoint of revision 5'),
+  (10, '10|none', 'asked for revision 10 by number it reads the same checkpoint as for the current revision'),
+  (3, 'ZD503: work unavailable', 'a revision without a checkpoint is unavailable'),
+  (6, 'ZD503: work unavailable', 'a revision whose checkpoint is not a document is unavailable'),
+  (99, 'ZD503: work unavailable', 'a revision the document does not have is unavailable'),
+  (-1, 'ZD503: work unavailable', 'a negative revision is unavailable')
+) AS c (revision, outcome, what);
+SELECT is(pg_temp.read(8, c.quote, p_revision => 4), c.outcome, 'the reader: of two paragraphs with one id ' || c.what)
+FROM (VALUES
+  ('prvi blizanac', '4|' || pg_temp.sha('prvi blizanac'), 'the first is read'),
+  ('drugi blizanac', '4|none', 'the second is never read')
+) AS c (quote, outcome, what);
+SELECT matches(pg_temp.read(2, 'drugi odlomak', p_role => r, p_revision => v.revision), '^42501',
+  'the reader: ' || r || ' cannot call it' || v.what)
+FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention']) AS r
+CROSS JOIN (VALUES (NULL::bigint, ''), (5, ' for an earlier revision')) AS v (revision, what);
 
 -- The change rule, for the student owner and for the teacher: the rereview is
 -- applied only when the range the database resolves at the current revision
--- differs from the accepted one. Neither caller can say that it changed.
+-- differs from the accepted one. Neither caller can say that it changed, and
+-- a stored acceptance says it only when its hash is the one the database
+-- computes in the checkpoint of the accepted revision: any other stored hash
+-- is a value a client sent and compares to nothing, whether the range still
+-- stands or not, and so does the hash of a range that resolved to no single
+-- place when it was accepted.
 SELECT is(pg_temp.try(h.state, p.name), h.outcome, 'a rereview by ' || p.name || ' ' || h.what)
 FROM (VALUES
   ('accepted', 'applied|2|reopened|stored', 'of a range whose quote was edited opens version 2'),
-  ('accepted_gone', 'applied|2|reopened|stored', 'of a range whose paragraph is gone opens version 2'),
-  ('accepted_tie', 'applied|2|reopened|stored', 'of a range that no longer resolves to one place opens version 2'),
-  ('accepted_other', 'applied|2|reopened|stored', 'of a range whose hash differs from the stored accepted one opens version 2'),
+  ('accepted_gone', 'ZD409: transition not allowed|unchanged',
+   'of a range whose paragraph was not there when it was accepted either is refused: nothing was accepted to compare with'),
+  ('accepted_tie', 'ZD409: transition not allowed|unchanged',
+   'of a range that resolved to no single place when it was accepted is refused, although the stored hash is the hash of its quote'),
+  ('accepted_other', 'ZD409: transition not allowed|unchanged',
+   'of an unchanged range accepted with an invented hash is refused: the stored hash alone is not a change (c.6754364680)'),
+  ('accepted_other_gone', 'ZD409: transition not allowed|unchanged',
+   'of an edited range accepted with an invented hash is refused: that acceptance cannot be compared'),
   ('accepted_same', 'ZD409: transition not allowed|unchanged',
    'of an unchanged range is refused although another paragraph changed (c.6754364680)'),
   ('accepted_pre', 'ZD409: transition not allowed|unchanged', 'of an unchanged range that its prefix still picks is refused'),
-  ('accepted_now', 'ZD409: transition not allowed|unchanged', 'accepted at the current revision is refused: the document has no later revision'),
+  ('accepted_now', 'ZD409: transition not allowed|unchanged',
+   'accepted at the current revision, where its quote does not resolve, is refused: the stored hash is not what the database computes there'),
+  ('accepted_u_now', 'ZD409: transition not allowed|unchanged', 'accepted at the current revision is refused: the document has no later revision'),
   ('accepted_nohash', 'ZD409: transition not allowed|unchanged', 'of an acceptance without a hash is refused: nothing to compare')
 ) AS h (state, outcome, what)
 CROSS JOIN (VALUES ('ana'), ('vesna')) AS p (name);
@@ -411,18 +485,18 @@ SELECT row_eq(
   'version 2 repeats the instruction at the revision the database read, opened by the caller as a rereview, without a hash because the range no longer resolves, and is not closed');
 SELECT is((SELECT string_agg(version::text, ',') FROM collaboration.revision_response WHERE request_id = pg_temp.id('s1')), '1',
   'the answer of version 1 stays and version 2 has none');
-INSERT INTO ref SELECT 's2', pg_temp.make('accepted_other');
+INSERT INTO ref SELECT 's2', pg_temp.make('accepted');
 SELECT matches(pg_temp.act('rereview', pg_temp.id('s2'), pg_temp.seq(pg_temp.id('s2')), 'vesna'), '^applied\|[0-9]+\|2\|reopened$',
-  'fixture: Vesna fires the rereview of a range that still resolves');
+  'fixture: Vesna fires the rereview of a range whose quote was edited');
 SELECT row_eq(
   $$ SELECT requested_revision, opened_by, opened_as, observed_range_hash FROM collaboration.revision_request_version
       WHERE request_id = pg_temp.id('s2') AND version = 2 $$,
-  ROW(10::bigint, pg_temp.id('vesna'), 'rereview'::text, pg_temp.sha('drugi odlomak')),
-  'a rereview of a range that resolves stores the teacher of the session and the hash the database computed');
+  ROW(10::bigint, pg_temp.id('vesna'), 'rereview'::text, NULL::text),
+  'a rereview fired by the teacher stores the teacher of the session and no hash');
 SELECT bag_eq(
   $$ SELECT DISTINCT requested_revision, observed_range_hash FROM collaboration.revision_request_version WHERE opened_as = 'rereview' $$,
-  $$ VALUES (10::bigint, NULL::text), (10::bigint, pg_temp.sha('drugi odlomak')) $$,
-  'every version a rereview opened so far names revision 10 and a hash the database computed, or none');
+  $$ VALUES (10::bigint, NULL::text) $$,
+  'every version a rereview opened so far names revision 10 and no hash: a range that still resolves is never rereviewed');
 INSERT INTO ref SELECT 's3', pg_temp.make('reopened');
 SELECT is((SELECT string_agg(format('%s|%s|%s', version, opened_as, observed_range_hash IS NULL), ';' ORDER BY version)
     FROM collaboration.revision_request_version WHERE request_id = pg_temp.id('s3')),
@@ -458,7 +532,7 @@ FROM (VALUES
   (3, 'restored', 'vesna', format('accept_revision_request(:id, :seq, 11, %L)', pg_temp.sha('prvi odlomak')), '^applied\|[0-9]+\|2\|accepted$',
    'at revision 11 the quote is back and only the teacher''s acceptance closes the new cycle'),
   (4, NULL, 'ana', 'rereview_revision_request(:id, :seq)', '^ZD409: transition not allowed$',
-   'the revision of the second acceptance is no later revision'),
+   'at the revision of the second acceptance nothing changed'),
   (5, 'elsewhere', 'ana', 'rereview_revision_request(:id, :seq)', '^ZD409: transition not allowed$',
    'revision 12 changes another paragraph only: the accepted range is unchanged and the student cannot reopen it'),
   (6, NULL, 'vesna', 'rereview_revision_request(:id, :seq)', '^ZD409: transition not allowed$', 'nor can the teacher through the rereview'),
@@ -503,9 +577,9 @@ SELECT is((SELECT string_agg(format('%s|%s|%s', version, opened_as, instruction)
 -- An acceptance and a new revision of the document at the same moment: the
 -- rereview loaded before the acceptance is a conflict; after it, the accepted
 -- revision is no change, and the next revision, read by the database, is.
-INSERT INTO ref SELECT 'k4r', pg_temp.make('responded');
+INSERT INTO ref SELECT 'k4r', pg_temp.make('responded_u');
 INSERT INTO ref SELECT 'k4r_seq', pg_temp.seq(pg_temp.id('k4r'));
-SELECT matches(pg_temp.act('accept_now', pg_temp.id('k4r'), (SELECT val FROM ref WHERE name = 'k4r_seq')::bigint), '^applied\|[0-9]+\|1\|accepted$',
+SELECT matches(pg_temp.act('accept_u_now', pg_temp.id('k4r'), (SELECT val FROM ref WHERE name = 'k4r_seq')::bigint), '^applied\|[0-9]+\|1\|accepted$',
   'the teacher accepts at the current revision 13');
 SELECT is(pg_temp.act('rereview', pg_temp.id('k4r'), (SELECT val FROM ref WHERE name = 'k4r_seq')::bigint),
   'conflict|' || pg_temp.seq(pg_temp.id('k4r')) || '|1|accepted', 'a rereview with the counter loaded before the acceptance is a conflict');
@@ -513,7 +587,7 @@ SELECT is(pg_temp.act('rereview', pg_temp.id('k4r'), pg_temp.seq(pg_temp.id('k4r
   'ZD409: transition not allowed', 'a rereview at the revision that was just accepted is refused');
 INSERT INTO ref SELECT 'rev14', pg_temp.revise('later');
 SELECT matches(pg_temp.act('rereview', pg_temp.id('k4r'), pg_temp.seq(pg_temp.id('k4r'))), '^applied\|[0-9]+\|2\|reopened$',
-  'a rereview after the next revision 14 of the document is applied');
+  'a rereview after the next revision 14 of the document, which edits the accepted range, is applied');
 SELECT is((SELECT requested_revision FROM collaboration.revision_request_version WHERE request_id = pg_temp.id('k4r') AND version = 2), 14::bigint,
   'and it names revision 14, which the database read');
 
