@@ -152,8 +152,8 @@ UPDATE collaboration.revision_request_version v SET accepted_anchor = q.anchor
  WHERE q.id = v.request_id AND v.accepted_range_hash IS NOT NULL;
 -- The scan under the lock is accepted, as above; every row passes after the
 -- update.
--- squawk-ignore constraint-missing-not-valid
 ALTER TABLE collaboration.revision_request_version
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT revision_request_version_accepted_anchor_hash_check
     CHECK ((accepted_anchor IS NULL) = (accepted_range_hash IS NULL));
 
@@ -164,6 +164,7 @@ ALTER TABLE collaboration.revision_request_version
 -- one that is not a text anchor, is invalid input. The pair is the teacher's
 -- claim; the rereview trusts it only when the database computes the same hash
 -- under that anchor in the accepted revision.
+-- squawk-ignore ban-drop-function
 DROP FUNCTION collaboration.accept_revision_request(uuid, bigint, bigint, text);
 CREATE FUNCTION collaboration.accept_revision_request(
   p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text,
