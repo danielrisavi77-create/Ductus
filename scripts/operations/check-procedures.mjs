@@ -226,7 +226,9 @@ export function parseOperations(text) {
           refuse(lineNumber, separator ? "table separator does not match the header" : "table without a separator row");
         }
       } else if (table.state === "body") {
+        // A row of another width is not part of this table (QA and review on e472fa77, contract c.5).
         if (problem) refuse(lineNumber, problem);
+        else if (row.length !== table.columns) refuse(lineNumber, "table row does not match the header");
         else {
           const name = (row[0] ?? "").replace(/^`(.*)`$/, "$1").trim();
           if (name) owners.push({ name, line: lineNumber });

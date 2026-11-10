@@ -348,6 +348,14 @@ describe("checkOperations: the Nositelji table is one plain table", () => {
     ["right after a paragraph", OWNERS.replace("\n\n|", "\nUvod.\n|"), missing("table right after a paragraph")],
     ["followed by a line without a blank", `${OWNERS}Dodatak.\n`, ["Nositelji#-: unsupported markdown: line right after a table"]],
     ["followed by an indented row", `${OWNERS}  | \`x\` | y |\n`, ["Nositelji#-: unsupported markdown: indented line"]],
+    // QA and review FAIL on e472fa77 (c.6751405101, c.6751408864): a body row of another width is refused.
+    ["with a row of fewer cells", `${OWNERS}| \`dežurni\` |\n`, ["Nositelji#-: unsupported markdown: table row does not match the header"]],
+    ["with a row of more cells", `${OWNERS}| \`dežurni\` | x | y |\n`, ["Nositelji#-: unsupported markdown: table row does not match the header"]],
+    [
+      "with the only matching owner in a short row",
+      OWNERS.replace("| `vlasnik` | tehnički kvarovi |", "| `vlasnik` |"),
+      ["Nositelji#-: unsupported markdown: table row does not match the header", "Pokretanje#1: owner not in Nositelji: vlasnik"],
+    ],
     ["with an owner in a double-backtick span", `${OWNERS}| \`\`dežurni\`\` | x |\n`, ["Nositelji#-: unsupported markdown: two or more backticks in a row"]],
   ] as const)("%s", (_name, owners, expected) => {
     expect(messages(doc(step, { owners }))).toEqual(expected);
