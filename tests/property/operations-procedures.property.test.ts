@@ -97,3 +97,42 @@ test.prop([documentArb, fc.nat(), fc.integer({ min: 0, max: MUTATIONS.length - 1
     expect(refused.map((p) => p.line)).toEqual(refused.map(() => index + 1));
   },
 );
+
+// Review and QA FAIL on 2d9c1e79 (#1803), contract on #1836 (w540j): a closing
+// run of `#` after a space or tab is not part of the heading (CommonMark ATX),
+// so adding one to any heading changes nothing, and `pnpm run <x>` passes
+// exactly when `x` is a script, `install` included.
+const closingArb = fc.record({
+  before: fc.stringMatching(/^[ \t]{1,3}$/),
+  hashes: fc.integer({ min: 1, max: 10 }),
+  after: fc.stringMatching(/^[ \t]{0,2}$/),
+});
+
+test.prop([documentArb, fc.array(fc.boolean(), { minLength: 1, maxLength: 8 }), closingArb])(
+  "a closing run of # on any heading does not change the result",
+  ({ steps, prose }, mask, { before, hashes, after }) => {
+    const text = render(steps, prose);
+    let n = 0;
+    const closed = text
+      .split("\n")
+      .map((line) => (/^#{1,3} /.test(line) && mask[n++ % mask.length] ? `${line}${before}${"#".repeat(hashes)}${after}` : line))
+      .join("\n");
+    expect(checkOperations(closed, CONTEXT)).toEqual(checkOperations(text, CONTEXT));
+  },
+);
+
+const SCRIPT_NAMES = ["install", "local:up", "db:status", "prod:up", "i", "add"] as const;
+
+test.prop([fc.constantFrom(...SCRIPT_NAMES), fc.subarray([...SCRIPT_NAMES]), fc.boolean()])(
+  "pnpm run <x> passes exactly when x is a package.json script",
+  (name, scripts, option) => {
+    const command = `pnpm run ${name}${option ? " --frozen-lockfile" : ""}`;
+    const text = render([[{ kind: 0 }], [{ kind: 0 }], [{ kind: 0 }], [{ kind: 0 }]], ["", "", "", ""]).replace("`pnpm local:up`", `\`${command}\``);
+    const context = { ...CONTEXT, scripts: new Set([...scripts, "local:up"]) };
+    const found = checkOperations(text, context).map((p) => p.message);
+    const known = name === "local:up" || scripts.includes(name);
+    expect(found).toEqual(
+      !known ? [`pnpm script not in package.json: ${name}`] : option ? ["pnpm option not allowed: --frozen-lockfile"] : [],
+    );
+  },
+);

@@ -451,6 +451,51 @@ describe("checkOperations: document structure", () => {
   });
 });
 
+// Review and QA FAIL on 2d9c1e79 (#1803 c.6760241487, c.6760261772), contract
+// on #1836 (w540j): classes P1 to P7 for `pnpm run`, H1 to H10 for headings.
+describe("checkOperations: pnpm run always names a package.json script", () => {
+  const MISSING_INSTALL = ["Pokretanje#1: pnpm script not in package.json: install"];
+  const withInstall = { ...CONTEXT, scripts: new Set([...CONTEXT.scripts, "install"]) };
+  it.each([
+    ["P1 pnpm install is built in", "`pnpm install`", CONTEXT, []],
+    ["P2 pnpm install with an allowed option", "`pnpm install --frozen-lockfile`", CONTEXT, []],
+    ["P3 pnpm run install without an install script", "`pnpm run install`", CONTEXT, MISSING_INSTALL],
+    ["P4 pnpm run install with an option, without the script", "`pnpm run install --frozen-lockfile`", CONTEXT, MISSING_INSTALL],
+    ["P5 pnpm run install with an install script", "`pnpm run install`", withInstall, []],
+    ["P6 pnpm run with a script that exists", "`pnpm run local:up`", CONTEXT, []],
+    ["P7 pnpm run without a script", "`pnpm run`", CONTEXT, ["Pokretanje#1: pnpm command names no script"]],
+  ] as const)("%s", (_name, command, context, expected) => {
+    const found = checkOperations(doc(`1. Pokreni. Naredba: ${command}.`), context).map((p) => `${p.procedure}#${p.step ?? "-"}: ${p.message}`);
+    expect(found).toEqual(expected);
+  });
+});
+
+describe("checkOperations: a closing run of # is not part of a heading (CommonMark ATX)", () => {
+  const BAD = "1. Odluči što dalje.";
+  const MISSING = REQUIRED_PROCEDURES.map((name) => `${name}#-: required procedure is missing`);
+  const postupci = (heading: string) => doc(BAD).replace("\n## Postupci\n", `\n${heading}\n`);
+  it.each([
+    ["H1 closing run after a space", postupci("## Postupci ##"), NONE],
+    ["H2 closing run of one #", postupci("## Postupci #"), NONE],
+    ["H2 closing run longer than the opening", postupci("## Postupci ##########"), NONE],
+    ["H3 closing run after a tab, tabs around the title", postupci("##\tPostupci\t##\t"), NONE],
+    ["H4 # without a space before it stays in the title", postupci("## Postupci##"), MISSING],
+    ["H5 only the last run is a closing run", postupci("## Postupci # #"), MISSING],
+    ["H6 a heading of # only is empty", postupci("## ##"), MISSING],
+    ["H6 a heading of one # is empty", postupci("## #"), MISSING],
+    ["H7 an escaped # is not a closing run", postupci("## Postupci \\##"), MISSING],
+    ["H8 a procedure heading with a closing run", doc(BAD).replace("### Pokretanje\n", "### Pokretanje ###\n"), NONE],
+    ["H9 the owners heading with a closing run", doc("1. Odluči. Nositelj: `vlasnik`.").replace("## Nositelji\n", "## Nositelji ##\n"), []],
+    [
+      "H10 QA: a second Postupci with a closing run is read strictly",
+      doc("1. Odluči. Nositelj: `vlasnik`.", { extra: "\n## Postupci ##\n\n### Dodatni\n\n1. Bez naredbe i nositelja.\n" }),
+      ["Dodatni#1: step has neither Naredba: nor Nositelj:"],
+    ],
+  ] as const)("%s", (_name, text, expected) => {
+    expect(messages(text)).toEqual(expected);
+  });
+});
+
 describe("docs/OPERATIONS.md on this branch", () => {
   const text = readFileSync(new URL("../../docs/OPERATIONS.md", import.meta.url), "utf8");
   const context = repoContext(new URL("../..", import.meta.url));

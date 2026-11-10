@@ -7,7 +7,8 @@
 // The check does not interpret CommonMark (#1803, contract #1091 c.6750197325).
 // In the sections "Nositelji" and "Postupci" it reads only this line subset and
 // refuses every other line with `unsupported markdown: <what>`:
-// - a blank line, or a heading `#`, `##` or `###` at column 0;
+// - a blank line, or a heading `#`, `##` or `###` at column 0 (a closing run
+//   of `#` after a space or tab is not part of the title, as in CommonMark);
 // - a step: one line `N. ` (one to nine digits, a dot, one space) followed by a
 //   letter or `**`, at column 0, inside a `###` procedure, after a blank line,
 //   a heading, a fence or another step; a step never continues on the next line;
@@ -168,7 +169,10 @@ export function parseOperations(text) {
       endTable(lineNumber);
       step = null;
       prev = "heading";
-      const title = (heading[2] ?? "").trim();
+      // CommonMark ATX: a closing run of `#` after a space or tab is not part
+      // of the title, and a title of `#` only is empty (#1803, contract #1836).
+      const raw = (heading[2] ?? "").trim();
+      const title = /^#+$/.test(raw) ? "" : raw.replace(/[ \t]+#+$/, "").trim();
       if (level <= 2) {
         section = level === 2 ? title : "";
         procedure = null;
@@ -318,11 +322,13 @@ function commandProblem(command, context) {
     case undefined:
       return "Naredba: is not followed by a command in inline code";
     case "pnpm": {
-      const rest = args[0] === "run" ? args.slice(1) : args;
+      // `pnpm run <x>` always runs the script x; only bare `pnpm install` is built in.
+      const run = args[0] === "run";
+      const rest = run ? args.slice(1) : args;
       const [script, ...scriptArgs] = rest;
       if (!script) return "pnpm command names no script";
       if (script.startsWith("-")) return `pnpm option not allowed: ${script}`;
-      if (BUILT_IN_PNPM.has(script)) {
+      if (!run && BUILT_IN_PNPM.has(script)) {
         // `pnpm install <name>` adds a package, so every argument is from the list.
         const refused = scriptArgs.find((arg) => !INSTALL_FLAGS.has(arg));
         return refused ? `pnpm install argument not allowed: ${refused}` : null;
