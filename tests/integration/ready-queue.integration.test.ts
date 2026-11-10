@@ -7,6 +7,7 @@ import { withActor } from "@/server/db";
 
 import { GET } from "../../app/api/ready/route";
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+import { holdWorkerPresence } from "./worker-presence";
 
 // DAN-585: the queue capability of /api/ready against the real catalogue, as
 // the web role reads it through withActor. A synthetic login that inherits
@@ -20,6 +21,7 @@ const password = randomBytes(24).toString("hex");
 
 const admin = new pg.Pool({ connectionString: ADMIN_URL, max: 1 });
 let worker: pg.Client | undefined;
+let releasePresence: (() => Promise<void>) | undefined;
 
 function loginUrl(): string {
   const url = new URL(ADMIN_URL);
@@ -37,18 +39,22 @@ async function queue(): Promise<unknown> {
 }
 
 beforeAll(async () => {
+  // Another file may hold a worker session of its own (the job queue test);
+  // this one reads the capability only once that file is done.
+  releasePresence = await holdWorkerPresence(ADMIN_URL);
   await admin.query(`DROP ROLE IF EXISTS ${WORKER_LOGIN}`);
   const ddl = await admin.query<{ ddl: string }>(
     "SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L IN ROLE ductus_worker', $1::text, $2::text) AS ddl",
     [WORKER_LOGIN, password],
   );
   await admin.query(ddl.rows[0].ddl);
-});
+}, 180_000);
 
 afterAll(async () => {
   await worker?.end().catch(() => {});
   await admin.query(`DROP ROLE IF EXISTS ${WORKER_LOGIN}`);
   await admin.end();
+  await releasePresence?.();
 });
 
 describe("/api/ready queue capability", () => {
