@@ -117,6 +117,12 @@ const zipRows: Row[] = [
   ["Z11", "bytes hidden between two entries", fixtureZip([{ name: "a.xml", data: "<a/>", after: enc("PK\u0003\u0004xx") }, ...ok]), "ZIP_INVALID"],
   ["Z11", "bytes hidden before the central directory", fixtureZip([...ok, { name: "b.xml", data: "<b/>", after: new Uint8Array(4) }]), "ZIP_INVALID"],
   ["Z13", "UTF-8 name flag and Croatian name", fixtureZip([{ name: "word/čćžšđ.xml", data: "<a/>", flags: 0x800 }]), "OK"],
+  ["Z6", "non-ASCII name without the UTF-8 flag", fixtureZip([{ name: "word/č.xml", data: "<a/>", flags: 0 }]), "ZIP_PATH"],
+  ["Z11", "UTF-8 name flag only in the directory", fixtureZip([{ name: "word/č.xml", data: "<a/>", flags: 0x800, localFlags: 0 }]), "ZIP_INVALID"],
+  ["Z11", "UTF-8 name flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0, localFlags: 0x800 }]), "ZIP_INVALID"],
+  ["Z11", "data descriptor flag only in the directory", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, localFlags: 0 }, ...ok]), "ZIP_INVALID"],
+  ["Z11", "data descriptor flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", localFlags: 0x8, after: descriptorFor("<a/>", true) }]), "ZIP_INVALID"],
+  ["Z13", "UTF-8 name flag on an ASCII name", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x800 }]), "OK"],
   ["Z6", "directory entry with data", fixtureZip([{ name: "word/", data: "x" }]), "ZIP_INVALID"],
 ];
 

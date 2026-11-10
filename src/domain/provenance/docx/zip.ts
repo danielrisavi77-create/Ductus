@@ -33,6 +33,8 @@ const LOCAL = 0x04034b50;
 const DESCRIPTOR = 0x08074b50;
 const ENCRYPTED = 0x0001 | 0x0040 | 0x2000;
 const PATCHED = 0x0020;
+const DESCRIBED = 0x0008;
+const UTF8 = 0x0800;
 const MAX_VERSION = 63;
 const reject = (code: ConstructorParameters<typeof DocxRejected>[0]): never => {
   throw new DocxRejected(code);
@@ -75,7 +77,7 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     const [nameLength, next, offset] = [u16(at + 28), at + 46 + u16(at + 28) + u16(at + 30) + u16(at + 32), u32(at + 42)];
     if (next > eocd) reject("ZIP_INVALID");
     const nameBytes = bytes.subarray(at + 46, at + 46 + nameLength);
-    const name = safeName(nameBytes);
+    const name = safeName(nameBytes, (flags & UTF8) !== 0);
     if (flags & ENCRYPTED || method === 99) reject("ZIP_ENCRYPTED");
     if (method !== 0 && method !== 8) reject("ZIP_METHOD");
     if (csize === 0xffffffff || usize === 0xffffffff || offset === 0xffffffff) reject("ZIP_UNSUPPORTED");
@@ -97,11 +99,14 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     if (localFlags & PATCHED || (u16(offset + 4) & 0xff) > MAX_VERSION) reject("ZIP_UNSUPPORTED");
     const start = offset + 30 + u16(offset + 26) + u16(offset + 28);
     const localName = bytes.subarray(offset + 30, offset + 30 + u16(offset + 26));
-    const sameSizes = (localFlags & 0x8) !== 0 || (u32(offset + 14) === crc && u32(offset + 18) === csize && u32(offset + 22) === usize);
-    if (!equal(localName, nameBytes) || u16(offset + 8) !== method || !sameSizes) reject("ZIP_INVALID");
+    const sameSizes = (localFlags & DESCRIBED) !== 0 || (u32(offset + 14) === crc && u32(offset + 18) === csize && u32(offset + 22) === usize);
+    // The name encoding and the data descriptor flags change how a reader reads the
+    // name and finds the end of the data, so both headers must carry the same ones.
+    const sameFlags = ((localFlags ^ flags) & (DESCRIBED | UTF8)) === 0;
+    if (!equal(localName, nameBytes) || u16(offset + 8) !== method || !sameSizes || !sameFlags) reject("ZIP_INVALID");
     if (start + csize > cdOffset) reject("ZIP_INVALID");
 
-    const entry = { name, method, crc, csize, usize, start: offset, end: start + csize, descriptor: (localFlags & 0x8) !== 0 };
+    const entry = { name, method, crc, csize, usize, start: offset, end: start + csize, descriptor: (localFlags & DESCRIBED) !== 0 };
     const key = keyOf(name);
     if (byKey.has(key)) reject("ZIP_DUPLICATE");
     byKey.set(key, entry);
@@ -140,7 +145,9 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
 }
 
 /** A part name that cannot leave the archive root or mean two things. */
-function safeName(raw: Uint8Array): string {
+function safeName(raw: Uint8Array, utf8: boolean): string {
+  // Without the UTF-8 flag other readers take non-ASCII bytes as CP437.
+  if (!utf8 && raw.some((b) => b >= 0x80)) reject("ZIP_PATH");
   let name = "";
   try {
     name = names.decode(raw);
