@@ -12,7 +12,8 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 import {
-  RevisionList, canAnswer, displayState, limitAnswer, revisionFromOpen, sendAnswer, type RevisionListProps,
+  RevisionList, canAnswer, clearSent, displayState, isLive, limitAnswer, revisionFromOpen, sendAnswer,
+  type RevisionListProps,
 } from "./revision-view";
 
 const t = messagesHr.revisions;
@@ -76,6 +77,23 @@ describe("every state of a request (N-08 states 6 to 10)", () => {
     expect(text(render({ requests: [STATES.reopened] }))).toContain(`${t.teacher}: Navedite stranicu izvora.`);
   });
 
+  it("an earlier answer stays beside its version, and every instruction stays in order (#1506 D1)", () => {
+    const third = request("reopened", [
+      v(1, { response: response("done"), closed: closed("reopened") }),
+      v(2, { instruction: "Navedite stranicu izvora.", response: response("declined"), closed: closed("reopened") }),
+      v(3, { instruction: "Dodajte godinu izdanja." }),
+    ]);
+    const shown = text(render({ requests: [third] }));
+    const order = [
+      "Dopunite odlomak izvorom za navedeni udio.", `${t.own}: Dodan izvor uz udio.`,
+      `${t.teacher}: Navedite stranicu izvora.`, `${t.own}: Udio se odnosi na primjer iz uvoda.`,
+      `${t.teacher}: Dodajte godinu izdanja.`,
+    ].map((part) => shown.indexOf(part));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(text(render({ requests: [STATES.reopened] }))).toContain(`${t.own}: Dodan izvor uz udio.`);
+  });
+
   it("accepted and withdrawn say when the request was closed, with one period after the year", () => {
     const accepted = text(render({ requests: [STATES.accepted] }));
     expect(accepted).toContain("Prihvaćeno 14. studenoga 2026. Zahtjev je zatvoren.");
@@ -121,6 +139,32 @@ describe("every state of a request (N-08 states 6 to 10)", () => {
     expect(off.match(/disabled=""/g)).toHaveLength(2);
     const on = render({ requests: [STATES.open], drafts: { [STATES.open.id]: "Dodan izvor." } });
     expect(on).not.toContain('disabled=""');
+  });
+
+  it("the explanation is read-only while it is on its way", () => {
+    const field = (html: string) => html.match(/<textarea[^>]*>/)?.[0];
+    const drafts = { [STATES.open.id]: "Dodan izvor." };
+    expect(field(render({ requests: [STATES.open], drafts, sending: STATES.open.id }))).toMatch(/readonly=""/i);
+    expect(field(render({ requests: [STATES.open], drafts }))).not.toMatch(/readonly/i);
+  });
+
+  it("a sent answer clears only the explanation that was sent", () => {
+    const id = STATES.open.id;
+    expect(clearSent({ [id]: "Dodan izvor.", b: "x" }, id, "Dodan izvor.")).toEqual({ b: "x" });
+    expect(clearSent({ [id]: "Dodan izvor i stranica." }, id, "Dodan izvor.")).toEqual({ [id]: "Dodan izvor i stranica." });
+  });
+
+  it("an explanation that could not be sent stays readable once the request is closed", () => {
+    const html = render({
+      requests: [STATES.withdrawn], drafts: { [STATES.withdrawn.id]: "Ne slažem se." }, errors: { [STATES.withdrawn.id]: "conflict" },
+    });
+    expect(html).toContain(t.keptLabel);
+    expect(html).toContain(t.keptHint);
+    expect(html.match(/<textarea[^>]*>/)?.[0]).toMatch(/readonly=""/i);
+    expect(html).toContain("Ne slažem se.");
+    expect(html).not.toContain(t.done);
+    expect(render({ requests: [STATES.withdrawn] })).not.toContain("<textarea");
+    expect(render({ requests: [STATES.open], drafts: { [STATES.open.id]: "x" } })).not.toContain(t.keptLabel);
   });
 
   it("keeps markup as plain text", () => {
@@ -183,6 +227,27 @@ describe("sending an answer", () => {
     expect(d.respond).not.toHaveBeenCalled();
   });
 
+  it("nothing is sent when the session or the panel ends while the revision is read", async () => {
+    const d = { ...deps(), current: vi.fn(() => true) };
+    d.revision.mockImplementationOnce(async () => {
+      d.current.mockReturnValue(false);
+      return { kind: "ok" as const, revision: 12 };
+    });
+    expect(await sendAnswer(STATES.open, "done", "Dodan izvor.", d)).toEqual({ kind: "error", error: "signedOut", reload: false });
+    expect(d.respond).not.toHaveBeenCalled();
+  });
+
+  it("an unmounted panel is not live, though its watch is gone", () => {
+    const refs = (mounted: boolean, stopped = false, ended: boolean | null = false) => ({
+      mounted: { current: mounted }, stopped: { current: stopped },
+      watch: { current: ended === null ? null : { ended: () => ended } },
+    });
+    expect(isLive(refs(true))).toBe(true);
+    expect(isLive(refs(false, false, null))).toBe(false);
+    expect(isLive(refs(true, true))).toBe(false);
+    expect(isLive(refs(true, false, true))).toBe(false);
+  });
+
   it("a submitted work is not answered", async () => {
     const d = { ...deps(), revision: vi.fn(async () => ({ kind: "submitted" as const })) };
     expect(await sendAnswer(STATES.open, "done", "Dodan izvor.", d)).toMatchObject({ error: "submitted" });
@@ -217,7 +282,7 @@ describe("language", () => {
     expect(isUiTextModule("src/lib/i18n/messages.hr.ts")).toBe(true);
     expect(isUiTextModule("src/lib/i18n/messages.en.ts")).toBe(true);
     for (const req of Object.values(STATES)) {
-      const shown = render({ requests: [req], errors: { [req.id]: "conflict" }, live: t.sent });
+      const shown = render({ requests: [req], drafts: { [req.id]: "Dodan izvor." }, errors: { [req.id]: "conflict" }, live: t.sent });
       expect(findForbiddenTerms(shown), shown).toEqual([]);
     }
     expect(findForbiddenTerms(JSON.stringify(t))).toEqual([]);

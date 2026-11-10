@@ -966,6 +966,8 @@ const en = {
     sending: "Sending…",
     sent: "The answer was sent.",
     submittedNote: "The work has been submitted. The request can no longer be answered.",
+    keptLabel: "Unsent explanation",
+    keptHint: "This explanation was not sent because the request can no longer be answered. Copy it if you want to keep it.",
     errors: {
       signedOut: "Your sign-in has expired. Sign in again.",
       forbidden: "This account cannot answer this request.",

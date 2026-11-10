@@ -970,6 +970,8 @@ export const hr = {
     sending: "Slanje…",
     sent: "Odgovor je poslan.",
     submittedNote: "Rad je predan. Na zahtjev se više ne odgovara.",
+    keptLabel: "Neposlano obrazloženje",
+    keptHint: "Ovo obrazloženje nije poslano jer se na zahtjev više ne odgovara. Kopirajte ga ako ga želite sačuvati.",
     errors: {
       signedOut: "Prijava je istekla. Prijavite se ponovno.",
       forbidden: "Ovaj račun ne može odgovoriti na ovaj zahtjev.",

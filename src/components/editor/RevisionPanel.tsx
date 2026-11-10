@@ -24,7 +24,9 @@ import { formatDateHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { useLocalSignedOut, useLocalSubmitted } from "./LocalDocument";
-import { RevisionList, revisionFromOpen, sendAnswer, type AnswerError, type ListStatus } from "./revision-view";
+import {
+  RevisionList, clearSent, isLive, revisionFromOpen, sendAnswer, type AnswerError, type ListStatus,
+} from "./revision-view";
 
 const t = messagesHr.revisions;
 
@@ -54,6 +56,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
   const generation = useRef(0);
   const stoppedRef = useRef(false);
   const watchRef = useRef<SessionWatch | null>(null);
+  const mountedRef = useRef(false);
   const tag = session?.tag ?? null;
   const at = session?.at ?? 0;
   useEffect(() => {
@@ -64,7 +67,15 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
       if (watchRef.current === watch) watchRef.current = null;
     };
   }, [tag, at]);
-  const current = useCallback(() => !stoppedRef.current && !(watchRef.current?.ended() ?? false), []);
+  // Before the load: an unmounted panel answers nothing, and what was on its way is dropped.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      generation.current += 1;
+    };
+  }, []);
+  const current = useCallback(() => isLive({ mounted: mountedRef, stopped: stoppedRef, watch: watchRef }), []);
 
   const load = useCallback(async () => {
     if (!current()) return;
@@ -102,7 +113,8 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
     setSending(id);
     setLive("");
     const mine = generation.current;
-    const result = await sendAnswer(request, kind, drafts[id] ?? "", {
+    const sent = drafts[id] ?? "";
+    const result = await sendAnswer(request, kind, sent, {
       respond: respondRevisionRequest,
       revision: async () => revisionFromOpen(await openWork(assignmentId)),
       current,
@@ -110,7 +122,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
     setSending(null);
     if (stoppedRef.current || mine !== generation.current) return;
     if (result.kind === "sent") {
-      setDrafts((all) => without(all, id));
+      setDrafts((all) => clearSent(all, id, sent));
       setErrors((all) => without(all, id));
       setLive(t.sent);
       void load();

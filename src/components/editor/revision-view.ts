@@ -45,6 +45,20 @@ export function revisionFromOpen(outcome: OpenOutcome): RevisionAt {
   return outcome.status === "unauthenticated" ? { kind: "signedOut" } : { kind: "unavailable" };
 }
 
+/**
+ * Whether an answer may still go out: the panel is mounted, its session has
+ * not ended and the watch says so. After unmount the watch is gone, so the
+ * mount itself must say no, or a late `openWork` could send under another session.
+ */
+export type Liveness = {
+  readonly mounted: { readonly current: boolean };
+  readonly stopped: { readonly current: boolean };
+  readonly watch: { readonly current: { ended: () => boolean } | null };
+};
+
+export const isLive = ({ mounted, stopped, watch }: Liveness): boolean =>
+  mounted.current && !stopped.current && !(watch.current?.ended() ?? false);
+
 export type AnswerDeps = {
   readonly respond: (input: RespondInput, current: () => boolean) => Promise<RespondOutcome>;
   readonly revision: () => Promise<RevisionAt>;
@@ -75,11 +89,23 @@ export async function sendAnswer(
   if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
   const at = await deps.revision();
   if (at.kind !== "ok") return { kind: "error", error: at.kind, reload: false };
+  // Reading the revision takes time; the session or the panel may be gone by now.
+  if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
   const outcome = await deps.respond({
     requestId: request.id, expectedSeq: request.rowSeq, kind, explanation, responseRevision: at.revision,
   }, deps.current);
   if (outcome.kind === "ok") return { kind: "sent" };
   return { kind: "error", error: outcome.kind, reload: outcome.kind === "conflict" };
+}
+
+/** Drafts after a sent answer: the explanation goes only if it is still the one that was sent. */
+export function clearSent(
+  drafts: Readonly<Record<string, string>>, id: string, sent: string,
+): Readonly<Record<string, string>> {
+  if (drafts[id] !== sent) return drafts;
+  const rest = { ...drafts };
+  delete rest[id];
+  return rest;
 }
 
 export type ListStatus = "loading" | "signedOut" | "forbidden" | "unavailable" | "ok";
@@ -126,9 +152,15 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
     h("strong", null, by(first.openedIsOwn, t.teacher)),
     h("span", { className: styles.passage }, `„${request.anchor.quote}”`),
     h("span", { className: styles.chip }, t.state[state])),
-  h("p", { className: styles.body }, first.instruction),
-  last !== first ? h("p", { className: styles.quote }, `${by(last.openedIsOwn, t.teacher)}: ${last.instruction}`) : null,
-  last.response ? h("p", { className: styles.quote }, `${by(last.response.isOwn, t.student)}: ${last.response.explanation}`) : null,
+  // Every version in order: an earlier answer stays beside its instruction (#1506 D1).
+  ...request.versions.flatMap((version) => [
+    version === first
+      ? h("p", { key: "i1", className: styles.body }, first.instruction)
+      : h("p", { key: `i${version.version}`, className: styles.quote }, `${by(version.openedIsOwn, t.teacher)}: ${version.instruction}`),
+    version.response
+      ? h("p", { key: `r${version.version}`, className: styles.quote }, `${by(version.response.isOwn, t.student)}: ${version.response.explanation}`)
+      : null,
+  ]),
   last.closed?.as === "accepted" ? h("p", { className: styles.meta }, t.acceptedMeta.replace("{date}", props.formatDate(last.closed.window))) : null,
   last.closed?.as === "withdrawn" ? h("p", { className: styles.meta }, t.withdrawnMeta.replace("{date}", props.formatDate(last.closed.window))) : null,
   answerable ? h("form", {
@@ -137,7 +169,7 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
   },
   h("label", { htmlFor: field, className: styles.label }, t.explanationLabel),
   h("textarea", {
-    id: field, rows: 3, value: draft, "aria-describedby": `${field}-hint`,
+    id: field, rows: 3, value: draft, "aria-describedby": `${field}-hint`, readOnly: sending,
     onChange: (event: { target: { value: string } }) => props.onDraft(request.id, limitAnswer(event.target.value)),
   }),
   h("p", { id: `${field}-hint`, className: styles.hint }, t.explanationHint),
@@ -148,6 +180,12 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
       type: "button", className: `${styles.btn} ${styles.secondary}`, disabled: !ready,
       onClick: () => props.onAnswer(request.id, "declined"),
     }, t.declined)),
+  ) : null,
+  // An explanation that could not be sent stays readable, so it can be copied.
+  !answerable && draft !== "" ? h("div", { className: styles.form },
+    h("label", { htmlFor: `${field}-kept`, className: styles.label }, t.keptLabel),
+    h("textarea", { id: `${field}-kept`, rows: 3, value: draft, readOnly: true, "aria-describedby": `${field}-kept-hint` }),
+    h("p", { id: `${field}-kept-hint`, className: styles.hint }, t.keptHint),
   ) : null,
   error ? h("p", { role: "alert", className: styles.error }, errorText(t, error)) : null);
 }
