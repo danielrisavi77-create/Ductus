@@ -10,7 +10,7 @@ import { CORPUS_DIR, MANIFEST_FILE } from "../../../../tests/fixtures/docx-corpu
 import { DEFAULT_DOCX_LIMITS, type DocxLimits, DocxRejected, resolveDocxLimits } from "./limits";
 import { scanXml, type XmlName } from "./xml";
 import { openDocxZip } from "./zip";
-import { descriptorFor, type FixtureEntry, fixtureZip } from "./zip.fixture";
+import { concat, descriptorFor, extraRecord, type FixtureEntry, fixtureZip } from "./zip.fixture";
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const DOC = '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="urn:w"><w:body/></w:document>';
@@ -44,6 +44,10 @@ const big = "a".repeat(100_000);
 // About 2:1 under raw deflate, so both sides of the boundary are below the default limit.
 const noisy = Array.from({ length: 20_000 }, (_, i) => "abcdefghijklmnop"[((i * 7919) ^ (i >> 3)) % 16]).join("");
 const valid = fixtureZip(ok);
+const timestamp = extraRecord(0x5455, new Uint8Array([1, 0, 0, 0, 0]));
+// Version 1, CRC-32 of the header name "a.xml", then the name other readers would show.
+const unicodePath = extraRecord(0x7075, concat([new Uint8Array([1, 0x9c, 0x70, 0x28, 0xec]), enc("word/document.xml")]));
+const unicodeComment = extraRecord(0x6375, concat([new Uint8Array([1, 0, 0, 0, 0]), enc("komentar")]));
 
 const zipRows: Row[] = [
   ["Z1", "string input", "PK", "INPUT_INVALID"],
@@ -128,6 +132,19 @@ const zipRows: Row[] = [
   ["Z6", "UTF-8 name with a byte order mark inside", fixtureZip([{ name: "word/a\ufeff.xml", data: "<a/>", flags: 0x800 }]), "ZIP_PATH"],
   ["Z13", "UTF-8 name flag on an ASCII name", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x800 }]), "OK"],
   ["Z6", "directory entry with data", fixtureZip([{ name: "word/", data: "x" }]), "ZIP_INVALID"],
+  // Info-ZIP Unicode Path (0x7075) renames the entry in readers that honour it,
+  // and Unicode Comment (0x6375) is the same mechanism; the extra field is read
+  // as whole records so that neither can hide behind a malformed one (#1851).
+  ["Z6", "Unicode Path extra in the directory", fixtureZip([{ name: "a.xml", data: "<a/>", extra: unicodePath, localExtra: new Uint8Array() }]), "ZIP_PATH"],
+  ["Z6", "Unicode Path extra only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", localExtra: unicodePath }]), "ZIP_PATH"],
+  ["Z6", "Unicode Path extra after a harmless record", fixtureZip([{ name: "a.xml", data: "<a/>", extra: concat([timestamp, unicodePath]) }]), "ZIP_PATH"],
+  ["Z3", "Unicode Comment extra in the directory", fixtureZip([{ name: "a.xml", data: "<a/>", extra: unicodeComment, localExtra: new Uint8Array() }]), "ZIP_UNSUPPORTED"],
+  ["Z3", "Unicode Comment extra only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", localExtra: unicodeComment }]), "ZIP_UNSUPPORTED"],
+  ["Z11", "extra record longer than the extra field", fixtureZip([{ name: "a.xml", data: "<a/>", extra: extraRecord(0x5455, "\u0001abcd", 9) }]), "ZIP_INVALID"],
+  ["Z11", "local extra record longer than the extra field", fixtureZip([{ name: "a.xml", data: "<a/>", localExtra: concat([timestamp, extraRecord(0x7075, "", 40)]) }]), "ZIP_INVALID"],
+  ["Z11", "extra field ends in a partial record header", fixtureZip([{ name: "a.xml", data: "<a/>", extra: concat([timestamp, new Uint8Array([0x75, 0x70, 0])]) }]), "ZIP_INVALID"],
+  ["Z13", "extended timestamp extra in both headers", fixtureZip([{ name: "a.xml", data: "<a/>", extra: timestamp }, ...ok]), "OK"],
+  ["Z13", "Unicode Path ID only inside another record's data", fixtureZip([{ name: "a.xml", data: "<a/>", extra: extraRecord(0x5455, new Uint8Array([1, 0x75, 0x70, 5, 0])) }]), "OK"],
 ];
 
 function deflated(s: string): Uint8Array {

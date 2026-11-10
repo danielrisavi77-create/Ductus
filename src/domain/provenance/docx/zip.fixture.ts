@@ -30,6 +30,9 @@ export interface FixtureEntry {
   offset?: number;
   /** Central directory "disk number start"; default 0. */
   diskStart?: number;
+  /** Central and local extra fields; the local one defaults to the central one. */
+  extra?: Uint8Array;
+  localExtra?: Uint8Array;
   /** Bytes written right after the entry data: a data descriptor, or anything to hide. */
   after?: Uint8Array;
 }
@@ -63,6 +66,8 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     const csize = e.csize ?? body.length;
     const usize = e.usize ?? plain.length;
     const localName = utf8(e.localName ?? name);
+    const extra = e.extra ?? new Uint8Array();
+    const localExtra = e.localExtra ?? extra;
     const local = new DataView(new ArrayBuffer(30));
     local.setUint32(0, 0x04034b50, true);
     local.setUint16(4, e.localVersion ?? e.version ?? 20, true);
@@ -72,6 +77,7 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     local.setUint32(18, csize, true);
     local.setUint32(22, usize, true);
     local.setUint16(26, localName.length, true);
+    local.setUint16(28, localExtra.length, true);
     const central = new DataView(new ArrayBuffer(46));
     central.setUint32(0, 0x02014b50, true);
     central.setUint16(4, 20, true);
@@ -82,12 +88,13 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     central.setUint32(20, csize, true);
     central.setUint32(24, usize, true);
     central.setUint16(28, name.length, true);
+    central.setUint16(30, extra.length, true);
     central.setUint16(34, e.diskStart ?? 0, true);
     central.setUint32(42, e.offset ?? at, true);
     const after = e.after ?? new Uint8Array();
-    locals.push(new Uint8Array(local.buffer), localName, body, after);
-    centrals.push(new Uint8Array(central.buffer), name);
-    at += 30 + localName.length + body.length + after.length;
+    locals.push(new Uint8Array(local.buffer), localName, localExtra, body, after);
+    centrals.push(new Uint8Array(central.buffer), name, extra);
+    at += 30 + localName.length + localExtra.length + body.length + after.length;
   }
   const cd = concat(centrals);
   const comment = z.comment ?? new Uint8Array();
@@ -111,6 +118,15 @@ export function concat(parts: Uint8Array[]): Uint8Array {
     at += p.length;
   }
   return out;
+}
+
+/** One extra field record: a 16-bit ID, a 16-bit data length, then the data. */
+export function extraRecord(id: number, data: Uint8Array | string = new Uint8Array(), length?: number): Uint8Array {
+  const body = utf8(data);
+  const head = new DataView(new ArrayBuffer(4));
+  head.setUint16(0, id, true);
+  head.setUint16(2, length ?? body.length, true);
+  return concat([new Uint8Array(head.buffer), body]);
 }
 
 /** A data descriptor for `data` stored as is, with or without its signature. */

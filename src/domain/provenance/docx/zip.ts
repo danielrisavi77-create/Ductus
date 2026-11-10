@@ -36,6 +36,8 @@ const PATCHED = 0x0020;
 const DESCRIBED = 0x0008;
 const UTF8 = 0x0800;
 const MAX_VERSION = 63;
+const UNICODE_PATH = 0x7075;
+const UNICODE_COMMENT = 0x6375;
 const reject = (code: ConstructorParameters<typeof DocxRejected>[0]): never => {
   throw new DocxRejected(code);
 };
@@ -80,6 +82,7 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     if (next > eocd) reject("ZIP_INVALID");
     const nameBytes = bytes.subarray(at + 46, at + 46 + nameLength);
     const name = safeName(nameBytes, (flags & UTF8) !== 0);
+    checkExtra(bytes.subarray(at + 46 + nameLength, at + 46 + nameLength + u16(at + 30)));
     if (flags & ENCRYPTED || method === 99) reject("ZIP_ENCRYPTED");
     if (method !== 0 && method !== 8) reject("ZIP_METHOD");
     // A start disk other than 0 is a split archive, and 0xffff points to ZIP64.
@@ -102,6 +105,8 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     if (localFlags & PATCHED || (u16(offset + 4) & 0xff) > MAX_VERSION) reject("ZIP_UNSUPPORTED");
     const start = offset + 30 + u16(offset + 26) + u16(offset + 28);
     const localName = bytes.subarray(offset + 30, offset + 30 + u16(offset + 26));
+    if (start > cdOffset) reject("ZIP_INVALID");
+    checkExtra(bytes.subarray(offset + 30 + u16(offset + 26), start));
     const sameSizes = (localFlags & DESCRIBED) !== 0 || (u32(offset + 14) === crc && u32(offset + 18) === csize && u32(offset + 22) === usize);
     // The name encoding and the data descriptor flags change how a reader reads the
     // name and finds the end of the data, so both headers must carry the same ones.
@@ -162,6 +167,25 @@ function safeName(raw: Uint8Array, utf8: boolean): string {
   const bad = (s: string) => s === "" || s === "." || s === "..";
   if (segments.length === 0 || segments.some(bad) || /[\u0000-\u001f\u007f\ufeff\\:]/.test(name)) reject("ZIP_PATH");
   return name;
+}
+
+/**
+ * An extra field must be whole records (16-bit ID, 16-bit length, data), so no
+ * record can hide from this walk while another reader still finds it. Info-ZIP
+ * Unicode Path renames the entry in readers that honour it, and Unicode Comment
+ * is the same mechanism, so both are refused.
+ */
+function checkExtra(extra: Uint8Array): void {
+  const view = new DataView(extra.buffer, extra.byteOffset, extra.byteLength);
+  let at = 0;
+  while (at < extra.length) {
+    if (at + 4 > extra.length) reject("ZIP_INVALID");
+    const id = view.getUint16(at, true);
+    at += 4 + view.getUint16(at + 2, true);
+    if (at > extra.length) reject("ZIP_INVALID");
+    if (id === UNICODE_PATH) reject("ZIP_PATH");
+    if (id === UNICODE_COMMENT) reject("ZIP_UNSUPPORTED");
+  }
 }
 
 async function inflate(data: Uint8Array, size: number): Promise<Uint8Array> {
