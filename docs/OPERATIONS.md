@@ -54,20 +54,20 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 
 ### Gašenje
 
-1. Pošalji web procesu signal `SIGTERM` (u terminalu `Ctrl+C` šalje `SIGINT`). Naredba: `kill -TERM <pid>`. Proces ne prima novi rad, `/api/ready` odgovara `503` sa stanjem `draining`, a rad u tijeku ima do 8 s (`SHUTDOWN_GRACE_MS`, `src/server/shutdown.ts`). Nakon roka proces izlazi s kodom 1 i zatvorenim kodom `SHUTDOWN_DEADLINE` u zapisu (DAN-587). `izgrađeno`
+1. Pošalji web procesu signal `SIGTERM` (u terminalu `Ctrl+C` šalje `SIGINT`). Naredba: `kill -TERM <pid>`; `kill` se vraća odmah, pa pričekaj da proces stvarno izađe (npr. `while kill -0 <pid> 2>/dev/null; do sleep 1; done`; ako ga je pokrenula ista ljuska, `wait <pid>` daje i izlazni kod). Proces ne prima novi rad, `/api/ready` odgovara `503` sa stanjem `draining`, a rad u tijeku ima do 8 s (`SHUTDOWN_GRACE_MS`, `src/server/shutdown.ts`). Nakon roka proces izlazi s kodom 1 i zatvorenim kodom `SHUTDOWN_DEADLINE` u zapisu (DAN-587); takvo neuspješno gašenje upiši u dnevni zapis ili zapis incidenta (korak 5). `izgrađeno`
 2. Worker se gasi istim signalom: posao u tijeku završava, a novi se odbija kodom `SHUTTING_DOWN`. Nositelj: `vlasnik`. `planirano`: ulaz workera je DAN-518.
-3. Zaustavi lokalne servise, a podatke sačuvaj. Naredba: `docker compose stop`. `izgrađeno` Ne koristi `pnpm stack:down` kad podatke treba sačuvati, jer briše volumene i lokalnu bazu (`docker compose down -v`).
+3. Tek kad web proces i worker izađu (korak 1 i 2), zaustavi lokalne servise, a podatke sačuvaj; inače bi zahtjev u tijeku mogao ostati bez baze ili pohrane prije isteka osam sekundi. Naredba: `docker compose stop`. `izgrađeno` Ne koristi `pnpm stack:down` kad podatke treba sačuvati, jer briše volumene i lokalnu bazu (`docker compose down -v`).
 4. Gašenje produkcije. Nositelj: `vlasnik`. `planirano`
 5. Upiši vrijeme i razlog gašenja u dnevni zapis (faze A i B) ili u zapis incidenta. Nositelj: `vlasnik`.
 
 ### Povrat
 
 1. Odluči što se vraća (kod na prethodno izdanje ili podaci iz kopije), na koje izdanje i zašto; ako povrat prati incident, upiši njegov ID. Nositelj: `vlasnik`.
-2. Ugasi aplikaciju po postupku „Gašenje”. Naredba: `kill -TERM <pid>`.
+2. Ugasi aplikaciju po postupku „Gašenje” (signal, čekanje da proces izađe i tek onda zaustavljanje servisa). Naredba: `kill -TERM <pid>`.
 3. Samo ako je u koraku 1 odlučeno da se vraća kod: vrati prethodno zamrznuto izdanje (puni commit SHA iz dnevnog zapisa) na produkciju; ako se vraćaju samo podaci, preskoči korak i ostavi trenutačno izdanje. Nositelj: `vlasnik`. `planirano`
 4. Samo ako je u koraku 1 odlučeno da se vraćaju podaci (ne samo kod): vrati bazu i pohranu iz kopije; inače preskoči korak jer bi novije podatke prepisao stariji. Nositelj: `vlasnik`. `planirano`: kopije i proba povrata su M11.2-P04 (D-277 NQ05). Dok proba povrata ne prođe, povrat iz kopije nije dokazan. `[DOKAZ]`
 5. Provjeri stanje migracija. Naredba: `pnpm db:status`. Naredba gleda samo lokalnu bazu i traži da ona radi: ako je stog ugašen po postupku „Gašenje”, prvo ga ponovno pokreni (`docker compose start`), jer se inače `pnpm db:status` ne može spojiti. Usporedba s `db/migrations.sum` (D-91) na produkciji ide uz korak 3 ili 4, kad god se mijenja kod ili baza.
-6. Pokreni izdanje (vraćeno ili, kod povrata samo podataka, trenutačno) po postupku „Pokretanje” i provjeri spremnost, uključujući tijelo odgovora `/api/ready`. Na produkciji: Nositelj: `vlasnik`. `planirano`. Lokalna proba povrata: `pnpm local:up` i `curl --fail-with-body -sS http://localhost:3000/api/ready`; to je lokalni stog i ne dokazuje stanje produkcije.
+6. Pokreni izdanje (vraćeno ili, kod povrata samo podataka, trenutačno) po postupku „Pokretanje” i provjeri spremnost, uključujući tijelo odgovora `/api/ready`. Na produkciji: Nositelj: `vlasnik`. `planirano`. Lokalna proba povrata: `pnpm local:up` i `curl --fail-with-body -sS http://localhost:3000/api/ready`. Pažnja: `pnpm local:up` ponovno primjenjuje migracije i upisuje sintetičke podatke, pa mijenja vraćenu bazu; zasebne naredbe za pokretanje bez toga nema. Zato sve što treba ispitati na neizmijenjenom vraćenom stanju (korak 5, pregled podataka) obavi prije ovog koraka, a provjere nakon njega (spremnost, korak 7) vrijede za migriranu bazu sa sintetičkim podacima. Lokalni stog ne dokazuje stanje produkcije.
 7. Provjeri rekonstrukciju predanih radova na pokrenutom izdanju; prag je 100 %, a svako odstupanje blokira izdanje (`docs/PRODUCT.md` §12). Nositelj: `vlasnik`. `[PRAVILO]`; alat je `[DOKAZ]`.
 8. Upiši povrat u dnevni zapis: izdanje prije i poslije, razlog i ID incidenta. Nositelj: `vlasnik`.
 
