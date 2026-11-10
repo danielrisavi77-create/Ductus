@@ -31,6 +31,8 @@ const EOCD = 0x06054b50;
 const CENTRAL = 0x02014b50;
 const LOCAL = 0x04034b50;
 const DESCRIPTOR = 0x08074b50;
+const ZIP64_LOCATOR = 0x07064b50;
+const ZIP64_EXTRA = 0x0001;
 const ENCRYPTED = 0x0001 | 0x0040 | 0x2000;
 const PATCHED = 0x0020;
 const DESCRIBED = 0x0008;
@@ -67,6 +69,9 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
   // Some readers take the last end record signature without checking its comment
   // length, so no signature may follow the chosen record, wherever it would end.
   for (let at = eocd + 1; at + 4 <= bytes.length; at++) if (u32(at) === EOCD) reject("ZIP_INVALID");
+  // A ZIP64 reader looks for its locator right before the end record and then
+  // reads a different directory, so those bytes may not carry its signature (F-262).
+  if (eocd >= 20 && u32(eocd - 20) === ZIP64_LOCATOR) reject("ZIP_UNSUPPORTED");
   const [disk, cdDisk, onDisk, total] = [u16(eocd + 4), u16(eocd + 6), u16(eocd + 8), u16(eocd + 10)];
   const [cdSize, cdOffset] = [u32(eocd + 12), u32(eocd + 16)];
   if (disk !== 0 || cdDisk !== 0 || total === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) reject("ZIP_UNSUPPORTED");
@@ -88,6 +93,10 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     checkExtra(bytes.subarray(at + 46 + nameLength, at + 46 + nameLength + u16(at + 30)));
     if (flags & ENCRYPTED || method === 99) reject("ZIP_ENCRYPTED");
     if (method !== 0 && method !== 8) reject("ZIP_METHOD");
+    // Entry comments are text some readers show and others skip (F-262), and a
+    // stored part has no end of its own, so readers that walk local headers
+    // cannot find where its data descriptor starts (F-264).
+    if (u16(at + 32) !== 0 || (method === 0 && flags & DESCRIBED)) reject("ZIP_UNSUPPORTED");
     // A start disk other than 0 is a split archive, and 0xffff points to ZIP64.
     if (csize === 0xffffffff || usize === 0xffffffff || offset === 0xffffffff || u16(at + 34) !== 0) reject("ZIP_UNSUPPORTED");
     // Patched data and versions past 6.3 are features other readers refuse; the
@@ -110,7 +119,10 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     const localName = bytes.subarray(offset + 30, offset + 30 + u16(offset + 26));
     if (start > cdOffset) reject("ZIP_INVALID");
     checkExtra(bytes.subarray(offset + 30 + u16(offset + 26), start));
-    const sameSizes = (localFlags & DESCRIBED) !== 0 || (u32(offset + 14) === crc && u32(offset + 18) === csize && u32(offset + 22) === usize);
+    // With a data descriptor the local CRC and sizes may be left zero, but any
+    // other value is what a streaming reader uses, so it must agree (F-264).
+    const agrees = (field: number, value: number) => u32(field) === value || ((localFlags & DESCRIBED) !== 0 && u32(field) === 0);
+    const sameSizes = agrees(offset + 14, crc) && agrees(offset + 18, csize) && agrees(offset + 22, usize);
     // The name encoding and the data descriptor flags change how a reader reads the
     // name and finds the end of the data, so both headers must carry the same ones.
     const sameFlags = ((localFlags ^ flags) & (DESCRIBED | UTF8)) === 0;
@@ -183,7 +195,8 @@ function safeName(raw: Uint8Array, utf8: boolean): string {
  * An extra field must be whole records (16-bit ID, 16-bit length, data), so no
  * record can hide from this walk while another reader still finds it. Info-ZIP
  * Unicode Path renames the entry in readers that honour it, and Unicode Comment
- * is the same mechanism, so both are refused.
+ * is the same mechanism, so both are refused; ZIP64 sizes and offsets would
+ * replace the directory's in readers that read them (F-262).
  */
 function checkExtra(extra: Uint8Array): void {
   const view = new DataView(extra.buffer, extra.byteOffset, extra.byteLength);
@@ -194,18 +207,36 @@ function checkExtra(extra: Uint8Array): void {
     at += 4 + view.getUint16(at + 2, true);
     if (at > extra.length) reject("ZIP_INVALID");
     if (id === UNICODE_PATH) reject("ZIP_PATH");
-    if (id === UNICODE_COMMENT) reject("ZIP_UNSUPPORTED");
+    if (id === UNICODE_COMMENT || id === ZIP64_EXTRA) reject("ZIP_UNSUPPORTED");
   }
 }
 
+/**
+ * Inflates one part. The deflate stream must end exactly at the end of the
+ * compressed data (F-263): Compression Streams error on bytes after the final
+ * block and on a stream that never reaches one, and the write side's error
+ * counts too. A runtime that does not enforce both is refused once, up front.
+ */
 async function inflate(data: Uint8Array, size: number): Promise<Uint8Array> {
+  if (!(await streamEndEnforced())) reject("ZIP_UNSUPPORTED");
+  const out = await inflateRaw(data, size);
+  if (out === undefined) return reject("ZIP_INVALID");
+  if (out.length !== size) reject("ZIP_SIZE_MISMATCH");
+  return out;
+}
+
+/** The inflated bytes, undefined when either side of the stream errors. Throws ZIP_SIZE_MISMATCH past `size`. */
+async function inflateRaw(data: Uint8Array, size: number): Promise<Uint8Array | undefined> {
   const stream = new DecompressionStream("deflate-raw");
   const writer = stream.writable.getWriter();
   const reader = stream.readable.getReader();
+  let failed = false;
   const writing = writer
     .write(data.slice())
     .then(() => writer.close())
-    .catch(() => undefined);
+    .catch(() => {
+      failed = true;
+    });
   const out = new Uint8Array(size);
   let length = 0;
   try {
@@ -218,12 +249,25 @@ async function inflate(data: Uint8Array, size: number): Promise<Uint8Array> {
     }
   } catch (e) {
     await reader.cancel().catch(() => undefined);
-    throw e instanceof DocxRejected ? e : new DocxRejected("ZIP_INVALID");
+    if (e instanceof DocxRejected) throw e;
+    failed = true;
   } finally {
     await writing;
   }
-  if (length !== size) reject("ZIP_SIZE_MISMATCH");
-  return out;
+  return failed ? undefined : out.subarray(0, length);
+}
+
+// Raw deflate of "a" with one byte after the final block, and the same text
+// sync-flushed so that it never reaches a final block.
+const TRAILING = new Uint8Array([0x4b, 0x04, 0x00, 0x00]);
+const UNFINISHED = new Uint8Array([0x4a, 0x04, 0x00, 0x00, 0x00, 0xff, 0xff]);
+let enforced: Promise<boolean> | undefined;
+function streamEndEnforced(): Promise<boolean> {
+  enforced ??= Promise.all([inflateRaw(TRAILING, 1), inflateRaw(UNFINISHED, 1)]).then(
+    ([a, b]) => a === undefined && b === undefined,
+    () => false,
+  );
+  return enforced;
 }
 
 function equal(a: Uint8Array, b: Uint8Array): boolean {
