@@ -50,8 +50,11 @@ const PERSONAL_DATA_SHAPES: readonly [string, RegExp][] = [
   ["name", /\p{Lu}\p{Ll}+,\s+\p{Lu}\p{Ll}+,/u],
 ];
 
-/** Anything that starts like a link, even glued to a word, up to the next space. */
-const URL_CANDIDATE = /(?:https?:|www\.)\S*/giu;
+/**
+ * Anything that starts like a link, even glued to a word, up to the next space
+ * or the next link start, so links joined without a space are checked one by one.
+ */
+const URL_CANDIDATE = /(?:https?:|www\.)(?:(?!https?:|(?<!\/\/)www\.)\S)*/giu;
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}"'»”]+$/u;
 
 /**
@@ -167,7 +170,7 @@ describe("synthetic Croatian evaluation corpus", () => {
     ["real url", (c) => void (c.items[0]!.input += " https://www.fpzg.unizg.hr/"), "url"],
     ["host merely ending in example.org", (c) => void (c.items[0]!.input += " https://notexample.org/"), "url"],
     ["reserved name inside a real host", (c) => void (c.items[0]!.input += " https://example.org.fpzg.unizg.hr/"), "url"],
-    // All but the look-alike passed the old pattern; the parsed hostname decides now.
+    // The old pattern missed all but the look-alike and the joined links; the parsed hostname decides now.
     ...[
       ["encoded dot", "https://example.org%2Efpzg.unizg.hr/"],
       ["lowercase encoded dot", "https://example.org%2efpzg.unizg.hr/"],
@@ -179,6 +182,9 @@ describe("synthetic Croatian evaluation corpus", () => {
       ["scheme without slashes", "https:fpzg.unizg.hr/"],
       ["link glued to a word", "vidinothttps://fpzg.unizg.hr/"],
       ["look-alike letter", "https://ex\u0430mple.org/"],
+      ["second link after a comma", "https://example.org/clanak,https://www.fpzg.unizg.hr/"],
+      ["second link after a semicolon", "https://example.org/a;www.fpzg.unizg.hr"],
+      ["second link after a bar", "https://example.org/x|https://fpzg.unizg.hr"],
     ].map(([name, url]): [string, (copy: Corpus) => void, string] => [name!, (c) => void (c.items[0]!.input += ` ${url}`), "url"]),
     ["unknown item field", (c) => void Object.assign(c.items[0]!, { author: "x" }), "fields"],
     ["unknown criterion field", (c) => void Object.assign(c.criteria[0]!, { weight: 1 }), "fields"],
