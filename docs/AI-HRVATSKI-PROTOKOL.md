@@ -37,7 +37,7 @@ Svako mjerilo ima `subject: "model_output"`: ocjenjuje se što je model vratio, 
 | --- | --- | --- |
 | `uputa` | Radi ono što uputa traži i ne izlazi iz svrhe. | Katalog svrha |
 | `jezik` | Standardni hrvatski: dijakritici, padeži, sročnost, red riječi. | D-194 t. 7 |
-| `brojke` | Brojke, godine, nazivi, navodi i oznake izvora ostaju nepromijenjeni. | D-46 |
+| `brojke` | Brojke, godine, nazivi, navodi i oznake izvora koje izlaz ponovi isti su kao u ulazu; nijedna nije dodana. Izostavljanje ocjenjuje `potpunost`. | D-46 |
 | `izmjene` | Svaka izmjena je vidljiva i može se prihvatiti ili odbiti. | D-46 |
 | `smisao` | Tvrdnje, zaključci i stav ulaza ostaju isti. | D-46 |
 | `izvori` | Nema izmišljenih izvora; nesigurni se tako i označe. | D-48 |

@@ -3,7 +3,7 @@
   "criteria": [
     { "id": "uputa", "subject": "model_output", "text": "Izlaz radi ono što uputa traži i ne izlazi iz zadane svrhe." },
     { "id": "jezik", "subject": "model_output", "text": "Izlaz je na standardnom hrvatskom: dijakritici, padeži, sročnost i red riječi su ispravni." },
-    { "id": "brojke", "subject": "model_output", "text": "Izlaz prenosi brojke, godine, nazive, navode i oznake izvora iz ulaza bez ikakve promjene (D-46)." },
+    { "id": "brojke", "subject": "model_output", "text": "Svaka brojka, godina, naziv, navod i oznaka izvora koju izlaz ponovi ista je kao u ulazu, a nijedna nije dodana (D-46). Izostavljanje ocjenjuje mjerilo potpunost; izlaz koji brojke ne ponavlja, poput samog redoslijeda oznaka, ovo mjerilo ispunjava." },
     { "id": "izmjene", "subject": "model_output", "text": "Izlaz jasno pokazuje svaku izmjenu u odnosu na ulaz, tako da je osoba može prihvatiti ili odbiti." },
     { "id": "smisao", "subject": "model_output", "text": "Izlaz ne mijenja tvrdnje, zaključke ni stav ulaznog teksta." },
     { "id": "izvori", "subject": "model_output", "text": "Izlaz ne izmišlja izvore; za svaki predloženi izvor daje podatke po kojima ga osoba sama može pronaći, a za nesigurne to kaže (D-48)." },
