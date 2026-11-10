@@ -47,12 +47,16 @@ const CODE_SPAN_RE = /`[^`]*`/g;
 const MARKER_RE = /(?<!\p{L})(Naredba|Nositelj):/gu;
 // After a code span, another span follows only after a comma or a joining word.
 const NEXT_SPAN_RE = /^(?:\s*,\s*|\s+(?:i|ili|pa)\s+)(?=`)/u;
-const ENV_RE = /^[A-Z_][A-Z0-9_]*=/;
+// An environment prefix such as `NODE_OPTIONS=... pnpm x` changes what the command runs.
+const ENV_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 // A placeholder such as <pid> is a value, not a redirect.
 const PLACEHOLDER_RE = /<[\p{L}\d_-]+>/gu;
 // Shell chains, pipes, redirects and substitutions: only one command per span.
 const SHELL_OPERATOR_RE = /[;&|<>]|\$\(/;
 const BUILT_IN_PNPM = new Set(["install"]);
+// pnpm and node options (`--dir=`, `--filter`, `--import=`, `-r`) change what
+// runs or where, so only these install options are allowed, and none elsewhere.
+const INSTALL_FLAGS = new Set(["--frozen-lockfile", "--offline", "--prefer-offline"]);
 // curl reads every argument that is not an option as a URL, so options are a
 // closed list without values: no option can carry a URL or a config file.
 const CURL_FLAGS_RE = /^(?:-[fsSi]+|--fail|--fail-with-body|--silent|--show-error|--include)$/;
@@ -305,23 +309,32 @@ function commandProblem(command, context) {
     return `command chains, pipes or redirects are not allowed: ${command}`;
   }
   const tokens = command.split(/\s+/).filter(Boolean);
-  while (tokens[0] && ENV_RE.test(tokens[0])) tokens.shift();
+  if (tokens[0] && ENV_RE.test(tokens[0])) return `environment prefix not allowed: ${tokens[0]}`;
   const [program, ...args] = tokens;
-  const firstPlain = (/** @type {string[]} */ list) => list.find((arg) => !arg.startsWith("-"));
 
   switch (program) {
     case undefined:
       return "Naredba: is not followed by a command in inline code";
     case "pnpm": {
       const rest = args[0] === "run" ? args.slice(1) : args;
-      const script = firstPlain(rest);
+      const [script, ...scriptArgs] = rest;
       if (!script) return "pnpm command names no script";
-      if (BUILT_IN_PNPM.has(script) || context.scripts.has(script)) return null;
-      return `pnpm script not in package.json: ${script}`;
+      if (script.startsWith("-")) return `pnpm option not allowed: ${script}`;
+      if (BUILT_IN_PNPM.has(script)) {
+        // `pnpm install <name>` adds a package, so every argument is from the list.
+        const refused = scriptArgs.find((arg) => !INSTALL_FLAGS.has(arg));
+        return refused ? `pnpm install argument not allowed: ${refused}` : null;
+      }
+      if (!context.scripts.has(script)) return `pnpm script not in package.json: ${script}`;
+      const option = scriptArgs.find((arg) => arg.startsWith("-"));
+      return option ? `pnpm option not allowed: ${option}` : null;
     }
     case "node": {
-      const file = firstPlain(args);
+      // Arguments after the file belong to the script; node reads only those before it.
+      const at = args.findIndex((arg) => !arg.startsWith("-"));
+      const file = at < 0 ? undefined : args[at];
       if (!file) return "node command names no file";
+      if (at > 0) return `node option not allowed: ${args[0]}`;
       return context.fileExists(file) ? null : `node file does not exist: ${file}`;
     }
     case "curl": {
@@ -339,8 +352,14 @@ function commandProblem(command, context) {
       return args[0] === "compose" && args[1] && !args[1].startsWith("-")
         ? null
         : "docker command is not docker compose <subcommand>";
-    case "kill":
-      return args.some((arg) => STOP_SIGNALS.has(arg)) ? null : "kill sends neither -TERM nor -INT";
+    case "kill": {
+      // Exactly one signal, first, then process ids: `kill -9 -TERM <pid>` sends SIGKILL.
+      const [signal, ...targets] = args;
+      if (!signal || !STOP_SIGNALS.has(signal)) return "kill sends neither -TERM nor -INT";
+      if (targets.length === 0) return "kill names no process";
+      const extra = targets.find((arg) => arg.startsWith("-"));
+      return extra ? `kill takes one signal and process ids only: ${extra}` : null;
+    }
     default:
       return `program not allowed: ${program}`;
   }
