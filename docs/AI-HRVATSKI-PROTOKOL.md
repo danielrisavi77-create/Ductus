@@ -43,7 +43,7 @@ Svako mjerilo ima `subject: "model_output"`: ocjenjuje se što je model vratio, 
 | `izvori` | Nema izmišljenih izvora; nesigurni se tako i označe. | D-48 |
 | `pitanja` | Postavlja pitanja, ne piše rečenice rada. | D-64 |
 | `redoslijed` | Vraća redoslijed s obrazloženjem, ne novi tekst. | D-64 |
-| `nazivlje` | Ustaljeno hrvatsko stručno nazivlje. | D-194 t. 7 |
+| `nazivlje` | Ustaljeno stručno nazivlje jezika izlaza: hrvatsko, a kod prijevoda nazivlje ciljnog jezika. | D-194 t. 7 |
 | `shema` | Samo zadana shema kodiranja, s dijelom ulaza za svaku odluku. | Katalog svrha |
 | `potpunost` | Obuhvaća cijeli ulaz, ništa ne ispušta. | D-46 |
 | `primjer` | Primjer je označen kao izmišljen. | D-64 |

@@ -43,7 +43,9 @@ const PERSONAL_DATA_SHAPES: readonly [string, RegExp][] = [
   ["email", /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/u],
   ["oib or jmbag", /(?<!\d)\d{10,11}(?!\d)/u],
   ["phone", /(?:\+385|\b0\d{1,2})[\s/-]?\d{3}[\s/-]?\d{3,4}\b/u],
-  ["url", /\b(?:https?:\/\/|www\.)(?![\w.-]*(?:example\.org|\.invalid)\b)/iu],
+  // Only a whole reserved host passes: example.org or a subdomain, or a name
+  // under .invalid; "notexample.org" or "example.org.real.hr" do not.
+  ["url", /\b(?:https?:\/\/|www\.)(?!(?:[\w-]+\.)*(?:example\.org|[\w-]+\.invalid)(?![\w-]|\.[\w-]))/iu],
   // Only roles with a letter ("Student A", "Autorica B") stand for people, so
   // no name in the corpus can be taken for a real person at the faculty.
   ["name", /\p{Lu}\p{Ll}+\s+\p{Lu}\p{Ll}+/u],
@@ -136,6 +138,8 @@ describe("synthetic Croatian evaluation corpus", () => {
     ["surname with an initial", (c) => void (c.items[0]!.input += " Babić, I. (2020)"), "name"],
     ["surname with a given name", (c) => void (c.items[0]!.input += " Babić, Iva, Naslov"), "name"],
     ["real url", (c) => void (c.items[0]!.input += " https://www.fpzg.unizg.hr/"), "url"],
+    ["host merely ending in example.org", (c) => void (c.items[0]!.input += " https://notexample.org/"), "url"],
+    ["reserved name inside a real host", (c) => void (c.items[0]!.input += " https://example.org.fpzg.unizg.hr/"), "url"],
     ["unknown item field", (c) => void Object.assign(c.items[0]!, { author: "x" }), "fields"],
     ["unknown criterion field", (c) => void Object.assign(c.criteria[0]!, { weight: 1 }), "fields"],
   ];
@@ -146,7 +150,8 @@ describe("synthetic Croatian evaluation corpus", () => {
   });
 
   it("allows a reserved example address", () => {
-    expect(corpusProblems(broken((c) => void (c.items[0]!.input += " https://example.org/clanak")))).toEqual([]);
+    const reserved = " https://example.org/clanak, https://www.example.org i https://arhiv.invalid/rad.";
+    expect(corpusProblems(broken((c) => void (c.items[0]!.input += reserved)))).toEqual([]);
   });
 
   it("allows roles with a letter in place of names", () => {
