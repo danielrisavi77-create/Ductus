@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 // routes. Three modules hand it on, and each may be imported only by the
 // module named here: the session opener by the db module, `openSession` of
 // the db module by the login dependencies, and the login dependencies by the
-// three login routes. Every module of src/, app/ and the repository root is
+// three login routes and sign-out on every device (DAN-296), which only
+// closes sessions. Every module of src/, app/ and the repository root is
 // parsed with the TypeScript compiler, so comments, line breaks and quote
 // style do not matter. A dynamic import or require whose module is not a
 // constant string counts too, since its target cannot be read. Colocated
@@ -46,7 +47,7 @@ function target(file: string, specifier: string): string | null {
 function allowed(importer: string, named: string): boolean {
   if (named === OPEN_SESSION) return importer === "src/server/db/index.ts";
   if (named === DB) return importer === "src/server/auth/deps.ts";
-  if (named === LOGIN_DEPS) return /^app\/api\/auth\/(?:login|callback|logout)\/route\.ts$/.test(importer);
+  if (named === LOGIN_DEPS) return /^app\/api\/auth\/(?:login|callback|logout|logout-all)\/route\.ts$/.test(importer);
   return true;
 }
 
