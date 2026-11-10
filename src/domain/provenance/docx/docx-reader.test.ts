@@ -231,6 +231,17 @@ const xmlRows: [cls: string, xml: string | Uint8Array, code: string, limits?: Pa
   ["X6", "<1a/>", "XML_INVALID"],
   ["X6", "<a:b:c/>", "XML_INVALID"],
   ["X6", "<a", "XML_INVALID"],
+  ["X6", '<a\u00a0b="1"/>', "XML_INVALID"],
+  ["X6", '<a b\u2003="1"/>', "XML_INVALID"],
+  ["X6", '<a b="1"\u00a0/>', "XML_INVALID"],
+  ["X6", "<a></a\u00a0>", "XML_INVALID"],
+  ["X6", "\u00a0<a/>", "XML_INVALID"],
+  ["X6", "<a/>\u3000", "XML_INVALID"],
+  ["X6", "<a/>\ufeff", "XML_INVALID"],
+  ["X4", '<?xml\u00a0version="1.0"?><a/>', "XML_PI"],
+  ["X6", '<?xml version="1.0"\u00a0?><a/>', "XML_INVALID"],
+  ["X6", "<a\tb='1'\r\n c=\"2\"\n/>\r\n", "OK"],
+  ["X6", "<a>\u00a0</a\t>", "OK"],
   ["X7", "<p:a/>", "XML_NAMESPACE"],
   ["X7", '<a p:b="1"/>', "XML_NAMESPACE"],
   ["X7", '<a xmlns:p=""/>', "XML_NAMESPACE"],
@@ -248,6 +259,19 @@ describe("DAN-242 XML reader: input classes X1-X8", () => {
   it.each(xmlRows)("%s %j", async (_cls, xml, code, limits) => {
     const bytes = typeof xml === "string" ? enc(xml) : xml;
     expect(await codeOf(() => scanXml(bytes, limits ?? {}, {}))).toBe(code);
+  });
+
+  it("X7 checks duplicate attributes in time linear in the input, whatever the namespace URI length", () => {
+    // One long URI bound to two prefixes and 2000 distinct attributes in it:
+    // the check must not copy the URI once per attribute.
+    const uri = `urn:${"u".repeat(200_000)}`;
+    const attrs = Array.from({ length: 2000 }, (_, k) => ` ${k % 2 ? "p" : "q"}:a${k}="1"`).join("");
+    const xml = enc(`<r xmlns:p="${uri}" xmlns:q="${uri}"${attrs}/>`);
+    const started = performance.now();
+    expect(() => scanXml(xml, {}, {})).not.toThrow();
+    expect(performance.now() - started).toBeLessThan(1000);
+    const twice = enc(`<r xmlns:p="${uri}" xmlns:q="${uri}"${attrs} q:a1="2"/>`);
+    expect(() => scanXml(twice, {}, {})).toThrow(new DocxRejected("XML_INVALID"));
   });
 
   it("X7 resolves prefixes in scope, rebinding and the default namespace", () => {

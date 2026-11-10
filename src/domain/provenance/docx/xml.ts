@@ -32,11 +32,15 @@ const XML_NS = "http://www.w3.org/XML/1998/namespace";
 const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
 const NAME = "[A-Za-z_][A-Za-z0-9._-]*";
 const QNAME = `${NAME}(?::${NAME})?`;
-const DECL = /^<\?xml\s+version\s*=\s*(["'])1\.[0-9]+\1(?:\s+encoding\s*=\s*(["'])([A-Za-z][A-Za-z0-9._-]*)\2)?(?:\s+standalone\s*=\s*(["'])(?:yes|no)\4)?\s*\?>/;
+// XML whitespace is only space, tab, CR and LF; JavaScript's \s also takes
+// Unicode spaces such as U+00A0, which no XML parser accepts as a separator.
+const S = "[ \\t\\r\\n]";
+const DECL = new RegExp(`^<\\?xml${S}+version${S}*=${S}*(["'])1\\.[0-9]+\\1(?:${S}+encoding${S}*=${S}*(["'])([A-Za-z][A-Za-z0-9._-]*)\\2)?(?:${S}+standalone${S}*=${S}*(["'])(?:yes|no)\\4)?${S}*\\?>`);
 const TAG = new RegExp(`<(${QNAME})`, "y");
-const ATTR = new RegExp(`\\s+(${QNAME})\\s*=\\s*(?:"([^<"]*)"|'([^<']*)')`, "y");
-const TAG_END = /\s*(\/?)>/y;
-const END_TAG = new RegExp(`</(${QNAME})\\s*>`, "y");
+const ATTR = new RegExp(`${S}+(${QNAME})${S}*=${S}*(?:"([^<"]*)"|'([^<']*)')`, "y");
+const TAG_END = new RegExp(`${S}*(/?)>`, "y");
+const END_TAG = new RegExp(`</(${QNAME})${S}*>`, "y");
+const NOT_S = /[^ \t\r\n]/;
 const REF = /&(?:(lt|gt|amp|quot|apos)|#([0-9]+)|#x([0-9a-fA-F]+));/y;
 const REFS = new RegExp(REF.source, "g");
 const BAD_CHAR = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/;
@@ -57,12 +61,18 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
   if (BAD_CHAR.test(text)) fail("XML_INVALID");
 
   let i = 0;
-  if (/^<\?xml[\s?]/.test(text)) {
+  if (/^<\?xml[ \t\r\n?]/.test(text)) {
     const decl = DECL.exec(text) ?? fail("XML_INVALID");
     if (decl[3] !== undefined && decl[3].toLowerCase() !== "utf-8") fail("XML_ENCODING");
     i = decl[0].length;
   }
   const stack: Frame[] = [];
+  // Each distinct namespace URI is kept as one string, so comparing two equal
+  // URIs below is a pointer check, not a walk over a long URI.
+  const uris = new Map<string, string>([
+    ["", ""],
+    [XML_NS, XML_NS],
+  ]);
   let rootDone = false;
   let rootSeen = false;
   const lookup = (prefix: string): string | undefined => {
@@ -84,7 +94,7 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
     if (text[i] !== "<") {
       const end = text.indexOf("<", i) === -1 ? text.length : text.indexOf("<", i);
       const run = text.slice(i, end);
-      if (stack.length === 0 ? /\S/.test(run) : run.includes("]]>")) fail("XML_INVALID");
+      if (stack.length === 0 ? NOT_S.test(run) : run.includes("]]>")) fail("XML_INVALID");
       checkRefs(run);
       i = end;
     } else if (text.startsWith("<!--", i)) {
@@ -121,7 +131,7 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
         const [name, value] = [m[1], m[2] ?? m[3]];
         checkRefs(value);
         if (raw.has(name)) fail("XML_INVALID");
-        if (name === "xmlns" || name.startsWith("xmlns:")) bind(bindings, name, decodeRefs(value));
+        if (name === "xmlns" || name.startsWith("xmlns:")) bind(bindings, name, decodeRefs(value), uris);
         else raw.add(name);
         at = ATTR.lastIndex;
       }
@@ -133,8 +143,13 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
       stack.push(frame);
       frame.name = resolve(qname, true);
       const attributes = [...raw].map((n) => resolve(n, false));
-      const expanded = new Set(attributes.map((a) => `${a.uri} ${a.local}`));
-      if (expanded.size !== attributes.length) fail("XML_INVALID");
+      // Duplicates after resolution, without copying a URI once per attribute.
+      const seen = new Map<string, Set<string>>();
+      for (const a of attributes) {
+        const locals = seen.get(a.uri) ?? new Set<string>();
+        if (locals.has(a.local)) fail("XML_INVALID");
+        seen.set(a.uri, locals.add(a.local));
+      }
       visitor.open?.({ ...frame.name, attributes });
       if (close[1] === "/") {
         stack.pop();
@@ -148,7 +163,9 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
   if (!rootSeen || stack.length > 0) fail("XML_INVALID");
 }
 
-function bind(bindings: Map<string, string>, name: string, uri: string): void {
+function bind(bindings: Map<string, string>, name: string, value: string, uris: Map<string, string>): void {
+  const uri = uris.get(value) ?? value;
+  uris.set(uri, uri);
   const prefix = name === "xmlns" ? "" : name.slice(6);
   if (bindings.has(prefix)) fail("XML_INVALID");
   if (prefix === "xmlns" || uri === XMLNS_NS) fail("XML_NAMESPACE");
