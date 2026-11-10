@@ -572,6 +572,33 @@ describe("checkOperations: only spaces and tabs are stripped around a heading", 
   });
 });
 
+// Codex c.4523669643 on 0d2fc9fc (#1803, w540k): Bash splits a command only on
+// spaces and tabs, so `pnpm<NBSP>install` is one word and not found. Any other
+// space character in a command span, also at its edges, is refused.
+describe("checkOperations: a command splits only on spaces and tabs", () => {
+  const code = (z: string) => `U+${z.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0")}`;
+  const refused = (command: string) => [`Pokretanje#1: command contains a space other than U+0020 or a tab: ${command}`];
+  const step = (command: string) => doc(`1. Pokreni. Naredba: \`${command}\`.`);
+  const rows = UNICODE_SPACES.flatMap((z) => [
+    [`S1 ${code(z)} between pnpm and the script`, `pnpm${z}local:up`],
+    [`S2 ${code(z)} at the end of the span`, `pnpm local:up${z}`],
+    [`S3 ${code(z)} at the start of the span`, `${z}pnpm local:up`],
+    [`S4 ${code(z)} between node and the file`, `node${z}scripts/db/native-db.mjs`],
+    [`S5 ${code(z)} between curl and its option`, `curl${z}-fsS http://localhost:3000/api/ready`],
+  ]);
+  it.each(rows)("%s is refused", (_name, command) => {
+    expect(messages(step(command))).toEqual(refused(command));
+  });
+
+  it.each([
+    ["K3 a space", "pnpm local:up"],
+    ["K3 a tab", "pnpm\tlocal:up"],
+    ["K3 two spaces", "node  scripts/db/native-db.mjs"],
+  ] as const)("%s between words is a separator", (_name, command) => {
+    expect(messages(step(command))).toEqual([]);
+  });
+});
+
 describe("docs/OPERATIONS.md on this branch", () => {
   const text = readFileSync(new URL("../../docs/OPERATIONS.md", import.meta.url), "utf8");
   const context = repoContext(new URL("../..", import.meta.url));

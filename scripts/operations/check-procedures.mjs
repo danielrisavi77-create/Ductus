@@ -279,7 +279,8 @@ function spansAfter(rest) {
   for (;;) {
     const span = /^`([^`]*)`/.exec(tail);
     if (!span) break;
-    spans.push((span[1] ?? "").trim());
+    // Only spaces and tabs are trimmed; any other space stays and is refused.
+    spans.push((span[1] ?? "").replace(/^[ \t]+|[ \t]+$/g, ""));
     tail = tail.slice(span[0].length);
     const next = NEXT_SPAN_RE.exec(tail);
     if (!next) break;
@@ -324,7 +325,10 @@ function commandProblem(command, context) {
   if (SHELL_OPERATOR_RE.test(command.replace(PLACEHOLDER_RE, ""))) {
     return `command chains, pipes or redirects are not allowed: ${command}`;
   }
-  const tokens = command.split(/\s+/).filter(Boolean);
+  // Bash splits words only on spaces and tabs, so `pnpm<NBSP>install` is one
+  // word that does not exist (Codex c.4523669643 on 0d2fc9fc, #1803 w540k).
+  if (/[^\S \t]|\u0085/u.test(command)) return `command contains a space other than U+0020 or a tab: ${command}`;
+  const tokens = command.split(/[ \t]+/).filter(Boolean);
   if (tokens[0] && ENV_RE.test(tokens[0])) return `environment prefix not allowed: ${tokens[0]}`;
   const [program, ...args] = tokens;
 

@@ -174,3 +174,23 @@ test.prop([
   expect(checkOperations(text, CONTEXT).map((m) => m.message)).toContain("required procedure is missing");
   expect(checkOperations(text, CONTEXT).filter((m) => m.message === "required procedure is missing").map((m) => m.procedure)).toEqual([name]);
 });
+
+// Codex c.4523669643 on 0d2fc9fc (#1803 w540k): Bash splits words only on
+// spaces and tabs, so any other space character anywhere in a command makes
+// the step refused at that procedure and step, never passed.
+const COMMANDS = ["pnpm local:up", "node scripts/db/native-db.mjs status", "curl -fsS http://localhost:3000/api/ready"] as const;
+
+test.prop([fc.integer({ min: 0, max: COMMANDS.length - 1 }), fc.nat(), fc.constantFrom(...SPACES), fc.boolean()])(
+  "a space other than U+0020 or a tab in a command refuses that step",
+  (kind, at, z, replace) => {
+    const command = COMMANDS[kind] ?? "";
+    const index = at % (command.length + 1);
+    const space = command.indexOf(" ");
+    const bad = replace ? `${command.slice(0, space)}${z}${command.slice(space + 1)}` : `${command.slice(0, index)}${z}${command.slice(index)}`;
+    const text = render([[{ kind }], [{ kind: 0 }], [{ kind: 0 }], [{ kind: 0 }]], ["", "", "", ""]).replace(`\`${command}\``, `\`${bad}\``);
+    const found = checkOperations(text, CONTEXT);
+    expect(found.map((p) => `${p.procedure}#${p.step}: ${p.message}`)).toEqual([
+      `${REQUIRED_PROCEDURES[0]}#1: command contains a space other than U+0020 or a tab: ${bad.replace(/^[ \t]+|[ \t]+$/g, "")}`,
+    ]);
+  },
+);
