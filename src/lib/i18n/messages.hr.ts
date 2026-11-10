@@ -971,7 +971,9 @@ export const hr = {
     sent: "Odgovor je poslan.",
     submittedNote: "Rad je predan. Na zahtjev se više ne odgovara.",
     // DAN-314: the answer names the server's current revision, which lacks changes still on the device.
-    unconfirmedNote: "Odgovor se može poslati kad poslužitelj primi sve izmjene teksta.",
+    // DAN-314, c.6779628877: in ERROR, CONFLICT and RECOVERY_REQUIRED the buttons stay off, so say what to do.
+    unconfirmedNote:
+      "Odgovor se može poslati kad poslužitelj primi sve izmjene teksta. Ako je uz tekst javljena greška ili sukob, najprije postupite prema toj obavijesti; upisano objašnjenje ostaje ovdje.",
     keptLabel: "Neposlano obrazloženje",
     keptHint: "Ovo obrazloženje nije poslano jer se na zahtjev više ne odgovara. Kopirajte ga ako ga želite sačuvati.",
     errors: {

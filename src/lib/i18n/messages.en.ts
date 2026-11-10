@@ -967,7 +967,8 @@ const en = {
     sent: "The answer was sent.",
     submittedNote: "The work has been submitted. The request can no longer be answered.",
     // DAN-314: the answer names the server's current revision, which lacks changes still on the device.
-    unconfirmedNote: "You can answer once the server has received every change to the text.",
+    unconfirmedNote:
+      "You can answer once the server has received every change to the text. If an error or a conflict is reported with the text, follow that notice first; the explanation you typed stays here.",
     keptLabel: "Unsent explanation",
     keptHint: "This explanation was not sent because the request can no longer be answered. Copy it if you want to keep it.",
     errors: {
