@@ -94,6 +94,22 @@ describe("every state of a request (N-08 states 6 to 10)", () => {
     expect(render({ status: "signedOut", requests: [STATES.open] })).not.toContain("<article");
   });
 
+  it("a read list can be read again, but not while an answer is on its way", () => {
+    const button = (html: string) => html.match(new RegExp(`<button[^>]*>${t.refresh}</button>`))?.[0];
+    const onRetry = vi.fn();
+    expect(button(render({ requests: [] }))).toBeDefined();
+    expect(button(render({ requests: [STATES.open] }))).not.toContain("disabled");
+    expect(button(render({ requests: [STATES.open], sending: STATES.open.id }))).toContain('disabled=""');
+    for (const status of ["loading", "signedOut", "forbidden", "unavailable"] as const) {
+      expect(render({ status, requests: [STATES.open] })).not.toContain(t.refresh);
+    }
+    const element = RevisionList(props({ requests: [STATES.open], onRetry })) as { props: { children: unknown[] } };
+    const refresh = element.props.children.find((child) =>
+      (child as { props?: { children?: unknown } } | null)?.props?.children === t.refresh) as { props: { onClick: () => void } };
+    refresh.props.onClick();
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it("after submission no form is shown, and the panel says why", () => {
     const html = render({ requests: [STATES.open], submitted: true });
     expect(html).not.toContain("<textarea");

@@ -943,6 +943,7 @@ const en = {
     notAvailable: "Revision requests are not available for this work.",
     unavailable: "Revision requests cannot be loaded right now.",
     retry: "Try again",
+    refresh: "Refresh revision requests",
     signedOut: "Your sign-in has expired. Sign in again to see the revision requests.",
     number: "Revision request {n}",
     teacher: "Assignment teacher",

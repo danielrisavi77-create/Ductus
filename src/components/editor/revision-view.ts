@@ -169,6 +169,11 @@ export function RevisionList(props: RevisionListProps): ReactNode {
     h("h2", { id: "revisions-title", className: "rail-section__title" }, t.title,
       h("span", { className: "rail-section__count" }, props.status === "ok" && props.requests.length > 0 ? props.requests.length : null)),
     h("div", { className: styles.list }, body),
+    // A request opened or reopened after the list was read appears without reloading the page;
+    // off while an answer is on its way, whose outcome a newer list would otherwise drop.
+    props.status === "ok"
+      ? h("button", { type: "button", className: styles.link, disabled: props.sending !== null, onClick: props.onRetry }, t.refresh)
+      : null,
     props.submitted && props.status === "ok" && props.requests.some(canAnswer)
       ? h("p", { className: styles.hint }, t.submittedNote) : null,
     h("p", { className: styles.live, role: "status", "aria-live": "polite" }, props.live));

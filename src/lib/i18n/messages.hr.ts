@@ -946,6 +946,7 @@ export const hr = {
     notAvailable: "Zahtjevi za doradu za ovaj rad nisu dostupni.",
     unavailable: "Zahtjeve za doradu trenutačno nije moguće učitati.",
     retry: "Pokušaj ponovno",
+    refresh: "Osvježi zahtjeve za doradu",
     signedOut: "Prijava je istekla. Prijavite se ponovno da vidite zahtjeve za doradu.",
     number: "Zahtjev za doradu {n}",
     teacher: "Nastavnik zadatka",
