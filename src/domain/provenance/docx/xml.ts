@@ -99,7 +99,8 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
       i = end;
     } else if (text.startsWith("<!--", i)) {
       const end = text.indexOf("-->", i + 4);
-      if (end === -1 || text.slice(i + 4, end).includes("--") || text[end - 1] === "-") fail("XML_INVALID");
+      // An empty comment "<!---->" is allowed; otherwise its text may not end in "-".
+      if (end === -1 || text.slice(i + 4, end).includes("--") || (end > i + 4 && text[end - 1] === "-")) fail("XML_INVALID");
       i = end + 3;
     } else if (text.startsWith("<![CDATA[", i)) {
       const end = text.indexOf("]]>", i + 9);

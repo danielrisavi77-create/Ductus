@@ -100,7 +100,7 @@ describe("DAN-242 reader properties", () => {
   });
 
   it("any text is either scanned or rejected with an XML code", async () => {
-    const token = fc.constantFrom("<a", ">", "</a>", "/>", "<b:c", ' xmlns:b="urn:b"', ' x="1"', "&amp;", "&#0;", "&e;", "<!DOCTYPE a>", "<?p?>", "<!--c-->", "<![CDATA[x]]>", "]]>", "\u0001", "č", " ");
+    const token = fc.constantFrom("<a", ">", "</a>", "/>", "<b:c", ' xmlns:b="urn:b"', ' x="1"', "&amp;", "&#0;", "&e;", "<!DOCTYPE a>", "<?p?>", "<!--c-->", "<!---->", "<![CDATA[x]]>", "]]>", "\u0001", "č", " ");
     await fc.assert(
       fc.asyncProperty(fc.array(token, { maxLength: 24 }), fc.string({ maxLength: 8 }), async (tokens, tail) => {
         const code = await outcome(() => scanXml(new TextEncoder().encode(tokens.join("") + tail), { maxXmlDepth: 8 }, {}));
