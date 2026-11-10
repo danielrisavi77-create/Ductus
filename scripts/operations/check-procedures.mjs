@@ -110,7 +110,9 @@ function inlineProblem(line, step = false) {
  * @returns {Operations}
  */
 export function parseOperations(text) {
-  const lines = text.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimEnd());
+  // CommonMark strips only spaces (U+0020) and tabs; trimEnd() would also strip
+  // NBSP and other Unicode spaces (QA FAIL on 4203cc68, contract #1836 w540k).
+  const lines = text.replace(/\r\n?/g, "\n").split("\n").map((line) => line.replace(/[ \t]+$/, ""));
   /** @type {Owner[]} */
   const owners = [];
   /** @type {Procedure[]} */
@@ -171,8 +173,8 @@ export function parseOperations(text) {
       prev = "heading";
       // CommonMark ATX: a closing run of `#` after a space or tab is not part
       // of the title, and a title of `#` only is empty (#1803, contract #1836).
-      const raw = (heading[2] ?? "").trim();
-      const title = /^#+$/.test(raw) ? "" : raw.replace(/[ \t]+#+$/, "").trim();
+      const raw = (heading[2] ?? "").replace(/^[ \t]+|[ \t]+$/g, "");
+      const title = /^#+$/.test(raw) ? "" : raw.replace(/[ \t]+#+$/, "");
       if (level <= 2) {
         section = level === 2 ? title : "";
         procedure = null;
@@ -255,7 +257,7 @@ export function parseOperations(text) {
 
   lines.forEach((line, index) => {
     read(line, index + 1);
-    prevNonBlank = line.trim() !== "";
+    prevNonBlank = line !== "";
   });
   endTable(lines.length);
   if (fence !== null) {
@@ -295,12 +297,20 @@ function curlUrlProblem(url, context) {
   if (!/^https?:\/\//.test(url)) return `curl argument is not an http(s) URL: ${url}`;
   // curl expands {a,b} and [1-2] into several URLs.
   if (/[{}[\]]/.test(url)) return `curl URL globbing is not allowed: ${url}`;
-  let pathname;
+  // Bash drops an unquoted backslash while new URL() reads it as `/` (review
+  // FAIL on 4203cc68, contract #1836 w540k), so it is refused before parsing.
+  if (url.includes("\\")) return `curl URL contains a backslash: ${url}`;
+  let parsed;
   try {
-    pathname = new URL(url).pathname.replace(/\/+$/, "");
+    parsed = new URL(url);
   } catch {
     return `curl URL is not under /api/: ${url}`;
   }
+  // new URL() also resolves `.`, `..` and `%2e` segments, so the path it
+  // returns must be the path as written, which is what curl sends.
+  const written = /^https?:\/\/[^/?#]*([^?#]*)/.exec(url)?.[1] || "/";
+  if (written !== parsed.pathname) return `curl URL path is not in normal form: ${url}`;
+  const pathname = parsed.pathname.replace(/\/+$/, "");
   if (!pathname.startsWith("/api/")) return `curl URL is not under /api/: ${url}`;
   return context.routeExists(pathname) ? null : `no route app${pathname}/route.ts`;
 }

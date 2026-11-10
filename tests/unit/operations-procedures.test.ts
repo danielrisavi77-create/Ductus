@@ -394,6 +394,37 @@ describe("checkOperations: curl names exactly one plain URL", () => {
   });
 });
 
+// Review FAIL c.6764268500 on 4203cc68 (#1803), contract #1836 c.6764529056
+// (w540k): Bash drops an unquoted backslash while new URL() reads it as `/`,
+// and new URL() resolves dot segments that curl may send as written, so the
+// path that is checked must be the path in the text of the URL.
+describe("checkOperations: the curl path is checked as written", () => {
+  const curl = (url: string) => `1. Provjeri. Naredba: \`curl -fsS ${url}\`.`;
+  const slash = (url: string) => [`Pokretanje#1: curl URL contains a backslash: ${url}`];
+  const normal = (url: string) => [`Pokretanje#1: curl URL path is not in normal form: ${url}`];
+  const base = "http://localhost:3000";
+  it.each([
+    ["B1 a backslash for a slash in the path", `${base}/api\\health`, slash],
+    // At the end of the span the backslash is refused earlier, before a backtick.
+    ["B2 a backslash at the end", `${base}/api/health\\`, () => [U("backslash before a backtick")]],
+    ["B2 a backslash before the query", `${base}/api/ready\\?x=1`, slash],
+    ["B3 a backslash in the authority", `${base}\\api/health`, slash],
+    ["B4 a doubled backslash", `${base}/api\\\\health`, slash],
+    ["B5 a backslash before a letter", `${base}/api/\\health`, slash],
+    ["B6 a backslash in the query", `${base}/api/ready?x=\\1`, slash],
+    ["P1 a dot-dot segment", `${base}/api/x/../health`, normal],
+    ["P2 a dot segment", `${base}/api/./health`, normal],
+    ["P3 an encoded dot-dot segment", `${base}/api/x/%2e%2e/health`, normal],
+    ["P3 a mixed encoded dot-dot segment", `${base}/api/x/%2E./health`, normal],
+    ["P4 an empty segment is kept as written", `${base}/api//health`, () => ["Pokretanje#1: no route app/api//health/route.ts"]],
+    ["K1 a plain path", `${base}/api/health`, () => []],
+    ["K1 a query", `${base}/api/ready?x=1`, () => []],
+    ["K1 a trailing slash", `${base}/api/ready/`, () => []],
+  ] as const)("%s", (_name, url, expected) => {
+    expect(messages(doc(curl(url)))).toEqual(expected(url));
+  });
+});
+
 describe("checkOperations: document structure", () => {
   it("7 a numbered line in a fence at the top level is not a step", () => {
     const steps = "1. Prvi. Nositelj: `vlasnik`.\n\n```\n2. nije korak\n```";
@@ -491,6 +522,51 @@ describe("checkOperations: a closing run of # is not part of a heading (CommonMa
       doc("1. Odluči. Nositelj: `vlasnik`.", { extra: "\n## Postupci ##\n\n### Dodatni\n\n1. Bez naredbe i nositelja.\n" }),
       ["Dodatni#1: step has neither Naredba: nor Nositelj:"],
     ],
+  ] as const)("%s", (_name, text, expected) => {
+    expect(messages(text)).toEqual(expected);
+  });
+});
+
+// QA FAIL c.6764305873 on 4203cc68 (#1803), contract #1836 c.6764529056
+// (w540k): CommonMark strips only spaces (U+0020) and tabs around a heading
+// and its closing run, so any other space character stays in the title.
+const UNICODE_SPACES = [
+  "\u00a0", "\u1680", "\u2000", "\u2001", "\u2002", "\u2003", "\u2004", "\u2005", "\u2006", "\u2007",
+  "\u2008", "\u2009", "\u200a", "\u202f", "\u205f", "\u3000", "\ufeff", "\u0085", "\u000b", "\u000c",
+  "\u2028", "\u2029",
+] as const;
+
+describe("checkOperations: only spaces and tabs are stripped around a heading", () => {
+  const BAD = "1. Odluči što dalje.";
+  const MISSING = REQUIRED_PROCEDURES.map((name) => `${name}#-: required procedure is missing`);
+  const postupci = (heading: string) => doc(BAD).replace("\n## Postupci\n", `\n${heading}\n`);
+  const code = (z: string) => `U+${z.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0")}`;
+  const rows = UNICODE_SPACES.flatMap((z) => [
+    [`U1 ${code(z)} after the closing run`, postupci(`## Postupci ##${z}`)],
+    [`U2 ${code(z)} between the closing run and a space`, postupci(`## Postupci ##${z} `)],
+    [`U3 ${code(z)} for the space before the closing run`, postupci(`## Postupci${z}##`)],
+    [`U4 ${code(z)} at the end of the title`, postupci(`## Postupci${z}`)],
+    [`U5 ${code(z)} at the start of the title`, postupci(`## ${z}Postupci`)],
+  ]);
+  it.each(rows)("%s: Postupci is not found", (_name, text) => {
+    expect(messages(text)).toEqual(expect.arrayContaining(MISSING));
+  });
+
+  it.each(UNICODE_SPACES.map((z) => [code(z), z]))("U1 %s after the closing run of a procedure heading", (_name, z) => {
+    const text = doc(BAD).replace("### Pokretanje\n", `### Pokretanje ###${z}\n`);
+    expect(messages(text)).toContain("Pokretanje#-: required procedure is missing");
+  });
+
+  it.each(UNICODE_SPACES.map((z) => [code(z), z]))("U6 a line of %s only in a procedure is not a blank line", (_name, z) => {
+    const text = doc(`1. Prvi. Nositelj: \`vlasnik\`.\n${z}\n2. Drugi. Nositelj: \`vlasnik\`.`);
+    expect(messages(text).some((m) => m.includes("unsupported markdown: "))).toBe(true);
+  });
+
+  it.each([
+    ["K2 a space after the closing run", postupci("## Postupci ## "), NONE],
+    ["K2 a tab after the closing run", postupci("## Postupci ##\t"), NONE],
+    ["K2 a tab before the title", postupci("##\tPostupci"), NONE],
+    ["K2 a line of spaces and tabs is a blank line", doc("1. Prvi. Nositelj: `vlasnik`.\n \t \n2. Drugi. Nositelj: `vlasnik`."), []],
   ] as const)("%s", (_name, text, expected) => {
     expect(messages(text)).toEqual(expected);
   });

@@ -136,3 +136,41 @@ test.prop([fc.constantFrom(...SCRIPT_NAMES), fc.subarray([...SCRIPT_NAMES]), fc.
     );
   },
 );
+
+// Review and QA FAIL on 4203cc68 (#1803), contract on #1836 c.6764529056
+// (w540k): a backslash anywhere in a curl URL is refused before new URL()
+// reads it, and a space character other than U+0020 or a tab next to a
+// heading stays in its title, so the heading no longer names a procedure.
+const URLS = ["http://localhost:3000/api/ready", "http://localhost:3000/api/ready?x=1", "http://localhost:3000/api/ready/"] as const;
+
+test.prop([fc.constantFrom(...URLS), fc.nat(), fc.integer({ min: 1, max: 3 })])(
+  "a backslash anywhere in a curl URL is refused",
+  (url, at, count) => {
+    const index = "http://".length + (at % (url.length - "http://".length + 1));
+    const bad = `${url.slice(0, index)}${"\\".repeat(count)}${url.slice(index)}`;
+    const text = render([[{ kind: 2 }], [{ kind: 0 }], [{ kind: 0 }], [{ kind: 0 }]], ["", "", "", ""]).replace(URLS[0], bad);
+    const found = checkOperations(text, CONTEXT);
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.every((p) => p.procedure === REQUIRED_PROCEDURES[0] && p.step === 1)).toBe(true);
+  },
+);
+
+const SPACES = [
+  " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
+  " ", " ", " ", " ", "　", "﻿", "\u0085", "\u000b", "\u000c", " ", " ",
+] as const;
+
+test.prop([
+  documentArb,
+  fc.integer({ min: 0, max: REQUIRED_PROCEDURES.length - 1 }),
+  fc.constantFrom(...SPACES),
+  fc.constantFrom("start", "end", "after closing run", "before closing run"),
+  fc.stringMatching(/^[ \t]{0,2}$/),
+])("a Unicode space next to a procedure heading takes the procedure out", ({ steps, prose }, p, z, where, pad) => {
+  const name = REQUIRED_PROCEDURES[p] ?? "";
+  const heading =
+    where === "start" ? `### ${z}${name}` : where === "end" ? `### ${name}${z}${pad}` : where === "after closing run" ? `### ${name} ###${z}${pad}` : `### ${name}${z}###`;
+  const text = render(steps, prose).replace(`\n### ${name}\n`, `\n${heading}\n`);
+  expect(checkOperations(text, CONTEXT).map((m) => m.message)).toContain("required procedure is missing");
+  expect(checkOperations(text, CONTEXT).filter((m) => m.message === "required procedure is missing").map((m) => m.procedure)).toEqual([name]);
+});
