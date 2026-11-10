@@ -85,7 +85,9 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
     if (!current()) return;
     const mine = ++generation.current;
     const result = await listRevisionRequests(documentId, current);
-    if (mine !== generation.current || stoppedRef.current) return;
+    // Asked again once the answer is here: the session may have ended while
+    // it was on the way, in a tab whose end only the cookie tells (#1858).
+    if (mine !== generation.current || !current()) return;
     setOutcome(result);
   }, [documentId, current]);
   useEffect(() => { void load(); }, [load]);

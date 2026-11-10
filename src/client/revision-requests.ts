@@ -179,8 +179,11 @@ export function requestsFromList(value: unknown): RevisionRequest[] | null {
   for (const request of requests) {
     if (request.versions.length !== request.version) return null;
     const earlier = request.versions.slice(0, -1);
-    // A version before the last was closed by reopening, or was accepted and then reopened.
-    if (earlier.some((v) => v.closed?.as !== "reopened" && v.closed?.as !== "accepted")) return null;
+    // A version before the last was closed by reopening, or was answered,
+    // accepted and then reopened: accept is allowed only from `responded`.
+    const closedRight = (v: RevisionVersion) =>
+      v.closed?.as === "reopened" || (v.closed?.as === "accepted" && v.response !== null);
+    if (!earlier.every(closedRight)) return null;
     if (!lastAgrees(request.state, request.version, request.versions.at(-1)!)) return null;
   }
   return requests.map(({ id, state, rowSeq, anchor, versions }, index) => ({
