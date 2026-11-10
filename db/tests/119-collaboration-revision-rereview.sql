@@ -255,7 +255,7 @@ SELECT bag_eq(
   $$ SELECT attname::text FROM pg_attribute
       WHERE attrelid = 'collaboration.revision_request_version'::regclass AND attnum > 0 AND NOT attisdropped $$,
   $$ VALUES ('request_id'), ('institution_id'), ('version'), ('instruction'), ('requested_revision'), ('opened_by'), ('opened_at'),
-            ('closed_as'), ('closed_by'), ('closed_at'), ('accepted_revision'), ('accepted_range_hash'), ('opened_as'),
+            ('closed_as'), ('closed_by'), ('closed_at'), ('accepted_revision'), ('accepted_range_hash'), ('opened_as'), ('accepted_anchor'),
             ('observed_range_hash') $$,
   'a version gains how it was opened and the observed hash, and no grade, verdict or authorship column (PRODUCT 5, rule 7)');
 
@@ -507,7 +507,9 @@ SELECT matches(pg_temp.ask_as('ductus_identity', 'vesna', format(
 FROM (VALUES
   ('s1', $$ opened_as = 'verdict' $$, 'an unknown way of opening'),
   ('s1', $$ observed_range_hash = 'changed' $$, 'an observed hash of the wrong shape'),
-  ('s3', format('observed_range_hash = %L', repeat('f', 64)), 'an observed hash on a version opened as an instruction')
+  ('s3', format('observed_range_hash = %L', repeat('f', 64)), 'an observed hash on a version opened as an instruction'),
+  ('s1', format('accepted_anchor = %L', (SELECT val FROM ref WHERE name = 'anchor')), 'an accepted anchor without an accepted hash'),
+  ('s1', $$ accepted_anchor = '{"quote":"prvi odlomak"}' $$, 'an accepted anchor that is not a text anchor')
 ) AS k (id, change, what);
 SELECT is(pg_temp.evidence_print(), (SELECT v FROM print_main), 'no call since revision 10 changed anything in schema evidence');
 
@@ -591,6 +593,67 @@ SELECT matches(pg_temp.act('rereview', pg_temp.id('k4r'), pg_temp.seq(pg_temp.id
 SELECT is((SELECT requested_revision FROM collaboration.revision_request_version WHERE request_id = pg_temp.id('k4r') AND version = 2), 14::bigint,
   'and it names revision 14, which the database read');
 
+-- The range the teacher actually accepted (#1831 B, #87 c.6763239855): a
+-- revision may replace the quote of the request, Q "prvi odlomak" (revision
+-- 5), with Q' "prvi, dopunjeni odlomak" (revisions 10, 13 and 14), and the
+-- teacher accepts Q'. The acceptance stores the anchor with its hash, and the
+-- rereview compares that anchor, not the request's. The client sends both or
+-- neither; a hash alone accepts the request's own range.
+INSERT INTO ref VALUES
+  ('anchor_q1', '{"nodeId":"0f0e0d0c-0b0a-4000-8000-000000000001","quote":"prvi, dopunjeni odlomak","prefix":"Ovo je ","suffix":" teksta","startHint":7,"endHint":30}');
+INSERT INTO action VALUES
+  ('accept_q1', 'vesna', format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi, dopunjeni odlomak'),
+    (SELECT val FROM ref WHERE name = 'anchor_q1'))),
+  ('accept_q1_old', 'vesna', format('accept_revision_request(:id, :seq, 10, %L)', pg_temp.sha('prvi, dopunjeni odlomak'))),
+  ('accept_q1_at5', 'vesna', format('accept_revision_request(:id, :seq, 5, %L, %L)', pg_temp.sha('prvi, dopunjeni odlomak'),
+    (SELECT val FROM ref WHERE name = 'anchor_q1'))),
+  ('accept_q1_other', 'vesna', format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi odlomak'),
+    (SELECT val FROM ref WHERE name = 'anchor_q1')));
+INSERT INTO shape VALUES
+  ('accepted_q1', 'anchor', '{respond,accept_q1}'), ('accepted_q1_old', 'anchor', '{respond,accept_q1_old}'),
+  ('accepted_q1_at5', 'anchor', '{respond,accept_q1_at5}'), ('accepted_q1_other', 'anchor', '{respond,accept_q1_other}');
+CREATE FUNCTION pg_temp.accepted_pair(p_id uuid) RETURNS text LANGUAGE sql AS $$
+  SELECT concat_ws('|', coalesce(accepted_anchor ->> 'quote', 'none'), coalesce(accepted_range_hash, 'none'))
+    FROM collaboration.revision_request_version v
+   WHERE v.request_id = p_id AND v.version = (SELECT q.version FROM collaboration.revision_request q WHERE q.id = p_id)
+$$;
+SELECT is(pg_temp.accepted_pair(pg_temp.make(a.state)), a.stored, 'an acceptance ' || a.what)
+FROM (VALUES
+  ('accepted_q1', 'prvi, dopunjeni odlomak|' || pg_temp.sha('prvi, dopunjeni odlomak'), 'with the anchor and hash of Q'' stores both'),
+  ('accepted', 'prvi odlomak|' || pg_temp.sha('prvi odlomak'), 'with a hash and no anchor stores the request''s anchor'),
+  ('accepted_q1_old', 'prvi odlomak|' || pg_temp.sha('prvi, dopunjeni odlomak'), 'of Q'' through the four-argument call binds the request''s anchor'),
+  ('accepted_nohash', 'none|none', 'without a hash stores no anchor')
+) AS a (state, stored, what);
+SELECT is(pg_temp.try('responded', 'vesna', c.call), 'ZD422: invalid input|unchanged', 'an acceptance with ' || c.what || ' is invalid input')
+FROM (VALUES
+  ((SELECT format('accept_revision_request(:id, :seq, 10, NULL, %L)', val) FROM ref WHERE name = 'anchor_q1'), 'an anchor and no hash'),
+  (format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi odlomak'), '{}'), 'an empty object as anchor'),
+  (format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi odlomak'), '"prvi odlomak"'), 'a string as anchor'),
+  (format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi odlomak'), 'null'), 'a JSON null as anchor'),
+  (format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi odlomak'),
+     (SELECT (val::jsonb - 'suffix')::text FROM ref WHERE name = 'anchor_q1')), 'an anchor without its suffix'),
+  (format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi odlomak'),
+     (SELECT jsonb_set(val::jsonb, '{nodeId}', '"odlomak-1"')::text FROM ref WHERE name = 'anchor_q1')), 'an anchor whose node is no id'),
+  (format('accept_revision_request(:id, :seq, 10, %L, %L)', pg_temp.sha('prvi odlomak'),
+     (SELECT jsonb_set(val::jsonb, '{quote}', '""')::text FROM ref WHERE name = 'anchor_q1')), 'an anchor with an empty quote')
+) AS c (call, what);
+-- At revision 14 Q' still stands: no change, whoever asks. An acceptance
+-- whose anchor does not give its hash at the accepted revision compares to
+-- nothing: Q at revision 10 (the old path), Q' at revision 5, where it does
+-- not resolve, and Q' with the hash of another text.
+SELECT is(pg_temp.try(c.state, p.name), 'ZD409: transition not allowed|unchanged', 'a rereview by ' || p.name || ' ' || c.what)
+FROM (VALUES
+  ('accepted_q1', 'of Q'' accepted at revision 10 while Q'' still stands'),
+  ('accepted_q1_old', 'of Q'' accepted under the request''s anchor Q, which does not resolve at revision 10'),
+  ('accepted_q1_at5', 'of Q'' accepted at revision 5, where Q'' does not resolve'),
+  ('accepted_q1_other', 'of Q'' accepted with the hash of another text')
+) AS c (state, what)
+CROSS JOIN (VALUES ('ana'), ('vesna')) AS p (name);
+-- The same requests wait for revision 15, which replaces Q' with Q''.
+INSERT INTO ref SELECT 'q2' || s.suffix, pg_temp.make(s.state)
+  FROM (VALUES ('', 'accepted_q1'), ('_old', 'accepted_q1_old'), ('_at5', 'accepted_q1_at5'),
+               ('_other', 'accepted_q1_other'), ('_nohash', 'accepted_nohash')) AS s (suffix, state);
+
 -- After the submission is recorded the rereview is forbidden, malformed or
 -- not: the acceptance is not the submission, and the submission ends it.
 INSERT INTO ref SELECT 'b8', pg_temp.make('accepted');
@@ -602,6 +665,33 @@ SELECT matches(pg_temp.act('rereview', pg_temp.id('b8_req'), pg_temp.seq(pg_temp
   '^applied\|[0-9]+\|2\|reopened$', 'a requested but unrecorded submission does not stop a rereview');
 SELECT is((SELECT requested_revision FROM collaboration.revision_request_version WHERE request_id = pg_temp.id('b8_req') AND version = 2), 15::bigint,
   'and it reads the revision the RPC of the evidence path committed');
+-- Q -> Q' -> Q'': revision 15 replaces the accepted Q' with Q''. The
+-- rereview of the acceptance of Q' is applied, opens version 2 at revision
+-- 15 and stores no observed hash, since Q' no longer resolves. Every
+-- acceptance that compares to nothing stays refused, the one without a hash
+-- too, although the range it was about changed.
+INSERT INTO ref SELECT 'q2_before' || s.suffix, pg_temp.snapshot(pg_temp.id('q2' || s.suffix))
+  FROM (VALUES ('_old'), ('_at5'), ('_other'), ('_nohash')) AS s (suffix);
+SELECT matches(pg_temp.act('rereview', pg_temp.id('q2'), pg_temp.seq(pg_temp.id('q2'))), '^applied\|[0-9]+\|2\|reopened$',
+  'the rereview of Q'' accepted at revision 10 is applied once revision 15 replaces Q'' with Q''''');
+SELECT is((SELECT format('%s|%s|%s|%s', opened_as, requested_revision, observed_range_hash IS NULL, accepted_anchor IS NULL)
+    FROM collaboration.revision_request_version WHERE request_id = pg_temp.id('q2') AND version = 2),
+  'rereview|15|t|t', 'and version 2 names revision 15, no observed hash and no acceptance yet');
+SELECT is(pg_temp.accepted_pair(pg_temp.id('q2')), 'none|none', 'and the version it opened carries no accepted range');
+SELECT is((SELECT accepted_anchor ->> 'quote' FROM collaboration.revision_request_version WHERE request_id = pg_temp.id('q2') AND version = 1),
+  'prvi, dopunjeni odlomak', 'and the accepted version 1 keeps the anchor of Q''');
+SELECT is(pg_temp.act('rereview', pg_temp.id('q2' || c.suffix), pg_temp.seq(pg_temp.id('q2' || c.suffix)), p.name),
+  'ZD409: transition not allowed', 'after Q'''' a rereview by ' || p.name || ' ' || c.what || ' is still refused')
+FROM (VALUES
+  ('_old', 'of Q'' accepted under the request''s anchor'),
+  ('_at5', 'of Q'' accepted at revision 5'),
+  ('_other', 'of Q'' accepted with another hash'),
+  ('_nohash', 'of an acceptance without a hash')
+) AS c (suffix, what)
+CROSS JOIN (VALUES ('ana'), ('vesna')) AS p (name);
+SELECT is(pg_temp.snapshot(pg_temp.id('q2' || s.suffix)), (SELECT val FROM ref WHERE name = 'q2_before' || s.suffix),
+  'the refused rereview of q2' || s.suffix || ' wrote nothing')
+FROM (VALUES ('_old'), ('_at5'), ('_other'), ('_nohash')) AS s (suffix);
 SELECT is(pg_temp.ask('ana', format('SELECT outcome FROM app.record_submission(%L::uuid, %L)',
     (SELECT id FROM evidence.submission_request WHERE document_id = 'doc-a'), pg_temp.sha((SELECT body FROM page WHERE name = 'submitted')))),
   'recorded', 'fixture: the submission of revision 15 is recorded');

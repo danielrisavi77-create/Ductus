@@ -2179,10 +2179,10 @@ $$;
 
 
 --
--- Name: accept_revision_request(uuid, bigint, bigint, text); Type: FUNCTION; Schema: collaboration; Owner: -
+-- Name: accept_revision_request(uuid, bigint, bigint, text, jsonb); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
-CREATE FUNCTION collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+CREATE FUNCTION collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text, p_accepted_anchor jsonb DEFAULT NULL::jsonb) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -2194,7 +2194,9 @@ BEGIN
   SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
   IF NOT collaboration.is_revision_seq(p_expected_seq)
      OR NOT collaboration.is_revision_number(p_accepted_revision)
-     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$') THEN
+     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$')
+     OR (p_accepted_anchor IS NOT NULL
+         AND (p_range_hash IS NULL OR NOT coalesce(collaboration.is_text_anchor(p_accepted_anchor), false))) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
   IF p_expected_seq <> r.row_seq THEN
@@ -2216,7 +2218,9 @@ BEGIN
   v_seq := nextval('collaboration.revision_request_seq');
   UPDATE collaboration.revision_request_version v
      SET closed_as = 'accepted', closed_by = r.actor_id, closed_at = now(),
-         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash
+         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash,
+         accepted_anchor = CASE WHEN p_range_hash IS NOT NULL THEN coalesce(p_accepted_anchor,
+           (SELECT q.anchor FROM collaboration.revision_request q WHERE q.id = r.request_id)) END
    WHERE v.request_id = r.request_id AND v.version = r.version;
   UPDATE collaboration.revision_request q SET state = 'accepted', row_seq = v_seq WHERE q.id = r.request_id;
   RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'accepted'::text;
@@ -2877,20 +2881,25 @@ BEGIN
   IF r.state <> 'accepted' OR r.version >= 1000 THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
-  SELECT v.instruction, v.accepted_revision, v.accepted_range_hash INTO a
+  SELECT v.instruction, v.accepted_revision, v.accepted_range_hash, v.accepted_anchor INTO a
     FROM collaboration.revision_request_version v
    WHERE v.request_id = r.request_id AND v.version = r.version;
-  IF a.accepted_range_hash IS NULL THEN
+  -- No range was accepted (the client found none to hash): nothing to
+  -- compare, refused before any text is read; the teacher's reopen remains.
+  IF a.accepted_range_hash IS NULL OR a.accepted_anchor IS NULL THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
-  SELECT q.document_id, q.anchor INTO t FROM collaboration.revision_request q WHERE q.id = r.request_id;
+  SELECT q.document_id INTO t FROM collaboration.revision_request q WHERE q.id = r.request_id;
+  -- The accepted anchor must resolve to the accepted hash in the accepted
+  -- revision; one that does not resolve there, or to another hash, is not
+  -- comparable.
   SELECT h.range_hash INTO v_then
-    FROM collaboration.range_hash_at(t.document_id, r.institution_id, t.anchor, a.accepted_revision) h;
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, a.accepted_anchor, a.accepted_revision) h;
   IF v_then IS DISTINCT FROM a.accepted_range_hash THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
   SELECT h.revision, h.range_hash INTO now_at
-    FROM collaboration.range_hash_at(t.document_id, r.institution_id, t.anchor, NULL) h;
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, a.accepted_anchor, NULL) h;
   IF now_at.range_hash IS NOT DISTINCT FROM a.accepted_range_hash THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
@@ -7095,6 +7104,9 @@ CREATE TABLE collaboration.revision_request_version (
     accepted_range_hash text,
     opened_as text DEFAULT 'instruction'::text NOT NULL,
     observed_range_hash text,
+    accepted_anchor jsonb,
+    CONSTRAINT revision_request_version_accepted_anchor_check CHECK (((accepted_anchor IS NULL) OR collaboration.is_text_anchor(accepted_anchor))),
+    CONSTRAINT revision_request_version_accepted_anchor_hash_check CHECK (((accepted_anchor IS NULL) = (accepted_range_hash IS NULL))),
     CONSTRAINT revision_request_version_accepted_range_hash_check CHECK ((accepted_range_hash ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT revision_request_version_accepted_revision_check CHECK (((accepted_revision >= 0) AND (accepted_revision <= '9007199254740991'::bigint))),
     CONSTRAINT revision_request_version_check1 CHECK ((((closed_as IS NULL) = (closed_by IS NULL)) AND ((closed_as IS NULL) = (closed_at IS NULL)))),

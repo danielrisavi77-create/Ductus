@@ -37,7 +37,7 @@ const ANCHOR = {
 const VALID: Record<Action, Record<string, unknown>> = {
   create: { anchor: ANCHOR, documentId: DOC, instruction: `Nastavnik N1: ${CANARY}`, requestedRevision: 3 },
   respond: { expectedSeq: 2, explanation: `Student A: ${CANARY}`, kind: "done", requestId: REQ, responseRevision: 4 },
-  accept: { acceptedRevision: 4, expectedSeq: 3, rangeHash: HASH, requestId: REQ },
+  accept: { acceptedAnchor: ANCHOR, acceptedRevision: 4, expectedSeq: 3, rangeHash: HASH, requestId: REQ },
   reopen: { expectedSeq: 3, instruction: `Nastavnik N1: ${CANARY}`, requestId: REQ, requestedRevision: 5 },
   rereview: { expectedSeq: 4, requestId: REQ },
   withdraw: { expectedSeq: 2, requestId: REQ },
@@ -145,7 +145,7 @@ describe("DAN-314 2f revision request API: success", () => {
 
   it.each([
     ["respond", "respond_revision_request($1::uuid, $2::bigint, $3, $4, $5::bigint)", [REQ, 2, "done", VALID.respond.explanation, 4]],
-    ["accept", "accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4)", [REQ, 3, 4, HASH]],
+    ["accept", "accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4, $5::jsonb)", [REQ, 3, 4, HASH, JSON.stringify(ANCHOR)]],
     ["reopen", "reopen_revision_request($1::uuid, $2::bigint, $3, $4::bigint)", [REQ, 3, VALID.reopen.instruction, 5]],
     ["rereview", "rereview_revision_request($1::uuid, $2::bigint)", [REQ, 4]],
     ["withdraw", "withdraw_revision_request($1::uuid, $2::bigint)", [REQ, 2]],
@@ -156,11 +156,12 @@ describe("DAN-314 2f revision request API: success", () => {
     expect(query).toHaveBeenCalledWith(`SELECT outcome, row_seq, version, state FROM collaboration.${fn}`, params);
   });
 
-  it("accept takes a null hash, and the key is required", async () => {
-    const ok = await call("accept", { ...VALID.accept, rangeHash: null });
+  it("accept takes a null hash only with a null anchor, and both keys are required (#1831 B)", async () => {
+    const ok = await call("accept", { ...VALID.accept, rangeHash: null, acceptedAnchor: null });
     expect(ok.res.status).toBe(200);
-    expect(ok.query.mock.calls[0]?.[1]).toEqual([REQ, 3, 4, null]);
+    expect(ok.query.mock.calls[0]?.[1]).toEqual([REQ, 3, 4, null, null]);
     expect((await call("accept", without(VALID.accept, "rangeHash"))).res.status).toBe(422);
+    expect((await call("accept", without(VALID.accept, "acceptedAnchor"))).res.status).toBe(422);
   });
 
   it("list returns the same keys for every row and parses bigint strings (H4)", async () => {
@@ -366,6 +367,28 @@ describe("DAN-314 2f: refusals before the database", () => {
     expect((await call("respond", { ...VALID.respond, kind: "declined" })).res.status).toBe(200);
     for (const rangeHash of [HASH.toUpperCase(), HASH.slice(1), `${HASH}0`, "", 1]) {
       await refused("accept", { ...VALID.accept, rangeHash }, 422, "invalid_input");
+    }
+  });
+
+  it("accept: the hash and its anchor come together or not at all (#1831 B)", async () => {
+    // Every class but "both null" and "both well formed" is refused before
+    // the database, so an anchor is never stored without its hash or the
+    // other way round.
+    const classes: [string, Record<string, unknown>][] = [
+      ["hash without anchor", { rangeHash: HASH, acceptedAnchor: null }],
+      ["anchor without hash", { rangeHash: null, acceptedAnchor: ANCHOR }],
+      ["bad hash with anchor", { rangeHash: HASH.slice(1), acceptedAnchor: ANCHOR }],
+      ["hash with empty object", { acceptedAnchor: {} }],
+      ["hash with string anchor", { acceptedAnchor: JSON.stringify(ANCHOR) }],
+      ["hash with anchor array", { acceptedAnchor: [ANCHOR] }],
+      ["hash with anchor missing suffix", { acceptedAnchor: without(ANCHOR, "suffix") }],
+      ["hash with anchor and extra key", { acceptedAnchor: { ...ANCHOR, extra: "x" } }],
+      ["hash with empty quote", { acceptedAnchor: { ...ANCHOR, quote: "" } }],
+      ["hash with bad nodeId", { acceptedAnchor: { ...ANCHOR, nodeId: "n1" } }],
+      ["hash with reversed hints", { acceptedAnchor: { ...ANCHOR, startHint: 10, endHint: 0 } }],
+    ];
+    for (const [, change] of classes) {
+      await refused("accept", { ...VALID.accept, ...change }, 422, "invalid_input");
     }
   });
 

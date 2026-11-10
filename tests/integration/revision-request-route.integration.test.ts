@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { snapshotHash } from "@/domain/collaboration/snapshot-hash";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import { handleRevisionRequest, type RevisionAction } from "@/server/collaboration/revision-requests";
 import { createWithActor } from "@/server/db/with-actor";
@@ -158,6 +159,48 @@ async function cleanUp() {
   }
 }
 
+// #1831 B, the main flow of review FAIL c.6757238840: the student replaces the
+// quoted text Q with Q′, so the request's anchor no longer resolves. The
+// teacher accepts Q′ through the route with its own anchor and the hash the
+// client computes for it; the student then replaces Q′ with Q″ and the
+// rereview reopens the request. Dora's project gets a second document for it.
+const QUOTED = `doc-quoted-${suffix}`;
+const quoted = (text: string) => JSON.stringify({ nodes: [{ children: [{ text: `${text} ${suffix}.`, type: "text" }],
+  id: ANCHOR.nodeId, type: "paragraph" }], schemaVersion: 2 });
+const Q_TEXTS = ["Ovo je prvi odlomak teksta", "Prvi, dopunjeni odlomak teksta", "Prvi, dopunjeni i predani odlomak teksta"].map(quoted);
+const Q_PRIME = { endHint: 23, nodeId: ANCHOR.nodeId, prefix: "Prvi, ", quote: "dopunjeni odlomak", startHint: 6, suffix: " teksta" };
+// Appends a revision with its checkpoint and moves the document to it, as the save path leaves them.
+async function reach(revision: number) {
+  const client = await admin.connect();
+  const body = Q_TEXTS[revision - 1];
+  const hash = createHash("sha256").update(body, "utf8").digest("hex");
+  try {
+    await client.query("BEGIN");
+    await client.query("SET CONSTRAINTS ALL DEFERRED");
+    if (revision === 1) {
+      await client.query(
+        `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_revision, current_content_hash)
+         VALUES ($1, $2, $3, $4, 1, $5)`, [QUOTED, institutionId, `project-${documents.dora}`, people.dora.id, hash]);
+      await client.query(
+        `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
+         VALUES ($1, $2, 0, NULL, $3, $4)`, [QUOTED, institutionId, people.dora.id, "a".repeat(64)]);
+    } else {
+      await client.query("UPDATE evidence.document SET current_revision = $2, current_content_hash = $3 WHERE id = $1", [QUOTED, revision, hash]);
+    }
+    await client.query(
+      `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
+       VALUES ($1, $2, $3, $4, $5, $6)`, [QUOTED, institutionId, revision, revision - 1, people.dora.id, hash]);
+    await client.query("INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body) VALUES ($1, $2, $3, $4)",
+      [QUOTED, institutionId, revision, body]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 describe("revision request route over the real RPCs", () => {
   it("create, respond, reopen, respond, accept and list end to end", async () => {
     const created = await create(documents.ana);
@@ -179,7 +222,7 @@ describe("revision request route over the real RPCs", () => {
     expect(again).toMatchObject({ status: 200, json: { outcome: "applied", state: "responded", version: 2 } });
 
     const accepted = await call("accept", "vesna", {
-      acceptedRevision: 1, expectedSeq: again.json.row_seq, rangeHash: RANGE_HASH, requestId,
+      acceptedAnchor: ANCHOR, acceptedRevision: 1, expectedSeq: again.json.row_seq, rangeHash: RANGE_HASH, requestId,
     });
     expect(accepted).toMatchObject({ status: 200, json: { outcome: "applied", state: "accepted", version: 2 } });
 
@@ -249,7 +292,7 @@ describe("revision request route over the real RPCs", () => {
     const responded = await respond("boris", requestId, seq);
     expect(responded.status).toBe(200);
     const refusedAccept = await call("accept", "vesna", {
-      acceptedRevision: 2, expectedSeq: responded.json.row_seq, rangeHash: RANGE_HASH, requestId,
+      acceptedAnchor: ANCHOR, acceptedRevision: 2, expectedSeq: responded.json.row_seq, rangeHash: RANGE_HASH, requestId,
     });
     expect(refusedAccept).toEqual({ status: 422, json: { error: "invalid_input" } });
     expect(await stored(requestId)).toEqual({ state: "responded", rowSeq: responded.json.row_seq, responses: 1 });
@@ -273,6 +316,29 @@ describe("revision request route over the real RPCs", () => {
     expect(applied[0].json).toMatchObject({ outcome: "applied", state: "responded" });
     expect(conflicts[0].json).toEqual({ outcome: "conflict", row_seq: applied[0].json.row_seq, version: 1, state: "responded" });
     expect(await stored(requestId)).toEqual({ state: "responded", rowSeq: applied[0].json.row_seq, responses: 1 });
+  });
+
+  it("a replaced quote accepted with its own anchor and hash is reopened by the rereview after the next change (#1831 B)", async () => {
+    await reach(1);
+    const created = await create(QUOTED);
+    expect(created).toMatchObject({ status: 200, json: { state: "open", version: 1 } });
+    const requestId = created.json.request_id as string;
+    const responded = await respond("dora", requestId, created.json.row_seq as number);
+    expect(responded).toMatchObject({ status: 200, json: { outcome: "applied", state: "responded", version: 1 } });
+    // The student replaces Q with Q′: the request's anchor no longer resolves.
+    await reach(2);
+    const accepted = await call("accept", "vesna", {
+      acceptedAnchor: Q_PRIME, acceptedRevision: 2, expectedSeq: responded.json.row_seq, rangeHash: snapshotHash(Q_PRIME.quote), requestId,
+    });
+    expect(accepted).toMatchObject({ status: 200, json: { outcome: "applied", state: "accepted", version: 1 } });
+    // Q′ is unchanged at revision 2: nothing to reopen yet.
+    expect(await call("rereview", "vesna", { expectedSeq: accepted.json.row_seq, requestId }))
+      .toEqual({ status: 409, json: { error: "not_allowed" } });
+    // The student replaces Q′ with Q″: the accepted range changed.
+    await reach(3);
+    const reopened = await call("rereview", "vesna", { expectedSeq: accepted.json.row_seq, requestId });
+    expect(reopened).toMatchObject({ status: 200, json: { outcome: "applied", state: "reopened", version: 2 } });
+    expect(await stored(requestId)).toMatchObject({ state: "reopened", rowSeq: reopened.json.row_seq, responses: 1 });
   });
 
   it("two concurrent withdraws with the same counter: one applied, one conflict", async () => {

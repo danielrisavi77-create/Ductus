@@ -79,7 +79,7 @@ SELECT bag_eq(
             ('collaboration.create_revision_request(text,jsonb,text,bigint)'),
             ('collaboration.list_revision_requests(text)'),
             ('collaboration.respond_revision_request(uuid,bigint,text,text,bigint)'),
-            ('collaboration.accept_revision_request(uuid,bigint,bigint,text)'),
+            ('collaboration.accept_revision_request(uuid,bigint,bigint,text,jsonb)'),
             ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
             ('collaboration.withdraw_revision_request(uuid,bigint)'),
             ('collaboration.rereview_revision_request(uuid,bigint)') $$,

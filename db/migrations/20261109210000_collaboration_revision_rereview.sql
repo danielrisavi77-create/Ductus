@@ -3,14 +3,16 @@
 -- #87 c.6691142048): an accepted request whose anchored range changed in a
 -- later revision of the document goes back to review as a new version. One
 -- RPC, no trigger and no worker. The database decides whether the range
--- changed: it resolves the request's stored anchor in the checkpoint of the
--- accepted revision and in the checkpoint of the document's current
+-- changed: it resolves the anchor stored with the acceptance (the range the
+-- teacher actually accepted, #1831 B, #87 c.6763239855) in the checkpoint of
+-- the accepted revision and in the checkpoint of the document's current
 -- revision, and compares the two hashes. The caller (the student owner or a
 -- teacher of the course) sends only the request and its counter, never a
 -- hash, a revision or text. The stored acceptance is trusted only when its
--- hash is the one the database computes at the accepted revision; an
--- acceptance without a hash, with another hash, or of a range that did not
--- resolve when it was accepted cannot be compared and is never "changed". A
+-- hash is the one the database computes under its anchor at the accepted
+-- revision; an acceptance without a hash, with another hash, or of a range
+-- that did not resolve when it was accepted cannot be compared and is never
+-- "changed". A
 -- comparable acceptance whose range no longer resolves opens version v + 1
 -- with the teacher's instruction of version v. The accepted version stays
 -- accepted. Nothing is graded, decided or concluded about the author: the
@@ -135,6 +137,85 @@ ALTER TABLE collaboration.revision_request_version
   ADD CONSTRAINT revision_request_version_observed_rereview_check
     CHECK (observed_range_hash IS NULL OR opened_as = 'rereview');
 
+-- #1831 B (#87 c.6763239855): the anchor of the range the teacher actually
+-- accepted, set together with its hash. A revision may replace the quote of
+-- the request (Q -> Q'), so the range accepted is not always the request's
+-- anchor; the rereview follows this one. NULL exactly when the hash is NULL:
+-- no range was accepted. An acceptance stored before this column accepted
+-- the request's own range, so its anchor is the request's.
+ALTER TABLE collaboration.revision_request_version
+  ADD COLUMN accepted_anchor jsonb
+    CONSTRAINT revision_request_version_accepted_anchor_check CHECK (
+      accepted_anchor IS NULL OR collaboration.is_text_anchor(accepted_anchor));
+UPDATE collaboration.revision_request_version v SET accepted_anchor = q.anchor
+  FROM collaboration.revision_request q
+ WHERE q.id = v.request_id AND v.accepted_range_hash IS NOT NULL;
+-- The scan under the lock is accepted, as above; every row passes after the
+-- update.
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE collaboration.revision_request_version
+  ADD CONSTRAINT revision_request_version_accepted_anchor_hash_check
+    CHECK ((accepted_anchor IS NULL) = (accepted_range_hash IS NULL));
+
+-- The body of 20261106220000 with the accepted anchor added. The client sends
+-- the hash and the anchor of the range it accepted in the accepted revision,
+-- or neither when no range resolved. A hash without an anchor accepts the
+-- request's own range (the four-argument calls); an anchor without a hash, or
+-- one that is not a text anchor, is invalid input. The pair is the teacher's
+-- claim; the rereview trusts it only when the database computes the same hash
+-- under that anchor in the accepted revision.
+DROP FUNCTION collaboration.accept_revision_request(uuid, bigint, bigint, text);
+CREATE FUNCTION collaboration.accept_revision_request(
+  p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text,
+  p_accepted_anchor jsonb DEFAULT NULL
+)
+RETURNS TABLE (outcome text, row_seq bigint, version integer, state text)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR NOT collaboration.is_revision_number(p_accepted_revision)
+     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$')
+     OR (p_accepted_anchor IS NOT NULL
+         AND (p_range_hash IS NULL OR NOT coalesce(collaboration.is_text_anchor(p_accepted_anchor), false))) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state <> 'responded' THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_accepted_revision < (SELECT s.response_revision FROM collaboration.revision_response s
+                             WHERE s.request_id = r.request_id AND s.version = r.version) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_accepted_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'accepted', closed_by = r.actor_id, closed_at = now(),
+         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash,
+         accepted_anchor = CASE WHEN p_range_hash IS NOT NULL THEN coalesce(p_accepted_anchor,
+           (SELECT q.anchor FROM collaboration.revision_request q WHERE q.id = r.request_id)) END
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  UPDATE collaboration.revision_request q SET state = 'accepted', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'accepted'::text;
+END
+$$;
+
+REVOKE ALL ON FUNCTION collaboration.accept_revision_request(uuid, bigint, bigint, text, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION collaboration.accept_revision_request(uuid, bigint, bigint, text, jsonb) TO ductus_app;
+
 -- accepted -> reopened at version + 1. The checks keep the order of the other
 -- transitions: session, request and role, lock and submission, input shape,
 -- counter, state and version ceiling, then the change rule. The rule reads
@@ -180,20 +261,25 @@ BEGIN
   IF r.state <> 'accepted' OR r.version >= 1000 THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
-  SELECT v.instruction, v.accepted_revision, v.accepted_range_hash INTO a
+  SELECT v.instruction, v.accepted_revision, v.accepted_range_hash, v.accepted_anchor INTO a
     FROM collaboration.revision_request_version v
    WHERE v.request_id = r.request_id AND v.version = r.version;
-  IF a.accepted_range_hash IS NULL THEN
+  -- No range was accepted (the client found none to hash): nothing to
+  -- compare, refused before any text is read; the teacher's reopen remains.
+  IF a.accepted_range_hash IS NULL OR a.accepted_anchor IS NULL THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
-  SELECT q.document_id, q.anchor INTO t FROM collaboration.revision_request q WHERE q.id = r.request_id;
+  SELECT q.document_id INTO t FROM collaboration.revision_request q WHERE q.id = r.request_id;
+  -- The accepted anchor must resolve to the accepted hash in the accepted
+  -- revision; one that does not resolve there, or to another hash, is not
+  -- comparable.
   SELECT h.range_hash INTO v_then
-    FROM collaboration.range_hash_at(t.document_id, r.institution_id, t.anchor, a.accepted_revision) h;
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, a.accepted_anchor, a.accepted_revision) h;
   IF v_then IS DISTINCT FROM a.accepted_range_hash THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
   SELECT h.revision, h.range_hash INTO now_at
-    FROM collaboration.range_hash_at(t.document_id, r.institution_id, t.anchor, NULL) h;
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, a.accepted_anchor, NULL) h;
   IF now_at.range_hash IS NOT DISTINCT FROM a.accepted_range_hash THEN
     RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
   END IF;
@@ -223,7 +309,55 @@ GRANT CREATE ON SCHEMA collaboration TO ductus_identity;
 GRANT USAGE ON SCHEMA collaboration TO ductus_evidence;
 SET LOCAL ROLE ductus_identity;
 DROP FUNCTION collaboration.rereview_revision_request(uuid, bigint);
+DROP FUNCTION collaboration.accept_revision_request(uuid, bigint, bigint, text, jsonb);
+-- The body of 20261106220000, verbatim.
+CREATE FUNCTION collaboration.accept_revision_request(
+  p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text
+)
+RETURNS TABLE (outcome text, row_seq bigint, version integer, state text)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+#variable_conflict use_column
+DECLARE
+  r record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
+  IF NOT collaboration.is_revision_seq(p_expected_seq)
+     OR NOT collaboration.is_revision_number(p_accepted_revision)
+     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state <> 'responded' THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  IF p_accepted_revision < (SELECT s.response_revision FROM collaboration.revision_response s
+                             WHERE s.request_id = r.request_id AND s.version = r.version) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF collaboration.revision_above_document(
+       (SELECT q.document_id FROM collaboration.revision_request q WHERE q.id = r.request_id),
+       r.institution_id, p_accepted_revision) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  UPDATE collaboration.revision_request_version v
+     SET closed_as = 'accepted', closed_by = r.actor_id, closed_at = now(),
+         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  UPDATE collaboration.revision_request q SET state = 'accepted', row_seq = v_seq WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'accepted'::text;
+END
+$$;
+
+REVOKE ALL ON FUNCTION collaboration.accept_revision_request(uuid, bigint, bigint, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION collaboration.accept_revision_request(uuid, bigint, bigint, text) TO ductus_app;
 ALTER TABLE collaboration.revision_request_version
+  DROP COLUMN accepted_anchor,
   DROP COLUMN observed_range_hash,
   DROP COLUMN opened_as;
 RESET ROLE;

@@ -80,13 +80,18 @@ const SPECS: Record<RevisionAction, Spec> = {
     sql: `${TRANSITION}collaboration.respond_revision_request($1::uuid, $2::bigint, $3, $4, $5::bigint)`,
     params: (i) => [i.requestId, i.expectedSeq, i.kind, i.explanation, i.responseRevision],
   },
+  // The hash and the anchor it was computed under travel together (#1831 B):
+  // both null, or both well formed. Anything else is refused before the
+  // database, so an accepted anchor never lands without its hash.
   accept: {
-    keys: ["acceptedRevision", "expectedSeq", "rangeHash", "requestId"],
+    keys: ["acceptedAnchor", "acceptedRevision", "expectedSeq", "rangeHash", "requestId"],
     id: "requestId",
     valid: (i) => isExpectedSeq(i.expectedSeq) && isRevisionNumber(i.acceptedRevision)
-      && (i.rangeHash === null || isRangeHash(i.rangeHash)),
-    sql: `${TRANSITION}collaboration.accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4)`,
-    params: (i) => [i.requestId, i.expectedSeq, i.acceptedRevision, i.rangeHash],
+      && ((i.rangeHash === null && i.acceptedAnchor === null)
+        || (isRangeHash(i.rangeHash) && isTextAnchorInput(i.acceptedAnchor))),
+    sql: `${TRANSITION}collaboration.accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4, $5::jsonb)`,
+    params: (i) => [i.requestId, i.expectedSeq, i.acceptedRevision, i.rangeHash,
+      i.acceptedAnchor === null ? null : JSON.stringify(i.acceptedAnchor)],
   },
   reopen: {
     keys: ["expectedSeq", "instruction", "requestId", "requestedRevision"],
