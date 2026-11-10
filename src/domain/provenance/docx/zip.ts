@@ -32,6 +32,8 @@ const CENTRAL = 0x02014b50;
 const LOCAL = 0x04034b50;
 const DESCRIPTOR = 0x08074b50;
 const ENCRYPTED = 0x0001 | 0x0040 | 0x2000;
+const PATCHED = 0x0020;
+const MAX_VERSION = 63;
 const reject = (code: ConstructorParameters<typeof DocxRejected>[0]): never => {
   throw new DocxRejected(code);
 };
@@ -77,6 +79,9 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     if (flags & ENCRYPTED || method === 99) reject("ZIP_ENCRYPTED");
     if (method !== 0 && method !== 8) reject("ZIP_METHOD");
     if (csize === 0xffffffff || usize === 0xffffffff || offset === 0xffffffff) reject("ZIP_UNSUPPORTED");
+    // Patched data and versions past 6.3 are features other readers refuse; the
+    // low byte of "version needed" is the version, the high byte names the host.
+    if (flags & PATCHED || (u16(at + 6) & 0xff) > MAX_VERSION) reject("ZIP_UNSUPPORTED");
     if (usize > lim.maxPartBytes) reject("ZIP_PART_TOO_LARGE");
     declared += usize;
     if (declared > lim.maxTotalBytes) reject("ZIP_TOTAL_TOO_LARGE");
@@ -89,6 +94,7 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     if (offset + 30 > cdOffset || u32(offset) !== LOCAL) reject("ZIP_INVALID");
     const localFlags = u16(offset + 6);
     if (localFlags & ENCRYPTED) reject("ZIP_ENCRYPTED");
+    if (localFlags & PATCHED || (u16(offset + 4) & 0xff) > MAX_VERSION) reject("ZIP_UNSUPPORTED");
     const start = offset + 30 + u16(offset + 26) + u16(offset + 28);
     const localName = bytes.subarray(offset + 30, offset + 30 + u16(offset + 26));
     const sameSizes = (localFlags & 0x8) !== 0 || (u32(offset + 14) === crc && u32(offset + 18) === csize && u32(offset + 22) === usize);

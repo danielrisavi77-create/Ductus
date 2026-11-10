@@ -14,6 +14,9 @@ export interface FixtureEntry {
   raw?: Uint8Array;
   method?: number;
   flags?: number;
+  /** Version needed to extract, central and local; default 20 (2.0). */
+  version?: number;
+  localVersion?: number;
   crc?: number;
   csize?: number;
   usize?: number;
@@ -58,7 +61,7 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     const localName = utf8(e.localName ?? name);
     const local = new DataView(new ArrayBuffer(30));
     local.setUint32(0, 0x04034b50, true);
-    local.setUint16(4, 20, true);
+    local.setUint16(4, e.localVersion ?? e.version ?? 20, true);
     local.setUint16(6, e.localFlags ?? e.flags ?? 0, true);
     local.setUint16(8, e.localMethod ?? method, true);
     local.setUint32(14, e.localCrc ?? crc, true);
@@ -68,7 +71,7 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     const central = new DataView(new ArrayBuffer(46));
     central.setUint32(0, 0x02014b50, true);
     central.setUint16(4, 20, true);
-    central.setUint16(6, 20, true);
+    central.setUint16(6, e.version ?? 20, true);
     central.setUint16(8, e.flags ?? 0, true);
     central.setUint16(10, method, true);
     central.setUint32(16, crc, true);
