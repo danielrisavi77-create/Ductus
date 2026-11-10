@@ -1,0 +1,179 @@
+{
+  "catalogVersion": 2,
+  "criteria": [
+    { "id": "uputa", "subject": "model_output", "text": "Izlaz radi ono što uputa traži i ne izlazi iz zadane svrhe." },
+    { "id": "jezik", "subject": "model_output", "text": "Izlaz je na standardnom hrvatskom: dijakritici, padeži, sročnost i red riječi su ispravni." },
+    { "id": "brojke", "subject": "model_output", "text": "Izlaz prenosi brojke, godine, nazive, navode i oznake izvora iz ulaza bez ikakve promjene (D-46)." },
+    { "id": "izmjene", "subject": "model_output", "text": "Izlaz jasno pokazuje svaku izmjenu u odnosu na ulaz, tako da je osoba može prihvatiti ili odbiti." },
+    { "id": "smisao", "subject": "model_output", "text": "Izlaz ne mijenja tvrdnje, zaključke ni stav ulaznog teksta." },
+    { "id": "izvori", "subject": "model_output", "text": "Izlaz ne izmišlja izvore; za svaki predloženi izvor daje podatke po kojima ga osoba sama može pronaći, a za nesigurne to kaže (D-48)." },
+    { "id": "pitanja", "subject": "model_output", "text": "Izlaz postavlja pitanja i ne piše rečenice rada umjesto osobe (D-64)." },
+    { "id": "redoslijed", "subject": "model_output", "text": "Izlaz vraća predloženi redoslijed dijelova s kratkim obrazloženjem, a ne novi tekst (D-64)." },
+    { "id": "nazivlje", "subject": "model_output", "text": "Izlaz koristi ustaljeno hrvatsko stručno nazivlje i ne ostavlja nepotrebne strane riječi." },
+    { "id": "shema", "subject": "model_output", "text": "Izlaz primjenjuje samo zadanu shemu kodiranja, ne dodaje kategorije i za svaku odluku navodi dio ulaza na koji se odnosi." },
+    { "id": "potpunost", "subject": "model_output", "text": "Izlaz obuhvaća cijeli ulaz i ništa ne ispušta." },
+    { "id": "primjer", "subject": "model_output", "text": "Izlaz daje primjer koji je jasno označen kao izmišljen i nije prikazan kao činjenica." }
+  ],
+  "items": [
+    {
+      "id": "formatting-1",
+      "purpose": "formatting",
+      "level": 1,
+      "instruction": "Oblikuj popis literature prema kućnom stilu: prezime, inicijal imena, godina u zagradi, naslov u kurzivu, mjesto i izdavač.",
+      "input": "Horvat, Ana, Lokalna samouprava u promjeni, Zagreb: Politička misao, 2019. / Kovač, I. (2021), Izborni sustavi malih država, Rijeka, Primjer d.o.o.",
+      "criteria": ["uputa", "brojke", "potpunost"]
+    },
+    {
+      "id": "formatting-2",
+      "purpose": "formatting",
+      "level": 1,
+      "instruction": "Pretvori ovaj odlomak u tablicu s tri stupca: država, godina reforme, broj razina vlasti.",
+      "input": "U izmišljenoj Državi A reforma je provedena 2004. i uvela je tri razine vlasti. Država B reformu je provela 2011. i zadržala dvije razine, a Država C 2016. prešla je na četiri razine.",
+      "criteria": ["uputa", "brojke", "potpunost"]
+    },
+    {
+      "id": "proofreading-1",
+      "purpose": "proofreading",
+      "level": 1,
+      "instruction": "Ispravi pravopisne i gramatičke pogreške, ne mijenjaj stil i označi svaku izmjenu.",
+      "input": "Prema podacima iz 2018. izlaznost na lokalnim izborima pala je na 41 %, sto autori tumače slabljenjem povjerenja u stranke (Horvat, 2019: 23). Gradjani su sve manje zainteresirani za općinske poslove i rijetko dolaze na sjednice vijeca.",
+      "criteria": ["jezik", "izmjene", "brojke", "smisao"]
+    },
+    {
+      "id": "proofreading-2",
+      "purpose": "proofreading",
+      "level": 1,
+      "instruction": "Provjeri sročnost i padeže u ovim rečenicama i predloži ispravke uz kratko objašnjenje.",
+      "input": "Većina ispitanika smatraju da je vlada odgovorna za stanje. Rezultati ankete, koje je provela izmišljena agencija, pokazuje razliku od 12 postotnih bodova između gradova i sela.",
+      "criteria": ["jezik", "izmjene", "brojke", "smisao"]
+    },
+    {
+      "id": "literature_search-1",
+      "purpose": "literature_search",
+      "level": 1,
+      "instruction": "Predloži smjerove pretraživanja literature o participativnom budžetiranju u gradovima srednje Europe i navedi ključne riječi na hrvatskom i engleskom.",
+      "input": "Tema rada: učinci participativnog budžetiranja na izlaznost na lokalnim izborima u gradovima srednje Europe nakon 2010.",
+      "criteria": ["izvori", "uputa", "nazivlje"]
+    },
+    {
+      "id": "literature_search-2",
+      "purpose": "literature_search",
+      "level": 1,
+      "instruction": "Navedi koje vrste izvora bi trebalo pregledati za ovo pitanje i gdje se takvi izvori obično objavljuju. Ako ne znaš točan naslov, nemoj ga navoditi.",
+      "input": "Istraživačko pitanje: kako se medijsko praćenje parlamentarnih rasprava promijenilo nakon uvođenja izravnog internetskog prijenosa sjednica?",
+      "criteria": ["izvori", "uputa"]
+    },
+    {
+      "id": "transcription-1",
+      "purpose": "transcription",
+      "level": 1,
+      "instruction": "Pretvori ove bilješke s intervjua u uredan zapis u obliku pitanje i odgovor, bez dodavanja sadržaja.",
+      "input": "P1: kako ste počeli s volonterskim radom / O: kroz udrugu u kvartu, 2015., najprije dva sata tjedno / P2: što vas je zadržalo / O: ljudi, osjećaj da se nešto mijenja, i to što je vijeće slušalo prijedloge",
+      "criteria": ["potpunost", "smisao", "jezik"]
+    },
+    {
+      "id": "transcription-2",
+      "purpose": "transcription",
+      "level": 1,
+      "instruction": "Pretvori ove izmišljene bilješke s fokus grupe u cijele rečenice, sačuvaj oznake sudionika i redoslijed.",
+      "input": "S1 – javni prijevoz loš, autobus svakih 40 min / S2 – slaže se, dodaje da nema noćnih linija / S3 – ne slaže se, kaže da je od 2022. bolje / S1 – traži da se to zapiše",
+      "criteria": ["potpunost", "brojke", "smisao"]
+    },
+    {
+      "id": "translation-1",
+      "purpose": "translation",
+      "level": 1,
+      "instruction": "Prevedi na hrvatski. Navode u zagradama i brojke ostavi kako jesu.",
+      "input": "The coalition agreement of 2017 reduced the number of ministries from 20 to 16 (Smith, 2018: 45). Critics argued that the merger weakened parliamentary oversight of the new departments.",
+      "criteria": ["brojke", "nazivlje", "smisao", "potpunost"]
+    },
+    {
+      "id": "translation-2",
+      "purpose": "translation",
+      "level": 1,
+      "instruction": "Prevedi sažetak na engleski, zadrži stručne nazive i oznake izvora.",
+      "input": "Rad analizira ulogu županijskih skupština u razdoblju od 2001. do 2013. Na uzorku od 21 izmišljene županije pokazuje se da je broj sjednica rastao, a broj usvojenih prijedloga oporbe ostao gotovo nepromijenjen (Kovač, 2021).",
+      "criteria": ["brojke", "nazivlje", "smisao", "potpunost"]
+    },
+    {
+      "id": "explanation-1",
+      "purpose": "explanation",
+      "level": 2,
+      "instruction": "Objasni pojam na razini studenta prve godine i daj jedan izmišljeni primjer.",
+      "input": "Pojam: d'Hondtova metoda raspodjele mandata.",
+      "criteria": ["uputa", "nazivlje", "jezik", "primjer"]
+    },
+    {
+      "id": "explanation-2",
+      "purpose": "explanation",
+      "level": 2,
+      "instruction": "Objasni razliku između dva pojma u nekoliko rečenica, bez pisanja dijela rada.",
+      "input": "Pojmovi: polupredsjednički sustav i parlamentarni sustav.",
+      "criteria": ["uputa", "nazivlje", "jezik"]
+    },
+    {
+      "id": "brainstorming-1",
+      "purpose": "brainstorming",
+      "level": 2,
+      "instruction": "Pomozi mi suziti temu tako da mi postaviš pitanja. Ne predlaži gotov naslov ni rečenice za rad.",
+      "input": "Zanima me odnos mladih prema političkim strankama, ali tema mi je preširoka.",
+      "criteria": ["pitanja", "uputa", "jezik"]
+    },
+    {
+      "id": "brainstorming-2",
+      "purpose": "brainstorming",
+      "level": 2,
+      "instruction": "Postavi mi pitanja koja bi mi pomogla odlučiti koju metodu istraživanja odabrati.",
+      "input": "Želim istražiti kako lokalni portali izvještavaju o radu gradskog vijeća. Dvoumim se između analize sadržaja i intervjua s novinarima.",
+      "criteria": ["pitanja", "uputa"]
+    },
+    {
+      "id": "restructuring-1",
+      "purpose": "restructuring",
+      "level": 2,
+      "instruction": "Predloži bolji redoslijed ovih dijelova poglavlja i ukratko obrazloži. Ne piši tekst poglavlja.",
+      "input": "1. Rezultati ankete 2. Pregled dosadašnjih istraživanja 3. Zaključak 4. Opis uzorka 5. Uvod u temu 6. Rasprava",
+      "criteria": ["redoslijed", "uputa", "potpunost"]
+    },
+    {
+      "id": "restructuring-2",
+      "purpose": "restructuring",
+      "level": 2,
+      "instruction": "Ovi odlomci su izmiješani. Predloži redoslijed odlomaka po oznakama i objasni zašto.",
+      "input": "[A] Stoga se zaključuje da je reforma imala ograničen učinak. [B] Reforma je provedena 2012. u izmišljenoj Državi D. [C] Podaci pokazuju da se broj zaposlenih u upravi smanjio za 8 %. [D] Cilj reforme bio je smanjiti troškove javne uprave.",
+      "criteria": ["redoslijed", "brojke", "potpunost"]
+    },
+    {
+      "id": "example_generation-1",
+      "purpose": "example_generation",
+      "level": 2,
+      "instruction": "Daj dva izmišljena primjera koji ilustriraju pojam, jasno označena kao izmišljena.",
+      "input": "Pojam: problem slobodnog jahača u kolektivnom djelovanju.",
+      "criteria": ["primjer", "uputa", "jezik"]
+    },
+    {
+      "id": "example_generation-2",
+      "purpose": "example_generation",
+      "level": 2,
+      "instruction": "Smisli jedan izmišljeni primjer anketnog pitanja s ljestvicom od 1 do 5 za mjerenje povjerenja u lokalnu vlast.",
+      "input": "Kontekst: vježba iz metodologije, anketa o povjerenju građana u gradsko vijeće.",
+      "criteria": ["primjer", "uputa", "brojke"]
+    },
+    {
+      "id": "data_coding-1",
+      "purpose": "data_coding",
+      "level": 2,
+      "instruction": "Svakom odgovoru dodijeli jednu kategoriju iz sheme: PROMET, STANOVANJE, OBRAZOVANJE, OSTALO. Za svaku odluku navedi riječi iz odgovora na koje se oslanjaš.",
+      "input": "O1: Autobusi kasne svaki dan. O2: Najam stana je preskup za mlade. O3: Škole nemaju dovoljno učitelja. O4: Park u centru treba više klupa.",
+      "criteria": ["shema", "potpunost", "uputa"]
+    },
+    {
+      "id": "data_coding-2",
+      "purpose": "data_coding",
+      "level": 2,
+      "instruction": "Kodiraj izjave prema shemi: POZITIVNO, NEGATIVNO, NEUTRALNO. Ne dodaj nove kategorije.",
+      "input": "I1: Vijeće je napokon objavilo proračun na internetu. I2: Sjednice traju predugo i ništa se ne odluči. I3: Sljedeća sjednica je u utorak u 17 sati.",
+      "criteria": ["shema", "potpunost", "uputa"]
+    }
+  ]
+}
