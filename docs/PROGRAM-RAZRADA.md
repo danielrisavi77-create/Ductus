@@ -288,7 +288,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M8.0-S1 | Ugovor i plan napada uvoza: izvor „uvoz” u novoj verziji formata segmenta (D-290), `import_event` i manifest s tri hasha, granice (D-291), naziv datoteke (D-292), idempotentna potvrda pregleda | B | M8.1-P03, M8.0a | DAN-436 (isti tiket kao M8.9) |
-| M8.0-S2 | Ugovor i plan napada izvoza: `ExportSnapshot` nad spremljenom ili predanom revizijom, karta sposobnosti po čvoru iz M5, jedan manifest D-173 zajedno s M7.10-P01, opseg i rok trajanja izvoznog artefakta | B | M8.0a, M5.0-S1, M5.4 | DAN-636 |
+| M8.0-S2 | Ugovor i plan napada izvoza: `ExportSnapshot` nad spremljenom ili predanom revizijom, karta sposobnosti po čvoru iz M5, jedan manifest D-173 zajedno s M7.10-P01, opseg i rok trajanja izvoznog artefakta | B | M8.0a, M5.0-S1 (DAN-589), M5.4 (DAN-403) | DAN-636 |
 | M8.1 | Lokalni sintetički spike čitanja DOCX-a (D-198 t. 5) | B | M8.8 | DAN-242 |
 | M8.2 | Uvoz DOCX-a kao događaj s izvorom „uvoz” | B, F | M8.1, M3.1 | DAN-396 |
 | M8.2b | Prekidač „Dopušten uvoz” pri stvaranju zadatka; nova verzija zadatka smije uvoz samo isključiti (`docs/PRODUCT.md` §6 t. 3, D-282) | F | M8.2-P04, M8.UX-R | DAN-396 |
@@ -309,7 +309,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
-**Ovisnosti izvan tablice:** M8.1-P03, M8.2-P04, M5.1-P04, M5.4-P03 i M8.UX-R navode se kako ih navodi plan M8 (M8.0a, DAN-601); M8.UX-R su referentne slike za S-19, S-20 i N-18 (DAN-603), a M5.4-P03 je opća izvozna projekcija bez paketa Lekte. Spike koraci (M8.5-S, M8.7-S) dijele tiket s korakom koji otvaraju.
+**Ovisnosti izvan tablice:** M8.1-P03, M8.2-P04, M5.0-S1, M5.1-P04, M5.4-P03 i M8.UX-R navode se kako ih navodi plan M8 (M8.0a, DAN-601); M8.UX-R su referentne slike za S-19, S-20 i N-18 (DAN-603), M5.0-S1 je ugovor sheme v2 iz odjeljka M5 (DAN-589), a M5.4-P03 je opća izvozna projekcija bez paketa Lekte. Spike koraci (M8.5-S, M8.7-S) dijele tiket s korakom koji otvaraju.
 
 **Otvoreno:** O1 i O3 plana M8 (D-290 do D-292); granice čitanja osim `rawByteLength` (D-291); pohrana naziva datoteke (D-292). Zaključuje ih ugovor M8.0-S1 i njegov review, a što bi bilo skupo promijeniti ide vlasniku.
 
