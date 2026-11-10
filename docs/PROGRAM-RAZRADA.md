@@ -288,7 +288,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
 | M8.0-S1 | Ugovor i plan napada uvoza: izvor „uvoz” u novoj verziji formata segmenta (D-290), `import_event` i manifest s tri hasha, granice (D-291), naziv datoteke (D-292), idempotentna potvrda pregleda | B | M8.1-P03, M8.0a | DAN-436 (isti tiket kao M8.9) |
-| M8.0-S2 | Ugovor i plan napada izvoza: `ExportSnapshot` nad spremljenom ili predanom revizijom, karta sposobnosti po čvoru iz M5, jedan manifest D-173 zajedno s M7.10-P01, opseg i rok trajanja izvoznog artefakta | B | M8.0a | DAN-636 |
+| M8.0-S2 | Ugovor i plan napada izvoza: `ExportSnapshot` nad spremljenom ili predanom revizijom, karta sposobnosti po čvoru iz M5, jedan manifest D-173 zajedno s M7.10-P01, opseg i rok trajanja izvoznog artefakta | B | M8.0a, M5.0-S1, M5.4 | DAN-636 |
 | M8.1 | Lokalni sintetički spike čitanja DOCX-a (D-198 t. 5) | B | M8.8 | DAN-242 |
 | M8.2 | Uvoz DOCX-a kao događaj s izvorom „uvoz” | B, F | M8.1, M3.1 | DAN-396 |
 | M8.2b | Prekidač „Dopušten uvoz” pri stvaranju zadatka; nova verzija zadatka smije uvoz samo isključiti (`docs/PRODUCT.md` §6 t. 3, D-282) | F | M8.2-P04, M8.UX-R | DAN-396 |
