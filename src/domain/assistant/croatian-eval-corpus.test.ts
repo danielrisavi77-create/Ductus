@@ -43,15 +43,41 @@ const PERSONAL_DATA_SHAPES: readonly [string, RegExp][] = [
   ["email", /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/u],
   ["oib or jmbag", /(?<!\d)\d{10,11}(?!\d)/u],
   ["phone", /(?:\+385|\b0\d{1,2})[\s/-]?\d{3}[\s/-]?\d{3,4}\b/u],
-  // Only a whole reserved host passes: example.org or a subdomain, or a name
-  // under .invalid; "notexample.org" or "example.org.real.hr" do not.
-  ["url", /\b(?:https?:\/\/|www\.)(?!(?:[\w-]+\.)*(?:example\.org|[\w-]+\.invalid)(?![\w-]|\.[\w-]))/iu],
   // Only roles with a letter ("Student A", "Autorica B") stand for people, so
   // no name in the corpus can be taken for a real person at the faculty.
   ["name", /\p{Lu}\p{Ll}+\s+\p{Lu}\p{Ll}+/u],
   ["name", /\p{Lu}\p{Ll}+,\s*(?:\p{Lu}\.\s*)?\(?\d{4}/u],
   ["name", /\p{Lu}\p{Ll}+,\s+\p{Lu}\p{Ll}+,/u],
 ];
+
+/** Anything that starts like a link, even glued to a word, up to the next space. */
+const URL_CANDIDATE = /(?:https?:|www\.)\S*/giu;
+const TRAILING_PUNCTUATION = /[.,;:!?)\]}"'»”]+$/u;
+
+/**
+ * Whether a link reaches a host reserved by the corpus rule
+ * (docs/AI-HRVATSKI-PROTOKOL.md): example.org or a subdomain, or a name under
+ * .invalid. The URL parser decodes %2E, lowers capitals and splits off the user
+ * and the port, so the host the link really reaches is judged; a link the
+ * parser refuses is not reserved.
+ */
+function isReservedUrl(candidate: string): boolean {
+  const text = candidate.replace(TRAILING_PUNCTUATION, "");
+  let host: string;
+  try {
+    host = new URL(/^www\./iu.test(text) ? `http://${text}` : text).hostname;
+  } catch {
+    return false;
+  }
+  const labels = host.replace(/\.$/u, "").split(".");
+  if (labels.some((label) => !/^[a-z0-9-]+$/u.test(label))) return false;
+  const name = labels.join(".");
+  return name === "example.org" || name.endsWith(".example.org") || (labels.length > 1 && name.endsWith(".invalid"));
+}
+
+function hasUnreservedUrl(text: string): boolean {
+  return [...text.matchAll(URL_CANDIDATE)].some(([candidate]) => !isReservedUrl(candidate));
+}
 
 function sameKeys(value: object, keys: readonly string[]): boolean {
   const actual = Object.keys(value).sort();
@@ -97,6 +123,7 @@ function corpusProblems(corpus: Corpus): string[] {
   for (const [where, text] of texts) {
     for (const term of findForbiddenTerms(String(text))) problems.push(`${where}: dictionary term ${term.entry}`);
     for (const [shape, pattern] of PERSONAL_DATA_SHAPES) if (pattern.test(String(text))) problems.push(`${where}: ${shape}`);
+    if (hasUnreservedUrl(String(text))) problems.push(`${where}: url`);
   }
   return problems;
 }
@@ -140,6 +167,19 @@ describe("synthetic Croatian evaluation corpus", () => {
     ["real url", (c) => void (c.items[0]!.input += " https://www.fpzg.unizg.hr/"), "url"],
     ["host merely ending in example.org", (c) => void (c.items[0]!.input += " https://notexample.org/"), "url"],
     ["reserved name inside a real host", (c) => void (c.items[0]!.input += " https://example.org.fpzg.unizg.hr/"), "url"],
+    // All but the look-alike passed the old pattern; the parsed hostname decides now.
+    ...[
+      ["encoded dot", "https://example.org%2Efpzg.unizg.hr/"],
+      ["lowercase encoded dot", "https://example.org%2efpzg.unizg.hr/"],
+      ["capitals with an encoded dot", "https://EXAMPLE.ORG%2Efpzg.unizg.hr/"],
+      ["double encoded dot", "https://example.org%252Efpzg.unizg.hr/"],
+      ["empty label after the reserved name", "https://example.org..fpzg.unizg.hr/"],
+      ["reserved name as the user", "https://example.org@fpzg.unizg.hr/"],
+      ["reserved name and port as the user", "https://example.org:443@fpzg.unizg.hr/"],
+      ["scheme without slashes", "https:fpzg.unizg.hr/"],
+      ["link glued to a word", "vidinothttps://fpzg.unizg.hr/"],
+      ["look-alike letter", "https://ex\u0430mple.org/"],
+    ].map(([name, url]): [string, (copy: Corpus) => void, string] => [name!, (c) => void (c.items[0]!.input += ` ${url}`), "url"]),
     ["unknown item field", (c) => void Object.assign(c.items[0]!, { author: "x" }), "fields"],
     ["unknown criterion field", (c) => void Object.assign(c.criteria[0]!, { weight: 1 }), "fields"],
   ];
@@ -149,9 +189,17 @@ describe("synthetic Croatian evaluation corpus", () => {
     expect(problems.some((p) => p.includes(expected))).toBe(true);
   });
 
-  it("allows a reserved example address", () => {
-    const reserved = " https://example.org/clanak, https://www.example.org i https://arhiv.invalid/rad.";
-    expect(corpusProblems(broken((c) => void (c.items[0]!.input += reserved)))).toEqual([]);
+  it.each([
+    "https://example.org/clanak,",
+    "https://www.example.org",
+    "www.example.org/rad",
+    "https://arhiv.invalid/rad.",
+    "https://EXAMPLE.org/",
+    "https://example.org./",
+    "https://example.org:8443/rad",
+    "(https://ured.example.org/upute)",
+  ])("allows the reserved address %s", (url) => {
+    expect(corpusProblems(broken((c) => void (c.items[0]!.input += ` ${url}`)))).toEqual([]);
   });
 
   it("allows roles with a letter in place of names", () => {
