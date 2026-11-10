@@ -252,6 +252,15 @@ ORDER BY v.n;
 SELECT is((SELECT count(*)::text FROM institution.assignment_version
             WHERE assignment_id = '00000000-0000-4000-8000-0000000000a2' AND version_no > 1), '0',
           'and the assignment keeps only its first version');
+-- Concurrency: two writers of the same version meet at the primary key; the
+-- second one waits for the first and gets a conflict, never a second row.
+SELECT throws_ok(
+  $$ INSERT INTO institution.assignment_version (assignment_id, version_no, title, instructions, work_type, opens_at,
+       due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, created_by)
+     VALUES ('00000000-0000-4000-8000-0000000000a1', 2, 'Z1', 'Upute.', 'essay', now(), now() + interval '1 day',
+       'partially_allowed', '{proofreading}', 'extended', true, '00000000-0000-4000-8000-000000000101') $$,
+  '23505', NULL, 'a second insert of an existing version is refused by the primary key'
+);
 INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by)
 SELECT '00000000-0000-4000-8000-0000000000a9', c.id, c.institution_id, 1, '00000000-0000-4000-8000-000000000101'
   FROM institution.course c WHERE c.id = '00000000-0000-4000-8000-0000000000c1';
