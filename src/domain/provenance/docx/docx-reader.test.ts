@@ -194,6 +194,16 @@ describe("DAN-242 ZIP reader: input classes Z1-Z13", () => {
     expect(openDocxZip(fixtureZip([{ name: "word/" }, ...ok])).names).toEqual(["[Content_Types].xml", "word/document.xml"]);
   });
 
+  it("Z13 a stored part is a copy, also when the archive is a Node Buffer", async () => {
+    const archive = Buffer.from(fixtureZip([{ name: "a.xml", data: "<a/>" }]));
+    const before = Uint8Array.from(archive);
+    const zip = openDocxZip(archive);
+    const part = await zip.read("a.xml");
+    part[1] = 98;
+    expect(Uint8Array.from(archive)).toEqual(before);
+    expect(new TextDecoder().decode(await zip.read("a.xml"))).toBe("<a/>");
+  });
+
   it("Z13 opens every fixture of the synthetic corpus and lists its parts in file order", async () => {
     const manifest = JSON.parse(readFileSync(join(CORPUS_DIR, MANIFEST_FILE), "utf8")) as { fixtures: { file: string; parts: string[] }[] };
     const files = readdirSync(CORPUS_DIR).filter((f) => f.endsWith(".docx")).sort();
@@ -332,6 +342,21 @@ describe("DAN-242 XML reader: input classes X1-X8", () => {
       "/urn:1|e",
       "/urn:1|a",
     ]);
+  });
+
+  it("X7 a visitor that scans another document does not move the outer scan", () => {
+    const events = (nested: boolean) => {
+      const seen: string[] = [];
+      const visit = (mark: string) => (el: XmlName) => {
+        if (seen.length > 50) throw new Error("outer scan did not advance");
+        seen.push(`${mark}${el.local}`);
+        if (nested) scanXml(enc('<i a="1"><j/></i>'), {}, {});
+      };
+      scanXml(enc('<root><child x="1"/><b>t</b></root>'), {}, { open: visit("<"), close: visit("/") });
+      return seen;
+    };
+    expect(events(false)).toEqual(["<root", "<child", "/child", "<b", "/b", "/root"]);
+    expect(events(true)).toEqual(events(false));
   });
 
   it("X8 D-198 t. 5: the reader hands out names only, never text or attribute values", () => {

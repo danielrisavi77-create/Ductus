@@ -145,7 +145,8 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
       const entry = byKey.get(keyOf(name));
       if (entry === undefined || entry.name.endsWith("/")) return reject("ZIP_NO_PART");
       const data = bytes.subarray(entry.end - entry.csize, entry.end);
-      const out = entry.method === 0 ? data.slice() : await inflate(data, entry.usize);
+      // Uint8Array.from copies; Buffer#slice would share the archive's memory.
+      const out = entry.method === 0 ? Uint8Array.from(data) : await inflate(data, entry.usize);
       if (crc32(out) !== entry.crc) reject("ZIP_CRC");
       return out;
     },

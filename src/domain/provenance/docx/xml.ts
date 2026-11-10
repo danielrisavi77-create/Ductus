@@ -113,11 +113,13 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
     } else if (text.startsWith("</", i)) {
       END_TAG.lastIndex = i;
       const m = END_TAG.exec(text) ?? fail("XML_INVALID");
+      // Read the shared regexes before the visitor: it may run scanXml again.
+      const next = END_TAG.lastIndex;
       const top = stack.pop();
       if (top === undefined || top.qname !== m[1]) fail("XML_INVALID");
       visitor.close?.(top!.name);
       rootDone = stack.length === 0;
-      i = END_TAG.lastIndex;
+      i = next;
     } else {
       if (rootDone) fail("XML_INVALID");
       TAG.lastIndex = i;
@@ -140,6 +142,7 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
       }
       TAG_END.lastIndex = at;
       const close = TAG_END.exec(text) ?? fail("XML_INVALID");
+      const next = TAG_END.lastIndex;
       if (stack.length + 1 > lim.maxXmlDepth) fail("XML_DEPTH");
       if (qname.startsWith("xmlns:")) fail("XML_NAMESPACE");
       const frame: Frame = { qname, name: { uri: "", local: "" }, bindings };
@@ -160,7 +163,7 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
         rootDone = stack.length === 0;
       }
       rootSeen = true;
-      i = TAG_END.lastIndex;
+      i = next;
     }
   }
   if (!rootSeen || stack.length > 0) fail("XML_INVALID");
