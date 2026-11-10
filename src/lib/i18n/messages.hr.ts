@@ -939,6 +939,31 @@ export const hr = {
       unavailable: "Odgovor nije poslan. Pokušajte ponovno.",
     },
   },
+  revisions: {
+    title: "Zahtjevi za doradu",
+    loading: "Učitavanje zahtjeva za doradu…",
+    empty: "Nema zahtjeva za doradu.",
+    notAvailable: "Zahtjevi za doradu za ovaj rad nisu dostupni.",
+    unavailable: "Zahtjeve za doradu trenutačno nije moguće učitati.",
+    retry: "Pokušaj ponovno",
+    refresh: "Osvježi zahtjeve za doradu",
+    signedOut: "Prijava je istekla. Prijavite se ponovno da vidite zahtjeve za doradu.",
+    number: "Zahtjev za doradu {n}",
+    teacher: "Nastavnik zadatka",
+    student: "Student",
+    own: "Vi",
+    state: {
+      open: "Otvoren",
+      done: "Student navodi da je proveden",
+      declined: "Student ne pristaje",
+      accepted: "Prihvaćen",
+      reopened: "Ponovno otvoren",
+      withdrawn: "Povučen",
+    },
+    // {date} is formatDateHr, whose year already ends with a period.
+    acceptedMeta: "Prihvaćeno {date} Zahtjev je zatvoren.",
+    withdrawnMeta: "Povučeno {date} Zahtjev je zatvoren.",
+  },
   // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).
   // The connection line is about this page's own requests, never the student.
   liveView: {
