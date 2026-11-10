@@ -245,11 +245,11 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 **Cilj:** student predaje rad koji se točno rekonstruira iz zapisa i dobiva potpisanu potvrdu, a student i nastavnik vide isti sažetak procesa (pravila 5 i 11).
 
-**Gotovo na mainu:** zahtjev za predaju, zapis predaje, potvrda v2 i zatvaranje paketa (pgTAP 060 do 067, 070, 071, 086, 087); predani rad samo za čitanje (#818); rekonstrukcija i odluka o predaji; sažetak procesa iz jedne funkcije (`app/api/process-summary`); obavijest S3 i njezina vrata; tri koraka predaje na `/rad/[assignmentId]/predaja`; brz put nastavnika i popis predaja zadatka (#878, #909). **Djelomično:** usporedba s ranijim nacrtom. **Nema:** produljenja roka, izjave po FPZG čl. 9 i 15, rekonstrukcije u workeru.
+**Gotovo na mainu** (za M7 ponovno provjereno na `main` `cb4fbde1`, 10. 11. 2026., zadatak M7.0a)**:** zahtjev za predaju, zapis predaje, potvrda v2 i zatvaranje paketa (pgTAP 060 do 067, 070, 071, 086, 087); predani rad samo za čitanje (#818); rekonstrukcija i odluka o predaji; sažetak procesa iz jedne funkcije (`app/api/process-summary`); obavijest S3 i njezina vrata; tri koraka predaje na `/rad/[assignmentId]/predaja`; brz put nastavnika i popis predaja zadatka (#878, #909). **Djelomično:** usporedba s ranijim nacrtom. **Nema:** produljenja roka (nema tablice povijesti produljenja), izjave po FPZG čl. 9 i 15, rekonstrukcije u workeru. **Preduvjeti za M7.1 spojeni na main:** red poslova workera (#1829, DAN-517), asinkrono spremanje odsječka uz potvrdu na čekanju (#1758, DAN-518) i kontrolne točke rekonstrukcije vezane uz lanac (#1824, #1827, DAN-293); status tiketa vodi Linear.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M7.1 | Rekonstrukcija u workeru (D-191 t. 4) | B | M3.2, M3.3 | DAN-381 |
+| M7.1 | Rekonstrukcija u workeru (D-191 t. 4) | B | M3.2, M3.3, DAN-517 i DAN-518 (Q-4) | DAN-381 |
 | M7.2 | Nastavnik vidi tko je predao, reviziju i „poslije roka”; detalj zadatka i pregled predane verzije (B6) | B, F | | DAN-290, DAN-311 |
 | M7.3 | Produljenje roka po studentu (B9) | B, F | | DAN-312 |
 | M7.4 | Rok testiran preko promjene sata | B | M7.3 | DAN-382 |
@@ -263,9 +263,21 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M7.12 | (uvjetno) Priprema za obranu, samo za studenta (A-04 iz `docs/FEATURES.md`) | F | M7.11, uvjet U-3 | novo |
 | M7.13 | „Moj rad u brojkama” za studenta, bez ritma i usporedbe (A-10 iz `docs/FEATURES.md`, u mapi ekrana S-47; ne miješati s ekranom A-10 slučajevi i paket dokaza). Brojke samo iz verzija i samo za studenta, prema D-63 | F | M7.1, M5.8, spajanje #1030 (izuzetak u PRODUCT §5 pravilu 4) | novo |
 
+**Odluke M7 (D-263, #87 c.6622685877; D-266 t. 7, #87 c.6639423372):**
+- Valovi M7.Z1 i M7.Z2, rokovi i otvoreni neskladi s valovima zapisani su u `docs/PROGRAM.md`, odjeljak „Valovi M7” (D-263 Q15).
+- Usporedba: M6-O1 je odlučen; usporedba vrijedi u oba profila, samo između poslanih verzija, bez oznake i ocjene (D-237, #87 c.6581656612). **Otvoreno:** zadatak DAN-598 navodi da M7.6-P01 proširuje M6.7-P03 umjesto drugog čitača usporedbe, ali oznake M7.6-P01 i M6.7-P03 i to pravilo nemaju zapis u `docs/DECISIONS.md` ni na #87; redak M6.7 u ovoj razradi usporedbu ne navodi.
+- Rok: zahtjev za predaju zamrzava efektivni rok, a produljenje je zasebna dopuna; povijest produljenja dobiva novu tablicu (M7.3-P01). Model efektivnog roka još nije zapisan u `docs/BACKEND.md`; taj zapis otvara D-263 (D-263 Q07). M7.4 ovisi o M7.3, a oba su u M7.Z1 (D-263 Q15). **Otvoreno:** zadatak DAN-598 traži upis ovisnosti M7.4, a izvor koji bi mijenjao ovisnost o M7.3 nije pronađen u `docs/DECISIONS.md` ni na #87, pa ovisnost ostaje kako je zapisana.
+- Runde: izričito otvorene runde, prethodna predaja nepromjenjiva; expand migracija zamjenjuje `UNIQUE (assignment_id, institution_id, principal_id)` na `submission_request` (M7.1-P07) i nije potrebna prije M7.1-P01 do P06 (D-263 Q08, provodi D-28).
+- Worker: odjava ne zaustavlja prihvaćen posao predaje, potvrđeni opoziv blokira novu finalizaciju, worker radi s uskim opsegom posla bez korisničkog kolačića (D-263 Q03). Nepotpisani odsječak: ostaje sadašnji blok s ponovnim pokušajem, praznina se prikazuje kao praznina (D-263 Q26).
+- Izjava: do 5. 2. 2027. M7.5 ima AI odjeljak nad zatvorenim formatom priloga, a M9.5 daje proizvođača priloga do 15. 2. 2027. (D-266 t. 7). Prilažu se točne verzije cijelih odabranih razgovora, prikazane prije potvrde; popis vanjskih formata zatvara se prije koda (M7.5-P02, D-263 Q22). Prijenos teksta koji je kasnije obrisan i dalje čini razgovor obveznim (D-268 O3).
+- Prenosiv zapis: zaseban verzioniran potpisani manifest s jednim nositeljem zajedno s M8.6 (DAN-341), a `evidence-receipt-v2` ostaje (D-263 Q23). QR otvara lokalnu provjeru, nema javnog krajnjeg mjesta s podacima (D-263 Q24). **Otvoreno:** naziv koraka M7.10 („javna provjera potvrde”) i ekran J-03 naspram D-263 Q24.
+- Referentne slike M7.UX-R prije UI PR-ova; backend ne čeka (D-263 Q16), odobrenje po ekranu (Q-8, #87 c.6639423372). M7 samo na hrvatskom, engleski s M11 (D-263 Q28).
+- Uvjetni koraci: M7.6-P03, M7.11 i M7.12 ne grade se bez potvrde FPZG-a i C-42, pravnog mišljenja (D-55, C-19), odnosno U-3; potvrđuje stanje kanona (D-129, D-131) (D-263 Q27). **Otvoreno:** zapis ne razlaže koji uvjet ide uz koji korak; ovdje su M7.11 i M7.12 vezani uz U-3, a M7.6-P03 nema redak ni u tablici koraka ni među uvjetnim koracima.
+- **Otvoreno:** DAN-293 stoji i uz M3.3 i uz M7.6; spojeni PR-ovi #1824 i #1827 (DAN-293) su kontrolne točke rekonstrukcije, odnosno M3.3.
+
 **Ekrani:** S-05 obavijest (S3), S-15 panel Rad, S-30 pregled prije predaje, S-31 izjava, S-32 potvrda, S-33 sažetak procesa, S-43 napomene i osporavanje, N-05 brz put, N-10 sažetak i karta podrijetla, N-11 usporedba verzija, N-13 produljenje roka, J-03 provjera potvrde.
 
-**Uvjet završetka:** izlazni kriterij M7 iz `docs/PROGRAM.md` (rekonstrukcija podudarna na svim scenarijima uključujući prazninu, nepodudarnost blokira predaju, isti sažetak, nema zabranjenih riječi, rok preko promjene sata, potpuna izjava, karta podrijetla bez zbroja); test iz M7.9 zelen u CI-ju. Koraci M7.11 i M7.12 (uvjetno) nisu dio uvjeta završetka.
+**Uvjet završetka:** izlazni kriterij M7 iz `docs/PROGRAM.md` (rekonstrukcija podudarna na svim scenarijima uključujući prazninu, nepodudarnost blokira predaju, isti sažetak, nema zabranjenih riječi, rok preko promjene sata, potpuna izjava, karta podrijetla bez zbroja); test iz M7.9 zelen u CI-ju. Koraci M7.11 i M7.12 (uvjetno) nisu dio uvjeta završetka, kao ni M7.6-P03 (uvjetno po D-263 Q27; pravilo T3, #87 c.6544288967). Karta podrijetla je u M7.Z2 (D-263 Q15), pa završetak M7.Z1 sam ne ispunjava ovaj uvjet.
 
 ## M8 Uvoz i izvoz
 
@@ -399,7 +411,7 @@ Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.654
 | --- | --- | --- | --- |
 | U-1 | M6.12 | Što komentor i povjerenstvo smiju vidjeti (tekst, sažetak, reprodukciju, prikaz uživo) i hoće li se mijenjati PRODUCT §3 i §5 pravilo 7. Model u M2.8 ostaje; sučelje čeka. | Ustav C-23, D-154, pravilo 7 |
 | U-2 | M6.13 do M6.15 | Pravno mišljenje D-55 i vlasnikova zasebna odluka o gradnji (D-136). Dio „Bilješka mentora” u M6.9 (D-47) vrijedi pod istim uvjetom (D-135). | D-130, D-135, D-136 |
-| U-3 | M7.11, M7.12 | Vlasnik potvrđuje tekst kriterija prihvaćanja: popis mjesta je činjenica, bez rangiranja, težine ni zbroja; „razgovor održan” bez ocjene; student vidi identičan popis. | PRODUCT §5 pravila 1, 2, 3, 5, 13 |
+| U-3 | M7.11, M7.12 | Vlasnik potvrđuje tekst kriterija prihvaćanja: popis mjesta je činjenica, bez rangiranja, težine ni zbroja; „razgovor održan” bez ocjene; student vidi identičan popis. | PRODUCT §5 pravila 1, 2, 3, 5, 13; D-263 Q27 |
 | U-4 | dio M9.6 | Oznaka „podudara se s odgovorom AI pomoćnika” ostaje oznaka mjesta, ne tvrdnja o autoru. | pravilo 1 (C-9, C-10); D-194 |
 | U-5 | M10.9 | Tekst paketa i QR provjere ne smije tvrditi autorstvo; dokument izlazi izvan sustava. | pravilo 9, C-13 |
 | U-6 | M10.10 | Agregati bez rizika, ranga i ocjena; isti prag od najmanje 5 studenata kao N-11. | pravilo 2 |
