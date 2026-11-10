@@ -112,6 +112,25 @@ describe("checkOperations: one step per input class", () => {
 });
 
 
+// Takeover of #1803 by w540i: the seven input classes named in the contract on
+// #1091, one row each, so the list in the contract maps to a test row.
+describe("checkOperations: contract input classes (w540i)", () => {
+  it.each([
+    ["step with a command", "1. Pokreni. Naredba: `pnpm local:up`.", "", []],
+    ["step with an owner", "1. Odluči. Nositelj: `vlasnik`.", "", []],
+    ["step with neither", "1. Odluči što dalje.", "", NONE],
+    ["empty section", "", "", ["Pokretanje#-: procedure has no steps"]],
+    ["nested list", "1. Prvi. Nositelj: `vlasnik`.\n   - podstavka", "", [U("indented line")]],
+    ["code block", "1. Prvi. Nositelj: `vlasnik`.\n\n```\n2. nije korak\n```", "", []],
+    ["unknown ### heading in Postupci is checked like a procedure", "1. Prvi. Nositelj: `vlasnik`.", "\n### Nepoznato\n\n1. Odluči.\n", ["Nepoznato#1: step has neither Naredba: nor Nositelj:"]],
+    ["unknown ### heading without steps", "1. Prvi. Nositelj: `vlasnik`.", "\n### Nepoznato\n\nSamo tekst.\n", ["Nepoznato#-: procedure has no steps"]],
+    ["unknown ## heading ends the strict section", "1. Prvi. Nositelj: `vlasnik`.", "\n## Dodatak\n\n1. Odluči.\n", []],
+  ] as const)("%s", (_name, steps, extra, expected) => {
+    expect(messages(doc(steps, { extra }))).toEqual(expected);
+  });
+});
+
+
 describe("checkOperations: a step is one line at column 0", () => {
   it.each([
     ["N1 blank line, indent 0 is prose", "1. Odluči.\n\nNositelj: `vlasnik`.", NONE],
