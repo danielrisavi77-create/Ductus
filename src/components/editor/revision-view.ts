@@ -69,6 +69,13 @@ export type AnswerDeps = {
    * answer names the server's current revision, which lacks such changes.
    */
   readonly unconfirmed: () => boolean;
+  /**
+   * How many changes the editor has reported so far (DAN-314). A change typed
+   * while the revision is read may already be confirmed as a newer revision
+   * when the read ends, so `unconfirmed` alone would let the answer name the
+   * revision before it; a moved count refuses the answer as well.
+   */
+  readonly edits: () => number;
 };
 
 /** The text an answer would carry, or null while the buttons stay off. */
@@ -95,12 +102,14 @@ export async function sendAnswer(
   if (explanation === null || !canAnswer(request)) return { kind: "error", error: "invalid", reload: false };
   if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
   if (deps.unconfirmed()) return { kind: "error", error: "unconfirmed", reload: false };
+  const edits = deps.edits();
   const at = await deps.revision();
   if (at.kind !== "ok") return { kind: "error", error: at.kind, reload: false };
   // Reading the revision takes time; the session or the panel may be gone by
-  // now, or a change typed meanwhile is not in the revision just read.
+  // now, or a change typed meanwhile is not in the revision just read, even
+  // when the server has confirmed it since.
   if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
-  if (deps.unconfirmed()) return { kind: "error", error: "unconfirmed", reload: false };
+  if (deps.unconfirmed() || deps.edits() !== edits) return { kind: "error", error: "unconfirmed", reload: false };
   const outcome = await deps.respond({
     requestId: request.id, expectedSeq: request.rowSeq, kind, explanation, responseRevision: at.revision,
   }, deps.current);

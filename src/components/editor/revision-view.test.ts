@@ -205,7 +205,7 @@ describe("sending an answer", () => {
 
   const deps = (respond = vi.fn(async () => ({ kind: "ok" as const }))) => ({
     respond, revision: vi.fn(async () => ({ kind: "ok" as const, revision: 12 })), current: () => true,
-    unconfirmed: vi.fn(() => false),
+    unconfirmed: vi.fn(() => false), edits: vi.fn(() => 7),
   });
 
   it("carries the counter list returned and the revision open read, in NFC", async () => {
@@ -258,6 +258,43 @@ describe("sending an answer", () => {
     });
     expect(await sendAnswer(STATES.open, "done", "Dodan izvor.", d)).toEqual({ kind: "error", error: "unconfirmed", reload: false });
     expect(d.respond).not.toHaveBeenCalled();
+  });
+
+  // QA c.6780514883, review c.6780647653: the change is typed and confirmed as
+  // revision 13 while `openWork` is on its way, which still read 12.
+  it("Istodobnost: a change typed and already confirmed while the revision is read is not answered on that revision", async () => {
+    const d = deps();
+    d.revision.mockImplementationOnce(async () => {
+      d.edits.mockReturnValue(8);
+      return { kind: "ok" as const, revision: 12 };
+    });
+    expect(await sendAnswer(STATES.open, "done", "Dodan izvor.", d)).toEqual({ kind: "error", error: "unconfirmed", reload: false });
+    expect(d.unconfirmed.mock.results.every((r) => r.value === false)).toBe(true);
+    expect(d.respond).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["nothing changed", false, false, false, "sent"],
+    ["changes on the device before the click", true, false, false, "unconfirmed"],
+    ["a change typed meanwhile, not yet confirmed", false, true, true, "unconfirmed"],
+    ["a change typed meanwhile, already confirmed", false, false, true, "unconfirmed"],
+    ["a change confirmed meanwhile that was typed before", true, false, false, "unconfirmed"],
+  ] as const)("the answer and the changes around reading the revision: %s", async (_name, before, after, typed, expected) => {
+    const d = deps();
+    d.unconfirmed.mockReturnValue(before);
+    d.revision.mockImplementationOnce(async () => {
+      d.unconfirmed.mockReturnValue(after);
+      if (typed) d.edits.mockReturnValue(8);
+      return { kind: "ok" as const, revision: 12 };
+    });
+    const result = await sendAnswer(STATES.open, "done", "Dodan izvor.", d);
+    if (expected === "sent") {
+      expect(result).toEqual({ kind: "sent" });
+      expect(d.respond).toHaveBeenCalledTimes(1);
+    } else {
+      expect(result).toEqual({ kind: "error", error: "unconfirmed", reload: false });
+      expect(d.respond).not.toHaveBeenCalled();
+    }
   });
 
   it.each([

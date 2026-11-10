@@ -51,7 +51,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
   const stopped = useLocalSignedOut() || sessionEnded;
   const submitted = useLocalSubmitted();
   // The answer names the server's current revision: changes still on the device wait first (DAN-314).
-  const { unconfirmed, now: unconfirmedNow } = useLocalUnconfirmed();
+  const { unconfirmed, now: unconfirmedNow, edits } = useLocalUnconfirmed();
   const [outcome, setOutcome] = useState<RevisionListOutcome | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, AnswerError>>({});
@@ -124,6 +124,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
       revision: async () => revisionFromOpen(await openWork(assignmentId)),
       current,
       unconfirmed: unconfirmedNow,
+      edits,
     });
     setSending(null);
     if (stoppedRef.current || mine !== generation.current) return;
