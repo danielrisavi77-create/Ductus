@@ -80,7 +80,7 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 3. Pregledaj zapise poslužitelja: JSON redci na stdout i stderr, bez osobnih podataka i sadržaja rada (`src/server/log/logger.ts`, DAN-586). Nositelj: `vlasnik`.
 4. U pilotu: ako je incident okidač STOP-a (neovlašten pristup, gubitak rada, lažan status), odluka o zaustavljanju ide po odjeljku „STOP”. Nositelj: `zaustavlja pilot`.
 5. Ako incident uključuje povredu osobnih podataka, odluči o prijavi AZOP-u u roku od 72 sata. Nositelj: `prijavljuje povredu`, `DPO ustanove`.
-6. Ograniči štetu: gašenje po postupku „Gašenje” ili povrat po postupku „Povrat”. Nositelj: `vlasnik`.
+6. Ograniči štetu: gašenje po postupku „Gašenje” ili povrat po postupku „Povrat” (samo kod, samo podaci ili oboje, kako se odluči u njegovu koraku 1). Nositelj: `vlasnik`.
 7. Ispravak ide kao novo izdanje kroz puni gate iz `docs/ENGINEERING_SYSTEM.md` §5 i §10. Nositelj: `vlasnik`. `[PRAVILO]`
 8. Zatvori zapis: uzrok, ispravak, izdanje i provjera rekonstrukcije. U pilotu obavijesti FPZG. Nositelj: `vlasnik`, `koordinator pilota`.
 
