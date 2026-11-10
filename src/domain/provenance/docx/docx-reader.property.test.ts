@@ -71,7 +71,7 @@ function pathIsSafe(name: string): boolean {
   if (name.length === 0 || name.startsWith("/")) return false;
   for (let k = 0; k < name.length; k++) {
     const c = name.charCodeAt(k);
-    if (c < 0x20 || c === 0x7f || name[k] === "\\" || name[k] === ":") return false;
+    if (c < 0x20 || c === 0x7f || c === 0xfeff || name[k] === "\\" || name[k] === ":") return false;
   }
   const segments = (name.endsWith("/") ? name.slice(0, -1) : name).split("/");
   return segments.every((s) => s !== "" && s !== "." && s !== "..");
@@ -88,7 +88,7 @@ describe("DAN-242 reader properties", () => {
   });
 
   it("an entry name is accepted exactly when the independent path rule accepts it", async () => {
-    const piece = fc.constantFrom("a", "word", ".", "..", "", "\\", ":", "\u0000", "\u007f", "č", "b.xml", "C:", "%2e");
+    const piece = fc.constantFrom("a", "word", ".", "..", "", "\\", ":", "\u0000", "\u007f", "\ufeff", "č", "b.xml", "C:", "%2e");
     await fc.assert(
       fc.asyncProperty(fc.array(piece, { minLength: 1, maxLength: 5 }), fc.boolean(), async (pieces, lead) => {
         const name = (lead ? "/" : "") + pieces.join("/");

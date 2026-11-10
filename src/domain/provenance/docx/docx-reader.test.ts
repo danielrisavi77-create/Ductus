@@ -122,6 +122,8 @@ const zipRows: Row[] = [
   ["Z11", "UTF-8 name flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0, localFlags: 0x800 }]), "ZIP_INVALID"],
   ["Z11", "data descriptor flag only in the directory", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, localFlags: 0 }, ...ok]), "ZIP_INVALID"],
   ["Z11", "data descriptor flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", localFlags: 0x8, after: descriptorFor("<a/>", true) }]), "ZIP_INVALID"],
+  ["Z6", "UTF-8 name with a leading byte order mark", fixtureZip([{ name: "\ufeffword/document.xml", data: "<a/>", flags: 0x800 }]), "ZIP_PATH"],
+  ["Z6", "UTF-8 name with a byte order mark inside", fixtureZip([{ name: "word/a\ufeff.xml", data: "<a/>", flags: 0x800 }]), "ZIP_PATH"],
   ["Z13", "UTF-8 name flag on an ASCII name", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x800 }]), "OK"],
   ["Z6", "directory entry with data", fixtureZip([{ name: "word/", data: "x" }]), "ZIP_INVALID"],
 ];
@@ -258,6 +260,11 @@ const xmlRows: [cls: string, xml: string | Uint8Array, code: string, limits?: Pa
   ["X7", '<a xmlns:p="urn:x" xmlns:p="urn:y"/>', "XML_INVALID"],
   ["X7", '<a xmlns="urn:x" xmlns="urn:x"/>', "XML_INVALID"],
   ["X7", '<a b="1" b="1"/>', "XML_INVALID"],
+  ["X7", '<a xmlns:p="urn:x y" xmlns:q="urn:x\ty" p:b="1" q:b="2"/>', "XML_INVALID"],
+  ["X7", '<a xmlns:p="urn:x y" xmlns:q="urn:x\r\ny" p:b="1" q:b="2"/>', "XML_INVALID"],
+  ["X7", '<a xmlns:p="urn:x\ry" xmlns:q="urn:x\ny" p:b="1" q:b="2"/>', "XML_INVALID"],
+  ["X7", '<a xmlns:p="urn:x  y" xmlns:q="urn:x\r\ny" p:b="1" q:b="2"/>', "OK"],
+  ["X7", '<a xmlns:p="urn:x\ty" xmlns:q="urn:x&#9;y" p:b="1" q:b="2"/>', "OK"],
   ["X8", '<!-- k --><a><![CDATA[<b>&e;]]><!-- d --></a><!-- e -->\n', "OK"],
 ];
 

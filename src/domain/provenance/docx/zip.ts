@@ -40,7 +40,9 @@ const reject = (code: ConstructorParameters<typeof DocxRejected>[0]): never => {
   throw new DocxRejected(code);
 };
 const keyOf = (name: string) => name.normalize("NFC").toLowerCase();
-const names = new TextDecoder("utf-8", { fatal: true });
+// Keep a leading U+FEFF: by default the decoder drops it, and the name would
+// then differ from the one other ZIP readers see.
+const names = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): DocxZip {
   const lim = resolveDocxLimits(limits);
@@ -157,7 +159,7 @@ function safeName(raw: Uint8Array, utf8: boolean): string {
   const segments = name.split("/");
   if (name.endsWith("/")) segments.pop();
   const bad = (s: string) => s === "" || s === "." || s === "..";
-  if (segments.length === 0 || segments.some(bad) || /[\u0000-\u001f\u007f\\:]/.test(name)) reject("ZIP_PATH");
+  if (segments.length === 0 || segments.some(bad) || /[\u0000-\u001f\u007f\ufeff\\:]/.test(name)) reject("ZIP_PATH");
   return name;
 }
 

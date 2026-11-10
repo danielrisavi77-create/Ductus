@@ -131,7 +131,9 @@ export function scanXml(bytes: Uint8Array, limits: Partial<DocxLimits> | undefin
         const [name, value] = [m[1], m[2] ?? m[3]];
         checkRefs(value);
         if (raw.has(name)) fail("XML_INVALID");
-        if (name === "xmlns" || name.startsWith("xmlns:")) bind(bindings, name, decodeRefs(value), uris);
+        // Namespace URIs are compared after attribute-value normalization: a
+        // literal CRLF, CR, LF or tab is one space, a character reference stays.
+        if (name === "xmlns" || name.startsWith("xmlns:")) bind(bindings, name, decodeRefs(value.replace(/\r\n|[\t\r\n]/g, " ")), uris);
         else raw.add(name);
         at = ATTR.lastIndex;
       }
