@@ -4436,6 +4436,33 @@ $$;
 
 
 --
+-- Name: assignment_version_purpose_catalog(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.assignment_version_purpose_catalog() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_previous integer;
+BEGIN
+  SELECT v.purpose_catalog_version INTO v_previous FROM institution.assignment_version v
+   WHERE v.assignment_id = NEW.assignment_id AND v.version_no = NEW.version_no - 1;
+  -- A later version keeps the catalogue of the one before. 1 is also the
+  -- column default, which a writer that names no version gets, so only another
+  -- value is a writer asking for a different catalogue.
+  IF v_previous IS NOT NULL THEN
+    IF NEW.purpose_catalog_version IS DISTINCT FROM 1 AND NEW.purpose_catalog_version IS DISTINCT FROM v_previous THEN
+      RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+    END IF;
+    NEW.purpose_catalog_version := v_previous;
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+--
 -- Name: assignment_version_work_language(); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4751,6 +4778,22 @@ CREATE FUNCTION institution.create_assignment(p_course_id uuid, p_request_id uui
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
+BEGIN
+  RETURN institution.create_assignment(p_course_id, p_request_id, p_title, p_instructions, p_work_type,
+                                       p_opens_at, p_due_at, p_ai_policy, p_ai_purposes, p_evidence_profile,
+                                       p_import_allowed, p_word_min, p_word_max, 1);
+END
+$$;
+
+
+--
+-- Name: create_assignment(uuid, uuid, text, text, text, timestamp with time zone, timestamp with time zone, text, text[], text, boolean, integer, integer, integer); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.create_assignment(p_course_id uuid, p_request_id uuid, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer, p_purpose_catalog_version integer) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
 DECLARE
   actor record;
   v_assignment uuid;
@@ -4762,7 +4805,8 @@ BEGIN
   END IF;
   IF p_request_id IS NULL
      OR NOT institution.is_assignment_content(p_title, p_instructions, p_work_type, p_opens_at, p_due_at,
-                                              p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed)
+                                              p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed,
+                                              p_purpose_catalog_version)
      OR NOT institution.is_word_range(p_word_min, p_word_max)
      OR institution.ai_policy_rank(p_ai_policy)
         > (SELECT institution.ai_policy_rank(c.ai_policy) FROM institution.course c WHERE c.id = p_course_id) THEN
@@ -4777,17 +4821,19 @@ BEGIN
   IF v_assignment IS NOT NULL THEN
     INSERT INTO institution.assignment_version (
       assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy,
-      ai_purposes, evidence_profile, import_allowed, word_min, word_max, created_by
+      ai_purposes, evidence_profile, import_allowed, word_min, word_max, purpose_catalog_version, created_by
     )
     VALUES (v_assignment, 1, p_title, p_instructions, p_work_type, p_opens_at, p_due_at, p_ai_policy,
-            p_ai_purposes, p_evidence_profile, p_import_allowed, p_word_min, p_word_max, actor.user_id);
+            p_ai_purposes, p_evidence_profile, p_import_allowed, p_word_min, p_word_max,
+            p_purpose_catalog_version, actor.user_id);
     RETURN v_assignment;
   END IF;
 
   -- A key belongs to one creator. Replays return the original assignment only
   -- when every field of its immutable first version and its course match.
   SELECT a.id, a.course_id, v.title, v.instructions, v.work_type, v.opens_at, v.due_at,
-         v.ai_policy, v.ai_purposes, v.evidence_profile, v.import_allowed, v.word_min, v.word_max
+         v.ai_policy, v.ai_purposes, v.evidence_profile, v.import_allowed, v.word_min, v.word_max,
+         v.purpose_catalog_version
     INTO existing
     FROM institution.assignment a
     JOIN institution.assignment_version v ON v.assignment_id = a.id AND v.version_no = 1
@@ -4804,7 +4850,8 @@ BEGIN
      OR existing.evidence_profile IS DISTINCT FROM p_evidence_profile
      OR existing.import_allowed IS DISTINCT FROM p_import_allowed
      OR existing.word_min IS DISTINCT FROM p_word_min
-     OR existing.word_max IS DISTINCT FROM p_word_max THEN
+     OR existing.word_max IS DISTINCT FROM p_word_max
+     OR existing.purpose_catalog_version IS DISTINCT FROM p_purpose_catalog_version THEN
     RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
   END IF;
   RETURN existing.id;
@@ -5323,6 +5370,19 @@ CREATE FUNCTION institution.is_assignment_content(p_title text, p_instructions t
     LANGUAGE sql IMMUTABLE
     SET search_path TO ''
     AS $$
+  SELECT institution.is_assignment_content(p_title, p_instructions, p_work_type, p_opens_at, p_due_at,
+                                           p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed, 1)
+$$;
+
+
+--
+-- Name: is_assignment_content(text, text, text, timestamp with time zone, timestamp with time zone, text, text[], text, boolean, integer); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_purpose_catalog_version integer) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
   SELECT coalesce(
     institution.is_plain_label(p_title)
     AND length(p_instructions) <= 20000
@@ -5333,8 +5393,9 @@ CREATE FUNCTION institution.is_assignment_content(p_title text, p_instructions t
     AND extract(year FROM p_opens_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
     AND extract(year FROM p_due_at AT TIME ZONE 'UTC') BETWEEN 1000 AND 9999
     AND institution.ai_policy_rank(p_ai_policy) IS NOT NULL
-    AND p_ai_purposes <@ ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
-    AND cardinality(p_ai_purposes) <= 5 AND coalesce(array_ndims(p_ai_purposes), 1) = 1
+    AND p_ai_purposes <@ institution.purpose_catalog_keys(p_purpose_catalog_version)
+    AND cardinality(p_ai_purposes) <= cardinality(institution.purpose_catalog_keys(p_purpose_catalog_version))
+    AND coalesce(array_ndims(p_ai_purposes), 1) = 1
     AND (p_ai_policy <> 'prohibited' OR cardinality(p_ai_purposes) = 0)
     AND p_evidence_profile IN ('basic', 'extended')
     AND p_import_allowed IS NOT NULL,
@@ -5680,14 +5741,18 @@ DECLARE
   actor record;
   cur record;
   v_current integer;
+  v_catalog integer;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
   IF institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
      OR EXISTS (SELECT 1 FROM institution.assignment a WHERE a.id = p_assignment_id AND a.mentorship_id IS NOT NULL) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
+  SELECT v.purpose_catalog_version INTO v_catalog FROM institution.assignment_version v
+   WHERE v.assignment_id = p_assignment_id AND v.version_no = 1;
   IF NOT institution.is_assignment_content(p_title, p_instructions, p_work_type, p_opens_at, p_due_at,
-                                           p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed)
+                                           p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed,
+                                           v_catalog)
      OR NOT institution.is_word_range(p_word_min, p_word_max) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
@@ -5709,10 +5774,10 @@ BEGIN
   END IF;
   INSERT INTO institution.assignment_version (
     assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy,
-    ai_purposes, evidence_profile, import_allowed, word_min, word_max, created_by
+    ai_purposes, evidence_profile, import_allowed, word_min, word_max, purpose_catalog_version, created_by
   )
   VALUES (p_assignment_id, v_current + 1, p_title, p_instructions, p_work_type, p_opens_at, p_due_at, p_ai_policy,
-          p_ai_purposes, p_evidence_profile, p_import_allowed, p_word_min, p_word_max, actor.user_id);
+          p_ai_purposes, p_evidence_profile, p_import_allowed, p_word_min, p_word_max, v_catalog, actor.user_id);
   UPDATE institution.assignment a SET current_version = v_current + 1 WHERE a.id = p_assignment_id;
   RETURN v_current + 1;
 END
@@ -5801,6 +5866,22 @@ BEGIN
         updated_at = EXCLUDED.updated_at;
   RETURN v_current + 1;
 END
+$$;
+
+
+--
+-- Name: purpose_catalog_keys(integer); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.purpose_catalog_keys(p_version integer) RETURNS text[]
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+  SELECT CASE p_version
+    WHEN 1 THEN ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation']
+    WHEN 2 THEN ARRAY['formatting', 'proofreading', 'literature_search', 'transcription', 'translation',
+                      'explanation', 'brainstorming', 'restructuring', 'example_generation', 'data_coding']
+  END
 $$;
 
 
@@ -7628,7 +7709,9 @@ CREATE TABLE institution.assignment_version (
     word_max integer,
     institution_id uuid NOT NULL,
     work_language text NOT NULL,
-    CONSTRAINT assignment_version_check CHECK (institution.is_assignment_content(title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes, evidence_profile, import_allowed)),
+    purpose_catalog_version integer DEFAULT 1 NOT NULL,
+    CONSTRAINT assignment_version_check CHECK (institution.is_assignment_content(title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, purpose_catalog_version)),
+    CONSTRAINT assignment_version_purpose_catalog_version_check CHECK ((purpose_catalog_version = ANY (ARRAY[1, 2]))),
     CONSTRAINT assignment_version_version_no_check CHECK ((version_no >= 1)),
     CONSTRAINT assignment_version_word_range_check CHECK (institution.is_word_range(word_min, word_max)),
     CONSTRAINT assignment_version_work_language_check CHECK (institution.is_work_language(work_language))
@@ -10215,6 +10298,13 @@ CREATE TRIGGER assignment_version_notify AFTER INSERT ON institution.assignment_
 
 
 --
+-- Name: assignment_version assignment_version_purpose_catalog; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER assignment_version_purpose_catalog BEFORE INSERT ON institution.assignment_version FOR EACH ROW EXECUTE FUNCTION institution.assignment_version_purpose_catalog();
+
+
+--
 -- Name: assignment_version assignment_version_work_language; Type: TRIGGER; Schema: institution; Owner: -
 --
 
@@ -12637,4 +12727,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108140000'),
     ('20261109030000'),
     ('20261109200000'),
-    ('20261109210000');
+    ('20261109210000'),
+    ('20261110120000');
