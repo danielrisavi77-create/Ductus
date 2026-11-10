@@ -936,6 +936,30 @@ const en = {
       unavailable: "The reply was not sent. Try again.",
     },
   },
+  revisions: {
+    title: "Revision requests",
+    loading: "Loading revision requests…",
+    empty: "No revision requests.",
+    notAvailable: "Revision requests are not available for this work.",
+    unavailable: "Revision requests cannot be loaded right now.",
+    retry: "Try again",
+    refresh: "Refresh revision requests",
+    signedOut: "Your sign-in has expired. Sign in again to see the revision requests.",
+    number: "Revision request {n}",
+    teacher: "Assignment teacher",
+    student: "Student",
+    own: "You",
+    state: {
+      open: "Open",
+      done: "Student says it is done",
+      declined: "Student does not agree",
+      accepted: "Accepted",
+      reopened: "Reopened",
+      withdrawn: "Withdrawn",
+    },
+    acceptedMeta: "Accepted {date}. The request is closed.",
+    withdrawnMeta: "Withdrawn {date}. The request is closed.",
+  },
   // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).
   // The connection line is about this page's own requests, never the student.
   liveView: {

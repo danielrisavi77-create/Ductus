@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import CommentPanel from "@/components/editor/CommentPanel";
+import RevisionPanel from "@/components/editor/RevisionPanel";
 import EarlierDraft from "@/components/editor/EarlierDraft";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import HeadingOutline from "@/components/editor/HeadingOutline";
@@ -212,7 +213,10 @@ export default async function WorkspacePage({
                 id: "comments",
                 label: t.workspace.tabComments,
                 content: plan.comments ? (
-                  <CommentPanel documentId={plan.journal.documentId} session={session} />
+                  <>
+                    <CommentPanel documentId={plan.journal.documentId} session={session} />
+                    <RevisionPanel documentId={plan.journal.documentId} session={session} />
+                  </>
                 ) : (
                   <p className="rail-empty">{t.workspace.commentsEmpty}</p>
                 ),
