@@ -26,6 +26,8 @@ export interface FixtureEntry {
   localFlags?: number;
   localMethod?: number;
   localCrc?: number;
+  localCsize?: number;
+  localUsize?: number;
   /** Central directory offset of the local header; defaults to the real one. */
   offset?: number;
   /** Central directory "disk number start"; default 0. */
@@ -33,6 +35,8 @@ export interface FixtureEntry {
   /** Central and local extra fields; the local one defaults to the central one. */
   extra?: Uint8Array;
   localExtra?: Uint8Array;
+  /** Central directory entry comment; default empty. */
+  comment?: Uint8Array;
   /** Bytes written right after the entry data: a data descriptor, or anything to hide. */
   after?: Uint8Array;
 }
@@ -68,14 +72,15 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     const localName = utf8(e.localName ?? name);
     const extra = e.extra ?? new Uint8Array();
     const localExtra = e.localExtra ?? extra;
+    const entryComment = e.comment ?? new Uint8Array();
     const local = new DataView(new ArrayBuffer(30));
     local.setUint32(0, 0x04034b50, true);
     local.setUint16(4, e.localVersion ?? e.version ?? 20, true);
     local.setUint16(6, e.localFlags ?? flags, true);
     local.setUint16(8, e.localMethod ?? method, true);
     local.setUint32(14, e.localCrc ?? crc, true);
-    local.setUint32(18, csize, true);
-    local.setUint32(22, usize, true);
+    local.setUint32(18, e.localCsize ?? csize, true);
+    local.setUint32(22, e.localUsize ?? usize, true);
     local.setUint16(26, localName.length, true);
     local.setUint16(28, localExtra.length, true);
     const central = new DataView(new ArrayBuffer(46));
@@ -89,11 +94,12 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     central.setUint32(24, usize, true);
     central.setUint16(28, name.length, true);
     central.setUint16(30, extra.length, true);
+    central.setUint16(32, entryComment.length, true);
     central.setUint16(34, e.diskStart ?? 0, true);
     central.setUint32(42, e.offset ?? at, true);
     const after = e.after ?? new Uint8Array();
     locals.push(new Uint8Array(local.buffer), localName, localExtra, body, after);
-    centrals.push(new Uint8Array(central.buffer), name, extra);
+    centrals.push(new Uint8Array(central.buffer), name, extra, entryComment);
     at += 30 + localName.length + localExtra.length + body.length + after.length;
   }
   const cd = concat(centrals);
@@ -129,13 +135,16 @@ export function extraRecord(id: number, data: Uint8Array | string = new Uint8Arr
   return concat([new Uint8Array(head.buffer), body]);
 }
 
-/** A data descriptor for `data` stored as is, with or without its signature. */
-export function descriptorFor(data: string | Uint8Array, signed: boolean, crc = crc32(utf8(data))): Uint8Array {
+/**
+ * A data descriptor for `data`, with or without its signature: compressed size
+ * as raw deflate writes it when `deflated`, else the stored size.
+ */
+export function descriptorFor(data: string | Uint8Array, signed: boolean, crc = crc32(utf8(data)), deflated = false): Uint8Array {
   const size = utf8(data).length;
   const view = new DataView(new ArrayBuffer(16));
   view.setUint32(0, 0x08074b50, true);
   view.setUint32(4, crc, true);
-  view.setUint32(8, size, true);
+  view.setUint32(8, deflated ? deflateRawSync(utf8(data)).length : size, true);
   view.setUint32(12, size, true);
   return new Uint8Array(view.buffer).subarray(signed ? 0 : 4);
 }
