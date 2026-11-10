@@ -130,7 +130,7 @@ export function extraRecord(id: number, data: Uint8Array | string = new Uint8Arr
 }
 
 /** A data descriptor for `data` stored as is, with or without its signature. */
-export function descriptorFor(data: string, signed: boolean, crc = crc32(utf8(data))): Uint8Array {
+export function descriptorFor(data: string | Uint8Array, signed: boolean, crc = crc32(utf8(data))): Uint8Array {
   const size = utf8(data).length;
   const view = new DataView(new ArrayBuffer(16));
   view.setUint32(0, 0x08074b50, true);

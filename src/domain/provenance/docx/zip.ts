@@ -64,6 +64,9 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     }
   }
   if (eocd === -1) reject("ZIP_INVALID");
+  // Some readers take the last end record signature without checking its comment
+  // length, so no signature may follow the chosen record, wherever it would end.
+  for (let at = eocd + 1; at + 4 <= bytes.length; at++) if (u32(at) === EOCD) reject("ZIP_INVALID");
   const [disk, cdDisk, onDisk, total] = [u16(eocd + 4), u16(eocd + 6), u16(eocd + 8), u16(eocd + 10)];
   const [cdSize, cdOffset] = [u32(eocd + 12), u32(eocd + 16)];
   if (disk !== 0 || cdDisk !== 0 || total === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) reject("ZIP_UNSUPPORTED");
@@ -126,15 +129,21 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
   // Entries tile the file from offset 0 up to the central directory: each is
   // followed by the next, or by its own data descriptor and then the next, so
   // no bytes hide between them for a reader that walks local headers.
+  const sorted = [...entries].sort((a, b) => a.start - b.start);
   let edge = 0;
-  for (const e of [...entries].sort((a, b) => a.start - b.start)) {
+  for (let i = 0; i < sorted.length; i++) {
+    const e = sorted[i];
     if (e.start !== edge) reject("ZIP_INVALID");
     edge = e.end;
     if (!e.descriptor) continue;
-    const signed = edge + 16 <= cdOffset && u32(edge) === DESCRIPTOR ? 4 : 0;
-    if (edge + signed + 12 > cdOffset) reject("ZIP_INVALID");
-    if (u32(edge + signed) !== e.crc || u32(edge + signed + 4) !== e.csize || u32(edge + signed + 8) !== e.usize) reject("ZIP_INVALID");
-    edge += signed + 12;
+    // A descriptor is 12 bytes, or 16 with its optional signature, and its CRC may
+    // equal that signature. Only one length can end where the next entry (or the
+    // directory) starts, and its fields must match the directory.
+    const next = i + 1 < sorted.length ? sorted[i + 1].start : cdOffset;
+    const fits = (n: number) =>
+      edge + n === next && (n === 12 || u32(edge) === DESCRIPTOR) && u32(next - 12) === e.crc && u32(next - 8) === e.csize && u32(next - 4) === e.usize;
+    if (!fits(12) && !fits(16)) reject("ZIP_INVALID");
+    edge = next;
   }
   if (edge !== cdOffset) reject("ZIP_INVALID");
 

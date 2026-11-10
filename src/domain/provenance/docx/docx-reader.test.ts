@@ -3,6 +3,7 @@
 // (Z1-Z13 ZIP, X1-X8 XML, L1-L2 limits). Every input is invented.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { crc32 } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
@@ -48,6 +49,11 @@ const timestamp = extraRecord(0x5455, new Uint8Array([1, 0, 0, 0, 0]));
 // Version 1, CRC-32 of the header name "a.xml", then the name other readers would show.
 const unicodePath = extraRecord(0x7075, concat([new Uint8Array([1, 0x9c, 0x70, 0x28, 0xec]), enc("word/document.xml")]));
 const unicodeComment = extraRecord(0x6375, concat([new Uint8Array([1, 0, 0, 0, 0]), enc("komentar")]));
+// Four bytes chosen so that the CRC-32 of this invented part equals the data
+// descriptor signature 0x08074b50; the test below checks that premise (#1851).
+const sigCrc = concat([enc("<a>izmisljeno</a>"), new Uint8Array([192, 46, 189, 27])]);
+const sigCrcEntry = (signed: boolean, after = new Uint8Array()): FixtureEntry => ({ name: "a.bin", data: sigCrc, flags: 0x8, after: concat([descriptorFor(sigCrc, signed), after]) });
+const emptyEnd = fixtureZip([]);
 
 const zipRows: Row[] = [
   ["Z1", "string input", "PK", "INPUT_INVALID"],
@@ -61,6 +67,13 @@ const zipRows: Row[] = [
   ["Z2", "data after the comment", fixtureZip(ok, { comment: enc("k"), trailing: enc("xyz") }), "ZIP_INVALID"],
   ["Z2", "data after the end record", fixtureZip(ok, { trailing: enc("x") }), "ZIP_INVALID"],
   ["Z2", "a second end record hidden in the comment", fixtureZip(ok, { comment: fixtureZip([]) }), "ZIP_INVALID"],
+  // Readers such as Python's zipfile take the last end record signature without
+  // checking its comment length, so any signature after the chosen record is refused (#1851).
+  ["Z2", "a second end record in the comment whose comment stops short of the end", fixtureZip(ok, { comment: concat([emptyEnd, new Uint8Array([0])]) }), "ZIP_INVALID"],
+  ["Z2", "a second end record in the comment whose comment runs past the end", fixtureZip(ok, { comment: fixtureZip([], { comment: enc("abcde") }).subarray(0, 22) }), "ZIP_INVALID"],
+  ["Z2", "an end record signature in the last 21 bytes of the comment", fixtureZip(ok, { comment: enc("PK\u0005\u0006") }), "ZIP_INVALID"],
+  // A comment of 0x4b50 bytes that starts with 05 06 puts the signature at the comment length field.
+  ["Z2", "an end record signature that starts in the comment length field", fixtureZip(ok, { comment: concat([new Uint8Array([5, 6]), new Uint8Array(0x4b50 - 2)]) }), "ZIP_INVALID"],
   ["Z2", "bytes before the first entry", fixtureZip(ok, { before: enc("prefiks") }), "ZIP_INVALID"],
   ["Z2", "comment that ends at the end", fixtureZip(ok, { comment: enc("izmišljeni komentar") }), "OK"],
   ["Z3", "disk number 1", fixtureZip(ok, { diskNumber: 1 }), "ZIP_UNSUPPORTED"],
@@ -119,6 +132,12 @@ const zipRows: Row[] = [
   ["Z13", "data descriptor with signature", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, after: descriptorFor("<a/>", true) }, ...ok]), "OK"],
   ["Z13", "data descriptor without signature", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, after: descriptorFor("<a/>", false) }]), "OK"],
   ["Z11", "data descriptor flag without a descriptor", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8 }, ...ok]), "ZIP_INVALID"],
+  // A descriptor is 12 bytes, or 16 with its optional signature; a CRC equal to that
+  // signature must not be read as one (#1851).
+  ["Z13", "unsigned descriptor whose CRC equals the signature, then another entry", fixtureZip([sigCrcEntry(false), ...ok]), "OK"],
+  ["Z13", "unsigned descriptor whose CRC equals the signature, last entry", fixtureZip([...ok, sigCrcEntry(false)]), "OK"],
+  ["Z13", "signed descriptor whose CRC equals the signature, then another entry", fixtureZip([sigCrcEntry(true), ...ok]), "OK"],
+  ["Z11", "unsigned descriptor whose CRC equals the signature, then hidden bytes", fixtureZip([sigCrcEntry(false, new Uint8Array(4)), ...ok]), "ZIP_INVALID"],
   ["Z11", "data descriptor that disagrees with the directory", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, after: descriptorFor("<a/>", true, 1) }]), "ZIP_INVALID"],
   ["Z11", "bytes hidden between two entries", fixtureZip([{ name: "a.xml", data: "<a/>", after: enc("PK\u0003\u0004xx") }, ...ok]), "ZIP_INVALID"],
   ["Z11", "bytes hidden before the central directory", fixtureZip([...ok, { name: "b.xml", data: "<b/>", after: new Uint8Array(4) }]), "ZIP_INVALID"],
@@ -173,6 +192,10 @@ describe("DAN-242 ZIP reader: input classes Z1-Z13", () => {
 
   it.each(unsafeNames.map((n) => [n]))("Z6 unsafe name %j is rejected before any part is read", async (name) => {
     expect(await codeOf(() => openDocxZip(fixtureZip([{ name, data: "<a/>" }])))).toBe("ZIP_PATH");
+  });
+
+  it("Z13 the descriptor collision rows use a part whose CRC-32 is the descriptor signature", () => {
+    expect(crc32(sigCrc)).toBe(0x08074b50);
   });
 
   it("Z10 ratio is checked on the declared sizes, with the limit inclusive", async () => {
