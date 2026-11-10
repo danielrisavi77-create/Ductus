@@ -4444,18 +4444,24 @@ CREATE FUNCTION institution.assignment_version_purpose_catalog() RETURNS trigger
     SET search_path TO ''
     AS $$
 DECLARE
-  v_previous integer;
+  v_first integer;
 BEGIN
-  SELECT v.purpose_catalog_version INTO v_previous FROM institution.assignment_version v
-   WHERE v.assignment_id = NEW.assignment_id AND v.version_no = NEW.version_no - 1;
-  -- A later version keeps the catalogue of the one before. 1 is also the
-  -- column default, which a writer that names no version gets, so only another
-  -- value is a writer asking for a different catalogue.
-  IF v_previous IS NOT NULL THEN
-    IF NEW.purpose_catalog_version IS DISTINCT FROM 1 AND NEW.purpose_catalog_version IS DISTINCT FROM v_previous THEN
+  IF NEW.version_no > 1 THEN
+    -- A later version follows the one before it: a skipped number would leave
+    -- no row to inherit from, and the chain could change its catalogue.
+    IF NOT EXISTS (SELECT 1 FROM institution.assignment_version v
+                    WHERE v.assignment_id = NEW.assignment_id AND v.version_no = NEW.version_no - 1) THEN
       RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
     END IF;
-    NEW.purpose_catalog_version := v_previous;
+    -- It keeps the catalogue of the first version. 1 is also the column
+    -- default, which a writer that names no version gets, so only another
+    -- value is a writer asking for a different catalogue.
+    SELECT v.purpose_catalog_version INTO v_first FROM institution.assignment_version v
+     WHERE v.assignment_id = NEW.assignment_id ORDER BY v.version_no LIMIT 1;
+    IF NEW.purpose_catalog_version IS DISTINCT FROM 1 AND NEW.purpose_catalog_version IS DISTINCT FROM v_first THEN
+      RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+    END IF;
+    NEW.purpose_catalog_version := v_first;
   END IF;
   RETURN NEW;
 END

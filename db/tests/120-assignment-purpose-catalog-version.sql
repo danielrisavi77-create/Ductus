@@ -235,6 +235,23 @@ SELECT lives_ok(
   'an omitted version on a version 2 assignment is accepted'
 );
 SELECT is(pg_temp.catalog_of((SELECT id FROM wide), 5), '2', 'and inherits version 2');
+-- A skipped number has no version before it to inherit from (review c.6780398651).
+SELECT throws_ok(
+  format($$ INSERT INTO institution.assignment_version (assignment_id, version_no, title, instructions, work_type, opens_at,
+       due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, purpose_catalog_version, created_by)
+     VALUES (%L, %s, 'Z2', 'Upute.', 'essay', now(), now() + interval '1 day',
+       'prohibited', '{}', 'basic', false, %s, '00000000-0000-4000-8000-000000000102') $$,
+     '00000000-0000-4000-8000-0000000000a2', v.version_no, v.catalog),
+  'ZD422', 'invalid input', v.what
+)
+FROM (VALUES
+  (1, 3, 2, 'a version that skips a number to change the catalogue is refused'),
+  (2, 3, 1, 'a version that skips a number is refused even on its own catalogue')
+) AS v (n, version_no, catalog, what)
+ORDER BY v.n;
+SELECT is((SELECT count(*)::text FROM institution.assignment_version
+            WHERE assignment_id = '00000000-0000-4000-8000-0000000000a2' AND version_no > 1), '0',
+          'and the assignment keeps only its first version');
 INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by)
 SELECT '00000000-0000-4000-8000-0000000000a9', c.id, c.institution_id, 1, '00000000-0000-4000-8000-000000000101'
   FROM institution.course c WHERE c.id = '00000000-0000-4000-8000-0000000000c1';
