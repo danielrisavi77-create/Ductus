@@ -31,19 +31,23 @@ export type WithActor = <T>(
 // cookie can neither raise an error that echoes it nor reach a log.
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
 
-// The configuration lock: the connection must be a login that is neither
-// superuser nor BYPASSRLS, inherits ductus_app, and is the role it
-// authenticated as with no role switched for the session. pg_stat_activity
-// keeps the role that authenticated, which SET SESSION AUTHORIZATION does not
-// change: a superuser connection that took on an app login's name would
-// otherwise pass and could RESET back to superuser inside fn.
-// The lock does not look at other memberships: a login that is also a member
-// of another role keeps what that role grants, also through a role switched
-// inside fn and switched back before the exit check. Provisioning keeps app
-// logins in ductus_app alone (pgTAP 010 checks it locally).
+// The configuration lock (F-018): the connection must be a login with none of
+// SUPERUSER, BYPASSRLS, CREATEROLE, CREATEDB and REPLICATION, whose one
+// membership is ductus_app, inherited and without ADMIN OPTION, and which is
+// the role it authenticated as with no role switched for the session.
+// pg_stat_activity keeps the role that authenticated, which SET SESSION
+// AUTHORIZATION does not change: a superuser connection that took on an app
+// login's name would otherwise pass and could RESET back to superuser inside
+// fn. The exit check runs the same statement, so an attribute or membership
+// given to the login while fn runs rolls the transaction back.
+// Provisioning keeps app logins this way (db/local/app-login.sql, pgTAP 010).
 const APP_ROLE_SQL = `
 (SELECT NOT r.rolsuper AND NOT r.rolbypassrls
+        AND NOT r.rolcreaterole AND NOT r.rolcreatedb AND NOT r.rolreplication
         AND pg_catalog.pg_has_role(r.oid, 'ductus_app', 'USAGE')
+        AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m
+                         WHERE m.member = r.oid
+                           AND (m.roleid <> 'ductus_app'::pg_catalog.regrole OR m.admin_option))
    FROM pg_catalog.pg_roles r
    JOIN pg_catalog.pg_stat_activity a ON a.usesysid = r.oid
   WHERE a.pid = pg_catalog.pg_backend_pid()
