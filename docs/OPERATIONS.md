@@ -66,7 +66,7 @@ Postupci vrijede za lokalni stog (`izgrađeno`) i za produkciju, koja još ne po
 2. Ugasi aplikaciju po postupku „Gašenje”. Naredba: `kill -TERM <pid>`.
 3. Vrati prethodno zamrznuto izdanje (puni commit SHA iz dnevnog zapisa) na produkciju. Nositelj: `vlasnik`. `planirano`
 4. Samo ako je u koraku 1 odlučeno da se vraćaju podaci (ne samo kod): vrati bazu i pohranu iz kopije; inače preskoči korak jer bi novije podatke prepisao stariji. Nositelj: `vlasnik`. `planirano`: kopije i proba povrata su M11.2-P04 (D-277 NQ05). Dok proba povrata ne prođe, povrat iz kopije nije dokazan. `[DOKAZ]`
-5. Provjeri stanje migracija. Naredba: `pnpm db:status`. Naredba gleda samo lokalnu bazu; usporedba s `db/migrations.sum` (D-91) na produkciji ide uz korak 3.
+5. Provjeri stanje migracija. Naredba: `pnpm db:status`. Naredba gleda samo lokalnu bazu i traži da ona radi: ako je stog ugašen po postupku „Gašenje”, prvo ga ponovno pokreni (`docker compose start`), jer se inače `pnpm db:status` ne može spojiti. Usporedba s `db/migrations.sum` (D-91) na produkciji ide uz korak 3.
 6. Pokreni vraćeno izdanje po postupku „Pokretanje” i provjeri spremnost, uključujući tijelo odgovora `/api/ready`. Na produkciji: Nositelj: `vlasnik`. `planirano`. Lokalna proba povrata: `pnpm local:up` i `curl --fail-with-body -sS http://localhost:3000/api/ready`; to je lokalni stog i ne dokazuje stanje produkcije.
 7. Provjeri rekonstrukciju predanih radova na vraćenom izdanju; prag je 100 %, a svako odstupanje blokira izdanje (`docs/PRODUCT.md` §12). Nositelj: `vlasnik`. `[PRAVILO]`; alat je `[DOKAZ]`.
 8. Upiši povrat u dnevni zapis: izdanje prije i poslije, razlog i ID incidenta. Nositelj: `vlasnik`.
