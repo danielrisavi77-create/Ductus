@@ -2179,10 +2179,10 @@ $$;
 
 
 --
--- Name: accept_revision_request(uuid, bigint, bigint, text); Type: FUNCTION; Schema: collaboration; Owner: -
+-- Name: accept_revision_request(uuid, bigint, bigint, text, jsonb); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
-CREATE FUNCTION collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+CREATE FUNCTION collaboration.accept_revision_request(p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text, p_accepted_anchor jsonb DEFAULT NULL::jsonb) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -2194,7 +2194,9 @@ BEGIN
   SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, 'teacher');
   IF NOT collaboration.is_revision_seq(p_expected_seq)
      OR NOT collaboration.is_revision_number(p_accepted_revision)
-     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$') THEN
+     OR (p_range_hash IS NOT NULL AND p_range_hash !~ '^[0-9a-f]{64}$')
+     OR (p_accepted_anchor IS NOT NULL
+         AND (p_range_hash IS NULL OR NOT coalesce(collaboration.is_text_anchor(p_accepted_anchor), false))) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
   IF p_expected_seq <> r.row_seq THEN
@@ -2216,7 +2218,9 @@ BEGIN
   v_seq := nextval('collaboration.revision_request_seq');
   UPDATE collaboration.revision_request_version v
      SET closed_as = 'accepted', closed_by = r.actor_id, closed_at = now(),
-         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash
+         accepted_revision = p_accepted_revision, accepted_range_hash = p_range_hash,
+         accepted_anchor = CASE WHEN p_range_hash IS NOT NULL THEN coalesce(p_accepted_anchor,
+           (SELECT q.anchor FROM collaboration.revision_request q WHERE q.id = r.request_id)) END
    WHERE v.request_id = r.request_id AND v.version = r.version;
   UPDATE collaboration.revision_request q SET state = 'accepted', row_seq = v_seq WHERE q.id = r.request_id;
   RETURN QUERY SELECT 'applied'::text, v_seq, r.version, 'accepted'::text;
@@ -2616,6 +2620,83 @@ $$;
 
 
 --
+-- Name: range_hash_at(text, uuid, jsonb, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.range_hash_at(p_document_id text, p_institution_id uuid, p_anchor jsonb, p_revision bigint) RETURNS TABLE(revision bigint, range_hash text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  v_revision bigint;
+  v_body text;
+  v_node jsonb;
+  v_text bytea;
+  v_quote bytea := pg_catalog.convert_to(coalesce(p_anchor ->> 'quote', ''), 'UTF8');
+  v_prefix bytea := pg_catalog.convert_to(coalesce(p_anchor ->> 'prefix', ''), 'UTF8');
+  v_suffix bytea := pg_catalog.convert_to(coalesce(p_anchor ->> 'suffix', ''), 'UTF8');
+  v_from integer := 1;
+  v_at integer;
+  v_matches integer := 0;
+  v_score integer;
+  v_best integer := -1;
+  v_winners integer := 0;
+BEGIN
+  SELECT coalesce(p_revision, d.current_revision), c.body INTO v_revision, v_body
+    FROM evidence.document d
+    LEFT JOIN evidence.document_checkpoint c
+      ON c.document_id = d.id AND c.institution_id = d.institution_id
+     AND c.revision = coalesce(p_revision, d.current_revision)
+     AND (p_revision IS NOT NULL OR c.content_hash = d.current_content_hash)
+   WHERE d.id = p_document_id AND d.institution_id = p_institution_id;
+  IF v_body IS NULL OR NOT pg_catalog.pg_input_is_valid(v_body, 'jsonb')
+     OR pg_catalog.jsonb_typeof(v_body::jsonb -> 'nodes') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'work unavailable' USING ERRCODE = 'ZD503';
+  END IF;
+  SELECT n.value INTO v_node
+    FROM pg_catalog.jsonb_array_elements(v_body::jsonb -> 'nodes') WITH ORDINALITY AS n(value, ord)
+   WHERE n.value ->> 'id' = p_anchor ->> 'nodeId'
+   ORDER BY n.ord LIMIT 1;
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT v_revision, NULL::text;
+    RETURN;
+  END IF;
+  IF pg_catalog.jsonb_typeof(v_node -> 'children') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'work unavailable' USING ERRCODE = 'ZD503';
+  END IF;
+  SELECT pg_catalog.convert_to(coalesce(pg_catalog.string_agg(coalesce(c.value ->> 'text', ''), '' ORDER BY c.ord), ''), 'UTF8')
+    INTO v_text
+    FROM pg_catalog.jsonb_array_elements(v_node -> 'children') WITH ORDINALITY AS c(value, ord);
+  WHILE pg_catalog.length(v_quote) > 0 LOOP
+    v_at := position(v_quote IN pg_catalog.substr(v_text, v_from));
+    EXIT WHEN v_at = 0;
+    v_at := v_from + v_at - 1;
+    v_matches := v_matches + 1;
+    IF v_matches > 1000 THEN
+      v_winners := 0;
+      EXIT;
+    END IF;
+    v_score :=
+      (pg_catalog.length(v_prefix) > 0 AND v_at > pg_catalog.length(v_prefix)
+        AND pg_catalog.substr(v_text, v_at - pg_catalog.length(v_prefix), pg_catalog.length(v_prefix)) = v_prefix)::integer
+      + (pg_catalog.length(v_suffix) > 0
+        AND pg_catalog.substr(v_text, v_at + pg_catalog.length(v_quote), pg_catalog.length(v_suffix)) = v_suffix)::integer;
+    IF v_score > v_best THEN
+      v_best := v_score;
+      v_winners := 1;
+    ELSIF v_score = v_best THEN
+      v_winners := v_winners + 1;
+    END IF;
+    v_from := v_at + 1;
+  END LOOP;
+  RETURN QUERY SELECT v_revision,
+    CASE WHEN v_winners = 1 THEN pg_catalog.encode(pg_catalog.sha256(v_quote), 'hex') END;
+END
+$$;
+
+
+--
 -- Name: read_live_state(text, text); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
@@ -2759,6 +2840,77 @@ BEGIN
   SET state = CASE WHEN t.role = 'student' THEN 'answered' ELSE 'open' END, updated_at = now()
   WHERE c.id = t.thread_id AND (t.role, c.state) IN (('student', 'open'), ('teacher', 'answered'));
   RETURN v_comment;
+END
+$$;
+
+
+--
+-- Name: rereview_revision_request(uuid, bigint); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.rereview_revision_request(p_request_id uuid, p_expected_seq bigint) RETURNS TABLE(outcome text, row_seq bigint, version integer, state text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+#variable_conflict use_column
+DECLARE
+  actor record;
+  v_role text;
+  r record;
+  a record;
+  t record;
+  v_then text;
+  now_at record;
+  v_seq bigint;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT collaboration.actor_role(q.institution_id, q.assignment_id, q.owner_id) INTO v_role
+    FROM collaboration.revision_request q
+   WHERE q.id = p_request_id AND q.institution_id = actor.institution_id;
+  IF v_role IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  SELECT * INTO r FROM collaboration.revision_request_for_write(p_request_id, v_role);
+  IF NOT collaboration.is_revision_seq(p_expected_seq) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  IF p_expected_seq <> r.row_seq THEN
+    RETURN QUERY SELECT 'conflict'::text, r.row_seq, r.version, r.state;
+    RETURN;
+  END IF;
+  IF r.state <> 'accepted' OR r.version >= 1000 THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  SELECT v.instruction, v.accepted_revision, v.accepted_range_hash, v.accepted_anchor INTO a
+    FROM collaboration.revision_request_version v
+   WHERE v.request_id = r.request_id AND v.version = r.version;
+  -- No range was accepted (the client found none to hash): nothing to
+  -- compare, refused before any text is read; the teacher's reopen remains.
+  IF a.accepted_range_hash IS NULL OR a.accepted_anchor IS NULL THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  SELECT q.document_id INTO t FROM collaboration.revision_request q WHERE q.id = r.request_id;
+  -- The accepted anchor must resolve to the accepted hash in the accepted
+  -- revision; one that does not resolve there, or to another hash, is not
+  -- comparable.
+  SELECT h.range_hash INTO v_then
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, a.accepted_anchor, a.accepted_revision) h;
+  IF v_then IS DISTINCT FROM a.accepted_range_hash THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  SELECT h.revision, h.range_hash INTO now_at
+    FROM collaboration.range_hash_at(t.document_id, r.institution_id, a.accepted_anchor, NULL) h;
+  IF now_at.range_hash IS NOT DISTINCT FROM a.accepted_range_hash THEN
+    RAISE EXCEPTION 'transition not allowed' USING ERRCODE = 'ZD409';
+  END IF;
+  v_seq := nextval('collaboration.revision_request_seq');
+  INSERT INTO collaboration.revision_request_version
+    (request_id, institution_id, version, instruction, requested_revision, opened_by, opened_as, observed_range_hash)
+  VALUES (r.request_id, r.institution_id, r.version + 1, a.instruction, now_at.revision, r.actor_id, 'rereview',
+          now_at.range_hash);
+  UPDATE collaboration.revision_request q SET state = 'reopened', version = r.version + 1, row_seq = v_seq
+   WHERE q.id = r.request_id;
+  RETURN QUERY SELECT 'applied'::text, v_seq, r.version + 1, 'reopened'::text;
 END
 $$;
 
@@ -6950,6 +7102,11 @@ CREATE TABLE collaboration.revision_request_version (
     closed_at timestamp with time zone,
     accepted_revision bigint,
     accepted_range_hash text,
+    opened_as text DEFAULT 'instruction'::text NOT NULL,
+    observed_range_hash text,
+    accepted_anchor jsonb,
+    CONSTRAINT revision_request_version_accepted_anchor_check CHECK (((accepted_anchor IS NULL) OR collaboration.is_text_anchor(accepted_anchor))),
+    CONSTRAINT revision_request_version_accepted_anchor_hash_check CHECK (((accepted_anchor IS NULL) = (accepted_range_hash IS NULL))),
     CONSTRAINT revision_request_version_accepted_range_hash_check CHECK ((accepted_range_hash ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT revision_request_version_accepted_revision_check CHECK (((accepted_revision >= 0) AND (accepted_revision <= '9007199254740991'::bigint))),
     CONSTRAINT revision_request_version_check1 CHECK ((((closed_as IS NULL) = (closed_by IS NULL)) AND ((closed_as IS NULL) = (closed_at IS NULL)))),
@@ -6957,6 +7114,9 @@ CREATE TABLE collaboration.revision_request_version (
     CONSTRAINT revision_request_version_check3 CHECK (((accepted_range_hash IS NULL) OR (NOT (closed_as IS DISTINCT FROM 'accepted'::text)))),
     CONSTRAINT revision_request_version_closed_as_check CHECK ((closed_as = ANY (ARRAY['accepted'::text, 'reopened'::text, 'withdrawn'::text]))),
     CONSTRAINT revision_request_version_instruction_check CHECK (collaboration.is_revision_text(instruction)),
+    CONSTRAINT revision_request_version_observed_hash_check CHECK ((observed_range_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT revision_request_version_observed_rereview_check CHECK (((observed_range_hash IS NULL) OR (opened_as = 'rereview'::text))),
+    CONSTRAINT revision_request_version_opened_as_check CHECK ((opened_as = ANY (ARRAY['instruction'::text, 'rereview'::text]))),
     CONSTRAINT revision_request_version_requested_revision_check CHECK (((requested_revision >= 0) AND (requested_revision <= '9007199254740991'::bigint))),
     CONSTRAINT revision_request_version_version_check CHECK (((version >= 1) AND (version <= 1000)))
 );
@@ -12476,4 +12636,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261108130000'),
     ('20261108140000'),
     ('20261109030000'),
-    ('20261109200000');
+    ('20261109200000'),
+    ('20261109210000');

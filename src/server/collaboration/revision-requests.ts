@@ -15,9 +15,10 @@ import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-
 
 /**
  * DAN-314 step 2f HTTP boundary (docs/backend/suradnja.md 4.14, #1506). The
- * SECURITY DEFINER RPCs of migrations 20261106160000, 20261106190000 and
- * 20261106220000 (revision ceiling) decide who may read or write, which
- * transition is allowed and which revision is too new; this only refuses
+ * SECURITY DEFINER RPCs of migrations 20261106160000, 20261106190000,
+ * 20261106220000 (revision ceiling) and 20261109210000 (rereview) decide who
+ * may read or write, which transition is allowed, which revision is too new
+ * and whether an accepted range counts as changed; this only refuses
  * malformed requests before the database, in an order that needs no database
  * at all, so no answer tells whether a request or document exists.
  *
@@ -35,8 +36,10 @@ const STATES = new Set(["open", "responded", "accepted", "reopened", "withdrawn"
 const CLOSED = new Set(["accepted", "reopened", "withdrawn"]);
 const VERSION_MAX = 1000;
 
-export type RevisionAction = "create" | "respond" | "accept" | "reopen" | "withdraw" | "list";
-export const REVISION_ACTIONS: readonly RevisionAction[] = ["create", "respond", "accept", "reopen", "withdraw", "list"];
+export type RevisionAction = "create" | "respond" | "accept" | "reopen" | "rereview" | "withdraw" | "list";
+export const REVISION_ACTIONS: readonly RevisionAction[] = [
+  "create", "respond", "accept", "reopen", "rereview", "withdraw", "list",
+];
 
 export interface RevisionDeps {
   withActor: WithActor;
@@ -77,13 +80,18 @@ const SPECS: Record<RevisionAction, Spec> = {
     sql: `${TRANSITION}collaboration.respond_revision_request($1::uuid, $2::bigint, $3, $4, $5::bigint)`,
     params: (i) => [i.requestId, i.expectedSeq, i.kind, i.explanation, i.responseRevision],
   },
+  // The hash and the anchor it was computed under travel together (#1831 B):
+  // both null, or both well formed. Anything else is refused before the
+  // database, so an accepted anchor never lands without its hash.
   accept: {
-    keys: ["acceptedRevision", "expectedSeq", "rangeHash", "requestId"],
+    keys: ["acceptedAnchor", "acceptedRevision", "expectedSeq", "rangeHash", "requestId"],
     id: "requestId",
     valid: (i) => isExpectedSeq(i.expectedSeq) && isRevisionNumber(i.acceptedRevision)
-      && (i.rangeHash === null || isRangeHash(i.rangeHash)),
-    sql: `${TRANSITION}collaboration.accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4)`,
-    params: (i) => [i.requestId, i.expectedSeq, i.acceptedRevision, i.rangeHash],
+      && ((i.rangeHash === null && i.acceptedAnchor === null)
+        || (isRangeHash(i.rangeHash) && isTextAnchorInput(i.acceptedAnchor))),
+    sql: `${TRANSITION}collaboration.accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4, $5::jsonb)`,
+    params: (i) => [i.requestId, i.expectedSeq, i.acceptedRevision, i.rangeHash,
+      i.acceptedAnchor === null ? null : JSON.stringify(i.acceptedAnchor)],
   },
   reopen: {
     keys: ["expectedSeq", "instruction", "requestId", "requestedRevision"],
@@ -91,6 +99,16 @@ const SPECS: Record<RevisionAction, Spec> = {
     valid: (i) => isExpectedSeq(i.expectedSeq) && isRevisionText(i.instruction) && isRevisionNumber(i.requestedRevision),
     sql: `${TRANSITION}collaboration.reopen_revision_request($1::uuid, $2::bigint, $3, $4::bigint)`,
     params: (i) => [i.requestId, i.expectedSeq, i.instruction, i.requestedRevision],
+  },
+  // Only the request and its counter: the database reads the current work
+  // itself and decides whether the accepted range changed. A hash, a revision
+  // or text sent here is an extra key and is refused before the database.
+  rereview: {
+    keys: ["expectedSeq", "requestId"],
+    id: "requestId",
+    valid: (i) => isExpectedSeq(i.expectedSeq),
+    sql: `${TRANSITION}collaboration.rereview_revision_request($1::uuid, $2::bigint)`,
+    params: (i) => [i.requestId, i.expectedSeq],
   },
   withdraw: {
     keys: ["expectedSeq", "requestId"],

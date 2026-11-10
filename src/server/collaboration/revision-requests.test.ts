@@ -37,8 +37,9 @@ const ANCHOR = {
 const VALID: Record<Action, Record<string, unknown>> = {
   create: { anchor: ANCHOR, documentId: DOC, instruction: `Nastavnik N1: ${CANARY}`, requestedRevision: 3 },
   respond: { expectedSeq: 2, explanation: `Student A: ${CANARY}`, kind: "done", requestId: REQ, responseRevision: 4 },
-  accept: { acceptedRevision: 4, expectedSeq: 3, rangeHash: HASH, requestId: REQ },
+  accept: { acceptedAnchor: ANCHOR, acceptedRevision: 4, expectedSeq: 3, rangeHash: HASH, requestId: REQ },
   reopen: { expectedSeq: 3, instruction: `Nastavnik N1: ${CANARY}`, requestId: REQ, requestedRevision: 5 },
+  rereview: { expectedSeq: 4, requestId: REQ },
   withdraw: { expectedSeq: 2, requestId: REQ },
   list: { documentId: DOC },
 };
@@ -144,8 +145,9 @@ describe("DAN-314 2f revision request API: success", () => {
 
   it.each([
     ["respond", "respond_revision_request($1::uuid, $2::bigint, $3, $4, $5::bigint)", [REQ, 2, "done", VALID.respond.explanation, 4]],
-    ["accept", "accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4)", [REQ, 3, 4, HASH]],
+    ["accept", "accept_revision_request($1::uuid, $2::bigint, $3::bigint, $4, $5::jsonb)", [REQ, 3, 4, HASH, JSON.stringify(ANCHOR)]],
     ["reopen", "reopen_revision_request($1::uuid, $2::bigint, $3, $4::bigint)", [REQ, 3, VALID.reopen.instruction, 5]],
+    ["rereview", "rereview_revision_request($1::uuid, $2::bigint)", [REQ, 4]],
     ["withdraw", "withdraw_revision_request($1::uuid, $2::bigint)", [REQ, 2]],
   ] as const)("%s: applied is 200 with the current counter", async (action, fn, params) => {
     const { res, json, query } = await call(action, VALID[action]);
@@ -154,11 +156,12 @@ describe("DAN-314 2f revision request API: success", () => {
     expect(query).toHaveBeenCalledWith(`SELECT outcome, row_seq, version, state FROM collaboration.${fn}`, params);
   });
 
-  it("accept takes a null hash, and the key is required", async () => {
-    const ok = await call("accept", { ...VALID.accept, rangeHash: null });
+  it("accept takes a null hash only with a null anchor, and both keys are required (#1831 B)", async () => {
+    const ok = await call("accept", { ...VALID.accept, rangeHash: null, acceptedAnchor: null });
     expect(ok.res.status).toBe(200);
-    expect(ok.query.mock.calls[0]?.[1]).toEqual([REQ, 3, 4, null]);
+    expect(ok.query.mock.calls[0]?.[1]).toEqual([REQ, 3, 4, null, null]);
     expect((await call("accept", without(VALID.accept, "rangeHash"))).res.status).toBe(422);
+    expect((await call("accept", without(VALID.accept, "acceptedAnchor"))).res.status).toBe(422);
   });
 
   it("list returns the same keys for every row and parses bigint strings (H4)", async () => {
@@ -186,7 +189,7 @@ describe("DAN-314 2f revision request API: success", () => {
 });
 
 describe("DAN-314 2f: conflict is an outcome, not_allowed an error", () => {
-  it.each(["respond", "accept", "reopen", "withdraw"] as const)("%s: a stale counter is 409 with the current row", async (action) => {
+  it.each(["respond", "accept", "reopen", "rereview", "withdraw"] as const)("%s: a stale counter is 409 with the current row", async (action) => {
     const { res, json } = await call(action, VALID[action], {
       rows: [{ outcome: "conflict", row_seq: "9", version: 2, state: "reopened" }],
     });
@@ -323,7 +326,7 @@ describe("DAN-314 2f: refusals before the database", () => {
 
   it("the counter is a safe integer from 1 (class 6)", async () => {
     for (const bad of [null, 0, "3", "", 3.5, -1, 2 ** 53, true, [], {}]) {
-      for (const action of ["respond", "accept", "reopen", "withdraw"] as const) {
+      for (const action of ["respond", "accept", "reopen", "rereview", "withdraw"] as const) {
         await refused(action, { ...VALID[action], expectedSeq: bad }, 422, "invalid_input");
       }
     }
@@ -365,6 +368,45 @@ describe("DAN-314 2f: refusals before the database", () => {
     for (const rangeHash of [HASH.toUpperCase(), HASH.slice(1), `${HASH}0`, "", 1]) {
       await refused("accept", { ...VALID.accept, rangeHash }, 422, "invalid_input");
     }
+  });
+
+  it("accept: the hash and its anchor come together or not at all (#1831 B)", async () => {
+    // Every class but "both null" and "both well formed" is refused before
+    // the database, so an anchor is never stored without its hash or the
+    // other way round.
+    const classes: [string, Record<string, unknown>][] = [
+      ["hash without anchor", { rangeHash: HASH, acceptedAnchor: null }],
+      ["anchor without hash", { rangeHash: null, acceptedAnchor: ANCHOR }],
+      ["bad hash with anchor", { rangeHash: HASH.slice(1), acceptedAnchor: ANCHOR }],
+      ["hash with empty object", { acceptedAnchor: {} }],
+      ["hash with string anchor", { acceptedAnchor: JSON.stringify(ANCHOR) }],
+      ["hash with anchor array", { acceptedAnchor: [ANCHOR] }],
+      ["hash with anchor missing suffix", { acceptedAnchor: without(ANCHOR, "suffix") }],
+      ["hash with anchor and extra key", { acceptedAnchor: { ...ANCHOR, extra: "x" } }],
+      ["hash with empty quote", { acceptedAnchor: { ...ANCHOR, quote: "" } }],
+      ["hash with bad nodeId", { acceptedAnchor: { ...ANCHOR, nodeId: "n1" } }],
+      ["hash with reversed hints", { acceptedAnchor: { ...ANCHOR, startHint: 10, endHint: 0 } }],
+    ];
+    for (const [, change] of classes) {
+      await refused("accept", { ...VALID.accept, ...change }, 422, "invalid_input");
+    }
+  });
+
+  it("rereview takes the request and its counter only: no hash, revision, text, state or role (c.6754364680)", async () => {
+    const ok = await call("rereview", VALID.rereview);
+    expect(ok.res.status).toBe(200);
+    expect(ok.query.mock.calls[0]?.[1]).toEqual([REQ, 4]);
+    // The caller cannot say whether the range changed: every such claim is an
+    // extra key, refused before the database is asked anything.
+    const claims: Record<string, unknown>[] = [{ rangeHash: null }, { rangeHash: HASH }, { rangeHash: "f".repeat(64) },
+      { currentRevision: 6 }, { currentRevision: 6, rangeHash: null }, { currentRevision: 6, rangeHash: HASH }];
+    for (const claim of claims) {
+      await refused("rereview", { ...VALID.rereview, ...claim }, 422, "invalid_input");
+    }
+    for (const extra of ["quote", "text", "state", "role", "instruction", "anchor"]) {
+      await refused("rereview", { ...VALID.rereview, [extra]: "x" }, 422, "invalid_input");
+    }
+    await refused("rereview", without(VALID.rereview, "expectedSeq"), 422, "invalid_input");
   });
 
   it("the anchor shape is exact (class 10, G8)", async () => {

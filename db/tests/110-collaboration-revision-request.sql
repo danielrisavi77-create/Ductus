@@ -292,17 +292,18 @@ FROM (VALUES
 SELECT is(pg_temp.ask_as('ductus_identity', 'vesna', format(
     $$ WITH i AS (
          INSERT INTO collaboration.revision_request_version (request_id, institution_id, version, instruction, requested_revision,
-           opened_by, closed_as, closed_by, closed_at, accepted_revision, accepted_range_hash)
-         VALUES (%L, {fak_a}, %s, 'Tekst.', 0, {vesna}, %s, %s, %s, %s, %s) RETURNING version)
+           opened_by, closed_as, closed_by, closed_at, accepted_revision, accepted_range_hash, accepted_anchor)
+         VALUES (%L, {fak_a}, %s, 'Tekst.', 0, {vesna}, %s, %s, %s, %s, %s, %s) RETURNING version)
        SELECT version FROM i $$,
-    pg_temp.id('r1'), c.version, c.closed_as, c.closed_by, c.closed_at, c.accepted, c.hash)),
+    pg_temp.id('r1'), c.version, c.closed_as, c.closed_by, c.closed_at, c.accepted, c.hash, c.anchor)),
   c.version::text, 'the version table accepts ' || c.what)
 FROM (VALUES
-  (900, $$'accepted'$$, '{vesna}', 'now()', '3', quote_literal(repeat('a', 64)), 'an acceptance with a revision and a range hash'),
-  (901, $$'accepted'$$, '{vesna}', 'now()', '3', 'NULL', 'an acceptance without a range hash'),
-  (902, $$'withdrawn'$$, '{vesna}', 'now()', 'NULL', 'NULL', 'a withdrawal'),
-  (903, $$'reopened'$$, '{vesna}', 'now()', 'NULL', 'NULL', 'a reopening')
-) AS c (version, closed_as, closed_by, closed_at, accepted, hash, what);
+  (900, $$'accepted'$$, '{vesna}', 'now()', '3', quote_literal(repeat('a', 64)), '{anchor}',
+   'an acceptance with a revision, a range hash and the anchor of that range'),
+  (901, $$'accepted'$$, '{vesna}', 'now()', '3', 'NULL', 'NULL', 'an acceptance without a range hash'),
+  (902, $$'withdrawn'$$, '{vesna}', 'now()', 'NULL', 'NULL', 'NULL', 'a withdrawal'),
+  (903, $$'reopened'$$, '{vesna}', 'now()', 'NULL', 'NULL', 'NULL', 'a reopening')
+) AS c (version, closed_as, closed_by, closed_at, accepted, hash, anchor, what);
 SELECT matches(pg_temp.ask_as('ductus_identity', 'vesna', s.sql), '^23514', 'the request tables refuse ' || s.what || ' even from their owner')
 FROM (VALUES
   ($$ UPDATE collaboration.revision_request SET state = 'resolved' WHERE id = {r1} $$, 'an unknown state'),
