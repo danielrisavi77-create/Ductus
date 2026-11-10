@@ -82,7 +82,8 @@ export function openDocxZip(bytes: Uint8Array, limits?: Partial<DocxLimits>): Do
     const name = safeName(nameBytes, (flags & UTF8) !== 0);
     if (flags & ENCRYPTED || method === 99) reject("ZIP_ENCRYPTED");
     if (method !== 0 && method !== 8) reject("ZIP_METHOD");
-    if (csize === 0xffffffff || usize === 0xffffffff || offset === 0xffffffff) reject("ZIP_UNSUPPORTED");
+    // A start disk other than 0 is a split archive, and 0xffff points to ZIP64.
+    if (csize === 0xffffffff || usize === 0xffffffff || offset === 0xffffffff || u16(at + 34) !== 0) reject("ZIP_UNSUPPORTED");
     // Patched data and versions past 6.3 are features other readers refuse; the
     // low byte of "version needed" is the version, the high byte names the host.
     if (flags & PATCHED || (u16(at + 6) & 0xff) > MAX_VERSION) reject("ZIP_UNSUPPORTED");

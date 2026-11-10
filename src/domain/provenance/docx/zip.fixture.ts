@@ -28,6 +28,8 @@ export interface FixtureEntry {
   localCrc?: number;
   /** Central directory offset of the local header; defaults to the real one. */
   offset?: number;
+  /** Central directory "disk number start"; default 0. */
+  diskStart?: number;
   /** Bytes written right after the entry data: a data descriptor, or anything to hide. */
   after?: Uint8Array;
 }
@@ -80,6 +82,7 @@ export function fixtureZip(entries: FixtureEntry[], z: FixtureZip = {}): Uint8Ar
     central.setUint32(20, csize, true);
     central.setUint32(24, usize, true);
     central.setUint16(28, name.length, true);
+    central.setUint16(34, e.diskStart ?? 0, true);
     central.setUint32(42, e.offset ?? at, true);
     const after = e.after ?? new Uint8Array();
     locals.push(new Uint8Array(local.buffer), localName, body, after);

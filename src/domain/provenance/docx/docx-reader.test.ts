@@ -63,6 +63,8 @@ const zipRows: Row[] = [
   ["Z3", "directory on disk 1", fixtureZip(ok, { cdDisk: 1 }), "ZIP_UNSUPPORTED"],
   ["Z3", "ZIP64 entry count", fixtureZip(ok, { countOnDisk: 0xffff, countTotal: 0xffff }), "ZIP_UNSUPPORTED"],
   ["Z3", "ZIP64 directory offset", fixtureZip(ok, { cdOffset: 0xffffffff }), "ZIP_UNSUPPORTED"],
+  ["Z3", "entry starts on disk 1", fixtureZip([{ name: "a.xml", data: "<a/>", diskStart: 1 }]), "ZIP_UNSUPPORTED"],
+  ["Z3", "ZIP64 entry start disk", fixtureZip([{ name: "a.xml", data: "<a/>", diskStart: 0xffff }]), "ZIP_UNSUPPORTED"],
   ["Z3", "ZIP64 entry size", fixtureZip([{ name: "a.xml", data: "<a/>", usize: 0xffffffff }]), "ZIP_UNSUPPORTED"],
   ["Z3", "patched data flag", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x20 }]), "ZIP_UNSUPPORTED"],
   ["Z3", "patched data flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", localFlags: 0x20 }]), "ZIP_UNSUPPORTED"],
