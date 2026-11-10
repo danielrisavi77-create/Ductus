@@ -1,0 +1,16 @@
+{
+  "corpus": "ductus-docx-corpus-v1",
+  "task": "DAN-242",
+  "generator": "tests/fixtures/docx-corpus/generate.ts",
+  "note": "Synthetic, invented content only. Generated; never edit by hand.",
+  "fixtures": [
+    {"file":"01-clean.docx","sha256":"d28dcfe62022c42ef407873279ba56b0172443f1fd8b5f26ce75fe89c93fb739","size":1462,"parts":["[Content_Types].xml","_rels/.rels","word/document.xml"],"text":["Ovo je izmišljeni ulomak o sintetičkom istraživanju.","Drugi odlomak, također izmišljen, bez stvarnih podataka."],"traces":{"ins":0,"del":0,"comments":0,"rsidAttributes":0,"coreProperties":[]}},
+    {"file":"02-ins.docx","sha256":"43a3cda57ed750d3b5eeffdc24f7c6b5765a22532cbe1cbcabf64880231b264f","size":1667,"parts":["[Content_Types].xml","_rels/.rels","word/document.xml"],"text":["Izmišljena rečenica s umetnutim dijelom.","Cijeli umetnuti odlomak."],"traces":{"ins":2,"del":0,"comments":0,"rsidAttributes":0,"coreProperties":[]}},
+    {"file":"03-del.docx","sha256":"f896590242b4f8eb6ea0e3114874af86f1f24445fc6bfadae441015c6c48ca6e","size":1521,"parts":["[Content_Types].xml","_rels/.rels","word/document.xml"],"text":["Rečenica ostaje kratka."],"traces":{"ins":0,"del":1,"comments":0,"rsidAttributes":0,"coreProperties":[]}},
+    {"file":"04-comment.docx","sha256":"34fd457ba1e5d11fe584d0453ab353fce4f9dc422c4426c1654e4c637c8122ce","size":2439,"parts":["[Content_Types].xml","_rels/.rels","word/_rels/document.xml.rels","word/document.xml","word/comments.xml"],"text":["Odlomak s izmišljenim komentarom."],"traces":{"ins":0,"del":0,"comments":1,"rsidAttributes":0,"coreProperties":[]}},
+    {"file":"05-rsid.docx","sha256":"d55f3b899ca23bfc360fa733d475245a8c0669e19c7c33b1405cbf3760d0fab8","size":2408,"parts":["[Content_Types].xml","_rels/.rels","word/_rels/document.xml.rels","word/document.xml","word/settings.xml"],"text":["Odlomak s oznakama uređivanja.","Drugi odlomak iz druge sesije."],"traces":{"ins":0,"del":0,"comments":0,"rsidAttributes":4,"coreProperties":[]}},
+    {"file":"06-core.docx","sha256":"9e866e9f7bcfe277c836f4b1ab0f0e1873c4ff6fcaaf03dfc4c46ae6241e465e","size":2361,"parts":["[Content_Types].xml","_rels/.rels","word/document.xml","docProps/core.xml"],"text":["Odlomak uz izmišljena svojstva datoteke."],"traces":{"ins":0,"del":0,"comments":0,"rsidAttributes":0,"coreProperties":["cp:lastModifiedBy","cp:revision","dc:creator","dc:title","dcterms:created","dcterms:modified"]}},
+    {"file":"07-same-text-other-bytes.docx","sha256":"ae8e148dd319e030dca3c1e794ffc240e0a9c15c28b9019352120583e0754c3e","size":1531,"parts":["word/document.xml","_rels/.rels","[Content_Types].xml"],"text":["Ovo je izmišljeni ulomak o sintetičkom istraživanju.","Drugi odlomak, također izmišljen, bez stvarnih podataka."],"traces":{"ins":0,"del":0,"comments":0,"rsidAttributes":0,"coreProperties":[]},"sameTextAs":"01-clean.docx"},
+    {"file":"08-mixed.docx","sha256":"36cca60d49905241e6a5280e699304073ac1f44ea38164d08509422923206bce","size":2823,"parts":["[Content_Types].xml","_rels/.rels","word/_rels/document.xml.rels","word/document.xml","word/comments.xml"],"text":["Mješoviti i dopunjeni odlomak.","Odlomak s komentarom."],"traces":{"ins":1,"del":1,"comments":1,"rsidAttributes":0,"coreProperties":[]}}
+  ]
+}
