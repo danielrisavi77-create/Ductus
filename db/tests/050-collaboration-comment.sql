@@ -79,10 +79,11 @@ SELECT bag_eq(
             ('collaboration.create_revision_request(text,jsonb,text,bigint)'),
             ('collaboration.list_revision_requests(text)'),
             ('collaboration.respond_revision_request(uuid,bigint,text,text,bigint)'),
-            ('collaboration.accept_revision_request(uuid,bigint,bigint,text)'),
+            ('collaboration.accept_revision_request(uuid,bigint,bigint,text,jsonb)'),
             ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
-            ('collaboration.withdraw_revision_request(uuid,bigint)') $$,
-  'the web role executes exactly the five comment RPCs, the two live RPCs of 051 and the six revision-request RPCs of 110 and 112');
+            ('collaboration.withdraw_revision_request(uuid,bigint)'),
+            ('collaboration.rereview_revision_request(uuid,bigint)') $$,
+  'the web role executes exactly the five comment RPCs, the two live RPCs of 051 and the seven revision-request RPCs of 110, 112 and 119');
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.oid IN ('collaboration.create_comment(text,text,jsonb)'::regprocedure,

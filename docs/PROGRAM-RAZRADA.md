@@ -245,11 +245,11 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 **Cilj:** student predaje rad koji se točno rekonstruira iz zapisa i dobiva potpisanu potvrdu, a student i nastavnik vide isti sažetak procesa (pravila 5 i 11).
 
-**Gotovo na mainu:** zahtjev za predaju, zapis predaje, potvrda v2 i zatvaranje paketa (pgTAP 060 do 067, 070, 071, 086, 087); predani rad samo za čitanje (#818); rekonstrukcija i odluka o predaji; sažetak procesa iz jedne funkcije (`app/api/process-summary`); obavijest S3 i njezina vrata; tri koraka predaje na `/rad/[assignmentId]/predaja`; brz put nastavnika i popis predaja zadatka (#878, #909). **Djelomično:** usporedba s ranijim nacrtom. **Nema:** produljenja roka, izjave po FPZG čl. 9 i 15, rekonstrukcije u workeru.
+**Gotovo na mainu** (za M7 ponovno provjereno na `main` `cb4fbde1`, 10. 11. 2026., zadatak M7.0a)**:** zahtjev za predaju, zapis predaje, potvrda v2 i zatvaranje paketa (pgTAP 060 do 067, 070, 071, 086, 087); predani rad samo za čitanje (#818); rekonstrukcija i odluka o predaji; sažetak procesa iz jedne funkcije (`app/api/process-summary`); obavijest S3 i njezina vrata; tri koraka predaje na `/rad/[assignmentId]/predaja`; brz put nastavnika i popis predaja zadatka (#878, #909). **Djelomično:** usporedba s ranijim nacrtom. **Nema:** produljenja roka (nema tablice povijesti produljenja), izjave po FPZG čl. 9 i 15, rekonstrukcije u workeru. **Preduvjeti za M7.1 spojeni na main:** red poslova workera (#1829, DAN-517), asinkrono spremanje odsječka uz potvrdu na čekanju (#1758, DAN-518) i kontrolne točke rekonstrukcije vezane uz lanac (#1824, #1827, DAN-293); status tiketa vodi Linear.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M7.1 | Rekonstrukcija u workeru (D-191 t. 4) | B | M3.2, M3.3 | DAN-381 |
+| M7.1 | Rekonstrukcija u workeru (D-191 t. 4) | B | M3.2, M3.3, DAN-517 i DAN-518 (Q-4) | DAN-381 |
 | M7.2 | Nastavnik vidi tko je predao, reviziju i „poslije roka”; detalj zadatka i pregled predane verzije (B6) | B, F | | DAN-290, DAN-311 |
 | M7.3 | Produljenje roka po studentu (B9) | B, F | | DAN-312 |
 | M7.4 | Rok testiran preko promjene sata | B | M7.3 | DAN-382 |
@@ -263,24 +263,41 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M7.12 | (uvjetno) Priprema za obranu, samo za studenta (A-04 iz `docs/FEATURES.md`) | F | M7.11, uvjet U-3 | novo |
 | M7.13 | „Moj rad u brojkama” za studenta, bez ritma i usporedbe (A-10 iz `docs/FEATURES.md`, u mapi ekrana S-47; ne miješati s ekranom A-10 slučajevi i paket dokaza). Brojke samo iz verzija i samo za studenta, prema D-63 | F | M7.1, M5.8, spajanje #1030 (izuzetak u PRODUCT §5 pravilu 4) | novo |
 
+**Odluke M7 (D-263, #87 c.6622685877; D-266 t. 7, #87 c.6639423372):**
+- Valovi M7.Z1 i M7.Z2, rokovi i otvoreni neskladi s valovima zapisani su u `docs/PROGRAM.md`, odjeljak „Valovi M7” (D-263 Q15).
+- Usporedba: M6-O1 je odlučen; usporedba vrijedi u oba profila, samo između poslanih verzija, bez oznake i ocjene (D-237, #87 c.6581656612). **Otvoreno:** zadatak DAN-598 navodi da M7.6-P01 proširuje M6.7-P03 umjesto drugog čitača usporedbe, ali oznake M7.6-P01 i M6.7-P03 i to pravilo nemaju zapis u `docs/DECISIONS.md` ni na #87; redak M6.7 u ovoj razradi usporedbu ne navodi.
+- Rok: zahtjev za predaju zamrzava efektivni rok, a produljenje je zasebna dopuna; povijest produljenja dobiva novu tablicu (M7.3-P01). Model efektivnog roka još nije zapisan u `docs/BACKEND.md`; taj zapis otvara D-263 (D-263 Q07). M7.4 ovisi o M7.3, a oba su u M7.Z1 (D-263 Q15). **Otvoreno:** zadatak DAN-598 traži upis ovisnosti M7.4, a izvor koji bi mijenjao ovisnost o M7.3 nije pronađen u `docs/DECISIONS.md` ni na #87, pa ovisnost ostaje kako je zapisana.
+- Runde: izričito otvorene runde, prethodna predaja nepromjenjiva; expand migracija zamjenjuje `UNIQUE (assignment_id, institution_id, principal_id)` na `submission_request` (M7.1-P07) i nije potrebna prije M7.1-P01 do P06 (D-263 Q08, provodi D-28).
+- Worker: odjava ne zaustavlja prihvaćen posao predaje, potvrđeni opoziv blokira novu finalizaciju, worker radi s uskim opsegom posla bez korisničkog kolačića (D-263 Q03). Nepotpisani odsječak: ostaje sadašnji blok s ponovnim pokušajem, praznina se prikazuje kao praznina (D-263 Q26).
+- Izjava: do 5. 2. 2027. M7.5 ima AI odjeljak nad zatvorenim formatom priloga, a M9.5 daje proizvođača priloga do 15. 2. 2027. (D-266 t. 7). Prilažu se točne verzije cijelih odabranih razgovora, prikazane prije potvrde; popis vanjskih formata zatvara se prije koda (M7.5-P02, D-263 Q22). Prijenos teksta koji je kasnije obrisan i dalje čini razgovor obveznim (D-268 O3).
+- Prenosiv zapis: zaseban verzioniran potpisani manifest s jednim nositeljem zajedno s M8.6 (DAN-341), a `evidence-receipt-v2` ostaje (D-263 Q23). QR otvara lokalnu provjeru, nema javnog krajnjeg mjesta s podacima (D-263 Q24). **Otvoreno:** naziv koraka M7.10 („javna provjera potvrde”) i ekran J-03 naspram D-263 Q24.
+- Referentne slike M7.UX-R prije UI PR-ova; backend ne čeka (D-263 Q16), odobrenje po ekranu (Q-8, #87 c.6639423372). M7 samo na hrvatskom, engleski s M11 (D-263 Q28).
+- Uvjetni koraci: M7.6-P03, M7.11 i M7.12 ne grade se bez potvrde FPZG-a i C-42, pravnog mišljenja (D-55, C-19), odnosno U-3; potvrđuje stanje kanona (D-129, D-131) (D-263 Q27). **Otvoreno:** zapis ne razlaže koji uvjet ide uz koji korak; ovdje su M7.11 i M7.12 vezani uz U-3, a M7.6-P03 nema redak ni u tablici koraka ni među uvjetnim koracima.
+- **Otvoreno:** DAN-293 stoji i uz M3.3 i uz M7.6; spojeni PR-ovi #1824 i #1827 (DAN-293) su kontrolne točke rekonstrukcije, odnosno M3.3.
+
 **Ekrani:** S-05 obavijest (S3), S-15 panel Rad, S-30 pregled prije predaje, S-31 izjava, S-32 potvrda, S-33 sažetak procesa, S-43 napomene i osporavanje, N-05 brz put, N-10 sažetak i karta podrijetla, N-11 usporedba verzija, N-13 produljenje roka, J-03 provjera potvrde.
 
-**Uvjet završetka:** izlazni kriterij M7 iz `docs/PROGRAM.md` (rekonstrukcija podudarna na svim scenarijima uključujući prazninu, nepodudarnost blokira predaju, isti sažetak, nema zabranjenih riječi, rok preko promjene sata, potpuna izjava, karta podrijetla bez zbroja); test iz M7.9 zelen u CI-ju. Koraci M7.11 i M7.12 (uvjetno) nisu dio uvjeta završetka.
+**Uvjet završetka:** izlazni kriterij M7 iz `docs/PROGRAM.md` (rekonstrukcija podudarna na svim scenarijima uključujući prazninu, nepodudarnost blokira predaju, isti sažetak, nema zabranjenih riječi, rok preko promjene sata, potpuna izjava, karta podrijetla bez zbroja); test iz M7.9 zelen u CI-ju. Koraci M7.11 i M7.12 (uvjetno) nisu dio uvjeta završetka, kao ni M7.6-P03 (uvjetno po D-263 Q27; pravilo T3, #87 c.6544288967). Karta podrijetla je u M7.Z2 (D-263 Q15), pa završetak M7.Z1 sam ne ispunjava ovaj uvjet.
 
 ## M8 Uvoz i izvoz
 
-**Cilj:** uvezeni tekst ulazi u rad kao označen događaj s izvorom, a rad se izvozi u obliku fakulteta.
+**Cilj:** uvezeni tekst ulazi u rad kao označen događaj s izvorom, a rad se izvozi u obliku fakulteta. Odgovori O2, O4 i O5 za M8 zapisani su u D-290 do D-292 samo u dijelu koji ima vlasnikov trag; O1 i O3 su otvoreni (vidi „Otvoreno” niže).
 
 **Gotovo na mainu:** ništa od uvoza ni izvoza DOCX-a i PDF-a.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
+| M8.0-S1 | Ugovor i plan napada uvoza: izvor „uvoz” u novoj verziji formata segmenta (D-290), `import_event` i manifest s tri hasha, granice (D-291), naziv datoteke (D-292), idempotentna potvrda pregleda | B | M8.1-P03, M8.0a | DAN-436 (isti tiket kao M8.9) |
+| M8.0-S2 | Ugovor i plan napada izvoza: `ExportSnapshot` nad spremljenom ili predanom revizijom, karta sposobnosti po čvoru iz M5, jedan manifest D-173 zajedno s M7.10-P01, opseg i rok trajanja izvoznog artefakta | B | M8.0a, M5.0-S1 (DAN-589), M5.4 (DAN-403) | DAN-636 |
 | M8.1 | Lokalni sintetički spike čitanja DOCX-a (D-198 t. 5) | B | M8.8 | DAN-242 |
-| M8.2 | Uvoz DOCX-a kao događaj s izvorom „uvoz” | B, F | M8.1, M3.1 | DAN-396 |
-| M8.3 | Uvoz PDF-a kao događaj s izvorom | B, F | M8.2 | DAN-397 |
-| M8.4 | Izvoz DOCX-a u obliku fakulteta | B | M5.4 (provjera oblika: M4.3, D-203 t. 2) | DAN-398 |
-| M8.5 | Izvoz PDF-a u obliku fakulteta | B | M8.4 | DAN-399 |
+| M8.2 | Uvoz DOCX-a kao događaj s izvorom „uvoz” | B, F | M8.1, M3.1, M8.0-S1 | DAN-396 |
+| M8.2b | Prekidač „Dopušten uvoz” pri stvaranju zadatka; nova verzija zadatka smije uvoz samo isključiti (`docs/PRODUCT.md` §6 t. 3, D-282) | F | M8.2-P04, M8.UX-R, M8.0-S1 | DAN-396 |
+| M8.3 | Uvoz PDF-a kao događaj s izvorom | B, F | M8.2, M8.0-S1 | DAN-397 |
+| M8.4 | Izvoz DOCX-a u obliku fakulteta: P01 zamrznuti izvozni snapshot, P02 DOCX pisac bibliotekom `docx` (D-254) | B | P01: M5.1-P04, M8.0-S2; P02: M5.4-P03, M8.4-P01 (provjera oblika: M4.3, D-203 t. 2) | DAN-398 |
+| M8.5-S | Spike S-PDF (D-254): DOCX → PDF/A-2u preko LibreOfficea u izoliranom servisu bez mreže, OFL fontovi, pinana slika; 15.000 riječi, veraPDF `isCompliant="true"`, izmjereni CPU i RAM | P | M8.4-P02 | DAN-399 |
+| M8.5 | Izvoz PDF-a u obliku fakulteta prema D-254 (kanonski dokument → DOCX → PDF); renderer prema ishodu M8.5-S, a ako spike ne prođe, varijanta pdfkit ide vlasniku | B | M8.4-P01, M8.5-S | DAN-399 |
 | M8.6 | Izvoz predanog rada, potvrde za referadu (R-06) i paket za Merlin (R-05); provjerljiv izvozni paket (D-173) | B, F | M7.1 | DAN-316, DAN-341 |
+| M8.7-S | Spike čitanja skeniranih uputa: Tesseract.js `hrv` (brzi i standardni model) i tekstni sloj PDF.js nad sintetičkim hrvatskim uputama i bibliografijama; točnost dijakritika i datuma, vrijeme, veličina paketa | F | | DAN-441 |
 | M8.7 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom (S-09) te provjera doslovnog citata u učitanom PDF-u (A-03) | F, B | M5.1, M5.9, M8.3 | DAN-441 |
 | M8.8 | Paket, lockfile, OSV skeniranje i testovi za `spikes/docx-provenance` | P | | DAN-435 |
 | M8.9 | Ugovor provenance i manifest uz `import_event`; `evidence-receipt-v2` se ne mijenja (D-198 t. 7) | B | M8.1, M8.2 | DAN-436 |
@@ -288,9 +305,17 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M8.11 | Čitanje spremljenih verzija iz OneDrivea, SharePointa i Google Drivea za odabranu datoteku (D-198 t. 1; granica podataka i opseg dozvola po D-198 t. 5) | B, F | M8.2, M8.9 | DAN-438 |
 | M8.12 | Word i Google Docs dodaci, sljedeći val, ne pilot (D-198 t. 2; uvjet U-7) | B, F | M8.11 | DAN-439 |
 | M8.13 | Ekran „Povijest dokumenta”: popis „uvezeno, tvrdnja iz datoteke”, isti za obje uloge (D-198 t. 6) | F | M8.2, M8.9 | DAN-440 |
-| M8.14 | Izvoz PDF/A-2u; valjanost provjerava veraPDF u CI-ju s fiksnim profilom `-f 2u`, pinanom verzijom i digestom; PDF se označava kao PDF/A samo uz `isCompliant="true"` (D-206, D-203 A3) | B | M8.5 | novo |
+| M8.14 | Izvoz PDF/A-2u; valjanost provjerava veraPDF u CI-ju s fiksnim profilom `-f 2u`, pinanom verzijom i digestom; PDF se označava kao PDF/A samo uz `isCompliant="true"`, inače obični PDF bez oznake (D-206, D-203 A3, D-253, D-284). P01: opcija nad istim snapshotom s `outputSha256` i `reportHash`; P02: veraPDF u CI-ju, test da veraPDF nije u `package.json` | B | M8.5 | DAN-527 |
 
 Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
+
+**Ovisnosti izvan tablice:** M8.1-P03, M8.2-P04, M5.0-S1, M5.1-P04, M5.4-P03 i M8.UX-R navode se kako ih navodi plan M8 (M8.0a, DAN-601); M8.UX-R su referentne slike za S-19, S-20 i N-18 (DAN-603), M5.0-S1 je ugovor sheme v2 iz odjeljka M5 (DAN-589), a M5.4-P03 je opća izvozna projekcija bez paketa Lekte. Spike koraci (M8.5-S, M8.7-S) dijele tiket s korakom koji otvaraju.
+
+**M8.0-S1 prije uvoza:** M8.2, M8.2b i M8.3 čekaju M8.0-S1 jer su polja `import_event`, manifest s tri hasha i idempotentna potvrda pregleda PRIJEDLOG do reviewa tog ugovora (D-290), granice čitanja osim `rawByteLength` predlaže taj ugovor (D-291), a pohrana naziva datoteke otvorena je do njega (D-292); uvoz se ne gradi na PRIJEDLOGU.
+
+**M8.9 i M8.0-S1:** prema D-290 do D-292 sadržaj ugovora uvoza (`import_event`, manifest, granice, naziv datoteke) zaključuju ugovor M8.0-S1 i njegov review; oba koraka nose DAN-436. Zapisane odluke ne kažu je li M8.9 time zamijenjen ili ostaje zaseban kasniji korak, pa redak M8.9 i njegove ovisnosti (M8.1, M8.2) ostaju nepromijenjeni do odluke (vidi „Otvoreno”).
+
+**Otvoreno:** O1 i O3 plana M8 (D-290 do D-292); granice čitanja osim `rawByteLength` (D-291); pohrana naziva datoteke (D-292). Zaključuje ih ugovor M8.0-S1 i njegov review, a što bi bilo skupo promijeniti ide vlasniku. **Za Owner queue:** je li M8.9 zamijenjen s M8.0-S1 ili ostaje zaseban korak nakon M8.2 (bilježenje uz `import_event`); o tome ovise ovisnosti M8.10, M8.11 i M8.13 o M8.9. Ne slijedi iz D-290 do D-292; do odluke se na M8.9 ne gradi ništa što bi bilo skupo promijeniti.
 
 **Ekrani:** S-19 uvoz teksta, S-20 izvoz, N-18 izvoz predanog rada i paket za Merlin.
 
@@ -328,7 +353,7 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 | M9.Z1 | Provjera cjeline M9 na sintetičkim podacima: svaki prijenos zapisan s pružateljem, modelom i svrhom; prekidači isključeni po zadanom; prazna konfiguracija troška isključuje AI | B | M9.4, M9.5, M9.6, M9.7 | novo |
 | M9.Z2 | Stanje na kontrolnoj točki 15. 1. 2027. i prijava vlasniku što je otvoreno (M9.1, M9.PRIV, M9.AIACT, M9.UX-R); M9 se ne reže bez vlasnika (D-199 t. 6, D-270 O12). Izvještaj je vezan za datum, ne za završetak koraka: ne čeka ni M9.1 (o njegovu stanju izvještava) ni M9.Z1 (zasebna završna provjera) | V | | novo |
 
-**Ovisnosti izvan M9:** M3.1 (B-8) i M3.2-P03 (nositelj formata evidencije) te M8.0-S1 (zajednički ugovor formata, D-269 O8) navode se kako ih navodi objedinjeni plan rb27; naziva M3.2-P03 i M8.0-S1 još nema u ovom dokumentu, a tiketi se otvaraju nakon potvrde plana (M9.0b, D-270 O13). M7.5 je preduvjet za M9.5. **Redoslijed i rokovi (D-199 t. 6, D-266 t. 6):** M10 → M9 → M11; M9.1 do 15. 12. 2026., M9.2 i M9.3 oko 15. 1. 2027., M9.4 do M9.7 do 15. 2. 2027. (M9.5 nakon M7.5), M10 oko 10. 2., M11 22. 2.; kontrolne točke 30. 11. 2026. i 15. 1. 2027.
+**Ovisnosti izvan M9:** M3.1 (B-8) i M3.2-P03 (nositelj formata evidencije) te M8.0-S1 (zajednički ugovor formata, D-269 O8) navode se kako ih navodi objedinjeni plan rb27; naziva M3.2-P03 još nema u ovom dokumentu (M8.0-S1 je u odjeljku M8), a tiketi se otvaraju nakon potvrde plana (M9.0b, D-270 O13). M7.5 je preduvjet za M9.5. **Redoslijed i rokovi (D-199 t. 6, D-266 t. 6):** M10 → M9 → M11; M9.1 do 15. 12. 2026., M9.2 i M9.3 oko 15. 1. 2027., M9.4 do M9.7 do 15. 2. 2027. (M9.5 nakon M7.5), M10 oko 10. 2., M11 22. 2.; kontrolne točke 30. 11. 2026. i 15. 1. 2027.
 
 **Uvjet završetka:** izlazni kriterij M9 iz `docs/PROGRAM.md`, bez oznake podudaranja s odgovorom AI pomoćnika iz M9.6 (D-58, uvjet U-4): ta oznaka (stavka „prepisan AI odgovor označen” u izlaznom kriteriju) nije dio uvjeta završetka M9 dok se U-4 ne riješi.
 

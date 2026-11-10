@@ -109,7 +109,7 @@ CREATE TEMP TABLE print_before AS SELECT pg_temp.evidence_print() AS v;
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.oid IN ('collaboration.respond_revision_request(uuid,bigint,text,text,bigint)'::regprocedure,
-        'collaboration.accept_revision_request(uuid,bigint,bigint,text)'::regprocedure,
+        'collaboration.accept_revision_request(uuid,bigint,bigint,text,jsonb)'::regprocedure,
         'collaboration.reopen_revision_request(uuid,bigint,text,bigint)'::regprocedure,
         'collaboration.withdraw_revision_request(uuid,bigint)'::regprocedure)
         AND (NOT p.prosecdef OR p.proowner <> 'ductus_identity'::regrole OR NOT 'search_path=""' = ANY (p.proconfig)) $$,
@@ -123,12 +123,12 @@ SELECT is_empty(
 SELECT bag_eq(
   $$ SELECT r || ' ' || f FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_evidence', 'ductus_test_stranger']) AS r
       CROSS JOIN unnest(ARRAY['collaboration.respond_revision_request(uuid,bigint,text,text,bigint)',
-        'collaboration.accept_revision_request(uuid,bigint,bigint,text)', 'collaboration.reopen_revision_request(uuid,bigint,text,bigint)',
+        'collaboration.accept_revision_request(uuid,bigint,bigint,text,jsonb)', 'collaboration.reopen_revision_request(uuid,bigint,text,bigint)',
         'collaboration.withdraw_revision_request(uuid,bigint)', 'collaboration.revision_request_for_write(uuid,text)',
         'collaboration.is_revision_seq(bigint)', 'collaboration.is_revision_number(bigint)']) AS f
       WHERE has_function_privilege(r, f, 'EXECUTE') $$,
   $$ VALUES ('ductus_app collaboration.respond_revision_request(uuid,bigint,text,text,bigint)'),
-            ('ductus_app collaboration.accept_revision_request(uuid,bigint,bigint,text)'),
+            ('ductus_app collaboration.accept_revision_request(uuid,bigint,bigint,text,jsonb)'),
             ('ductus_app collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
             ('ductus_app collaboration.withdraw_revision_request(uuid,bigint)') $$,
   'the web role executes the four transitions and no runtime role a helper (A11)');
@@ -138,8 +138,8 @@ SELECT is(pg_get_function_arguments(a.f::regprocedure), a.args, 'the arguments o
 FROM (VALUES
   ('collaboration.respond_revision_request(uuid,bigint,text,text,bigint)',
    'p_request_id uuid, p_expected_seq bigint, p_kind text, p_explanation text, p_response_revision bigint'),
-  ('collaboration.accept_revision_request(uuid,bigint,bigint,text)',
-   'p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text'),
+  ('collaboration.accept_revision_request(uuid,bigint,bigint,text,jsonb)',
+   'p_request_id uuid, p_expected_seq bigint, p_accepted_revision bigint, p_range_hash text, p_accepted_anchor jsonb DEFAULT NULL::jsonb'),
   ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)',
    'p_request_id uuid, p_expected_seq bigint, p_instruction text, p_requested_revision bigint'),
   ('collaboration.withdraw_revision_request(uuid,bigint)', 'p_request_id uuid, p_expected_seq bigint')
@@ -147,7 +147,7 @@ FROM (VALUES
 SELECT is(pg_get_function_result(a.f::regprocedure), 'TABLE(outcome text, row_seq bigint, version integer, state text)',
   a.f || ' returns the outcome, the counter, the version and the state')
 FROM (VALUES ('collaboration.respond_revision_request(uuid,bigint,text,text,bigint)'),
-  ('collaboration.accept_revision_request(uuid,bigint,bigint,text)'), ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
+  ('collaboration.accept_revision_request(uuid,bigint,bigint,text,jsonb)'), ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
   ('collaboration.withdraw_revision_request(uuid,bigint)')) AS a (f);
 
 -- The transition table (B1, B2, B7): every state against every action, with
