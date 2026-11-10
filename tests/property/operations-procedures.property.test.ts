@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+
 import { fc, test } from "@fast-check/vitest";
 import { expect } from "vitest";
 
-import { REQUIRED_PROCEDURES, checkOperations } from "../../scripts/operations/check-procedures.mjs";
+import { REQUIRED_PROCEDURES, checkOperations, repoContext } from "../../scripts/operations/check-procedures.mjs";
 
 // DAN-540 (M11.3-P04), contract on #1091: for any document of the four
 // required procedures, the check reports a problem exactly for the steps that
@@ -22,7 +24,8 @@ const CONTEXT = {
 /** A step kind and whether the check must refuse it. */
 const STEPS = [
   { body: "Naredba: `pnpm local:up`.", bad: false },
-  { body: "Naredba: `node scripts/db/native-db.mjs status`.", bad: false },
+  // Since #1803 w540l a dot is outside the character list, so a node file is refused.
+  { body: "Naredba: `node scripts/db/native-db.mjs status`.", bad: true },
   { body: "Naredba: `curl -fsS http://localhost:3000/api/ready`.", bad: false },
   { body: "Nositelj: `vlasnik`.", bad: false },
   { body: "**Nositelj:** `koordinator pilota`.", bad: false },
@@ -32,6 +35,7 @@ const STEPS = [
   { body: "Nositelj: `dežurni`.", bad: true },
   { body: "Pogledaj `pnpm local:up` u dokumentu.", bad: true },
   { body: "Odluči što dalje.", bad: true },
+  { body: "Naredba: `kill -TERM <pid>`.", bad: false },
 ] as const;
 
 const PROSE = ["", "Kratka napomena bez naredbe.\n\n", "**Napomena:** `pnpm nope` nije korak.\n\n", "```\n1. nije korak\n```\n\n"] as const;
@@ -194,3 +198,62 @@ test.prop([fc.integer({ min: 0, max: COMMANDS.length - 1 }), fc.nat(), fc.consta
     ]);
   },
 );
+
+// Review FAIL c.6765310879 and QA FAIL c.6765312157 on 9deb453a (#1803),
+// contract #1836 c.6765524123 (w540l): a command may use only ASCII letters and
+// digits, U+0020, `-`, `/`, `:` and `<pid>` as a whole word. Any command with at
+// least one other character is refused at its step by a character check, and
+// every command of docs/OPERATIONS.md still passes.
+const DOC_TEXT = readFileSync(new URL("../../docs/OPERATIONS.md", import.meta.url), "utf8");
+const DOC_COMMANDS = [
+  ...new Set(
+    DOC_TEXT.split("\n")
+      .filter((line) => /^\d+\. /.test(line))
+      .flatMap((line) => [...line.matchAll(/Naredba:((?:(?:\s*,\s*|\s+(?:i|ili|pa)\s+|\s*)`[^`]*`)+)/gu)])
+      .flatMap((m) => [...(m[1] ?? "").matchAll(/`([^`]*)`/g)].map((c) => (c[1] ?? "").trim())),
+  ),
+];
+const REPO = repoContext(new URL("../..", import.meta.url));
+const ALLOWED = /^[A-Za-z0-9 /:-]$/;
+const PID_WORD = /(?<=^| )<pid>(?= |$)/g;
+/** Characters outside the list once whole-word `<pid>` is taken out. */
+const outside = (command: string) => [...command.replace(PID_WORD, "")].filter((c) => !ALLOWED.test(c));
+const CHARACTER_CHECKS = [
+  "command contains a character that is not allowed (U+",
+  "command chains, pipes or redirects are not allowed: ",
+  "command contains a space other than U+0020 or a tab: ",
+  // A backslash right before the closing backtick is refused by the parser.
+  "unsupported markdown: backslash before a backtick",
+];
+const SPECIAL = [..."'\"$\\;|&<>(){}[]*?~!#%=@^.,_+\t\u0000\u001b\u007f\u00a0\u0085\u200b\u2028\ufeffčć"] as const;
+// Any character but a backtick or a line break, which end the code span or the line.
+const anyChar = fc.oneof(fc.constantFrom(...SPECIAL), fc.string({ unit: "binary", minLength: 1, maxLength: 1 })).filter((c) => !/[`\n\r]/.test(c));
+const allowedChar = fc.constantFrom(..."abcxyzABCXYZ0189 /:-");
+const baseArb = fc.oneof(fc.constantFrom(...DOC_COMMANDS), fc.stringMatching(/^[A-Za-z0-9 /:-]{1,30}$/));
+const stepWith = (command: string) => `# Operacije\n\n${OWNERS}\n## Postupci\n\n### ${REQUIRED_PROCEDURES[0]}\n\n1. Korak. Naredba: \`${command}\`.\n`;
+
+test.prop([baseArb, fc.nat(), fc.array(fc.oneof(anyChar, allowedChar), { minLength: 1, maxLength: 5 })])(
+  "F1/F2 a command with one to five characters outside the list is refused at its step",
+  (base, at, inserted) => {
+    const index = at % (base.length + 1);
+    const command = `${base.slice(0, index)}${inserted.join("")}${base.slice(index)}`;
+    fc.pre(outside(command).length > 0);
+    const found = checkOperations(stepWith(command), REPO).filter((p) => p.procedure === REQUIRED_PROCEDURES[0]);
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.every((p) => p.step === 1 && CHARACTER_CHECKS.some((m) => p.message.startsWith(m)))).toBe(true);
+  },
+);
+
+test.prop([fc.stringMatching(/^[A-Za-z0-9 /:-]{1,40}$/)])("F3 a command made only of listed characters is never refused for a character", (command) => {
+  const found = checkOperations(stepWith(command), REPO).filter((p) => p.procedure === REQUIRED_PROCEDURES[0]);
+  expect(found.filter((p) => CHARACTER_CHECKS.some((m) => p.message.startsWith(m)))).toEqual([]);
+});
+
+test("F3 every command of docs/OPERATIONS.md passes and uses only listed characters", () => {
+  expect(DOC_COMMANDS.length).toBeGreaterThanOrEqual(7);
+  for (const command of DOC_COMMANDS) {
+    expect(outside(command)).toEqual([]);
+    expect(checkOperations(stepWith(command), REPO).filter((p) => p.procedure === REQUIRED_PROCEDURES[0])).toEqual([]);
+  }
+  expect(checkOperations(DOC_TEXT, REPO)).toEqual([]);
+});

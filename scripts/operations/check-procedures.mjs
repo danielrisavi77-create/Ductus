@@ -54,6 +54,13 @@ const ENV_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const PLACEHOLDER_RE = /<[\p{L}\d_-]+>/gu;
 // Shell chains, pipes, redirects and substitutions: only one command per span.
 const SHELL_OPERATOR_RE = /[;&|<>]|\$\(/;
+// The only characters a command may contain (#1803 w540l): the narrowest set the
+// steps in docs/OPERATIONS.md use. Bash gives quotes, `$`, `\`, globs, braces,
+// `~`, `#` and tabs a meaning the word split below cannot see (review FAIL
+// c.6765310879, QA FAIL c.6765312157), so any other character refuses the step.
+const ALLOWED_CHAR_RE = /[A-Za-z0-9 /:-]/;
+// `<pid>` is the one placeholder the steps use, allowed only as a whole word.
+const PID_WORD_RE = /(?<=^| )<pid>(?= |$)/g;
 const BUILT_IN_PNPM = new Set(["install"]);
 // pnpm and node options (`--dir=`, `--filter`, `--import=`, `-r`) change what
 // runs or where, so only these install options are allowed, and none elsewhere.
@@ -279,8 +286,8 @@ function spansAfter(rest) {
   for (;;) {
     const span = /^`([^`]*)`/.exec(tail);
     if (!span) break;
-    // Only spaces and tabs are trimmed; any other space stays and is refused.
-    spans.push((span[1] ?? "").replace(/^[ \t]+|[ \t]+$/g, ""));
+    // Only U+0020 is trimmed; a tab or any other space stays and is refused.
+    spans.push((span[1] ?? "").replace(/^ +| +$/g, ""));
     tail = tail.slice(span[0].length);
     const next = NEXT_SPAN_RE.exec(tail);
     if (!next) break;
@@ -328,7 +335,12 @@ function commandProblem(command, context) {
   // Bash splits words only on spaces and tabs, so `pnpm<NBSP>install` is one
   // word that does not exist (Codex c.4523669643 on 0d2fc9fc, #1803 w540k).
   if (/[^\S \t]|\u0085/u.test(command)) return `command contains a space other than U+0020 or a tab: ${command}`;
-  const tokens = command.split(/[ \t]+/).filter(Boolean);
+  for (const char of command.replace(PID_WORD_RE, "")) {
+    if (ALLOWED_CHAR_RE.test(char)) continue;
+    const code = (char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0");
+    return `command contains a character that is not allowed (U+${code}): ${command}`;
+  }
+  const tokens = command.split(/ +/).filter(Boolean);
   if (tokens[0] && ENV_RE.test(tokens[0])) return `environment prefix not allowed: ${tokens[0]}`;
   const [program, ...args] = tokens;
 

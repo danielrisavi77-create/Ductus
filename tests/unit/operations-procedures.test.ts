@@ -49,6 +49,8 @@ const messages = (text: string) => checkOperations(text, CONTEXT).map((p) => `${
 const NONE = ["Pokretanje#1: step has neither Naredba: nor Nositelj:"];
 const NINE = Array.from({ length: 9 }, (_, i) => `${i + 1}. Korak. Nositelj: \`vlasnik\`.`).join("\n");
 const U = (what: string, step = "1") => `Pokretanje#${step}: unsupported markdown: ${what}`;
+// Since #1803 w540l a command uses only `A-Za-z0-9`, U+0020, `-`, `/`, `:` and
+// `<pid>`, so rows with `.`, `_`, `=` and the like are refused before splitting.
 
 describe("checkOperations: one step per input class", () => {
   it.each([
@@ -57,8 +59,8 @@ describe("checkOperations: one step per input class", () => {
     ["1 pnpm install is built in", "1. Ovisnosti. Naredba: `pnpm install --frozen-lockfile`.", []],
     ["1 pnpm script that does not exist", "1. Pokreni. Naredba: `pnpm prod:up`.", ["Pokretanje#1: pnpm script not in package.json: prod:up"]],
     ["1 pnpm without a script", "1. Pokreni. Naredba: `pnpm`.", ["Pokretanje#1: pnpm command names no script"]],
-    ["2 node file that exists", "1. Baza. Naredba: `node scripts/db/native-db.mjs up`.", []],
-    ["2 node file that does not exist", "1. Baza. Naredba: `node scripts/db/gone.mjs`.", ["Pokretanje#1: node file does not exist: scripts/db/gone.mjs"]],
+    ["2 node file that exists", "1. Baza. Naredba: `node scripts/db/native-db.mjs up`.", ["Pokretanje#1: command contains a character that is not allowed (U+002E): node scripts/db/native-db.mjs up"]],
+    ["2 node file that does not exist", "1. Baza. Naredba: `node scripts/db/gone.mjs`.", ["Pokretanje#1: command contains a character that is not allowed (U+002E): node scripts/db/gone.mjs"]],
     ["2 node flags only", "1. Baza. Naredba: `node --version`.", ["Pokretanje#1: node command names no file"]],
     ["3 curl route that exists", `1. ${VALID_STEP}`, []],
     ["3 curl that keeps the body on failure", "1. Spremnost. Naredba: `curl --fail-with-body -sS http://localhost:3000/api/ready`.", []],
@@ -79,19 +81,19 @@ describe("checkOperations: one step per input class", () => {
     ["4 pipe and redirect", "1. Pokreni. Naredba: `pnpm local:up | tee log`, `pnpm local:up > log`.", ["Pokretanje#1: command chains, pipes or redirects are not allowed: pnpm local:up | tee log", "Pokretanje#1: command chains, pipes or redirects are not allowed: pnpm local:up > log"]],
     // Grok findings on #1803, in scope per the orchestrator (#1803 c.6759224276):
     // an environment prefix, a second signal and pnpm or node options.
-    ["4 environment prefix is refused", "1. Pokreni. Naredba: `NODE_ENV=development pnpm local:up`.", ["Pokretanje#1: environment prefix not allowed: NODE_ENV=development"]],
-    ["4 lower-case environment prefix is refused", "1. Pokreni. Naredba: `node_options=--import=x pnpm local:up`.", ["Pokretanje#1: environment prefix not allowed: node_options=--import=x"]],
+    ["4 environment prefix is refused", "1. Pokreni. Naredba: `NODE_ENV=development pnpm local:up`.", ["Pokretanje#1: command contains a character that is not allowed (U+005F): NODE_ENV=development pnpm local:up"]],
+    ["4 lower-case environment prefix is refused", "1. Pokreni. Naredba: `node_options=--import=x pnpm local:up`.", ["Pokretanje#1: command contains a character that is not allowed (U+005F): node_options=--import=x pnpm local:up"]],
     ["4 kill with a second signal before TERM", "1. Stani. Naredba: `kill -9 -TERM <pid>`.", ["Pokretanje#1: kill sends neither -TERM nor -INT"]],
     ["4 kill with a second signal after TERM", "1. Stani. Naredba: `kill -TERM -9 <pid>`.", ["Pokretanje#1: kill takes one signal and process ids only: -9"]],
     ["4 kill without a process", "1. Stani. Naredba: `kill -INT`.", ["Pokretanje#1: kill names no process"]],
-    ["1 pnpm option before the script", "1. Pokreni. Naredba: `pnpm --dir=/tmp local:up`.", ["Pokretanje#1: pnpm option not allowed: --dir=/tmp"]],
+    ["1 pnpm option before the script", "1. Pokreni. Naredba: `pnpm --dir=/tmp local:up`.", ["Pokretanje#1: command contains a character that is not allowed (U+003D): pnpm --dir=/tmp local:up"]],
     ["1 pnpm run option before the script", "1. Pokreni. Naredba: `pnpm run --filter x local:up`.", ["Pokretanje#1: pnpm option not allowed: --filter"]],
-    ["1 pnpm option after the script", "1. Pokreni. Naredba: `pnpm local:up --dir=/tmp`.", ["Pokretanje#1: pnpm option not allowed: --dir=/tmp"]],
-    ["1 pnpm install with an option outside the list", "1. Ovisnosti. Naredba: `pnpm install --dir=/tmp`.", ["Pokretanje#1: pnpm install argument not allowed: --dir=/tmp"]],
+    ["1 pnpm option after the script", "1. Pokreni. Naredba: `pnpm local:up --dir=/tmp`.", ["Pokretanje#1: command contains a character that is not allowed (U+003D): pnpm local:up --dir=/tmp"]],
+    ["1 pnpm install with an option outside the list", "1. Ovisnosti. Naredba: `pnpm install --dir=/tmp`.", ["Pokretanje#1: command contains a character that is not allowed (U+003D): pnpm install --dir=/tmp"]],
     ["1 pnpm install that adds a package", "1. Ovisnosti. Naredba: `pnpm install left-pad`.", ["Pokretanje#1: pnpm install argument not allowed: left-pad"]],
-    ["2 node option before the file", "1. Baza. Naredba: `node --import=./x.mjs scripts/db/native-db.mjs`.", ["Pokretanje#1: node option not allowed: --import=./x.mjs"]],
-    ["2 node option with a separate value", "1. Baza. Naredba: `node --require ./x.cjs scripts/db/native-db.mjs`.", ["Pokretanje#1: node option not allowed: --require"]],
-    ["2 node arguments after the file belong to the script", "1. Baza. Naredba: `node scripts/db/native-db.mjs status --json`.", []],
+    ["2 node option before the file", "1. Baza. Naredba: `node --import=./x.mjs scripts/db/native-db.mjs`.", ["Pokretanje#1: command contains a character that is not allowed (U+003D): node --import=./x.mjs scripts/db/native-db.mjs"]],
+    ["2 node option with a separate value", "1. Baza. Naredba: `node --require ./x.cjs scripts/db/native-db.mjs`.", ["Pokretanje#1: command contains a character that is not allowed (U+002E): node --require ./x.cjs scripts/db/native-db.mjs"]],
+    ["2 node arguments after the file belong to the script", "1. Baza. Naredba: `node scripts/db/native-db.mjs status --json`.", ["Pokretanje#1: command contains a character that is not allowed (U+002E): node scripts/db/native-db.mjs status --json"]],
     ["5 owner from the table", "1. Odluči. Nositelj: `vlasnik`.", []],
     ["5 owner with a space", "1. Odluči. Nositelj: `zamjenik vlasnika`.", []],
     ["5 owner not in the table", "1. Odluči. Nositelj: `dežurni`.", ["Pokretanje#1: owner not in Nositelji: dežurni"]],
@@ -385,10 +387,10 @@ describe("checkOperations: curl names exactly one plain URL", () => {
     ["N2 a header", `-H X-Test:1 ${ready}`, ["Pokretanje#1: curl option not allowed: -H"]],
     ["N2 a value joined to short flags", `-fsSo out ${ready}`, ["Pokretanje#1: curl option not allowed: -fsSo"]],
     ["N2 a value joined to an option", `-oout ${ready}`, ["Pokretanje#1: curl option not allowed: -oout"]],
-    ["N2 a long option with a value", `--config=cfg ${ready}`, ["Pokretanje#1: curl option not allowed: --config=cfg"]],
+    ["N2 a long option with a value", `--config=cfg ${ready}`, [`Pokretanje#1: command contains a character that is not allowed (U+003D): curl --config=cfg ${ready}`]],
     ["N2 allowed flags", `--fail --silent --show-error -i ${ready}`, []],
-    ["N2 a brace glob", "http://localhost:3000/api/{ready,nope}", ["Pokretanje#1: curl URL globbing is not allowed: http://localhost:3000/api/{ready,nope}"]],
-    ["N2 a range glob", `${ready}[1-2]`, [`Pokretanje#1: curl URL globbing is not allowed: ${ready}[1-2]`]],
+    ["N2 a brace glob", "http://localhost:3000/api/{ready,nope}", ["Pokretanje#1: command contains a character that is not allowed (U+007B): curl http://localhost:3000/api/{ready,nope}"]],
+    ["N2 a range glob", `${ready}[1-2]`, [`Pokretanje#1: command contains a character that is not allowed (U+005B): curl ${ready}[1-2]`]],
   ] as const)("%s", (_name, args, expected) => {
     expect(messages(doc(curl(args)))).toEqual(expected);
   });
@@ -400,25 +402,26 @@ describe("checkOperations: curl names exactly one plain URL", () => {
 // path that is checked must be the path in the text of the URL.
 describe("checkOperations: the curl path is checked as written", () => {
   const curl = (url: string) => `1. Provjeri. Naredba: \`curl -fsS ${url}\`.`;
-  const slash = (url: string) => [`Pokretanje#1: curl URL contains a backslash: ${url}`];
-  const normal = (url: string) => [`Pokretanje#1: curl URL path is not in normal form: ${url}`];
+  // Since w540l these URLs are refused by the character list before the URL checks,
+  // which stay for the characters the list allows.
+  const listed = (code: string) => (url: string) => [`Pokretanje#1: command contains a character that is not allowed (U+${code}): curl -fsS ${url}`];
   const base = "http://localhost:3000";
   it.each([
-    ["B1 a backslash for a slash in the path", `${base}/api\\health`, slash],
+    ["B1 a backslash for a slash in the path", `${base}/api\\health`, listed("005C")],
     // At the end of the span the backslash is refused earlier, before a backtick.
     ["B2 a backslash at the end", `${base}/api/health\\`, () => [U("backslash before a backtick")]],
-    ["B2 a backslash before the query", `${base}/api/ready\\?x=1`, slash],
-    ["B3 a backslash in the authority", `${base}\\api/health`, slash],
-    ["B4 a doubled backslash", `${base}/api\\\\health`, slash],
-    ["B5 a backslash before a letter", `${base}/api/\\health`, slash],
-    ["B6 a backslash in the query", `${base}/api/ready?x=\\1`, slash],
-    ["P1 a dot-dot segment", `${base}/api/x/../health`, normal],
-    ["P2 a dot segment", `${base}/api/./health`, normal],
-    ["P3 an encoded dot-dot segment", `${base}/api/x/%2e%2e/health`, normal],
-    ["P3 a mixed encoded dot-dot segment", `${base}/api/x/%2E./health`, normal],
+    ["B2 a backslash before the query", `${base}/api/ready\\?x=1`, listed("005C")],
+    ["B3 a backslash in the authority", `${base}\\api/health`, listed("005C")],
+    ["B4 a doubled backslash", `${base}/api\\\\health`, listed("005C")],
+    ["B5 a backslash before a letter", `${base}/api/\\health`, listed("005C")],
+    ["B6 a backslash in the query", `${base}/api/ready?x=\\1`, listed("003F")],
+    ["P1 a dot-dot segment", `${base}/api/x/../health`, listed("002E")],
+    ["P2 a dot segment", `${base}/api/./health`, listed("002E")],
+    ["P3 an encoded dot-dot segment", `${base}/api/x/%2e%2e/health`, listed("0025")],
+    ["P3 a mixed encoded dot-dot segment", `${base}/api/x/%2E./health`, listed("0025")],
     ["P4 an empty segment is kept as written", `${base}/api//health`, () => ["Pokretanje#1: no route app/api//health/route.ts"]],
     ["K1 a plain path", `${base}/api/health`, () => []],
-    ["K1 a query", `${base}/api/ready?x=1`, () => []],
+    ["K1 a query", `${base}/api/ready?x=1`, listed("003F")],
     ["K1 a trailing slash", `${base}/api/ready/`, () => []],
   ] as const)("%s", (_name, url, expected) => {
     expect(messages(doc(curl(url)))).toEqual(expected(url));
@@ -592,10 +595,115 @@ describe("checkOperations: a command splits only on spaces and tabs", () => {
 
   it.each([
     ["K3 a space", "pnpm local:up"],
-    ["K3 a tab", "pnpm\tlocal:up"],
-    ["K3 two spaces", "node  scripts/db/native-db.mjs"],
+    ["K3 two spaces", "pnpm  local:up"],
+    ["K3 two spaces before a placeholder", "kill  -TERM  <pid>"],
   ] as const)("%s between words is a separator", (_name, command) => {
     expect(messages(step(command))).toEqual([]);
+  });
+
+  // w540l: Bash also splits on a tab, but a tab is outside the character list.
+  it.each([
+    ["K3 a tab", "pnpm\tlocal:up"],
+    ["K3 two spaces before a dot", "node  scripts/db/native-db.mjs"],
+  ] as const)("%s is refused by the character list", (_name, command) => {
+    const c = command.includes("\t") ? "0009" : "002E";
+    expect(messages(step(command))).toEqual([`Pokretanje#1: command contains a character that is not allowed (U+${c}): ${command}`]);
+  });
+});
+
+// Review FAIL c.6765310879 and QA FAIL c.6765312157 on 9deb453a (#1803),
+// contract #1836 c.6765524123 (w540l): before a command is split it is checked
+// against an explicit list of characters, the narrowest one that passes every
+// step of docs/OPERATIONS.md: ASCII letters and digits, U+0020, `-`, `/`, `:`
+// and the placeholder `<pid>` as a whole word. Every other character refuses it.
+const DOC_TEXT = readFileSync(new URL("../../docs/OPERATIONS.md", import.meta.url), "utf8");
+/** Every command after a `Naredba:` marker on a step line of the real document. */
+const DOC_COMMANDS = [
+  ...new Set(
+    DOC_TEXT.split("\n")
+      .filter((line) => /^\d+\. /.test(line))
+      .flatMap((line) => [...line.matchAll(/Naredba:((?:(?:\s*,\s*|\s+(?:i|ili|pa)\s+|\s*)`[^`]*`)+)/gu)])
+      .flatMap((m) => [...(m[1] ?? "").matchAll(/`([^`]*)`/g)].map((s) => (s[1] ?? "").trim())),
+  ),
+];
+
+describe("checkOperations: a command uses only allowed characters", () => {
+  const hex = (c: string) => `U+${c.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0")}`;
+  const step = (command: string) => doc(`1. Pokreni. Naredba: \`${command}\`.`);
+  const notAllowed = (command: string, c: string) => [`Pokretanje#1: command contains a character that is not allowed (${hex(c)}): ${command}`];
+  const chain = (command: string) => [`Pokretanje#1: command chains, pipes or redirects are not allowed: ${command}`];
+  const health = "http://localhost:3000/api/health";
+  it.each([
+    ["R1 review FAIL: an unclosed single quote", `curl -fsS ${health}?x='`, "?"],
+    ["R1 a single quote", `curl -fsS '${health}'`, "'"],
+    ["R1 a double quote", `curl -fsS "${health}"`, '"'],
+    ["R2 QA FAIL: $IFS adds a curl option", `curl -fsS ${health}?x=$IFS--url=http://localhost:3000/api/nepostojeca`, "?"],
+    ["R2 a dollar without a query", `curl -fsS ${health}$IFS--url`, "$"],
+    ["R2 a dollar in a pnpm script", "pnpm local:up$X", "$"],
+    ["R2 a backslash", "pnpm local\\:up", "\\"],
+    ["R4 a parenthesis", "pnpm local:up (x)", "("],
+    ["R4 a closing parenthesis", "pnpm local:up x)", ")"],
+    ["R4 a brace", "pnpm local:up {a,b}", "{"],
+    ["R4 a closing brace", "pnpm local:up b}", "}"],
+    ["R4 a bracket", "pnpm local:up [a]", "["],
+    ["R4 a closing bracket", "pnpm local:up a]", "]"],
+    ["R5 an asterisk", "pnpm local:up *", "*"],
+    ["R5 a question mark", "pnpm local:up ?", "?"],
+    ["R5 a tilde", "pnpm local:up ~", "~"],
+    ["R5 an exclamation mark", "pnpm local:up !!", "!"],
+    ["R5 a hash", "pnpm local:up #x", "#"],
+    ["R5 a percent", "pnpm local:up %1", "%"],
+    ["R5 an equals sign", "pnpm local:up x=1", "="],
+    ["R5 an at sign", "pnpm local:up @x", "@"],
+    ["R5 a caret", "pnpm local:up ^x", "^"],
+    ["R6 a dot", "pnpm local:up .", "."],
+    ["R6 an underscore", "pnpm local_up", "_"],
+    ["R6 a comma", "pnpm local:up a,b", ","],
+    ["R6 a plus", "pnpm local:up +x", "+"],
+    ["R7 a tab between words", "pnpm\tlocal:up", "\t"],
+    ["R7 a tab at the end of the span", "pnpm local:up\t", "\t"],
+    ["R7 a tab at the start of the span", "\tpnpm local:up", "\t"],
+    ["R8 a Croatian letter", "pnpm lokalno:čisti", "č"],
+    ["R8 a zero-width space", "pnpm\u200blocal:up", "\u200b"],
+    ["R8 an emoji", "pnpm local:up \u{1f600}", "\u{1f600}"],
+    ["R9 a NUL", "pnpm local:up\u0000", "\u0000"],
+    ["R9 an escape", "pnpm local:up\u001b[0m", "\u001b"],
+    ["R9 a delete", "pnpm local:up\u007f", "\u007f"],
+    ["R10 a placeholder followed by a letter", "kill -TERM <pid>x", "<"],
+    ["R10 a letter followed by a placeholder", "kill -TERM x<pid>", "<"],
+    ["R10 an upper-case placeholder", "kill -TERM <PID>", "<"],
+    ["R10 another placeholder", "kill -TERM <proces>", "<"],
+  ] as const)("%s is refused", (_name, command, c) => {
+    expect(messages(step(command))).toEqual(notAllowed(command, c));
+  });
+
+  // These classes are refused by the earlier checks, which stay.
+  it.each([
+    ["R3 a chain", "pnpm local:up && pnpm db:status", chain],
+    ["R3 a semicolon", "pnpm local:up; pnpm db:status", chain],
+    ["R3 a pipe", "pnpm local:up | pnpm db:status", chain],
+    ["R3 an input redirect", "pnpm local:up < x", chain],
+    ["R3 an output redirect", "pnpm local:up > x", chain],
+    ["R3 a single ampersand", "pnpm local:up &", chain],
+    ["R10 a doubled opening bracket", "kill -TERM <<pid>", chain],
+    ["R2 a command substitution", "pnpm $(x)", chain],
+    ["R8 a non-breaking space", "pnpm\u00a0local:up", (c: string) => [`Pokretanje#1: command contains a space other than U+0020 or a tab: ${c}`]],
+    ["R8 a next line", "pnpm\u0085local:up", (c: string) => [`Pokretanje#1: command contains a space other than U+0020 or a tab: ${c}`]],
+    ["R8 a line separator", "pnpm\u2028local:up", (c: string) => [`Pokretanje#1: command contains a space other than U+0020 or a tab: ${c}`]],
+  ] as const)("%s is refused by an earlier check", (_name, command, expected) => {
+    expect(messages(step(command))).toEqual(expected(command));
+  });
+
+  it("R2 a backtick ends the code span, so the step is refused by the parser", () => {
+    expect(messages(step("pnpm local:up`x"))).not.toEqual([]);
+  });
+
+  it("K every command of docs/OPERATIONS.md passes on its own", () => {
+    expect(DOC_COMMANDS).toEqual(expect.arrayContaining(["pnpm local:up", "kill -TERM <pid>", "curl -fsS http://localhost:3000/api/health"]));
+    const context = repoContext(new URL("../..", import.meta.url));
+    for (const command of DOC_COMMANDS) {
+      expect(checkOperations(step(command), context)).toEqual([]);
+    }
   });
 });
 
