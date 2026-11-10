@@ -126,6 +126,40 @@ describe("requestsFromList: input classes", () => {
   });
 });
 
+describe("requestsFromList: classes of version history", () => {
+  // Version 1 of a request reopened at version 2: what closed it, and whether it was answered.
+  const second = { request_state: "reopened", request_version: 2 };
+  const earlier = (extra: Record<string, unknown>) => [row(R1, 1, extra, second), row(R1, 2, {}, second)];
+  // The only version of a request in `state`.
+  const only = (state: string, extra: Record<string, unknown>) => [row(R1, 1, extra, { request_state: state })];
+
+  it.each([
+    ["earlier: not closed, unanswered", false, earlier({})],
+    ["earlier: not closed, answered", false, earlier(answered())],
+    ["earlier: reopened, unanswered", true, earlier(closed("reopened"))],
+    ["earlier: reopened, answered", true, earlier({ ...answered(), ...closed("reopened") })],
+    ["earlier: accepted, answered", true, earlier({ ...answered(), ...closed("accepted") })],
+    ["earlier: accepted, unanswered", false, earlier(closed("accepted"))],
+    ["earlier: withdrawn, unanswered", false, earlier(closed("withdrawn"))],
+    ["earlier: withdrawn, answered", false, earlier({ ...answered(), ...closed("withdrawn") })],
+    ["last: open", true, only("open", {})],
+    ["last: open, answered", false, only("open", answered())],
+    ["last: open, closed", false, only("open", closed("reopened"))],
+    ["last: responded", true, only("responded", answered())],
+    ["last: responded, unanswered", false, only("responded", {})],
+    ["last: responded, closed", false, only("responded", { ...answered(), ...closed("accepted") })],
+    ["last: accepted", true, only("accepted", { ...answered(), ...closed("accepted") })],
+    ["last: accepted, unanswered", false, only("accepted", closed("accepted"))],
+    ["last: withdrawn, unanswered", true, only("withdrawn", closed("withdrawn"))],
+    ["last: withdrawn, answered", true, only("withdrawn", { ...answered(), ...closed("withdrawn") })],
+    ["last: withdrawn, not closed", false, only("withdrawn", {})],
+  ])("%s: valid %s", (_name, valid, rows) => {
+    const list = requestsFromList({ requests: rows });
+    if (valid) expect(list).not.toBeNull();
+    else expect(list).toBeNull();
+  });
+});
+
 describe("listRevisionRequests", () => {
   afterEach(() => vi.unstubAllGlobals());
 
