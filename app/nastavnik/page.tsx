@@ -8,6 +8,7 @@ import { shellSession } from "@/components/shell/shell-session";
 import TeacherCourses from "@/components/teacher/TeacherCourses";
 import { readWorkAccommodationsMany } from "@/components/teacher/work-accommodations-read";
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -29,6 +30,7 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 // course or whether one exists.
 export default async function TeacherHomePage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const [read, principal] = await Promise.all([
     token === undefined ? null : readTeacherCourses(token, withActor),
     sessionPrincipal(token, withActor),

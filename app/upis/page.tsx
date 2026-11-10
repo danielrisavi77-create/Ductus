@@ -8,6 +8,7 @@ import EnrollForm from "@/components/student/EnrollForm";
 import { SIGN_IN_HREF } from "@/components/student/enroll-code";
 import styles from "@/components/student/Enroll.module.css";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -23,6 +24,7 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 // shows the sign-in link in the form.
 export default async function EnrollPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const signedIn = Boolean(token && TOKEN.test(token));
   const { role, scope } = await readShellAccount(token, withActor);
   return (

@@ -9,6 +9,7 @@ import { SIGN_IN_HREF } from "@/components/student/enroll-code";
 import styles from "@/components/student/Enroll.module.css";
 import { courseHref, readOpenAssignment } from "@/components/student/open-assignment";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -25,6 +26,7 @@ const c = t.student.enroll.course;
 export default async function EnrolledCoursePage({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const read = await readOpenAssignment(token, courseId, withActor);
   // redirect() throws, so it stays outside any try block.
   if (read.kind === "assignment") redirect(`/zadatak/${encodeURIComponent(read.assignmentId)}`);

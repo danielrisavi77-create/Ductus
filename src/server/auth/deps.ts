@@ -29,6 +29,10 @@ function authDeps(): AuthDeps {
         const { rows } = await tx.query<{ closed: boolean }>("SELECT identity.close_current_session() AS closed");
         return rows[0]?.closed === true;
       }),
+    closeAllSessions: (token) =>
+      withActor(token, async (tx) => {
+        await tx.query("SELECT identity.close_all_sessions_for_identity()");
+      }),
   };
   return deps;
 }

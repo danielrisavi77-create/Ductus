@@ -6,6 +6,15 @@ labels: ""
 assignees: ""
 ---
 
+**Što:** <što predlažeš, jednom ili dvjema rečenicama, običnim jezikom>
+
+**Zašto:** <koji problem korisnika to rješava>
+
+**Rizik i provjera:** <što bi moglo poći krivo i kako ćemo znati da pomaže>
+
+<details>
+<summary>Detalji za agente</summary>
+
 ## Problem
 
 ## Dokaz
@@ -36,3 +45,5 @@ low / medium / high
 ## Odluka Orkestratora / Daniela
 
 Ne implementira se dok nije eksplicitno prihvaćeno.
+
+</details>

@@ -1,0 +1,26 @@
+@import url("../m2-nastavnik-reference/reference.css");
+/* Paket 7 (DAN-600): tokeni podrijetla i list iz DESIGN-SYSTEM §3; oznake se razlikuju oblikom i tekstom, ne samo bojom. */
+:root { --p-internal: #8fb0e0; --p-unknown: #9e9a90; --p-ai: #d3ac63; }
+:root[data-theme="light"] { --p-internal: #4a6fa5; --p-unknown: #6e6a62; --p-ai: #8a6a2f; }
+.sheet { --ink: #242422; --ink-2: #55534d; --ink-3: #5c5a54; --rule: #cfccc4; --rule-2: #cfccc4; --well: #efede7; --accent: #806529; --p-internal: #4a6fa5; --p-unknown: #6e6a62; --p-ai: #8a6a2f; background: #fcfbf8; color: var(--ink); font: 16px/1.7 var(--ff-display); padding: 20px 24px; border-radius: 6px; }
+.sheet h3 { font: 600 19px/1.3 var(--ff-display); margin: 4px 0 8px; }
+.sheet p { color: var(--ink); margin: 0 0 10px; }
+.pm { text-decoration-thickness: 2px; text-underline-offset: 4px; text-decoration-skip-ink: none; }
+.pm-paste { text-decoration: underline dashed var(--p-unknown); }
+.pm-import { text-decoration: underline dotted var(--ink-3); }
+.pm-ai { text-decoration: underline double var(--p-ai); }
+.pm-teacher { text-decoration: underline wavy var(--ink-3); text-decoration-thickness: 1px; }
+.pm-slot { border: 1px dashed var(--ink-3); border-radius: 3px; padding: 0 4px; font: 12.5px/1.4 var(--ff-ui); color: var(--ink-2); }
+.pm-ductus { box-shadow: inset 3px 0 0 var(--p-internal); padding-left: 8px; }
+.pm-tag { font: 600 11px/1 var(--ff-ui); color: var(--ink-2); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 5px; margin-left: 4px; vertical-align: 2px; white-space: nowrap; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.legend li { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.legend .sw { display: inline-block; min-width: 64px; }
+.chapters { list-style: none; margin: 0; padding: 0; }
+.chapters li { padding: 10px 0; border-bottom: 1px solid var(--rule-2); display: grid; gap: 4px; }
+.chapters li:last-child { border-bottom: 0; }
+.ev { display: flex; gap: 6px; flex-wrap: wrap; }
+.diff ins { text-decoration: underline 2px var(--ink-2); text-underline-offset: 4px; background: none; }
+.diff del { text-decoration: line-through 2px var(--ink-3); color: var(--ink-2); }
+.diff .sig { font: 600 11px/1 var(--ff-ui); color: var(--ink-2); margin-right: 4px; }
+select.field { min-width: 0; }

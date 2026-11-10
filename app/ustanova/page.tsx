@@ -10,6 +10,7 @@ import { accessShellScope } from "@/components/auth/access-kind";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -24,6 +25,7 @@ export const runtime = "nodejs";
 // One read per request, shared by the title and the page.
 const resolveScreen = cache(async () => {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
   const [read, principal] = await Promise.all([
     token === undefined ? null : readInstitutionOverview(token, withActor),
     sessionPrincipal(token, withActor),

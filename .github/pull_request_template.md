@@ -1,6 +1,13 @@
-## Sažetak
+**Što:** <jednom ili dvjema rečenicama, što se mijenja, običnim jezikom>
 
-<!-- Što ovaj PR radi i zašto? -->
+**Zašto:** <koji problem rješava ili koju odluku provodi, opisano riječima>
+
+**Rizik i provjera:** <što bi moglo poći krivo i kako je to provjereno>
+
+<!-- Tri retka iznad pišu se za ljude: bez oznaka odluka, slotova i SHA-ova (ENGINEERING_SYSTEM §6). Strojni redci ostaju ispod, u bloku za agente. -->
+
+<details>
+<summary>Detalji za agente</summary>
 
 ## Engineering metadata
 
@@ -73,3 +80,5 @@ Vizualni dokaz (`docs/SESSIONS.md` §6.5; bez vidljive promjene n/a uz razlog):
 Otvoreno ili blokira: ništa
 
 Treba Daniel: ništa
+
+</details>
