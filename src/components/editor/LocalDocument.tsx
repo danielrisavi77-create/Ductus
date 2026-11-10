@@ -68,7 +68,7 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, writingClosed, type DocumentSaver, type DocumentSnapshot,
+  createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, unconfirmedOf, writingClosed, type DocumentSaver, type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
@@ -136,6 +136,8 @@ type LocalDocumentValue = {
    * what the journal holds afterwards, read again for the open dialog.
    */
   discardAfterSubmission: () => Promise<HoldRead>;
+  /** `unconfirmedOf` read from the saver at the moment of the call, not from the last render (DAN-314). */
+  unconfirmedNow: () => boolean;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
@@ -172,6 +174,16 @@ export function useLocalSignedOut(): boolean {
  */
 export function useLocalSubmitted(): boolean {
   return submittedOf(useLocalDocument().snapshot);
+}
+
+/**
+ * Whether the text in this tab may hold changes the server has not confirmed
+ * (DAN-314): `unconfirmed` for the render, `now` for a check after an await,
+ * when a change typed meanwhile may not have rendered yet.
+ */
+export function useLocalUnconfirmed(): { unconfirmed: boolean; now: () => boolean } {
+  const { phase, snapshot, invalid, unconfirmedNow } = useLocalDocument();
+  return { unconfirmed: unconfirmedOf(phase, snapshot, invalid), now: unconfirmedNow };
 }
 
 /**
@@ -258,6 +270,10 @@ export function LocalDocumentProvider({
   // The view as last rendered, for a load or "Ostani" that ends after a change.
   const heldRef = useRef(publishHeld);
   useLayoutEffect(() => { heldRef.current = publishHeld; });
+
+  // A change waiting out the debounce has already called `edit()`, so the saver's own snapshot says it.
+  const [unconfirmedNow] = useState(() => () =>
+    unconfirmedOf(phaseRef.current, saverRef.current?.snapshot() ?? null, dirtyRef.current));
 
   // Builds and proposes the candidate for what the editor holds now.
   const flushRef = useRef(() => {
@@ -662,6 +678,7 @@ export function LocalDocumentProvider({
 
   const value: LocalDocumentValue = {
     editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut, discardAfterSubmission,
+    unconfirmedNow,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }

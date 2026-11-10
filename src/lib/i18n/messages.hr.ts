@@ -970,6 +970,8 @@ export const hr = {
     sending: "Slanje…",
     sent: "Odgovor je poslan.",
     submittedNote: "Rad je predan. Na zahtjev se više ne odgovara.",
+    // DAN-314: the answer names the server's current revision, which lacks changes still on the device.
+    unconfirmedNote: "Odgovor se može poslati kad poslužitelj primi sve izmjene teksta.",
     keptLabel: "Neposlano obrazloženje",
     keptHint: "Ovo obrazloženje nije poslano jer se na zahtjev više ne odgovara. Kopirajte ga ako ga želite sačuvati.",
     errors: {
@@ -978,6 +980,7 @@ export const hr = {
       conflict: "Zahtjev se u međuvremenu promijenio. Prikazano je trenutačno stanje.",
       invalid: "Odgovor nije prihvaćen. Napišite od 1 do 2000 znakova.",
       unavailable: "Odgovor nije poslan. Pokušajte ponovno.",
+      unconfirmed: "Odgovor nije poslan jer poslužitelj još nije primio sve izmjene teksta.",
     },
   },
   // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).

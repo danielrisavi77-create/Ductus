@@ -966,6 +966,8 @@ const en = {
     sending: "Sending…",
     sent: "The answer was sent.",
     submittedNote: "The work has been submitted. The request can no longer be answered.",
+    // DAN-314: the answer names the server's current revision, which lacks changes still on the device.
+    unconfirmedNote: "You can answer once the server has received every change to the text.",
     keptLabel: "Unsent explanation",
     keptHint: "This explanation was not sent because the request can no longer be answered. Copy it if you want to keep it.",
     errors: {
@@ -974,6 +976,7 @@ const en = {
       conflict: "The request has changed in the meantime. Its current state is shown.",
       invalid: "The answer was not accepted. Write between 1 and 2000 characters.",
       unavailable: "The answer was not sent. Try again.",
+      unconfirmed: "The answer was not sent because the server has not yet received every change to the text.",
     },
   },
   // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).

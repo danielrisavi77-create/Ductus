@@ -17,7 +17,16 @@ import {
 import { EvidenceSession, type EvidenceSnapshot } from "./evidence-session";
 
 /** A snapshot of either saver; only the evidence session ever sets `closedBy`. */
-export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused" | "submitted">>;
+export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused" | "submitted" | "unconfirmed">>;
+
+/**
+ * Whether the sheet may hold changes the server has not confirmed (DAN-314).
+ * Only a ready sheet whose evidence session says so is confirmed; the local
+ * saver never sends, so its text is never confirmed.
+ */
+export function unconfirmedOf(phase: string, snapshot: DocumentSnapshot | null, invalid = false): boolean {
+  return phase !== "ready" || invalid || snapshot?.unconfirmed !== false;
+}
 
 /**
  * Whether the work is submitted (DAN-215, K7c/K7d): closed by submission, or

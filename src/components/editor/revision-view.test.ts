@@ -11,8 +11,9 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
+import { unconfirmedOf } from "./document-saver";
 import {
-  RevisionList, canAnswer, clearSent, displayState, isLive, limitAnswer, revisionFromOpen, sendAnswer,
+  RevisionList, answerText, canAnswer, clearSent, displayState, isLive, limitAnswer, revisionFromOpen, sendAnswer,
   type RevisionListProps,
 } from "./revision-view";
 
@@ -47,7 +48,7 @@ const STATES = {
 } as const;
 
 const props = (extra: Partial<RevisionListProps> = {}): RevisionListProps => ({
-  t, formatDate: formatDateHr, status: "ok", requests: [], submitted: false, drafts: {}, sending: null, errors: {},
+  t, formatDate: formatDateHr, status: "ok", requests: [], submitted: false, unconfirmed: false, drafts: {}, sending: null, errors: {},
   live: "", onDraft: () => {}, onAnswer: () => {}, onRetry: () => {}, ...extra,
 });
 const render = (extra: Partial<RevisionListProps> = {}) => renderToStaticMarkup(createElement(RevisionList, props(extra)));
@@ -177,6 +178,26 @@ describe("every state of a request (N-08 states 6 to 10)", () => {
   it("an explanation is cut at 2000 code points, not UTF-16 units", () => {
     expect([...limitAnswer("𝒜".repeat(2100))]).toHaveLength(2000);
   });
+
+  it("the cut counts after NFC, as the route counts: a field that fits can always be sent", () => {
+    // U+0958 is one code point that NFC turns into two; 1500 of them are 3000 after NFC.
+    const cut = limitAnswer("\u0958".repeat(1500));
+    expect([...cut.normalize("NFC")].length).toBeLessThanOrEqual(2000);
+    expect(answerText(cut)).not.toBeNull();
+    expect(limitAnswer("Dodan izvor.")).toBe("Dodan izvor.");
+  });
+
+  it("while the text holds changes the server has not confirmed, the buttons wait and say why (DAN-314)", () => {
+    const drafts = { [STATES.open.id]: "Dodan izvor." };
+    const waiting = render({ requests: [STATES.open], drafts, unconfirmed: true });
+    expect(waiting.match(/<button type="button" class="[^"]*" disabled=""/g)).toHaveLength(2);
+    expect(waiting).toContain(t.unconfirmedNote);
+    expect(waiting).toContain(`aria-describedby="revision-${STATES.open.id}-hint revision-${STATES.open.id}-wait"`);
+    expect(waiting).not.toMatch(/<textarea[^>]*readonly/i);
+    const ready = render({ requests: [STATES.open], drafts });
+    expect(ready).not.toContain("disabled");
+    expect(ready).not.toContain(t.unconfirmedNote);
+  });
 });
 
 describe("sending an answer", () => {
@@ -184,6 +205,7 @@ describe("sending an answer", () => {
 
   const deps = (respond = vi.fn(async () => ({ kind: "ok" as const }))) => ({
     respond, revision: vi.fn(async () => ({ kind: "ok" as const, revision: 12 })), current: () => true,
+    unconfirmed: vi.fn(() => false),
   });
 
   it("carries the counter list returned and the revision open read, in NFC", async () => {
@@ -218,6 +240,35 @@ describe("sending an answer", () => {
     expect(await sendAnswer(STATES.open, "done", " \n ", d)).toMatchObject({ error: "invalid" });
     expect(d.revision).not.toHaveBeenCalled();
     expect(d.respond).not.toHaveBeenCalled();
+  });
+
+  it("nothing is sent while the text holds changes the server has not confirmed (DAN-314)", async () => {
+    const d = { ...deps(), unconfirmed: vi.fn(() => true) };
+    expect(await sendAnswer(STATES.open, "done", "Dodan izvor.", d)).toEqual({ kind: "error", error: "unconfirmed", reload: false });
+    expect(d.revision).not.toHaveBeenCalled();
+    expect(d.respond).not.toHaveBeenCalled();
+    expect(render({ requests: [STATES.open], errors: { [STATES.open.id]: "unconfirmed" } })).toContain(t.errors.unconfirmed);
+  });
+
+  it("Istodobnost: a change typed while the revision is read is not answered on that revision", async () => {
+    const d = deps();
+    d.revision.mockImplementationOnce(async () => {
+      d.unconfirmed.mockReturnValue(true);
+      return { kind: "ok" as const, revision: 12 };
+    });
+    expect(await sendAnswer(STATES.open, "done", "Dodan izvor.", d)).toEqual({ kind: "error", error: "unconfirmed", reload: false });
+    expect(d.respond).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["loading", null, false, true],
+    ["ready, nothing confirmed yet", undefined, false, true],
+    ["ready, the editor holds invalid text", false, true, true],
+    ["ready, changes on the device", true, false, true],
+    ["ready, every change confirmed", false, false, false],
+  ] as const)("the gate of the answer buttons: %s", (phase, flag, invalid, expected) => {
+    const snapshot = flag === null ? null : ({ unconfirmed: flag } as Parameters<typeof unconfirmedOf>[1]);
+    expect(unconfirmedOf(phase.startsWith("ready") ? "ready" : "loading", snapshot, invalid)).toBe(expected);
   });
 
   it("nothing is sent once the session has ended", async () => {

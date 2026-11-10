@@ -31,7 +31,7 @@ export function displayState(request: RevisionRequest): DisplayState {
 export const canAnswer = (request: RevisionRequest): boolean =>
   request.state === "open" || request.state === "reopened";
 
-export type AnswerError = "signedOut" | "forbidden" | "conflict" | "invalid" | "unavailable" | "submitted";
+export type AnswerError = "signedOut" | "forbidden" | "conflict" | "invalid" | "unavailable" | "submitted" | "unconfirmed";
 
 export type AnswerResult = { kind: "sent" } | { kind: "error"; error: AnswerError; reload: boolean };
 
@@ -63,6 +63,12 @@ export type AnswerDeps = {
   readonly respond: (input: RespondInput, current: () => boolean) => Promise<RespondOutcome>;
   readonly revision: () => Promise<RevisionAt>;
   readonly current: () => boolean;
+  /**
+   * Whether the text on the device may hold changes the server has not
+   * confirmed (DAN-314). Asked before and after the revision is read: an
+   * answer names the server's current revision, which lacks such changes.
+   */
+  readonly unconfirmed: () => boolean;
 };
 
 /** The text an answer would carry, or null while the buttons stay off. */
@@ -71,8 +77,9 @@ export function answerText(draft: string): string | null {
   return isRevisionText(text) ? text : null;
 }
 
+/** Cuts the field to what `answerText` accepts, counted after NFC as the route counts. */
 export function limitAnswer(value: string): string {
-  const points = [...value];
+  const points = [...value.normalize("NFC")];
   return points.length <= REVISION_TEXT_MAX ? value : points.slice(0, REVISION_TEXT_MAX).join("");
 }
 
@@ -87,10 +94,13 @@ export async function sendAnswer(
   const explanation = answerText(draft);
   if (explanation === null || !canAnswer(request)) return { kind: "error", error: "invalid", reload: false };
   if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
+  if (deps.unconfirmed()) return { kind: "error", error: "unconfirmed", reload: false };
   const at = await deps.revision();
   if (at.kind !== "ok") return { kind: "error", error: at.kind, reload: false };
-  // Reading the revision takes time; the session or the panel may be gone by now.
+  // Reading the revision takes time; the session or the panel may be gone by
+  // now, or a change typed meanwhile is not in the revision just read.
   if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
+  if (deps.unconfirmed()) return { kind: "error", error: "unconfirmed", reload: false };
   const outcome = await deps.respond({
     requestId: request.id, expectedSeq: request.rowSeq, kind, explanation, responseRevision: at.revision,
   }, deps.current);
@@ -117,6 +127,8 @@ export type RevisionListProps = {
   readonly requests: readonly RevisionRequest[];
   /** True once the work is submitted: no form is shown, and the panel says why. */
   readonly submitted: boolean;
+  /** The text may hold changes the server has not confirmed: the answer buttons wait, and say why. */
+  readonly unconfirmed: boolean;
   readonly drafts: Readonly<Record<string, string>>;
   readonly sending: string | null;
   readonly errors: Readonly<Record<string, AnswerError>>;
@@ -138,7 +150,7 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
   const answerable = canAnswer(request) && !props.submitted;
   const draft = props.drafts[request.id] ?? "";
   const sending = props.sending === request.id;
-  const ready = answerText(draft) !== null && props.sending === null;
+  const ready = answerText(draft) !== null && props.sending === null && !props.unconfirmed;
   const error = props.errors[request.id];
   const by = (own: boolean, other: string) => (own ? t.own : other);
   const field = `revision-${request.id}`;
@@ -169,10 +181,12 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
   },
   h("label", { htmlFor: field, className: styles.label }, t.explanationLabel),
   h("textarea", {
-    id: field, rows: 3, value: draft, "aria-describedby": `${field}-hint`, readOnly: sending,
+    id: field, rows: 3, value: draft, readOnly: sending,
+    "aria-describedby": props.unconfirmed ? `${field}-hint ${field}-wait` : `${field}-hint`,
     onChange: (event: { target: { value: string } }) => props.onDraft(request.id, limitAnswer(event.target.value)),
   }),
   h("p", { id: `${field}-hint`, className: styles.hint }, t.explanationHint),
+  props.unconfirmed ? h("p", { id: `${field}-wait`, className: styles.hint }, t.unconfirmedNote) : null,
   h("div", { className: styles.controls },
     h("button", { type: "button", className: styles.btn, disabled: !ready, onClick: () => props.onAnswer(request.id, "done") },
       sending ? t.sending : t.done),

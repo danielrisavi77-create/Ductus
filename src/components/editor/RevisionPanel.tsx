@@ -6,7 +6,9 @@
  * the student answers the current version "done" or declines with a reason
  * through `respond`, on the revision `openWork` reads at that moment. The
  * answer is sent once: a changed request is shown as it is now, never sent
- * again (revision-requests.ts). The view is in revision-view.ts.
+ * again (revision-requests.ts). The view is in revision-view.ts. While the
+ * text holds changes the server has not confirmed, the buttons wait and say
+ * why, since the answer would name a revision without them (DAN-314).
  *
  * Session: like CommentPanel (F-088, F-093), the panel starts from nothing
  * under another session, hears the end of the session itself and drops any
@@ -23,7 +25,7 @@ import type { RevisionKind } from "@/domain/collaboration/revision-input";
 import { formatDateHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
-import { useLocalSignedOut, useLocalSubmitted } from "./LocalDocument";
+import { useLocalSignedOut, useLocalSubmitted, useLocalUnconfirmed } from "./LocalDocument";
 import {
   RevisionList, clearSent, isLive, revisionFromOpen, sendAnswer, type AnswerError, type ListStatus,
 } from "./revision-view";
@@ -48,6 +50,8 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
   const [sessionEnded, setSessionEnded] = useState(false);
   const stopped = useLocalSignedOut() || sessionEnded;
   const submitted = useLocalSubmitted();
+  // The answer names the server's current revision: changes still on the device wait first (DAN-314).
+  const { unconfirmed, now: unconfirmedNow } = useLocalUnconfirmed();
   const [outcome, setOutcome] = useState<RevisionListOutcome | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, AnswerError>>({});
@@ -109,6 +113,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
 
   const answer = async (id: string, kind: RevisionKind) => {
     const request = requests.find((r) => r.id === id);
+    // An unconfirmed text is refused by sendAnswer itself, so the student is told why.
     if (!request || sending !== null) return;
     setSending(id);
     setLive("");
@@ -118,6 +123,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
       respond: respondRevisionRequest,
       revision: async () => revisionFromOpen(await openWork(assignmentId)),
       current,
+      unconfirmed: unconfirmedNow,
     });
     setSending(null);
     if (stoppedRef.current || mine !== generation.current) return;
@@ -135,7 +141,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
 
   return (
     <RevisionList
-      t={t} formatDate={formatDateHr} status={status} requests={requests} submitted={submitted}
+      t={t} formatDate={formatDateHr} status={status} requests={requests} submitted={submitted} unconfirmed={unconfirmed}
       drafts={drafts} sending={sending} errors={errors} live={live}
       onDraft={(id, value) => setDrafts((all) => ({ ...all, [id]: value }))}
       onAnswer={(id, kind) => void answer(id, kind)}
