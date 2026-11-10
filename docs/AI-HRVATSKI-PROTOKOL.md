@@ -60,7 +60,7 @@ Po svrhama:
 | `explanation` | 2 | uputa, nazivlje, jezik, primjer |
 | `brainstorming` | 2 | pitanja, uputa, jezik |
 | `restructuring` | 2 | redoslijed, uputa, brojke, potpunost |
-| `example_generation` | 2 | primjer, uputa, jezik, brojke |
+| `example_generation` | 2 | primjer, uputa, jezik |
 | `data_coding` | 2 | shema, potpunost, uputa |
 
 ## 4. Postupak

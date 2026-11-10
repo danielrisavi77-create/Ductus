@@ -157,7 +157,7 @@
       "level": 2,
       "instruction": "Smisli jedan izmišljeni primjer anketnog pitanja s ljestvicom od 1 do 5 za mjerenje povjerenja u lokalnu vlast.",
       "input": "Kontekst: vježba iz metodologije, anketa o povjerenju građana u gradsko vijeće.",
-      "criteria": ["primjer", "uputa", "brojke"]
+      "criteria": ["primjer", "uputa"]
     },
     {
       "id": "data_coding-1",
