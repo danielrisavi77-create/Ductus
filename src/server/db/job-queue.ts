@@ -102,9 +102,14 @@ const SWEEP_SQL = `
          OR (state < 'active' AND keep_until < pgboss.job_now()))`;
 // True only for a login with no elevated attribute whose one role is
 // ductus_worker and which cannot build in the queue schema: a login that is
-// also the web role, the queue owner or the migrator must not run jobs.
+// also the web role, the queue owner or the migrator must not run jobs. The
+// login checked is the one that authenticated (session_user; the server does
+// not let a connection's start-up settings change it), and the session must
+// run as that login: a role set when the connection starts (`options`) would
+// otherwise let an elevated login pass as a worker.
 const ROLE_SQL = `
   SELECT CASE
+    WHEN session_user IS DISTINCT FROM current_user THEN false
     WHEN r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication THEN false
     WHEN (SELECT pg_catalog.array_agg(g.rolname::text ORDER BY g.rolname) FROM pg_catalog.pg_roles g
            WHERE g.oid <> r.oid AND pg_catalog.pg_has_role(r.oid, g.oid, 'MEMBER'))
@@ -112,7 +117,7 @@ const ROLE_SQL = `
     WHEN pg_catalog.has_schema_privilege(r.oid, 'pgboss', 'CREATE') THEN false
     ELSE NOT pg_catalog.has_table_privilege(r.oid, 'pgboss.version', 'UPDATE')
   END AS ok
-  FROM pg_catalog.pg_roles r WHERE r.rolname = current_user`;
+  FROM pg_catalog.pg_roles r WHERE r.rolname = session_user`;
 
 function whole(value: number, min: number, max: number): boolean {
   return Number.isInteger(value) && value >= min && value <= max;

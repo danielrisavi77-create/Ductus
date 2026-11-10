@@ -117,6 +117,13 @@ function withParameter(name: string, value: string): string {
   return target.toString();
 }
 
+/** The connection string with one setting the server applies when the session starts. */
+function startup(connectionString: string, setting: string): string {
+  const target = new URL(connectionString);
+  target.searchParams.set("options", `-c ${setting}`);
+  return target.toString();
+}
+
 // A real worker process: plain node, the adapter as it is in src/, the real
 // fence. Its settings travel in the environment and are never printed.
 const work = mkdtempSync(path.join(tmpdir(), "ductus-jobq-"));
@@ -569,6 +576,23 @@ describe("job queue: what it refuses", () => {
     ["a login that is both the worker and the queue owner", () => url(role("workerAndOwner"))],
   ])("W-10: does not open for %s", async (_label, connectionString) => {
     expect(await refusal(openJobQueue(settings(definition(), connectionString(), {})))).toEqual(refused("role_not_worker"));
+  });
+
+  // Classes: the login that authenticated × how the connection changes its role
+  // at start (`options`, which the driver passes to the server). Only the login
+  // that authenticated counts, and it must be the role the session runs as.
+  it.each<[string, () => string, "opens" | "role_not_worker"]>([
+    ["a superuser that sets its role to a worker login", () => startup(ADMIN_URL, `role=${role("workerA")}`), "role_not_worker"],
+    ["a superuser that sets its role to ductus_worker", () => startup(ADMIN_URL, "role=ductus_worker"), "role_not_worker"],
+    ["a superuser that asks for a worker login's session authorization", () => startup(ADMIN_URL, `session_authorization=${role("workerA")}`), "role_not_worker"],
+    ["a worker login that sets its role to ductus_worker", () => startup(url(role("workerA")), "role=ductus_worker"), "role_not_worker"],
+    ["a worker login that sets its role to itself (control)", () => startup(url(role("workerA")), `role=${role("workerA")}`), "opens"],
+  ])("W-10 (negative): a role changed when the connection starts, %s", async (_label, connectionString, expected) => {
+    const outcome = await refusal(openJobQueue(settings(definition(), connectionString(), {})).then((queue) => {
+      opened.push(queue);
+      return queue;
+    }));
+    expect(outcome).toEqual(expected === "opens" ? "opened" : refused(expected));
   });
 
   it("W-10: reports an unreachable database by code, without the connection string", async () => {
