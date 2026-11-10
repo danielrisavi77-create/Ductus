@@ -71,13 +71,33 @@ const CODE = /^[a-z][a-z0-9_]{0,39}$/;
 const DAY = 86_400;
 const DEPTH_SQL =
   "SELECT count(*)::int AS n FROM pgboss.job WHERE name = $1 AND state IN ('created', 'retry', 'active')";
-// The package stores a sentence as the outcome of an attempt it took back.
-// Every stored outcome is one code, so the sweep rewrites what is not.
-const EXPIRED_SQL = `
-  UPDATE pgboss.job SET output = '{"code":"expired"}'::jsonb
-  WHERE name = $1 AND state IN ('retry', 'active', 'failed') AND output IS NOT NULL
-    AND NOT COALESCE(output = jsonb_build_object('code', output ->> 'code')
-                     AND output ->> 'code' ~ '^[a-z][a-z0-9_]{0,39}$', false)`;
+// The whole sweep of one queue, as one statement: either all of it happens or
+// none. `due` claims the queue for this sweep, and a second sweep that asks
+// inside the interval waits for the claim and then changes nothing. `expired`
+// takes back every attempt past its expiry and stores its outcome in the same
+// row update, so no instant exists in which the attempt is taken back and its
+// outcome is anything but the one code. The last line removes what is past
+// its keep time. The package's own sweep is never run: it would store a
+// sentence as the outcome first. Both conditions are the ones it uses.
+const SWEEP_SQL = `
+  WITH due AS (
+    UPDATE pgboss.queue SET maintain_on = pgboss.job_now()
+    WHERE name = $1 AND (maintain_on IS NULL OR maintain_on + $2::int * interval '1s' <= pgboss.job_now())
+    RETURNING name
+  ), expired AS (
+    UPDATE pgboss.job SET
+      state = CASE WHEN retry_count < retry_limit THEN 'retry' ELSE 'failed' END::pgboss.job_state,
+      completed_on = CASE WHEN retry_count < retry_limit THEN NULL ELSE pgboss.job_now() END,
+      start_after = CASE WHEN retry_count < retry_limit THEN pgboss.job_now() + retry_delay * interval '1s' ELSE start_after END,
+      heartbeat_on = NULL,
+      output = '{"code":"expired"}'::jsonb
+    WHERE name = $1 AND EXISTS (SELECT 1 FROM due)
+      AND state = 'active' AND started_on + expire_seconds * interval '1s' < pgboss.job_now()
+  )
+  DELETE FROM pgboss.job
+  WHERE name = $1 AND EXISTS (SELECT 1 FROM due)
+    AND ((deletion_seconds > 0 AND completed_on + deletion_seconds * interval '1s' < pgboss.job_now())
+         OR (state < 'active' AND keep_until < pgboss.job_now()))`;
 // True only for a login with no elevated attribute whose one role is
 // ductus_worker and which cannot build in the queue schema: a login that is
 // also the web role, the queue owner or the migrator must not run jobs.
@@ -187,7 +207,6 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     boss = new PgBoss({
       connectionString: settings.connectionString, application_name: "ductus-worker", max: 4,
       schema: "pgboss", migrate: false, supervise: false, schedule: false, monitorVacuum: false, reindex: false,
-      monitorIntervalSeconds: settings.sweepSeconds, maintenanceIntervalSeconds: settings.sweepSeconds,
     });
     fence = (settings.fence ?? startAttemptFence)();
   } catch {
@@ -274,8 +293,7 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
     }),
     sweep: (name) => closed(async () => {
       known(name);
-      await boss.supervise(name);
-      await boss.getDb().executeSql(EXPIRED_SQL, [name]);
+      await boss.getDb().executeSql(SWEEP_SQL, [name, settings.sweepSeconds]);
     }),
     depth: (name) => closed(async () => {
       known(name);

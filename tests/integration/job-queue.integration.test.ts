@@ -383,6 +383,101 @@ describe("job queue: one job, one attempt at a time", () => {
     expect(await jobs(def.name)).toEqual(rows);
   });
 
+  it.each<[string, number, string]>([
+    ["for good", 0, "failed"],
+    ["for another attempt", 1, "retry"],
+  ])("W-3, W-12 (Istodobnost, negative): a sweep cut off right after it took an attempt back %s has already stored the code expired", async (_label, retryLimit, state) => {
+    const def = definition();
+    const queue = await open(def, "workerA", { retryLimit, expireSeconds: 1, deadlineMs: 300 });
+    // The cut: once a job of this queue carries an outcome, every later write to
+    // it fails. Whatever a sweep meant to do after taking the attempt back is lost.
+    const cut = `it_jobq_${RUN}_cut_${retryLimit}`;
+    await admin.query(`CREATE FUNCTION public.${cut}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF OLD.name = TG_ARGV[0] AND OLD.output IS NOT NULL THEN RAISE EXCEPTION 'synthetic interruption'; END IF; RETURN NEW; END $$`);
+    await admin.query(`CREATE TRIGGER ${cut} BEFORE UPDATE ON pgboss.job_common FOR EACH ROW EXECUTE FUNCTION public.${cut}('${def.name}')`);
+    const release = gate();
+    let first: Promise<unknown> = Promise.resolve();
+    try {
+      await queue.enqueue(def.name, body(72));
+      const started = gate();
+      first = queue.runOnce(def.name, async () => { started.open(); await release.wait; return { ok: true }; });
+      await started.wait;
+      const cutOff: unknown[] = [];
+      await expect.poll(async () => {
+        await queue.sweep(def.name).catch((error: unknown) => cutOff.push(error));
+        return (await jobs(def.name))[0].state;
+      }, { timeout: 20_000, interval: 250 }).toBe(state);
+      const rows = await jobs(def.name);
+      expect(rows).toEqual([{ state, retry_count: 0, output: { code: "expired" }, data: body(72) }]);
+      expect(JSON.stringify(rows)).not.toContain("timed out");
+      // Nothing was left to write after the attempt was taken back, so nothing was cut off.
+      expect(cutOff).toEqual([]);
+      // Control: the cut is real. A second write to this job is refused.
+      await expect(admin.query("UPDATE pgboss.job SET output = output WHERE name = $1", [def.name])).rejects.toThrow("synthetic interruption");
+      release.open();
+      expect(await first).toEqual({ status: "lost" });
+      expect(await jobs(def.name)).toEqual(rows);
+    } finally {
+      release.open();
+      await first.catch(() => {});
+      await admin.query(`DROP TRIGGER ${cut} ON pgboss.job_common`);
+      await admin.query(`DROP FUNCTION public.${cut}()`);
+    }
+  });
+
+  type Seed = { key: string; state: string; startedSecondsAgo: number | null; retryCount: number; output: string | null };
+  async function seed(name: string, row: Seed): Promise<void> {
+    await admin.query(
+      `INSERT INTO pgboss.job (name, data, singleton_key, policy, state, retry_limit, retry_count, expire_seconds, deletion_seconds, started_on, completed_on, output)
+       VALUES ($1, $2::jsonb, $3, 'exclusive', $4::text::pgboss.job_state, 2, $5, 60, 3600, now() - $6::int * interval '1s',
+               CASE WHEN $4::text IN ('completed', 'failed') THEN now() END, $7::jsonb)`,
+      [name, JSON.stringify(body(73)), row.key, row.state, row.retryCount, row.startedSecondsAgo, row.output],
+    );
+  }
+  type Swept = { key: string; state: string; retry_count: number; output: unknown; ended: boolean };
+  async function swept(name: string): Promise<Swept[]> {
+    return (await admin.query<Swept>(
+      "SELECT singleton_key AS key, state::text, retry_count, output, completed_on IS NOT NULL AS ended FROM pgboss.job WHERE name = $1 ORDER BY created_on, singleton_key", [name],
+    )).rows;
+  }
+  const refusedBefore = '{"code":"synthetic_refusal"}';
+
+  it("W-3: one sweep takes back exactly the attempts past their expiry in its own queue, and leaves every other job as it was", async () => {
+    const def = definition();
+    const other = definition();
+    const queue = await open(def);
+    await open(other);
+    // Every class of job a sweep can meet, as [what was stored, what one sweep leaves].
+    const classes: [Seed, Omit<Swept, "key">][] = [
+      [{ key: "expired-first-attempt", state: "active", startedSecondsAgo: 61, retryCount: 0, output: null }, { state: "retry", retry_count: 0, output: { code: "expired" }, ended: false }],
+      [{ key: "expired-one-attempt-left", state: "active", startedSecondsAgo: 61, retryCount: 1, output: null }, { state: "retry", retry_count: 1, output: { code: "expired" }, ended: false }],
+      [{ key: "expired-last-attempt", state: "active", startedSecondsAgo: 61, retryCount: 2, output: null }, { state: "failed", retry_count: 2, output: { code: "expired" }, ended: true }],
+      [{ key: "within-its-expiry", state: "active", startedSecondsAgo: 30, retryCount: 0, output: null }, { state: "active", retry_count: 0, output: null, ended: false }],
+      [{ key: "waiting", state: "created", startedSecondsAgo: null, retryCount: 0, output: null }, { state: "created", retry_count: 0, output: null, ended: false }],
+      [{ key: "waiting-to-retry", state: "retry", startedSecondsAgo: 300, retryCount: 1, output: refusedBefore }, { state: "retry", retry_count: 1, output: { code: "synthetic_refusal" }, ended: false }],
+      [{ key: "completed", state: "completed", startedSecondsAgo: 300, retryCount: 0, output: null }, { state: "completed", retry_count: 0, output: null, ended: true }],
+      [{ key: "failed", state: "failed", startedSecondsAgo: 300, retryCount: 2, output: refusedBefore }, { state: "failed", retry_count: 2, output: { code: "synthetic_refusal" }, ended: true }],
+    ];
+    for (const [row] of classes) await seed(def.name, row);
+    await seed(other.name, { key: "expired-in-another-queue", state: "active", startedSecondsAgo: 300, retryCount: 0, output: null });
+    await queue.sweep(def.name);
+    expect(await swept(def.name)).toEqual(classes.map(([row, after]) => ({ key: row.key, ...after })));
+    expect(await swept(other.name)).toEqual([{ key: "expired-in-another-queue", state: "active", retry_count: 0, output: null, ended: false }]);
+    // A job taken back for another attempt is handed out again.
+    const again: string[] = [];
+    await drain(queue, def.name, async () => { again.push("ran"); return { ok: true }; });
+    expect(again).toHaveLength(4);
+  });
+
+  it("W-3 (Istodobnost): a second sweep inside the sweep interval, whoever asks, changes nothing", async () => {
+    const def = definition();
+    const [a, b] = await Promise.all([open(def, "workerA", { sweepSeconds: 3600 }), open(def, "workerB", { sweepSeconds: 3600 })]);
+    await a.sweep(def.name);
+    await seed(def.name, { key: "expired-after-the-sweep", state: "active", startedSecondsAgo: 61, retryCount: 0, output: null });
+    await Promise.all([a.sweep(def.name), b.sweep(def.name)]);
+    expect(await swept(def.name)).toEqual([{ key: "expired-after-the-sweep", state: "active", retry_count: 0, output: null, ended: false }]);
+  });
+
   it.each<[string, string]>([
     ["ignores the stop signal", `setInterval(() => {}, 1000); await new Promise(() => {});`],
     ["blocks the thread", `for (;;) {}`],
