@@ -76,6 +76,8 @@ const zipRows: Row[] = [
   ["Z2", "an end record signature that starts in the comment length field", fixtureZip(ok, { comment: concat([new Uint8Array([5, 6]), new Uint8Array(0x4b50 - 2)]) }), "ZIP_INVALID"],
   ["Z2", "bytes before the first entry", fixtureZip(ok, { before: enc("prefiks") }), "ZIP_INVALID"],
   ["Z2", "comment that ends at the end", fixtureZip(ok, { comment: enc("izmišljeni komentar") }), "OK"],
+  // The shadow check covers only bytes after the chosen end record, never entry data.
+  ["Z2", "end record bytes inside the data of a stored entry", fixtureZip([...ok, { name: "word/media/a.bin", data: concat([enc("PK\u0005\u0006"), emptyEnd]) }]), "OK"],
   ["Z3", "disk number 1", fixtureZip(ok, { diskNumber: 1 }), "ZIP_UNSUPPORTED"],
   ["Z3", "directory on disk 1", fixtureZip(ok, { cdDisk: 1 }), "ZIP_UNSUPPORTED"],
   ["Z3", "ZIP64 entry count", fixtureZip(ok, { countOnDisk: 0xffff, countTotal: 0xffff }), "ZIP_UNSUPPORTED"],
