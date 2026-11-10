@@ -1,0 +1,159 @@
+/* Revision requests of reference N-08 (states 6 to 10), on the shared tokens (app/globals.css, D-188). */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule-2);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.on {
+  border-color: var(--accent);
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  color: var(--ink-2);
+}
+
+.who strong {
+  color: var(--ink);
+}
+
+.passage {
+  font-family: var(--ff-display);
+  font-style: italic;
+}
+
+.chip {
+  display: inline-block;
+  padding: 1px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--well);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.body {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.quote {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--rule);
+  color: var(--ink-2);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.meta,
+.hint,
+.live {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.live:empty {
+  display: none;
+}
+
+.form {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.form textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.btn {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 600 12.5px/1 var(--ff-ui);
+  cursor: pointer;
+}
+
+.secondary {
+  border-color: var(--rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.failed {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+/* 12 px is the floor for interface text, 13 px on a phone (app/globals.css); targets 44 px there. */
+@media (max-width: 640px) {
+  .card,
+  .chip,
+  .meta,
+  .hint,
+  .live,
+  .label,
+  .btn,
+  .error {
+    font-size: 13px;
+  }
+
+  .btn {
+    min-height: 44px;
+  }
+}
