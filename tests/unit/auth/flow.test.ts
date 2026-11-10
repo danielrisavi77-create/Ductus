@@ -31,6 +31,7 @@ beforeEach(() => {
     oidc: createOidcClient(config, idp.fetch),
     openSession: vi.fn(async () => ({ ok: true as const, expires: EXPIRES })),
     closeSession: vi.fn(async () => true),
+    closeAllSessions: vi.fn(async () => {}),
   };
   errors = vi.spyOn(console, "error").mockImplementation(() => {});
 });
