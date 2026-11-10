@@ -78,7 +78,9 @@ const DEPTH_SQL =
 // row update, so no instant exists in which the attempt is taken back and its
 // outcome is anything but the one code. The last line removes what is past
 // its keep time. The package's own sweep is never run: it would store a
-// sentence as the outcome first. Both conditions are the ones it uses.
+// sentence as the outcome first. Both conditions are the ones it uses; the
+// step back to a retry is its plain one, which is why opening refuses a
+// queue with a growing retry delay or a dead letter queue.
 const SWEEP_SQL = `
   WITH due AS (
     UPDATE pgboss.queue SET maintain_on = pgboss.job_now()
@@ -219,7 +221,9 @@ export async function openJobQueue(settings: JobQueueSettings): Promise<JobQueue
       await boss.createQueue(name, expected);
       const queue = await boss.getQueue(name);
       // Nothing here renews a heartbeat, so a queue that expects one would take running jobs back.
+      // The sweep neither grows a retry delay nor copies a failed job to a dead letter queue.
       const same = queue !== null && queue.partition !== true && queue.heartbeatSeconds === null &&
+        queue.retryBackoff !== true && (queue.deadLetter ?? null) === null &&
         (Object.keys(expected) as Array<keyof typeof expected>).every((key) => queue[key] === expected[key]);
       if (!same) throw new JobQueueError("queue_mismatch");
     }

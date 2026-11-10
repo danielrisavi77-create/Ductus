@@ -581,6 +581,14 @@ describe("job queue: what it refuses", () => {
     await admin.query("UPDATE pgboss.queue SET heartbeat_seconds = 30 WHERE name = $1", [def.name]);
     expect(await refusal(open(def, "workerB"))).toEqual(refused("queue_mismatch"));
     await admin.query("UPDATE pgboss.queue SET heartbeat_seconds = NULL WHERE name = $1", [def.name]);
+    // The sweep takes an attempt back with the plain retry delay and no dead letter copy.
+    const elsewhere = definition();
+    await open(elsewhere);
+    for (const [set, reset] of [["retry_backoff = true", "retry_backoff = false"], ["dead_letter = $2", "dead_letter = NULL"]] as const) {
+      await admin.query(`UPDATE pgboss.queue SET ${set} WHERE name = $1`, set.includes("$2") ? [def.name, elsewhere.name] : [def.name]);
+      expect(await refusal(open(def, "workerB"))).toEqual(refused("queue_mismatch"));
+      await admin.query(`UPDATE pgboss.queue SET ${reset} WHERE name = $1`, [def.name]);
+    }
     await open(def, "workerB");
     const other = definition().name;
     expect(await queue.enqueue(other, body(80))).toBe("rejected");
