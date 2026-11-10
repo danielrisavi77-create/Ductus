@@ -78,7 +78,7 @@ Granice uloga (pgTAP matrica):
 - RPC za zahtjev druge ustanove ili nepostojeći ID vraća isti ishod bez zapisa (J8, J9).
 
 Idempotentnost:
-- Ponovljen posao istog zahtjeva vraća postojeći ishod, a ne drugi zapis (I2). To osigurava postojeći `UNIQUE` na `evidence.submission`; ugovor traži test, ne novi ključ.
+- Ponovljen posao istog zahtjeva vraća postojeći ishod, a ne drugi zapis (I2). To osigurava postojeći `UNIQUE` na `evidence.submission.submission_request_id`; ugovor traži test, ne novi ključ.
 - Pokušaj kojem je istekao attempt fence ne smije zapisati ishod nakon što je novi pokušaj počeo (I6; #1826).
 
 Odjava i opoziv:
@@ -92,6 +92,8 @@ D-263 Q08 provodi D-28: runde se otvaraju izričito, a prethodna predaja ostaje 
 1. Dok runde nema, drugi klik na Predaj daje `existing` (R1). To je današnje ponašanje i ostaje.
 2. Novu rundu otvara samo izričita radnja ovlaštene osobe. Student je ne može otvoriti sam (R4). Tko je ovlaštena osoba, ugovor ne određuje; to se piše u koraku M7.1-P07 iz zapisanih uloga.
 3. Expand migracija M7.1-P07 zamjenjuje `UNIQUE (assignment_id, institution_id, principal_id)` na `submission_request` ključem koji uključuje rundu, bez `UPDATE` ili `DELETE` postojećih redaka (R3). Test uspoređuje stare retke prije i poslije migracije.
+   Isto ograničenje od tri stupca stoji i na `evidence.submission` (`20261018140000_submission.sql`). D-263 Q08 imenuje samo `submission_request`, ali bez zamjene i na predaji druga runda ne može biti finalizirana. Zato je ta zamjena posljedica Q08, ne nova odluka. `UNIQUE` na `submission_request_id` ostaje: jedan zahtjev daje najviše jednu predaju (I2).
+   Test (R6, dodan ovdje uz R1 do R5 iz #1843): dvije runde istog studenta i zadatka obje se finaliziraju, a redak predaje prve runde ostaje bajt po bajt jednak. Test pada ako se druga finalizacija odbije zbog starog ključa ili ako promijeni prvi redak.
 4. Okidači nepromjenjivosti na zahtjevu i predaji ostaju. Nijedan put ne mijenja redak ranije runde (R2).
 5. Otvaranje runde istodobno s finalizacijom prethodne ne smije prepisati ni preuzeti njen zahtjev (I5).
 6. M7.1-P07 ne ide prije M7.1-P01 do P06 (D-263 Q08 i Q15, R5); runde su u valu M7.Z2.
@@ -129,7 +131,7 @@ Za ovaj PR se ne primjenjuje, jer ne mijenja shemu, sesije ni kod. Za M7.1 su ob
 
 - Jedinični i svojstveni: J1 do J9 (tablica i fast-check), F3 i F4.
 - Integracijski (worker i baza): A1 do A5, A8, A9, F1, F2, F5 do F8, I1 do I4 i I6.
-- pgTAP: A6 i A7, a za M7.1-P07 R2, R3 i I5.
+- pgTAP: A6 i A7, a za M7.1-P07 R2, R3, R6 i I5.
 - Kontrole lažnog blokiranja iz #1843: ispravan zahtjev prije roka zapisuje se kao predan; odjava ne blokira; produljenje ne ruši zapisan ishod; usporedba dviju poslanih verzija radi u oba profila.
 
 Test koji samo provjerava da nema greške ne dokazuje nijednu od ovih tvrdnji. Svaki test mora pasti kad se pravilo prekrši.
