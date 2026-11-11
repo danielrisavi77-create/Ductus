@@ -1,5 +1,6 @@
 /**
- * Croatian UI vocabulary for the eight sync states (F1-3b).
+ * UI vocabulary for the eight sync states (F1-3b): Croatian, the source and
+ * default, and English (M11.5-P01b).
  *
  * Pure data + pure functions: no React, no DOM, no clock. The chip component
  * is a thin renderer over this file, so the wording and the blocked-precedence
@@ -23,6 +24,8 @@
  * are necessarily shared (CONFLICT/ERROR/RECOVERY_REQUIRED all read as
  * trouble). What distinguishes the states to the reader is always the label.
  */
+
+import { DEFAULT_INTERFACE_LOCALE, type InterfaceLocale } from "@/lib/i18n/locale";
 
 import type { SyncState } from "./states";
 
@@ -88,6 +91,47 @@ export const SYNC_STATE_LABELS: Record<SyncState, SyncStateLabel> = {
  */
 export const MULTI_TAB_BLOCKED_MESSAGE = "Dokument je otvoren u drugoj kartici.";
 
+/**
+ * The same eight states in English (M11.5-P01b, D-70), under the same rules:
+ * no bare "Saved", the device named only while the work is local and the
+ * server named only in SYNCED (docs/PRODUCT.md §5, English column). Tones are
+ * not repeated: urgency does not depend on the language.
+ */
+const SYNC_STATE_LABELS_EN: Readonly<Record<SyncState, string>> = {
+  EDITING: "Editing",
+  SAVING_LOCAL: "Saving on this device",
+  LOCAL_DURABLE: "Saved on this device",
+  SYNCING: "Syncing",
+  SYNCED: "Saved on the server",
+  CONFLICT: "Conflict",
+  ERROR: "Error",
+  RECOVERY_REQUIRED: "Recovery needed",
+};
+
+/**
+ * Chip text by interface language. A `Record` over `InterfaceLocale`, so a
+ * third catalogue cannot be registered without its own save-state wording.
+ */
+export const SYNC_STATE_TEXT: Readonly<Record<InterfaceLocale, Readonly<Record<SyncState, string>>>> = {
+  hr: {
+    EDITING: SYNC_STATE_LABELS.EDITING.label,
+    SAVING_LOCAL: SYNC_STATE_LABELS.SAVING_LOCAL.label,
+    LOCAL_DURABLE: SYNC_STATE_LABELS.LOCAL_DURABLE.label,
+    SYNCING: SYNC_STATE_LABELS.SYNCING.label,
+    SYNCED: SYNC_STATE_LABELS.SYNCED.label,
+    CONFLICT: SYNC_STATE_LABELS.CONFLICT.label,
+    ERROR: SYNC_STATE_LABELS.ERROR.label,
+    RECOVERY_REQUIRED: SYNC_STATE_LABELS.RECOVERY_REQUIRED.label,
+  },
+  en: SYNC_STATE_LABELS_EN,
+};
+
+/** The blocked notice by interface language. */
+export const MULTI_TAB_BLOCKED_TEXT: Readonly<Record<InterfaceLocale, string>> = {
+  hr: MULTI_TAB_BLOCKED_MESSAGE,
+  en: "The document is open in another tab.",
+};
+
 /** Tone of the blocked notice: an explanation the author must act on, not a fault. */
 export const MULTI_TAB_BLOCKED_TONE: SyncTone = "warn";
 
@@ -101,14 +145,18 @@ export type ChipContent = {
  *
  * `blocked` wins over every state — see `MULTI_TAB_BLOCKED_MESSAGE`. Kept
  * here, rather than inside the component, so the precedence rule is unit
- * tested for all eight states without a DOM.
+ * tested for all eight states without a DOM. `locale` picks only the words;
+ * Croatian is the default until the profile setting (M11.5-P02) passes one.
  */
-export function chipContent(state: SyncState, blocked = false): ChipContent {
+export function chipContent(
+  state: SyncState,
+  blocked = false,
+  locale: InterfaceLocale = DEFAULT_INTERFACE_LOCALE,
+): ChipContent {
   if (blocked) {
-    return { text: MULTI_TAB_BLOCKED_MESSAGE, tone: MULTI_TAB_BLOCKED_TONE };
+    return { text: MULTI_TAB_BLOCKED_TEXT[locale], tone: MULTI_TAB_BLOCKED_TONE };
   }
-  const entry = SYNC_STATE_LABELS[state];
-  return { text: entry.label, tone: entry.tone };
+  return { text: SYNC_STATE_TEXT[locale][state], tone: SYNC_STATE_LABELS[state].tone };
 }
 
 /** What a local-only editor knows when it picks the chip (F-3, plan #197). */
@@ -133,10 +181,13 @@ export type LocalChip = ChipContent & { readonly state: SyncState | "blocked" };
  * says "Spremljeno na uređaju" while a notice says saving has stopped (#197
  * attacks 5 and 9). Only the saver's own state can say it.
  */
-export function localChip(input: LocalChipInput): LocalChip | null {
-  if (input.blocked) return { ...chipContent("EDITING", true), state: "blocked" };
+export function localChip(
+  input: LocalChipInput,
+  locale: InterfaceLocale = DEFAULT_INTERFACE_LOCALE,
+): LocalChip | null {
+  if (input.blocked) return { ...chipContent("EDITING", true, locale), state: "blocked" };
   const state: SyncState | null = input.recoveryRequired ? "RECOVERY_REQUIRED"
     : input.failed ? "ERROR"
     : input.saverState;
-  return state ? { ...chipContent(state), state } : null;
+  return state ? { ...chipContent(state, false, locale), state } : null;
 }

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { INTERFACE_LOCALES } from "@/lib/i18n/locale";
+
 import {
   MULTI_TAB_BLOCKED_MESSAGE,
+  MULTI_TAB_BLOCKED_TEXT,
   MULTI_TAB_BLOCKED_TONE,
   SYNC_STATE_LABELS,
+  SYNC_STATE_TEXT,
   SYNC_TONES,
   chipContent,
   localChip,
@@ -185,6 +189,89 @@ describe("localChip", () => {
             const chip = localChip({ blocked, recoveryRequired, failed, saverState });
             const durable = !blocked && !recoveryRequired && !failed && saverState === "LOCAL_DURABLE";
             expect(chip?.text === DURABLE).toBe(durable);
+          }
+        }
+      }
+    }
+  });
+});
+
+// M11.5-P01b: the same rules in English (docs/PRODUCT.md §5, English column:
+// "saved (without saying where)").
+describe("sync state labels in English", () => {
+  const EN = SYNC_STATE_TEXT.en;
+
+  it("has wording for every registered interface language", () => {
+    expect(Object.keys(SYNC_STATE_TEXT).sort()).toEqual([...INTERFACE_LOCALES].sort());
+    expect(Object.keys(MULTI_TAB_BLOCKED_TEXT).sort()).toEqual([...INTERFACE_LOCALES].sort());
+  });
+
+  it("covers exactly the eight states, each with its own trimmed label", () => {
+    expect(Object.keys(EN).sort()).toEqual([...SYNC_STATES].sort());
+    for (const state of SYNC_STATES) {
+      expect(EN[state].trim(), state).not.toBe("");
+      expect(EN[state], state).toBe(EN[state].trim());
+    }
+    expect(new Set(SYNC_STATES.map((state) => EN[state])).size).toBe(SYNC_STATES.length);
+  });
+
+  it("never says 'saved' without saying where", () => {
+    for (const state of SYNC_STATES) {
+      const label = EN[state].toLowerCase();
+      expect(FORBIDDEN_BARE_LABELS.map((word) => word.toLowerCase()), state).not.toContain(label);
+      if (/\bsaved\b/.test(label)) {
+        expect(label, state).toMatch(/^saved on (this device|the server)$/);
+      }
+    }
+  });
+
+  it("names the server in SYNCED only, and the device only while the work is local", () => {
+    const naming = (word: string) => SYNC_STATES.filter((state) => EN[state].toLowerCase().includes(word));
+    expect(naming("server")).toEqual(["SYNCED"]);
+    expect(naming("device")).toEqual(["SAVING_LOCAL", "LOCAL_DURABLE"]);
+    expect(EN.LOCAL_DURABLE).toBe("Saved on this device");
+    expect(EN.SYNCED).toBe("Saved on the server");
+  });
+
+  it("keeps the Croatian table as the source of the Croatian words", () => {
+    for (const state of SYNC_STATES) {
+      expect(SYNC_STATE_TEXT.hr[state]).toBe(SYNC_STATE_LABELS[state].label);
+    }
+    expect(MULTI_TAB_BLOCKED_TEXT.hr).toBe(MULTI_TAB_BLOCKED_MESSAGE);
+  });
+
+  it("contains no Croatian letters", () => {
+    for (const text of [...SYNC_STATES.map((state) => EN[state]), MULTI_TAB_BLOCKED_TEXT.en]) {
+      expect(text).not.toMatch(/[čćđšžČĆĐŠŽ]/u);
+    }
+  });
+
+  it.each(SYNC_STATES)("changes only the words of %s, never its tone", (state) => {
+    expect(chipContent(state, false, "en")).toEqual({ text: EN[state], tone: SYNC_STATE_LABELS[state].tone });
+    expect(chipContent(state, true, "en")).toEqual({ text: MULTI_TAB_BLOCKED_TEXT.en, tone: MULTI_TAB_BLOCKED_TONE });
+  });
+
+  it("defaults to Croatian, unchanged", () => {
+    for (const state of SYNC_STATES) {
+      for (const blocked of [false, true]) {
+        expect(chipContent(state, blocked)).toEqual(chipContent(state, blocked, "hr"));
+      }
+    }
+  });
+
+  it("applies the same precedence in English as in Croatian", () => {
+    for (const blocked of [false, true]) {
+      for (const recoveryRequired of [false, true]) {
+        for (const failed of [false, true]) {
+          for (const saverState of [...SYNC_STATES, null]) {
+            const input = { blocked, recoveryRequired, failed, saverState };
+            const hr = localChip(input);
+            const en = localChip(input, "en");
+            expect(localChip(input, "hr")).toEqual(hr);
+            expect(en?.state).toBe(hr?.state);
+            expect(en?.tone).toBe(hr?.tone);
+            const said = en?.text === EN.LOCAL_DURABLE;
+            expect(said).toBe(!blocked && !recoveryRequired && !failed && saverState === "LOCAL_DURABLE");
           }
         }
       }

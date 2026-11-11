@@ -1,0 +1,1712 @@
+{
+  "vectorSchema": "ductus-golden-vectors-v1",
+  "about": [
+    "Golden vectors for evidence segment format v4 (DAN-411, contract docs/contracts/evidence-segment-v4.md, attack plan #1659). All data is invented.",
+    "v4 is v3 with the sources import and ai-transfer and the optional pasteOrigin on paste; every other rule of v3 holds. These vectors add to evidence-v2.json and evidence-v3.json and change none of them.",
+    "Derived outside the repository code: Python json.dumps with sorted keys and compact separators (JCS for this ASCII data) and hashlib.sha256. Never regenerate them from the code under test."
+  ],
+  "accepted": [
+    {
+      "name": "v4-import",
+      "note": "An imported document as one import event, followed by a typed event.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 2,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "sequence": 2,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 21,
+                "to": 21,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": " i dalje"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"editor\",\"steps\":[{\"from\":21,\"slice\":{\"content\":[{\"text\":\" i dalje\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":21}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":2,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1446,
+      "segmentHash": "51bbe91ee2c4e10744d777c958d1db7e5fe9f4bd516c87a6cf7b904539c88fbd"
+    },
+    {
+      "name": "v4-ai-transfer",
+      "note": "A typed event, then text transferred from the AI assistant.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 2,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Uvod "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "ai-transfer",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 21,
+                "to": 21,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 2"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "aiTransferId": "00000000-0000-4000-8000-0000000000a2",
+            "aiTransferSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Uvod \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"aiTransferId\":\"00000000-0000-4000-8000-0000000000a2\",\"aiTransferSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"ai-transfer\",\"steps\":[{\"from\":21,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 2\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":21}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":2,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1448,
+      "segmentHash": "08cf045a87efea8b33e28d12a36edce2ae5b8f7ab392edae074ec56b4ca4250b"
+    },
+    {
+      "name": "v4-paste-origin-ai-response",
+      "note": "A paste that claims an AI response as its origin.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1154,
+      "segmentHash": "069b298a72b26cc66db2150b40f6c570d00710dbf51c4f407534e275c2ccc783"
+    },
+    {
+      "name": "v4-paste-origin-source-notebook",
+      "note": "A paste that claims a source notebook item as its origin, next to a paste without a claim.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 2,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 4"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 21,
+                "to": 21,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 5"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "pasteOrigin": {
+              "kind": "source-notebook",
+              "refId": "00000000-0000-4000-8000-0000000000a4",
+              "textSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 4\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"pasteOrigin\":{\"kind\":\"source-notebook\",\"refId\":\"00000000-0000-4000-8000-0000000000a4\",\"textSha256\":\"4444444444444444444444444444444444444444444444444444444444444444\"},\"sequence\":2,\"source\":\"paste\",\"steps\":[{\"from\":21,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 5\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":21}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":2,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1479,
+      "segmentHash": "f1c3a323fe831031760dc8ceed4a6468ac3e94e1fe1ce520ee44e240492b8145"
+    },
+    {
+      "name": "v4-every-feature",
+      "note": "Every v4 feature with v2 and v3 sources in one segment.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 6,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "5555555555555555555555555555555555555555555555555555555555555555",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 21,
+                "to": 21,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "ai-transfer",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 41,
+                "to": 41,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 2"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "aiTransferId": "00000000-0000-4000-8000-0000000000a2",
+            "aiTransferSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          {
+            "sequence": 4,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 61,
+                "to": 61,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "afterDocumentHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          {
+            "sequence": 5,
+            "source": "drop",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 81,
+                "to": 81,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "afterDocumentHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          },
+          {
+            "sequence": 6,
+            "source": "unattributed",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 101,
+                "to": 101,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "x"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "afterDocumentHash": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":21,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":21}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"aiTransferId\":\"00000000-0000-4000-8000-0000000000a2\",\"aiTransferSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"ai-transfer\",\"steps\":[{\"from\":41,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 2\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":41}]},{\"afterDocumentHash\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"beforeDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":4,\"source\":\"paste\",\"steps\":[{\"from\":61,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":61}]},{\"afterDocumentHash\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"beforeDocumentHash\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"sequence\":5,\"source\":\"drop\",\"steps\":[{\"from\":81,\"slice\":{\"content\":[{\"text\":\"Lorem\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":81}]},{\"afterDocumentHash\":\"5555555555555555555555555555555555555555555555555555555555555555\",\"beforeDocumentHash\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"sequence\":6,\"source\":\"unattributed\",\"steps\":[{\"from\":101,\"slice\":{\"content\":[{\"text\":\"x\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":101}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"5555555555555555555555555555555555555555555555555555555555555555\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":6,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 3038,
+      "segmentHash": "4526b3ca71d1f3493ec94e355e8bbfb76620314933a1a53361b2eab119f9f129"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "v3-with-import",
+      "note": "A v3 header around an import event: the new source is refused in v3.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1131,
+      "segmentHash": "1693d2696a5f4d777ae8bd130151e350103ac2c800e9a0dd4387b35df5ae599b"
+    },
+    {
+      "name": "v2-with-ai-transfer",
+      "note": "A v2 header around an ai-transfer event.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v2",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "ai-transfer",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 2"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "aiTransferId": "00000000-0000-4000-8000-0000000000a2",
+            "aiTransferSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"aiTransferId\":\"00000000-0000-4000-8000-0000000000a2\",\"aiTransferSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"ai-transfer\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 2\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1136,
+      "segmentHash": "e38dcfb48817046230b031bceb8937b325dc080a2e281bf4e0fd30f1a3dff069"
+    },
+    {
+      "name": "v3-with-paste-origin",
+      "note": "A v3 header around a paste with pasteOrigin: the key is refused in v3.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1154,
+      "segmentHash": "0196a830dbfff85878d87736cf3bf6bff7810fbbb22980a16db2012aeb148a10"
+    },
+    {
+      "name": "v4-without-v4-feature",
+      "note": "A v4 header around v3 content: each content has one schema.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 2,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Uvod"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 21,
+                "to": 21,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Uvod\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":21,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":21}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":2,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1309,
+      "segmentHash": "677384a86dca53a9ded2b5ac184bfc8637b78bcbfe7bb346ccb07a845e899bcf"
+    },
+    {
+      "name": "v4-import-without-import-id",
+      "note": "importId is required with import.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1081,
+      "segmentHash": "1fa45fae68cd0d0f320edbbc8fc58b50f1ad746ff66dfa1c34766d37c76e26fd"
+    },
+    {
+      "name": "v4-import-without-manifest-hash",
+      "note": "importManifestSha256 is required with import.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1041,
+      "segmentHash": "9bbb58c92c0ea7795a39d7d049ef6fb47c98425c49a3990526e95a64e83366eb"
+    },
+    {
+      "name": "v4-import-id-uppercase",
+      "note": "A UUID in upper case is not canonical.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000A1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000A1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1131,
+      "segmentHash": "8f94f0373c97b6bc347063fc0f243ae7dff41aa32123ba808bb94f14b4278da9"
+    },
+    {
+      "name": "v4-import-id-nil",
+      "note": "The nil UUID is not a v4 UUID.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-0000-0000-000000000000",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-0000-0000-000000000000\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1131,
+      "segmentHash": "f7ca88b35aa9783f5934b0515eb394945cef5a1110d4f1f93d8e4c97ffb8b7d2"
+    },
+    {
+      "name": "v4-import-id-version-1",
+      "note": "A version 1 UUID is refused.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-1000-8000-0000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-1000-8000-0000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1131,
+      "segmentHash": "144941fc1d24f0b80c3fc6ca9da771631dfede54a65d9c377213a0ab7f071672"
+    },
+    {
+      "name": "v4-import-id-without-hyphens",
+      "note": "A UUID must have 36 characters with hyphens.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "000000000000400080000000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"000000000000400080000000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1127,
+      "segmentHash": "437f866bd53741dd01cf0433a6d3a5bf3861260a424467ade9a666661a0ffd35"
+    },
+    {
+      "name": "v4-manifest-hash-uppercase",
+      "note": "A binding hash in upper case.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1131,
+      "segmentHash": "93f76efa89799bdc3539aeb0cabf7778088458735db5883cf445ead63c14e84e"
+    },
+    {
+      "name": "v4-manifest-hash-63",
+      "note": "A binding hash of 63 characters.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1130,
+      "segmentHash": "4fd623d47fd57b4ce1b7dd0380393667dda58d6ca478fb1cc04984e044ec3cc8"
+    },
+    {
+      "name": "v4-transfer-without-hash",
+      "note": "aiTransferSha256 is required with ai-transfer.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "ai-transfer",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 2"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "aiTransferId": "00000000-0000-4000-8000-0000000000a2"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"aiTransferId\":\"00000000-0000-4000-8000-0000000000a2\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"ai-transfer\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 2\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1050,
+      "segmentHash": "b350b86f84d5c0c66604ee288c7c85985e1e04bdaedfcf9683ffed0460d4ef12"
+    },
+    {
+      "name": "v4-transfer-with-import-id",
+      "note": "importId belongs to import only.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "ai-transfer",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 2"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "aiTransferId": "00000000-0000-4000-8000-0000000000a2",
+            "aiTransferSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "importId": "00000000-0000-4000-8000-0000000000a1"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"aiTransferId\":\"00000000-0000-4000-8000-0000000000a2\",\"aiTransferSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"sequence\":1,\"source\":\"ai-transfer\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 2\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1186,
+      "segmentHash": "dcf387b8b626ce6c3efb55a327edb75f6c7a61da5313311bfed3cc7038e9fbeb"
+    },
+    {
+      "name": "v4-import-with-paste-origin",
+      "note": "pasteOrigin belongs to paste only.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1295,
+      "segmentHash": "400e6547cecfa42f73dc882f0303883fd6a9e5bf21cce15426e281faee57cb72"
+    },
+    {
+      "name": "v4-paste-with-import-id",
+      "note": "importId on a paste.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            },
+            "importId": "00000000-0000-4000-8000-0000000000a1"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1204,
+      "segmentHash": "1cc45288b95b3b821f4f327f16027db3f2de910e8c48165e56de6fa277694722"
+    },
+    {
+      "name": "v4-drop-with-paste-origin",
+      "note": "drop carries no pasteOrigin until the owner decides O-6.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "drop",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":1,\"source\":\"drop\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1153,
+      "segmentHash": "c4f4cae83533dbe415cf36f919a0f7ff76c59e353a722a958780436982a51f04"
+    },
+    {
+      "name": "v4-paste-origin-unknown-kind",
+      "note": "pasteOrigin.kind is a closed set.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": {
+              "kind": "web-page",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pasteOrigin\":{\"kind\":\"web-page\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1151,
+      "segmentHash": "40160d8bfd03b9c35ee9e449dfae91275337c4f61e93375c014d0485153b7a1a"
+    },
+    {
+      "name": "v4-paste-origin-with-text",
+      "note": "pasteOrigin never carries text (D9).",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3",
+              "textSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "text": "Lorem odlomak 3"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\",\"text\":\"Lorem odlomak 3\",\"textSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\"},\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1179,
+      "segmentHash": "b1da7baf738659e6a7190a75b35e9eb92e5805650322266c0b9197e8add812ad"
+    },
+    {
+      "name": "v4-paste-origin-without-text-hash",
+      "note": "textSha256 is required in pasteOrigin.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": {
+              "kind": "ai-response",
+              "refId": "00000000-0000-4000-8000-0000000000a3"
+            }
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pasteOrigin\":{\"kind\":\"ai-response\",\"refId\":\"00000000-0000-4000-8000-0000000000a3\"},\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1074,
+      "segmentHash": "f82992950b71b97cc3da2e683901d736233ba0810e99d642bebbb791e3fb1f6a"
+    },
+    {
+      "name": "v4-paste-origin-null",
+      "note": "pasteOrigin is an object when present, never null.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "paste",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 3"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "pasteOrigin": null
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pasteOrigin\":null,\"sequence\":1,\"source\":\"paste\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 3\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1009,
+      "segmentHash": "9a3e332c46245d406305988266a303022a36f09e89044e81f77bda67a0a6004d"
+    },
+    {
+      "name": "v4-applied-suggestion",
+      "note": "Reserved sources stay refused in v4 (D-34).",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 2,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "applied-suggestion",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "suggestionId": "00000000-0000-4000-8000-0000000000a5"
+          },
+          {
+            "sequence": 2,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 21,
+                "to": 21,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"applied-suggestion\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}],\"suggestionId\":\"00000000-0000-4000-8000-0000000000a5\"},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"sequence\":2,\"source\":\"import\",\"steps\":[{\"from\":21,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":21}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":2,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1509,
+      "segmentHash": "eca66fe8e2072982b84085631e693dbbe6713acdfaed5c722b6ea4c40a307060"
+    },
+    {
+      "name": "v4-event-time",
+      "note": "An event has no time of its own (D-24, D-56).",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v4",
+        "sessionId": "sesija-izmisljena-v4",
+        "segmentId": "odsjecak-v4-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-11-10T09:00:00.000Z",
+        "observedEndedAt": "2026-11-10T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "import",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Lorem odlomak 1"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "importId": "00000000-0000-4000-8000-0000000000a1",
+            "importManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "observedAt": "2026-11-10T09:00:00.000Z"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v4\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"importId\":\"00000000-0000-4000-8000-0000000000a1\",\"importManifestSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"observedAt\":\"2026-11-10T09:00:00.000Z\",\"sequence\":1,\"source\":\"import\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Lorem odlomak 1\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-11-10T09:01:00.000Z\",\"observedStartedAt\":\"2026-11-10T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v4-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v4\"}",
+      "byteLength": 1171,
+      "segmentHash": "18772c87695e505225d8a4fb486ac8dd19bb63654f0385632e541da6c77b46c3"
+    }
+  ]
+}

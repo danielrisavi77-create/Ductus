@@ -22,7 +22,12 @@ import { canonicalizeJcs } from "@/domain/forensics/jcs";
  * checks them again and replays them by the same step rules; the server
  * computes no document state per change.
  *
- * The only request inputs are the document id and `from`. Who asks reaches
+ * The request inputs are the document id, `from` and, for every page after
+ * the first, the `head` the first page reported (DAN-537). A later page is
+ * read only from the record that ends at that head: a record that has grown
+ * since is read up to it, and one that no longer holds it (a submission cut
+ * it) is `record_changed`, so the browser starts again and never joins pages
+ * of two records. Who asks reaches
  * this code only through `source`, so the owner and the teacher of the same
  * stored state get the same bytes (PRODUCT §5 rule 5): the RFC 8785 JCS text
  * of the page. Every failure is whole, never a partial page; `reason` is a
@@ -75,33 +80,58 @@ export type ReplayReadResult =
   | { status: "ok"; body: string }
   | { status: "not_found" }
   | { status: "unauthenticated" }
+  /** The record no longer ends at the head the pages are pinned to; start again from the first page. */
+  | { status: "record_changed" }
   | { status: "unavailable"; reason: ReplayUnavailableReason };
 
 const unavailable = (reason: ReplayUnavailableReason): ReplayReadResult => ({ status: "unavailable", reason });
 
+/** Whether `listing` still holds `head` at its place: the whole record up to it, by the chain of hashes. */
+function holds(listing: readonly string[], head: EvidenceChainHeadV2): boolean {
+  const count = head.segmentCount;
+  return Number.isSafeInteger(count) && count >= 1 && count <= listing.length && listing[count - 1] === head.segmentHash;
+}
+
+/** The source read once more; access is decided again on every read. */
+async function listing(source: ReplaySource, documentId: string) {
+  let result;
+  try {
+    result = await source.readSource(documentId);
+  } catch {
+    return unavailable("source_unavailable");
+  }
+  if (result.status === "not_found") return { status: "not_found" } as const;
+  if (result.status === "unauthenticated") return { status: "unauthenticated" } as const;
+  if (result.status !== "found") return unavailable("source_unavailable");
+  return result;
+}
+
+/**
+ * `pin` is null for the first page and the head that page reported for every
+ * later one; any other pairing is answered like an index that does not exist.
+ */
 export async function readReplayPage(
   deps: ReplayReaderDeps,
   documentId: string,
   from: number,
+  pin: EvidenceChainHeadV2 | null,
 ): Promise<ReplayReadResult> {
   // An id or index that cannot exist is answered like a document that does not.
-  if (!isDocumentId(documentId) || !Number.isSafeInteger(from) || from < 0) return { status: "not_found" };
-
-  let source;
-  try {
-    source = await deps.source.readSource(documentId);
-  } catch {
-    return unavailable("source_unavailable");
+  if (!isDocumentId(documentId) || !Number.isSafeInteger(from) || from < 0 || (from === 0) !== (pin === null)) {
+    return { status: "not_found" };
   }
-  if (source.status === "not_found") return { status: "not_found" };
-  if (source.status === "unauthenticated") return { status: "unauthenticated" };
-  if (source.status !== "found") return unavailable("source_unavailable");
 
-  const hashes = source.segmentHashes;
+  // Access first: a reader who may not see the document learns nothing of the pin.
+  const source = await listing(deps.source, documentId);
+  if (source.status !== "found") return source;
+  if (pin !== null && !holds(source.segmentHashes, pin)) return { status: "record_changed" };
+  const head = pin ?? source.head;
+
+  const hashes = source.segmentHashes.slice(0, head?.segmentCount ?? 0);
   const page: ReplayPage = {
     replayFormat: REPLAY_FORMAT,
     segmentCount: hashes.length,
-    head: source.head,
+    head,
     from,
     next: null,
     startDocument: null,
@@ -188,13 +218,28 @@ export async function readReplayPage(
     }
     if (checkpoints.status === "unauthenticated") return { status: "unauthenticated" };
     if (checkpoints.status !== "found") return unavailable("checkpoints_unavailable");
+    let missing = false;
     for (const hash of wanted) {
       const text = checkpoints.texts.get(hash);
       // Only text within the reserved size that hashes to the hash it was asked for; anything else is no checkpoint.
-      if (text === undefined || encoder.encode(text).byteLength > MAX_REPLAY_CHECKPOINT_BYTES) continue;
-      if ((await sha256WebCrypto(text)) !== hash) continue;
+      if (
+        text === undefined || encoder.encode(text).byteLength > MAX_REPLAY_CHECKPOINT_BYTES ||
+        (await sha256WebCrypto(text)) !== hash
+      ) {
+        missing = true;
+        continue;
+      }
       if (resumeHashes.has(hash)) page.resumeDocuments[hash] = text;
       if (hash === start && page.startDocument === null) page.startDocument = text;
+    }
+    if (missing && head !== null) {
+      // The checkpoints are read in a transaction of their own: a submission
+      // recorded since the listing hides the texts past its cut. A record that
+      // no longer holds the head is a changed record, never a page that looks
+      // like a break without a resume.
+      const again = await listing(deps.source, documentId);
+      if (again.status !== "found") return again;
+      if (!holds(again.segmentHashes, head)) return { status: "record_changed" };
     }
   }
   // Without the document the first change applies to there is nothing to replay.

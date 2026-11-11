@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceEvent, EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 
 import { CaptureError, changeOf, EvidenceRecorder, type SegmentContext } from "./capture";
@@ -174,7 +174,7 @@ describe("F-8 3d-1b: random edits never give a segment that replay refuses", () 
       });
       if (stop === null) {
         const replayer = createEditStepsV1Replayer();
-        const rebuilt = segments.flatMap((s) => s.events).reduce((doc, event) => replayer.apply(doc, event), replayer.load(initial));
+        const rebuilt = segments.flatMap((s): EvidenceEvent[] => s.events).reduce((doc, event) => replayer.apply(doc, event), replayer.load(initial));
         expect(replayer.toCanonical(rebuilt), `seed ${seed}`).toEqual(final);
       }
     }

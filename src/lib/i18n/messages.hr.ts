@@ -970,6 +970,29 @@ export const hr = {
     // {date} is formatDateHr, whose year already ends with a period.
     acceptedMeta: "Prihvaćeno {date} Zahtjev je zatvoren.",
     withdrawnMeta: "Povučeno {date} Zahtjev je zatvoren.",
+    explanationLabel: "Obrazloženje",
+    explanationHint: "Napišite što ste promijenili ili zašto ne pristajete, do 2000 znakova.",
+    done: "Navedi da je provedeno",
+    declined: "Ne pristajem, uz obrazloženje",
+    sending: "Slanje…",
+    sent: "Odgovor je poslan.",
+    submittedNote: "Rad je predan. Na zahtjev se više ne odgovara.",
+    // DAN-314: the answer names the server's current revision, which lacks changes still on the device.
+    // DAN-314, c.6779628877: in ERROR, CONFLICT and RECOVERY_REQUIRED the buttons stay off, so say what to do.
+    unconfirmedNote:
+      "Odgovor se može poslati kad poslužitelj primi sve izmjene teksta. Ako je uz tekst javljena greška ili sukob, najprije postupite prema toj obavijesti; upisano objašnjenje ostaje ovdje.",
+    keptLabel: "Neposlano obrazloženje",
+    keptHint: "Ovo obrazloženje nije poslano jer se na zahtjev više ne odgovara. Kopirajte ga ako ga želite sačuvati.",
+    keptForLabel: "Neposlano obrazloženje za zahtjev za doradu {n}",
+    keptUnloadedHint: "Ovo obrazloženje nije poslano, a zahtjevi se trenutačno ne mogu učitati. Kopirajte ga ako ga želite sačuvati.",
+    errors: {
+      signedOut: "Prijava je istekla. Prijavite se ponovno.",
+      forbidden: "Ovaj račun ne može odgovoriti na ovaj zahtjev.",
+      conflict: "Zahtjev se u međuvremenu promijenio. Prikazano je trenutačno stanje.",
+      invalid: "Odgovor nije prihvaćen. Napišite od 1 do 2000 znakova.",
+      unavailable: "Odgovor nije poslan. Pokušajte ponovno.",
+      unconfirmed: "Odgovor nije poslan jer poslužitelj još nije primio sve izmjene teksta.",
+    },
   },
   // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).
   // The connection line is about this page's own requests, never the student.
