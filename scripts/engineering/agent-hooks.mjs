@@ -214,8 +214,39 @@ export function budgetNotice(tokens, role = "unknown") {
 // A writer or control session gets STATE.md with the body of that section
 // replaced by one line naming the lines left out; every other role, including
 // a session with no detectable role, gets the text unchanged (DAN-695).
-const OWNER_QUEUE = /^## Owner queue\b/i;
+// Headings and fenced blocks follow CommonMark: up to three spaces of indent,
+// and a fence closes only with the same character, at least as long.
+const OWNER_QUEUE = /^ {0,3}##[ \t]+Owner queue\b/i;
+const SECTION = /^ {0,3}#{1,2}(?:[ \t]|$)/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const CUT_ROLES = new Set(["worker", "control"]);
+
+const ownerQueueNote = (from, to, cr, last = false, lastCr = cr) => [
+  "" + cr,
+  `> Owner queue left out for this session's role: STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.` + (last ? lastCr : cr),
+  ...(last ? [] : ["" + cr]),
+];
+// A body is cut only when it is longer than the longest note, so the text
+// handed over is never longer than the file, and a second pass keeps the note
+// as it is: the decision does not depend on where the section sits.
+const size = (lines) => lines.reduce((sum, line) => sum + line.length + 1, 0);
+const noteRoom = (cr) => size(ownerQueueNote(9_999_999, 9_999_999, cr));
+
+function fenceTracker() {
+  let open = null;
+  return (bare) => {
+    const match = FENCE.exec(bare);
+    if (open) {
+      if (match && match[1][0] === open[0] && match[1].length >= open.length && !match[2].trim()) open = null;
+      return true;
+    }
+    if (match && !(match[1][0] === "`" && match[2].includes("`"))) {
+      open = match[1];
+      return true;
+    }
+    return false;
+  };
+}
 
 export function stateForRole(text, role) {
   if (!CUT_ROLES.has(role)) return text;
@@ -223,22 +254,26 @@ export function stateForRole(text, role) {
   const ends = text.endsWith("\n");
   const lines = (ends ? text.slice(0, -1) : text).split("\n");
   const out = [];
-  let fenced = false;
-  let from = 0; // first line of the body being cut, 1-based; 0 when none
-  const close = (to, last = false) => {
-    if (to >= from) out.push("", `> Owner queue left out for this session's role: STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`, ...(last ? [] : [""]));
-    from = 0;
+  const fenced = fenceTracker();
+  let body = null; // the Owner queue body being collected: { from (1-based), lines, cr }
+  const flush = (last = false) => {
+    const kept = body.lines;
+    const to = body.from + kept.length - 1;
+    const lastCr = kept.length && kept.at(-1).endsWith("\r") ? "\r" : "";
+    if (size(kept) > noteRoom(body.cr)) out.push(...ownerQueueNote(body.from, to, body.cr, last, lastCr));
+    else out.push(...kept);
+    body = null;
   };
   lines.forEach((line, index) => {
     const bare = line.replace(/\r$/, "");
-    if (/^\s*(```|~~~)/.test(bare)) fenced = !fenced;
-    const section = !fenced && /^#{1,2} /.test(bare);
-    if (from && section && !OWNER_QUEUE.test(bare)) close(index);
-    if (from) return;
+    const section = !fenced(bare) && SECTION.test(bare);
+    const queue = section && OWNER_QUEUE.test(bare);
+    if (body && section && !queue) flush();
+    if (body) return void body.lines.push(line);
     out.push(line);
-    if (section && OWNER_QUEUE.test(bare)) from = index + 2;
+    if (queue) body = { from: index + 2, lines: [], cr: line.endsWith("\r") ? "\r" : "" };
   });
-  if (from) close(lines.length, true);
+  if (body) flush(true);
   return out.join("\n") + (ends ? "\n" : "");
 }
 

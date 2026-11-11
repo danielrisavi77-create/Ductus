@@ -462,31 +462,49 @@ test("start entry point checks the install only in a checkout with a lockfile an
 // DAN-695 step 5: the Owner queue is for the owner and the orchestrator; a
 // writer or a control session gets STATE.md without its body (contract on #1836).
 const QUEUE = "## Owner queue (samo Daniel)";
-const note = (from, to) => `> Owner queue left out for this session's role: STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`;
+const NOTE = "> Owner queue left out for this session's role:";
+const note = (from, to) => `${NOTE} STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`;
+// A body is cut only when it is longer than the note with seven-digit line
+// numbers and its blank lines; an item this long always is.
+const ROOM = 3 + note(9_999_999, 9_999_999).length + 1 + 1;
+const item = (n) => `- [ ] Q-${n} ${"x".repeat(140)}`;
 
 test("stateForRole: table of roles and STATE.md shapes", () => {
-  const middle = `# Stanje\n\n${QUEUE}\n\n- [ ] Q-1\n### Sub\n- [ ] Q-2\n\n## Engineering\ntext\n`;
+  const middle = `# Stanje\n\n${QUEUE}\n\n${item(1)}\n### Sub\n- [ ] Q-2\n\n## Engineering\ntext\n`;
   const cut = `# Stanje\n\n${QUEUE}\n\n${note(4, 8)}\n\n## Engineering\ntext\n`;
   for (const role of ["worker", "control"]) assert.equal(stateForRole(middle, role), cut, role);
   for (const role of ["orchestrator", "unknown", undefined, "writer"]) assert.equal(stateForRole(middle, role), middle, String(role));
   const cases = [
     // Owner queue as the last section runs to the end of the file; the final
     // newline ends line 3 and is kept, it is not a line 4.
-    [`# S\n${QUEUE}\n- [ ] Q-1\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n`],
-    [`# S\n${QUEUE}\n- [ ] Q-1`, `# S\n${QUEUE}\n\n${note(3, 3)}`],
+    [`# S\n${QUEUE}\n${item(1)}\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n`],
+    [`# S\n${QUEUE}\n${item(1)}`, `# S\n${QUEUE}\n\n${note(3, 3)}`],
     [`# S\n${QUEUE}\n`, `# S\n${QUEUE}\n`],
     ["\n", "\n"],
+    // A body no longer than the note stays: the text never grows.
+    [`# S\n${QUEUE}\n- [ ] Q-1\n## A\nx\n`, `# S\n${QUEUE}\n- [ ] Q-1\n## A\nx\n`],
     // No Owner queue, an empty section, an empty file: nothing to cut.
     ["# S\n## A\nx\n", "# S\n## A\nx\n"],
     [`# S\n${QUEUE}\n## A\nx\n`, `# S\n${QUEUE}\n## A\nx\n`],
     ["", ""],
     // A heading inside a fenced block is text, not a section.
-    ["# S\n```\n## Owner queue\n```\n## A\n", "# S\n```\n## Owner queue\n```\n## A\n"],
-    // Another heading that only starts alike is not the queue; letter case is ignored.
+    [`# S\n\`\`\`\n## Owner queue\n${item(1)}\n\`\`\`\n## A\n`, `# S\n\`\`\`\n## Owner queue\n${item(1)}\n\`\`\`\n## A\n`],
+    // CommonMark fences: inline code is no fence, a fence closes only with the
+    // same character, four spaces of indent is no fence.
+    [`# S\n${QUEUE}\n\`\`\`x\`\`\`\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 4)}\n\n## A\n`],
+    [`# S\n${QUEUE}\n\`\`\`\n~~~\n## A\n${item(1)}\n\`\`\`\n## B\n`, `# S\n${QUEUE}\n\n${note(3, 7)}\n\n## B\n`],
+    [`# S\n${QUEUE}\n    \`\`\`\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 4)}\n\n## A\n`],
+    // Up to three spaces of indent is still a heading.
+    [`# S\n   ${QUEUE}\n${item(1)}\n  ## A\n`, `# S\n   ${QUEUE}\n\n${note(3, 3)}\n\n  ## A\n`],
+    // Another heading that only starts alike: "Owners" is not the queue,
+    // "Owner queue arhiva" is; letter case is ignored.
     ["# S\n## Owners\nx\n", "# S\n## Owners\nx\n"],
-    ["# S\n## owner QUEUE\nx\n## A\n", `# S\n## owner QUEUE\n\n${note(3, 3)}\n\n## A\n`],
-    // A level-1 heading also ends the section; CRLF lines are kept as they are.
-    [`# S\r\n${QUEUE}\r\nq\r\n# T\r\n`, `# S\r\n${QUEUE}\r\n\n${note(3, 3)}\n\n# T\r\n`],
+    [`# S\n## Owner queue arhiva\n${item(1)}\n## A\n`, `# S\n## Owner queue arhiva\n\n${note(3, 3)}\n\n## A\n`],
+    [`# S\n## owner QUEUE\n${item(1)}\n## A\n`, `# S\n## owner QUEUE\n\n${note(3, 3)}\n\n## A\n`],
+    // A level-1 heading also ends the section; CRLF stays CRLF.
+    [`# S\r\n${QUEUE}\r\n${item(1)}\r\n# T\r\n`, `# S\r\n${QUEUE}\r\n\r\n${note(3, 3)}\r\n\r\n# T\r\n`],
+    // Text that was already cut is handed over as it is.
+    [`# S\n${QUEUE}\n\n${note(3, 9)}\n\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 9)}\n\n## A\n`],
   ];
   for (const [input, expected] of cases) assert.equal(stateForRole(input, "worker"), expected, JSON.stringify(input));
 });
@@ -494,13 +512,13 @@ test("stateForRole: table of roles and STATE.md shapes", () => {
 test("start entry point leaves the Owner queue out for writer and control profiles only", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-state-"));
   try {
-    fs.writeFileSync(path.join(dir, "STATE.md"), `# Stanje rada\n${QUEUE}\n- [ ] Q-7 secret-ish owner item\n## Ne smije se izgubiti\n- B-8\n`);
+    fs.writeFileSync(path.join(dir, "STATE.md"), `# Stanje rada\n${QUEUE}\n${item(7)}\n## Ne smije se izgubiti\n- B-8\n`);
     for (const agent_type of ["ductus-platform-sre", "ductus-independent-reviewer", "ductus-adversarial-qa"]) {
       const context = run("start", { cwd: dir, agent_type }, dir).additionalContext;
       assert.doesNotMatch(context, /Q-7/, agent_type);
       assert.match(context, /lines 3-3[\s\S]*## Ne smije se izgubiti\n- B-8/, agent_type);
     }
-    for (const event of [{ cwd: dir, agent_type: "ductus-orchestrator" }, { cwd: dir }, { cwd: dir, agent_type: "ductus-scout" }]) {
+    for (const event of [{ cwd: dir, agent_type: "ductus-orchestrator" }, { cwd: dir }, { cwd: dir, agent_type: "ductus-scout" }, { cwd: dir, agent_type: 7 }]) {
       assert.match(run("start", event, dir).additionalContext, /Q-7[\s\S]*B-8/, JSON.stringify(event));
     }
     // The limit is measured on what is handed over: a writer still gets a
@@ -509,6 +527,10 @@ test("start entry point leaves the Owner queue out for writer and control profil
     assert.match(run("start", { cwd: dir, agent_type: "ductus-backend-data" }, dir).additionalContext, /## Ne smije se izgubiti/);
     assert.equal(run("start", { cwd: dir, agent_type: "ductus-orchestrator" }, dir), null);
     assert.equal(run("start", { cwd: dir }, dir), null);
+    // A file exactly at the limit with a short queue still loads for a writer.
+    const head = `# Stanje rada\n${QUEUE}\n- [ ] Q-1\n## Ne smije se izgubiti\n`;
+    fs.writeFileSync(path.join(dir, "STATE.md"), head + "b".repeat(STATE_LIMIT - head.length));
+    assert.match(run("start", { cwd: dir, agent_type: "ductus-backend-data" }, dir).additionalContext, /Q-1/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -516,31 +538,34 @@ test("start entry point leaves the Owner queue out for writer and control profil
 
 // A STATE.md built from sections, so the expected output follows from the
 // structure and not from the code under test.
-const arbLine = fc.string({ maxLength: 12 }).filter((l) => !/[\r\n]/.test(l) && !/^(#|\s*(```|~~~))/.test(l));
+const arbLine = fc.string({ maxLength: 60 }).filter((l) => !/[\r\n]/.test(l) && !/^\s*(#|```|~~~)/.test(l));
 const arbSection = fc.record({
-  heading: fc.constantFrom(QUEUE, "## Owner queue", "## Engineering", "# Stanje", "### Sub"),
-  body: fc.array(arbLine, { maxLength: 4 }),
+  heading: fc.constantFrom(QUEUE, "## Owner queue", "  ## Owner queue arhiva", "## Engineering", " ## Plan", "# Stanje", "### Sub"),
+  body: fc.array(fc.oneof(arbLine, fc.constant(item(9))), { maxLength: 4 }),
 });
 
 function expectedState(sections, role) {
   const out = [];
   let line = 0;
-  let open = null; // the Owner queue section being cut: { from, removed }
+  let open = null; // the Owner queue section being cut: { from, lines }
   const close = (last = false) => {
-    if (open && open.removed > 0) out.push("", note(open.from, open.from + open.removed - 1), ...(last ? [] : [""]));
+    if (!open) return;
+    const size = open.lines.reduce((sum, text) => sum + text.length + 1, 0);
+    if (size > ROOM) out.push("", note(open.from, open.from + open.lines.length - 1), ...(last ? [] : [""]));
+    else out.push(...open.lines);
     open = null;
   };
   for (const { heading, body } of sections) {
-    const level = heading.match(/^#+/)[0].length;
-    const queue = /^## Owner queue\b/.test(heading);
+    const level = heading.trim().match(/^#+/)[0].length;
+    const queue = /^## Owner queue\b/.test(heading.trim());
     line += 1;
     if (open && level <= 2 && !queue) close();
-    if (open) open.removed += 1;
+    if (open) open.lines.push(heading);
     else out.push(heading);
-    if (!open && queue && (role === "worker" || role === "control")) open = { from: line + 1, removed: 0 };
+    if (!open && queue && (role === "worker" || role === "control")) open = { from: line + 1, lines: [] };
     for (const text of body) {
       line += 1;
-      if (open) open.removed += 1;
+      if (open) open.lines.push(text);
       else out.push(text);
     }
   }
@@ -548,20 +573,37 @@ function expectedState(sections, role) {
   return out.join("\n");
 }
 
+const arbState = fc.tuple(fc.array(arbSection, { maxLength: 6 }), fc.boolean(), fc.boolean()).map(([sections, final, crlf]) => {
+  const text = sections.flatMap(({ heading, body }) => [heading, ...body]).join("\n") + (final ? "\n" : "");
+  return { sections, final, text: crlf ? text.replaceAll("\n", "\r\n") : text, crlf };
+});
+
 test("property: only Owner queue lines leave, the note names them, other roles get the text unchanged", () => {
   fc.assert(
-    fc.property(fc.array(arbSection, { maxLength: 6 }), fc.constantFrom("worker", "control", "orchestrator", "unknown"), fc.boolean(), (sections, role, final) => {
-      // With or without a final newline: it ends the last line and is kept.
-      const end = final ? "\n" : "";
-      const text = sections.flatMap(({ heading, body }) => [heading, ...body]).join("\n") + end;
+    fc.property(arbState, fc.constantFrom("worker", "control", "orchestrator", "unknown"), ({ sections, final, text, crlf }, role) => {
       // "a\n" is one line with a final newline, never "a" and an empty line: such a
       // case is drawn with final = true instead.
-      fc.pre(final || !text.endsWith("\n"));
+      fc.pre(!crlf && (final || !text.endsWith("\n")));
       const result = stateForRole(text, role);
-      assert.equal(result, expectedState(sections, role) + end);
+      assert.equal(result, expectedState(sections, role) + (final ? "\n" : ""));
       if (role === "orchestrator" || role === "unknown") assert.equal(result, text);
     }),
   );
+});
+
+test("property: a second pass changes nothing and the text never grows, CRLF included", () => {
+  fc.assert(
+    fc.property(arbState, fc.constantFrom("worker", "control"), ({ text, crlf }, role) => {
+      const once = stateForRole(text, role);
+      assert.equal(stateForRole(once, role), once);
+      assert.ok(once.length <= text.length, `${once.length} > ${text.length}`);
+      if (crlf) assert.doesNotMatch(once, /(^|[^\r])\n/);
+    }),
+  );
+  const real = fs.readFileSync(path.join(repo, "STATE.md"), "utf8");
+  const once = stateForRole(real, "worker");
+  assert.equal(stateForRole(once, "worker"), once);
+  assert.ok(once.length <= real.length);
 });
 
 test("the longest STATE.md that is loaded still fits the hook context limit with the notice", () => {
