@@ -4,53 +4,81 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import fc from "fast-check";
 
-import { declaredModel, expectedTier, modelOutcome, modelTier, OUTCOMES } from "./model-check.mjs";
+import { checkRole, declaredModel, expectedTier, modelOutcome, modelTier, OUTCOMES } from "./model-check.mjs";
 
 const SHA = (c) => c.repeat(40);
+// A verdict as the gate counts it: owner account, posted through the Claude App,
+// a valid reviewer or QA slot, QA with its scope. `over` replaces any field.
 const verdict = (kind, head, v, model, over = {}) => {
-  const [a, h, r, m] = kind === "review"
-    ? ["Agent-Review", "Review-Head", "Review-Verdict", "Review-Model"]
-    : ["QA-Agent", "QA-Head", "QA-Verdict", "QA-Model"];
+  const [a, h, r, m, role] = kind === "review"
+    ? ["Agent-Review", "Review-Head", "Review-Verdict", "Review-Model", "reviewer"]
+    : ["QA-Agent", "QA-Head", "QA-Verdict", "QA-Model", "qa"];
   const line = model === undefined ? "" : `${m}: ${model}\n`;
+  const scope = kind === "qa" ? "QA-Scope: full\n" : "";
+  const slot = over.slot ?? "x";
+  const { slot: _slot, ...rest } = over;
   return {
-    author_association: "OWNER", user: { login: "u" }, created_at: "2026-10-01T10:00:00Z",
-    body: `${a}: claude:x\n${h}: ${head}\n${r}: ${v}\n${line}`, ...over,
+    author_association: "OWNER", user: { login: "u", type: "User" }, performed_via_github_app: { slug: "claude" },
+    created_at: "2026-10-01T10:00:00Z", updated_at: "2026-10-01T10:00:00Z",
+    body: `${a}: claude:${slot}:${role}\n${h}: ${head}\n${r}: ${v}\n${scope}${line}`, ...rest,
   };
 };
+const OWNER = { ownerLogin: "u", authorAgent: "claude:w:platforma" };
 
-test("modelTier: id, marketing name, other runtimes, empty and ambiguous values", () => {
+test("modelTier: allowlist of Claude forms; anything else is other", () => {
+  // Input classes (contract on #1836): [class, value, tier]
   const cases = [
-    ["claude-opus-5-5", "opus"],
-    ["claude-sonnet-5-5[1m]", "sonnet"],
-    ["claude-haiku-5-5", "haiku"],
-    ["Opus 5.5", "opus"],
-    ["SONNET", "sonnet"],
-    ["  opus  ", "opus"],
-    ["claude-opus-4-8[1m]", "opus"],
-    ["Fable 5.2", "other"],
-    ["claude-fable-5-2", "other"],
-    ["gpt-5-codex", "other"],
-    ["Astra", "other"],
-    ["opusx", "other"],
-    ["magnum-opus", "opus"],
-    ["opus or sonnet", "other"],
-    ["claude-opus-5-5 (fallback sonnet)", "other"],
-    // A Claude tier next to another model family is unclear.
-    ["claude-opus-5-5 + gpt-5-codex", "other"],
-    ["claude-fable-5-5 opus", "other"],
+    ["id", "claude-opus-5-5", "opus"],
+    ["id", "claude-haiku-5-5", "haiku"],
+    ["id with context suffix", "claude-sonnet-5-5[1m]", "sonnet"],
+    ["id with context suffix", "claude-opus-4-8[1m]", "opus"],
+    ["id with date", "claude-sonnet-4-5-20250929", "sonnet"],
+    ["old id form", "claude-3-5-sonnet-20241022", "sonnet"],
+    ["old id form", "claude-3-opus", "opus"],
+    ["name", "Opus 5.5", "opus"],
+    ["name", "Claude Sonnet 5.5", "sonnet"],
+    ["bare tier", "SONNET", "sonnet"],
+    ["bare tier, spaces", "  opus  ", "opus"],
+    ["other family", "Fable 5.2", "other"],
+    ["other family", "claude-fable-5-2", "other"],
+    ["other family", "gpt-5-codex", "other"],
+    ["unknown name", "Astra", "other"],
+    ["tier inside a word", "opusx", "other"],
+    ["tier inside a word", "magnum-opus", "other"],
+    ["two tiers", "opus or sonnet", "other"],
+    ["note after the id", "claude-opus-5-5 (fallback sonnet)", "other"],
+    // Finding (2) of cxcr1946: a tier mixed with any other name is unclear,
+    // whether or not that name is a known family.
+    ["mixed, unknown family", "claude-opus-5-5 + Astra", "other"],
+    ["mixed, unknown family", "Opus + Nova", "other"],
+    ["mixed, known family", "claude-opus-5-5 + gpt-5-codex", "other"],
+    ["mixed, known family", "claude-fable-5-5 opus", "other"],
+    ["id and name together", "claude-opus-5-5 / Opus 5.5", "other"],
+    ["two lines", "claude-opus-5-5\nAstra", "other"],
     // Placeholders name no model: undeclared, not a model outside the table.
-    ["n/a", null],
-    ["N/A", null],
-    ["-", null],
-    ["\u2014", null],
-    ["unknown", null],
-    ["none", null],
-    ["", null],
-    ["   ", null],
-    [null, null],
-    [undefined, null],
+    ["placeholder", "n/a", null],
+    ["placeholder", "N/A", null],
+    ["placeholder", "-", null],
+    ["placeholder", "\u2014", null],
+    ["placeholder", "unknown", null],
+    ["placeholder", "none", null],
+    ["empty", "", null],
+    ["empty", "   ", null],
+    ["missing", null, null],
+    ["missing", undefined, null],
   ];
-  for (const [value, tier] of cases) assert.equal(modelTier(value), tier, JSON.stringify(value));
+  for (const [kind, value, tier] of cases) assert.equal(modelTier(value), tier, `${kind}: ${JSON.stringify(value)}`);
+});
+
+test("property: an allowed form followed by any other word is other", () => {
+  const allowed = fc.constantFrom("claude-opus-5-5", "claude-sonnet-5-5[1m]", "Opus 5.5", "haiku");
+  const word = fc.stringMatching(/^[A-Za-z][A-Za-z0-9.-]{0,11}$/);
+  const sep = fc.constantFrom(" ", " + ", ", ", " / ", " & ");
+  fc.assert(fc.property(allowed, sep, word, (model, s, extra) => {
+    // A trailing version number is part of the name form ("Opus 5.5").
+    fc.pre(!/^\d/.test(extra));
+    assert.equal(modelTier(`${model}${s}${extra}`), "other", `${model}${s}${extra}`);
+  }));
 });
 
 const P = {
@@ -122,34 +150,79 @@ test("modelOutcome: ok, below, undeclared, other, n/a", () => {
   assert.equal(modelOutcome(null, null), "n/a");
 });
 
-test("declaredModel reads only a trusted canonical PASS on the merged head", () => {
+test("declaredModel counts only a PASS the gate counts on the merged head", () => {
   const head = SHA("b");
-  const found = (comments, kind = "review") => declaredModel(comments, kind, head);
-  assert.deepEqual(found([verdict("review", head, "PASS", "claude-opus-5-5")]), { found: true, model: "claude-opus-5-5" });
-  assert.deepEqual(found([verdict("review", head, "PASS")]), { found: true, model: null });
-  assert.deepEqual(found([verdict("review", head.toUpperCase(), "PASS", "Sonnet")]), { found: true, model: "Sonnet" });
-  assert.deepEqual(found([verdict("qa", head, "PASS", "claude-opus-5-5")], "qa"), { found: true, model: "claude-opus-5-5" });
-  // Model line on another head, in a FAIL, in an untrusted or non-canonical comment: not read.
-  assert.deepEqual(found([verdict("review", SHA("a"), "PASS", "claude-opus-5-5")]), { found: false, model: null });
-  assert.deepEqual(found([verdict("review", head, "FAIL", "claude-opus-5-5")]), { found: false, model: null });
-  assert.deepEqual(found([verdict("review", head, "PASS", "claude-opus-5-5", { author_association: "NONE" })]), { found: false, model: null });
+  const found = (comments, kind = "review", ctx = OWNER) => declaredModel(comments, kind, head, ctx);
+  const none = { found: false, model: null };
+  const at = (t) => ({ created_at: `2026-10-01T${t}:00Z`, updated_at: `2026-10-01T${t}:00Z` });
+  // [class, comments, kind, expected]
+  const table = [
+    ["App PASS", [verdict("review", head, "PASS", "claude-opus-5-5")], "review", { found: true, model: "claude-opus-5-5" }],
+    ["App PASS without a model line", [verdict("review", head, "PASS")], "review", { found: true, model: null }],
+    ["head in upper case", [verdict("review", head.toUpperCase(), "PASS", "Sonnet")], "review", { found: true, model: "Sonnet" }],
+    ["QA App PASS", [verdict("qa", head, "PASS", "claude-opus-5-5")], "qa", { found: true, model: "claude-opus-5-5" }],
+    ["QA PASS without QA-Scope", [verdict("qa", head, "PASS", "claude-opus-5-5", {
+      body: `QA-Agent: claude:x:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Model: claude-opus-5-5\n` })], "qa", none],
+    ["CLI channel of the owner", [verdict("review", head, "PASS", "gpt-5-codex", {
+      performed_via_github_app: null,
+      body: `Agent-Review: codex:c:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\nReview-Model: gpt-5-codex\nReview-Channel: codex-cli\n` })],
+    "review", { found: true, model: "gpt-5-codex" }],
+    ["owner comment without App or CLI line", [verdict("review", head, "PASS", "claude-opus-5-5", { performed_via_github_app: null })], "review", none],
+    ["App that does not run the declared runtime", [verdict("review", head, "PASS", "claude-opus-5-5", { performed_via_github_app: { slug: "grok-by-xai" } })], "review", none],
+    ["agent without a reviewer role", [verdict("review", head, "PASS", "claude-opus-5-5", {
+      body: `Agent-Review: claude:x\nReview-Head: ${head}\nReview-Verdict: PASS\nReview-Model: claude-opus-5-5\n` })], "review", none],
+    // Finding (1) of cxcr1946, F-012: an edited PASS is never counted.
+    ["edited PASS", [verdict("review", head, "PASS", "claude-opus-5-5", { updated_at: "2026-10-01T10:05:00Z" })], "review", none],
+    ["edited PASS, then a new PASS of the same slot", [
+      verdict("review", head, "PASS", "claude-sonnet-5-5", { updated_at: "2026-10-01T10:05:00Z" }),
+      verdict("review", head, "PASS", "claude-opus-5-5", at("11:00")),
+    ], "review", { found: true, model: "claude-opus-5-5" }],
+    ["author's own PASS", [verdict("review", head, "PASS", "claude-opus-5-5", { slot: "w" })], "review", none],
+    ["untrusted author", [verdict("review", head, "PASS", "claude-opus-5-5", { author_association: "NONE" })], "review", none],
+    ["bot account", [verdict("review", head, "PASS", "claude-opus-5-5", { user: { login: "b[bot]", type: "Bot" } })], "review", none],
+    ["another head", [verdict("review", SHA("a"), "PASS", "claude-opus-5-5")], "review", none],
+    ["FAIL", [verdict("review", head, "FAIL", "claude-opus-5-5")], "review", none],
+    ["QA line does not answer for review", [verdict("qa", head, "PASS", "claude-opus-5-5")], "review", none],
+    ["review line does not answer for QA", [verdict("review", head, "PASS", "claude-opus-5-5")], "qa", none],
+    ["several PASS: the newest counts", [
+      verdict("review", head, "PASS", "claude-opus-5-5", { ...at("11:00"), slot: "y" }),
+      verdict("review", head, "PASS", "claude-sonnet-5-5", at("09:00")),
+    ], "review", { found: true, model: "claude-opus-5-5" }],
+    ["PASS then FAIL of the same slot", [
+      verdict("qa", head, "PASS", "claude-sonnet-5-5"),
+      verdict("qa", head, "FAIL", undefined, at("12:00")),
+    ], "qa", none],
+    ["FAIL then PASS of the same slot (F-023)", [
+      verdict("qa", head, "FAIL", undefined, at("09:00")),
+      verdict("qa", head, "PASS", "claude-opus-5-5"),
+    ], "qa", none],
+    ["another slot's FAIL", [
+      verdict("review", head, "PASS", "claude-opus-5-5"),
+      verdict("review", head, "FAIL", undefined, { ...at("11:00"), slot: "y" }),
+    ], "review", none],
+  ];
+  for (const [kind, comments, role, expected] of table) assert.deepEqual(found(comments, role), expected, kind);
+
   const nonCanonical = verdict("review", head, "PASS", "claude-opus-5-5");
   nonCanonical.body = `Note\n${nonCanonical.body}`;
-  assert.deepEqual(found([nonCanonical]), { found: false, model: null });
-  // A QA model line never answers for review, nor the other way round.
-  assert.deepEqual(found([verdict("qa", head, "PASS", "claude-opus-5-5")]), { found: false, model: null });
-  // Several PASS on the merged head: the newest one counts.
-  const older = verdict("review", head, "PASS", "claude-sonnet-5-5", { created_at: "2026-10-01T09:00:00Z" });
-  const newer = verdict("review", head, "PASS", "claude-opus-5-5", { created_at: "2026-10-01T11:00:00Z" });
-  assert.deepEqual(found([newer, older]), { found: true, model: "claude-opus-5-5" });
-  // A later FAIL from the same identity replaces its PASS, as in the gate: nothing is read.
-  const failLater = verdict("qa", head, "FAIL", undefined, { created_at: "2026-10-01T12:00:00Z" });
-  assert.deepEqual(found([verdict("qa", head, "PASS", "claude-sonnet-5-5"), failLater], "qa"), { found: false, model: null });
-  // Another identity's FAIL on the merged head also means the gate holds no PASS there.
-  const otherFail = verdict("review", head, "FAIL", undefined, { body: `Agent-Review: claude:y\nReview-Head: ${head}\nReview-Verdict: FAIL\n` });
-  assert.deepEqual(found([verdict("review", head, "PASS", "claude-opus-5-5"), otherFail]), { found: false, model: null });
-  assert.deepEqual(declaredModel([verdict("review", head, "PASS", "x")], "review", null), { found: false, model: null });
-  assert.deepEqual(declaredModel([verdict("review", head, "PASS", "x")], "review", "abc123"), { found: false, model: null });
+  assert.deepEqual(found([nonCanonical]), none, "non-canonical block");
+  // Without the owner's login no CLI comment is authenticated.
+  const cli = verdict("review", head, "PASS", "gpt-5-codex", {
+    performed_via_github_app: null,
+    body: `Agent-Review: codex:c:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\nReview-Model: gpt-5-codex\nReview-Channel: codex-cli\n` });
+  assert.deepEqual(found([cli], "review", { ...OWNER, ownerLogin: null }), none, "CLI without owner login");
+  assert.deepEqual(declaredModel([verdict("review", head, "PASS", "x")], "review", null, OWNER), none);
+  assert.deepEqual(declaredModel([verdict("review", head, "PASS", "x")], "review", "abc123", OWNER), none);
+});
+
+test("finding (1) of cxcr1946: an unauthenticated newer Opus line never replaces a valid Sonnet PASS", () => {
+  const head = SHA("c");
+  const valid = verdict("review", head, "PASS", "claude-sonnet-5-5");
+  const forged = verdict("review", head, "PASS", "Opus", {
+    performed_via_github_app: null, created_at: "2026-10-01T12:00:00Z", updated_at: "2026-10-01T12:00:00Z" });
+  const pr = { headRefOid: head };
+  const result = checkRole([valid, forged], "review", pr, "critical", ["src/lib/x.ts"], OWNER);
+  assert.deepEqual(result, { declared: "claude-sonnet-5-5", expected: "opus", outcome: "below" });
 });
 
 const RISKS = ["low", "standard", "critical", null, "weird"];

@@ -8,16 +8,17 @@
 import "./help.mjs";
 import { readFile } from "node:fs/promises";
 
-import { mergedPrs, prComments, prPaths } from "./gh.mjs";
+import { mergedPrs, prComments, prPaths, repoId } from "./gh.mjs";
 import { demoTaskIds, mapLimit, parseMetricsArgs, prMetrics, renderMetrics, summarize } from "./metrics-core.mjs";
 
 try {
   const { since, json } = parseMetricsArgs(process.argv.slice(2));
   const demoIds = demoTaskIds(await readFile(new URL("../../docs/PLAN-DEMO.md", import.meta.url), "utf8"));
   const prs = await mergedPrs(since);
+  const { owner } = await repoId();
   const rows = await mapLimit(prs, 5, async (pr) => {
     const [comments, paths] = await Promise.all([prComments(pr.number), prPaths(pr.number).catch(() => null)]);
-    return prMetrics(pr, comments, demoIds, paths);
+    return prMetrics(pr, comments, demoIds, paths, { ownerLogin: owner });
   });
   const summary = summarize(rows);
   if (json) console.log(JSON.stringify({ since, summary, rows }, null, 2));

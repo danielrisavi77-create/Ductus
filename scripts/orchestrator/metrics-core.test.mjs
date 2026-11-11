@@ -66,19 +66,21 @@ test("prMetrics: a round is one distinct head per kind; gate rules decide its ou
   assert.deepEqual(m, {
     number: 7, risk: "critical", task: "DAN-1", demoTasks: [{ id: "B-7", part: "1/2" }], leadHours: 36,
     reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2, pathsRead: true,
-    // No paths given and no model line: the check expects Opus; review has no PASS on the merged head.
+    // No paths given: the check expects Opus. These verdicts carry no App, so
+    // the gate counts none of them and the model check reads nothing.
     reviewModel: { declared: null, expected: "opus", outcome: "n/a" },
-    qaModel: { declared: null, expected: "opus", outcome: "undeclared" },
+    qaModel: { declared: null, expected: "opus", outcome: "n/a" },
   });
 });
 
 test("prMetrics: the model check reads the merged head's PASS against the changed paths", () => {
   const head = SHA("b");
-  const withModel = (c, line) => ({ ...c, body: `${c.body}${line}\n` });
+  // Verdicts the gate counts: posted through the Claude App, valid slots, QA with scope.
+  const withModel = (c, line) => ({ ...c, performed_via_github_app: { slug: "claude" }, body: `${c.body}${line}\n` });
   const comments = [
-    withModel(review(head, "PASS", "2026-10-01T10:00:00Z"), "Review-Model: claude-sonnet-5-5"),
-    withModel(qa(head, "PASS", "2026-10-01T11:00:00Z"), "QA-Model: claude-opus-5-5"),
-    withModel(qa(SHA("a"), "PASS", "2026-10-01T09:00:00Z"), "QA-Model: claude-haiku-5-5"),
+    withModel(review(head, "PASS", "2026-10-01T10:00:00Z", "claude:reviewX:reviewer"), "Review-Model: claude-sonnet-5-5"),
+    withModel(qa(head, "PASS", "2026-10-01T11:00:00Z", "claude:qaX:qa"), "QA-Scope: full\nQA-Model: claude-opus-5-5"),
+    withModel(qa(SHA("a"), "PASS", "2026-10-01T09:00:00Z", "claude:qaX:qa"), "QA-Scope: full\nQA-Model: claude-haiku-5-5"),
   ];
   const code = prMetrics(merged(), comments, new Set(), ["src/domain/sync/drain.ts"]);
   assert.deepEqual(code.reviewModel, { declared: "claude-sonnet-5-5", expected: "opus", outcome: "below" });
@@ -102,6 +104,18 @@ test("prMetrics: the model check reads the merged head's PASS against the change
   assert.deepEqual(su.modelCheck.below, ["#7 review (files unread)"]);
   assert.deepEqual(su.modelCheck.unread, ["#7"]);
   assert.match(renderMetrics([unread], su, "2026-10-01").at(-1), /below: #7 review \(files unread\); files unread \(expects Opus\): #7$/);
+});
+
+test("prMetrics: the owner's CLI channel counts only with the owner's login", () => {
+  const head = SHA("b");
+  const cli = {
+    ...review(head, "PASS", "2026-10-01T10:00:00Z", "codex:c:reviewer"),
+    body: `Agent-Review: codex:c:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\nReview-Model: gpt-5-codex\nReview-Channel: codex-cli\n`,
+  };
+  const paths = ["src/lib/x.ts"];
+  assert.deepEqual(prMetrics(merged(), [cli], new Set(), paths, { ownerLogin: "u" }).reviewModel,
+    { declared: "gpt-5-codex", expected: "opus", outcome: "other" });
+  assert.equal(prMetrics(merged(), [cli], new Set(), paths).reviewModel.outcome, "n/a");
 });
 
 test("two verdicts on the same head are one round", () => {

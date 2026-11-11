@@ -3,15 +3,22 @@
 // the "Model po poslu" table of docs/ORKESTRATOR.md §7. A report, not a gate.
 import { field } from "../engineering/metadata-parser.mjs";
 import { matchesPath, qaExemption } from "../engineering/protected-paths.mjs";
-import { latestVerdict, parseVerdicts } from "./orchestrator-core.mjs";
+import { countedVerdicts } from "../engineering/review-gate-core.mjs";
 
 export const OUTCOMES = ["ok", "below", "undeclared", "other", "n/a"];
 const RANK = { haiku: 1, sonnet: 2, opus: 3 };
 const FULL_SHA = /^[0-9a-f]{40}$/i;
 // A line that names no model: counts as undeclared, not as a model outside the table.
 const PLACEHOLDER = /^(n\/?a|none|unknown|nepoznat[a-z]*|[-\u2013\u2014?]+)$/;
-// Another model family next to a Claude tier makes the value unclear.
-const OTHER_FAMILY = /\b(gpt|codex|gemini|grok|llama|mistral|deepseek|qwen|fable)\b/;
+// The only forms that name one Claude tier: an id (claude-opus-5-5,
+// claude-sonnet-5-5[1m], claude-sonnet-4-5-20250929), the old id form
+// (claude-3-5-sonnet-20241022) or a name (Opus 5.5, Claude Sonnet). Anything
+// else, a tier next to any other word included, is "other" (cxcr1946 (2)).
+const ALLOWED_FORMS = [
+  /^claude-(opus|sonnet|haiku)(-\d+)+(\[1m\])?$/,
+  /^claude(-\d+)+-(opus|sonnet|haiku)(-\d+)*(\[1m\])?$/,
+  /^(?:claude )?(opus|sonnet|haiku)(?: \d+(?:\.\d+)*)?$/,
+];
 
 // Evidence, authorization, login and sync (.claude/rules/evidencija-i-prijava.md
 // and sinkronizacija.md) plus migrations and the server database access.
@@ -28,16 +35,18 @@ export const RULE_DOC_PATHS = [
 ];
 
 /**
- * "opus" | "sonnet" | "haiku" from an id or a name; "other" for anything else,
- * including two tiers or a tier next to another model family; null when empty
+ * "opus" | "sonnet" | "haiku" from an allowed id or name; "other" for anything
+ * else, including two tiers or a tier next to any other word; null when empty
  * or a placeholder such as "n/a" or "-".
  */
 export function modelTier(value) {
   const text = String(value ?? "").trim().toLowerCase();
   if (!text || PLACEHOLDER.test(text)) return null;
-  if (OTHER_FAMILY.test(text)) return "other";
-  const tiers = new Set([...text.matchAll(/\b(opus|sonnet|haiku)\b/g)].map((m) => m[1]));
-  return tiers.size === 1 ? [...tiers][0] : "other";
+  for (const form of ALLOWED_FORMS) {
+    const match = form.exec(text);
+    if (match) return match.slice(1).find((group) => RANK[group]);
+  }
+  return "other";
 }
 
 /**
@@ -67,24 +76,25 @@ export function modelOutcome(declared, expected) {
 }
 
 /**
- * Model line of the newest trusted canonical PASS of `kind` on the merged head,
- * only while the gate still counts a PASS there: a later FAIL or BLOCK from the
- * same identity replaces it (latestVerdict), and then nothing is read.
+ * Model line of the newest PASS of `kind` the gate counts on the merged head
+ * (review-gate-core countedVerdicts): App or owner CLI channel, never an
+ * edited comment, never the author's own principal. While any principal holds
+ * a FAIL or BLOCK there, the gate counts no PASS and nothing is read.
  */
-export function declaredModel(comments, kind, mergedHead) {
-  const head = FULL_SHA.test(mergedHead ?? "") ? mergedHead.toLowerCase() : null;
-  const gate = head ? latestVerdict(comments, kind, head) : null;
-  if (!gate?.current || gate.verdict !== "PASS") return { found: false, model: null };
-  const pass = parseVerdicts(comments, kind)
-    .filter((e) => head && e.verdict === "PASS" && e.head?.toLowerCase() === head)
-    .at(-1);
-  if (!pass) return { found: false, model: null };
-  return { found: true, model: field(comments[pass.index].body, kind === "review" ? "Review-Model" : "QA-Model") };
+export function declaredModel(comments, kind, mergedHead, { ownerLogin = null, authorAgent = null } = {}) {
+  const none = { found: false, model: null };
+  if (!FULL_SHA.test(mergedHead ?? "")) return none;
+  const { negative, passes } = countedVerdicts({ comments, kind, headSha: mergedHead, ownerLogin, authorAgent });
+  if (negative || passes.length === 0) return none;
+  const newest = passes.reduce((a, b) => (newer(b.order, a.order) ? b : a));
+  return { found: true, model: field(newest.body, kind === "review" ? "Review-Model" : "QA-Model") };
 }
 
-/** {declared, expected, outcome} of one role; n/a without a PASS on the merged head. */
-export function checkRole(comments, kind, pr, risk, paths) {
-  const { found, model } = declaredModel(comments, kind, pr.headRefOid);
+const newer = (a, b) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]);
+
+/** {declared, expected, outcome} of one role; n/a without a counted PASS on the merged head. */
+export function checkRole(comments, kind, pr, risk, paths, { ownerLogin = null } = {}) {
+  const { found, model } = declaredModel(comments, kind, pr.headRefOid, { ownerLogin, authorAgent: field(pr.body, "Agent") });
   const expected = expectedTier(kind, risk, paths);
   return { declared: model, expected, outcome: found ? modelOutcome(model, expected) : "n/a" };
 }

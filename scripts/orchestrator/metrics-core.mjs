@@ -78,9 +78,10 @@ export function rounds(comments, kind) {
  * earlier heads for non-forced pushes). `paths` are the changed files for the
  * model check (DAN-695); without them the check expects Opus (rule of doubt).
  * `paths === null` means the file list could not be read: the row is marked so
- * a "below" from that cannot pass for a real deviation.
+ * a "below" from that cannot pass for a real deviation. `ownerLogin` lets the
+ * check count the owner's CLI channel as the gate does (review-gate-core).
  */
-export function prMetrics(pr, comments, demoIds, paths = []) {
+export function prMetrics(pr, comments, demoIds, paths = [], { ownerLogin = null } = {}) {
   const created = Date.parse(pr.createdAt);
   const merged = Date.parse(pr.mergedAt);
   const rev = rounds(comments, "review");
@@ -102,8 +103,8 @@ export function prMetrics(pr, comments, demoIds, paths = []) {
     qaRounds: qa.total,
     heads: heads.size,
     pathsRead: paths !== null,
-    reviewModel: checkRole(comments, "review", pr, risk, paths ?? []),
-    qaModel: checkRole(comments, "qa", pr, risk, paths ?? []),
+    reviewModel: checkRole(comments, "review", pr, risk, paths ?? [], { ownerLogin }),
+    qaModel: checkRole(comments, "qa", pr, risk, paths ?? [], { ownerLogin }),
   };
 }
 
