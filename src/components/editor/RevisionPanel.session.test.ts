@@ -274,4 +274,28 @@ describe("RevisionPanel: a 409 whose list read fails (QA FAIL c.6784961513)", ()
     expect(body.textContent).not.toContain(t.keptUnloadedHint);
     expect(respond.calls).toBe(1);
   });
+
+  it("after a 403 on the list read the same retry brings the explanation back unchanged (QA FAIL c.6786063110)", async () => {
+    await answer(ok);
+    const [field] = all(body, "textarea");
+    await act(async () => { propsOf(field!).onChange!({ target: { value: EXPLANATION } }); });
+    await act(async () => { propsOf(button(t.done)!).onClick!(); });
+    expect(respond.calls).toBe(1);
+    await act(async () => { respond.resolve!({ kind: "conflict", state: "reopened" }); });
+    expect(list.calls).toBe(2);
+    await act(async () => { list.resolve!({ kind: "forbidden" }); });
+
+    expect(body.textContent).toContain(t.notAvailable);
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: true })]);
+    expect(button(t.done)).toBeUndefined();
+    expect(button(t.declined)).toBeUndefined();
+
+    // Access is back: the retry reads the list once more, and nothing is sent again.
+    await act(async () => { propsOf(button(t.retry)!).onClick!(); });
+    expect(list.calls).toBe(3);
+    await act(async () => { list.resolve!(ok); });
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: false })]);
+    expect(body.textContent).not.toContain(t.keptUnloadedHint);
+    expect(respond.calls).toBe(1);
+  });
 });

@@ -242,7 +242,13 @@ export function RevisionList(props: RevisionListProps): ReactNode {
   let body: ReactNode;
   if (props.status === "loading") body = h("p", { className: "rail-empty" }, t.loading);
   else if (props.status === "signedOut") body = h("p", { className: "rail-empty", role: "status" }, t.signedOut);
-  else if (props.status === "forbidden") body = [h("p", { key: "", className: "rail-empty" }, t.notAvailable), ...unloadedDrafts(props)];
+  else if (props.status === "forbidden") {
+    // Access may come back, so the list can be read again like after a failed read (QA FAIL c.6786063110).
+    body = [h("div", { key: "", className: styles.failed },
+      h("p", { className: "rail-empty" }, t.notAvailable),
+      h("button", { type: "button", className: `${styles.btn} ${styles.secondary}`, onClick: props.onRetry }, t.retry)),
+    ...unloadedDrafts(props)];
+  }
   else if (props.status === "unavailable") {
     body = [h("div", { key: "", className: styles.failed },
       h("p", { className: "rail-empty", role: "alert" }, t.unavailable),

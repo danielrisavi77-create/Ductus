@@ -109,7 +109,9 @@ describe("every state of a request (N-08 states 6 to 10)", () => {
     expect(failed).toContain('role="alert"');
     expect(failed).toContain(t.unavailable);
     expect(failed).toContain(t.retry);
-    expect(render({ status: "forbidden" })).toContain(t.notAvailable);
+    const forbidden = render({ status: "forbidden" });
+    expect(forbidden).toContain(t.notAvailable);
+    expect(forbidden).toContain(t.retry);
     expect(render({ status: "signedOut", requests: [STATES.open] })).not.toContain("<article");
   });
 
