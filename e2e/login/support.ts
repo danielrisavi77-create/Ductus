@@ -62,6 +62,16 @@ export async function appCookie(context: BrowserContext, name: string) {
   return (await context.cookies(APP_ORIGIN)).find((c) => c.name === name);
 }
 
+/**
+ * After a sign-out no answer deletes the session cookie (#1929): it is gone
+ * or still names the closed session, never another, and that session is closed.
+ */
+export async function expectEndedCookie(context: BrowserContext, token: string): Promise<void> {
+  const value = (await appCookie(context, SESSION_COOKIE))?.value;
+  expect(value === undefined || value === token).toBe(true);
+  expect(await sessionRow(token)).toMatchObject({ closed_at: expect.any(Date) });
+}
+
 /** Where "/" sends a signed-in person: the teacher's page or the workspace (DAN-325). */
 export const ROLE_HOME = new RegExp(`^${APP_ORIGIN_PATTERN}\\/(rad|nastavnik)$`);
 

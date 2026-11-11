@@ -3,7 +3,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
-  appCookie, clickSignOut, editorMounted, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+  appCookie, clickSignOut, editorMounted, expectEndedCookie, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
 import { APP_HOST, APP_ORIGIN } from "./origin";
 
@@ -68,7 +68,7 @@ test("row 1: sign-in leads to an editable sheet; sign-out of an unchanged docume
 
   // Nothing of this person stays on the device, so no dialog (O1, #476 c.6396707923).
   await signOutWithoutDialog(page);
-  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+  await expectEndedCookie(context, token);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   // Nothing was written, so nothing of that person stays on the device.
   const names = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
@@ -85,7 +85,7 @@ test("rows 2, 3 and 5: a local change does not hold the session open; the text w
 
   await clickSignOut(page);
   await page.waitForURL(`${APP_ORIGIN}/`);
-  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+  await expectEndedCookie(context, token);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   expect(await journalNames(page)).toHaveLength(1);
 

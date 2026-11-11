@@ -24,7 +24,6 @@ const PROVIDER_LOGOUT = `${ENDPOINT}?post_logout_redirect_uri=${encodeURICompone
 const HOME = `${APP}/`;
 const TOKEN = "a".repeat(43);
 const SAME_ORIGIN = { "sec-fetch-site": "same-origin", origin: APP };
-const CLEARED = /^__Host-ductus_session=; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=0$/;
 
 let idp: ReturnType<typeof createTestIdp>;
 let deps: AuthDeps & { closeSession: ReturnType<typeof vi.fn>; closeAllSessions: ReturnType<typeof vi.fn> };
@@ -62,14 +61,13 @@ function post(headers: Record<string, string> = SAME_ORIGIN, cookie: string | nu
   );
 }
 
-function expectOnlyClearedCookie(response: Response): void {
-  const cookies = response.headers.getSetCookie();
-  expect(cookies).toHaveLength(1);
-  expect(cookies[0]).toMatch(CLEARED);
+/** The answer sets no cookie (#1929): the closed session's cookie reads as signed out. */
+function expectNoCookie(response: Response): void {
+  expect(response.headers.getSetCookie()).toEqual([]);
 }
 
 describe("POST /api/auth/logout-all", () => {
-  it("1: closes every session of the account first, then clears the cookie and goes to the provider", async () => {
+  it("1: closes every session of the account first, then goes to the provider without setting a cookie", async () => {
     const response = await post();
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
@@ -79,7 +77,7 @@ describe("POST /api/auth/logout-all", () => {
     expect(deps.closeSession).not.toHaveBeenCalled();
     expect(events[0]).toBe("close_all");
     expect(events.slice(1).every((event) => event === "provider")).toBe(true);
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
     expect(JSON.stringify([...response.headers])).not.toContain(TOKEN);
   });
 
@@ -88,7 +86,7 @@ describe("POST /api/auth/logout-all", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
     expect(deps.closeAllSessions).not.toHaveBeenCalled();
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
   });
 
   it.each([
@@ -138,7 +136,7 @@ describe("POST /api/auth/logout-all", () => {
     expect(await response.text()).not.toContain(TOKEN);
   });
 
-  it("7: the same database failure clears the cookie on logout, as on main, but not on logout-all", async () => {
+  it("7: the same database failure answers 503 and keeps the cookie on both routes (#1929)", async () => {
     const failure = () => Object.assign(new Error("down"), { code: "57P01" });
     deps.closeSession.mockRejectedValueOnce(failure());
     deps.closeAllSessions.mockRejectedValueOnce(failure());
@@ -146,8 +144,8 @@ describe("POST /api/auth/logout-all", () => {
       new Request(`${APP}${path}`, { method: "POST", headers: { cookie: `${SESSION_COOKIE_NAME}=${TOKEN}`, ...SAME_ORIGIN } });
     const one = await logout(request("/api/auth/logout"), deps);
     const all = await logoutAll(request("/api/auth/logout-all"), deps);
-    expect(one.status).toBe(303);
-    expectOnlyClearedCookie(one);
+    expect(one.status).toBe(503);
+    expectNoCookie(one);
     expect(all.status).toBe(503);
     expect(all.headers.getSetCookie()).toEqual([]);
     expect(errors).toHaveBeenCalledWith("login failed", "logout", "Error:57P01");
@@ -160,7 +158,7 @@ describe("POST /api/auth/logout-all", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(HOME);
     expect(deps.closeAllSessions).toHaveBeenCalledWith(TOKEN);
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
     expect(errors).toHaveBeenCalledWith("login failed", "end_session", expect.any(String));
   });
 });

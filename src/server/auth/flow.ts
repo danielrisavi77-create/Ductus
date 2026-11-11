@@ -217,40 +217,40 @@ export function isSameOrigin(request: Request, origin: string): boolean {
 
 /** POST /api/auth/logout */
 export async function logout(request: Request, deps: AuthDeps): Promise<Response> {
-  return endSessions(request, deps, "logout", (token) => deps.closeSession(token), "clear", clickTag);
+  return endSessions(request, deps, "logout", (token) => deps.closeSession(token), clickTag);
 }
 
 /** POST /api/auth/logout-all: this session and every other live one of the account (DAN-296). */
 export async function logoutAll(request: Request, deps: AuthDeps): Promise<Response> {
-  return endSessions(request, deps, "logout_all", (token) => deps.closeAllSessions(token), "keep");
+  return endSessions(request, deps, "logout_all", (token) => deps.closeAllSessions(token));
 }
 
 /**
- * Closes on the server, then clears the cookie and goes to the provider. The
- * answer is the same whether a session existed or not. When the database
- * fails, logout clears the cookie all the same, as it always did, and the
- * session ends at expiry or idle; logout-all answers 503 and keeps the cookie,
- * so it never reports a sign-out while the account's other sessions live and
- * can be sent again (contract addendum on #1091, item 3).
+ * Closes on the server, then goes to the provider. The answer is the same
+ * whether a session existed or not. It never sets the session cookie (#1929):
+ * HTTP cannot clear a cookie only while it is still the one this request
+ * read, so an answer that clears could land after a sign-in from another tab
+ * and remove that newer cookie. The closed session's cookie reads as signed
+ * out on every page, and only the next sign-in replaces it. When the database
+ * fails, nothing was closed, so both routes answer 503: the page then ends
+ * the session on this device (Z-02), never reports a sign-out that the
+ * server did not make, and can send it again (contract addendum on #1091,
+ * item 3).
  */
 async function endSessions(
   request: Request,
   deps: AuthDeps,
   stage: string,
   close: (token: string) => Promise<unknown>,
-  onCloseFailure: "clear" | "keep",
   readTag?: (request: Request) => Promise<string | undefined>,
 ): Promise<Response> {
   if (!isSameOrigin(request, deps.config.redirectUri.origin)) {
     logFailure(stage, "cross_origin");
     return failurePage(403);
   }
-  const clearedSession = cookie(SESSION_COOKIE_NAME, "", "Max-Age=0");
   const token = readCookie(request, SESSION_COOKIE_NAME);
   // A tagged request ends only the session it was sent for (DAN-99, #1929).
-  // Another tab may have signed in after the click: its cookie is neither
-  // closed nor cleared, and without a cookie none is cleared either, so a
-  // sign-in that lands while this answer is on its way survives it.
+  // Another tab may have signed in after the click: its session stays open.
   const tag = readTag === undefined ? undefined : await readTag(request);
   if (tag !== undefined) {
     if (!token) return redirect(await providerLocation(deps), []);
@@ -262,10 +262,10 @@ async function endSessions(
       await close(token);
     } catch (error) {
       logFailure(stage, errorCode(error));
-      if (onCloseFailure === "keep") return failurePage(503);
+      return failurePage(503);
     }
   }
-  return redirect(await providerLocation(deps), [clearedSession]);
+  return redirect(await providerLocation(deps), []);
 }
 
 /**

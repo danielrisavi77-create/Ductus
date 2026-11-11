@@ -331,13 +331,12 @@ describe("logout", () => {
   const post = (headers: Record<string, string>) =>
     logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers: { cookie: `${SESSION_COOKIE_NAME}=${token}`, ...headers } }), deps);
 
-  it("#20 closes the session of the cookie and clears it", async () => {
+  it("#20 closes the session of the cookie on the server and sets no cookie (#1929)", async () => {
     const response = await post({ "sec-fetch-site": "same-origin", origin: APP });
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${APP}/`);
     expect(deps.closeSession).toHaveBeenCalledWith(token);
-    const cleared = setCookies(response).get(SESSION_COOKIE_NAME)!;
-    expect(cleared).toMatch(/^__Host-ductus_session=; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=0$/);
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 
   it("#18 accepts a matching Origin when the browser sends no Sec-Fetch-Site", async () => {
@@ -362,10 +361,55 @@ describe("logout", () => {
     expect(setCookies(response).has(SESSION_COOKIE_NAME)).toBe(false);
   });
 
-  it("clears the cookie even when the database is unavailable", async () => {
+  it("answers 503 and keeps the cookie when the database is unavailable (#1929)", async () => {
     deps.closeSession.mockRejectedValueOnce(Object.assign(new Error("down"), { code: "ECONNREFUSED" }));
     const response = await post({ "sec-fetch-site": "same-origin", origin: APP });
-    expect(response.status).toBe(303);
-    expect(setCookies(response).get(SESSION_COOKIE_NAME)).toMatch(/Max-Age=0$/);
+    expect(response.status).toBe(503);
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
+
+  // Istodobnost (#1929, cxcr1929 / cxcq1929): the browser's cookie jar, with
+  // each answer's Set-Cookie applied in the order the answers arrive.
+  it("Istodobnost: A's logout reads A, B signs in meanwhile, A's answer lands last, and B stays", async () => {
+    const jar = new Map<string, string>([[SESSION_COOKIE_NAME, token]]);
+    const apply = (response: Response) => {
+      for (const header of response.headers.getSetCookie()) {
+        const name = header.slice(0, header.indexOf("="));
+        if (/;\s*Max-Age=0(;|$)/.test(header)) jar.delete(name);
+        else jar.set(name, cookieValue(header));
+      }
+    };
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    deps.closeSession.mockImplementationOnce(async () => {
+      await held;
+      return true;
+    });
+
+    // 1. The first logout POST reads cookie A and waits in the database.
+    const pending = logout(new Request(`${APP}/api/auth/logout`, {
+      method: "POST",
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${jar.get(SESSION_COOKIE_NAME)}`, "sec-fetch-site": "same-origin", origin: APP },
+    }), deps);
+    await vi.waitFor(() => expect(deps.closeSession).toHaveBeenCalledWith(token));
+
+    // 2. Another tab signs in as B, with A still in the jar.
+    const { authorize, cookie } = await begin();
+    const signedIn = await callback(idp.approve(authorize, `${APP}/api/auth/callback`), `${cookie}; ${SESSION_COOKIE_NAME}=${token}`);
+    expect(signedIn.status).toBe(303);
+    apply(signedIn);
+    const b = jar.get(SESSION_COOKIE_NAME)!;
+    expect(b).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(b).not.toBe(token);
+
+    // 3. The answer to A's logout arrives last.
+    release();
+    const answer = await pending;
+    expect(answer.status).toBe(303);
+    apply(answer);
+
+    expect(jar.get(SESSION_COOKIE_NAME)).toBe(b);
+    expect(deps.closeSession.mock.calls.flat()).not.toContain(b);
+    expect(deps.openSession).toHaveBeenCalledWith(expect.objectContaining({ tokenHash: hashSessionToken(b) }));
   });
 });

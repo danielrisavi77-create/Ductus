@@ -3,7 +3,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
-  appCookie, clickSignOut, logoutDialogOf, ROLE_HOME, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+  appCookie, clickSignOut, expectEndedCookie, logoutDialogOf, ROLE_HOME, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
 import { APP_ORIGIN } from "./origin";
 
@@ -113,7 +113,7 @@ async function expectStillSignedIn(page: Page, token: string): Promise<void> {
 
 async function expectSignedOut(page: Page, token: string): Promise<void> {
   expect(page.url()).toBe(`${ORIGIN}/`);
-  expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
+  await expectEndedCookie(page.context(), token);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
 }
 
@@ -491,6 +491,41 @@ test("T14 Istodobnost: a sign-in between the two POSTs of the shell's sign-out k
   // B's own "Odjava" still reaches the route and closes it.
   await signOutWithoutDialog(second);
   await expectSignedOut(second, tokenB);
+});
+
+// #1929 (cxcr1929, cxcq1929): the first logout POST reads A's cookie and
+// closes A, but its answer lands only after B has signed in from another tab.
+// HTTP cannot clear a cookie conditionally, so no logout answer clears it:
+// the held answer carries no session cookie, and B stays signed in.
+test("T15 Istodobnost: the first logout POST's answer, arriving after a sign-in in another tab, keeps the newer session", async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await signIn(page, "/upis");
+  const tokenA = (await appCookie(context, SESSION_COOKIE))!.value;
+  let release: (() => Promise<void>) | undefined;
+  let heldCookies: string[] | undefined;
+  await page.route("**/api/auth/logout", async (route) => {
+    if (route.request().resourceType() !== "fetch" || release) return route.continue();
+    const answer = await route.fetch({ maxRedirects: 0 });
+    heldCookies = answer.headersArray()
+      .filter(({ name }) => name.toLowerCase() === "set-cookie").map(({ value }) => value);
+    release = () => route.fulfill({ response: answer }).catch(() => {});
+  });
+  await logoutOf(page).click();
+  await expect.poll(() => release !== undefined, { timeout: 15_000 }).toBe(true);
+  expect(await sessionRow(tokenA)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
+
+  await forgetProviderLogin(context);
+  const second = await context.newPage();
+  await signIn(second, "/upis", "Demo student 2");
+  const tokenB = (await appCookie(context, SESSION_COOKIE))!.value;
+  expect(tokenB).not.toBe(tokenA);
+  await release!();
+
+  expect(heldCookies!.filter((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`))).toEqual([]);
+  await second.reload();
+  await expectStillSignedIn(second, tokenB);
+  expect(await sessionRow(tokenA)).toMatchObject({ closed_at: expect.any(Date) });
+  expect((await appCookie(context, SESSION_COOKIE))?.value).toBe(tokenB);
 });
 
 // D-183 (#1330, #1336): the shell's dialog after a sign-out that ended on this

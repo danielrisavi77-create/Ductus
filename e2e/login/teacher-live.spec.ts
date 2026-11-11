@@ -12,7 +12,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { cleanUpAssignmentWork, openAssignmentWork } from "./assignment-work";
 import { post } from "./comment-seed";
-import { appCookie, type DemoAccount, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog } from "./support";
+import { appCookie, type DemoAccount, expectEndedCookie, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog } from "./support";
 import { APP_ORIGIN } from "./origin";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
@@ -213,7 +213,7 @@ test("a session ended in another tab before hydration sends no initial summary P
     // in the shared browser storage while the other tab is still unhydrated.
     // The teacher's sheet holds nothing: no dialog (O1, #476 c.6396707923).
     await signOutWithoutDialog(logoutTab);
-    expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+    await expectEndedCookie(context, token);
     expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
     expect(await page.evaluate(({ key, tag }) => {
       return (JSON.parse(localStorage.getItem(key) ?? "[]") as string[]).includes(tag);

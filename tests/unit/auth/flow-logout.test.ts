@@ -63,11 +63,13 @@ function post(headers: Record<string, string> = SAME_ORIGIN, { cookie = true, ur
   );
 }
 
-/** The response's cookies: only the cleared session cookie, every time (E1). */
-function expectOnlyClearedCookie(response: Response): void {
-  const cookies = response.headers.getSetCookie();
-  expect(cookies).toHaveLength(1);
-  expect(cookies[0]).toMatch(/^__Host-ductus_session=; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=0$/);
+/**
+ * The answer sets no cookie at all (E1; #1929): HTTP cannot clear only the
+ * cookie this request read, so the closed session's cookie stays and reads
+ * as signed out until the next sign-in replaces it.
+ */
+function expectNoCookie(response: Response): void {
+  expect(response.headers.getSetCookie()).toEqual([]);
 }
 
 describe("logout at the provider", () => {
@@ -78,7 +80,7 @@ describe("logout at the provider", () => {
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(events[0]).toBe("close");
     expect(events.slice(1).every((event) => event === "provider")).toBe(true);
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
   });
 
   it("C5: the redirect is not stored and sends no Referer", async () => {
@@ -115,7 +117,7 @@ describe("logout at the provider", () => {
     const response = await post(SAME_ORIGIN, { cookie: false });
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
     expect(deps.closeSession).not.toHaveBeenCalled();
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
   });
 
   it("B4: goes to the provider when the session was already closed or had expired", async () => {
@@ -124,11 +126,14 @@ describe("logout at the provider", () => {
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
   });
 
-  it("B3: when closing fails, still clears the cookie and goes to the provider", async () => {
+  it("B3: when closing fails, answers 503, sets no cookie and skips the provider (#1929)", async () => {
     deps.closeSession.mockRejectedValueOnce(Object.assign(new Error("down"), { code: "ECONNREFUSED" }));
     const response = await post();
-    expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
-    expectOnlyClearedCookie(response);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("location")).toBeNull();
+    expectNoCookie(response);
+    expect(events).toEqual([]);
+    expect(errors).toHaveBeenCalledWith("login failed", "logout", "Error:ECONNREFUSED");
   });
 
   it("B2: without an end_session_endpoint the local logout stands and / follows", async () => {
@@ -137,7 +142,7 @@ describe("logout at the provider", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(HOME);
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
     expect(errors).not.toHaveBeenCalled();
   });
 
@@ -167,7 +172,7 @@ describe("logout at the provider", () => {
     expect(response.headers.get("location")).toBe(HOME);
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(events[0]).toBe("close");
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
     // Only the stage and an error code: nothing from the request or the provider.
     expect(errors).toHaveBeenCalledWith("login failed", "end_session", expect.any(String));
     const logged = JSON.stringify(errors.mock.calls);
@@ -191,7 +196,7 @@ describe("logout at the provider", () => {
 
 // DAN-99 (#1929, cxcr1929 / cxcq1929): the native POST that follows a
 // successful fetch carries the tag of the session the click ended. The route
-// closes and clears only the session whose cookie has that tag; a newer
+// closes only the session whose cookie has that tag; a newer
 // session signed in meanwhile in another tab stays, cookie and all.
 describe("logout with the tag of the click's session", () => {
   const OTHER = "u".repeat(43);
@@ -229,18 +234,18 @@ describe("logout with the tag of the click's session", () => {
     ["a malformed Content-Length", { ...formBody(`session=${TAG}`), headers: { ...formBody("").headers, "content-length": "-1" } }],
   ];
 
-  it.each(absent)("t1 × cookie: %s closes and clears the cookie's session as before", async (_name, init) => {
+  it.each(absent)("t1 × cookie: %s closes the cookie's session as before, cookie untouched", async (_name, init) => {
     const response = await send(TOKEN, init);
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
   });
 
-  it("t2 × cookie: the click's tag closes and clears that session, then the provider", async () => {
+  it("t2 × cookie: the click's tag closes that session, then the provider", async () => {
     const response = await send(TOKEN, formBody(`session=${TAG}`));
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
-    expectOnlyClearedCookie(response);
+    expectNoCookie(response);
   });
 
   it.each(foreign)("Istodobnost, t3-t7 × newer cookie: %s touches nothing and goes to /", async (_name, init) => {

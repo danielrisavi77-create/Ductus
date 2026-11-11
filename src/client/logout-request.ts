@@ -13,8 +13,9 @@ import {
 
 /**
  * POST to the logout route; true only for its redirect, which comes after
- * the session was closed and the cookie cleared. A lost request, an error
- * status and no answer within the time limit are false.
+ * the session was closed on the server. The answer never touches the session
+ * cookie (#1929). A lost request, an error status (503 when the database
+ * could not close it) and no answer within the time limit are false.
  */
 export async function postLogout(fetchImpl: typeof fetch = fetch, timeoutMs = LOGOUT_TIMEOUT_MS): Promise<boolean> {
   const abort = new AbortController();

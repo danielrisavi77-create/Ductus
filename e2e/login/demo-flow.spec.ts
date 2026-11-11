@@ -24,7 +24,7 @@ import {
   loseNextCommitAnswer, replayFirstReceipt, stackCheckpoint, stackKeysOfDomain, stackReceiptKeys, tamperNextReceipt, verifyWithStackKeys,
 } from "./evidence-receipt";
 import {
-  appCookie, editorMounted, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
+  appCookie, editorMounted, expectEndedCookie, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
   signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
 import { localAdminUrl } from "./local-db-url";
@@ -185,7 +185,7 @@ async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (held) await signOutHoweverHeld(page);
   else await signOutWithoutDialog(page);
   await page.waitForURL(`${APP_ORIGIN}/`);
-  expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
+  await expectEndedCookie(page.context(), token);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   await forgetProviderLogin(page.context());
 }

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { appCookie, SESSION_COOKIE, signIn, signOutWithoutDialog } from "./support";
+import { appCookie, expectEndedCookie, SESSION_COOKIE, signIn, signOutWithoutDialog } from "./support";
 import { APP_HOST, APP_ORIGIN } from "./origin";
 
 // #802 part B (DAN-325): every signed-in page in the shell has "Početna" in
@@ -77,8 +77,9 @@ test("QA (2) and (4): a student's Početna and brand lead to S01 on /zadaci; on 
 
 test("QA (3): a student on a teacher page with an empty journal signs out without a dialog", async ({ page, context }) => {
   await signIn(page, "/nastavnik");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
   await signOutWithoutDialog(page);
-  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+  await expectEndedCookie(context, token);
 });
 
 // DAN-378 (#1231): a cookie whose session is closed reads Z-03 on "/", with

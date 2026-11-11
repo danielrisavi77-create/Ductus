@@ -13,6 +13,7 @@ import { shellSession } from "@/components/shell/shell-session";
 import { readHome } from "@/components/shell/shell-role";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
+import { endedHere } from "@/server/auth/ended-mark";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -24,24 +25,26 @@ export default async function HomePage() {
   // where the sign-in returns by default. The login route stays reachable,
   // and a sign-in that replaces the cookie ends the earlier session's tabs
   // (SessionObserver).
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
   pageActivity(token);
   // Without a session cookie the public home page (FE-H1, #476).
-  if (token === undefined) {
-    return (
-      <>
-        <SessionObserver {...shellSession(token)} />
-        <Landing />
-      </>
-    );
-  }
+  const landing = (
+    <>
+      <SessionObserver {...shellSession(undefined)} />
+      <Landing />
+    </>
+  );
+  if (token === undefined) return landing;
   // One read gives both the way on and the shell's scope (F-151).
   const { path, scope, closed } = await readHome(token, withActor);
   if (path !== null) redirect(path);
   // #1231: a closed session behind the cookie is told so (Z-03), with one way
   // to sign in again, and no empty shell with only "Odjava". A new sign-in
-  // replaces the cookie.
+  // replaces the cookie. A session this browser signed out keeps its cookie
+  // (#1929) and gets the public home, as without one.
   if (closed) {
+    if (endedHere(token, (name) => store.has(name))) return landing;
     return (
       <AppShell session={shellSession(token)} role={null} scope={null} crumbs={[]}>
         <div className="page">

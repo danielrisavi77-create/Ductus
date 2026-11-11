@@ -271,11 +271,11 @@ describe("finishLogin when the session ports fail", () => {
 });
 
 describe("logout", () => {
-  it("clears the cookie without calling the database when there is no session", async () => {
+  it("sets no cookie and calls no database when there is no session (#1929)", async () => {
     const response = await logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers: { "sec-fetch-site": "same-origin", origin: APP } }), deps);
     expect(response.status).toBe(303);
     expect(deps.closeSession).not.toHaveBeenCalled();
-    expect(setCookies(response).get(SESSION_COOKIE_NAME)).toMatch(/Max-Age=0$/);
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 });
 

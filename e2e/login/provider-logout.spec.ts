@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
-  appCookie, clickSignOut, ROLE_HOME, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+  appCookie, clickSignOut, expectEndedCookie, ROLE_HOME, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
 import { APP_ORIGIN } from "./origin";
 
@@ -41,7 +41,7 @@ function expectProviderLogout(seen: URL[]): void {
 
 async function expectSignedOut(page: Page, token: string): Promise<void> {
   expect(page.url()).toBe(`${APP}/`);
-  expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
+  await expectEndedCookie(page.context(), token);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
 }
 
@@ -101,7 +101,7 @@ test("A2, G1: from the editor with work on the device, the dialog's sign-out als
     await page.waitForURL(new RegExp(`^${APP}/`));
     await expect(page.getByText("Nacrt P: siva bilježnica")).toHaveCount(0);
     await expect(logoutOf(page)).toHaveCount(0);
-    expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+    await expectEndedCookie(context, token);
     if (page.url() === `${APP}/rad`) break;
   }
 
@@ -136,7 +136,7 @@ test("B5: a stale second tab that signs out afterwards leaves no session open he
 
   await logoutOf(stale).click();
   await stale.waitForURL(`${APP}/`);
-  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+  await expectEndedCookie(context, token);
   await expect(logoutOf(stale)).toHaveCount(0);
   await signIn(stale, "/upis");
 });

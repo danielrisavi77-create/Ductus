@@ -6,6 +6,7 @@ import { signedInRedirect, signInHref, signInTarget } from "@/components/auth/si
 import SessionObserver from "@/components/shell/SessionObserver";
 import { shellSession } from "@/components/shell/shell-session";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { endedHere } from "@/server/auth/ended-mark";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,11 @@ export default async function PrijavaPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const store = await cookies();
+  const cookie = store.get(SESSION_COOKIE_NAME)?.value;
+  // A session this browser signed out keeps its cookie (#1929); the page
+  // reads it as no cookie, so the sign-in screen shows and nothing forwards.
+  const token = endedHere(cookie, (name) => store.has(name)) ? undefined : cookie;
   const { returnTo } = await searchParams;
   const onward = signedInRedirect(token, returnTo);
   if (onward !== null) redirect(onward);

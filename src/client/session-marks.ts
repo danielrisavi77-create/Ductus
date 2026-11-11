@@ -53,8 +53,10 @@ export function currentSession(store: MarkStore | null): SessionMark | null {
 }
 
 /**
- * The ended sessions also go to cookies, read only by this page's script, for
- * where localStorage refuses the record (#1444). Each ended session has its own
+ * The ended sessions also go to cookies, read by this page's script, for
+ * where localStorage refuses the record (#1444). The server reads them only to
+ * show a session signed out here as the public home, not as expired (#1929;
+ * src/server/auth/ended-mark.ts). Each ended session has its own
  * cookie, `ductus-ended-<tag>`, so a write never reads or replaces another
  * tab's mark. It outlives a session.
  */
