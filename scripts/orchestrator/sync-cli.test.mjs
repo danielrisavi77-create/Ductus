@@ -2,7 +2,8 @@
 // conflict, a merge that fails without a conflict, a rejected push, a single-branch
 // clone, a tree dirty under hostile git config, a local head that moves while
 // CI is awaited, merge options set on the branch, pull.twohead, a local ref named
-// origin/main and every state after the merge. `gh` is answered by fake-gh-git-preload.mjs; no network.
+// origin/main, unfinished git operations, merge drivers and every state after the merge.
+// `gh` is answered by fake-gh-git-preload.mjs; no network.
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -54,7 +55,7 @@ function setup(t, { cloneArgs = [], mainFile = "main.txt", mainMoves = true } = 
   }
   const head = git(work, "rev-parse", "HEAD");
   const argvLog = join(root, "argv.jsonl");
-  const sync = ({ waitMin = 0, routes = {}, env = {} } = {}) => {
+  const sync = ({ waitMin = 0, routes = {}, env = {}, cwd = work } = {}) => {
     const file = join(root, "routes.json");
     writeFileSync(file, JSON.stringify({ "repos/{owner}/{repo}/pulls/7": {
       number: 7, state: "open", mergeable: true, head: { sha: head, ref: BRANCH, repo: { full_name: "o/r" } },
@@ -62,7 +63,7 @@ function setup(t, { cloneArgs = [], mainFile = "main.txt", mainMoves = true } = 
     }, ...routes }));
     rmSync(argvLog, { force: true });
     const all = { ...base, FAKE_GH_ROUTES: file, FAKE_GH_ARGV_LOG: argvLog, NODE_OPTIONS: `--import ${PRELOAD}`, ...env };
-    const r = spawnSync(process.execPath, [SCRIPT, "7", "--wait-min", String(waitMin)], { cwd: work, env: all, encoding: "utf8" });
+    const r = spawnSync(process.execPath, [SCRIPT, "7", "--wait-min", String(waitMin)], { cwd, env: all, encoding: "utf8" });
     // Arguments of every script the run started, sync.mjs itself included.
     const calls = existsSync(argvLog) ? readFileSync(argvLog, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
     const preflight = calls.filter((c) => c[0].endsWith("preflight.mjs")).map((c) => c.slice(1));
@@ -269,12 +270,82 @@ test("a merge already in progress with a clean tree stops the run and is left as
   const pending = git(r.work, "rev-parse", "MERGE_HEAD");
   const res = r.sync();
   assert.equal(res.code, 1, res.out);
-  assert.ok(res.out.includes("a merge is already in progress"), res.out);
+  assert.ok(res.out.includes("in progress (MERGE_HEAD)"), res.out);
   assert.doesNotMatch(res.out, /preflight|SYNC OK|CONFLICT/);
   assert.deepEqual(res.preflight, []);
   assert.equal(git(r.work, "rev-parse", "MERGE_HEAD"), pending);
   assert.equal(git(r.work, "rev-parse", "HEAD"), r.head);
   assert.equal(r.remoteSha(), r.head);
+});
+
+// A MERGE_HEAD git cannot read is still an unfinished merge: it is reported and left alone.
+test("an unreadable MERGE_HEAD stops the run and is neither aborted nor removed", (t) => {
+  const r = setup(t);
+  writeFileSync(join(r.work, ".git", "MERGE_HEAD"), "not a commit\n");
+  writeFileSync(join(r.work, ".git", "MERGE_MSG"), "kept\n");
+  const res = r.sync();
+  assert.equal(res.code, 1, res.out);
+  assert.ok(res.out.includes("in progress (MERGE_HEAD)"), res.out);
+  assert.deepEqual(res.preflight, []);
+  assert.equal(readFileSync(join(r.work, ".git", "MERGE_HEAD"), "utf8"), "not a commit\n");
+  assert.equal(readFileSync(join(r.work, ".git", "MERGE_MSG"), "utf8"), "kept\n");
+  assert.equal(git(r.work, "rev-parse", "HEAD"), r.head);
+  assert.equal(r.remoteSha(), r.head);
+});
+
+// A cherry-pick, revert or rebase left open would end up under the merge commit.
+for (const [marker, dir] of [["CHERRY_PICK_HEAD", false], ["REVERT_HEAD", false], ["rebase-merge", true], ["rebase-apply", true]]) {
+  test(`an unfinished operation (${marker}) stops the run before the merge`, (t) => {
+    const r = setup(t);
+    const path = join(r.work, ".git", marker);
+    if (dir) mkdirSync(path);
+    else writeFileSync(path, `${r.head}\n`);
+    const res = r.sync();
+    assert.equal(res.code, 1, res.out);
+    assert.ok(res.out.includes(`in progress (${marker})`), res.out);
+    assert.deepEqual(res.preflight, []);
+    assert.equal(existsSync(path), true);
+    assert.equal(git(r.work, "rev-parse", "HEAD"), r.head);
+    assert.equal(r.remoteSha(), r.head);
+  });
+}
+
+// A merge driver other than git's text merge can resolve a conflict silently: union keeps
+// both sides, a configured driver may keep one. Neither is a merge orch:sync may push.
+for (const [driver, config] of [["union", null], ["keepours", ["merge.keepours.driver", "true"]], ["keepours", null]]) {
+  test(`merge attribute ${driver}${config ? " (configured)" : ""} on a file main changed stops before the merge`, (t) => {
+    const r = setup(t, { mainFile: "pr.txt" });
+    writeFileSync(join(r.work, ".git", "info", "attributes"), `* merge=${driver}\n`);
+    if (config) git(r.work, "config", ...config);
+    const res = r.sync();
+    assert.equal(res.code, 1, res.out);
+    assert.ok(res.out.includes(`merge attribute ${driver} on pr.txt`), res.out);
+    assert.doesNotMatch(res.out, /preflight|SYNC OK|CONFLICT/);
+    assert.deepEqual(res.preflight, []);
+    untouched(r);
+  });
+}
+
+for (const attr of ["merge=text", "merge=binary", "-merge", "merge", "!merge"]) {
+  test(`merge attribute "${attr}" is git's own merge and does not stop the run`, (t) => {
+    const r = setup(t);
+    writeFileSync(join(r.work, ".git", "info", "attributes"), `main.txt ${attr}\n`);
+    const res = r.sync();
+    const head = git(r.work, "rev-parse", "HEAD");
+    assert.notEqual(head, r.head, res.out);
+    assert.equal(r.remoteSha(), head, res.out);
+    assert.deepEqual(res.preflight, [["7", "--head", head]]);
+  });
+}
+
+test("a merge attribute is found from a subdirectory too", (t) => {
+  const r = setup(t, { mainFile: "pr.txt" });
+  writeFileSync(join(r.work, ".git", "info", "attributes"), "pr.txt merge=union\n");
+  mkdirSync(join(r.work, "sub"));
+  const res = r.sync({ cwd: join(r.work, "sub") });
+  assert.equal(res.code, 1, res.out);
+  assert.ok(res.out.includes("merge attribute union on pr.txt"), res.out);
+  untouched(r);
 });
 
 test("a merge that ends without main in HEAD is not pushed", (t) => {
@@ -303,13 +374,17 @@ test("readMergeState and mergeCheck over real states after the merge", async (t)
     ["(b) unconcluded merge, MERGE_HEAD present", true, ["merge", "-q", "--no-commit", "--no-ff", "origin/main"], /MERGE_HEAD/],
     ["(c) HEAD without main (squash, no commit)", true, ["merge", "-q", "--squash", "origin/main"], /does not contain the fetched main/],
     ["(d) already up to date", false, null, null],
+    ["(e) unreadable MERGE_HEAD after a commit", true, ["merge", "-q", "--no-edit", "origin/main"], /MERGE_HEAD/, "MERGE_HEAD"],
+    ["(e) rebase left open after a commit", true, ["merge", "-q", "--no-edit", "origin/main"], /another unfinished operation/, "rebase-merge"],
   ];
-  for (const [name, mainMoves, merge, want] of states) {
+  for (const [name, mainMoves, merge, want, marker] of states) {
     const r = setup(t, { mainMoves });
     git(r.work, "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main");
     const main = git(r.work, "rev-parse", "refs/remotes/origin/main");
     const containedBefore = git(r.work, "rev-list", "--count", `HEAD..${main}`) === "0";
     if (merge) git(r.work, ...merge);
+    if (marker === "MERGE_HEAD") writeFileSync(join(r.work, ".git", marker), "garbage\n");
+    else if (marker) mkdirSync(join(r.work, ".git", marker));
     const got = mergeCheck(await readMergeState(tryGit(r.work), { before: r.head, main, containedBefore }));
     if (want === null) assert.equal(got, null, name);
     else assert.match(String(got), want, name);

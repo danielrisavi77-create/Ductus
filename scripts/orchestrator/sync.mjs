@@ -5,11 +5,13 @@
 // for it); a head that only lags without a conflict needs no merge (D-101).
 // It never resolves a conflict, never forces a push, never merges the PR and
 // posts nothing. On a conflict the merge is aborted and the files are listed.
-// Merge options set on the branch stop it before the merge; after the merge nothing
-// is pushed unless the merge is concluded and HEAD contains the fetched main.
+// An unfinished merge, cherry-pick, revert or rebase, merge options set on the branch
+// and a merge driver on a file the merge touches stop it before the merge; after the
+// merge nothing is pushed unless nothing is left unfinished and HEAD contains main.
 // Usage: node sync.mjs <number> [--wait-min N]     (default 30, 0 = do not wait)
 //   exit 0 = preflight PASS on the synced head
-//        1 = stopped: wrong branch, dirty tree or a merge in progress, merge options, conflict,
+//        1 = stopped: wrong branch, dirty tree or an operation in progress, merge options or
+//            a merge driver, conflict,
 //            unconcluded merge or HEAD without main, push, CI wait timeout, preflight FAIL
 //            or the local branch or head moved before success was reported
 //        2 = usage or read error
@@ -20,7 +22,9 @@ import { promisify } from "node:util";
 
 import { checkRollup, ghJson, prView, repoId } from "./gh.mjs";
 import { requiredStatusChecks } from "./preflight-core.mjs";
-import { ciWait, headDrift, mergeCheck, parseSyncArgs, readMergeState, STATUS_ARGS, syncPlan } from "./sync-core.mjs";
+import {
+  ciWait, gitOperations, headDrift, mergeCheck, mergeDriverStop, parseSyncArgs, readMergeState, STATUS_ARGS, syncPlan,
+} from "./sync-core.mjs";
 
 const POLL_MS = 30_000;
 const parsed = parseSyncArgs(process.argv.slice(2));
@@ -33,6 +37,36 @@ const { n, waitMin } = parsed;
 const run = promisify(execFile);
 const git = async (...args) => (await run("git", args, { windowsHide: true })).stdout.trim();
 const tryGit = (...args) => git(...args).catch(() => null);
+// Raw stdout with stdin, for NUL-separated output; null when git fails.
+const gitIo = (args, input, cwd) => new Promise((resolve) => {
+  const p = spawn("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+  let out = "";
+  p.stdout.setEncoding("utf8").on("data", (d) => { out += d; });
+  p.on("error", () => resolve(null)).on("close", (code) => resolve(code === 0 ? out : null));
+  p.stdin.on("error", () => {}).end(input);
+});
+
+/**
+ * Why the merge of `main` must not run here, or null. Attributes come from the checkout,
+ * as for git merge itself; the paths are every file either side changed since any merge
+ * base, so a renamed or conflicting file is among them. No base: git refuses the merge.
+ */
+async function mergeDriverCheck(main) {
+  const bases = await tryGit("merge-base", "--all", "HEAD", main);
+  if (bases === null) return null;
+  const top = await tryGit("rev-parse", "--show-toplevel");
+  if (!top) return "merge attributes could not be read";
+  const paths = new Set();
+  for (const base of bases.split("\n").filter(Boolean)) {
+    for (const tip of ["HEAD", main]) {
+      const out = await gitIo(["diff", "--name-only", "-z", "--no-renames", "--no-relative", "--no-ext-diff", base, tip], "", top);
+      if (out === null) return "merge attributes could not be read";
+      for (const f of out.split("\0")) if (f) paths.add(f);
+    }
+  }
+  if (paths.size === 0) return null;
+  return mergeDriverStop(await gitIo(["check-attr", "--stdin", "-z", "merge"], `${[...paths].join("\0")}\0`, top));
+}
 const script = (name) => fileURLToPath(new URL(name, import.meta.url));
 const child = (name, args) => new Promise((resolve) => {
   spawn(process.execPath, [script(name), ...args], { stdio: "inherit", windowsHide: true })
@@ -51,7 +85,7 @@ try {
     branch: await tryGit("symbolic-ref", "--short", "HEAD"),
     head: await git("rev-parse", "HEAD"),
     dirty: (await git(...STATUS_ARGS)) !== "",
-    merging: (await tryGit("rev-parse", "-q", "--verify", "MERGE_HEAD")) !== null,
+    operations: await gitOperations(tryGit),
     behind: behind === null ? null : Number(behind),
   };
   const plan = syncPlan({ pr, local });
@@ -64,6 +98,12 @@ try {
     const options = await tryGit("config", "--get-all", `branch.${local.branch}.mergeOptions`);
     if (options !== null) {
       console.error(`branch.${local.branch}.mergeOptions is set (${options}): orch:sync merges only with git's defaults; unset it or merge by hand`);
+      process.exit(1);
+    }
+    // union or a configured driver can resolve a conflict without a word.
+    const driver = await mergeDriverCheck(main);
+    if (driver) {
+      console.error(`${driver}: orch:sync merges only with git's own merge; merge by hand`);
       process.exit(1);
     }
     try {

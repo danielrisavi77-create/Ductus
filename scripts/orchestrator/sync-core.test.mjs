@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { GATE_CONTEXT } from "./orchestrator-core.mjs";
-import { ciWait, DEFAULT_WAIT_MIN, headDrift, mergeCheck, parseSyncArgs, syncPlan } from "./sync-core.mjs";
+import {
+  ciWait, DEFAULT_WAIT_MIN, gitOperations, headDrift, mergeCheck, mergeDriverStop, OPERATION_MARKERS, parseSyncArgs, syncPlan,
+} from "./sync-core.mjs";
 
 const HEAD = "a".repeat(40);
 const PR = { state: "OPEN", baseRefName: "main", headRefName: "claude/x", headRefOid: HEAD, sameRepository: true };
-const LOCAL = { branch: "claude/x", head: HEAD, dirty: false, merging: false, behind: 3 };
+const LOCAL = { branch: "claude/x", head: HEAD, dirty: false, operations: [], behind: 3 };
 const plan = (pr = {}, local = {}) => syncPlan({ pr: { ...PR, ...pr }, local: { ...LOCAL, ...local } });
 const run = (name, conclusion, status = "COMPLETED") => ({ name, status, conclusion, completedAt: "2026-11-01T10:00:00Z" });
 
@@ -31,8 +33,9 @@ test("syncPlan merges only a lagging branch that matches the PR head", () => {
 test("syncPlan stops before touching anything when the checkout is not the PR head", () => {
   const stops = [
     plan({ state: "MERGED" }), plan({ baseRefName: "release" }), plan({ sameRepository: false }),
-    plan({}, { branch: null }), plan({}, { branch: "main" }), plan({}, { dirty: true }), plan({}, { merging: true }),
-    plan({}, { merging: true, behind: 0 }),
+    plan({}, { branch: null }), plan({}, { branch: "main" }), plan({}, { dirty: true }), plan({}, { operations: ["MERGE_HEAD"] }),
+    plan({}, { operations: ["MERGE_HEAD"], behind: 0 }), plan({}, { operations: ["rebase-apply"] }),
+    plan({}, { operations: null }), plan({}, { operations: undefined }),
     plan({}, { head: "b".repeat(40) }), plan({}, { behind: null }), plan({}, { behind: Number.NaN }),
   ];
   for (const p of stops) {
@@ -111,6 +114,7 @@ test("mergeCheck lets only a concluded merge that contains main and the PR head 
     ["(f) HEAD did not move, main was not in it", { head: OLD }, /did not move/],
     ["(g) head unreadable", { head: null }, /HEAD could not be read/],
     ["(g) merge state unreadable", { mergeInProgress: null }, /MERGE_HEAD/],
+    ["(h) another operation left open", { mergeInProgress: true }, /another unfinished operation/],
     ["(g) main ancestry unreadable", { mainInHead: null }, /does not contain the fetched main/],
     ["(g) PR head ancestry unreadable", { beforeInHead: null }, /does not contain the PR head/],
     ["(g) earlier containment unreadable", { head: OLD, containedBefore: null }, /did not move/],
@@ -120,4 +124,29 @@ test("mergeCheck lets only a concluded merge that contains main and the PR head 
     if (want === null) assert.equal(got, null, name);
     else assert.match(String(got), want, name);
   }
+});
+
+// `git check-attr -z merge -- <paths>` prints path NUL attribute NUL value NUL per path.
+test("mergeDriverStop lets through only git's own text and binary merges", () => {
+  const out = (...rows) => rows.map(([p, v]) => `${p}\0merge\0${v}\0`).join("");
+  for (const v of ["unspecified", "set", "unset", "text", "binary"]) assert.equal(mergeDriverStop(out(["a.txt", v])), null, v);
+  assert.equal(mergeDriverStop(""), null);
+  assert.equal(mergeDriverStop(out(["a.txt", "set"], ["d/b c.txt", "union"])), "merge attribute union on d/b c.txt");
+  assert.equal(mergeDriverStop(out(["x", "keepours"])), "merge attribute keepours on x");
+  // A path with a newline stays one field; output that is not whole triples is unreadable.
+  assert.equal(mergeDriverStop(out(["a\nb", "union"])), "merge attribute union on a\nb");
+  assert.match(String(mergeDriverStop("a.txt\0merge\0")), /could not be read/);
+  assert.match(String(mergeDriverStop(null)), /could not be read/);
+});
+
+test("gitOperations reports every unfinished operation marker that exists and nothing it cannot read", async () => {
+  const paths = OPERATION_MARKERS.map((m) => `/r/.git/${m}`).join("\n");
+  const reader = (out) => async (...a) => (a[0] === "rev-parse" ? out : null);
+  assert.deepEqual(OPERATION_MARKERS, ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"]);
+  assert.deepEqual(await gitOperations(reader(paths), () => false), []);
+  assert.deepEqual(await gitOperations(reader(paths), (p) => p.endsWith("/MERGE_HEAD") || p.endsWith("/rebase-apply")),
+    ["MERGE_HEAD", "rebase-apply"]);
+  assert.equal(await gitOperations(reader(null), () => false), null);
+  assert.equal(await gitOperations(reader("/r/.git/MERGE_HEAD"), () => false), null);
+  assert.equal(await gitOperations(reader(`${paths}\n/extra`), () => false), null);
 });

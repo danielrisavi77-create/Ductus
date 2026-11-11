@@ -1,5 +1,7 @@
 // Pure core of orch:sync: argument parsing, the local-state decision, the state after
 // the merge and the CI wait. No GitHub here, and git only through an injected reader.
+import { existsSync } from "node:fs";
+
 import { GATE_STATUSES } from "./merge-ready-core.mjs";
 import { latestChecks } from "./orchestrator-core.mjs";
 
@@ -9,6 +11,38 @@ export const DEFAULT_WAIT_MIN = 30;
 // The command line overrides status.showUntrackedFiles, diff.ignoreSubmodules and
 // submodule.<name>.ignore, so a hidden untracked file or submodule change still counts.
 export const STATUS_ARGS = ["status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"];
+// Files and directories git leaves while a merge, cherry-pick, revert or rebase is unfinished.
+export const OPERATION_MARKERS = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"];
+// Values of the merge attribute that are git's own merges: unspecified, set and text are the
+// text merge, unset and binary keep ours and report a conflict. Any other name is a driver.
+const GIT_MERGES = new Set(["unspecified", "set", "unset", "text", "binary"]);
+
+/**
+ * Unfinished git operations by their markers, which count by existence alone: a MERGE_HEAD
+ * git cannot parse is still a merge someone left open. `tryGit` as in readMergeState,
+ * `exists(path)` tells whether a file or directory is there. null when unreadable.
+ */
+export async function gitOperations(tryGit, exists = existsSync) {
+  const out = await tryGit("rev-parse", "--path-format=absolute", ...OPERATION_MARKERS.flatMap((m) => ["--git-path", m]));
+  const paths = out === null ? [] : out.split("\n");
+  if (paths.length !== OPERATION_MARKERS.length) return null;
+  return OPERATION_MARKERS.filter((_, i) => exists(paths[i]));
+}
+
+/**
+ * null when every path in `git check-attr -z merge -- <paths>` output merges with git's own
+ * text or binary merge, otherwise the reason: a driver may resolve a conflict silently.
+ */
+export function mergeDriverStop(out) {
+  if (typeof out !== "string") return "merge attributes could not be read";
+  const f = out.split("\0");
+  // Whole path, attribute, value triples followed by the final empty field.
+  if ((f.length - 1) % 3 !== 0 || f[f.length - 1] !== "") return "merge attributes could not be read";
+  for (let i = 0; i + 2 < f.length; i += 3) {
+    if (!GIT_MERGES.has(f[i + 2])) return `merge attribute ${f[i + 2]} on ${f[i]}`;
+  }
+  return null;
+}
 
 /** `<pr> [--wait-min N]`; null when the arguments are not exactly that. */
 export function parseSyncArgs(args) {
@@ -26,8 +60,8 @@ export function parseSyncArgs(args) {
 /**
  * What to do with the local checkout before anything is merged.
  *   pr      toPr() shape (state, headRefName, headRefOid, baseRefName, sameRepository)
- *   local   { branch, head, dirty, merging, behind } read from git; merging = MERGE_HEAD present,
- *           behind = commits of main the branch lacks
+ *   local   { branch, head, dirty, operations, behind } read from git; operations =
+ *           gitOperations() (null unreadable), behind = commits of main the branch lacks
  * Returns { action: "stop", reason } or { action: "merge" | "skip", reason }.
  */
 export function syncPlan({ pr, local }) {
@@ -38,8 +72,11 @@ export function syncPlan({ pr, local }) {
   if (!local.branch) return stop("detached HEAD: check out the PR branch first");
   if (local.branch !== pr.headRefName) return stop(`current branch is ${local.branch}, the PR branch is ${pr.headRefName}`);
   if (local.dirty) return stop("working tree has uncommitted changes: commit or stash them first");
-  // A clean tree can still hold a merge the user started: never abort or push over it.
-  if (local.merging) return stop("a merge is already in progress: conclude or abort it first");
+  // A clean tree can still hold a merge or rebase the user started: never abort or push over it.
+  if (!Array.isArray(local.operations)) return stop("unfinished git operations could not be read");
+  if (local.operations.length > 0) {
+    return stop(`a merge or another git operation is in progress (${local.operations.join(", ")}): conclude or abort it first`);
+  }
   if (local.head !== pr.headRefOid) return stop("local head differs from the PR head: pull or push first");
   if (!Number.isInteger(local.behind) || local.behind < 0) return stop("lag behind main could not be read");
   return local.behind === 0
@@ -53,26 +90,29 @@ export function syncPlan({ pr, local }) {
  *   before           the PR head the run started from
  *   main             SHA of origin/main read once right after the fetch
  *   containedBefore  true when `before` already contained `main` (nothing to merge)
+ * `exists` as in gitOperations; mergeInProgress covers every unfinished operation.
  */
-export async function readMergeState(tryGit, { before, main, containedBefore }) {
+export async function readMergeState(tryGit, { before, main, containedBefore }, exists = existsSync) {
   const head = await tryGit("rev-parse", "--verify", "HEAD");
-  const mergeHead = await tryGit("rev-parse", "-q", "--verify", "MERGE_HEAD");
+  const operations = await gitOperations(tryGit, exists);
   return {
-    before, main, containedBefore, head,
-    mergeInProgress: head === null ? null : mergeHead !== null,
+    before, main, containedBefore, head, operations,
+    mergeInProgress: head === null || operations === null ? null : operations.length > 0,
     mainInHead: (await tryGit("merge-base", "--is-ancestor", main, "HEAD")) !== null,
     beforeInHead: (await tryGit("merge-base", "--is-ancestor", before, "HEAD")) !== null,
   };
 }
 
 /**
- * null when the checkout may be pushed: no merge left in progress, HEAD contains the
+ * null when the checkout may be pushed: no merge or other operation left in progress, HEAD contains the
  * fetched main and the PR head, and HEAD moved or already contained main. Otherwise the
  * reason; anything unread (null) is a reason too.
  */
 export function mergeCheck(s) {
   if (!s.head) return "HEAD could not be read";
-  if (s.mergeInProgress !== false) return "merge not concluded: MERGE_HEAD is present or unreadable";
+  if (s.mergeInProgress !== false) {
+    return "merge not concluded: MERGE_HEAD or another unfinished operation is present or unreadable";
+  }
   if (s.mainInHead !== true) return `HEAD does not contain the fetched main ${String(s.main).slice(0, 8)}`;
   if (s.beforeInHead !== true) return `HEAD does not contain the PR head ${String(s.before).slice(0, 8)}`;
   if (s.head === s.before && s.containedBefore !== true) return "HEAD did not move and did not contain main";
