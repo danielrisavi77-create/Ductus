@@ -75,7 +75,12 @@ test("Odjava on /ustanova without an answer ends the session on this device and 
   await operator(first, "appoint");
   try {
     for (const theme of ["dark", "light"] as const) {
-      if (theme === "light") await page.evaluate(() => localStorage.setItem("ductura.theme", "light"));
+      if (theme === "light") {
+        await page.evaluate(() => localStorage.setItem("ductura.theme", "light"));
+        // The route never reached the fake provider, which still remembers the
+        // first sign-in; forgetting it shows the account choice again.
+        await context.clearCookies({ name: /^_session/ });
+      }
       const session = theme === "dark" ? first : await asAdministrator(page);
       // The overview is reached by a link, so the client keeps it in its
       // router cache: Back must not bring it back (QA, finding 2).
