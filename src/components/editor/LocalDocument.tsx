@@ -683,7 +683,11 @@ export function LocalDocumentProvider({
     sheetOwnerRef.current = null;
     // Unconfirmed work stays for this person's next sign-in (D-118).
     await (locked ? locked.clear() : clearWithoutEditor(scope, documentId)).catch(() => undefined);
-    if (reached) return true;
+    // On to the provider, for this click's session only (#1929).
+    if (reached) {
+      followLogoutNatively(own);
+      return true;
+    }
     if (stopRef.current) stopRef.current();
     else setPhase("signed-out");
     return false;
@@ -930,8 +934,7 @@ export function LocalLogout() {
       setWorking(false);
     };
     void signOut().then((done) => {
-      if (done) followLogoutNatively();
-      else failure();
+      if (!done) failure();
     }, failure);
   };
   const stay = () => {

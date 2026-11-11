@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { readLogoutHold, shellLogoutStep } from "@/client/logout-hold";
-import { browserSignOutDeps, followLogoutNatively, signOutHere } from "@/client/logout-request";
+import { browserSignOutDeps, followLogoutNatively, sessionAtClick, signOutHere } from "@/client/logout-request";
 import type { SessionMark } from "@/client/session-marks";
 import LogoutDialog from "@/components/editor/LogoutDialog";
 import type { LogoutPlan } from "@/components/editor/logout-plan";
@@ -43,11 +43,14 @@ export default function ShellLogout({ scope, session, className, buttonClassName
     setSignedOutHere(true);
     setBusy(false);
   };
-  // Answered: on to the provider's logout. Otherwise ended here all the same.
+  // Answered: on to the provider's logout, for the click's session only.
+  // Otherwise ended here all the same.
   const signOut = () => {
     setBusy(true);
-    void signOutHere(session, browserSignOutDeps()).then(
-      (reached) => (reached ? followLogoutNatively() : unanswered()),
+    const deps = browserSignOutDeps();
+    const own = sessionAtClick(session, deps.store);
+    void signOutHere(own, deps).then(
+      (reached) => (reached ? followLogoutNatively(own?.tag ?? null) : unanswered()),
       unanswered,
     );
   };

@@ -458,6 +458,41 @@ test("T13 Istodobnost: a sign-in in another tab while the shell's sign-out waits
   await expectSignedOut(second, tokenB);
 });
 
+// #1929: the fetch reached the route and A's session is closed; before the
+// native POST that follows it to the provider arrives, another person signs
+// in in a second tab. That POST names A's session, so it neither closes nor
+// clears B's cookie, whichever cookie it carries.
+test("T14 Istodobnost: a sign-in between the two POSTs of the shell's sign-out keeps the newer session", async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await signIn(page, "/upis");
+  const tokenA = (await appCookie(context, SESSION_COOKIE))!.value;
+  const logouts = logoutRequests(context);
+  let releaseNative: (() => Promise<void>) | undefined;
+  await page.route("**/api/auth/logout", async (route) => {
+    if (route.request().resourceType() === "document") releaseNative = () => route.continue();
+    else await route.continue();
+  });
+  await logoutOf(page).click();
+  await expect.poll(() => releaseNative !== undefined, { timeout: 15_000 }).toBe(true);
+  expect(await sessionRow(tokenA)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
+
+  await forgetProviderLogin(context);
+  const second = await context.newPage();
+  await signIn(second, "/upis", "Demo student 2");
+  const tokenB = (await appCookie(context, SESSION_COOKIE))!.value;
+  const answered = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/auth/logout" && response.request().resourceType() === "document");
+  await releaseNative!();
+  await answered;
+
+  await second.reload();
+  await expectStillSignedIn(second, tokenB);
+  expect(logouts).toEqual([ONE_FETCH, "POST document"]);
+  // B's own "Odjava" still reaches the route and closes it.
+  await signOutWithoutDialog(second);
+  await expectSignedOut(second, tokenB);
+});
+
 // D-183 (#1330, #1336): the shell's dialog after a sign-out that ended on this
 // device, full page, both themes, 1440 and 400 px. No new visual element: the
 // editor's dialog of the same state (reference docs/design/ductura/m0-rad-reference).

@@ -69,8 +69,10 @@ describe("the sign-outs read with the session", () => {
   // ends the page's session here instead of leaving for the browser's error page.
   it("ShellLogout ends its own session through the shared sign-out", () => {
     const source = readFileSync(join(ROOT, "src/components/shell/ShellLogout.tsx"), "utf8");
-    expect(source).toContain("signOutHere(session, browserSignOutDeps())");
-    expect(source).toMatch(/reached \? followLogoutNatively\(\) : unanswered\(\)/);
+    expect(source).toContain("const own = sessionAtClick(session, deps.store);");
+    expect(source).toContain("signOutHere(own, deps)");
+    // The native POST names the click's session, so a newer one stays (#1929).
+    expect(source).toMatch(/reached \? followLogoutNatively\(own\?\.tag \?\? null\) : unanswered\(\)/);
     expect(source).toContain("signedOutHere={signedOutHere}");
     expect(source).not.toMatch(/\.submit\(\)/);
     // Without JS the form still posts to the route (I5).

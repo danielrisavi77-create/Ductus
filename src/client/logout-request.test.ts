@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LOGOUT_TIMEOUT_MS } from "./logout-hold";
-import { postLogout, signOutHere, type SignOutDeps } from "./logout-request";
+import { followLogoutNatively, postLogout, signOutHere, type SignOutDeps } from "./logout-request";
 import { CURRENT_KEY, ENDED_KEY, hasEnded, type CookieJar, type MarkStore } from "./session-marks";
 
 // DAN-99 (Z-02, D-118): a sign-out from a page without the editor ends the
@@ -162,5 +162,30 @@ describe("Istodobnost: a sign-in elsewhere while the sign-out waits", () => {
     expect(JSON.parse(store.data.get(CURRENT_KEY)!)).toEqual(B);
     expect(jar.names()).toEqual(["ductus-ended-tag-a"]);
     expect(announce.mock.calls).toEqual([["tag-a"]]);
+  });
+});
+
+describe("followLogoutNatively names the click's session (#1929)", () => {
+  type Fake = { tag: string; children: Fake[]; submitted: boolean; [key: string]: unknown };
+  function fakeDocument() {
+    const body: Fake = { tag: "body", children: [], submitted: false };
+    const make = (tag: string): Fake => {
+      const element: Fake = { tag, children: [], submitted: false };
+      element.append = (child: Fake) => void element.children.push(child);
+      element.submit = () => void (element.submitted = true);
+      return element;
+    };
+    body.append = (child: Fake) => void body.children.push(child);
+    return { body, createElement: make };
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([["tag-a", "tag-a"], [null, ""]])("tag %s posts session=%s to the route", (tag, sent) => {
+    const doc = fakeDocument();
+    vi.stubGlobal("document", doc);
+    followLogoutNatively(tag);
+    const [form] = doc.body.children;
+    expect(form).toMatchObject({ tag: "form", method: "post", action: "/api/auth/logout", hidden: true, submitted: true });
+    expect(form.children).toEqual([expect.objectContaining({ tag: "input", type: "hidden", name: "session", value: sent })]);
   });
 });

@@ -1,8 +1,11 @@
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
+import { readBodyWithLimit } from "@/server/http/mutation-request";
+
 import { identityFromClaims } from "./claims";
 import type { AuthConfig } from "./config";
 import { isProviderUnavailable, newLoginChecks, type LoginChecks, type OidcClient } from "./oidc";
+import { sessionTag } from "./principal";
 import { DEFAULT_RETURN_TO, safeReturnTo } from "./return-to";
 import { newSessionToken, SESSION_COOKIE_NAME } from "./session-token";
 
@@ -214,7 +217,7 @@ export function isSameOrigin(request: Request, origin: string): boolean {
 
 /** POST /api/auth/logout */
 export async function logout(request: Request, deps: AuthDeps): Promise<Response> {
-  return endSessions(request, deps, "logout", (token) => deps.closeSession(token), "clear");
+  return endSessions(request, deps, "logout", (token) => deps.closeSession(token), "clear", clickTag);
 }
 
 /** POST /api/auth/logout-all: this session and every other live one of the account (DAN-296). */
@@ -236,6 +239,7 @@ async function endSessions(
   stage: string,
   close: (token: string) => Promise<unknown>,
   onCloseFailure: "clear" | "keep",
+  readTag?: (request: Request) => Promise<string | undefined>,
 ): Promise<Response> {
   if (!isSameOrigin(request, deps.config.redirectUri.origin)) {
     logFailure(stage, "cross_origin");
@@ -243,6 +247,16 @@ async function endSessions(
   }
   const clearedSession = cookie(SESSION_COOKIE_NAME, "", "Max-Age=0");
   const token = readCookie(request, SESSION_COOKIE_NAME);
+  // A tagged request ends only the session it was sent for (DAN-99, #1929).
+  // Another tab may have signed in after the click: its cookie is neither
+  // closed nor cleared, and without a cookie none is cleared either, so a
+  // sign-in that lands while this answer is on its way survives it.
+  const tag = readTag === undefined ? undefined : await readTag(request);
+  if (tag !== undefined) {
+    if (!token) return redirect(await providerLocation(deps), []);
+    if (sessionTag(token) !== tag)
+      return redirect(new URL(DEFAULT_RETURN_TO, deps.config.redirectUri.origin).href, []);
+  }
   if (token) {
     try {
       await close(token);
@@ -251,15 +265,49 @@ async function endSessions(
       if (onCloseFailure === "keep") return failurePage(503);
     }
   }
-  // Only then the provider (DAN-212), also without a live Ductus session: the
-  // provider's own may still be open (D-200 P2). Without an endpoint, or when
-  // the provider fails, the local logout stands and "/" follows as before.
-  let location = new URL(DEFAULT_RETURN_TO, deps.config.redirectUri.origin).href;
+  return redirect(await providerLocation(deps), [clearedSession]);
+}
+
+/**
+ * Only then the provider (DAN-212), also without a live Ductus session: the
+ * provider's own may still be open (D-200 P2). Without an endpoint, or when
+ * the provider fails, the local logout stands and "/" follows as before.
+ */
+async function providerLocation(deps: AuthDeps): Promise<string> {
   try {
     const endSession = await deps.oidc.endSessionUrl();
-    if (endSession) location = endSession.href;
+    if (endSession) return endSession.href;
   } catch (error) {
     logFailure("end_session", errorCode(error));
   }
-  return redirect(location, [clearedSession]);
+  return new URL(DEFAULT_RETURN_TO, deps.config.redirectUri.origin).href;
+}
+
+const CLICK_TAG_FIELD = "session";
+const CLICK_TAG_MAX_BYTES = 256;
+const CLICK_TAG_TIMEOUT_MS = 5_000;
+
+/**
+ * The `session` field of the logout form: the tag of the session the click
+ * was made in. undefined when the request carries none (an empty body, or a
+ * form without the field), so the fetch and the form without script work as
+ * before. Anything else that is not exactly one field in a form body (another
+ * type, the field twice, a body too large, slow or unreadable) comes back as
+ * "", which matches no cookie, so a doubtful request closes nothing.
+ */
+async function clickTag(request: Request): Promise<string | undefined> {
+  const read = await readBodyWithLimit(request, CLICK_TAG_MAX_BYTES, CLICK_TAG_TIMEOUT_MS);
+  if (!read.ok) return "";
+  if (read.bytes.byteLength === 0) return undefined;
+  const type = (request.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  if (type !== "application/x-www-form-urlencoded") return "";
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(read.bytes);
+  } catch {
+    return "";
+  }
+  const values = new URLSearchParams(text).getAll(CLICK_TAG_FIELD);
+  if (values.length === 0) return undefined;
+  return values.length === 1 ? values[0] : "";
 }

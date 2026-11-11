@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAuthConfig } from "@/server/auth/config";
 import { logout, type AuthDeps } from "@/server/auth/flow";
 import { createOidcClient } from "@/server/auth/oidc";
+import { sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
 import { CLIENT_ID, CLIENT_SECRET, createTestIdp, ISSUER } from "./test-idp";
@@ -185,5 +186,98 @@ describe("logout at the provider", () => {
   it("D2: the logout route answers POST alone", async () => {
     const route = await import("../../../app/api/auth/logout/route");
     expect(Object.keys(route).filter((name) => /^[A-Z]+$/.test(name))).toEqual(["POST"]);
+  });
+});
+
+// DAN-99 (#1929, cxcr1929 / cxcq1929): the native POST that follows a
+// successful fetch carries the tag of the session the click ended. The route
+// closes and clears only the session whose cookie has that tag; a newer
+// session signed in meanwhile in another tab stays, cookie and all.
+describe("logout with the tag of the click's session", () => {
+  const OTHER = "u".repeat(43);
+  const TAG = sessionTag(TOKEN)!;
+  const OTHER_TAG = sessionTag(OTHER)!;
+  const form = (body: string) => ({ "content-type": "application/x-www-form-urlencoded", ...SAME_ORIGIN, body });
+
+  function send(cookieValue: string | null, init: { body?: string; headers?: Record<string, string> } = {}) {
+    const headers: Record<string, string> = { ...SAME_ORIGIN, ...init.headers };
+    if (cookieValue !== null) headers.cookie = `${SESSION_COOKIE_NAME}=${cookieValue}`;
+    return logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers, body: init.body }), deps);
+  }
+  const formBody = (body: string) => {
+    const { body: text, ...headers } = form(body);
+    return { body: text, headers };
+  };
+
+  // (t1) No field: as before, for the fetch and the form without script.
+  const absent: [string, { body?: string; headers?: Record<string, string> }][] = [
+    ["no body", {}],
+    ["an empty body", formBody("")],
+    ["a body without the field", formBody("other=1")],
+  ];
+  // (t3)-(t7) A field that names no session of this cookie.
+  const foreign: [string, { body?: string; headers?: Record<string, string> }][] = [
+    ["the click's tag under a newer cookie", formBody(`session=${TAG}`)],
+    ["an empty tag", formBody("session=")],
+    ["the tag in capitals", formBody(`session=${TAG.toUpperCase()}`)],
+    ["a shortened tag", formBody(`session=${TAG.slice(0, 63)}`)],
+    ["a lengthened tag", formBody(`session=${TAG}0`)],
+    ["a tag that is not hex", formBody(`session=${"z".repeat(64)}`)],
+    ["the field twice", formBody(`session=${TAG}&session=${TAG}`)],
+    ["a body of another type", { body: `session=${TAG}`, headers: { "content-type": "text/plain" } }],
+    ["a body over the limit", formBody(`session=${TAG}&pad=${"x".repeat(400)}`)],
+    ["a malformed Content-Length", { ...formBody(`session=${TAG}`), headers: { ...formBody("").headers, "content-length": "-1" } }],
+  ];
+
+  it.each(absent)("t1 × cookie: %s closes and clears the cookie's session as before", async (_name, init) => {
+    const response = await send(TOKEN, init);
+    expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
+    expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
+    expectOnlyClearedCookie(response);
+  });
+
+  it("t2 × cookie: the click's tag closes and clears that session, then the provider", async () => {
+    const response = await send(TOKEN, formBody(`session=${TAG}`));
+    expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
+    expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
+    expectOnlyClearedCookie(response);
+  });
+
+  it.each(foreign)("Istodobnost, t3-t7 × newer cookie: %s touches nothing and goes to /", async (_name, init) => {
+    const response = await send(OTHER, init);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(HOME);
+    expect(deps.closeSession).not.toHaveBeenCalled();
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it.each([["the tag of another cookie", `session=${TAG}`], ["an empty tag", "session="]])(
+    "k3, malformed cookie with %s: touches nothing and goes to /",
+    async (_name, body) => {
+      const response = await send("kratko", formBody(body));
+      expect(response.headers.get("location")).toBe(HOME);
+      expect(deps.closeSession).not.toHaveBeenCalled();
+      expect(response.headers.getSetCookie()).toEqual([]);
+    },
+  );
+
+  it.each([["the click's tag", `session=${TAG}`], ["an empty tag", "session="], ["another tag", `session=${OTHER_TAG}`]])(
+    "Istodobnost, k1 × %s: goes to the provider and clears no cookie set meanwhile",
+    async (_name, body) => {
+      const response = await send(null, formBody(body));
+      expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
+      expect(deps.closeSession).not.toHaveBeenCalled();
+      expect(response.headers.getSetCookie()).toEqual([]);
+    },
+  );
+
+  it("a tag from another origin is still refused before anything", async () => {
+    const response = await send(TOKEN, {
+      ...formBody(`session=${TAG}`),
+      headers: { ...formBody("").headers, "sec-fetch-site": "cross-site", origin: "https://napadac.test" },
+    });
+    expect(response.status).toBe(403);
+    expect(deps.closeSession).not.toHaveBeenCalled();
   });
 });
