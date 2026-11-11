@@ -210,6 +210,36 @@ export function budgetNotice(tokens, role = "unknown") {
   return `${where}Finish the current step, then ${handoff} and tell the user this session should be rotated. Do not take on a new task here.`;
 }
 
+// The Owner queue is for the owner and the orchestrator (CLAUDE.md, STATE.md).
+// A writer or control session gets STATE.md with the body of that section
+// replaced by one line naming the lines left out; every other role, including
+// a session with no detectable role, gets the text unchanged (DAN-695).
+const OWNER_QUEUE = /^## Owner queue\b/i;
+const CUT_ROLES = new Set(["worker", "control"]);
+
+export function stateForRole(text, role) {
+  if (!CUT_ROLES.has(role)) return text;
+  const lines = text.split("\n");
+  const out = [];
+  let fenced = false;
+  let from = 0; // first line of the body being cut, 1-based; 0 when none
+  const close = (to) => {
+    if (to >= from) out.push("", `> Owner queue left out for this session's role: STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`, "");
+    from = 0;
+  };
+  lines.forEach((line, index) => {
+    const bare = line.replace(/\r$/, "");
+    if (/^\s*(```|~~~)/.test(bare)) fenced = !fenced;
+    const section = !fenced && /^#{1,2} /.test(bare);
+    if (from && section && !OWNER_QUEUE.test(bare)) close(index);
+    if (from) return;
+    out.push(line);
+    if (section && OWNER_QUEUE.test(bare)) from = index + 2;
+  });
+  if (from) close(lines.length);
+  return out.join("\n");
+}
+
 // STATE.md as session-start context, or null when it would be truncated.
 export function stateContext(file, text) {
   if (text.length > STATE_LIMIT) return null;
@@ -306,7 +336,8 @@ const modes = {
     // can make STATE.md point at .env or any other file; a path that resolves
     // anywhere but the same place under <root> is not read.
     const text = projectText(root, "STATE.md", io);
-    const state = text === undefined ? null : stateContext(path.join(root, "STATE.md"), text);
+    // The limit is measured on the text handed over, after the role's cut.
+    const state = text === undefined ? null : stateContext(path.join(root, "STATE.md"), stateForRole(text, sessionRole(event)));
     // A directory without a lockfile is not a checkout to install, so it gets no notice.
     const lock = projectText(root, "pnpm-lock.yaml", io);
     const installed = lock === undefined ? undefined : projectText(root, "node_modules/.pnpm/lock.yaml", io);
