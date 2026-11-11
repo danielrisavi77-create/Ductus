@@ -34,6 +34,9 @@ const FIXED: { code: string; outcome: Outcome; recipients: readonly Recipient[];
   { code: "20", outcome: "ne", recipients: RECIPIENTS, why: "D-273 MQ08, the package is the output" },
   { code: "23", outcome: "ne", recipients: RECIPIENTS, why: "D-273 MQ08, discarded objects" },
   { code: "29", outcome: "ne", recipients: RECIPIENTS, why: "backups are not exported" },
+  { code: "25", outcome: "ne", recipients: [STUDENT, FORMER, PORTFOLIO], why: "D-173 closed package (A6)" },
+  { code: "26", outcome: "ne", recipients: [STUDENT, FORMER, PORTFOLIO], why: "D-173 closed package (A6)" },
+  { code: "28", outcome: "ne", recipients: [STUDENT, FORMER, PORTFOLIO], why: "D-173 closed package (A6)" },
   { code: "30", outcome: "ne", recipients: RECIPIENTS, why: "local device data is not on the server" },
 ];
 
@@ -172,6 +175,9 @@ describe("contractErrors", () => {
     ["session data in the exit (A11)", edit("3", "ne | ne | ne | da | D-x"), "class 3: Izlaz ustanove must be ne"],
     ["backups in the exit (A11)", edit("29", "ne | ne | ne | otvoreno | D-x"), "class 29: Izlaz ustanove must be ne"],
     ["device journal for the student (A11)", edit("30", "da | da | ne | ne | D-x"), "class 30: Student must be ne"],
+    ["the access log for the student (A6)", edit("25", "da | da | ne | da | D-x"), "class 25: Student must be ne"],
+    ["permission changes for the former student (A6)", edit("26", "da | da | ne | da | D-x"), "class 26: Bivši student must be ne"],
+    ["the deletion record in the portfolio (A6)", edit("28", "da | da | da | da | D-x"), "class 28: Portfelj must be ne"],
   ])("fails on %s", (_case, rows, error) => {
     expect(check(contract(rows)).some((e) => e.startsWith(error))).toBe(true);
   });

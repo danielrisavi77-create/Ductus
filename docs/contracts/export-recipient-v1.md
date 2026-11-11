@@ -115,7 +115,7 @@ Rok artefakta je zasebno pravilo od roka poveznice (MQ08), iako oba danas traju 
 | --- | --- | --- | --- |
 | Rok | Novi izvozni artefakt (klasa 20) briše se 24 sata nakon nastanka. Brisanje ide kroz raspored pg-boss, bez obzira na to je li poveznica iskorištena. | D-273 MQ08, MQ14 | C7 |
 | Odvojeni rokovi | Istek poveznice ne briše artefakt, a brisanje artefakta ne produžuje poveznicu. Svaki ima svoj stupac i svoju provjeru. | D-273 MQ08 | C8 |
-| Predana datoteka | Bajtovi DOCX-a i PDF-a iz trenutka predaje dio su zapisa predaje (klasa 16) i nikad se ne brišu po pravilu 24 h. Izvoz ih kopira, a ne premješta. | D-285 | C9 |
+| Predana datoteka | Bajtovi DOCX-a i PDF-a iz trenutka predaje dio su zapisa predaje (klasa 16) i nikad se ne brišu po pravilu 24 h. Izvoz ih kopira nepromijenjene, a ne premješta. | D-285 | C9 |
 | Ponovna isporuka | Novi posao nad istim snimkom daje novi artefakt i novu poveznicu. Izvorni posao i njegov trag ostaju. Otisci sadržaja u manifestu jednaki su prvoj isporuci. | D-273 MQ08 | C10, C11 |
 | Bez novog vremena | Ponovna isporuka ne mijenja vrijeme predaje, potvrdu ni manifest predaje. | D-173, `submission-receipt-v2.md` | C11 |
 | Zadržavanje | Izvoz ne skida zadržavanje (D-274 MQ11) i ne briše ništa što zadržavanje drži. Smije li se izvoziti rad pod zadržavanjem, ugovor ne odlučuje. | D-274 MQ11 | C13 |
@@ -143,7 +143,7 @@ Prvi kodni PR za pojedinog primatelja mora imati testove iz #1882 za tog primate
 - **Klase:** paket svakog primatelja sadrži točno klase s `da` iz odjeljka 3 i ništa iz odjeljka 4. Klasa `otvoreno` u paketu je pad (A1 do A13).
 - **Ovlast:** tuđi rad, rad bez predaje, posao bez reference, admin koji čita sadržaj i operater bez pisanog zahtjeva ili imenovanog primatelja odbijaju se (B1 do B10).
 - **Poveznica i artefakt:** granica 24 h u točnoj sekundi, sat klijenta naprijed i natrag, drugo preuzimanje, brisanje artefakta neovisno o poveznici, D-285 i ponovna isporuka s jednakim otiscima (C1 do C14).
-- **Sadržaj:** PDF/A samo uz veraPDF, log bez hasheva i tokena, R-07 i CSV redak (D1 do D6).
+- **Sadržaj:** PDF/A samo uz veraPDF, log bez hasheva i tokena, R-07 i CSV redak (D1 do D5). Rječnik zabranjenih izraza provjerava se samo nad tekstom koji Ductus piše u paket, a predana datoteka u paketu bajtno je jednaka predanoj, i kad sadrži riječ iz rječnika (D6).
 - **Istodobnost:** dva istodobna preuzimanja iste jednokratne poveznice daju točno jedno preuzimanje. Brisanje artefakta za vrijeme preuzimanja ne daje nepotpun paket. Dvije ponovne isporuke daju dva posla bez prepisivanja. Opoziv za vrijeme posla i istek u trenutku preuzimanja ponašaju se kao u #1882 (N1 do N5).
 
 Svi podaci u testovima su izmišljeni (`CLAUDE.md`).
