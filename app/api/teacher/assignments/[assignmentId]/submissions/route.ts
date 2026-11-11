@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { withActor } from "@/server/db";
 import { handleAssignmentSubmissionsRequest } from "@/server/evidence/assignment-submissions";
 
@@ -14,6 +14,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ass
   const { assignmentId } = await context.params;
   return handleAssignmentSubmissionsRequest(request, assignmentId, {
     withActor,
-    sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
+    sessionToken: liveSessionToken(request.cookies),
   });
 }

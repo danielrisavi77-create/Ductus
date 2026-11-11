@@ -4,6 +4,20 @@ Verzija 0.4 · 10. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codexu. Nova instanca prvo čita `docs/ORKESTRATOR-SAZETAK.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM-SAZETAK.md` i `docs/PLAN-DEMO.md` §3 i §4. Ovaj dokument, `docs/ENGINEERING_SYSTEM.md` i ostalo čita po odjeljcima koje odluka traži, a `docs/MULTI-ACCOUNT.md` kod predaje ili rotacije sesije. U sukobu sa sažetkom vrijedi ovaj dokument. Vrijedi uz `CLAUDE.md` i `docs/SESSIONS.md`.
 
+<!-- toc:start -->
+- §1 Na početku svakog poteza: retci 21-33
+- §2 Kad stigne PR: retci 34-55
+- §3 Nakon spajanja: retci 56-65
+- §4 Što orkestrator odlučuje sam, a što pita: retci 66-114
+  - §4a Kako se pita Daniel: retci 105-114
+- §5 Poruke i cross-account koordinacija: retci 115-131
+- §6 Kontrolne točke: retci 132-135
+- §7 Štednja tokena orkestratora: retci 136-165
+- §8 Sesije: pregled, pokretanje i gašenje: retci 166-235
+- §9 Petlja poteza: retci 236-249
+- §10 Provjera zastoja (`pnpm orch:health`): retci 250-262
+<!-- toc:end -->
+
 ## 1. Na početku svakog poteza
 
 Četiri jeftine provjere, bez čitanja diffova. Za odabir i redoslijed zadataka koristi Linearov prioritet, nositelja i status; za grane, PR-ove, reviewe i CI koristi GitHub:
@@ -94,7 +108,7 @@ Pitanja se skupljaju i šalju zajedno, s preporukom uz svako.
 2. Orkestrator šalje push obavijest (alat `PushNotification`, do 200 znakova): što treba i preporuka, npr. "Ductus: treba odluka o D-08; preporuka UpCloud. Detalji na pultu." Više pitanja ide u jednu obavijest.
 3. Orkestrator ne čeka u chatu: nastavlja sve što ne ovisi o odgovoru. Što ovisi, stoji na ploči kao "čeka Daniela".
    Kad vlasniku pošalje obavijest za „Spoji n”, orkestrator to javlja piscu PR-a; od tada je grana zamrznuta (`docs/SESSIONS.md` §2, #87 [c.6550413739](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6550413739) t. 1). Kad naredbu poništi, i to javlja piscu.
-   **Skupni „Spoji n” (vlasnik, 7. 11. 2026., #87 [c.6706748222](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6706748222) t. 24).** U dva fiksna termina dnevno, 10:31 i 17:29 po zagrebačkom vremenu, orkestrator zakazanim poslom šalje vlasniku jednu obavijest sa svim PR-ovima koji na točnom headu imaju review PASS i QA PASS (gdje je QA obvezna) i čekaju „Spoji n”. Termin samo skuplja spremne PR-ove u jednu obavijest; spaja se i dalje samo na vlasnikov doslovni „Spoji n” (§4). Noćni prozor (§4) ostaje kakav jest.
+   **Skupni „Spoji n” (vlasnik, 7. 11. 2026., #87 [c.6706748222](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6706748222) t. 24).** U dva fiksna termina dnevno, 10:31 i 17:29 po zagrebačkom vremenu, orkestrator zakazanim poslom šalje vlasniku jednu obavijest sa svim PR-ovima koji na točnom headu imaju review PASS i QA PASS (gdje je QA obvezna) i čekaju „Spoji n”. Termin samo skuplja spremne PR-ove u jednu obavijest; spaja se i dalje samo na vlasnikov doslovni „Spoji n” (§4) ili u prozoru od 24 h (§4), koji je zamijenio noćni prozor.
 4. Za D-196 (trajno od 11. 11. 2026., #87 c.6785418113) orkestrator vlasniku jednom dnevno javlja popis `critical` PR-ova bez D-97 putanja koji su spojeni bez njegove naredbe (broj, naslov, head), na ploči i u istoj push obavijesti s ostalim pitanjima.
 5. Isto vrijedi kad Daniel mora nešto napraviti sam (npr. otvoriti novu sesiju workera pri rotaciji ili novu sesiju orkestratora kad se postojeća ne može nastaviti, §7, jer orkestrator ne pokreće desktop sesije ni stalne sesije, §8): obavijest s točnom radnjom.
 
@@ -145,7 +159,7 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
   Effort slijedi risk zadatka (`ENGINEERING_SYSTEM.md` §5): `low` → low, `standard` → medium, `critical` → high. Iznimka je redak orkestratora: njegova sesija radi s effortom medium, koji vlasnik postavlja naredbom `/effort medium` (#87 [c.6706748222](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6706748222) t. 21). Kad se model iz tablice razlikuje od zadanog modela uloge u `docs/SESSIONS.md` §1, vrijedi tablica ("Prednost modela"). "Samo dokumenti" ne uključuje dokumente koji određuju gate ili pravila rada (`docs/ENGINEERING_SYSTEM.md`, `docs/ORKESTRATOR.md`, `docs/SESSIONS.md`, `CLAUDE.md`, kartice uloga u `.claude/uloge/`, skillovi u `.claude/skills/` i `.agents/skills/`): PR koji ih mijenja dobiva Opus za review i QA (#87, `issuecomment-6111858205`).
 
-  Model se zadaje **izričito pri svakom pokretanju**: parametar `model` alata Agent za lokalne podagente, polje `model` u konfiguraciji sesije u oblaku. Bez parametra vrijedi model iz profila: pisci, reviewer, QA i sigurnosni pregled imaju `opus` (`docs/SESSIONS.md` §7, redak "`model:` u profilima"). Svaki zapis pokretanja na koordinacijskom issueu (§8) navodi model. Pravilo sumnje: ako nije jasno u koju razinu zadatak spada, ide viši model. Gate se time ne mijenja: komentari reviewa i QA-a i dalje navode stvarni model (`Review-Model`, `QA-Model`, `ENGINEERING_SYSTEM.md` §6). Ovo je governance pravilo, ne strojna granica: ništa ne provjerava da je zadani model stvarno korišten.
+  Model se zadaje **izričito pri svakom pokretanju**: parametar `model` alata Agent za lokalne podagente, polje `model` u konfiguraciji sesije u oblaku. Bez parametra vrijedi model iz profila: pisci, reviewer, QA i sigurnosni pregled imaju `opus` (`docs/SESSIONS.md` §7, redak "`model:` u profilima"). Svaki zapis pokretanja na koordinacijskom issueu (§8) navodi model. Pravilo sumnje: ako nije jasno u koju razinu zadatak spada, ide viši model. Gate se time ne mijenja: komentari reviewa i QA-a i dalje navode stvarni model (`Review-Model`, `QA-Model`, `ENGINEERING_SYSTEM.md` §6). Ovo je governance pravilo, ne strojna granica: gate to ne provjerava; `pnpm orch:metrics` naknadno uspoređuje model koji navodi PASS na spojenom headu s ovom tablicom i promijenjenim datotekama PR-a (ishodi `ok`, `below`, `undeclared`, `other`, `n/a`; DAN-695). Viši model od traženog nije odstupanje.
 - **Svjež podagent ili CLI posao po zadatku ili lancu.** Dobiva samo zadatak iz `SESSIONS.md` §3 i odjeljke navedene u polju Ulaz; nikad povijest razgovora orkestratora. Dugovječne sesije i dalje rotiraju po `SESSIONS.md` §4.
 - **Logovi samo za pad.** Stanje se čita po §1; CI logovi samo za provjeru koja je pala na PR-u koji se obrađuje.
 

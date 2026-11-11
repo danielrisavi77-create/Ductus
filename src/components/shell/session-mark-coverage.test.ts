@@ -44,9 +44,11 @@ function pages(dir: string): string[] {
   });
 }
 
-const cookiePages = pages(join(ROOT, "app")).filter((file) =>
-  readFileSync(file, "utf8").includes("SESSION_COOKIE_NAME"),
-);
+// Directly, or through liveSessionToken (DAN-99), which reads the same cookie.
+const cookiePages = pages(join(ROOT, "app")).filter((file) => {
+  const source = readFileSync(file, "utf8");
+  return source.includes("SESSION_COOKIE_NAME") || source.includes("liveSessionToken(");
+});
 
 describe("session mark on every page that reads the session cookie (F-113 t.1)", () => {
   it("finds the pages that a sign-in can return to", () => {
@@ -58,6 +60,7 @@ describe("session mark on every page that reads the session cookie (F-113 t.1)",
       "app/upis/page.tsx",
       "app/zadatak/[id]/page.tsx",
       "app/nastavnik/brz-put/page.tsx",
+      "app/ustanova/page.tsx",
     ]));
   });
 

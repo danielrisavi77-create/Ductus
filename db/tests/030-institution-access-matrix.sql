@@ -124,8 +124,9 @@ SELECT bag_eq(
   'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt, faculty_work_rule or notification'
 );
 -- A version is immutable by its triggers, one of a mentorship's assignment
--- stays within the faculty's rule, and an administrator comes and goes only
--- through the operator procedure (DAN-525); losing one must change this list.
+-- stays within the faculty's rule, an administrator comes and goes only
+-- through the operator procedure (DAN-525), and a grant is bound to its rows
+-- on insert (DAN-379); losing one must change this list.
 SELECT bag_eq(
   $$ SELECT c.relname || ': ' || t.tgname || ' ' || t.tgtype::text || ' ' || t.tgenabled::text
      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
@@ -142,8 +143,9 @@ SELECT bag_eq(
         'institution_role: institution_role_keeps_admin 17 O',
         'notice_acknowledgment: notice_acknowledgment_fingerprint_immutable 19 O',
         'notice_acknowledgment: notice_acknowledgment_binding_fill 7 O',
-        'notice_acknowledgment: notice_acknowledgment_binding_immutable 19 O'],
-  'triggers: immutable versions, fingerprints and bindings, the binding derived on insert, mentorship validation, the inherited purpose catalogue, transactional notification, the institution of the parent and the operator''s administrators, all enabled'
+        'notice_acknowledgment: notice_acknowledgment_binding_immutable 19 O',
+        'work_grant: work_grant_binding_fill 23 O'],
+  'triggers: immutable versions, fingerprints and bindings, the bindings derived on insert, mentorship validation, the inherited purpose catalogue, transactional notification, the institution of the parent and the operator''s administrators, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -203,6 +205,7 @@ SELECT bag_eq(
     'require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid)',
     'is_confirmed_teacher(p_user_id uuid, p_course_id uuid)',
     'set_course_holder(p_course_id uuid, p_holder_id uuid) definer app',
+    'hand_over_course(p_course_id uuid, p_holder_id uuid) definer app',
     'create_seminar_group(p_course_id uuid, p_name text) definer app',
     'assign_group_teacher(p_group_id uuid, p_teacher_id uuid) definer app',
     'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
@@ -222,6 +225,7 @@ SELECT bag_eq(
     'grant_work_access(p_assignment_id uuid, p_student_id uuid, p_grantee_id uuid, p_kind text, p_actions text[], p_valid_from timestamp with time zone, p_valid_to timestamp with time zone) definer app',
     'revoke_work_access(p_grant_id uuid) definer app',
     'grant_can(p_action text, p_document_id text) definer app',
+    'work_grant_binding_fill()',
     'lock_teacher_role(p_user_id uuid)',
     'request_mentorship(p_teacher_id uuid, p_work_type text) definer app',
     'withdraw_mentorship_request(p_request_id uuid) definer app',

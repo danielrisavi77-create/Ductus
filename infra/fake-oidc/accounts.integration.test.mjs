@@ -34,6 +34,30 @@ async function waitForProvider(child, discoveryUrl, output) {
   throw new Error(`fake OIDC did not become ready: ${output.join("")}`);
 }
 
+// F-019: an issuer or redirect address off this machine stops the provider
+// before it listens. Hosts are invented.
+for (const [name, extra] of [
+  ["issuer", { ISSUER: "https://idp.example.test" }],
+  ["redirect URI", { REDIRECT_URI: "https://ductus.example.test/api/auth/callback" }],
+  ["post-logout redirect URI", { POST_LOGOUT_REDIRECT_URI: "https://ductus.example.test/" }],
+]) {
+  test(`the provider refuses to start with a foreign ${name}`, { timeout: 10_000 }, async () => {
+    const port = await unusedPort();
+    const output = [];
+    const child = spawn(process.execPath, [serverPath], {
+      env: { ...process.env, NODE_ENV: "development", PORT: String(port), ISSUER: `http://localhost:${port}`, ...extra },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    child.stdout.on("data", (chunk) => output.push(chunk.toString()));
+    child.stderr.on("data", (chunk) => output.push(chunk.toString()));
+    const code = await new Promise((resolve) => child.once("exit", resolve));
+    assert.notEqual(code, 0);
+    assert.match(output.join(""), /localhost, 127\.0\.0\.1 or \[::1\]/);
+    await assert.rejects(fetch(`http://localhost:${port}/.well-known/openid-configuration`));
+  });
+}
+
 test("the fake OIDC interaction offers both synthetic students", { timeout: 10_000 }, async () => {
   const port = await unusedPort();
   const issuer = `http://localhost:${port}`;

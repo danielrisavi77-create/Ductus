@@ -23,6 +23,7 @@ const row = {
   ai_purposes: ["proofreading", "formatting"],
   word_min: null,
   word_max: 2500,
+  work_language: "en",
 };
 
 function actor(rows: unknown[] | Error) {
@@ -53,8 +54,19 @@ describe("DAN-310 current version read", () => {
         opensAt: "2026-11-02T08:00:00.000Z", dueAt: "2026-11-30T22:59:00.000Z",
         aiPolicy: "partially_allowed", aiPurposes: ["formatting", "proofreading"], wordMin: null, wordMax: 2500,
       },
+      workLanguage: "en",
     });
   });
+
+  it.each([["hr", "hr"], ["en", "en"], ["HR", null], [" hr", null], ["", null], ["de", null], [null, null], [1, null]])(
+    "reads the work language %j as %j in the same row (DAN-386, class 5)", async (stored, expected) => {
+      const { withActor, query } = actor([{ ...row, work_language: stored }]);
+      const read = await readCurrentVersion(TOKEN, ID, withActor);
+      expect(read).toMatchObject({ kind: "available", workLanguage: expected });
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(String((query.mock.calls[0] as unknown[])[0])).toContain("v.work_language");
+    },
+  );
 
   it("reads a student's, a mentorship's, someone else's and a missing assignment alike (T031)", async () => {
     for (const other of [{ role: "student" }, { mentorship: true }, { role: null, mentorship: null, version_no: null }]) {

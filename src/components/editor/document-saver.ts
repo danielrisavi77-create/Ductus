@@ -70,6 +70,25 @@ export function stoppedSaved(snapshot: DocumentSnapshot | null): boolean {
   return evidenceNotice(snapshot) === "stopped" && snapshot !== null && LOCALLY_SAVED.includes(snapshot.state);
 }
 
+/** States in which this tab is typing or writing the newest change. */
+const WRITING: readonly SyncState[] = ["EDITING", "SAVING_LOCAL"];
+
+/**
+ * What the polite save region of the status bar may say (attack 14): `typing`
+ * when a change is typed or written in this tab now, `saved` once it is on
+ * the device. A stopped recorder keeps the chip at ERROR, so its snapshot
+ * says both, and the saved line is the stop notice's (QA #1901 c.6787896540).
+ * `snapshot` is null when it does not speak for the sheet.
+ */
+export function saveAnnouncement(
+  chip: SyncState | "blocked" | null, snapshot: DocumentSnapshot | null,
+): { readonly typing: boolean; readonly saved: "durable" | "stoppedSaved" | null } {
+  const stopped = evidenceNotice(snapshot) === "stopped" && snapshot !== null;
+  const typing = (chip === "EDITING" || chip === "SAVING_LOCAL") || (stopped && WRITING.includes(snapshot.state));
+  const saved = chip === "LOCAL_DURABLE" ? "durable" : stoppedSaved(snapshot) ? "stoppedSaved" : null;
+  return { typing, saved };
+}
+
 /**
  * Whether the saver's snapshot speaks for the sheet (chip and notice): a
  * ready sheet, or one the evidence session loaded in a sticky state, whose

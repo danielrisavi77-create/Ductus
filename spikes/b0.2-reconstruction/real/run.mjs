@@ -1,0 +1,89 @@
+// B0.2 on the real code (DAN-388, M3.4-P01): every scenario, each measurement
+// in a fresh process. Writes results/real-<label>.json and prints a Markdown
+// table. Needs `node real/build.mjs` first.
+//   node real/run.mjs [label] [--words 15000,80000] [--granularity char,word]
+//                     [--checkpoint-segments 100,500,2000] [--checkpoint-steps 500,2000,8000]
+// The checkpoint distance is a parameter (ARCHITECTURE §5 only proposes one),
+// in segments (K) or in steps, and every distance listed is measured. With
+// neither flag both defaults run; with one, only that unit runs.
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpus, platform, totalmem } from 'node:os';
+import { join } from 'node:path';
+import { checkpointSpacing } from './spacing.mjs';
+
+const argv = process.argv.slice(2);
+const option = (name, fallback) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 ? argv[i + 1].split(',') : fallback;
+};
+const label = argv[0] && !argv[0].startsWith('--') ? argv[0] : 'local';
+const wordCounts = option('words', ['15000', '80000']).map(Number);
+const granularities = option('granularity', ['char', 'word']);
+const unitsGiven = ['segments', 'steps'].some((unit) => argv.includes(`--checkpoint-${unit}`));
+const spacings = [
+  ...option('checkpoint-segments', unitsGiven ? [] : ['100', '500', '2000']).map((every) => checkpointSpacing('segments', every)),
+  ...option('checkpoint-steps', unitsGiven ? [] : ['500', '2000', '8000']).map((every) => checkpointSpacing('steps', every)),
+];
+const UNIT_LABEL = { segments: 'segmenata', steps: 'koraka' };
+
+const bench = (env, ...args) => JSON.parse(execFileSync(
+  process.execPath,
+  [join('real', 'bench.mjs'), ...args.map(String)],
+  { encoding: 'utf8', maxBuffer: 1 << 20, env: { ...process.env, ...env } },
+));
+
+const machine = {
+  label,
+  cpu: cpus()[0].model.trim(),
+  cpuCount: cpus().length,
+  memoryGb: Math.round(totalmem() / 1073741824),
+  platform: platform(),
+  node: process.version,
+  checkpointSpacings: spacings,
+  date: new Date().toISOString(),
+};
+const results = [];
+for (const words of wordCounts) {
+  for (const granularity of granularities) {
+    const dir = join('out', `real-${words}-${granularity}`);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    console.error(`${words} words, ${granularity}...`);
+    const row = { words, granularity, gen: bench({}, 'gen', words, granularity, dir), replay: bench({}, 'replay', dir), checkpoints: [] };
+    for (const { unit, every } of spacings) {
+      const env = { CHECKPOINT_UNIT: unit, CHECKPOINT_EVERY: String(every) };
+      const checkpoint = bench(env, 'checkpoint', dir);
+      // Too short a session for one checkpoint: nothing to resume from.
+      const bounded = checkpoint.checkpoints > 0 ? bench(env, 'bounded', dir) : null;
+      row.checkpoints.push({ unit, every, checkpoint, bounded });
+      rmSync(join(dir, 'checkpoint.json'), { force: true });
+      rmSync(join(dir, 'checkpoint.meta.json'), { force: true });
+    }
+    results.push(row);
+  }
+}
+
+mkdirSync('results', { recursive: true });
+writeFileSync(join('results', `real-${label}.json`), `${JSON.stringify({ machine, results }, null, 2)}\n`);
+
+const lines = [
+  `${machine.label}: ${machine.cpu}, ${machine.cpuCount} CPU, ${machine.memoryGb} GB, Node ${machine.node}; stvarni kod`,
+  '',
+  '| Riječi | Segmenti | Događaji | Koraci | Provjera segmenata | Puni replay | Vrh RSS | Dnevnik segmenata (gzip) | Dokumenti u commitovima |',
+  '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+];
+for (const r of results) {
+  lines.push(`| ${r.words} (${r.granularity}) | ${r.gen.segments} | ${r.gen.events} | ${r.gen.steps} | ${r.replay.loadMs} ms | `
+    + `${r.replay.replayMs} ms | ${r.replay.peakRssMb} MB | ${r.gen.segmentLogMb} MB (${r.gen.segmentLogGzipMb} MB) | ${r.gen.commitDocumentsMb} MB |`);
+}
+lines.push('', '| Riječi | Razmak | Kontrolne točke | Zadnja točka (gzip) | Volumen točaka (gzip) | Od točke: koraci (događaji) | Od točke (medijan / max) | Vrh RSS |',
+  '| --- | --- | --- | --- | --- | --- | --- | --- |');
+for (const r of results) {
+  for (const { unit, every, checkpoint: c, bounded: b } of r.checkpoints) {
+    lines.push(`| ${r.words} (${r.granularity}) | ${every} ${UNIT_LABEL[unit]} | ${c.checkpoints} | ${c.lastCheckpointKb} KB (${c.lastCheckpointGzipKb} KB) | `
+      + `${c.volumeRawMb} MB (${c.volumeGzipMb} MB) | ${b ? `${b.stepsReplayed} (${b.eventsReplayed})` : '–'} | ${b ? `${b.medianMs} / ${b.maxMs} ms` : '–'} | `
+      + `${Math.max(c.peakRssMb, b?.peakRssMb ?? 0)} MB |`);
+  }
+}
+console.log(lines.join('\n'));

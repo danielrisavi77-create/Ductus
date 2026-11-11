@@ -68,7 +68,7 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, evidenceNotice, snapshotSpeaks, stoppedSaved, submittedOf, unconfirmedOf, writingClosed, type DocumentSaver,
+  createDocumentSaver, evidenceNotice, saveAnnouncement, snapshotSpeaks, stoppedSaved, submittedOf, unconfirmedOf, writingClosed, type DocumentSaver,
   type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
@@ -874,9 +874,11 @@ function chipOf(value: LocalDocumentValue): LocalChip | null {
  * the sheet, a blocked tab by its status notice.
  */
 export function LocalSaveChip() {
-  const chip = chipOf(useLocalDocument());
+  const value = useLocalDocument();
+  const chip = chipOf(value);
+  const said = saveAnnouncement(chip?.state ?? null, showsSaverState(value) ? value.snapshot : null);
   const [edited, setEdited] = useState(false);
-  if (!edited && (chip?.state === "EDITING" || chip?.state === "SAVING_LOCAL")) setEdited(true);
+  if (!edited && said.typing) setEdited(true);
   return (
     <>
       {chip ? (
@@ -887,7 +889,7 @@ export function LocalSaveChip() {
         </span>
       ) : null}
       <span className="visually-hidden" role="status">
-        {edited && chip?.state === "LOCAL_DURABLE" ? chip.text : null}
+        {!edited ? null : said.saved === "durable" ? chip?.text : said.saved === "stoppedSaved" ? t.editor.sendStoppedSaved : null}
       </span>
     </>
   );
