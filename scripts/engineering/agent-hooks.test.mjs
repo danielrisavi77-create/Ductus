@@ -470,8 +470,12 @@ test("stateForRole: table of roles and STATE.md shapes", () => {
   for (const role of ["worker", "control"]) assert.equal(stateForRole(middle, role), cut, role);
   for (const role of ["orchestrator", "unknown", undefined, "writer"]) assert.equal(stateForRole(middle, role), middle, String(role));
   const cases = [
-    // Owner queue as the last section runs to the end of the file.
-    [`# S\n${QUEUE}\n- [ ] Q-1\n`, `# S\n${QUEUE}\n\n${note(3, 4)}\n`],
+    // Owner queue as the last section runs to the end of the file; the final
+    // newline ends line 3 and is kept, it is not a line 4.
+    [`# S\n${QUEUE}\n- [ ] Q-1\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n`],
+    [`# S\n${QUEUE}\n- [ ] Q-1`, `# S\n${QUEUE}\n\n${note(3, 3)}`],
+    [`# S\n${QUEUE}\n`, `# S\n${QUEUE}\n`],
+    ["\n", "\n"],
     // No Owner queue, an empty section, an empty file: nothing to cut.
     ["# S\n## A\nx\n", "# S\n## A\nx\n"],
     [`# S\n${QUEUE}\n## A\nx\n`, `# S\n${QUEUE}\n## A\nx\n`],
@@ -522,8 +526,8 @@ function expectedState(sections, role) {
   const out = [];
   let line = 0;
   let open = null; // the Owner queue section being cut: { from, removed }
-  const close = () => {
-    if (open && open.removed > 0) out.push("", note(open.from, open.from + open.removed - 1), "");
+  const close = (last = false) => {
+    if (open && open.removed > 0) out.push("", note(open.from, open.from + open.removed - 1), ...(last ? [] : [""]));
     open = null;
   };
   for (const { heading, body } of sections) {
@@ -540,16 +544,21 @@ function expectedState(sections, role) {
       else out.push(text);
     }
   }
-  close();
+  close(true);
   return out.join("\n");
 }
 
 test("property: only Owner queue lines leave, the note names them, other roles get the text unchanged", () => {
   fc.assert(
-    fc.property(fc.array(arbSection, { maxLength: 6 }), fc.constantFrom("worker", "control", "orchestrator", "unknown"), (sections, role) => {
-      const text = sections.flatMap(({ heading, body }) => [heading, ...body]).join("\n");
+    fc.property(fc.array(arbSection, { maxLength: 6 }), fc.constantFrom("worker", "control", "orchestrator", "unknown"), fc.boolean(), (sections, role, final) => {
+      // With or without a final newline: it ends the last line and is kept.
+      const end = final ? "\n" : "";
+      const text = sections.flatMap(({ heading, body }) => [heading, ...body]).join("\n") + end;
+      // "a\n" is one line with a final newline, never "a" and an empty line: such a
+      // case is drawn with final = true instead.
+      fc.pre(final || !text.endsWith("\n"));
       const result = stateForRole(text, role);
-      assert.equal(result, expectedState(sections, role));
+      assert.equal(result, expectedState(sections, role) + end);
       if (role === "orchestrator" || role === "unknown") assert.equal(result, text);
     }),
   );

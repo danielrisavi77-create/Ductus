@@ -219,12 +219,14 @@ const CUT_ROLES = new Set(["worker", "control"]);
 
 export function stateForRole(text, role) {
   if (!CUT_ROLES.has(role)) return text;
-  const lines = text.split("\n");
+  // A final newline ends the last line; it is not one more line to count.
+  const ends = text.endsWith("\n");
+  const lines = (ends ? text.slice(0, -1) : text).split("\n");
   const out = [];
   let fenced = false;
   let from = 0; // first line of the body being cut, 1-based; 0 when none
-  const close = (to) => {
-    if (to >= from) out.push("", `> Owner queue left out for this session's role: STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`, "");
+  const close = (to, last = false) => {
+    if (to >= from) out.push("", `> Owner queue left out for this session's role: STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`, ...(last ? [] : [""]));
     from = 0;
   };
   lines.forEach((line, index) => {
@@ -236,8 +238,8 @@ export function stateForRole(text, role) {
     out.push(line);
     if (section && OWNER_QUEUE.test(bare)) from = index + 2;
   });
-  if (from) close(lines.length);
-  return out.join("\n");
+  if (from) close(lines.length, true);
+  return out.join("\n") + (ends ? "\n" : "");
 }
 
 // STATE.md as session-start context, or null when it would be truncated.
