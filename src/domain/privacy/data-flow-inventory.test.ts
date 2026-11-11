@@ -311,7 +311,7 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   // A table is covered when the inventory or a cited file names it, or a cited
   // code file calls a database function whose body uses it.
   const called = functions.filter(([n]) => hasToken(code, n, (c) => /[a-z0-9_.]/.test(c), (c) => /[a-z0-9_]/.test(c)) || hasToken(code, `${n.split(".")[1]}(`, (c) => /[a-z0-9_.]/.test(c), () => false));
-  const ident = (c: string) => /[a-z_]/.test(c);
+  const ident = (c: string) => /[a-z0-9_]/.test(c);
   const word = (text: string, t: string) => hasToken(text, t, ident, ident);
   const covered = (t: string) => word(inv, t) || citedText.some((x) => word(x, t)) || called.some(([, b]) => word(b, t));
   const stillGaps = new Set<string>();
@@ -422,6 +422,7 @@ describe("completenessErrors", () => {
     ["a table used only by a function whose name is a prefix of a called one", { migrations: { ...FAKE.migrations, "b.sql": "CREATE FUNCTION app.put() RETURNS void AS $$\nINSERT INTO evidence.orphan VALUES (1);\n$$;\nCREATE TABLE evidence.orphan (id int);" } }, "table evidence.orphan: no flow in the inventory"],
     ["a table reached only by an uncalled function", { read: () => "" }, "table evidence.thing: no flow in the inventory"],
     ["a table only a cited document names", { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE evidence.docd (id int);" }, read: (p: string) => (p === "docs/b.md" ? "evidence.docd" : FAKE.read(p)), inventory: FAKE.inventory.replace("`src/dl.ts`", "`src/dl.ts`, `docs/b.md`") }, "table evidence.docd: no flow in the inventory"],
+    ["a table whose name is a prefix of a digit-suffixed one", { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE x.t (id int);\nCREATE TABLE x.t2 (id int);" }, inventory: FAKE.inventory + "\nx.t2\n" }, "table x.t: no flow in the inventory"],
     ["a table the inventory names that does not exist", { inventory: FAKE.inventory + "\nevidence.gone\n" }, "inventory names evidence.gone, not in the migrations"],
     ["a cited migration with no known table", { migrations: { "a.sql": "CREATE TABLE evidence.other (id int);" } }, "db/migrations/a.sql: cited migration touches no known table"],
     ["a provider missing from the inventory", { inventory: FAKE.inventory.replace("KMS", "kms-less") }, "provider AWS KMS: missing from the inventory"],
