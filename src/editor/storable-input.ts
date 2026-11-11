@@ -25,10 +25,16 @@
  * per run grows as runs times document size. Its position map lists only the
  * runs, like the steps it stands for, so the identity plugin sees the same
  * change either way and every block keeps its id (F-071).
+ *
+ * Pasted, dropped and typed text is made storable before its step exists
+ * (DAN-699, #1876): the recorder writes every step of a change, so a step
+ * that inserted U+0000 stayed in the record although the repair after it
+ * removed it, the server refused it (`invalid_text`) and sending stopped for
+ * good. The repair above stays for any other way in.
  */
 
 import { Extension } from "@tiptap/core";
-import { Fragment, type Mark, type Node as PmNode } from "@tiptap/pm/model";
+import { Fragment, Slice, type Mark, type Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { AddMarkStep, RemoveMarkStep, Step, StepMap, StepResult, type Mappable } from "@tiptap/pm/transform";
 
@@ -253,9 +259,47 @@ function changedRanges(transactions: readonly Transaction[], doc: PmNode): [numb
   });
 }
 
+/** `fragment` with every text node made storable; itself when nothing changed. */
+function storableFragment(fragment: Fragment): Fragment {
+  let changed = false;
+  const nodes: PmNode[] = [];
+  fragment.forEach((node) => {
+    if (node.isText) {
+      const text = storableText(node.text!);
+      if (text === node.text) nodes.push(node);
+      else {
+        changed = true;
+        // A node that held only NUL goes: a text node is never empty.
+        if (text !== "") nodes.push(node.type.schema.text(text, node.marks));
+      }
+      return;
+    }
+    const content = storableFragment(node.content);
+    changed ||= content !== node.content;
+    nodes.push(content === node.content ? node : node.copy(content));
+  });
+  return changed ? Fragment.fromArray(nodes) : fragment;
+}
+
+/** A pasted or dropped slice with its text made storable, at the same depth. */
+export function storableSlice(slice: Slice): Slice {
+  const content = storableFragment(slice.content);
+  return content === slice.content ? slice : new Slice(content, slice.openStart, slice.openEnd);
+}
+
 export function createStorableInputPlugin(): Plugin {
   return new Plugin({
     key: storableInputKey,
+    props: {
+      transformPasted: (slice) => storableSlice(slice),
+      // Text the browser reports as typed; the storable form is inserted in its place.
+      handleTextInput(view, from, to, text) {
+        const clean = storableText(text);
+        if (clean === text) return false;
+        if (clean !== "" || from !== to) view.dispatch(view.state.tr.insertText(clean, from, to));
+        return true;
+      },
+    },
     appendTransaction(transactions, _oldState, newState) {
       if (!transactions.some((tr) => tr.docChanged)) return null;
       const blocks = new Map<number, Run[]>();

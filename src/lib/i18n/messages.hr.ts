@@ -867,6 +867,13 @@ export const hr = {
     // good. The contract's "spremljen na ovom uređaju" fails the PRODUCT §5
     // scan, so "ovom" is dropped.
     sendRefused: "Tekst je spremljen na uređaju, ali ga poslužitelj nije primio. Ponovno učitajte stranicu.",
+    // DAN-699 (#1876): the recorder stopped, so later changes stay only on
+    // the device. Export keeps them; a reload does not resume sending. It
+    // names no finished save: it shows while typing too (review c.6786923958).
+    sendStopped:
+      "Slanje na poslužitelj je zaustavljeno. Poslužitelj ne prima nove izmjene. Izvezite tekst i javite se podršci.",
+    // Shown under the stop notice only once the local save has finished.
+    sendStoppedSaved: "Tekst je spremljen na uređaju.",
     // 3d-2c2b, owner approved 25 Oct: the package was closed by the submission (DAN-289 A1).
     submittedReadOnly:
       "Rad je predan, pa se ovdje više ne može pisati. Izmjene napravljene nakon predaje nisu u predanom radu i ostaju samo na ovom uređaju.",
