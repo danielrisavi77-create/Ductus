@@ -1,5 +1,5 @@
-// Pure core of orch:sync: argument parsing, the local-state decision and the CI wait.
-// No git and no GitHub here; the entry script feeds it what it read.
+// Pure core of orch:sync: argument parsing, the local-state decision, the state after
+// the merge and the CI wait. No GitHub here, and git only through an injected reader.
 import { GATE_STATUSES } from "./merge-ready-core.mjs";
 import { latestChecks } from "./orchestrator-core.mjs";
 
@@ -42,6 +42,38 @@ export function syncPlan({ pr, local }) {
   return local.behind === 0
     ? { action: "skip", reason: "branch already contains main" }
     : { action: "merge", reason: `branch lacks ${local.behind} commit(s) of main` };
+}
+
+/**
+ * What git says about the checkout after the merge step. `tryGit(...args)` resolves to
+ * stdout, or null when the command fails; a failed ancestry check reads as "not contained".
+ *   before           the PR head the run started from
+ *   main             SHA of origin/main read once right after the fetch
+ *   containedBefore  true when `before` already contained `main` (nothing to merge)
+ */
+export async function readMergeState(tryGit, { before, main, containedBefore }) {
+  const head = await tryGit("rev-parse", "--verify", "HEAD");
+  const mergeHead = await tryGit("rev-parse", "-q", "--verify", "MERGE_HEAD");
+  return {
+    before, main, containedBefore, head,
+    mergeInProgress: head === null ? null : mergeHead !== null,
+    mainInHead: (await tryGit("merge-base", "--is-ancestor", main, "HEAD")) !== null,
+    beforeInHead: (await tryGit("merge-base", "--is-ancestor", before, "HEAD")) !== null,
+  };
+}
+
+/**
+ * null when the checkout may be pushed: no merge left in progress, HEAD contains the
+ * fetched main and the PR head, and HEAD moved or already contained main. Otherwise the
+ * reason; anything unread (null) is a reason too.
+ */
+export function mergeCheck(s) {
+  if (!s.head) return "HEAD could not be read";
+  if (s.mergeInProgress !== false) return "merge not concluded: MERGE_HEAD is present or unreadable";
+  if (s.mainInHead !== true) return `HEAD does not contain the fetched main ${String(s.main).slice(0, 8)}`;
+  if (s.beforeInHead !== true) return `HEAD does not contain the PR head ${String(s.before).slice(0, 8)}`;
+  if (s.head === s.before && s.containedBefore !== true) return "HEAD did not move and did not contain main";
+  return null;
 }
 
 /**

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { GATE_CONTEXT } from "./orchestrator-core.mjs";
-import { ciWait, DEFAULT_WAIT_MIN, headDrift, parseSyncArgs, syncPlan } from "./sync-core.mjs";
+import { ciWait, DEFAULT_WAIT_MIN, headDrift, mergeCheck, parseSyncArgs, syncPlan } from "./sync-core.mjs";
 
 const HEAD = "a".repeat(40);
 const PR = { state: "OPEN", baseRefName: "main", headRefName: "claude/x", headRefOid: HEAD, sameRepository: true };
@@ -88,6 +88,34 @@ test("headDrift accepts only the exact branch and head that CI and preflight cov
   ];
   for (const [name, now, want] of cases) {
     const got = headDrift(now, expected);
+    if (want === null) assert.equal(got, null, name);
+    else assert.match(String(got), want, name);
+  }
+});
+
+// Every state the checkout can be in after the merge step; only (a) and (d) may be pushed.
+test("mergeCheck lets only a concluded merge that contains main and the PR head through", () => {
+  const OLD = "b".repeat(40);
+  const NEW = "c".repeat(40);
+  const MAIN = "d".repeat(40);
+  const ok = { before: OLD, main: MAIN, containedBefore: false, head: NEW, mergeInProgress: false, mainInHead: true, beforeInHead: true };
+  const cases = [
+    ["(a) concluded merge", {}, null],
+    ["(b) MERGE_HEAD present, HEAD unchanged", { head: OLD, mergeInProgress: true, mainInHead: false }, /MERGE_HEAD/],
+    ["(b) MERGE_HEAD present, HEAD moved", { mergeInProgress: true }, /MERGE_HEAD/],
+    ["(c) HEAD without main", { head: OLD, mainInHead: false }, /does not contain the fetched main d{8}/],
+    ["(c) HEAD moved, still without main", { mainInHead: false }, /does not contain the fetched main/],
+    ["(d) already up to date", { head: OLD, containedBefore: true }, null],
+    ["(e) HEAD moved off the PR head", { beforeInHead: false }, /does not contain the PR head b{8}/],
+    ["(f) HEAD did not move, main was not in it", { head: OLD }, /did not move/],
+    ["(g) head unreadable", { head: null }, /HEAD could not be read/],
+    ["(g) merge state unreadable", { mergeInProgress: null }, /MERGE_HEAD/],
+    ["(g) main ancestry unreadable", { mainInHead: null }, /does not contain the fetched main/],
+    ["(g) PR head ancestry unreadable", { beforeInHead: null }, /does not contain the PR head/],
+    ["(g) earlier containment unreadable", { head: OLD, containedBefore: null }, /did not move/],
+  ];
+  for (const [name, change, want] of cases) {
+    const got = mergeCheck({ ...ok, ...change });
     if (want === null) assert.equal(got, null, name);
     else assert.match(String(got), want, name);
   }

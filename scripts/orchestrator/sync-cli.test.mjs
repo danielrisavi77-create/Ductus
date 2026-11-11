@@ -1,16 +1,16 @@
 // The real sync.mjs against a local bare repository as the remote: merge, push,
 // conflict, a merge that fails without a conflict, a rejected push, a single-branch
-// clone, a tree dirty under hostile git config and a local head that moves while
-// CI is awaited. `gh` is answered by fake-gh-git-preload.mjs; no network.
+// clone, a tree dirty under hostile git config, a local head that moves while
+// CI is awaited, merge options set on the branch and every state after the merge. `gh` is answered by fake-gh-git-preload.mjs; no network.
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { STATUS_ARGS } from "./sync-core.mjs";
+import { mergeCheck, readMergeState, STATUS_ARGS } from "./sync-core.mjs";
 
 const SCRIPT = fileURLToPath(new URL("./sync.mjs", import.meta.url));
 const PRELOAD = new URL("./fake-gh-git-preload.mjs", import.meta.url).href;
@@ -218,3 +218,57 @@ for (const [name, run, moved] of [
     assert.equal(r.remoteSha(), r.head);
   });
 }
+
+// The command line beats --no-commit and --squash from the branch config, but not -s ours
+// or -X ours, so any merge option set on the branch stops the run before the merge.
+for (const option of ["--no-commit", "--squash", "-s ours", "-Xours"]) {
+  test(`branch.<name>.mergeOptions=${option}: stops before the merge, nothing changes`, (t) => {
+    const r = setup(t);
+    git(r.work, "config", `branch.${BRANCH}.mergeOptions`, option);
+    const res = r.sync();
+    assert.equal(res.code, 1, res.out);
+    assert.ok(res.out.includes(`branch.${BRANCH}.mergeOptions is set (${option})`), res.out);
+    assert.doesNotMatch(res.out, /preflight|SYNC OK|CONFLICT/);
+    assert.deepEqual(res.preflight, []);
+    untouched(r);
+  });
+}
+
+test("a merge that ends without main in HEAD is not pushed", (t) => {
+  const r = setup(t);
+  // A post-merge hook takes the merge commit back: git exits 0, HEAD lacks main.
+  const hooks = join(r.work, ".git", "test-hooks");
+  mkdirSync(hooks);
+  writeFileSync(join(hooks, "post-merge"), `#!/bin/sh\ngit checkout -q -B ${BRANCH} HEAD~1\n`);
+  chmodSync(join(hooks, "post-merge"), 0o755);
+  git(r.work, "config", "core.hooksPath", hooks);
+  const res = r.sync();
+  assert.equal(res.code, 1, res.out);
+  assert.match(res.out, /SYNC STOPPED: HEAD does not contain the fetched main [0-9a-f]{8}; nothing pushed/);
+  assert.doesNotMatch(res.out, /preflight|SYNC OK/);
+  assert.deepEqual(res.preflight, []);
+  untouched(r);
+});
+
+// The same reads orch:sync makes, over real repositories in each state after the merge step.
+test("readMergeState and mergeCheck over real states after the merge", async (t) => {
+  const tryGit = (cwd) => (...a) => new Promise((resolve) => {
+    execFile("git", a, { cwd, env: base, encoding: "utf8" }, (e, out) => resolve(e ? null : out.trim()));
+  });
+  const states = [
+    ["(a) concluded merge", true, ["merge", "-q", "--no-edit", "origin/main"], null],
+    ["(b) unconcluded merge, MERGE_HEAD present", true, ["merge", "-q", "--no-commit", "--no-ff", "origin/main"], /MERGE_HEAD/],
+    ["(c) HEAD without main (squash, no commit)", true, ["merge", "-q", "--squash", "origin/main"], /does not contain the fetched main/],
+    ["(d) already up to date", false, null, null],
+  ];
+  for (const [name, mainMoves, merge, want] of states) {
+    const r = setup(t, { mainMoves });
+    git(r.work, "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main");
+    const main = git(r.work, "rev-parse", "refs/remotes/origin/main");
+    const containedBefore = git(r.work, "rev-list", "--count", `HEAD..${main}`) === "0";
+    if (merge) git(r.work, ...merge);
+    const got = mergeCheck(await readMergeState(tryGit(r.work), { before: r.head, main, containedBefore }));
+    if (want === null) assert.equal(got, null, name);
+    else assert.match(String(got), want, name);
+  }
+});

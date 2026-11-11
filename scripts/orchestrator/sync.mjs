@@ -5,9 +5,12 @@
 // for it); a head that only lags without a conflict needs no merge (D-101).
 // It never resolves a conflict, never forces a push, never merges the PR and
 // posts nothing. On a conflict the merge is aborted and the files are listed.
+// Merge options set on the branch stop it before the merge; after the merge nothing
+// is pushed unless the merge is concluded and HEAD contains the fetched main.
 // Usage: node sync.mjs <number> [--wait-min N]     (default 30, 0 = do not wait)
 //   exit 0 = preflight PASS on the synced head
-//        1 = stopped: wrong branch or dirty tree, conflict, push, CI wait timeout, preflight FAIL
+//        1 = stopped: wrong branch or dirty tree, merge options on the branch, conflict,
+//            unconcluded merge or HEAD without main, push, CI wait timeout, preflight FAIL
 //            or the local branch or head moved before success was reported
 //        2 = usage or read error
 import "./help.mjs";
@@ -17,7 +20,7 @@ import { promisify } from "node:util";
 
 import { checkRollup, ghJson, prView, repoId } from "./gh.mjs";
 import { requiredStatusChecks } from "./preflight-core.mjs";
-import { ciWait, headDrift, parseSyncArgs, STATUS_ARGS, syncPlan } from "./sync-core.mjs";
+import { ciWait, headDrift, mergeCheck, parseSyncArgs, readMergeState, STATUS_ARGS, syncPlan } from "./sync-core.mjs";
 
 const POLL_MS = 30_000;
 const parsed = parseSyncArgs(process.argv.slice(2));
@@ -41,7 +44,9 @@ try {
   // Explicit refspec: in a single-branch checkout a plain "fetch origin main" only
   // writes FETCH_HEAD and leaves origin/main missing or stale.
   await git("fetch", "origin", "+refs/heads/main:refs/remotes/origin/main");
-  const behind = await tryGit("rev-list", "--count", "HEAD..origin/main");
+  // Read once: every later check is against this exact main.
+  const main = await git("rev-parse", "--verify", "refs/remotes/origin/main");
+  const behind = await tryGit("rev-list", "--count", `HEAD..${main}`);
   const local = {
     branch: await tryGit("symbolic-ref", "--short", "HEAD"),
     head: await git("rev-parse", "HEAD"),
@@ -53,8 +58,14 @@ try {
   if (plan.action === "stop") process.exit(1);
 
   if (plan.action === "merge") {
+    // The command line beats --no-commit and --squash from here, not -s ours or -X ours.
+    const options = await tryGit("config", "--get-all", `branch.${local.branch}.mergeOptions`);
+    if (options !== null) {
+      console.error(`branch.${local.branch}.mergeOptions is set (${options}): orch:sync merges only with git's defaults; unset it or merge by hand`);
+      process.exit(1);
+    }
     try {
-      await git("merge", "--no-edit", "origin/main");
+      await git("merge", "--no-squash", "--commit", "--no-edit", "origin/main");
     } catch (e) {
       const files = ((await tryGit("diff", "--name-only", "--diff-filter=U")) ?? "").split("\n").filter(Boolean);
       await tryGit("merge", "--abort");
@@ -67,13 +78,24 @@ try {
       for (const f of files) console.error(`  ${f}`);
       process.exit(1);
     }
+  }
+  // A zero exit from git merge is not proof: hooks or git itself may leave it unconcluded.
+  const state = await readMergeState(tryGit, { before: local.head, main, containedBefore: local.behind === 0 });
+  const stopped = mergeCheck(state);
+  if (stopped) {
+    // Only a merge this run started is aborted.
+    if (plan.action === "merge" && state.mergeInProgress) await tryGit("merge", "--abort");
+    console.error(`SYNC STOPPED: ${stopped}; nothing pushed`);
+    process.exit(1);
+  }
+  if (plan.action === "merge") {
     // orch:push keeps the push guard and compares the remote head with the local one.
     if (await child("push-verify.mjs", ["origin", local.branch, "--to", local.branch]) !== 0) {
       console.error("push failed: the merge commit is local only");
       process.exit(1);
     }
   }
-  const head = await git("rev-parse", "HEAD");
+  const head = state.head;
 
   if (waitMin > 0) {
     const { owner, repo } = await repoId();
