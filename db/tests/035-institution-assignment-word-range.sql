@@ -109,7 +109,7 @@ SELECT is(pg_temp.publish_ranged('marko', (SELECT id FROM ranged), 4, NULL, NULL
 SELECT throws_ok(
   $$ INSERT INTO institution.assignment_version (assignment_id, version_no, title, instructions, work_type, opens_at,
        due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, word_min, word_max, created_by)
-     VALUES ('00000000-0000-4000-8000-0000000000a2', 9, 'Z2', 'Upute.', 'essay', now(), now() + interval '1 day',
+     VALUES ('00000000-0000-4000-8000-0000000000a2', 2, 'Z2', 'Upute.', 'essay', now(), now() + interval '1 day',
        'prohibited', '{}', 'basic', false, 0, NULL, '00000000-0000-4000-8000-000000000102') $$,
   '23514', NULL, 'the table constraint refuses a bound of 0 written directly'
 );

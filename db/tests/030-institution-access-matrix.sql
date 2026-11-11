@@ -134,6 +134,7 @@ SELECT bag_eq(
         'assignment_version: assignment_version_mentorship_rule 7 O', 'assignment_version: assignment_version_notify 5 O',
         'assignment_version: assignment_version_institution_fill 7 O',
         'assignment_version: assignment_version_work_language 7 O',
+        'assignment_version: assignment_version_purpose_catalog 7 O',
         'course_enrollment_code: course_enrollment_code_institution_fill 7 O',
         'faculty_rule_version: faculty_rule_version_immutable 27 O', 'faculty_rule_version: faculty_rule_version_no_truncate 34 O',
         'faculty_rule_version: faculty_rule_version_has_event 5 O',
@@ -142,7 +143,7 @@ SELECT bag_eq(
         'notice_acknowledgment: notice_acknowledgment_fingerprint_immutable 19 O',
         'notice_acknowledgment: notice_acknowledgment_binding_fill 7 O',
         'notice_acknowledgment: notice_acknowledgment_binding_immutable 19 O'],
-  'triggers: immutable versions, fingerprints and bindings, the binding derived on insert, mentorship validation, transactional notification, the institution of the parent and the operator''s administrators, all enabled'
+  'triggers: immutable versions, fingerprints and bindings, the binding derived on insert, mentorship validation, the inherited purpose catalogue, transactional notification, the institution of the parent and the operator''s administrators, all enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -177,6 +178,8 @@ SELECT bag_eq(
     'institution_academic_years() definer app',
     'ai_policy_rank(p_ai_policy text)',
     'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean)',
+    'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_purpose_catalog_version integer)',
+    'purpose_catalog_keys(p_version integer)',
     'refuse_change()',
     'actor_assignment_role(p_assignment_id uuid) definer app',
     'actor_course_ids(p_roles text[]) definer app',
@@ -184,6 +187,7 @@ SELECT bag_eq(
     'is_word_range(p_word_min integer, p_word_max integer)',
     'create_assignment(p_course_id uuid, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer) definer app',
     'create_assignment(p_course_id uuid, p_request_id uuid, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer) definer app',
+    'create_assignment(p_course_id uuid, p_request_id uuid, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer, p_purpose_catalog_version integer) definer app',
     'publish_assignment_version(p_assignment_id uuid, p_expected_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean, p_word_min integer, p_word_max integer) definer app',
     'acknowledge_notice(p_assignment_id uuid, p_version_no integer, p_template_version integer) definer app',
     'notice_fingerprint(p_template_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_word_min integer, p_word_max integer)',
@@ -232,6 +236,7 @@ SELECT bag_eq(
     'check_last_admin() definer',
     'is_work_language(p_language text)',
     'assignment_version_work_language() definer',
+    'assignment_version_purpose_catalog() definer',
     'lock_assignment_teacher(p_assignment_id uuid)',
     'lock_assignment_student(p_assignment_id uuid, p_student_id uuid)',
     'set_assignment_work_language(p_assignment_id uuid, p_expected_version integer, p_work_language text) definer app',
