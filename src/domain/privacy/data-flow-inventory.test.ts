@@ -326,7 +326,7 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   }
   // Reverse: tables or functions the inventory names, and migrations it cites, exist and matter.
   const known = new Set([...tables, ...functions.map(([n]) => n)]);
-  for (const m of inv.matchAll(/\b(?:app|audit|collaboration|evidence|identity|institution|pgboss)\.[a-z_]+/g)) {
+  for (const m of inv.matchAll(/\b(?:app|audit|collaboration|evidence|identity|institution|pgboss)\.[a-z0-9_]+/g)) {
     if (!known.has(m[0])) errors.push(`inventory names ${m[0]}, not in the migrations`);
   }
   for (const [i, p] of cited.entries()) {
@@ -368,6 +368,19 @@ const FAKE: Sources = {
   exporters: ["src/dl.ts"],
 };
 
+// Top-level keys under `services:` of a compose file; names may hold `_`, a trailing comment is allowed.
+function composeServices(compose: string): string[] {
+  const block = compose.match(/^services:[^\n]*\n((?:[ \t]+.*\n?|[ \t]*\n)*)/m)?.[1] ?? "";
+  return [...block.matchAll(/^ {2}([a-z][a-z0-9_-]*):[ \t]*(?:#.*)?$/gm)].map((m) => m[1]);
+}
+
+describe("composeServices", () => {
+  it("reads names with underscores and lines with a trailing comment, only under services", () => {
+    const text = "name: x\nservices:\n  # note\n  postgres:\n    image: a\n  external_relay:\n    image: b\n  relay: # outside\n    image: c\nvolumes:\n  data:\n";
+    expect(composeServices(text)).toEqual(["postgres", "external_relay", "relay"]);
+  });
+});
+
 describe("hasToken", () => {
   const ident = (c: string) => /[a-z_]/.test(c);
   it.each([
@@ -394,6 +407,11 @@ describe("hasToken", () => {
 });
 
 describe("completenessErrors", () => {
+  it("accepts an inventory that names a table with a digit in its name", () => {
+    const withDigit = { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE evidence.export_v2 (id int);" }, inventory: FAKE.inventory + "\nevidence.export_v2\n" };
+    expect(completenessErrors({ ...FAKE, ...withDigit }, [])).toEqual([]);
+  });
+
   it("accepts an inventory that covers tables, providers and exports", () => {
     expect(completenessErrors(FAKE, [])).toEqual([]);
   });
@@ -444,7 +462,7 @@ describe(`${INVENTORY} completeness`, () => {
     walk("app");
     const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     const compose = readFileSync(join(ROOT, "compose.yaml"), "utf8");
-    const services = [...compose.matchAll(/^ {2}([a-z][a-z0-9-]*):\s*$/gm)].map((m) => m[1]);
+    const services = composeServices(compose);
     const sources: Sources = { inventory: readFileSync(join(ROOT, INVENTORY), "utf8"), migrations, read, deps: Object.keys(pkg.dependencies), services, exporters };
     expect(exporters.length).toBeGreaterThan(0);
     expect(Object.keys(migrations).length).toBeGreaterThan(50);
