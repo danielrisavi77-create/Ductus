@@ -7,7 +7,7 @@ import { ciWait, DEFAULT_WAIT_MIN, headDrift, mergeCheck, parseSyncArgs, syncPla
 
 const HEAD = "a".repeat(40);
 const PR = { state: "OPEN", baseRefName: "main", headRefName: "claude/x", headRefOid: HEAD, sameRepository: true };
-const LOCAL = { branch: "claude/x", head: HEAD, dirty: false, behind: 3 };
+const LOCAL = { branch: "claude/x", head: HEAD, dirty: false, merging: false, behind: 3 };
 const plan = (pr = {}, local = {}) => syncPlan({ pr: { ...PR, ...pr }, local: { ...LOCAL, ...local } });
 const run = (name, conclusion, status = "COMPLETED") => ({ name, status, conclusion, completedAt: "2026-11-01T10:00:00Z" });
 
@@ -31,7 +31,8 @@ test("syncPlan merges only a lagging branch that matches the PR head", () => {
 test("syncPlan stops before touching anything when the checkout is not the PR head", () => {
   const stops = [
     plan({ state: "MERGED" }), plan({ baseRefName: "release" }), plan({ sameRepository: false }),
-    plan({}, { branch: null }), plan({}, { branch: "main" }), plan({}, { dirty: true }),
+    plan({}, { branch: null }), plan({}, { branch: "main" }), plan({}, { dirty: true }), plan({}, { merging: true }),
+    plan({}, { merging: true, behind: 0 }),
     plan({}, { head: "b".repeat(40) }), plan({}, { behind: null }), plan({}, { behind: Number.NaN }),
   ];
   for (const p of stops) {

@@ -9,7 +9,7 @@
 // is pushed unless the merge is concluded and HEAD contains the fetched main.
 // Usage: node sync.mjs <number> [--wait-min N]     (default 30, 0 = do not wait)
 //   exit 0 = preflight PASS on the synced head
-//        1 = stopped: wrong branch or dirty tree, merge options on the branch, conflict,
+//        1 = stopped: wrong branch, dirty tree or a merge in progress, merge options, conflict,
 //            unconcluded merge or HEAD without main, push, CI wait timeout, preflight FAIL
 //            or the local branch or head moved before success was reported
 //        2 = usage or read error
@@ -51,6 +51,7 @@ try {
     branch: await tryGit("symbolic-ref", "--short", "HEAD"),
     head: await git("rev-parse", "HEAD"),
     dirty: (await git(...STATUS_ARGS)) !== "",
+    merging: (await tryGit("rev-parse", "-q", "--verify", "MERGE_HEAD")) !== null,
     behind: behind === null ? null : Number(behind),
   };
   const plan = syncPlan({ pr, local });

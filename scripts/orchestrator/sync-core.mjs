@@ -26,7 +26,8 @@ export function parseSyncArgs(args) {
 /**
  * What to do with the local checkout before anything is merged.
  *   pr      toPr() shape (state, headRefName, headRefOid, baseRefName, sameRepository)
- *   local   { branch, head, dirty, behind } read from git; behind = commits of main the branch lacks
+ *   local   { branch, head, dirty, merging, behind } read from git; merging = MERGE_HEAD present,
+ *           behind = commits of main the branch lacks
  * Returns { action: "stop", reason } or { action: "merge" | "skip", reason }.
  */
 export function syncPlan({ pr, local }) {
@@ -37,6 +38,8 @@ export function syncPlan({ pr, local }) {
   if (!local.branch) return stop("detached HEAD: check out the PR branch first");
   if (local.branch !== pr.headRefName) return stop(`current branch is ${local.branch}, the PR branch is ${pr.headRefName}`);
   if (local.dirty) return stop("working tree has uncommitted changes: commit or stash them first");
+  // A clean tree can still hold a merge the user started: never abort or push over it.
+  if (local.merging) return stop("a merge is already in progress: conclude or abort it first");
   if (local.head !== pr.headRefOid) return stop("local head differs from the PR head: pull or push first");
   if (!Number.isInteger(local.behind) || local.behind < 0) return stop("lag behind main could not be read");
   return local.behind === 0

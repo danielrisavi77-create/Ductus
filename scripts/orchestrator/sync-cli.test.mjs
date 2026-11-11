@@ -234,6 +234,22 @@ for (const option of ["--no-commit", "--squash", "-s ours", "-Xours"]) {
   });
 }
 
+test("a merge already in progress with a clean tree stops the run and is left as it was", (t) => {
+  const r = setup(t);
+  git(r.work, "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main");
+  // -s ours --no-commit: MERGE_HEAD is present and the tree still equals HEAD.
+  git(r.work, "merge", "-q", "-s", "ours", "--no-commit", "origin/main");
+  const pending = git(r.work, "rev-parse", "MERGE_HEAD");
+  const res = r.sync();
+  assert.equal(res.code, 1, res.out);
+  assert.ok(res.out.includes("a merge is already in progress"), res.out);
+  assert.doesNotMatch(res.out, /preflight|SYNC OK|CONFLICT/);
+  assert.deepEqual(res.preflight, []);
+  assert.equal(git(r.work, "rev-parse", "MERGE_HEAD"), pending);
+  assert.equal(git(r.work, "rev-parse", "HEAD"), r.head);
+  assert.equal(r.remoteSha(), r.head);
+});
+
 test("a merge that ends without main in HEAD is not pushed", (t) => {
   const r = setup(t);
   // A post-merge hook takes the merge commit back: git exits 0, HEAD lacks main.
