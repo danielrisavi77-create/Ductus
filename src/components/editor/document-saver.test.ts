@@ -7,10 +7,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchLike } from "@/client/evidence-ingest";
 import type { CanonicalDocument } from "@/domain/document";
 import { tiptapToCanonical } from "@/editor/interop";
+import { messagesEn } from "@/lib/i18n/messages.en";
+import { messagesHr } from "@/lib/i18n/messages.hr";
 import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";
 import { DOC, journalKit, json } from "@/lib/sync/evidence-test-kit";
 
-import { createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, writingClosed } from "./document-saver";
+import {
+  createDocumentSaver, evidenceNotice, snapshotSpeaks, stoppedSaved, submittedOf, writingClosed,
+} from "./document-saver";
 import { EvidenceSession } from "./evidence-session";
 
 /**
@@ -95,6 +99,38 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     expect(evidenceNotice({ ...base, state: "ERROR", refused: true })).toBe("refused");
     expect(evidenceNotice({ ...base, state: "ERROR", refused: false })).toBeNull();
     expect(evidenceNotice({ ...base, state: "LOCAL_DURABLE", closedBy: "submission" })).toBeNull();
+  });
+
+  // Codex #1901 (c.4533816077): a stopped recorder whose local save failed
+  // must not say the text is kept on this device; the failure text speaks.
+  it("a stopped recorder says so only while its local save holds", () => {
+    const base = { failure: null, capacity: "ok" as const, closedBy: null, state: "LOCAL_DURABLE" as const };
+    expect(evidenceNotice({ ...base, stopped: true })).toBe("stopped");
+    // Before a refused row too: a reload does not resume sending (review bot c.6786590285).
+    expect(evidenceNotice({ ...base, refused: true, stopped: true })).toBe("stopped");
+    for (const failure of ["quota", "unavailable", "unknown"] as const) {
+      expect(evidenceNotice({ ...base, failure, stopped: true })).toBeNull();
+      expect(evidenceNotice({ ...base, failure, refused: true, stopped: true })).toBeNull();
+    }
+  });
+
+  // Review #1901 (c.6786923958), orchestrator c.6786961844: the stop notice
+  // shows while typing too, so it claims no save; the claim waits for the save.
+  it("a stopped recorder says the text is saved on the device only after the local save", () => {
+    const base = { failure: null, capacity: "ok" as const, closedBy: null, stopped: true };
+    for (const state of ["EDITING", "SAVING_LOCAL"] as const) {
+      expect(evidenceNotice({ ...base, state })).toBe("stopped");
+      expect(stoppedSaved({ ...base, state })).toBe(false);
+    }
+    expect(evidenceNotice({ ...base, state: "LOCAL_DURABLE" })).toBe("stopped");
+    expect(stoppedSaved({ ...base, state: "LOCAL_DURABLE" })).toBe(true);
+    // Not stopped, or a failed local save: no claim either.
+    expect(stoppedSaved({ ...base, state: "LOCAL_DURABLE", stopped: false })).toBe(false);
+    expect(stoppedSaved({ ...base, state: "LOCAL_DURABLE", failure: "quota" })).toBe(false);
+    expect(stoppedSaved(null)).toBe(false);
+    expect(messagesHr.editor.sendStopped).not.toMatch(/spremljen/i);
+    expect(messagesEn.editor.sendStopped).not.toMatch(/\bsaved\b/i);
+    expect(messagesHr.editor.sendStoppedSaved).toMatch(/spremljen na uređaju/);
   });
 
   it("the local saver's own snapshot never gives an evidence notice (e2e local-editor stored ids)", () => {
