@@ -21,7 +21,7 @@ import { fetchProcessSummary } from "@/client/process-summary";
 import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
 import type { SessionMark } from "@/client/session-marks";
 import { submitWork } from "@/client/submission";
-import { readDocumentHold, submitWhenClear } from "@/client/submission-hold";
+import { readDocumentHold, sendGuard, submitWhenClear } from "@/client/submission-hold";
 import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
 
 import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionView";
@@ -141,16 +141,24 @@ function SessionSubmission({ assignmentId, session, scope }: Props) {
     if (sendingRef.current || work === null || work.currentRevision === 0 || !current() || !navigator.onLine) return;
     sendingRef.current = true;
     const mine = generation.current;
+    // Taken at the click: once this component is gone, the load changed or
+    // the session ended, no request leaves (review c.6788770331 on #1904).
+    const live = sendGuard(watchRef, generation);
     setState((s) => (s.phase === "ready" ? { ...s, sending: true } : s));
     // A check made on load says nothing of text saved since: the device is
     // read again here, and anything but clear sends no request (DAN-699).
     deviceTicket.current += 1;
     const gated = await submitWhenClear(
       () => readDocumentHold(scope, work.documentId),
-      () => submitWork({ documentId: work.documentId, revision: work.currentRevision }, current),
+      () => submitWork({ documentId: work.documentId, revision: work.currentRevision }, live),
+      live,
     );
     sendingRef.current = false;
     if (mine !== generation.current) return;
+    if (gated.kind === "stopped") {
+      setState((s) => (s.phase === "ready" ? { ...s, sending: false } : s));
+      return;
+    }
     if (gated.kind === "held") {
       setState((s) => (s.phase === "ready" ? { ...s, sending: false, device: gated.device } : s));
       return;
