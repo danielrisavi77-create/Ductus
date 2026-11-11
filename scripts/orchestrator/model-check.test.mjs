@@ -35,6 +35,16 @@ test("modelTier: id, marketing name, other runtimes, empty and ambiguous values"
     ["magnum-opus", "opus"],
     ["opus or sonnet", "other"],
     ["claude-opus-5-5 (fallback sonnet)", "other"],
+    // A Claude tier next to another model family is unclear.
+    ["claude-opus-5-5 + gpt-5-codex", "other"],
+    ["claude-fable-5-5 opus", "other"],
+    // Placeholders name no model: undeclared, not a model outside the table.
+    ["n/a", null],
+    ["N/A", null],
+    ["-", null],
+    ["\u2014", null],
+    ["unknown", null],
+    ["none", null],
     ["", null],
     ["   ", null],
     [null, null],
@@ -62,6 +72,8 @@ test("expectedTier: table of risk x role x paths (ORKESTRATOR §7)", () => {
     ["low", "plain", S, N],
     ["low", "sensitive", S, N],
     ["low", "docsOnly", S, N],
+    ["low", "testsOnly", S, N],
+    ["low", "mixed", S, N],
     ["low", "rules", O, N],
     ["low", "empty", O, N],
     ["standard", "plain", S, N],
@@ -70,6 +82,7 @@ test("expectedTier: table of risk x role x paths (ORKESTRATOR §7)", () => {
     ["standard", "sensitiveDb", O, N],
     ["standard", "rules", O, N],
     ["standard", "testsOnly", S, N],
+    ["standard", "docsOnly", S, N],
     ["standard", "empty", O, N],
     ["critical", "plain", O, O],
     ["critical", "mixed", O, O],
@@ -81,6 +94,10 @@ test("expectedTier: table of risk x role x paths (ORKESTRATOR §7)", () => {
     ["critical", "empty", O, O],
     [null, "plain", O, O],
     ["unknown", "docsOnly", O, O],
+    ["unknown", "sensitive", O, O],
+    ["unknown", "rules", O, O],
+    ["unknown", "testsOnly", O, O],
+    ["unknown", "mixed", O, O],
     [null, "empty", O, O],
   ];
   for (const [risk, key, review, qa] of table) {
@@ -99,6 +116,7 @@ test("modelOutcome: ok, below, undeclared, other, n/a", () => {
   assert.equal(modelOutcome("claude-sonnet-5-5", "opus"), "below");
   assert.equal(modelOutcome("claude-haiku-5-5", "sonnet"), "below");
   assert.equal(modelOutcome(null, "opus"), "undeclared");
+  assert.equal(modelOutcome("n/a", "opus"), "undeclared");
   assert.equal(modelOutcome("gpt-5-codex", "opus"), "other");
   assert.equal(modelOutcome("claude-sonnet-5-5", null), "n/a");
   assert.equal(modelOutcome(null, null), "n/a");
@@ -124,6 +142,12 @@ test("declaredModel reads only a trusted canonical PASS on the merged head", () 
   const older = verdict("review", head, "PASS", "claude-sonnet-5-5", { created_at: "2026-10-01T09:00:00Z" });
   const newer = verdict("review", head, "PASS", "claude-opus-5-5", { created_at: "2026-10-01T11:00:00Z" });
   assert.deepEqual(found([newer, older]), { found: true, model: "claude-opus-5-5" });
+  // A later FAIL from the same identity replaces its PASS, as in the gate: nothing is read.
+  const failLater = verdict("qa", head, "FAIL", undefined, { created_at: "2026-10-01T12:00:00Z" });
+  assert.deepEqual(found([verdict("qa", head, "PASS", "claude-sonnet-5-5"), failLater], "qa"), { found: false, model: null });
+  // Another identity's FAIL on the merged head also means the gate holds no PASS there.
+  const otherFail = verdict("review", head, "FAIL", undefined, { body: `Agent-Review: claude:y\nReview-Head: ${head}\nReview-Verdict: FAIL\n` });
+  assert.deepEqual(found([verdict("review", head, "PASS", "claude-opus-5-5"), otherFail]), { found: false, model: null });
   assert.deepEqual(declaredModel([verdict("review", head, "PASS", "x")], "review", null), { found: false, model: null });
   assert.deepEqual(declaredModel([verdict("review", head, "PASS", "x")], "review", "abc123"), { found: false, model: null });
 });
@@ -132,6 +156,8 @@ const RISKS = ["low", "standard", "critical", null, "weird"];
 const PATH_POOL = Object.values(P).flat().concat(["docs/x.md", "app/api/y/route.ts", "src/server/db/pool.ts"]);
 const arbRisk = fc.constantFrom(...RISKS);
 const arbRole = fc.constantFrom("review", "qa");
+// At least one path: an empty list means "unknown" and expects Opus, so adding a
+// document to it may correctly lower a critical PR to Sonnet.
 const arbPaths = fc.array(fc.constantFrom(...PATH_POOL), { minLength: 1, maxLength: 6 });
 const RANK = { haiku: 1, sonnet: 2, opus: 3 };
 

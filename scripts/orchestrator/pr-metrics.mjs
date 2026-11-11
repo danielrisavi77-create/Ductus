@@ -3,7 +3,8 @@
 // DAN-695: also compares the model a PASS on the merged head declares
 // (Review-Model, QA-Model) with the table in docs/ORKESTRATOR.md §7, over the
 // PR's changed files. A report, not a gate: a file list that cannot be read
-// counts as empty, and the check then expects Opus (rule of doubt).
+// counts as empty, the check then expects Opus (rule of doubt), and the
+// report lists the PR under "files unread".
 import "./help.mjs";
 import { readFile } from "node:fs/promises";
 
@@ -15,7 +16,7 @@ try {
   const demoIds = demoTaskIds(await readFile(new URL("../../docs/PLAN-DEMO.md", import.meta.url), "utf8"));
   const prs = await mergedPrs(since);
   const rows = await mapLimit(prs, 5, async (pr) => {
-    const [comments, paths] = await Promise.all([prComments(pr.number), prPaths(pr.number).catch(() => [])]);
+    const [comments, paths] = await Promise.all([prComments(pr.number), prPaths(pr.number).catch(() => null)]);
     return prMetrics(pr, comments, demoIds, paths);
   });
   const summary = summarize(rows);

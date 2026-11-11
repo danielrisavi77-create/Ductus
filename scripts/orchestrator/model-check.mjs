@@ -3,11 +3,15 @@
 // the "Model po poslu" table of docs/ORKESTRATOR.md §7. A report, not a gate.
 import { field } from "../engineering/metadata-parser.mjs";
 import { matchesPath, qaExemption } from "../engineering/protected-paths.mjs";
-import { parseVerdicts } from "./orchestrator-core.mjs";
+import { latestVerdict, parseVerdicts } from "./orchestrator-core.mjs";
 
 export const OUTCOMES = ["ok", "below", "undeclared", "other", "n/a"];
 const RANK = { haiku: 1, sonnet: 2, opus: 3 };
 const FULL_SHA = /^[0-9a-f]{40}$/i;
+// A line that names no model: counts as undeclared, not as a model outside the table.
+const PLACEHOLDER = /^(n\/?a|none|unknown|nepoznat[a-z]*|[-\u2013\u2014?]+)$/;
+// Another model family next to a Claude tier makes the value unclear.
+const OTHER_FAMILY = /\b(gpt|codex|gemini|grok|llama|mistral|deepseek|qwen|fable)\b/;
 
 // Evidence, authorization, login and sync (.claude/rules/evidencija-i-prijava.md
 // and sinkronizacija.md) plus migrations and the server database access.
@@ -23,10 +27,15 @@ export const RULE_DOC_PATHS = [
   ".claude/uloge/", ".claude/skills/", ".agents/skills/",
 ];
 
-/** "opus" | "sonnet" | "haiku" from an id or a name; "other" for anything else; null when empty. */
+/**
+ * "opus" | "sonnet" | "haiku" from an id or a name; "other" for anything else,
+ * including two tiers or a tier next to another model family; null when empty
+ * or a placeholder such as "n/a" or "-".
+ */
 export function modelTier(value) {
   const text = String(value ?? "").trim().toLowerCase();
-  if (!text) return null;
+  if (!text || PLACEHOLDER.test(text)) return null;
+  if (OTHER_FAMILY.test(text)) return "other";
   const tiers = new Set([...text.matchAll(/\b(opus|sonnet|haiku)\b/g)].map((m) => m[1]));
   return tiers.size === 1 ? [...tiers][0] : "other";
 }
@@ -57,9 +66,15 @@ export function modelOutcome(declared, expected) {
   return RANK[tier] < RANK[expected] ? "below" : "ok";
 }
 
-/** Model line of the newest trusted canonical PASS of `kind` on the merged head. */
+/**
+ * Model line of the newest trusted canonical PASS of `kind` on the merged head,
+ * only while the gate still counts a PASS there: a later FAIL or BLOCK from the
+ * same identity replaces it (latestVerdict), and then nothing is read.
+ */
 export function declaredModel(comments, kind, mergedHead) {
   const head = FULL_SHA.test(mergedHead ?? "") ? mergedHead.toLowerCase() : null;
+  const gate = head ? latestVerdict(comments, kind, head) : null;
+  if (!gate?.current || gate.verdict !== "PASS") return { found: false, model: null };
   const pass = parseVerdicts(comments, kind)
     .filter((e) => head && e.verdict === "PASS" && e.head?.toLowerCase() === head)
     .at(-1);

@@ -77,6 +77,8 @@ export function rounds(comments, kind) {
  * heads that received a verdict plus the merged head (GitHub keeps no list of
  * earlier heads for non-forced pushes). `paths` are the changed files for the
  * model check (DAN-695); without them the check expects Opus (rule of doubt).
+ * `paths === null` means the file list could not be read: the row is marked so
+ * a "below" from that cannot pass for a real deviation.
  */
 export function prMetrics(pr, comments, demoIds, paths = []) {
   const created = Date.parse(pr.createdAt);
@@ -99,21 +101,27 @@ export function prMetrics(pr, comments, demoIds, paths = []) {
     qaFail: qa.total - qa.pass,
     qaRounds: qa.total,
     heads: heads.size,
-    reviewModel: checkRole(comments, "review", pr, risk, paths),
-    qaModel: checkRole(comments, "qa", pr, risk, paths),
+    pathsRead: paths !== null,
+    reviewModel: checkRole(comments, "review", pr, risk, paths ?? []),
+    qaModel: checkRole(comments, "qa", pr, risk, paths ?? []),
   };
 }
 
-/** Outcome counts per role and the PRs whose declared model is below the table. */
+/**
+ * Outcome counts per role and the PRs whose declared model is below the table;
+ * a "below" over an unread file list carries "(files unread)".
+ */
 export function modelSummary(rows) {
   const count = (key) => Object.fromEntries(
     OUTCOMES.map((o) => [o, rows.filter((r) => (r[key]?.outcome ?? "n/a") === o).length]),
   );
+  const mark = (r) => (r.pathsRead === false ? " (files unread)" : "");
   const below = rows.flatMap((r) => [
-    ...(r.reviewModel?.outcome === "below" ? [`#${r.number} review`] : []),
-    ...(r.qaModel?.outcome === "below" ? [`#${r.number} qa`] : []),
+    ...(r.reviewModel?.outcome === "below" ? [`#${r.number} review${mark(r)}`] : []),
+    ...(r.qaModel?.outcome === "below" ? [`#${r.number} qa${mark(r)}`] : []),
   ]);
-  return { review: count("reviewModel"), qa: count("qaModel"), below };
+  const unread = rows.filter((r) => r.pathsRead === false).map((r) => `#${r.number}`);
+  return { review: count("reviewModel"), qa: count("qaModel"), below, unread };
 }
 
 const round = (n) => (n === null ? null : Math.round(n * 10) / 10);
@@ -162,7 +170,7 @@ export function renderMetrics(rows, summary, since) {
   const m = summary.modelCheck;
   const counts = (c) => OUTCOMES.map((o) => `${o} ${c[o]}`).join(", ");
   lines.push(
-    `model check (declared Review-Model/QA-Model on the merged head vs ORKESTRATOR §7; report, not a gate): review ${counts(m.review)}; qa ${counts(m.qa)}; below: ${m.below.join(", ") || "-"}`,
+    `model check (declared Review-Model/QA-Model on the merged head vs ORKESTRATOR §7; report, not a gate): review ${counts(m.review)}; qa ${counts(m.qa)}; below: ${m.below.join(", ") || "-"}; files unread (expects Opus): ${m.unread.join(", ") || "-"}`,
   );
   return lines;
 }

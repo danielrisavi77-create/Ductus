@@ -65,7 +65,7 @@ test("prMetrics: a round is one distinct head per kind; gate rules decide its ou
   const m = prMetrics(merged({ title: "feat: model (B-7, 1/2)" }), comments, demoTaskIds(plan));
   assert.deepEqual(m, {
     number: 7, risk: "critical", task: "DAN-1", demoTasks: [{ id: "B-7", part: "1/2" }], leadHours: 36,
-    reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2,
+    reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2, pathsRead: true,
     // No paths given and no model line: the check expects Opus; review has no PASS on the merged head.
     reviewModel: { declared: null, expected: "opus", outcome: "n/a" },
     qaModel: { declared: null, expected: "opus", outcome: "undeclared" },
@@ -93,7 +93,15 @@ test("prMetrics: the model check reads the merged head's PASS against the change
   assert.deepEqual(s.modelCheck.qa, { ok: 2, below: 0, undeclared: 0, other: 0, "n/a": 1 });
   assert.deepEqual(s.modelCheck.below, ["#7 review"]);
   const line = renderMetrics([code], summarize([code]), "2026-10-01").at(-1);
-  assert.match(line, /^model check .*review ok 0, below 1, undeclared 0, other 0, n\/a 0; qa ok 1,.*below: #7 review$/);
+  assert.match(line, /^model check .*review ok 0, below 1, undeclared 0, other 0, n\/a 0; qa ok 1,.*below: #7 review; files unread \(expects Opus\): -$/);
+  // A file list that could not be read (null): Opus is expected and the row is marked.
+  const unread = prMetrics(merged({ body: body("low", "DAN-1") }), comments, new Set(), null);
+  assert.equal(unread.pathsRead, false);
+  assert.deepEqual(unread.reviewModel, { declared: "claude-sonnet-5-5", expected: "opus", outcome: "below" });
+  const su = summarize([unread]);
+  assert.deepEqual(su.modelCheck.below, ["#7 review (files unread)"]);
+  assert.deepEqual(su.modelCheck.unread, ["#7"]);
+  assert.match(renderMetrics([unread], su, "2026-10-01").at(-1), /below: #7 review \(files unread\); files unread \(expects Opus\): #7$/);
 });
 
 test("two verdicts on the same head are one round", () => {
@@ -149,7 +157,7 @@ test("render puts the two T2 metrics first", () => {
   assert.match(lines[2], /^2\. QA rounds per PR .*mean 2, max 2/);
   assert.match(lines.at(-2), /PRs without a recognised plan id: 0/);
   assert.match(lines.at(-2), /demo tasks with merged work .*: 1 \(B-7\)/);
-  assert.match(lines.at(-1), /^model check .*below: -$/);
+  assert.match(lines.at(-1), /^model check .*below: -; files unread \(expects Opus\): -$/);
   assert.doesNotMatch(lines.join("\n"), /tasks merged/);
   assert.ok(renderMetrics([], summarize([]), "2026-10-01").join("\n").includes("median ? h"));
 });
