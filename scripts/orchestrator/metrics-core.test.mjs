@@ -66,7 +66,34 @@ test("prMetrics: a round is one distinct head per kind; gate rules decide its ou
   assert.deepEqual(m, {
     number: 7, risk: "critical", task: "DAN-1", demoTasks: [{ id: "B-7", part: "1/2" }], leadHours: 36,
     reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2,
+    // No paths given and no model line: the check expects Opus; review has no PASS on the merged head.
+    reviewModel: { declared: null, expected: "opus", outcome: "n/a" },
+    qaModel: { declared: null, expected: "opus", outcome: "undeclared" },
   });
+});
+
+test("prMetrics: the model check reads the merged head's PASS against the changed paths", () => {
+  const head = SHA("b");
+  const withModel = (c, line) => ({ ...c, body: `${c.body}${line}\n` });
+  const comments = [
+    withModel(review(head, "PASS", "2026-10-01T10:00:00Z"), "Review-Model: claude-sonnet-5-5"),
+    withModel(qa(head, "PASS", "2026-10-01T11:00:00Z"), "QA-Model: claude-opus-5-5"),
+    withModel(qa(SHA("a"), "PASS", "2026-10-01T09:00:00Z"), "QA-Model: claude-haiku-5-5"),
+  ];
+  const code = prMetrics(merged(), comments, new Set(), ["src/domain/sync/drain.ts"]);
+  assert.deepEqual(code.reviewModel, { declared: "claude-sonnet-5-5", expected: "opus", outcome: "below" });
+  assert.deepEqual(code.qaModel, { declared: "claude-opus-5-5", expected: "opus", outcome: "ok" });
+  const testsOnly = prMetrics(merged(), comments, new Set(), ["tests/unit/a.test.ts"]);
+  assert.equal(testsOnly.reviewModel.outcome, "ok");
+  const standard = prMetrics(merged({ body: body("standard", "DAN-1") }), comments, new Set(), ["src/lib/x.ts"]);
+  assert.equal(standard.reviewModel.outcome, "ok");
+  assert.equal(standard.qaModel.outcome, "n/a");
+  const s = summarize([code, testsOnly, standard]);
+  assert.deepEqual(s.modelCheck.review, { ok: 2, below: 1, undeclared: 0, other: 0, "n/a": 0 });
+  assert.deepEqual(s.modelCheck.qa, { ok: 2, below: 0, undeclared: 0, other: 0, "n/a": 1 });
+  assert.deepEqual(s.modelCheck.below, ["#7 review"]);
+  const line = renderMetrics([code], summarize([code]), "2026-10-01").at(-1);
+  assert.match(line, /^model check .*review ok 0, below 1, undeclared 0, other 0, n\/a 0; qa ok 1,.*below: #7 review$/);
 });
 
 test("two verdicts on the same head are one round", () => {
@@ -120,8 +147,9 @@ test("render puts the two T2 metrics first", () => {
   const lines = renderMetrics(rows, summarize(rows), "2026-10-01");
   assert.match(lines[1], /^1\. time from open to merge: median 4 h, p90 4 h/);
   assert.match(lines[2], /^2\. QA rounds per PR .*mean 2, max 2/);
-  assert.match(lines.at(-1), /PRs without a recognised plan id: 0/);
-  assert.match(lines.at(-1), /demo tasks with merged work .*: 1 \(B-7\)/);
+  assert.match(lines.at(-2), /PRs without a recognised plan id: 0/);
+  assert.match(lines.at(-2), /demo tasks with merged work .*: 1 \(B-7\)/);
+  assert.match(lines.at(-1), /^model check .*below: -$/);
   assert.doesNotMatch(lines.join("\n"), /tasks merged/);
   assert.ok(renderMetrics([], summarize([]), "2026-10-01").join("\n").includes("median ? h"));
 });

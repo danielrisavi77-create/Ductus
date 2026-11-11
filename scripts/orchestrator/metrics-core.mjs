@@ -1,5 +1,6 @@
 // DAN-130 PR B: pure logic for `pnpm orch:metrics`. No gh/git calls here.
 import { field } from "../engineering/metadata-parser.mjs";
+import { checkRole, OUTCOMES } from "./model-check.mjs";
 import { latestVerdict, parseAgentRisk, parseVerdicts } from "./orchestrator-core.mjs";
 
 const HOUR = 3_600_000;
@@ -74,9 +75,10 @@ export function rounds(comments, kind) {
 /**
  * Metrics of one merged PR. `heads` is a lower bound: the distinct full-SHA
  * heads that received a verdict plus the merged head (GitHub keeps no list of
- * earlier heads for non-forced pushes).
+ * earlier heads for non-forced pushes). `paths` are the changed files for the
+ * model check (DAN-695); without them the check expects Opus (rule of doubt).
  */
-export function prMetrics(pr, comments, demoIds) {
+export function prMetrics(pr, comments, demoIds, paths = []) {
   const created = Date.parse(pr.createdAt);
   const merged = Date.parse(pr.mergedAt);
   const rev = rounds(comments, "review");
@@ -84,9 +86,10 @@ export function prMetrics(pr, comments, demoIds) {
   const heads = new Set([...rev.heads, ...qa.heads]);
   if (pr.headRefOid && FULL_SHA.test(pr.headRefOid)) heads.add(pr.headRefOid.toLowerCase());
   const task = field(pr.body, "Task") ?? null;
+  const risk = parseAgentRisk(pr.body).risk?.toLowerCase() ?? null;
   return {
     number: pr.number,
-    risk: parseAgentRisk(pr.body).risk?.toLowerCase() ?? null,
+    risk,
     task,
     demoTasks: demoTasksOf([task, pr.title], demoIds),
     leadHours: Number.isFinite(created) && Number.isFinite(merged) ? (merged - created) / HOUR : null,
@@ -96,7 +99,21 @@ export function prMetrics(pr, comments, demoIds) {
     qaFail: qa.total - qa.pass,
     qaRounds: qa.total,
     heads: heads.size,
+    reviewModel: checkRole(comments, "review", pr, risk, paths),
+    qaModel: checkRole(comments, "qa", pr, risk, paths),
   };
+}
+
+/** Outcome counts per role and the PRs whose declared model is below the table. */
+export function modelSummary(rows) {
+  const count = (key) => Object.fromEntries(
+    OUTCOMES.map((o) => [o, rows.filter((r) => (r[key]?.outcome ?? "n/a") === o).length]),
+  );
+  const below = rows.flatMap((r) => [
+    ...(r.reviewModel?.outcome === "below" ? [`#${r.number} review`] : []),
+    ...(r.qaModel?.outcome === "below" ? [`#${r.number} qa`] : []),
+  ]);
+  return { review: count("reviewModel"), qa: count("qaModel"), below };
 }
 
 const round = (n) => (n === null ? null : Math.round(n * 10) / 10);
@@ -119,6 +136,7 @@ export function summarize(rows) {
     },
     demoTasksWithMergedWork: demoWorkLabels(rows),
     prsWithoutDemoId: rows.filter((r) => !r.demoTasks.length).length,
+    modelCheck: modelSummary(rows),
   };
 }
 
@@ -140,6 +158,11 @@ export function renderMetrics(rows, summary, since) {
   lines.push(
     `all risks: n=${summary.all.prs} lead median ${f(summary.all.leadMedianH)} h, p90 ${f(summary.all.leadP90H)} h`,
     `demo tasks with merged work (parts as marked in PRs; completeness not judged): ${summary.demoTasksWithMergedWork.length} (${summary.demoTasksWithMergedWork.join(", ") || "-"}); PRs without a recognised plan id: ${summary.prsWithoutDemoId}`,
+  );
+  const m = summary.modelCheck;
+  const counts = (c) => OUTCOMES.map((o) => `${o} ${c[o]}`).join(", ");
+  lines.push(
+    `model check (declared Review-Model/QA-Model on the merged head vs ORKESTRATOR §7; report, not a gate): review ${counts(m.review)}; qa ${counts(m.qa)}; below: ${m.below.join(", ") || "-"}`,
   );
   return lines;
 }
