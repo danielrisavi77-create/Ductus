@@ -1,6 +1,6 @@
 import { sha256WebCrypto } from "./crypto";
 import { findEvidenceBreakV2, type EvidenceChainDiscontinuityV2 } from "./evidence-chain-v2";
-import type { EvidenceEventV3, EvidenceSegment } from "./evidence-segment-v2";
+import type { EvidenceEvent, EvidenceSegment } from "./evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
 /**
@@ -21,7 +21,7 @@ export interface EvidenceStepReplayerV2<TDocument> {
   /** Reads a canonical document; throws if it is not a valid one. */
   load(canonical: JcsJsonValue): TDocument;
   /** Applies every step of the event exactly, or throws. Never guesses. */
-  apply(document: TDocument, event: EvidenceEventV3): TDocument;
+  apply(document: TDocument, event: EvidenceEvent): TDocument;
   /** JSON form whose JCS string is hashed and compared. */
   toCanonical(document: TDocument): JcsJsonValue;
 }
@@ -34,7 +34,7 @@ export interface EvidenceStepReplayerV2<TDocument> {
 export interface AsyncEvidenceStepReplayerV2<TDocument>
   extends Omit<EvidenceStepReplayerV2<TDocument>, "apply"> {
   /** Applies every step of the event exactly, or throws or rejects. */
-  apply(document: TDocument, event: EvidenceEventV3): TDocument | Promise<TDocument>;
+  apply(document: TDocument, event: EvidenceEvent): TDocument | Promise<TDocument>;
 }
 
 /**
