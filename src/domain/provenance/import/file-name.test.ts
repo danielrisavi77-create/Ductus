@@ -27,6 +27,19 @@ describe("import file name: normalization", () => {
     expect(normalizeImportFileName("Rad\u2028\u2029.docx")).toBe("Rad.docx");
   });
 
+  // QA c.6788054034: default-ignorable characters outside Cc, Cf, Zl and Zp.
+  it("N2: removes default-ignorable characters before the cut", () => {
+    expect(normalizeImportFileName("\u034F".repeat(200) + "Rad.docx")).toBe("Rad.docx");
+    expect(normalizeImportFileName("R\u034Fa\uFE0Fd\u{E0100}\u180B.docx")).toBe("Rad.docx");
+    expect(normalizeImportFileName("\u115FR\u1160a\u3164d\uFFA0.docx")).toBe("Rad.docx");
+    expect(normalizeImportFileName("\u3164".repeat(250) + "Rad.docx")).toBe("Rad.docx");
+  });
+
+  it("N2/N5: a name made only of default-ignorable characters gives no name", () => {
+    expect(normalizeImportFileName("\u034F\uFE0F\u{E01EF}\u180D\u115F\u1160\u3164\uFFA0")).toBeNull();
+    expect(normalizeImportFileName(" \u3164 \u034F ")).toBeNull();
+  });
+
   it("N3: NFD and NFC forms of one name give the same result", () => {
     const nfc = "Čitanje i učenje.docx";
     expect(normalizeImportFileName(nfc.normalize("NFD"))).toBe(nfc);

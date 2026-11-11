@@ -59,7 +59,7 @@ Odgovor na otvoreni dio D-292:
 - **Gdje:** samo u stupcu `import_event.file_name`. Naziv nije u manifestu, ni u jednom hashu, ni u odsječku ni u potvrdi predaje (N8). Zato se format v4 ne mijenja, a naziv se može izbrisati ili skratiti bez diranja dokaza.
 - **Normalizacija** (`normalizeImportFileName`), redom:
   1. zadnji dio putanje (dijeli se na `/` i `\`), N1;
-  2. uklanjaju se usamljeni surogati (N6), zatim nevidljivi znakovi `\p{Cc}`, `\p{Cf}`, `\p{Zl}`, `\p{Zp}`: kontrole C0 i C1, DEL, bidi kontrole, znakovi nulte širine (N2);
+  2. uklanjaju se usamljeni surogati (N6), zatim nevidljivi znakovi `\p{Cc}`, `\p{Cf}`, `\p{Zl}`, `\p{Zp}` i `\p{Default_Ignorable_Code_Point}`: kontrole C0 i C1, DEL, bidi kontrole, znakovi nulte širine, separatori retka i odlomka, spojnik grafema U+034F, selektori varijanti (U+FE00 do U+FE0F, U+E0100 do U+E01EF), mongolski selektori (U+180B do U+180D) i hangulske ispune (U+115F, U+1160, U+3164, U+FFA0) (N2). Vidljivo prazni znakovi koji nisu default-ignorable (npr. U+2800) ostaju: to je poznata granica;
   3. NFC (N3); nevidljivi znakovi idu prije NFC-a, inače znak između slova i kombinirajućeg znaka ostavlja oblik koji nije NFC;
   4. razmaci se sažimaju u jedan i obrezuju;
   5. najviše **200 kodnih točaka**; rez je uvijek na granici kodne točke, a rezultat se ponovno čisti (N4);
