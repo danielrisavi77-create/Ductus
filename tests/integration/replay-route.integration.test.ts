@@ -279,6 +279,14 @@ async function insertFixture() {
       });
       expect(stored.status).toBe("stored");
     }
+    // Segment 2 ends Ana's revision 1: its receipt names that revision, so a
+    // submission of revision 1 cuts the record after it (DAN-537).
+    await client.query(
+      `INSERT INTO evidence.receipt (id, evidence_package_id, institution_id, evidence_domain_id, segment_id,
+         principal_id, client_request_id, payload_sha256, descriptor, receipt_payload, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'request-ana-2', $7, '{}', '{"revision":1}', 'pending_signature')`,
+      [randomUUID(), packageId, institutionId, domainId, record[1].id, people.ana, record[1].hash],
+    );
     // The head reserve writes: a receipt for the last segment, named by the package.
     const last = record[record.length - 1];
     await client.query(
@@ -310,6 +318,8 @@ async function removeFixture() {
     // normal operation (same teardown as the other evidence tests).
     await admin.query("SET LOCAL session_replication_role = replica");
     await admin.query("DELETE FROM audit.access_log WHERE institution_id = $1", [institutionId]);
+    await admin.query("DELETE FROM evidence.submission WHERE assignment_id = $1", [assignmentId]);
+    await admin.query("DELETE FROM evidence.submission_request WHERE assignment_id = $1", [assignmentId]);
     await admin.query("DELETE FROM evidence.receipt WHERE evidence_package_id = $1", [packageId]);
     await admin.query("DELETE FROM evidence.segment WHERE evidence_package_id = $1", [packageId]);
     await admin.query("DELETE FROM evidence.package WHERE id = $1", [packageId]);
@@ -467,5 +477,53 @@ describe("replay over the API and the read RPCs (DAN-344 R3, PRODUCT 5 rule 5)",
       expect(await response.json()).toStrictEqual({ error: "unauthorized" });
     }
     expect((await ask("ana")).status).toBe(200);
+  });
+
+  // Last: the submission cuts the record for every test after it.
+  it("answers Vesna's next page with 409 when Ana submits between her two pages (DAN-537)", async () => {
+    const first = await ask("vesna");
+    expect(first.status).toBe(200);
+    const { head } = (await first.json()) as { head: { segmentHash: string; segmentCount: number } };
+    expect(head).toStrictEqual({ segmentHash: record[2].hash, segmentCount: 3 });
+
+    // Ana's click named revision 1 (before segment 3 was accepted); she records it now, between the pages.
+    const requestId = randomUUID();
+    await admin.query(
+      `INSERT INTO evidence.submission_request (id, institution_id, assignment_id, assignment_version, project_id,
+                                                document_id, principal_id, revision, content_hash, requested_at)
+       VALUES ($1, $2, $3, 1, $4, $5, $6, 1, $7, now())`,
+      [requestId, institutionId, assignmentId, projectId, documentId, people.ana, resumeHash],
+    );
+    const recorded = await withActor(tokens.ana, async (tx) =>
+      (await tx.query<{ outcome: string }>("SELECT outcome FROM app.record_submission($1, $2)", [requestId, resumeHash]))
+        .rows[0],
+    );
+    expect(recorded.outcome).toBe("recorded");
+
+    // The record now ends at segment 2, so it no longer holds the head of Vesna's first page.
+    for (const from of [1, 2]) {
+      const second = await ask("vesna", { documentId, from, head });
+      expect(second.status).toBe(409);
+      expect(second.headers.get("cache-control")).toBe("no-store");
+      expect(await second.json()).toStrictEqual({ error: "record_changed" });
+    }
+
+    // Starting again gives the cut record, and its pages read on from its own head.
+    const again = await ask("vesna");
+    expect(again.status).toBe(200);
+    const restart = (await again.json()) as { head: unknown; segmentCount: number; segments: string[] };
+    expect(restart).toMatchObject({
+      segmentCount: 2,
+      head: { segmentHash: record[1].hash, segmentCount: 2 },
+      segments: [record[0].payload, record[1].payload],
+    });
+    const next = await ask("vesna", { documentId, from: 1, head: restart.head });
+    expect(next.status).toBe(200);
+    expect(await next.json()).toMatchObject({ from: 1, next: null, segments: [record[1].payload] });
+
+    // Dora still may not see the work: 404 with the old head, never 409.
+    const dora = await ask("dora", { documentId, from: 1, head });
+    expect(dora.status).toBe(404);
+    expect(await dora.json()).toStrictEqual({ error: "not_found" });
   });
 });
