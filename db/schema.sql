@@ -5341,6 +5341,72 @@ $$;
 
 
 --
+-- Name: hand_over_course(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.hand_over_course(p_course_id uuid, p_holder_id uuid) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_from uuid;
+  v_ended timestamptz;
+  v_handover uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The administrator role row FOR SHARE until the end, taken before the
+  -- course: a revocation waits for this transaction, and one that committed
+  -- first, even while this call waited for the row, leaves no row to find.
+  PERFORM 1 FROM institution.institution_role r
+   WHERE r.institution_id = actor.institution_id AND r.user_id = actor.user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+   FOR SHARE OF r;
+  IF NOT FOUND OR p_holder_id IS NOT DISTINCT FROM actor.user_id THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- Two handovers, or a handover and a first naming, of the same course wait
+  -- for each other here; course_holder_open_idx is the last barrier.
+  PERFORM 1 FROM institution.course c
+   WHERE c.id = p_course_id AND c.institution_id = actor.institution_id FOR NO KEY UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- The new holder's teacher role row FOR SHARE until the end, taken after
+  -- the course (the course is already known to be in the actor's institution):
+  -- a revocation waits for this transaction, and one that committed first,
+  -- even while this call waited for the row, leaves no row to find.
+  -- revoke_teacher_role locks only that row, so the order cannot deadlock.
+  IF institution.lock_teacher_role(p_holder_id) IS NULL OR NOT EXISTS (
+       SELECT 1 FROM institution.course_member m
+       WHERE m.course_id = p_course_id AND m.user_id = p_holder_id AND m.role = 'teacher' AND m.member_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  SELECT h.user_id INTO v_from FROM institution.course_holder h
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL;
+  IF v_from = p_holder_id THEN
+    RETURN NULL;
+  END IF;
+  UPDATE institution.course_holder h SET valid_to = greatest(now(), h.valid_from)
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL
+  RETURNING h.valid_to INTO v_ended;
+  INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), v_ended));
+  INSERT INTO audit.course_handover (institution_id, course_id, from_holder_id, to_holder_id, actor_id, occurred_at)
+  VALUES (actor.institution_id, p_course_id, v_from, p_holder_id, actor.user_id, now())
+  RETURNING id INTO v_handover;
+  INSERT INTO institution.notification (institution_id, recipient_id, kind, event_key, target_id)
+  SELECT m.institution_id, m.user_id, 'course_handover', 'course_handover:' || v_handover::text, p_course_id
+  FROM institution.course_member m
+  WHERE m.course_id = p_course_id AND m.role = 'student' AND m.member_to IS NULL
+  ON CONFLICT (recipient_id, event_key) DO NOTHING;
+  RETURN v_handover;
+END
+$$;
+
+
+--
 -- Name: has_acknowledged_current(uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -6419,7 +6485,7 @@ CREATE FUNCTION institution.set_course_holder(p_course_id uuid, p_holder_id uuid
     AS $$
 DECLARE
   actor record;
-  v_ended timestamptz;
+  v_open uuid;
 BEGIN
   SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
   IF NOT institution.is_confirmed_teacher(p_holder_id, p_course_id) OR NOT EXISTS (
@@ -6428,17 +6494,19 @@ BEGIN
      ) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  -- Two replacements of the same course wait for each other here.
+  -- Waits for a handover of the same course, then sees its holder.
   PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
-  IF EXISTS (SELECT 1 FROM institution.course_holder h
-             WHERE h.course_id = p_course_id AND h.user_id = p_holder_id AND h.valid_to IS NULL) THEN
+  SELECT h.user_id INTO v_open FROM institution.course_holder h
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL;
+  IF v_open = p_holder_id THEN
     RETURN;
   END IF;
-  UPDATE institution.course_holder h SET valid_to = greatest(now(), h.valid_from)
-   WHERE h.course_id = p_course_id AND h.valid_to IS NULL
-  RETURNING h.valid_to INTO v_ended;
+  IF v_open IS NOT NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
   INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by, valid_from)
-  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), v_ended));
+  SELECT p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), max(h.valid_to))
+  FROM institution.course_holder h WHERE h.course_id = p_course_id;
 END
 $$;
 
@@ -7118,6 +7186,25 @@ CREATE TABLE audit.access_log (
 );
 
 ALTER TABLE ONLY audit.access_log FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: course_handover; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.course_handover (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    course_id uuid NOT NULL,
+    from_holder_id uuid,
+    to_holder_id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT course_handover_check CHECK ((from_holder_id IS DISTINCT FROM to_holder_id)),
+    CONSTRAINT course_handover_check1 CHECK ((actor_id <> to_holder_id))
+);
+
+ALTER TABLE ONLY audit.course_handover FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -8155,8 +8242,8 @@ CREATE TABLE institution.notification (
     target_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     read_at timestamp with time zone,
-    CONSTRAINT notification_check CHECK (((event_key ~ '^(comment_posted|assignment_version|submission_recorded):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[1-9][0-9]{0,9})?$'::text) AND (event_key ~~ (kind || ':%'::text)) AND ((kind = 'assignment_version'::text) = (event_key ~ ':[1-9][0-9]{0,9}$'::text)))),
-    CONSTRAINT notification_kind_check CHECK ((kind = ANY (ARRAY['comment_posted'::text, 'assignment_version'::text, 'submission_recorded'::text])))
+    CONSTRAINT notification_check CHECK (((event_key ~ '^(comment_posted|assignment_version|submission_recorded|course_handover):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[1-9][0-9]{0,9})?$'::text) AND (event_key ~~ (kind || ':%'::text)) AND ((kind = 'assignment_version'::text) = (event_key ~ ':[1-9][0-9]{0,9}$'::text)))),
+    CONSTRAINT notification_kind_check CHECK ((kind = ANY (ARRAY['comment_posted'::text, 'assignment_version'::text, 'submission_recorded'::text, 'course_handover'::text])))
 );
 
 ALTER TABLE ONLY institution.notification FORCE ROW LEVEL SECURITY;
@@ -8634,6 +8721,14 @@ ALTER TABLE ONLY pgboss.job ATTACH PARTITION pgboss.job_common DEFAULT;
 
 ALTER TABLE ONLY audit.access_log
     ADD CONSTRAINT access_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: course_handover course_handover_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_pkey PRIMARY KEY (id);
 
 
 --
@@ -9707,6 +9802,13 @@ CREATE UNIQUE INDEX access_log_opening_idx ON audit.access_log USING btree (docu
 
 
 --
+-- Name: course_handover_course_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX course_handover_course_idx ON audit.course_handover USING btree (course_id, occurred_at);
+
+
+--
 -- Name: course_member_event_course_idx; Type: INDEX; Schema: audit; Owner: -
 --
 
@@ -10190,6 +10292,20 @@ CREATE TRIGGER access_log_no_truncate BEFORE TRUNCATE ON audit.access_log FOR EA
 
 
 --
+-- Name: course_handover course_handover_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER course_handover_append_only BEFORE DELETE OR UPDATE ON audit.course_handover FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: course_handover course_handover_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER course_handover_no_truncate BEFORE TRUNCATE ON audit.course_handover FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
 -- Name: course_member_event course_member_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
 --
 
@@ -10589,6 +10705,38 @@ ALTER TABLE ONLY audit.access_log
 
 ALTER TABLE ONLY audit.access_log
     ADD CONSTRAINT access_log_reader_id_institution_id_fkey FOREIGN KEY (reader_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_actor_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_actor_id_institution_id_fkey FOREIGN KEY (actor_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_from_holder_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_from_holder_id_institution_id_fkey FOREIGN KEY (from_holder_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_to_holder_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_to_holder_id_institution_id_fkey FOREIGN KEY (to_holder_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -11674,6 +11822,19 @@ ALTER TABLE audit.access_log ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY access_log_owner ON audit.access_log TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: course_handover; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.course_handover ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: course_handover course_handover_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY course_handover_owner ON audit.course_handover TO ductus_identity USING (true) WITH CHECK (true);
 
 
 --
@@ -12942,4 +13103,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261111120000'),
     ('20261111180000'),
     ('20261111221500'),
-    ('20261111230000');
+    ('20261111230000'),
+    ('20261111233000');
