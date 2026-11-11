@@ -82,6 +82,11 @@ const ROLE_CASES: Record<string, RoleCase> = {
     grants: ["GRANT ductus_app TO LOGIN WITH ADMIN OPTION"],
     accepted: false,
   },
+  "refuses a member with ADMIN OPTION in a second grant of ductus_app": {
+    attributes: `${PLAIN} IN ROLE ductus_app`,
+    grants: ["GRANT ductus_app TO LOGIN WITH ADMIN OPTION GRANTED BY ductus_migrator"],
+    accepted: false,
+  },
   "refuses a member that does not inherit ductus_app": {
     attributes: PLAIN,
     grants: ["GRANT ductus_app TO LOGIN WITH INHERIT FALSE"],
@@ -89,7 +94,9 @@ const ROLE_CASES: Record<string, RoleCase> = {
   },
 };
 
-async function createLogin(roleCase: RoleCase) {
+// `options` is the startup parameter a connection string can carry, e.g. a
+// default transaction isolation for every transaction on the connection.
+async function createLogin(roleCase: RoleCase, options?: string) {
   const suffix = randomBytes(4).toString("hex");
   const quoted = `"it_with_actor_${suffix}"`;
   const helper = `"it_with_actor_helper_${suffix}"`;
@@ -111,7 +118,7 @@ async function createLogin(roleCase: RoleCase) {
   const url = new URL(ADMIN_URL);
   url.username = quoted.slice(1, -1);
   url.password = loginPassword;
-  const pool = new pg.Pool({ connectionString: url.href, max: 1 });
+  const pool = new pg.Pool({ connectionString: url.href, max: 1, options });
   return {
     pool,
     quoted,
@@ -302,18 +309,60 @@ describe("withActor over a ductus_app login", () => {
     }
   });
 
+  // F-018 (cxcq1839): the group role itself has no membership rows, while
+  // pg_has_role answers true for it. LOGIN is given to ductus_app for this
+  // test alone and taken back after it, with the password.
+  it("refuses a login as ductus_app itself", async () => {
+    const before = (
+      await admin.query<{ rolcanlogin: boolean; has_password: boolean }>(
+        "SELECT rolcanlogin, rolpassword IS NOT NULL AS has_password FROM pg_catalog.pg_authid WHERE rolname = 'ductus_app'",
+      )
+    ).rows[0];
+    expect(before).toEqual({ rolcanlogin: false, has_password: false });
+    const groupPassword = randomBytes(24).toString("hex");
+    const ddl = await admin.query<{ ddl: string }>("SELECT format('ALTER ROLE ductus_app LOGIN PASSWORD %L', $1::text) AS ddl", [groupPassword]);
+    await admin.query(ddl.rows[0].ddl);
+    const url = new URL(ADMIN_URL);
+    url.username = "ductus_app";
+    url.password = groupPassword;
+    const pool = new pg.Pool({ connectionString: url.href, max: 1 });
+    try {
+      const { pid, role } = (
+        await pool.query<{ pid: number; role: string }>("SELECT pg_catalog.pg_backend_pid() AS pid, session_user::text AS role")
+      ).rows[0];
+      expect(role).toBe("ductus_app");
+      const fn = vi.fn(async () => "ran");
+      await expect(createWithActor(pool)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
+      expect(fn).not.toHaveBeenCalled();
+      expect((await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0].pid).not.toBe(pid);
+    } finally {
+      await pool.end();
+      await admin.query("ALTER ROLE ductus_app NOLOGIN PASSWORD NULL");
+    }
+  });
+
   // Istodobnost (F-018): the exit check reads the catalogue again, so a
   // membership or attribute given to the login while fn runs rolls back what
-  // fn did and closes the connection.
-  it.each([
-    ["another role", (role: string) => `GRANT ductus_identity TO ${role}`],
-    ["an attribute", (role: string) => `ALTER ROLE ${role} CREATEDB`],
-  ])("rolls back when the login gains %s while fn runs", async (_name, change) => {
-    const login = await createLogin(ROLE_CASES["accepts a plain member of ductus_app"]);
+  // fn did and closes the connection. cxcr1839: also when the connection's
+  // default isolation would keep the snapshot of the entry check.
+  it.each(
+    ["", "repeatable read", "serializable"].flatMap((isolation) => [
+      ["another role", isolation, (role: string) => `GRANT ductus_identity TO ${role}`] as const,
+      ["an attribute", isolation, (role: string) => `ALTER ROLE ${role} CREATEDB`] as const,
+    ]),
+  )("rolls back when the login gains %s while fn runs (default isolation: '%s')", async (_name, isolation, change) => {
+    const options = isolation ? `-c default_transaction_isolation=${isolation.replace(" ", "\\ ")}` : undefined;
+    const login = await createLogin(ROLE_CASES["accepts a plain member of ductus_app"], options);
     try {
-      const { pid } = (await login.pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      const { pid, isolation: shown } = (
+        await login.pool.query<{ pid: number; isolation: string }>(
+          "SELECT pg_catalog.pg_backend_pid() AS pid, pg_catalog.current_setting('default_transaction_isolation') AS isolation",
+        )
+      ).rows[0];
+      expect(shown).toBe(isolation || "read committed");
       await expect(
         createWithActor(login.pool)(tokenRace, async (tx) => {
+          expect((await tx.query("SELECT pg_catalog.current_setting('transaction_isolation') AS i")).rows[0].i).toBe("read committed");
           expect((await tx.query("SELECT identity.close_current_session() AS closed")).rows[0].closed).toBe(true);
           await admin.query(change(login.quoted));
           return "saved";
