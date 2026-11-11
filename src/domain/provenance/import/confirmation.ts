@@ -59,6 +59,9 @@ const reject = (code: ImportConfirmRejectCode): ImportConfirmDecisionV1 => ({ ki
 /** The stored and the reviewed hash: SHA-256 in lowercase hex (§2). */
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
+/** An identifier the record can be matched on: a non-empty string. */
+const isId = (value: unknown): value is string => typeof value === "string" && value !== "";
+
 /**
  * Decides one confirmation. The order is fixed: a stranger learns nothing
  * beyond `NOT_FOUND` (another owner and another document look like a missing
@@ -72,7 +75,7 @@ export function decideImportConfirmation(
 ): ImportConfirmDecisionV1 {
   if (
     record === null ||
-    record.importId === "" || record.ownerId === "" || record.documentId === "" ||
+    !isId(record.importId) || !isId(record.ownerId) || !isId(record.documentId) ||
     record.importId !== request.importId ||
     record.ownerId !== request.actorId ||
     record.documentId !== request.documentId
@@ -88,12 +91,15 @@ export function decideImportConfirmation(
     return { kind: "already-confirmed", eventId: record.confirmedEventId };
   }
   if (record.state === "cancelled") return reject("CANCELLED");
-  if (record.state !== "pending") return reject("NOT_FOUND");
+  // A pending record that already names an event is inconsistent (E2): confirming it would make a second event.
+  if (record.state !== "pending" || record.confirmedEventId !== undefined) return reject("NOT_FOUND");
 
   if (!sameManifest) return reject("MANIFEST_MISMATCH");
+  // The window is [preparedAtMs, preparedAtMs + lifetime); a prepare time in the future does not extend it.
   if (!Number.isFinite(context.nowMs) || !Number.isFinite(record.preparedAtMs)) return reject("EXPIRED");
-  if (context.nowMs >= record.preparedAtMs + IMPORT_PENDING_LIFETIME_MS) return reject("EXPIRED");
-  if (!context.importAllowed) return reject("IMPORT_NOT_ALLOWED");
-  if (context.currentRevision !== record.baseRevision) return reject("REVISION_CHANGED");
+  if (context.nowMs < record.preparedAtMs || context.nowMs >= record.preparedAtMs + IMPORT_PENDING_LIFETIME_MS) return reject("EXPIRED");
+  if (context.importAllowed !== true) return reject("IMPORT_NOT_ALLOWED");
+  // Revisions are integers; anything else on either side is treated as a changed revision.
+  if (!Number.isSafeInteger(record.baseRevision) || context.currentRevision !== record.baseRevision) return reject("REVISION_CHANGED");
   return { kind: "confirm" };
 }

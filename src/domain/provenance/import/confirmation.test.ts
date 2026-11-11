@@ -56,10 +56,14 @@ describe("import confirmation: idempotent decision", () => {
   it("P3: a cancelled or expired import is refused", () => {
     expect(decideImportConfirmation({ ...pending, state: "cancelled" }, request, context)).toEqual({ kind: "reject", code: "CANCELLED" });
     const at = (nowMs: number) => decideImportConfirmation(pending, request, { ...context, nowMs });
+    expect(at(PREPARED)).toEqual({ kind: "confirm" });
     expect(at(PREPARED + IMPORT_PENDING_LIFETIME_MS - 1)).toEqual({ kind: "confirm" });
+    expect(at(PREPARED - 1)).toEqual({ kind: "reject", code: "EXPIRED" });
     expect(at(PREPARED + IMPORT_PENDING_LIFETIME_MS)).toEqual({ kind: "reject", code: "EXPIRED" });
     expect(at(Number.NaN)).toEqual({ kind: "reject", code: "EXPIRED" });
     expect(decideImportConfirmation({ ...pending, preparedAtMs: Number.NaN }, request, context)).toEqual({ kind: "reject", code: "EXPIRED" });
+    // A prepare time in the future does not stretch the 60-minute window.
+    expect(decideImportConfirmation({ ...pending, preparedAtMs: PREPARED + 10 * IMPORT_PENDING_LIFETIME_MS }, request, context)).toEqual({ kind: "reject", code: "EXPIRED" });
   });
 
   it("P4: another owner, another document or another import looks like a missing import", () => {
@@ -76,6 +80,7 @@ describe("import confirmation: idempotent decision", () => {
 
   it("P7: import switched off between prepare and confirm is refused", () => {
     expect(decideImportConfirmation(pending, request, { ...context, importAllowed: false })).toEqual({ kind: "reject", code: "IMPORT_NOT_ALLOWED" });
+    expect(decideImportConfirmation(pending, request, { ...context, importAllowed: "false" as unknown as boolean })).toEqual({ kind: "reject", code: "IMPORT_NOT_ALLOWED" });
   });
 
   it("P9: a changed document revision is refused; the student reviews again", () => {
@@ -86,6 +91,15 @@ describe("import confirmation: idempotent decision", () => {
     expect(decideImportConfirmation({ ...pending, state: "confirmed" }, request, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
     expect(decideImportConfirmation({ ...confirmed, confirmedEventId: "" }, request, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
     expect(decideImportConfirmation({ ...pending, state: "unknown" as "pending" }, request, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
+    // A pending record that already names an event would get a second one.
+    for (const eventId of ["dogadaj-izmisljeni-1", ""]) {
+      expect(decideImportConfirmation({ ...pending, confirmedEventId: eventId }, request, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
+    }
+    for (const missing of [undefined, null]) {
+      const id = missing as unknown as string;
+      const record = { ...pending, ownerId: id };
+      expect(decideImportConfirmation(record, { ...request, actorId: id }, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
+    }
     for (const empty of [{ importId: "" }, { ownerId: "" }, { documentId: "" }]) {
       const record = { ...pending, ...empty };
       const same = { importId: record.importId, actorId: record.ownerId, documentId: record.documentId, manifestSha256: MANIFEST };
@@ -106,10 +120,20 @@ describe("import confirmation: idempotent decision", () => {
     }
   });
 
-  it("P9: a non-finite revision on either side is a changed revision", () => {
+  it("P9: a revision that is not an integer on either side is a changed revision", () => {
     expect(decideImportConfirmation(pending, request, { ...context, currentRevision: Number.NaN })).toEqual({ kind: "reject", code: "REVISION_CHANGED" });
-    const nanBase = { ...pending, baseRevision: Number.NaN };
-    expect(decideImportConfirmation(nanBase, request, { ...context, currentRevision: Number.NaN })).toEqual({ kind: "reject", code: "REVISION_CHANGED" });
+    for (const odd of [Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
+      const base = { ...pending, baseRevision: odd };
+      expect(decideImportConfirmation(base, request, { ...context, currentRevision: odd })).toEqual({ kind: "reject", code: "REVISION_CHANGED" });
+    }
+  });
+
+  it("§5 t. 4: with several failures the first in the fixed order answers", () => {
+    const expired = PREPARED + IMPORT_PENDING_LIFETIME_MS;
+    const other = { ...request, manifestSha256: OTHER_MANIFEST };
+    expect(decideImportConfirmation(pending, other, { nowMs: expired, currentRevision: 8, importAllowed: false })).toEqual({ kind: "reject", code: "MANIFEST_MISMATCH" });
+    expect(decideImportConfirmation(pending, request, { nowMs: expired, currentRevision: 8, importAllowed: false })).toEqual({ kind: "reject", code: "EXPIRED" });
+    expect(decideImportConfirmation(pending, request, { ...context, currentRevision: 8, importAllowed: false })).toEqual({ kind: "reject", code: "IMPORT_NOT_ALLOWED" });
   });
 
   it("a rejection carries a code only", () => {
