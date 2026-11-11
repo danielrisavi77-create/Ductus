@@ -226,6 +226,24 @@ describe("replay route R3: later pages pinned to the first page's head (DAN-537)
     expect(await changed.json()).toStrictEqual({ error: "record_changed" });
   });
 
+  it("answers the first page with 409 record_changed when a submission cut hides its start text between the two reads", async () => {
+    const { store, hash } = await record();
+    // The listing ends at `hash`; the checkpoint read finds the start text hidden, and the
+    // listing read again no longer holds that head (the cut kept another segment).
+    const listings = [found(hash), found("c".repeat(64))];
+    const withActor = vi.fn(async (_token, fn) => fn({
+      async query(text: string) {
+        const rows = text.includes("read_replay_checkpoints") ? [] : listings.shift() ?? [];
+        return { rows, rowCount: rows.length } as never;
+      },
+    } as ActorTransaction)) as unknown as WithActor;
+    const response = await handleReplayRequest(post({ documentId: DOCUMENT, from: 0 }), deps({ withActor, payloads: store }));
+    expect(response.status).toBe(409);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toStrictEqual({ error: "record_changed" });
+    expect(listings).toStrictEqual([]);
+  });
+
   it("answers 404, never 409, to a reader who may not see the document, whatever head it sends", async () => {
     const db = database([{ outcome: "not_found" }]);
     const response = await handleReplayRequest(post({ documentId: DOCUMENT, from: 3, head: HEAD }), deps({ withActor: db.withActor }));
