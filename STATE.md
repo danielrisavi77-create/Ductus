@@ -46,7 +46,7 @@ Agent ne uzima ove stavke i ne čeka na njima ako drugi posao može naprijed. �
 
 ## Engineering System v1
 
-Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`, sažetak `docs/ENGINEERING_SYSTEM-SAZETAK.md`. Normalno 3 writera (Backend, Frontend, Platforma); autor ne reviewa svoj PR. `low` i `standard`: neovisni review na headu; `critical`: review + zaseban QA PASS. Novi push poništava review/QA (D-101: osim čistog spajanja `main`). Owner Override samo s razlogom i head SHA-om.
+Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`, sažetak `docs/ENGINEERING_SYSTEM-SAZETAK.md`. Normalno 3 writera (Backend, Frontend, Platforma); autor ne reviewa svoj PR. `low` i `standard`: neovisni review na headu; `critical`: review + zaseban QA PASS. Novi push poništava review/QA (D-101: osim čistog spajanja `main`). Owner Override samo s razlogom i head SHA-om. D-196 (`critical` bez D-97 putanja u red bez naredbe) vrijedi trajno; spajanje s potpunim gateom 24 h dnevno (#87 c.6785418113, c.6785046838).
 
 ## Otvoreni razvojni stog
 
