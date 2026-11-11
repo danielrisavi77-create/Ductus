@@ -215,7 +215,7 @@ export default async function WorkspacePage({
                 content: plan.comments ? (
                   <>
                     <CommentPanel documentId={plan.journal.documentId} session={session} />
-                    <RevisionPanel documentId={plan.journal.documentId} session={session} />
+                    <RevisionPanel documentId={plan.journal.documentId} assignmentId={plan.assignmentId} session={session} />
                   </>
                 ) : (
                   <p className="rail-empty">{t.workspace.commentsEmpty}</p>

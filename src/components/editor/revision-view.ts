@@ -1,16 +1,17 @@
 import { createElement as h, type ReactNode } from "react";
 
-import type { RevisionRequest } from "@/client/revision-requests";
+import type { OpenOutcome } from "@/client/evidence-ingest";
+import type { RespondInput, RespondOutcome, RevisionRequest } from "@/client/revision-requests";
+import { isRevisionText, REVISION_TEXT_MAX, type RevisionKind } from "@/domain/collaboration/revision-input";
 import type { Messages } from "@/lib/i18n/messages.hr";
 
 import styles from "./RevisionPanel.module.css";
 
 /**
  * The student's side of revision requests on /rad (DAN-314, reference N-08
- * states 6 to 10), read only: the student sees each request, its versions and
- * the teacher's closing. The view lives apart from the panel that holds the
- * state, so the unit tests reach every state without a DOM. Written with
- * createElement, like SidePanels.
+ * states 6 to 10). The logic of an answer and the view of the list live
+ * here, apart from the panel that holds the state, so the unit tests reach
+ * every state without a DOM. Written with createElement, like SidePanels.
  *
  * Nothing here judges the work: a state is what the teacher or the student
  * said, shown as they said it. Text is rendered as React text, never as HTML.
@@ -26,10 +27,28 @@ export function displayState(request: RevisionRequest): DisplayState {
   return request.versions.at(-1)?.response?.kind ?? "done";
 }
 
+/** The student answers only the current version of an open or reopened request. */
+export const canAnswer = (request: RevisionRequest): boolean =>
+  request.state === "open" || request.state === "reopened";
+
+export type AnswerError = "signedOut" | "forbidden" | "conflict" | "invalid" | "unavailable" | "submitted" | "unconfirmed";
+
+export type AnswerResult = { kind: "sent" } | { kind: "error"; error: AnswerError; reload: boolean };
+
+/** The revision of the work an answer is given on, read from `openWork`. */
+export type RevisionAt = { kind: "ok"; revision: number } | { kind: "signedOut" | "submitted" | "unavailable" };
+
+export function revisionFromOpen(outcome: OpenOutcome): RevisionAt {
+  if (outcome.status === "opened") {
+    return outcome.work.submitted ? { kind: "submitted" } : { kind: "ok", revision: outcome.work.currentRevision };
+  }
+  return outcome.status === "unauthenticated" ? { kind: "signedOut" } : { kind: "unavailable" };
+}
+
 /**
- * Whether a loaded list may still be shown: the panel is mounted, its session
- * has not ended and the watch says so. After unmount the watch is gone, so the
- * mount itself must say no, or a late `list` could show another session's requests.
+ * Whether an answer may still go out: the panel is mounted, its session has
+ * not ended and the watch says so. After unmount the watch is gone, so the
+ * mount itself must say no, or a late `openWork` could send under another session.
  */
 export type Liveness = {
   readonly mounted: { readonly current: boolean };
@@ -40,6 +59,74 @@ export type Liveness = {
 export const isLive = ({ mounted, stopped, watch }: Liveness): boolean =>
   mounted.current && !stopped.current && !(watch.current?.ended() ?? false);
 
+export type AnswerDeps = {
+  readonly respond: (input: RespondInput, current: () => boolean) => Promise<RespondOutcome>;
+  readonly revision: () => Promise<RevisionAt>;
+  readonly current: () => boolean;
+  /**
+   * Whether the text on the device may hold changes the server has not
+   * confirmed (DAN-314). Asked before and after the revision is read: an
+   * answer names the server's current revision, which lacks such changes.
+   */
+  readonly unconfirmed: () => boolean;
+  /**
+   * How many changes the editor has reported so far (DAN-314). A change typed
+   * while the revision is read may already be confirmed as a newer revision
+   * when the read ends, so `unconfirmed` alone would let the answer name the
+   * revision before it; a moved count refuses the answer as well.
+   */
+  readonly edits: () => number;
+};
+
+/** The text an answer would carry, or null while the buttons stay off. */
+export function answerText(draft: string): string | null {
+  const text = draft.normalize("NFC");
+  return isRevisionText(text) ? text : null;
+}
+
+/** Cuts the field to what `answerText` accepts, counted after NFC as the route counts. */
+export function limitAnswer(value: string): string {
+  const points = [...value.normalize("NFC")];
+  return points.length <= REVISION_TEXT_MAX ? value : points.slice(0, REVISION_TEXT_MAX).join("");
+}
+
+/**
+ * One answer, sent once. The counter is the one `list` returned; a 409 is
+ * shown with a reload of the list and never sent again with a newer counter,
+ * since the teacher may have reopened the request with another instruction.
+ */
+export async function sendAnswer(
+  request: RevisionRequest, kind: RevisionKind, draft: string, deps: AnswerDeps,
+): Promise<AnswerResult> {
+  const explanation = answerText(draft);
+  if (explanation === null || !canAnswer(request)) return { kind: "error", error: "invalid", reload: false };
+  if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
+  if (deps.unconfirmed()) return { kind: "error", error: "unconfirmed", reload: false };
+  const edits = deps.edits();
+  const at = await deps.revision();
+  if (at.kind !== "ok") return { kind: "error", error: at.kind, reload: false };
+  // Reading the revision takes time; the session or the panel may be gone by
+  // now, or a change typed meanwhile is not in the revision just read, even
+  // when the server has confirmed it since.
+  if (!deps.current()) return { kind: "error", error: "signedOut", reload: false };
+  if (deps.unconfirmed() || deps.edits() !== edits) return { kind: "error", error: "unconfirmed", reload: false };
+  const outcome = await deps.respond({
+    requestId: request.id, expectedSeq: request.rowSeq, kind, explanation, responseRevision: at.revision,
+  }, deps.current);
+  if (outcome.kind === "ok") return { kind: "sent" };
+  return { kind: "error", error: outcome.kind, reload: outcome.kind === "conflict" };
+}
+
+/** Drafts after a sent answer: the explanation goes only if it is still the one that was sent. */
+export function clearSent(
+  drafts: Readonly<Record<string, string>>, id: string, sent: string,
+): Readonly<Record<string, string>> {
+  if (drafts[id] !== sent) return drafts;
+  const rest = { ...drafts };
+  delete rest[id];
+  return rest;
+}
+
 export type ListStatus = "loading" | "signedOut" | "forbidden" | "unavailable" | "ok";
 
 export type RevisionListProps = {
@@ -47,18 +134,40 @@ export type RevisionListProps = {
   readonly formatDate: (iso: string) => string;
   readonly status: ListStatus;
   readonly requests: readonly RevisionRequest[];
+  /** True once the work is submitted: no form is shown, and the panel says why. */
+  readonly submitted: boolean;
+  /** The text may hold changes the server has not confirmed: the answer buttons wait, and say why. */
+  readonly unconfirmed: boolean;
+  readonly drafts: Readonly<Record<string, string>>;
+  /** The number of each request from the last list read, so an explanation kept without the list says which request it is for. */
+  readonly numbers?: Readonly<Record<string, number>>;
+  readonly sending: string | null;
+  readonly errors: Readonly<Record<string, AnswerError>>;
+  /** The outcome of the last answer, read out once. */
+  readonly live: string;
+  readonly onDraft: (id: string, value: string) => void;
+  readonly onAnswer: (id: string, kind: RevisionKind) => void;
   readonly onRetry: () => void;
 };
+
+const errorText = (t: RevisionTexts, error: AnswerError): string =>
+  error === "submitted" ? t.submittedNote : t.errors[error];
 
 function RevisionCard({ request, props }: { request: RevisionRequest; props: RevisionListProps }): ReactNode {
   const { t } = props;
   const state = displayState(request);
   const first = request.versions[0]!;
   const last = request.versions.at(-1)!;
+  const answerable = canAnswer(request) && !props.submitted;
+  const draft = props.drafts[request.id] ?? "";
+  const sending = props.sending === request.id;
+  const ready = answerText(draft) !== null && props.sending === null && !props.unconfirmed;
+  const error = props.errors[request.id];
   const by = (own: boolean, other: string) => (own ? t.own : other);
+  const field = `revision-${request.id}`;
 
   return h("article", {
-    className: styles.card,
+    className: answerable ? `${styles.card} ${styles.on}` : styles.card,
     "data-state": state,
     "aria-label": t.number.replace("{n}", String(request.number)),
   },
@@ -76,7 +185,56 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
       : null,
   ]),
   last.closed?.as === "accepted" ? h("p", { className: styles.meta }, t.acceptedMeta.replace("{date}", props.formatDate(last.closed.window))) : null,
-  last.closed?.as === "withdrawn" ? h("p", { className: styles.meta }, t.withdrawnMeta.replace("{date}", props.formatDate(last.closed.window))) : null);
+  last.closed?.as === "withdrawn" ? h("p", { className: styles.meta }, t.withdrawnMeta.replace("{date}", props.formatDate(last.closed.window))) : null,
+  answerable ? h("form", {
+    className: styles.form,
+    onSubmit: (event: { preventDefault: () => void }) => event.preventDefault(),
+  },
+  h("label", { htmlFor: field, className: styles.label }, t.explanationLabel),
+  h("textarea", {
+    id: field, rows: 3, value: draft, readOnly: sending,
+    "aria-describedby": props.unconfirmed ? `${field}-hint ${field}-wait` : `${field}-hint`,
+    onChange: (event: { target: { value: string } }) => props.onDraft(request.id, limitAnswer(event.target.value)),
+  }),
+  h("p", { id: `${field}-hint`, className: styles.hint }, t.explanationHint),
+  props.unconfirmed ? h("p", { id: `${field}-wait`, className: styles.hint }, t.unconfirmedNote) : null,
+  h("div", { className: styles.controls },
+    h("button", { type: "button", className: styles.btn, disabled: !ready, onClick: () => props.onAnswer(request.id, "done") },
+      sending ? t.sending : t.done),
+    h("button", {
+      type: "button", className: `${styles.btn} ${styles.secondary}`, disabled: !ready,
+      onClick: () => props.onAnswer(request.id, "declined"),
+    }, t.declined)),
+  ) : null,
+  // An explanation that could not be sent stays readable, so it can be copied.
+  !answerable && draft !== "" ? h("div", { className: styles.form },
+    h("label", { htmlFor: `${field}-kept`, className: styles.label }, t.keptLabel),
+    h("textarea", { id: `${field}-kept`, rows: 3, value: draft, readOnly: true, "aria-describedby": `${field}-kept-hint` }),
+    h("p", { id: `${field}-kept-hint`, className: styles.hint }, t.keptHint),
+  ) : null,
+  error ? h("p", { role: "alert", className: styles.error }, errorText(t, error)) : null);
+}
+
+/**
+ * Explanations not sent when the list could not be read (QA FAIL c.6784961513):
+ * after a 409 the list is read again, and when that read fails the cards are
+ * gone, but what the student typed stays readable, to copy, with no way to send it.
+ */
+function unloadedDrafts(props: RevisionListProps): ReactNode[] {
+  const { t } = props;
+  const number = (id: string): number | undefined => props.numbers?.[id];
+  // In request order, and each labelled with its request when the last list named it (Grok c.6785580350).
+  const kept = Object.entries(props.drafts).filter(([, draft]) => draft !== "")
+    .sort(([a], [b]) => (number(a) ?? Number.MAX_SAFE_INTEGER) - (number(b) ?? Number.MAX_SAFE_INTEGER));
+  return kept.map(([id, draft]) => {
+    const field = `revision-${id}-kept`;
+    const n = number(id);
+    return h("div", { key: id, className: styles.form },
+      h("label", { htmlFor: field, className: styles.label },
+        n === undefined ? t.keptLabel : t.keptForLabel.replace("{n}", String(n))),
+      h("textarea", { id: field, rows: 3, value: draft, readOnly: true, "aria-describedby": `${field}-hint` }),
+      h("p", { id: `${field}-hint`, className: styles.hint }, t.keptUnloadedHint));
+  });
 }
 
 export function RevisionList(props: RevisionListProps): ReactNode {
@@ -84,11 +242,18 @@ export function RevisionList(props: RevisionListProps): ReactNode {
   let body: ReactNode;
   if (props.status === "loading") body = h("p", { className: "rail-empty" }, t.loading);
   else if (props.status === "signedOut") body = h("p", { className: "rail-empty", role: "status" }, t.signedOut);
-  else if (props.status === "forbidden") body = h("p", { className: "rail-empty" }, t.notAvailable);
+  else if (props.status === "forbidden") {
+    // Access may come back, so the list can be read again like after a failed read (QA FAIL c.6786063110).
+    body = [h("div", { key: "", className: styles.failed },
+      h("p", { className: "rail-empty" }, t.notAvailable),
+      h("button", { type: "button", className: `${styles.btn} ${styles.secondary}`, onClick: props.onRetry }, t.retry)),
+    ...unloadedDrafts(props)];
+  }
   else if (props.status === "unavailable") {
-    body = h("div", { className: styles.failed },
+    body = [h("div", { key: "", className: styles.failed },
       h("p", { className: "rail-empty", role: "alert" }, t.unavailable),
-      h("button", { type: "button", className: `${styles.btn} ${styles.secondary}`, onClick: props.onRetry }, t.retry));
+      h("button", { type: "button", className: `${styles.btn} ${styles.secondary}`, onClick: props.onRetry }, t.retry)),
+    ...unloadedDrafts(props)];
   } else if (props.requests.length === 0) body = h("p", { className: "rail-empty" }, t.empty);
   else body = props.requests.map((request) => h(RevisionCard, { key: request.id, request, props }));
 
@@ -96,8 +261,12 @@ export function RevisionList(props: RevisionListProps): ReactNode {
     h("h2", { id: "revisions-title", className: "rail-section__title" }, t.title,
       h("span", { className: "rail-section__count" }, props.status === "ok" && props.requests.length > 0 ? props.requests.length : null)),
     h("div", { className: styles.list }, body),
-    // A request opened or reopened after the list was read appears without reloading the page.
+    // A request opened or reopened after the list was read appears without reloading the page;
+    // off while an answer is on its way, whose outcome a newer list would otherwise drop.
     props.status === "ok"
-      ? h("button", { type: "button", className: styles.link, onClick: props.onRetry }, t.refresh)
-      : null);
+      ? h("button", { type: "button", className: styles.link, disabled: props.sending !== null, onClick: props.onRetry }, t.refresh)
+      : null,
+    props.submitted && props.status === "ok" && props.requests.some(canAnswer)
+      ? h("p", { className: styles.hint }, t.submittedNote) : null,
+    h("p", { className: styles.live, role: "status", "aria-live": "polite" }, props.live));
 }

@@ -959,6 +959,28 @@ const en = {
     },
     acceptedMeta: "Accepted {date}. The request is closed.",
     withdrawnMeta: "Withdrawn {date}. The request is closed.",
+    explanationLabel: "Explanation",
+    explanationHint: "Write what you changed or why you do not agree, up to 2000 characters.",
+    done: "Say it is done",
+    declined: "I do not agree, with a reason",
+    sending: "Sending…",
+    sent: "The answer was sent.",
+    submittedNote: "The work has been submitted. The request can no longer be answered.",
+    // DAN-314: the answer names the server's current revision, which lacks changes still on the device.
+    unconfirmedNote:
+      "You can answer once the server has received every change to the text. If an error or a conflict is reported with the text, follow that notice first; the explanation you typed stays here.",
+    keptLabel: "Unsent explanation",
+    keptHint: "This explanation was not sent because the request can no longer be answered. Copy it if you want to keep it.",
+    keptForLabel: "Unsent explanation for revision request {n}",
+    keptUnloadedHint: "This explanation was not sent, and the requests cannot be loaded right now. Copy it if you want to keep it.",
+    errors: {
+      signedOut: "Your sign-in has expired. Sign in again.",
+      forbidden: "This account cannot answer this request.",
+      conflict: "The request has changed in the meantime. Its current state is shown.",
+      invalid: "The answer was not accepted. Write between 1 and 2000 characters.",
+      unavailable: "The answer was not sent. Try again.",
+      unconfirmed: "The answer was not sent because the server has not yet received every change to the text.",
+    },
   },
   // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).
   // The connection line is about this page's own requests, never the student.
