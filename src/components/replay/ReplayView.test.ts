@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -122,6 +125,15 @@ describe("ReplayPlayerView (DAN-537)", () => {
     expect(shown).toContain("Promjena 2 od 2");
     expect(shown).toContain(fill(t.gapBetween, { a: 1, b: 2 }));
     expect(shown).toContain("Idi na promjenu 2");
+  });
+
+  it("keeps repeated spaces of the replayed text, in the markup and on the page", async () => {
+    const player = await playerOf(buildRecord(start, [{ at: "10:00", events: [typeAt(1, "Dva  razmaka ")] }]));
+    const markup = renderToStaticMarkup(h(ReplayPlayerView, { player }));
+    expect(markup).toContain("Dva  razmaka");
+    // Without pre-wrap the browser folds the two spaces into one and the change is not seen.
+    const css = readFileSync(path.resolve("src/components/replay/ReplayView.module.css"), "utf8");
+    expect(css).toMatch(/\.text,\s*\.table td\s*\{[^}]*white-space:\s*pre-wrap/);
   });
 
   it("keeps the block ids of the replayed text, so the marked paragraph is the changed one", async () => {

@@ -120,6 +120,13 @@
   color: var(--ink);
 }
 
+/* The replayed text keeps every space and line break it holds: a change of spaces alone must show. */
+.text,
+.table td {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .text h2,
 .text h3,
 .text h4 {
