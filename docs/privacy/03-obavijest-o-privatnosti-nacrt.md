@@ -58,20 +58,24 @@ Svaka vrsta podataka ima svoj rok, a kad rok istekne, podaci se brišu. `[Rokove
 | Vrsta podataka | Rok |
 | --- | --- |
 | Račun, ime i prezime | `[otvoreno; klase 1 i 2]` |
-| Sesije prijave | 30 dana nakon kraja sesije `[određeno, D-273 MQ08; klasa 3]` |
+| Sesije prijave | 30 dana nakon kraja sesije `[određeno, D-273 MQ08; klasa 3; raspored brisanja nije izgrađen, M10.0-S2; rok za zapise odjave (jti) nije zasebno određen, 07 §5]` |
 | Kolegiji, uloge i obavijesti uz zadatak | `[otvoreno; klase 4 do 7]` |
+| Zadatak, pravila fakulteta, projekt i dokument | `[otvoreno; klase 9 do 11]` |
 | Radne verzije i kontrolne točke | `[otvoreno; prijedlog za revizije: do kraja akademske godine zadatka; klase 13 i 14]` |
+| Prikaz rada uživo | `[otvoreno; briše se pri kraju rada ili povlačenju (D-12); klasa 15]` |
 | Predani rad, komentari i zahtjevi za doradu | `[otvoreno; prijedlog: prema pravilniku ustanove, komentari i zahtjevi kao predani rad; klase 16, 18 i 19]` |
 | Izjava o pomoći AI-ja i priloženi ispisi razgovora | `[otvoreno, uz Q-10; klasa 17]` |
 | Evidencija nastanka rada | `[otvoreno; prijedlog: kao predani rad; klasa 21]` |
 | Vrijeme po promjeni | `[VARIJANTA, D-143: otvoreno, kraće od ostale evidencije; klasa 22]` |
 | Razgovori s AI pomoćnikom i zapis prijenosa | `[PLANIRANO, D-194: otvoreno, uz Q-10; klasa 24]` |
 | Zapis o tome tko je otvorio vaš rad | `[otvoreno; prijedlog: dulje od predanog rada; klasa 25]` |
+| Promjene ovlasti nastavnika i administratora | `[otvoreno; klasa 26]` |
 | Paket za izvoz | 24 sata, koliko vrijedi poveznica `[određeno, D-173, D-273 MQ08; klasa 20; izvoz nije izgrađen]` |
+| Odbačeni privremeni tehnički objekti | `[brisanje je odlučeno i izvršava se i prije potvrde ostalih rokova (D-273 MQ08), ali trajanje nije zapisano; klasa 23]` |
 | Tehnički otisci i potvrde predaje | `[otvoreno; prijedlog: rok predanog rada uz rok za prigovor, koji nije određen; klasa 27]` |
 | Zapis o brisanju | `[otvoreno; klasa 28]` |
 | Ankete i razgovori za evaluaciju pilota | `[otvoreno; prijedlog: do kraja evaluacije; klasa 8]` |
-| Zapisi na vašem uređaju | Do sinkronizacije ili odjave `[rok trajanja otvoren, D-118 i D-122; klasa 30]` |
+| Zapisi na vašem uređaju | `[otvoreno; zapis živi do sinkronizacije, a nesinkronizirani zapis ostaje u pregledniku i nakon odjave (D-118); rok trajanja odlučuje se prije pilota (D-122); klasa 30]` |
 | Sigurnosne kopije | `[svaka vrsta kopije ima svoj rok (D-12), nijedan nije određen; klasa 29]` |
 
 Podatak obrisan iz Ductusa ostaje u sigurnosnim kopijama najdulje do isteka roka te kopije; brisanje je potpuno tek kad istekne najdulji rok. Ako se Ductus vraća iz kopije, prije ponovnog otvaranja provjerava se da se obrisani podaci nisu vratili `[planirano, D-272 MQ07]`.
