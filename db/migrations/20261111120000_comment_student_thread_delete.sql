@@ -12,10 +12,16 @@ SET LOCAL ROLE ductus_migrator;
 GRANT CREATE ON SCHEMA collaboration TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
+-- The body CHECK and NOT NULL give way to one CHECK that still requires a
+-- valid body on every live comment; all existing rows are live, so each one
+-- passes, and validating at once scans the table under this transaction's lock.
 ALTER TABLE collaboration.comment
+  -- squawk-ignore ban-drop-constraint
   DROP CONSTRAINT comment_body_check,
+  -- squawk-ignore ban-drop-not-null
   ALTER COLUMN body DROP NOT NULL,
   ADD COLUMN deleted_at timestamptz,
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT comment_body_check CHECK (
     CASE WHEN deleted_at IS NULL THEN collaboration.is_comment_body(body)
          ELSE body IS NULL AND deleted_at >= created_at END
@@ -91,6 +97,8 @@ $$;
 
 -- As before, plus deleted_window: a deleted comment comes back with a null
 -- body and the 5-minute window of its deletion, the same row for everyone.
+-- Its result gains a column, so it is dropped and created again.
+-- squawk-ignore ban-drop-function
 DROP FUNCTION collaboration.list_comments(text);
 CREATE FUNCTION collaboration.list_comments(p_document_id text)
 RETURNS TABLE (
