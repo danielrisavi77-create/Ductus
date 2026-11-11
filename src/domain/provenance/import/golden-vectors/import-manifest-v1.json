@@ -1,0 +1,138 @@
+{
+  "vectorSchema": "ductus-golden-vectors-v1",
+  "about": [
+    "Golden vectors for the import manifest ductus-import-manifest-v1 (DAN-436, contract docs/contracts/import-v1.md, attack plan #1911 M12 and M13). All data is invented.",
+    "manifestSha256 is SHA-256 of the JCS bytes of the manifest, lowercase hex. It is stored beside the manifest, never in it.",
+    "Derived outside the repository code: Python json.dumps with sorted keys and compact separators (JCS for this ASCII data) and hashlib.sha256. Never regenerate them from the code under test."
+  ],
+  "accepted": [
+    {
+      "name": "docx-upload-with-traces",
+      "note": "A docx upload with all three trace kinds in canonical order.",
+      "manifest": {
+        "manifestSchema": "ductus-import-manifest-v1",
+        "documentId": "dokument-izmisljeni-uvoz",
+        "rawSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "contentSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "importId": "0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c",
+        "importKind": "file-upload",
+        "fileFormat": "docx",
+        "rawByteLength": 48213,
+        "traces": [
+          {
+            "traceKind": "comment",
+            "count": 2
+          },
+          {
+            "traceKind": "deletion",
+            "count": 1
+          },
+          {
+            "traceKind": "insertion",
+            "count": 5
+          }
+        ]
+      },
+      "canonical": "{\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"docx\",\"importId\":\"0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c\",\"importKind\":\"file-upload\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"rawByteLength\":48213,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"traces\":[{\"count\":2,\"traceKind\":\"comment\"},{\"count\":1,\"traceKind\":\"deletion\"},{\"count\":5,\"traceKind\":\"insertion\"}]}",
+      "byteLength": 483,
+      "manifestSha256": "554805bf1709ba4863bd3f567195eb22177c2c8c0b5d35f04e60171d1835a623"
+    },
+    {
+      "name": "docx-upload-no-traces",
+      "note": "A docx upload without traces: traces is present and empty.",
+      "manifest": {
+        "manifestSchema": "ductus-import-manifest-v1",
+        "documentId": "dokument-izmisljeni-uvoz",
+        "rawSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "contentSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "importId": "7e1f0c3a-9b2d-4e5f-8a1b-2c3d4e5f6a7b",
+        "importKind": "file-upload",
+        "fileFormat": "docx",
+        "rawByteLength": 1,
+        "traces": []
+      },
+      "canonical": "{\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"docx\",\"importId\":\"7e1f0c3a-9b2d-4e5f-8a1b-2c3d4e5f6a7b\",\"importKind\":\"file-upload\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"rawByteLength\":1,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"traces\":[]}",
+      "byteLength": 375,
+      "manifestSha256": "1e2fe1a4ef33011a3677b0281a7d560a4202ea2bba18dcc5f538a9d944a31101"
+    },
+    {
+      "name": "pdf-upload",
+      "note": "A pdf upload: no traces key at all; rawByteLength at the B-8 limit.",
+      "manifest": {
+        "manifestSchema": "ductus-import-manifest-v1",
+        "documentId": "dokument-izmisljeni-uvoz",
+        "rawSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "contentSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "importId": "c4d5e6f7-a8b9-4c0d-a1e2-f3a4b5c6d7e8",
+        "importKind": "file-upload",
+        "fileFormat": "pdf",
+        "rawByteLength": 2097152
+      },
+      "canonical": "{\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"pdf\",\"importId\":\"c4d5e6f7-a8b9-4c0d-a1e2-f3a4b5c6d7e8\",\"importKind\":\"file-upload\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"rawByteLength\":2097152,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\"}",
+      "byteLength": 368,
+      "manifestSha256": "6b9616b9983c7658643e3d018f5be97e65bca5555214d0fdbe610586d76ad0ec"
+    },
+    {
+      "name": "docx-cloud-version",
+      "note": "A cloud version with savedAt in a whole UTC minute.",
+      "manifest": {
+        "manifestSchema": "ductus-import-manifest-v1",
+        "documentId": "dokument-izmisljeni-uvoz",
+        "rawSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "contentSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "importId": "5a6b7c8d-9e0f-4a1b-b2c3-d4e5f6a7b8c9",
+        "importKind": "cloud-version",
+        "fileFormat": "docx",
+        "rawByteLength": 90000,
+        "traces": [
+          {
+            "traceKind": "insertion",
+            "count": 3
+          }
+        ],
+        "savedAt": "2026-11-10T08:15:00.000Z"
+      },
+      "canonical": "{\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"docx\",\"importId\":\"5a6b7c8d-9e0f-4a1b-b2c3-d4e5f6a7b8c9\",\"importKind\":\"cloud-version\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"rawByteLength\":90000,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"savedAt\":\"2026-11-10T08:15:00.000Z\",\"traces\":[{\"count\":3,\"traceKind\":\"insertion\"}]}",
+      "byteLength": 453,
+      "manifestSha256": "539c8b11abc78ca3c66000fc3617a24b6a47303c22bfa5b8f2d90a305fc6bc29"
+    }
+  ],
+  "rejectedBytes": [
+    {
+      "name": "whitespace",
+      "note": "Valid manifest, pretty-printed: not the JCS bytes.",
+      "text": "{\n \"contentSha256\": \"2222222222222222222222222222222222222222222222222222222222222222\",\n \"documentId\": \"dokument-izmisljeni-uvoz\",\n \"fileFormat\": \"docx\",\n \"importId\": \"0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c\",\n \"importKind\": \"file-upload\",\n \"manifestSchema\": \"ductus-import-manifest-v1\",\n \"rawByteLength\": 48213,\n \"rawSha256\": \"1111111111111111111111111111111111111111111111111111111111111111\",\n \"traces\": [\n  {\n   \"count\": 2,\n   \"traceKind\": \"comment\"\n  },\n  {\n   \"count\": 1,\n   \"traceKind\": \"deletion\"\n  },\n  {\n   \"count\": 5,\n   \"traceKind\": \"insertion\"\n  }\n ]\n}",
+      "code": "MANIFEST_NOT_CANONICAL"
+    },
+    {
+      "name": "key-order",
+      "note": "Valid manifest, keys in reverse order.",
+      "text": "{\"traces\":[{\"traceKind\":\"comment\",\"count\":2},{\"traceKind\":\"deletion\",\"count\":1},{\"traceKind\":\"insertion\",\"count\":5}],\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"rawByteLength\":48213,\"manifestSchema\":\"ductus-import-manifest-v1\",\"importKind\":\"file-upload\",\"importId\":\"0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c\",\"fileFormat\":\"docx\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\"}",
+      "code": "MANIFEST_NOT_CANONICAL"
+    },
+    {
+      "name": "duplicate-key",
+      "note": "JCS text with documentId repeated: JSON.parse keeps the last, the bytes differ.",
+      "text": "{\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"docx\",\"importId\":\"0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c\",\"importKind\":\"file-upload\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"rawByteLength\":48213,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"traces\":[{\"count\":2,\"traceKind\":\"comment\"},{\"count\":1,\"traceKind\":\"deletion\"},{\"count\":5,\"traceKind\":\"insertion\"}],\"documentId\":\"dokument-izmisljeni-uvoz\"}",
+      "code": "MANIFEST_NOT_CANONICAL"
+    },
+    {
+      "name": "number-spelling",
+      "note": "rawByteLength spelled 4.8213e4.",
+      "text": "{\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"docx\",\"importId\":\"0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c\",\"importKind\":\"file-upload\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"rawByteLength\":4.8213e4,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"traces\":[{\"count\":2,\"traceKind\":\"comment\"},{\"count\":1,\"traceKind\":\"deletion\"},{\"count\":5,\"traceKind\":\"insertion\"}]}",
+      "code": "MANIFEST_NOT_CANONICAL"
+    },
+    {
+      "name": "hash-inside",
+      "note": "manifestSha256 inside the manifest is an unknown key.",
+      "text": "{\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"docx\",\"importId\":\"0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c\",\"importKind\":\"file-upload\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"manifestSha256\":\"554805bf1709ba4863bd3f567195eb22177c2c8c0b5d35f04e60171d1835a623\",\"rawByteLength\":48213,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"traces\":[{\"count\":2,\"traceKind\":\"comment\"},{\"count\":1,\"traceKind\":\"deletion\"},{\"count\":5,\"traceKind\":\"insertion\"}]}",
+      "code": "MANIFEST_INVALID"
+    },
+    {
+      "name": "author-key",
+      "note": "An author key is unknown (B5).",
+      "text": "{\"author\":\"Lorem Autor\",\"contentSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"documentId\":\"dokument-izmisljeni-uvoz\",\"fileFormat\":\"docx\",\"importId\":\"0b5c2a7e-3f1d-4c8e-9a6b-1d2e3f4a5b6c\",\"importKind\":\"file-upload\",\"manifestSchema\":\"ductus-import-manifest-v1\",\"rawByteLength\":48213,\"rawSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"traces\":[{\"count\":2,\"traceKind\":\"comment\"},{\"count\":1,\"traceKind\":\"deletion\"},{\"count\":5,\"traceKind\":\"insertion\"}]}",
+      "code": "MANIFEST_INVALID"
+    }
+  ]
+}
