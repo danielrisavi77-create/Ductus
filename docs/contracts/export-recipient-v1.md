@@ -128,7 +128,7 @@ Rok artefakta je zasebno pravilo od roka poveznice (MQ08), iako oba danas traju 
 - Hashevi, tokeni i potpisi ne pišu se u log aplikacije ni workera (D-264 Q11; D3).
 - Isti podatak ima istu vrijednost u sučelju, API-ju i izvozu (R-07; D4).
 - Studentov CSV redak ima iste stupce kao CSV za Merlin i ništa iz sažetka procesa (D-286; D5).
-- Nijedan tekst u paketu ne sadrži riječ iz rječnika zabranjenih izraza (`docs/PRODUCT.md` §5; D6).
+- Tekst koji Ductus sam piše u paket (oznake, naslovi, objašnjenja i tekst sučelja izvoza) ne sadrži riječ iz rječnika zabranjenih izraza (`docs/PRODUCT.md` §5; D6). Predani rad i drugi tekst koji je napisao korisnik prenose se nepromijenjeni, pa se na njih rječnik ne primjenjuje.
 
 ## 8. Veza s drugim ugovorima
 
