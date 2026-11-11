@@ -46,6 +46,9 @@ describe("withActor", () => {
 
     expect(value).toEqual([{ answer: 1 }]);
     expect(db.statements()).toEqual(["BEGIN", "SELECT", "SELECT", "SELECT", "COMMIT", "DISCARD"]);
+    // F-018: the exit check must read the catalogue afresh, whatever the
+    // connection's default isolation.
+    expect(db.sent[0].text).toBe("BEGIN ISOLATION LEVEL READ COMMITTED");
     expect(db.sent[1].text).toContain("set_config('app.session_token', $1, true)");
     expect(db.sent[1].text).toContain("set_config('app.with_actor_tx', $2, true)");
     expect(db.sent[1].values?.[0]).toEqual(TOKEN);

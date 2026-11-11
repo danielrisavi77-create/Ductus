@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { createWithActor } from "@/server/db/with-actor";
+import { type ActorTransaction, createWithActor } from "@/server/db/with-actor";
 
 // withActor against the compose stack (pnpm stack:up, pnpm db:migrate), over
 // a real pool and a real ductus_app login (B-5, docs/BACKEND.md 4.3).
@@ -22,6 +22,7 @@ const userB = randomUUID();
 const tokenA = newToken();
 const tokenB = newToken();
 const tokenLogout = newToken();
+const tokenRace = newToken();
 
 const admin = new pg.Pool({ connectionString: ADMIN_URL, max: 2 });
 const pools: pg.Pool[] = [admin];
@@ -39,6 +40,96 @@ const WHO = "SELECT app.current_user_id() AS user_id, app.current_institution_id
 type Who = { user_id: string | null; institution_id: string | null; pid: number };
 const who = (withActor: ReturnType<typeof createWithActor>, token: string | null) =>
   withActor(token, async (tx) => (await tx.query<Who>(WHO)).rows[0]);
+
+// F-018: the lock as a table. In grants, LOGIN and HELPER stand for the quoted
+// names of the case's login and of its helper role.
+const PLAIN = "LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION";
+type RoleCase = { attributes: string; helper?: string; grants?: string[]; accepted: boolean };
+const ROLE_CASES: Record<string, RoleCase> = {
+  "accepts a plain member of ductus_app": { attributes: `${PLAIN} IN ROLE ductus_app`, accepted: true },
+  "accepts a member of ductus_app without SET": {
+    attributes: PLAIN,
+    grants: ["GRANT ductus_app TO LOGIN WITH INHERIT TRUE, SET FALSE"],
+    accepted: true,
+  },
+  "refuses a BYPASSRLS member": { attributes: "LOGIN NOSUPERUSER BYPASSRLS IN ROLE ductus_app", accepted: false },
+  "refuses a CREATEROLE member": { attributes: "LOGIN NOSUPERUSER NOBYPASSRLS CREATEROLE IN ROLE ductus_app", accepted: false },
+  "refuses a CREATEDB member": { attributes: "LOGIN NOSUPERUSER NOBYPASSRLS CREATEDB IN ROLE ductus_app", accepted: false },
+  "refuses a REPLICATION member": { attributes: "LOGIN NOSUPERUSER NOBYPASSRLS REPLICATION IN ROLE ductus_app", accepted: false },
+  "refuses a login that is not a member": { attributes: PLAIN, accepted: false },
+  "refuses a member also in ductus_identity": { attributes: `${PLAIN} IN ROLE ductus_app`, grants: ["GRANT ductus_identity TO LOGIN"], accepted: false },
+  "refuses a member also in ductus_auth": { attributes: `${PLAIN} IN ROLE ductus_app`, grants: ["GRANT ductus_auth TO LOGIN"], accepted: false },
+  "refuses a member also in ductus_worker": { attributes: `${PLAIN} IN ROLE ductus_app`, grants: ["GRANT ductus_worker TO LOGIN"], accepted: false },
+  "refuses a member also in a predefined role": {
+    attributes: `${PLAIN} IN ROLE ductus_app`,
+    grants: ["GRANT pg_read_all_data TO LOGIN"],
+    accepted: false,
+  },
+  "refuses a member also in another role": {
+    attributes: `${PLAIN} IN ROLE ductus_app`,
+    helper: "NOLOGIN",
+    grants: ["GRANT HELPER TO LOGIN"],
+    accepted: false,
+  },
+  "refuses a member only through another role": {
+    attributes: PLAIN,
+    helper: "NOLOGIN IN ROLE ductus_app",
+    grants: ["GRANT HELPER TO LOGIN"],
+    accepted: false,
+  },
+  "refuses a member with ADMIN OPTION on ductus_app": {
+    attributes: PLAIN,
+    grants: ["GRANT ductus_app TO LOGIN WITH ADMIN OPTION"],
+    accepted: false,
+  },
+  "refuses a member with ADMIN OPTION in a second grant of ductus_app": {
+    attributes: `${PLAIN} IN ROLE ductus_app`,
+    grants: ["GRANT ductus_app TO LOGIN WITH ADMIN OPTION GRANTED BY ductus_migrator"],
+    accepted: false,
+  },
+  "refuses a member that does not inherit ductus_app": {
+    attributes: PLAIN,
+    grants: ["GRANT ductus_app TO LOGIN WITH INHERIT FALSE"],
+    accepted: false,
+  },
+};
+
+// `options` is the startup parameter a connection string can carry, e.g. a
+// default transaction isolation for every transaction on the connection.
+async function createLogin(roleCase: RoleCase, options?: string) {
+  const suffix = randomBytes(4).toString("hex");
+  const quoted = `"it_with_actor_${suffix}"`;
+  const helper = `"it_with_actor_helper_${suffix}"`;
+  const loginPassword = randomBytes(24).toString("hex");
+  if (roleCase.helper) await admin.query(`CREATE ROLE ${helper} ${roleCase.helper}`);
+  const ddl = await admin.query<{ ddl: string }>(`SELECT format('CREATE ROLE ${quoted} ${roleCase.attributes} PASSWORD %L', $1::text) AS ddl`, [
+    loginPassword,
+  ]);
+  await admin.query(ddl.rows[0].ddl);
+  for (const grant of roleCase.grants ?? []) {
+    await admin.query(grant.replace(/\bHELPER\b/g, helper).replace(/\bLOGIN\b/g, quoted));
+  }
+  // CONNECT is not granted to PUBLIC; ductus_app members get it from the role.
+  const connect = await admin.query<{ grant: string; revoke: string }>(
+    `SELECT format('GRANT CONNECT ON DATABASE %I TO ${quoted}', current_database()) AS grant,
+            format('REVOKE CONNECT ON DATABASE %I FROM ${quoted}', current_database()) AS revoke`,
+  );
+  await admin.query(connect.rows[0].grant);
+  const url = new URL(ADMIN_URL);
+  url.username = quoted.slice(1, -1);
+  url.password = loginPassword;
+  const pool = new pg.Pool({ connectionString: url.href, max: 1, options });
+  return {
+    pool,
+    quoted,
+    async drop() {
+      await pool.end();
+      await admin.query(connect.rows[0].revoke);
+      await admin.query(`DROP ROLE IF EXISTS ${quoted}`);
+      await admin.query(`DROP ROLE IF EXISTS ${helper}`);
+    },
+  };
+}
 
 beforeAll(async () => {
   await admin.query(`DROP ROLE IF EXISTS ${LOGIN}`);
@@ -61,6 +152,7 @@ beforeAll(async () => {
     [tokenA, userA, institutionA],
     [tokenB, userB, institutionB],
     [tokenLogout, userA, institutionA],
+    [tokenRace, userA, institutionA],
   ]) {
     await admin.query(
       `INSERT INTO identity.session (token_hash, user_id, institution_id, expires_at)
@@ -194,42 +286,93 @@ describe("withActor over a ductus_app login", () => {
     }
   });
 
-  // QA on #160 (V-1): a misprovisioned login. BYPASSRLS would read past RLS,
-  // and a login outside ductus_app is not the application's at all. Each is
-  // created for this test alone and dropped after it.
-  it.each([
-    ["a BYPASSRLS member of ductus_app", "LOGIN NOSUPERUSER BYPASSRLS IN ROLE ductus_app"],
-    ["a login that is not a member of ductus_app", "LOGIN NOSUPERUSER NOBYPASSRLS"],
-  ])("refuses %s before fn and closes the connection", async (_name, attributes) => {
-    const login = `it_with_actor_${randomBytes(4).toString("hex")}`;
-    const loginPassword = randomBytes(24).toString("hex");
-    const ddl = await admin.query<{ ddl: string }>(
-      `SELECT format('CREATE ROLE %I ${attributes} PASSWORD %L', $1::text, $2::text) AS ddl`,
-      [login, loginPassword],
-    );
+  // QA on #160 (V-1), F-018: the lock over role attributes and memberships.
+  // A login is accepted only with none of the attributes below and ductus_app,
+  // inherited, as its one membership. Every login and helper role is created
+  // for its case alone and dropped after it.
+  it.each(Object.entries(ROLE_CASES))("%s", async (_name, roleCase) => {
+    const login = await createLogin(roleCase);
+    try {
+      const { pid } = (await login.pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      const fn = vi.fn(async (tx: ActorTransaction) => (await tx.query<Who>(WHO)).rows[0]);
+      const after = async () => (await login.pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0].pid;
+      if (roleCase.accepted) {
+        expect((await createWithActor(login.pool)(tokenA, fn)).user_id).toBe(userA);
+        expect(await after()).toBe(pid);
+      } else {
+        await expect(createWithActor(login.pool)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
+        expect(fn).not.toHaveBeenCalled();
+        expect(await after()).not.toBe(pid);
+      }
+    } finally {
+      await login.drop();
+    }
+  });
+
+  // F-018 (cxcq1839): the group role itself has no membership rows, while
+  // pg_has_role answers true for it. LOGIN is given to ductus_app for this
+  // test alone and taken back after it, with the password.
+  it("refuses a login as ductus_app itself", async () => {
+    const before = (
+      await admin.query<{ rolcanlogin: boolean; has_password: boolean }>(
+        "SELECT rolcanlogin, rolpassword IS NOT NULL AS has_password FROM pg_catalog.pg_authid WHERE rolname = 'ductus_app'",
+      )
+    ).rows[0];
+    expect(before).toEqual({ rolcanlogin: false, has_password: false });
+    const groupPassword = randomBytes(24).toString("hex");
+    const ddl = await admin.query<{ ddl: string }>("SELECT format('ALTER ROLE ductus_app LOGIN PASSWORD %L', $1::text) AS ddl", [groupPassword]);
     await admin.query(ddl.rows[0].ddl);
-    // CONNECT is not granted to PUBLIC; ductus_app members get it from the role.
-    const grant = await admin.query<{ grant: string; revoke: string }>(
-      `SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), $1::text) AS grant,
-              format('REVOKE CONNECT ON DATABASE %I FROM %I', current_database(), $1::text) AS revoke`,
-      [login],
-    );
-    await admin.query(grant.rows[0].grant);
     const url = new URL(ADMIN_URL);
-    url.username = login;
-    url.password = loginPassword;
+    url.username = "ductus_app";
+    url.password = groupPassword;
     const pool = new pg.Pool({ connectionString: url.href, max: 1 });
     try {
-      const { pid } = (await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      const { pid, role } = (
+        await pool.query<{ pid: number; role: string }>("SELECT pg_catalog.pg_backend_pid() AS pid, session_user::text AS role")
+      ).rows[0];
+      expect(role).toBe("ductus_app");
       const fn = vi.fn(async () => "ran");
       await expect(createWithActor(pool)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
       expect(fn).not.toHaveBeenCalled();
-      const after = (await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
-      expect(after.pid).not.toBe(pid);
+      expect((await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0].pid).not.toBe(pid);
     } finally {
       await pool.end();
-      await admin.query(grant.rows[0].revoke);
-      await admin.query(`DROP ROLE IF EXISTS ${login}`);
+      await admin.query("ALTER ROLE ductus_app NOLOGIN PASSWORD NULL");
+    }
+  });
+
+  // Istodobnost (F-018): the exit check reads the catalogue again, so a
+  // membership or attribute given to the login while fn runs rolls back what
+  // fn did and closes the connection. cxcr1839: also when the connection's
+  // default isolation would keep the snapshot of the entry check.
+  it.each(
+    ["", "repeatable read", "serializable"].flatMap((isolation) => [
+      ["another role", isolation, (role: string) => `GRANT ductus_identity TO ${role}`] as const,
+      ["an attribute", isolation, (role: string) => `ALTER ROLE ${role} CREATEDB`] as const,
+    ]),
+  )("rolls back when the login gains %s while fn runs (default isolation: '%s')", async (_name, isolation, change) => {
+    const options = isolation ? `-c default_transaction_isolation=${isolation.replace(" ", "\\ ")}` : undefined;
+    const login = await createLogin(ROLE_CASES["accepts a plain member of ductus_app"], options);
+    try {
+      const { pid, isolation: shown } = (
+        await login.pool.query<{ pid: number; isolation: string }>(
+          "SELECT pg_catalog.pg_backend_pid() AS pid, pg_catalog.current_setting('default_transaction_isolation') AS isolation",
+        )
+      ).rows[0];
+      expect(shown).toBe(isolation || "read committed");
+      await expect(
+        createWithActor(login.pool)(tokenRace, async (tx) => {
+          expect((await tx.query("SELECT pg_catalog.current_setting('transaction_isolation') AS i")).rows[0].i).toBe("read committed");
+          expect((await tx.query("SELECT identity.close_current_session() AS closed")).rows[0].closed).toBe(true);
+          await admin.query(change(login.quoted));
+          return "saved";
+        }),
+      ).rejects.toThrow("changed inside fn");
+      const after = (await login.pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      expect(after.pid).not.toBe(pid);
+      expect((await who(createWithActor(appPool(1)), tokenRace)).user_id).toBe(userA);
+    } finally {
+      await login.drop();
     }
   });
 });
