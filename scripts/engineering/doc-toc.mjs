@@ -255,13 +255,20 @@ export function applyToc(text) {
   // A final newline keeps a last empty line a line when the pieces are joined.
   const final = text.endsWith("\n") ? "\n" : "";
   const join = (lines) => lines.join("\n") + final;
-  const count = docSections(join([...before, ...after])).length;
-  const placeholder = [START, ...Array(count).fill("-"), END];
-  const sections = docSections(join([...before, ...placeholder, ...after]));
-  const block = [START, ...sections.map(entry), END].map((line, i, all) =>
+  // The block itself can change what the lines around it belong to (its markers close a list item
+  // before them), so the table is rebuilt in place until it describes the text it sits in.
+  let block = [START, END];
+  for (let round = 0; ; round++) {
+    const sections = docSections(join([...before, ...block, ...after]));
+    const next = [START, ...sections.map(entry), END];
+    if (next.join("\n") === block.join("\n")) break;
+    if (round === 8) throw new Error("toc: the table of contents does not settle");
+    block = next;
+  }
+  const lines = block.map((line, i, all) =>
     i === all.length - 1 && !after.length && !final ? line : line + cr,
   );
-  return join([...before, ...block, ...after]);
+  return join([...before, ...lines, ...after]);
 }
 
 const ROOT = path.resolve(

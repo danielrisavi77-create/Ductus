@@ -200,6 +200,23 @@ const cases = [
     input: "-     ```\n## 1. A\n",
     output: `-     \`\`\`\n${block("- §1 A: retci 6-6")}\n\n## 1. A\n`,
   },
+  {
+    // CommonMark (commonmark.js 0.31.2): "2. b" starts a new list, so "unutra" is a section.
+    name: "an ordered item after a bullet item starts a new list",
+    input: "- a\n2. b\n  ## unutra\n## vani\n",
+    output: `- a\n2. b\n${block("- unutra: retci 8-8", "- vani: retci 9-9")}\n\n  ## unutra\n## vani\n`,
+  },
+  {
+    // The markers close the item, so the heading after them is a section only with the block in place.
+    name: "the block closes a list item before it",
+    input: `- a\n${block()}\n  ## B\n`,
+    output: `- a\n${block("- B: retci 5-5")}\n  ## B\n`,
+  },
+  {
+    name: "a range counted without the block is corrected",
+    input: `- a\n${block("- B: retci 4-4")}\n  ## B\n`,
+    output: `- a\n${block("- B: retci 5-5")}\n  ## B\n`,
+  },
 ];
 
 for (const { name, input, output } of cases) {
@@ -275,8 +292,11 @@ const freeLine = fc.constantFrom(
   "- ```",
   "  ```",
   "1. x",
+  "2. y",
   "-",
   "*",
+  "  ## G",
+  "  tekst",
 );
 const withEol = (lines, crlf, final) => {
   const eol = crlf ? "\r\n" : "\n";
@@ -377,6 +397,27 @@ test("property: applyToc is idempotent", () => {
 
 /** ATX heading level of a line with a title, or 0. */
 const atxLevel = (line) => /^ {0,3}(#{1,6})[ \t]/.exec(line)?.[1].length ?? 0;
+
+test("property: the block lists the sections of the text it sits in", () => {
+  fc.assert(
+    fc.property(freeDoc, (text) => {
+      const out = tryToc(text);
+      fc.pre(out !== null && docSections(out).length > 0);
+      const lines = splitLines(out).map((line) => line.trim());
+      // Lines are trimmed, so a level 3 entry loses its indent.
+      const want = docSections(out)
+        .map((s) => `- ${s.label}: retci ${s.start}-${s.end}`)
+        .join("\n");
+      const found = lines.some((line, i) => {
+        if (line !== START) return false;
+        const end = lines.indexOf(END, i);
+        return end > i && lines.slice(i + 1, end).join("\n") === want;
+      });
+      assert.ok(found, JSON.stringify(out));
+    }),
+    { numRuns: 2000 },
+  );
+});
 
 test("property: every range starts at its heading and ends before the next one of its level or above", () => {
   fc.assert(
