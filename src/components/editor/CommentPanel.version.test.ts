@@ -172,7 +172,7 @@ function thread(letter: Letter, number: number): CommentThread {
     number,
     state: "open",
     anchor: createTextAnchor({ nodeId: ID[letter] as NodeId, nodeText: TEXT[letter], start, end: start + QUOTE[letter].length }),
-    comments: [{ id: `0000000${number}-2222-4222-8222-222222222222`, role: "teacher", isOwn: false, body: `Komentar ${number}.`, createdWindow: "2026-11-02T10:00:00.000Z" }],
+    comments: [{ id: `0000000${number}-2222-4222-8222-222222222222`, role: "teacher", isOwn: false, body: `Komentar ${number}.`, createdWindow: "2026-11-02T10:00:00.000Z", deletedWindow: null }],
   };
 }
 

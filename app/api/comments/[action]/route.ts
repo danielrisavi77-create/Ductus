@@ -9,7 +9,7 @@ import { withActor } from "@/server/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ACTIONS = new Set<string>(["create", "reply", "resolve", "reopen", "list"]);
+const ACTIONS = new Set<string>(["create", "reply", "resolve", "reopen", "delete", "list"]);
 
 function unavailable(status = 503): Response {
   return Response.json({ error: status === 404 ? "not_found" : "unavailable" }, {

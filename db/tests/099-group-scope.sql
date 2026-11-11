@@ -80,7 +80,8 @@ SELECT is(pg_temp.reach('nina', 'doc-dora-z1'), 'text,comments,summary,replay,ch
 SELECT is(pg_temp.reach('nina', 'doc-ana-z1'), '-', 'and none of Ana''s');
 SELECT is(pg_temp.reach('vesna', 'doc-dora-z1'), 'text,comments,summary,replay,checkpoints,fast_path,comment',
   'Vesna reaches every surface of Dora''s work');
-SELECT is(pg_temp.reach('ana', 'doc-ana-z1'), 'text,comments,summary,replay,checkpoints',
+-- The owner also opens a thread on her own work (DAN-215, D-201 t. 3(c)).
+SELECT is(pg_temp.reach('ana', 'doc-ana-z1'), 'text,comments,summary,replay,checkpoints,comment',
   'Ana still reaches her own work as its owner');
 SELECT is(pg_temp.can('ana', 'doc-ana-z1'), 'read,write', 'and still writes it');
 SELECT is(pg_temp.reach('dora', 'doc-ana-z1'), '-', 'Dora does not reach Ana''s work');
