@@ -102,7 +102,7 @@ for (const path of ORDINARY_DOCS) {
   const directory = [];
   // The bare docs root is checked separately (WHOLE_DOCS).
   for (let dir = dirname(path); dir !== "." && dir !== "docs"; dir = dirname(dir)) {
-    directory.push(new RegExp(`(?<![\\w.-])${escape(dir)}/?(?=[\\s"'\`*{)$:;,|\\]]|\\$\\{|$)`, "m"));
+    directory.push(new RegExp(`(?<![\\w.-])${escape(dir)}\\/?(?![\\w.\\/-])`, "m"));
   }
   PATTERNS.set(path, {
     // `docs/x/README.md` is another file, so a root name after `name/` is not it; `${root}/` and `../` are.
@@ -151,7 +151,8 @@ test("the reader matcher catches joined, concatenated and listed paths", () => {
   }
   assert.equal(reads(nested, at, forms(`"${top}/" + "${dir.slice(5)}/" + "${posix.basename(nested)}"`)), "names");
   for (const text of [`"${dir}"`, `"${dir}/" + f`, `"${dir}" + "/" + f`, `join("${top}/", "${dir.slice(5)}")`,
-    `new URL("../../${dir}/", import.meta.url)`, `[\n  "${dir}",\n  "src/app",\n]`, `\`${dir}/\${f}\``]) {
+    `new URL("../../${dir}/", import.meta.url)`, `[\n  "${dir}",\n  "src/app",\n]`, `\`${dir}/\${f}\``,
+    `tar -cf x ${dir}>log`, `ls ${dir}/>log`, `wc <${dir}<in`, `ls ${dir}&`, `X=${dir}=y`, `{${dir}}`, `ls ${dir}#x`]) {
     assert.equal(reads(nested, at, forms(text)), "reads the directory of", text);
   }
   assert.equal(reads(nested, `${dir}/x.mjs`, forms(`"${posix.basename(nested)}"`)), "lists");
