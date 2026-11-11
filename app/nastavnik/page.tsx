@@ -9,8 +9,8 @@ import TeacherCourses from "@/components/teacher/TeacherCourses";
 import { readWorkAccommodationsMany } from "@/components/teacher/work-accommodations-read";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { sessionPrincipal } from "@/server/auth/principal";
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { readAssignmentSubmissionsMany } from "@/server/evidence/assignment-submissions";
 import { readTeacherCourses } from "@/server/institution/teacher-courses";
@@ -29,7 +29,7 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 // closed one Z-03 and a person who is not a teacher Z-05, none of them a
 // course or whether one exists.
 export default async function TeacherHomePage() {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const token = liveSessionToken(await cookies());
   pageActivity(token);
   const [read, principal] = await Promise.all([
     token === undefined ? null : readTeacherCourses(token, withActor),

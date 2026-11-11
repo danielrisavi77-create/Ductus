@@ -9,7 +9,7 @@ import { FastPath, FastPathLive } from "@/components/teacher/FastPath";
 import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { withActor } from "@/server/db";
 
 import styles from "./page.module.css";
@@ -25,7 +25,7 @@ export const metadata = { title: `${t.fastPath.title} · ${t.app.name}` };
 // access screens of the other teacher pages, Z-05 without a sign-in.
 export default async function FastPathPage({ searchParams }: { searchParams: Promise<{ zadatak?: string | string[] }> }) {
   const assignmentId = assignmentParam((await searchParams).zadatak);
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const token = liveSessionToken(await cookies());
   pageActivity(token);
   const { tag, at } = shellSession(token);
   // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
