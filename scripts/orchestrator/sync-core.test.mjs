@@ -46,6 +46,9 @@ test("ciWait waits for an empty, unreadable or running roll-up", () => {
   const w = ciWait([run("Lint", "SUCCESS"), run("E2E", "", "IN_PROGRESS")], ["Lint", "E2E"]);
   assert.equal(w.state, "waiting");
   assert.deepEqual(w.running, ["E2E"]);
+  for (const status of ["WAITING", "REQUESTED", "QUEUED"]) {
+    assert.equal(ciWait([run("Lint", "SUCCESS"), run("Deploy", status, status)], ["Lint"]).state, "waiting", status);
+  }
 });
 
 test("ciWait waits for a required check that has not reported yet", () => {

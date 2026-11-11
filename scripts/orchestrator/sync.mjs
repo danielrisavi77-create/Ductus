@@ -54,11 +54,16 @@ try {
   if (plan.action === "merge") {
     try {
       await git("merge", "--no-edit", "origin/main");
-    } catch {
-      const files = await tryGit("diff", "--name-only", "--diff-filter=U");
+    } catch (e) {
+      const files = ((await tryGit("diff", "--name-only", "--diff-filter=U")) ?? "").split("\n").filter(Boolean);
       await tryGit("merge", "--abort");
+      // Only unmerged files mean a conflict; anything else is git's own failure, shown as is.
+      if (files.length === 0) {
+        console.error(`merge failed, nothing changed: ${e.stderr?.trim() || e.message}`);
+        process.exit(1);
+      }
       console.error("CONFLICT: merge aborted, nothing changed. Resolve by hand: git merge origin/main");
-      for (const f of (files ?? "").split("\n").filter(Boolean)) console.error(`  ${f}`);
+      for (const f of files) console.error(`  ${f}`);
       process.exit(1);
     }
     // orch:push keeps the push guard and compares the remote head with the local one.

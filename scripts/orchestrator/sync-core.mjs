@@ -3,7 +3,8 @@
 import { GATE_STATUSES } from "./merge-ready-core.mjs";
 import { latestChecks } from "./orchestrator-core.mjs";
 
-const RUNNING_STATES = new Set(["PENDING", "QUEUED", "IN_PROGRESS"]);
+// WAITING (environment approval) and REQUESTED are check runs that have not finished either.
+const RUNNING_STATES = new Set(["PENDING", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED"]);
 export const DEFAULT_WAIT_MIN = 30;
 
 /** `<pr> [--wait-min N]`; null when the arguments are not exactly that. */
