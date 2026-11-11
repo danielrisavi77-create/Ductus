@@ -203,6 +203,7 @@ SELECT bag_eq(
     'require_course_teacher(p_course_id uuid, OUT user_id uuid, OUT institution_id uuid)',
     'is_confirmed_teacher(p_user_id uuid, p_course_id uuid)',
     'set_course_holder(p_course_id uuid, p_holder_id uuid) definer app',
+    'hand_over_course(p_course_id uuid, p_holder_id uuid) definer app',
     'create_seminar_group(p_course_id uuid, p_name text) definer app',
     'assign_group_teacher(p_group_id uuid, p_teacher_id uuid) definer app',
     'assign_group_student(p_group_id uuid, p_student_id uuid) definer app',
