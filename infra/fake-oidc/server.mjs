@@ -6,10 +6,12 @@ import { createServer } from "node:http";
 
 import Provider from "oidc-provider";
 import { ACCOUNTS, demoAccountClaims, isDemoAccountId } from "./accounts.mjs";
-import { DEFAULT_POST_LOGOUT_REDIRECT_URIS, DEFAULT_REDIRECT_URIS, redirectUriList } from "./redirect-uris.mjs";
+import { DEFAULT_POST_LOGOUT_REDIRECT_URIS, DEFAULT_REDIRECT_URIS, loopbackIssuer, redirectUriList } from "./redirect-uris.mjs";
 
 const PORT = Number(process.env.PORT ?? 8080);
-const ISSUER = process.env.ISSUER ?? `http://localhost:${PORT}`;
+// F-019: the issuer and every redirect address are on this machine; any other
+// value stops the provider here, before it listens.
+const ISSUER = loopbackIssuer(process.env.ISSUER, `http://localhost:${PORT}`);
 // Comma separated; http and https for the app on port 3000 by default (the login
 // E2E runs the app over https).
 const REDIRECT_URIS = redirectUriList(process.env.REDIRECT_URI, DEFAULT_REDIRECT_URIS);
