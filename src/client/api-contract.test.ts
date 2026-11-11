@@ -105,6 +105,7 @@ describe("contract: POST /api/comments/list and listComments", () => {
     anchor: ANCHOR,
     state: "open",
     created_window: new Date("2026-10-17T10:05:00Z"),
+    deleted_window: null,
   };
 
   const stubFetch = (rows: Record<string, unknown>[]) =>
@@ -124,6 +125,20 @@ describe("contract: POST /api/comments/list and listComments", () => {
     const [thread] = outcome.threads;
     expect(thread).toMatchObject({ id: THREAD, number: 1, state: "open", anchor: ANCHOR });
     expect(thread?.comments.map((c) => c.role)).toStrictEqual(["teacher", "student"]);
+  });
+
+  it("a comment the student deleted reaches the client at its place, without text (DAN-215)", async () => {
+    stubFetch([ROW, {
+      ...ROW, comment_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", comment_position: 2, author_role: "student",
+      anchor: null, body: null, deleted_window: new Date("2026-10-17T11:20:00Z"),
+    }]);
+    const outcome = await listComments(DOC);
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind !== "ok") return;
+    expect(outcome.threads[0]?.comments.map((c) => [c.body, c.deletedWindow])).toStrictEqual([
+      ["Invented comment.", null],
+      [null, "2026-10-17T11:20:00.000Z"],
+    ]);
   });
 
   it("a thread without rows is an empty list, not an error", async () => {

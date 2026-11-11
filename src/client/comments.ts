@@ -15,9 +15,12 @@ export type ThreadComment = {
   readonly id: string;
   readonly role: CommentRole;
   readonly isOwn: boolean;
-  readonly body: string;
+  /** Null once the student who wrote it deleted it; it keeps its place (DAN-215). */
+  readonly body: string | null;
   /** Start of the 5-minute window (P-03) the comment was written in. */
   readonly createdWindow: string;
+  /** Start of the 5-minute window of the deletion; null while the comment stands. */
+  readonly deletedWindow: string | null;
 };
 
 export type CommentThread = {
@@ -53,15 +56,20 @@ export function threadsFromList(value: unknown): CommentThread[] | null {
   const threads: { id: string; state: ThreadState; anchor: TextAnchor | null; comments: ThreadComment[] }[] = [];
   for (const row of value.comments as unknown[]) {
     if (!isObject(row)) return null;
-    const { threadId, commentId, position, authorRole, isOwn, body, anchor, state, createdWindow } = row;
+    const { threadId, commentId, position, authorRole, isOwn, body, anchor, state, createdWindow, deletedWindow } = row;
+    const standing = deletedWindow === null && typeof body === "string";
+    const deleted = body === null && typeof deletedWindow === "string" && !Number.isNaN(Date.parse(deletedWindow));
     if (typeof threadId !== "string" || !UUID.test(threadId) || typeof commentId !== "string" || !UUID.test(commentId)
       || typeof position !== "number" || !Number.isSafeInteger(position) || position < 1
       || typeof authorRole !== "string" || !ROLES.has(authorRole) || typeof isOwn !== "boolean"
-      || typeof body !== "string" || typeof state !== "string" || !STATES.has(state)
+      || !(standing || deleted) || typeof state !== "string" || !STATES.has(state)
       || typeof createdWindow !== "string" || Number.isNaN(Date.parse(createdWindow))) {
       return null;
     }
-    const comment: ThreadComment = { id: commentId, role: authorRole as CommentRole, isOwn, body, createdWindow };
+    const comment: ThreadComment = {
+      id: commentId, role: authorRole as CommentRole, isOwn, body: body as string | null, createdWindow,
+      deletedWindow: deletedWindow as string | null,
+    };
     const last = threads.at(-1);
     if (position === 1) {
       if (threads.some((t) => t.id === threadId)) return null;
