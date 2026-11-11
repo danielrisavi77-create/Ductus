@@ -74,6 +74,11 @@ async function operator(sessionToken: string, procedure: "appoint" | "revoke"): 
   });
 }
 
+/** Drops the provider's own login, so the next sign-in shows its account choice again. */
+async function forgetProviderLogin(page: Page): Promise<void> {
+  await page.context().clearCookies({ name: /^_session/ });
+}
+
 /** The mark of an ended session, written by the page's script as endSessionsInCookie does. */
 async function markEnded(page: Page, sessionToken: string): Promise<string> {
   const tag = sessionTag(sessionToken);
@@ -149,10 +154,12 @@ test("the administrator's overview reads the mark of an ended session, and close
 // then signs in in the same browser. The mark of A never hides B.
 test("a newer session in the same browser keeps its screens beside the mark of the ended one", async ({ page }) => {
   await asTeacher(page);
+  await forgetProviderLogin(page);
   await signIn(page, "/zadaci", "Ustanova B: nastavnica");
   const ended = await token(page);
   const tagA = await markEnded(page, ended);
 
+  await forgetProviderLogin(page);
   await signIn(page, "/nastavnik", "Demo nastavnik");
   const live = await token(page);
   expect(live).not.toBe(ended);
