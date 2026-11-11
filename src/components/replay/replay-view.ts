@@ -99,7 +99,8 @@ export type HistoryRow =
  * The rows of a paragraph's history up to change `at`, newest first: the
  * current version, the one just before it and the first recorded one, with
  * every gap of the record up to `at` at its place, since the paragraph may
- * have changed inside it. A record that stops after `at` shows its stop too.
+ * have changed inside it. Once the paragraph has no later change, a record
+ * that stops after `at` shows its stop too.
  *
  * Across a resumed gap the paragraph may already differ in the verified
  * document the replay resumes from. That text is a row of its own, and the
@@ -108,9 +109,12 @@ export type HistoryRow =
  * for a paragraph no change touched after the gap.
  */
 export function historyRows(history: readonly ParagraphHistoryEntry[], at: number, current?: string | null): HistoryRow[] {
+  // The stop of the record ends the paragraph's history once no later change of
+  // it is left: with one paragraph replayed, `at` never passes its last change.
+  const final = history.every((entry) => entry.entry === "gap" || entry.index <= at);
   const shown = history.filter((entry) => entry.entry === "change"
     ? entry.index <= at
-    : entry.beforeIndex <= at || (entry.gap === "not_resumed" && entry.beforeIndex === at + 1));
+    : entry.beforeIndex <= at || (entry.gap === "not_resumed" && final));
   const changes = shown.flatMap((entry) => (entry.entry === "change" ? [entry] : []));
   if (changes.length === 0) return [];
   const last = changes[changes.length - 1];

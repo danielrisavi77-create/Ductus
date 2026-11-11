@@ -195,8 +195,15 @@ describe("replay words (DAN-537)", () => {
       rows: [stopped(3), `Sadašnja (promjena 1) | „A” | ${t.historyNotYet} | utipkano`],
     },
     {
-      name: "K2 before the last change replayed, the stop is not shown yet",
+      name: "K2 one paragraph replayed: the stop shows at its last change",
       history: [change(1, "A"), { entry: "gap", gap: "not_resumed", beforeIndex: 4 }],
+      at: 1,
+      current: "A",
+      rows: [stopped(3), `Sadašnja (promjena 1) | „A” | ${t.historyNotYet} | utipkano`],
+    },
+    {
+      name: "K2 before a later change of the paragraph, the stop is not shown yet",
+      history: [change(1, "A"), change(3, "AB", "editor", "A"), { entry: "gap", gap: "not_resumed", beforeIndex: 4 }],
       at: 2,
       current: "A",
       rows: [`Sadašnja (promjena 1) | „A” | ${t.historyNotYet} | utipkano`],
