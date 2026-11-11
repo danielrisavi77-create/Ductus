@@ -54,9 +54,11 @@ test("ciWait waits for a required check that has not reported yet", () => {
   assert.deepEqual(w.missing, ["E2E"]);
 });
 
-test("ciWait is settled on finished checks, red or green, and ignores the gate and the authorization", () => {
+test("ciWait is settled on finished checks, red or green, and ignores the statuses that wait for people", () => {
   const rollup = [run("Lint", "SUCCESS"), run("E2E", "FAILURE"),
-    { context: GATE_CONTEXT, state: "PENDING" }, { context: "Merge authorization", state: "PENDING" }];
-  const w = ciWait(rollup, ["Lint", "E2E", GATE_CONTEXT, "Merge authorization"]);
+    { context: GATE_CONTEXT, state: "PENDING" }, { context: "Merge authorization", state: "PENDING" },
+    { context: "Auto-merge eligible", state: "PENDING" },
+    { name: "Mergify Merge Queue", appSlug: "mergify", status: "IN_PROGRESS", conclusion: "" }];
+  const w = ciWait(rollup, ["Lint", "E2E", GATE_CONTEXT, "Merge authorization", "Auto-merge eligible"]);
   assert.deepEqual(w, { state: "settled", running: [], missing: [] });
 });

@@ -1,8 +1,8 @@
 // Pure core of orch:sync: argument parsing, the local-state decision and the CI wait.
 // No git and no GitHub here; the entry script feeds it what it read.
-import { GATE_CONTEXT, latestChecks } from "./orchestrator-core.mjs";
+import { GATE_STATUSES } from "./merge-ready-core.mjs";
+import { latestChecks } from "./orchestrator-core.mjs";
 
-const AUTHORIZATION_CONTEXT = "Merge authorization";
 const RUNNING_STATES = new Set(["PENDING", "QUEUED", "IN_PROGRESS"]);
 export const DEFAULT_WAIT_MIN = 30;
 
@@ -41,15 +41,16 @@ export function syncPlan({ pr, local }) {
 }
 
 /**
- * State of CI on one head for the wait loop. The review gate and the merge
- * authorization wait for people, so they never keep the loop waiting.
+ * State of CI on one head for the wait loop. The review gate, the merge authorization
+ * and "Auto-merge eligible" wait for people, and the merge queue's own checks
+ * (Mergify, by App slug) wait for those, so none of them keeps the loop waiting.
  *   required  requiredStatusChecks() shape, or null when it could not be read
  * Returns { state: "waiting" | "settled", running: [names], missing: [names] }.
  */
 export function ciWait(rollup, required) {
-  const skip = (name) => name === GATE_CONTEXT || name === AUTHORIZATION_CONTEXT;
+  const skip = (name) => GATE_STATUSES.has(name);
   const nameOf = (c) => c.name ?? c.context;
-  const checks = latestChecks(Array.isArray(rollup) ? rollup : []).filter((c) => !skip(nameOf(c)));
+  const checks = latestChecks(Array.isArray(rollup) ? rollup : []).filter((c) => !skip(nameOf(c)) && c?.appSlug !== "mergify");
   const running = checks
     .filter((c) => RUNNING_STATES.has(String(c.conclusion || c.state || c.status || "").toUpperCase()))
     .map(nameOf);
