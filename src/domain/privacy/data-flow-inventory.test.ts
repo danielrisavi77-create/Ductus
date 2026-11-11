@@ -238,3 +238,169 @@ describe(INVENTORY, () => {
     expect(how).toContain("IF v_role = 'teacher'");
   });
 });
+
+// DAN-709: completeness in both directions. The tests above check that what the
+// inventory cites exists; these check that what the code does is cited. Classes
+// of flows: (1) database tables, (2) outside providers, (3) exports. Test only:
+// a gap found here is a gap in docs/privacy/08, to be closed there (DAN-430
+// follow-up), never hidden by editing the code or skipping the test.
+
+type Sources = {
+  inventory: string;
+  migrations: Record<string, string>;
+  read: (path: string) => string | undefined;
+  deps: string[];
+  services: string[];
+  exporters: string[];
+};
+type Provider = { name: string; dep?: string; service?: string; inventory: RegExp };
+
+// Every runtime dependency is classified: a provider the inventory must describe,
+// or a library that sends nothing anywhere. A new dependency fails until sorted.
+const PROVIDERS: Provider[] = [
+  { name: "AAI@EduHr (OIDC)", dep: "openid-client", inventory: /AAI@EduHr/ },
+  { name: "AWS KMS", dep: "@aws-sdk/client-kms", inventory: /KMS/ },
+  { name: "job queue", dep: "pg-boss", inventory: /pgboss/ },
+  { name: "local mail", service: "mail", inventory: /E-pošta/ },
+  { name: "browser journal", dep: "dexie", inventory: /Lokalni dnevnik/ },
+];
+const LOCAL_ONLY_DEPS = [/^@tiptap\//, /^next$/, /^react(-dom)?$/, /^pg$/];
+// Tables no inventory-cited code reaches on main (DAN-709, found by this test).
+// The first seven have no caller in app code (the note under the table says so
+// for mentorships, faculty rules and admins); the last two are read by
+// src/server/institution/institution-courses.ts, which no flow cites yet.
+// An entry that stops being a gap fails the test, so the list cannot go stale.
+const KNOWN_GAPS = [
+  "audit.course_handover", "audit.faculty_rule_event", "audit.mentorship_event",
+  "institution.course_editor", "institution.faculty_work_rule", "institution.mentorship_request",
+  "institution.team_substitution", "institution.work_grant",
+  "institution.course_holder", "institution.seminar_group_teacher",
+];
+const SCHEMAS = "audit|collaboration|evidence|identity|institution|pgboss";
+
+function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = PROVIDERS): string[] {
+  const errors: string[] = [];
+  const inv = s.inventory.toLowerCase();
+  const flows = parseFlows(s.inventory);
+  const cited = [...new Set(flows.flatMap((f) => f.paths))];
+  // Cited documents never count as coverage: they describe, the code does.
+  const citedText = cited.map((p) => (p.startsWith("docs/") ? "" : (s.read(p)?.toLowerCase() ?? "")));
+  const code = citedText.filter((_, i) => !cited[i].startsWith("db/")).join("\n");
+
+  const tables = new Set<string>();
+  const functions: [string, string][] = [];
+  for (const sql of Object.values(s.migrations)) {
+    for (const m of sql.matchAll(/create table (?:if not exists )?([a-z_]+\.[a-z_]+)/gi)) tables.add(m[1].toLowerCase());
+    for (const part of sql.split(/create (?:or replace )?function /i).slice(1)) {
+      const name = part.match(/^([a-z_]+\.[a-z_]+)\s*\(/i)?.[1]?.toLowerCase();
+      if (name) functions.push([name, part.toLowerCase().split(/\n\$\$;|\n\$[a-z_]*\$;/)[0]]);
+    }
+  }
+  // A table is covered when the inventory or a cited file names it, or a cited
+  // code file calls a database function whose body uses it.
+  const called = functions.filter(([n]) => code.includes(n) || code.includes(`${n.split(".")[1]}(`));
+  const covered = (t: string) => inv.includes(t) || citedText.some((x) => x.includes(t)) || called.some(([, b]) => b.includes(t));
+  const stillGaps = new Set<string>();
+  for (const t of [...tables].sort()) {
+    if (covered(t)) continue;
+    stillGaps.add(t);
+    if (!gaps.includes(t)) errors.push(`table ${t}: no flow in the inventory`);
+  }
+  for (const g of gaps) {
+    if (!tables.has(g)) errors.push(`known gap ${g}: no such table`);
+    else if (!stillGaps.has(g)) errors.push(`known gap ${g}: now covered, remove it from the list`);
+  }
+  // Reverse: tables or functions the inventory names, and migrations it cites, exist and matter.
+  const known = new Set([...tables, ...functions.map(([n]) => n)]);
+  for (const m of inv.matchAll(new RegExp(`\\b(?:${SCHEMAS})\\.[a-z_]+`, "g"))) {
+    if (!known.has(m[0])) errors.push(`inventory names ${m[0]}, not in the migrations`);
+  }
+  for (const [i, p] of cited.entries()) {
+    if (p.startsWith("db/migrations/") && ![...tables].some((t) => citedText[i].includes(t))) {
+      errors.push(`${p}: cited migration touches no known table`);
+    }
+  }
+  // Outside providers.
+  for (const p of providers) {
+    const found = p.dep ? s.deps.includes(p.dep) : s.services.includes(p.service ?? "");
+    if (!found) errors.push(`provider ${p.name}: no longer in the code, drop it from the list`);
+    else if (!p.inventory.test(s.inventory)) errors.push(`provider ${p.name}: missing from the inventory`);
+  }
+  const sorted = new Set(providers.flatMap((p) => (p.dep ? [p.dep] : [])));
+  for (const d of s.deps) {
+    if (!sorted.has(d) && !LOCAL_ONLY_DEPS.some((re) => re.test(d))) errors.push(`dependency ${d}: unclassified`);
+  }
+  // Exports: a file that hands the user a download belongs to an Izvoz flow.
+  const exportPaths = flows.filter((f) => f.area === "Izvoz").flatMap((f) => f.paths);
+  for (const e of s.exporters) if (!exportPaths.includes(e)) errors.push(`${e}: export missing from the Izvoz flows`);
+  return errors;
+}
+
+const SQL = (body = "") =>
+  `CREATE TABLE evidence.thing (id int);\nCREATE TABLE audit.thing_event (id int);\nCREATE FUNCTION app.put_thing(x int) RETURNS void AS $$\n${body}\n$$;`;
+const FAKE: Sources = {
+  inventory: doc([
+    row("Evidencija", "`app/api/x/route.ts`, `db/migrations/a.sql`, `scripts/b.mjs`", "14"),
+    row("Izvoz", "`src/dl.ts`", "20"),
+  ]).concat("\nOIDC: AAI@EduHr, KMS, pgboss, E-pošta, Lokalni dnevnik.\n"),
+  migrations: { "a.sql": SQL("INSERT INTO evidence.thing VALUES (1); INSERT INTO audit.thing_event VALUES (1);") },
+  read: (p) => ({ "app/api/x/route.ts": "select app.put_thing(1)", "db/migrations/a.sql": "evidence.thing audit.thing_event" })[p] ?? "",
+  deps: ["openid-client", "@aws-sdk/client-kms", "pg-boss", "dexie", "react", "@tiptap/core"],
+  services: ["mail", "postgres"],
+  exporters: ["src/dl.ts"],
+};
+
+describe("completenessErrors", () => {
+  it("accepts an inventory that covers tables, providers and exports", () => {
+    expect(completenessErrors(FAKE, [])).toEqual([]);
+  });
+
+  it.each([
+    ["a table no cited file reaches", { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE evidence.orphan (id int);" } }, "table evidence.orphan: no flow in the inventory"],
+    ["a table reached only by an uncalled function", { read: () => "" }, "table evidence.thing: no flow in the inventory"],
+    ["a table only a cited document names", { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE evidence.docd (id int);" }, read: (p: string) => (p === "docs/b.md" ? "evidence.docd" : FAKE.read(p)), inventory: FAKE.inventory.replace("`src/dl.ts`", "`src/dl.ts`, `docs/b.md`") }, "table evidence.docd: no flow in the inventory"],
+    ["a table the inventory names that does not exist", { inventory: FAKE.inventory + "\nevidence.gone\n" }, "inventory names evidence.gone, not in the migrations"],
+    ["a cited migration with no known table", { migrations: { "a.sql": "CREATE TABLE evidence.other (id int);" } }, "db/migrations/a.sql: cited migration touches no known table"],
+    ["a provider missing from the inventory", { inventory: FAKE.inventory.replace("KMS", "kms-less") }, "provider AWS KMS: missing from the inventory"],
+    ["a provider gone from the code", { deps: FAKE.deps.filter((d) => d !== "pg-boss") }, "provider job queue: no longer in the code, drop it from the list"],
+    ["a mail service gone from compose", { services: ["postgres"] }, "provider local mail: no longer in the code, drop it from the list"],
+    ["a new dependency nobody classified", { deps: [...FAKE.deps, "nodemailer"] }, "dependency nodemailer: unclassified"],
+    ["a new outside SDK nobody classified", { deps: [...FAKE.deps, "@aws-sdk/client-s3"] }, "dependency @aws-sdk/client-s3: unclassified"],
+    ["an export outside the Izvoz flows", { exporters: ["src/dl.ts", "src/new-export.tsx"] }, "src/new-export.tsx: export missing from the Izvoz flows"],
+  ])("fails on %s", (_case, change, error) => {
+    expect(completenessErrors({ ...FAKE, ...change }, [])).toContain(error);
+  });
+
+  it("lets a listed gap pass, and fails when the list goes stale", () => {
+    const orphan = { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE evidence.orphan (id int);" } };
+    expect(completenessErrors({ ...FAKE, ...orphan }, ["evidence.orphan"])).toEqual([]);
+    expect(completenessErrors(FAKE, ["evidence.thing"])).toContain("known gap evidence.thing: now covered, remove it from the list");
+    expect(completenessErrors(FAKE, ["evidence.nope"])).toContain("known gap evidence.nope: no such table");
+  });
+});
+
+describe(`${INVENTORY} completeness`, () => {
+  it("covers every table, outside provider and export in the code on main", () => {
+    const migrations = Object.fromEntries(
+      readdirSync(join(ROOT, "db/migrations")).map((f) => [f, readFileSync(join(ROOT, "db/migrations", f), "utf8")]),
+    );
+    const read = (p: string) => (existsSync(join(ROOT, p)) && statSync(join(ROOT, p)).isFile() ? readFileSync(join(ROOT, p), "utf8") : undefined);
+    const exporters: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const p = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) && /Content-Disposition|createObjectURL/.test(readFileSync(join(ROOT, p), "utf8"))) exporters.push(p);
+      }
+    };
+    walk("src");
+    walk("app");
+    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    const compose = readFileSync(join(ROOT, "compose.yaml"), "utf8");
+    const services = [...compose.matchAll(/^ {2}([a-z][a-z0-9-]*):\s*$/gm)].map((m) => m[1]);
+    const sources: Sources = { inventory: readFileSync(join(ROOT, INVENTORY), "utf8"), migrations, read, deps: Object.keys(pkg.dependencies), services, exporters };
+    expect(exporters.length).toBeGreaterThan(0);
+    expect(Object.keys(migrations).length).toBeGreaterThan(50);
+    expect(completenessErrors(sources, KNOWN_GAPS)).toEqual([]);
+  });
+});
