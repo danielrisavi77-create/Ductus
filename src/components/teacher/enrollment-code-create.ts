@@ -1,6 +1,8 @@
 // DAN-36 (#576): the teacher asks the real route (#575) for a course's enrolment
 // code. The server stores only a hash, so the code exists in this one response;
 // there is no read-back route and nothing here keeps it beyond component state.
+import { zagrebInstant, zagrebOffset } from "@/lib/i18n/zagreb";
+
 import type { CourseCreation } from "./course-create";
 
 export type EnrollmentCodeCreation =
@@ -11,25 +13,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = /^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
 
-const pad = (value: number) => String(value).padStart(2, "0");
-
 /**
- * The `datetime-local` value in the teacher's own zone, as one absolute instant
- * and the offset that produced it. No default and no normalization: a calendar
- * date that does not exist (30 February) or a minute skipped by the spring
- * clock change returns null instead of silently becoming another minute. In
- * the repeated autumn hour the first occurrence is taken and its offset shown.
+ * The `datetime-local` value in Zagreb time (DAN-700), whatever the teacher's
+ * device zone, as one absolute instant and the offset that produced it. No
+ * default and no normalization: a calendar date that does not exist (30
+ * February) or a minute skipped by the spring clock change returns null
+ * instead of silently becoming another minute. In the repeated autumn hour the
+ * first occurrence is taken and its offset shown.
  */
 export function enrollmentCodeExpiry(local: string): { validUntil: string; offset: string } | null {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return null;
-  const parts = local.split(/[-T:]/).map(Number);
-  const at = new Date(parts[0]!, parts[1]! - 1, parts[2]!, parts[3]!, parts[4]!);
-  if (parts[0]! < 1 || Number.isNaN(at.getTime())) return null;
-  const read = [at.getFullYear(), at.getMonth() + 1, at.getDate(), at.getHours(), at.getMinutes()];
-  if (read.some((value, index) => value !== parts[index])) return null;
-  const minutes = -at.getTimezoneOffset();
-  const offset = `${minutes >= 0 ? "+" : "-"}${pad(Math.floor(Math.abs(minutes) / 60))}:${pad(Math.abs(minutes) % 60)}`;
-  return { validUntil: at.toISOString(), offset };
+  const validUntil = zagrebInstant(local);
+  return validUntil === null ? null : { validUntil, offset: zagrebOffset(validUntil) };
 }
 
 /**
