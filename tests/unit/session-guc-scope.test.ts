@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -209,10 +210,16 @@ function sessionScoped(source: string): string[] {
   return [...calls.values(), ...statements];
 }
 
-function sources(directory: string, pattern = /\.(ts|tsx|js|mjs)$/): string[] {
+/** Every file under directory whose path relative to it matches pattern and not skip. */
+function files(directory: string, pattern: RegExp, skip?: RegExp): string[] {
   return readdirSync(directory, { recursive: true, encoding: "utf8" })
-    .filter((file) => pattern.test(file) && !/node_modules|\.test\./.test(file))
+    .filter((file) => pattern.test(file) && !skip?.test(file))
     .map((file) => join(directory, file));
+}
+
+/** TS/JS sources, without installed packages and test files. */
+function sources(directory: string): string[] {
+  return files(directory, /\.(ts|tsx|js|mjs)$/, /node_modules|\.test\./);
 }
 
 // Session settings in SQL that never runs on the application's pool, each
@@ -248,10 +255,10 @@ function findingKey(name: string, hit: string): string {
   return `${toPosix(name)}: ${hit.replace(/\s+/g, " ").trim()}`;
 }
 
-function sqlFindings(): string[] {
-  const db = join(REPO_ROOT, "db");
-  return sources(db, /\.sql$/).flatMap((file) => {
-    const name = relative(REPO_ROOT, file);
+/** Findings in every .sql file under root/db, with no skip by name. */
+function sqlFindings(root = REPO_ROOT): string[] {
+  return files(join(root, "db"), /\.sql$/).flatMap((file) => {
+    const name = relative(root, file);
     const source = readFileSync(file, "utf8");
     return sessionScoped(source).map((hit) => findingKey(name, hit));
   });
@@ -430,6 +437,43 @@ describe("session-scoped settings", () => {
     const files = sources(directory);
     expect(files.length).toBeGreaterThan(0);
     expect(files.flatMap((file) => sessionScoped(readFileSync(file, "utf8")).map((hit) => `${file}: ${hit}`))).toEqual([]);
+  });
+
+  // Review on #1888, third round: the SQL scan reads every .sql file under
+  // db/, whatever its name; the node_modules and .test. skips are for TS/JS.
+  const FORBIDDEN = "SELECT set_config('app.session_token', 'x', false);\n";
+  it.each([
+    ["node_modules in the file name", "db/migrations/20261111000000_node_modules_guard.sql", true],
+    [".test. in the file name", "db/tests/020-guard.test.sql", true],
+    ["node_modules as a directory", "db/node_modules/guard.sql", true],
+    [".test. in a directory name", "db/x.test.d/guard.sql", true],
+    ["an ordinary name", "db/migrations/20261111000001_guard.sql", true],
+    ["a file that is not SQL", "db/notes.txt", false],
+  ])("the db scan reads %s", (_name, path, reported) => {
+    const root = mkdtempSync(join(tmpdir(), "session-guc-"));
+    try {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), FORBIDDEN);
+      const expected = reported ? [`${path}: set_config('app.session_token', 'x', false)`] : [];
+      expect(sqlFindings(root)).toEqual(expected);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ["node_modules in a path", "node_modules/x/index.js", false],
+    [".test. in a file name", "lib/a.test.ts", false],
+    ["an ordinary source", "lib/a.ts", true],
+  ])("the TS/JS scan still skips installed packages and tests: %s", (_name, path, listed) => {
+    const root = mkdtempSync(join(tmpdir(), "session-guc-"));
+    try {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "");
+      expect(sources(root)).toEqual(listed ? [join(root, path)] : []);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("db has none outside the listed exceptions, and every exception is still there", () => {
