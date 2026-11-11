@@ -33,7 +33,9 @@ export function submittedOf(snapshot: DocumentSnapshot | null): boolean {
  * differs, or it refused the last step for good, or the recorder stopped and
  * what follows stays on this device (DAN-699). A stopped recorder whose local
  * save also failed gives no notice: the failure's own text says the text is
- * not kept (Codex #1901 c.4533816077).
+ * not kept (Codex #1901 c.4533816077). The stop notice shows while the newest
+ * change is still being saved locally, so its text names no finished save
+ * (review #1901 c.6786923958); `stoppedSaved` says when that save is done.
  */
 export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | "stopped" | null {
   // Only the evidence session sets `closedBy`: the local saver's own
@@ -44,6 +46,19 @@ export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | 
   // after it (#1901, review bot c.6786590285).
   if (snapshot.stopped) return snapshot.failure ? null : "stopped";
   return snapshot.refused ? "refused" : null;
+}
+
+/** States in which the newest change is already in the local journal. */
+const LOCALLY_SAVED: readonly SyncState[] = ["LOCAL_DURABLE", "SYNCING", "SYNCED"];
+
+/**
+ * Whether the stop notice may add that the text is saved on the device: only
+ * once the local save of the newest change has finished, never while it is
+ * typed (EDITING) or still being written (SAVING_LOCAL) (review #1901
+ * c.6786923958, orchestrator c.6786961844).
+ */
+export function stoppedSaved(snapshot: DocumentSnapshot | null): boolean {
+  return evidenceNotice(snapshot) === "stopped" && snapshot !== null && LOCALLY_SAVED.includes(snapshot.state);
 }
 
 /**
