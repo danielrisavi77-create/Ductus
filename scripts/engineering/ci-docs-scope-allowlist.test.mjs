@@ -81,7 +81,7 @@ test("listed documents are plain docs outside D-97 and the agent rules", () => {
 
 // Files of the steps a docs profile skips: stack, browser, database, property,
 // local launcher and fake OIDC tests, the Next build and the production image.
-const SKIPPED = /^(?:e2e|tests\/(?:property|integration)|infra|db|scripts\/(?:local|db)|config|public)\/|^scripts\/engineering\/(?:production-image|ui-test-pilot|e2e-shards|login-shard|db-schema|playwright-(?:version|install))(?![\w.-]*\.test\.)|\.(?:property|integration)\.test\.ts$|^(?:next\.config|middleware|instrumentation|playwright[\w.]*config|compose|vitest\.config)\.|^(?:src|app)\/(?!.*\.test\.tsx?$)/;
+const SKIPPED = /^(?:e2e|tests\/(?:property|integration)|infra|db|scripts\/(?:local|db)|config|public)\/|^scripts\/engineering\/(?:production-image|ui-test-pilot|e2e-shards|login-shard|db-schema|playwright-(?:version|install))(?![\w.-]*\.test\.)|\.(?:property|integration)\.test\.ts$|^(?:next\.config|middleware|instrumentation|playwright[\w.]*config|compose|vitest\.config)\.|^(?:src|app)\/(?!.*\.test\.tsx?$)|^package\.json$/;
 // The jobs and steps of ci.yml that run only on the full profile.
 const workflow = readFileSync(`${root}.github/workflows/ci.yml`, "utf8");
 const skippedBlocks = workflow.split(/^(?= {2}[\w-]+:$)/m).flatMap((job) => (/^ {4}if:.*profile == 'full'/m.test(job)
@@ -89,7 +89,7 @@ const skippedBlocks = workflow.split(/^(?= {2}[\w-]+:$)/m).flatMap((job) => (/^ 
 // Both the raw text and a joined form are searched: `"docs/" + "adr"` and
 // `join("docs/", "adr")` read as `docs/adr`, while the raw text keeps array items apart.
 const forms = (text) => [text, text.replace(/["'`]\s*\+\s*["'`]/g, "").replace(/["'`]\s*,\s*["'`]/g, "/").replace(/\/{2,}/g, "/")];
-const sources = [...tracked.filter(({ mode, path }) => mode !== "160000" && !path.endsWith(".md") && !FIXTURES.has(path))
+const sources = [...tracked.filter(({ mode, path }) => !["160000", "120000"].includes(mode) && !path.endsWith(".md") && !FIXTURES.has(path))
   .flatMap(({ path }) => {
     const text = readFileSync(`${root}${path}`, "latin1");
     return text.includes("\0") ? [] : [{ path, skipped: SKIPPED.test(path), forms: forms(text) }];
@@ -100,16 +100,18 @@ for (const path of ORDINARY_DOCS) {
   const directory = [];
   // The bare docs root is checked separately (WHOLE_DOCS).
   for (let dir = dirname(path); dir !== "." && dir !== "docs"; dir = dirname(dir)) {
-    directory.push(new RegExp(`(?<![\\w.-])${escape(dir)}/?(?=["'\`*)$]|\\$\\{|$)`, "m"));
+    directory.push(new RegExp(`(?<![\\w.-])${escape(dir)}/?(?=[\\s"'\`*{)$:;,|\\]]|\\$\\{|$)`, "m"));
   }
   PATTERNS.set(path, {
-    // `docs/x/README.md` is another file, so a root name preceded by "/" is not it.
-    direct: new RegExp(`(?<![\\w.${path.includes("/") ? "" : "/"}-])${escape(path)}(?![\\w.-])`),
+    // `docs/x/README.md` is another file, so a root name after `name/` is not it; `${root}/` and `../` are.
+    direct: new RegExp(`(?<![\\w.-]${path.includes("/") ? "" : "|[\\w-]/"})${escape(path)}(?![\\w.-])`),
     directory,
     sibling: new RegExp(`(?<![\\w.-])${escape(posix.basename(path))}(?![\\w.-])`),
   });
 }
-const WHOLE_DOCS = /(?<![\w.-])docs\/?(?=["'`*]|\$\{)/;
+// A bare `docs` counts only in a string, a path, a glob or a shell word, so the
+// identifier `docs` in code is not a read.
+const WHOLE_DOCS = /(?<![\w.-])docs(?:\/?(?=["'`*{]|\$\{)|\/(?![\w.-])|\/[\w.-]*\*)|(?<=\.\.?\/)docs(?!\/?[\w.-])|(?<=\s)docs(?=[ \t]+(?:[./~]|\|(?!\|))|[ \t]*$)/m;
 
 // How `file` reads the listed document `path`, or "" when it does not.
 function reads(path, file, texts) {
@@ -126,7 +128,7 @@ test("every script a skipped ci.yml step runs is a skipped-step file", () => {
   assert.ok(skippedBlocks.length >= 8 && ["pnpm build", "production-image.mjs", "login-shards.mjs"]
     .every((word) => skippedBlocks.some((block) => block.includes(word))));
   for (const block of skippedBlocks) {
-    for (const [script] of block.matchAll(/scripts\/[\w./-]+\.(?:mjs|sh)/g)) assert.match(script, SKIPPED, script);
+    for (const [script] of block.matchAll(/scripts\/[\w./-]+\.(?:[cm]?js|ts|sh)\b/g)) assert.match(script, SKIPPED, script);
   }
 });
 
@@ -145,14 +147,18 @@ test("the reader matcher catches joined, concatenated and listed paths", () => {
     assert.equal(reads(nested, at, forms(text)), "reads the directory of", text);
   }
   assert.equal(reads(nested, `${dir}/x.mjs`, forms(`"${posix.basename(nested)}"`)), "lists");
+  assert.deepEqual(["`${root}/README.md`", '"../README.md"', '"docs/README.md"'].map((text) => reads("README.md", at, forms(text))),
+    ["names", "names", ""]);
   for (const text of [`"${doc}x"`, `"x${doc}"`, `"${dir}-old"`, `"x${dir}"`, `"${dir}.md"`]) {
     assert.equal(reads(doc, at, forms(text)) + reads(nested, at, forms(text)), "", text);
   }
   for (const text of ['"docs"', '"./docs/"', "`docs/${f}`", '"docs/**/*.md"', "`${root}/docs`", '["app", "docs"]',
-    'new URL("../../docs/", import.meta.url)']) {
+    'new URL("../../docs/", import.meta.url)', '"docs/{adr,x}/*.md"', "COPY docs /srv/docs", "grep -rl x docs",
+    "ls docs | wc -l", "- ./docs:/srv/docs:ro", "cp docs/ out", '"docs/PIL*.md"', "./docs"]) {
     assert.ok(forms(text).some((form) => WHOLE_DOCS.test(form)), text);
   }
-  for (const text of ['"docsx"', '"my-docs"', "docs.length"]) assert.ok(!forms(text).some((form) => WHOLE_DOCS.test(form)), text);
+  for (const text of ['"docsx"', '"my-docs"', "docs.length", "docs: readonly PmNode[]", "const docs = []",
+    "{ steps, docs, after }", "x = docs || []", '"../../docs/x.md"']) assert.ok(!forms(text).some((form) => WHOLE_DOCS.test(form)), text);
 });
 
 test("no tracked file outside Markdown names a listed document, its directory or a sibling list", () => {
