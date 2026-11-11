@@ -41,12 +41,22 @@ export type SubmissionState =
       /** The last answer of the submission route, if any. */
       outcome: SubmitOutcome | null;
       summary: SummaryOutcome | null;
+      /**
+       * Whether this device holds text of the work the server does not have
+       * (DAN-699): only "clear" lets the button submit.
+       */
+      device: DeviceHold;
     };
+
+/** The device check of the submission: read, or not yet, or unreadable (DAN-699). */
+export type DeviceHold = "checking" | "clear" | "held" | "unknown";
 
 export type SubmissionHandlers = {
   readonly onSubmit: () => void;
   readonly onReload: () => void;
   readonly onReloadSummary: () => void;
+  /** Reads the device again (DAN-699). */
+  readonly onRecheck: () => void;
 };
 
 function Block(node: DocumentNode, index: number): ReactNode {
@@ -110,6 +120,18 @@ function refusalText(outcome: SubmitOutcome): string | null {
   }
 }
 
+/** What the device check says while it is not clear; nothing when it is. */
+function DeviceNotice(device: DeviceHold, onRecheck: () => void): ReactNode {
+  if (device === "clear") return null;
+  if (device === "checking") return h("p", { role: "status", className: styles.muted }, t.device.checking);
+  return h(
+    "div",
+    { className: styles.actions },
+    h("p", { role: "alert" }, device === "held" ? t.device.held : t.device.unknown),
+    h("button", { type: "button", className: `btn ${styles.secondary}`, onClick: onRecheck }, t.device.recheck),
+  );
+}
+
 function Steps(current: "check" | "submit" | "receipt"): ReactNode {
   return h(
     "ol",
@@ -157,7 +179,8 @@ export function SubmissionView({ state, handlers, offline = false }: {
       h("button", {
         type: "button",
         className: "btn",
-        disabled: state.sending || offline,
+        // Text this device holds that the server lacks keeps the button closed (DAN-699).
+        disabled: state.sending || offline || state.device !== "clear",
         onClick: handlers.onSubmit,
       }, state.sending ? t.sending : t.submit),
       offline ? h("span", { role: "status" }, t.offline) : null,
@@ -189,6 +212,7 @@ export function SubmissionView({ state, handlers, offline = false }: {
         ),
       ),
       refusal ? h("p", { id: OUTCOME_ID, tabIndex: -1, role: "alert" }, refusal) : null,
+      submitted || empty ? null : DeviceNotice(state.device, handlers.onRecheck),
       action,
     ),
     h(

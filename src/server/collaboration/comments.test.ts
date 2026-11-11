@@ -22,6 +22,7 @@ const VALID: Record<CommentAction, Record<string, unknown>> = {
   reply: { threadId: THREAD, body: `Student A: ${CANARY}` },
   resolve: { threadId: THREAD },
   reopen: { threadId: THREAD },
+  delete: { commentId: COMMENT },
   list: { documentId: DOC },
 };
 const ROW = {
@@ -34,6 +35,11 @@ const ROW = {
   anchor: ANCHOR,
   state: "open",
   created_window: new Date("2026-10-17T10:05:00Z"),
+  deleted_window: null,
+};
+const DELETED = {
+  ...ROW, comment_id: THREAD, comment_position: 2, author_role: "student", is_own: true, anchor: null, body: null,
+  deleted_window: new Date("2026-10-17T11:20:00Z"),
 };
 
 function request(body: unknown, headers: Record<string, string> = {}): Request {
@@ -92,11 +98,57 @@ describe("B-10 / DAN-86 comment API contract", () => {
     const { comments } = await res.json();
     expect(comments).toHaveLength(2);
     expect(Object.keys(comments[0]).sort()).toEqual(
-      ["anchor", "authorRole", "body", "commentId", "createdWindow", "isOwn", "position", "state", "threadId"],
+      ["anchor", "authorRole", "body", "commentId", "createdWindow", "deletedWindow", "isOwn", "position", "state", "threadId"],
     );
     expect(comments[0].createdWindow).toBe("2026-10-17T10:05:00.000Z");
+    expect(comments[0].deletedWindow).toBeNull();
     expect(comments[1].anchor).toBeNull();
     expect((query.mock.calls[0] as unknown[])[0]).toMatch(/FROM collaboration\.list_comments\(\$1\)$/);
+  });
+
+  // DAN-215: the student deletes their own comment; the RPC decides who may.
+  it("deletes a comment by its id only and answers 204", async () => {
+    const { deps, withActor, query } = port({ rows: [{}] });
+    const res = await handleCommentRequest("delete", request(VALID.delete), deps);
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe("");
+    expect(withActor).toHaveBeenCalledWith(TOKEN, expect.any(Function));
+    expect(query).toHaveBeenCalledWith("SELECT collaboration.delete_comment($1::uuid)", [COMMENT]);
+  });
+
+  it("lists a deleted comment at its place, without text, with the window of deletion", async () => {
+    const { deps } = port({ rows: [ROW, DELETED] });
+    const res = await handleCommentRequest("list", request(VALID.list), deps);
+    expect(res.status).toBe(200);
+    const { comments } = await res.json();
+    expect(comments[1]).toMatchObject({ position: 2, authorRole: "student", body: null, deletedWindow: "2026-10-17T11:20:00.000Z" });
+  });
+
+  it.each([
+    ["empty", { commentId: "" }],
+    ["not a uuid", { commentId: "1 OR 1=1" }],
+    ["too long", { commentId: `${COMMENT}0` }],
+    ["a number", { commentId: 7 }],
+    ["thread key instead", { threadId: COMMENT }],
+    ["extra key", { commentId: COMMENT, authorId: THREAD }],
+    ["no key", {}],
+  ])("refuses a delete with %s before the database", async (_name, body) => {
+    const { deps, withActor } = port();
+    const res = await handleCommentRequest("delete", request(body), deps);
+    expect(res.status).toBe(422);
+    expect(await res.text()).toBe(JSON.stringify({ error: "invalid_input" }));
+    expect(withActor).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["ZD401", 401],
+    ["ZD403", 403],
+    ["ZD409", 409],
+  ])("maps a delete refused with %s to %s", async (code, status) => {
+    const { deps } = port({ code });
+    const res = await handleCommentRequest("delete", request(VALID.delete), deps);
+    expect(res.status).toBe(status);
+    expect(await res.text()).not.toContain(CANARY);
   });
 
   it("refuses cross-site, missing session, wrong media type and oversized bodies before the database", async () => {
@@ -145,6 +197,10 @@ describe("B-10 / DAN-86 comment API contract", () => {
       ["create", [{ id: "not-a-uuid" }]],
       ["list", [{ ...ROW, author_role: "admin" }]],
       ["list", [{ ...ROW, created_window: "never" }]],
+      ["list", [{ ...ROW, body: null }]],
+      ["list", [{ ...DELETED, body: "text after deletion" }]],
+      ["list", [{ ...DELETED, deleted_window: "never" }]],
+      ["list", [{ ...ROW, deleted_window: undefined }]],
     ] as const) {
       const { deps } = port({ rows: [...rows] });
       expect((await handleCommentRequest(action, request(VALID[action]), deps)).status).toBe(503);
@@ -153,7 +209,7 @@ describe("B-10 / DAN-86 comment API contract", () => {
 
   it("logs only the action and error code, never body, anchor or ids (attack 11, canary)", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    for (const action of ["create", "reply", "list"] as const) {
+    for (const action of ["create", "reply", "delete", "list"] as const) {
       const { deps } = port({ code: "XX000" });
       const res = await handleCommentRequest(action, request(VALID[action]), deps);
       expect(res.status).toBe(503);
@@ -161,7 +217,8 @@ describe("B-10 / DAN-86 comment API contract", () => {
     }
     const logged = JSON.stringify(log.mock.calls);
     expect(log).toHaveBeenCalledWith("comment request failed", "create", "XX000");
-    for (const secret of [CANARY, DOC, THREAD, ANCHOR.nodeId]) expect(logged).not.toContain(secret);
+    expect(log).toHaveBeenCalledWith("comment request failed", "delete", "XX000");
+    for (const secret of [CANARY, DOC, THREAD, COMMENT, ANCHOR.nodeId]) expect(logged).not.toContain(secret);
   });
 
   // DAN-302 L1: a client that never finishes the body cannot hold the route open.

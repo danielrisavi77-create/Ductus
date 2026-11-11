@@ -2054,6 +2054,41 @@ $_$;
 
 
 --
+-- Name: worker_package_checkpoints(uuid, text, text[]); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.worker_package_checkpoints(p_evidence_domain_id uuid, p_evidence_package_id text, p_content_hashes text[]) RETURNS TABLE(content_hash text, body text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+BEGIN
+  IF p_evidence_domain_id IS NULL OR p_evidence_package_id IS NULL
+     OR p_evidence_package_id !~ '^[a-z0-9][a-z0-9_-]{0,127}$'
+     OR p_content_hashes IS NULL OR pg_catalog.array_ndims(p_content_hashes) IS DISTINCT FROM 1
+     OR pg_catalog.cardinality(p_content_hashes) NOT BETWEEN 1 AND 256
+     OR EXISTS (SELECT 1 FROM pg_catalog.unnest(p_content_hashes) AS h (v)
+                 WHERE h.v IS NULL OR h.v !~ '^[0-9a-f]{64}$')
+     OR (SELECT pg_catalog.count(DISTINCT h.v) FROM pg_catalog.unnest(p_content_hashes) AS h (v))
+        <> pg_catalog.cardinality(p_content_hashes) THEN
+    RAISE EXCEPTION 'invalid worker request' USING ERRCODE = '22023';
+  END IF;
+  -- The same text may be checkpointed at two revisions; one row per hash.
+  RETURN QUERY
+    SELECT DISTINCT ON (c.content_hash) c.content_hash, c.body
+      FROM evidence.package p
+      JOIN evidence.document_checkpoint c
+        ON c.document_id = p.document_id
+       AND c.institution_id = p.institution_id
+     WHERE p.id = p_evidence_package_id
+       AND p.evidence_domain_id = p_evidence_domain_id
+       AND c.content_hash = ANY (p_content_hashes)
+       AND pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(c.body, 'UTF8')), 'hex') = c.content_hash
+     ORDER BY c.content_hash, c.revision;
+END
+$_$;
+
+
+--
 -- Name: worker_pending_backlog(); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -2149,18 +2184,46 @@ $$;
 
 
 --
+-- Name: reader_role(uuid, uuid, uuid); Type: FUNCTION; Schema: audit; Owner: -
+--
+
+CREATE FUNCTION audit.reader_role(p_institution_id uuid, p_assignment_id uuid, p_owner_id uuid) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT CASE
+    WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
+    WHEN p_owner_id = a.user_id THEN NULL
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN
+      CASE WHEN s.mentorship_id IS NOT NULL THEN 'mentor' ELSE 'teacher' END
+    WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'seminar_teacher'
+  END
+  FROM app.current_actor() a
+  LEFT JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+$$;
+
+
+--
 -- Name: record_work_opening(uuid, text, uuid, uuid, text); Type: FUNCTION; Schema: audit; Owner: -
 --
 
 CREATE FUNCTION audit.record_work_opening(p_institution_id uuid, p_document_id text, p_assignment_id uuid, p_owner_id uuid, p_surface text) RETURNS void
-    LANGUAGE sql
+    LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
+DECLARE
+  v_role text;
+BEGIN
+  v_role := audit.reader_role(p_institution_id, p_assignment_id, p_owner_id);
+  IF v_role IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
   INSERT INTO audit.access_log (institution_id, document_id, assignment_id, owner_id, reader_id, reader_role, surface, opened_at)
-  SELECT p_institution_id, p_document_id, p_assignment_id, p_owner_id, a.user_id, 'teacher', p_surface,
+  SELECT p_institution_id, p_document_id, p_assignment_id, p_owner_id, a.user_id, v_role, p_surface,
          date_bin('5 minutes', now(), timestamptz '2000-01-01 00:00:00+00')
   FROM app.current_actor() a
-  ON CONFLICT (document_id, institution_id, reader_id, surface, opened_at) DO NOTHING
+  ON CONFLICT (document_id, institution_id, reader_id, surface, opened_at) DO NOTHING;
+END
 $$;
 
 
@@ -2257,11 +2320,13 @@ CREATE FUNCTION collaboration.create_comment(p_document_id text, p_body text, p_
 DECLARE
   actor record;
   scope record;
+  v_role text;
   v_thread uuid;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
   SELECT * INTO scope FROM collaboration.document_scope(p_document_id);
-  IF collaboration.actor_role(scope.institution_id, scope.assignment_id, scope.principal_id) IS DISTINCT FROM 'teacher' THEN
+  v_role := collaboration.actor_role(scope.institution_id, scope.assignment_id, scope.principal_id);
+  IF v_role IS NULL THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
   -- Checked before the table constraints, whose errors would quote the row.
@@ -2269,11 +2334,12 @@ BEGIN
      OR NOT coalesce(collaboration.is_text_anchor(p_anchor), false) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  INSERT INTO collaboration.comment_thread (institution_id, document_id, assignment_id, owner_id, anchor, created_by)
-  VALUES (scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id, p_anchor, actor.user_id)
+  INSERT INTO collaboration.comment_thread (institution_id, document_id, assignment_id, owner_id, anchor, state, created_by)
+  VALUES (scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id, p_anchor,
+          CASE WHEN v_role = 'student' THEN 'answered' ELSE 'open' END, actor.user_id)
   RETURNING id INTO v_thread;
   INSERT INTO collaboration.comment (thread_id, institution_id, position, author_id, author_role, body)
-  VALUES (v_thread, scope.institution_id, 1, actor.user_id, 'teacher', p_body);
+  VALUES (v_thread, scope.institution_id, 1, actor.user_id, v_role, p_body);
   RETURN v_thread;
 END
 $$;
@@ -2323,6 +2389,41 @@ BEGIN
     (request_id, institution_id, version, instruction, requested_revision, opened_by)
   VALUES (v_id, scope.institution_id, 1, p_instruction, p_requested_revision, actor.user_id);
   RETURN QUERY SELECT v_id, v_seq, 1, 'open'::text;
+END
+$$;
+
+
+--
+-- Name: delete_comment(uuid); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.delete_comment(p_comment_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_thread uuid;
+  t record;
+  c record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT x.thread_id INTO v_thread FROM collaboration.comment x
+  WHERE x.id = p_comment_id AND x.institution_id = actor.institution_id;
+  IF v_thread IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  SELECT * INTO t FROM collaboration.thread_for_actor(v_thread, true);
+  SELECT x.author_id, x.author_role, x.deleted_at INTO c FROM collaboration.comment x
+  WHERE x.id = p_comment_id FOR UPDATE;
+  IF t.role IS DISTINCT FROM 'student' OR c.author_role IS DISTINCT FROM 'student'
+     OR c.author_id IS DISTINCT FROM actor.user_id THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF c.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  UPDATE collaboration.comment x SET body = NULL, deleted_at = now() WHERE x.id = p_comment_id;
 END
 $$;
 
@@ -2475,7 +2576,7 @@ $_$;
 -- Name: list_comments(text); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
-CREATE FUNCTION collaboration.list_comments(p_document_id text) RETURNS TABLE(thread_id uuid, comment_id uuid, comment_position integer, author_role text, is_own boolean, body text, anchor jsonb, state text, created_window timestamp with time zone)
+CREATE FUNCTION collaboration.list_comments(p_document_id text) RETURNS TABLE(thread_id uuid, comment_id uuid, comment_position integer, author_role text, is_own boolean, body text, anchor jsonb, state text, created_window timestamp with time zone, deleted_window timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -2491,7 +2592,8 @@ BEGIN
   RETURN QUERY
     SELECT t.id, c.id, c.position, c.author_role, c.author_id = actor.user_id, c.body,
            CASE WHEN c.position = 1 THEN t.anchor END, t.state,
-           date_bin('5 minutes', c.created_at, timestamptz '2000-01-01 00:00:00+00')
+           date_bin('5 minutes', c.created_at, timestamptz '2000-01-01 00:00:00+00'),
+           date_bin('5 minutes', c.deleted_at, timestamptz '2000-01-01 00:00:00+00')
     FROM collaboration.comment_thread t
     JOIN collaboration.comment c ON c.thread_id = t.id AND c.institution_id = t.institution_id
     WHERE t.document_id = p_document_id AND t.institution_id = scope.institution_id
@@ -2709,6 +2811,7 @@ DECLARE
   v_role text;
   v_current record;
   v_submitted record;
+  v_is_submitted boolean;
 BEGIN
   PERFORM institution.require_actor();
   SELECT * INTO scope FROM collaboration.document_scope(p_document_id);
@@ -2719,11 +2822,13 @@ BEGIN
   IF p_known_hash !~ '^[0-9a-f]{64}$' THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  IF v_role = 'teacher' THEN
-    PERFORM audit.record_work_opening(scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id, 'live_view');
-  END IF;
   SELECT t.content_hash, t.body INTO v_submitted FROM app.submitted_document_text(p_document_id) t;
-  IF FOUND THEN
+  v_is_submitted := FOUND;
+  IF v_role = 'teacher' THEN
+    PERFORM audit.record_work_opening(scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id,
+                                      CASE WHEN v_is_submitted THEN 'submitted_text' ELSE 'live_view' END);
+  END IF;
+  IF v_is_submitted THEN
     IF v_submitted.body IS NULL THEN
       RETURN QUERY SELECT 'unavailable'::text, NULL::text, NULL::text;
     ELSIF v_submitted.content_hash = p_known_hash THEN
@@ -5148,11 +5253,15 @@ BEGIN
   END IF;
 
   RETURN EXISTS (
-    SELECT 1 FROM institution.institution_role r
-    WHERE r.user_id = v_user AND r.institution_id = v_institution AND r.role = 'teacher'
-      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
-  ) AND EXISTS (
-    SELECT 1 FROM institution.work_grant g
+    SELECT 1
+    FROM institution.work_grant g
+    JOIN institution.assignment a ON a.id = g.assignment_id AND a.institution_id = g.institution_id
+    JOIN institution.institution_role ge ON ge.id = g.grantee_role_id
+     AND ge.user_id = g.grantee_id AND ge.institution_id = g.institution_id AND ge.role = 'teacher'
+     AND ge.confirmed_at IS NOT NULL AND ge.revoked_at IS NULL
+    JOIN institution.institution_role gr ON gr.id = g.granter_role_id
+     AND gr.user_id = g.granted_by AND gr.institution_id = g.institution_id AND gr.role = 'teacher'
+     AND gr.confirmed_at IS NOT NULL AND gr.revoked_at IS NULL
     WHERE g.institution_id = v_institution
       AND g.grantee_id = v_user
       AND g.assignment_id = v_scope.assignment_id
@@ -5161,7 +5270,17 @@ BEGIN
       AND statement_timestamp() >= g.valid_from
       AND statement_timestamp() < g.valid_to
       AND p_action = ANY (g.actions)
-      AND institution.work_relation(g.granted_by, g.assignment_id) = 'teacher'
+      AND CASE
+            WHEN a.course_id IS NOT NULL THEN EXISTS (
+              SELECT 1 FROM institution.course_member m
+              WHERE m.id = g.granter_member_id AND m.course_id = a.course_id
+                AND m.institution_id = a.institution_id AND m.user_id = g.granted_by
+                AND m.role = 'teacher' AND m.member_to IS NULL)
+            ELSE EXISTS (
+              SELECT 1 FROM institution.mentorship ms
+              WHERE ms.id = a.mentorship_id AND ms.institution_id = a.institution_id
+                AND ms.mentor_id = g.granted_by AND ms.ended_at IS NULL)
+          END
   );
 END
 $$;
@@ -5217,6 +5336,72 @@ BEGIN
     (actor.institution_id, p_assignment_id, p_student_id, p_grantee_id, p_kind, p_actions, v_from, p_valid_to, actor.user_id)
   RETURNING id INTO v_id;
   RETURN v_id;
+END
+$$;
+
+
+--
+-- Name: hand_over_course(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.hand_over_course(p_course_id uuid, p_holder_id uuid) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_from uuid;
+  v_ended timestamptz;
+  v_handover uuid;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  -- The administrator role row FOR SHARE until the end, taken before the
+  -- course: a revocation waits for this transaction, and one that committed
+  -- first, even while this call waited for the row, leaves no row to find.
+  PERFORM 1 FROM institution.institution_role r
+   WHERE r.institution_id = actor.institution_id AND r.user_id = actor.user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+   FOR SHARE OF r;
+  IF NOT FOUND OR p_holder_id IS NOT DISTINCT FROM actor.user_id THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- Two handovers, or a handover and a first naming, of the same course wait
+  -- for each other here; course_holder_open_idx is the last barrier.
+  PERFORM 1 FROM institution.course c
+   WHERE c.id = p_course_id AND c.institution_id = actor.institution_id FOR NO KEY UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  -- The new holder's teacher role row FOR SHARE until the end, taken after
+  -- the course (the course is already known to be in the actor's institution):
+  -- a revocation waits for this transaction, and one that committed first,
+  -- even while this call waited for the row, leaves no row to find.
+  -- revoke_teacher_role locks only that row, so the order cannot deadlock.
+  IF institution.lock_teacher_role(p_holder_id) IS NULL OR NOT EXISTS (
+       SELECT 1 FROM institution.course_member m
+       WHERE m.course_id = p_course_id AND m.user_id = p_holder_id AND m.role = 'teacher' AND m.member_to IS NULL
+     ) THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  SELECT h.user_id INTO v_from FROM institution.course_holder h
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL;
+  IF v_from = p_holder_id THEN
+    RETURN NULL;
+  END IF;
+  UPDATE institution.course_holder h SET valid_to = greatest(now(), h.valid_from)
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL
+  RETURNING h.valid_to INTO v_ended;
+  INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by, valid_from)
+  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), v_ended));
+  INSERT INTO audit.course_handover (institution_id, course_id, from_holder_id, to_holder_id, actor_id, occurred_at)
+  VALUES (actor.institution_id, p_course_id, v_from, p_holder_id, actor.user_id, now())
+  RETURNING id INTO v_handover;
+  INSERT INTO institution.notification (institution_id, recipient_id, kind, event_key, target_id)
+  SELECT m.institution_id, m.user_id, 'course_handover', 'course_handover:' || v_handover::text, p_course_id
+  FROM institution.course_member m
+  WHERE m.course_id = p_course_id AND m.role = 'student' AND m.member_to IS NULL
+  ON CONFLICT (recipient_id, event_key) DO NOTHING;
+  RETURN v_handover;
 END
 $$;
 
@@ -6300,7 +6485,7 @@ CREATE FUNCTION institution.set_course_holder(p_course_id uuid, p_holder_id uuid
     AS $$
 DECLARE
   actor record;
-  v_ended timestamptz;
+  v_open uuid;
 BEGIN
   SELECT * INTO actor FROM institution.require_course_teacher(p_course_id);
   IF NOT institution.is_confirmed_teacher(p_holder_id, p_course_id) OR NOT EXISTS (
@@ -6309,17 +6494,19 @@ BEGIN
      ) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  -- Two replacements of the same course wait for each other here.
+  -- Waits for a handover of the same course, then sees its holder.
   PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR NO KEY UPDATE;
-  IF EXISTS (SELECT 1 FROM institution.course_holder h
-             WHERE h.course_id = p_course_id AND h.user_id = p_holder_id AND h.valid_to IS NULL) THEN
+  SELECT h.user_id INTO v_open FROM institution.course_holder h
+   WHERE h.course_id = p_course_id AND h.valid_to IS NULL;
+  IF v_open = p_holder_id THEN
     RETURN;
   END IF;
-  UPDATE institution.course_holder h SET valid_to = greatest(now(), h.valid_from)
-   WHERE h.course_id = p_course_id AND h.valid_to IS NULL
-  RETURNING h.valid_to INTO v_ended;
+  IF v_open IS NOT NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
   INSERT INTO institution.course_holder (course_id, institution_id, user_id, assigned_by, valid_from)
-  VALUES (p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), v_ended));
+  SELECT p_course_id, actor.institution_id, p_holder_id, actor.user_id, greatest(now(), max(h.valid_to))
+  FROM institution.course_holder h WHERE h.course_id = p_course_id;
 END
 $$;
 
@@ -6632,6 +6819,36 @@ BEGIN
     SELECT 1 FROM institution.work_accommodation w
      WHERE w.assignment_id = p_assignment_id AND w.student_id = p_student_id
        AND w.institution_id = v_institution);
+END
+$$;
+
+
+--
+-- Name: work_grant_binding_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.work_grant_binding_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = 'ZD403';
+  END IF;
+  NEW.grantee_role_id := (
+    SELECT r.id FROM institution.institution_role r
+    WHERE r.user_id = NEW.grantee_id AND r.institution_id = NEW.institution_id AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL);
+  NEW.granter_role_id := (
+    SELECT r.id FROM institution.institution_role r
+    WHERE r.user_id = NEW.granted_by AND r.institution_id = NEW.institution_id AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL);
+  NEW.granter_member_id := (
+    SELECT m.id FROM institution.assignment a
+    JOIN institution.course_member m ON m.course_id = a.course_id AND m.institution_id = a.institution_id
+    WHERE a.id = NEW.assignment_id AND a.institution_id = NEW.institution_id
+      AND m.user_id = NEW.granted_by AND m.role = 'teacher' AND m.member_to IS NULL);
+  RETURN NEW;
 END
 $$;
 
@@ -6964,11 +7181,30 @@ CREATE TABLE audit.access_log (
     CONSTRAINT access_log_document_id_check CHECK (((length(document_id) >= 1) AND (length(document_id) <= 256))),
     CONSTRAINT access_log_interval_check CHECK ((opened_at = date_bin('00:05:00'::interval, opened_at, '2000-01-01 00:00:00+00'::timestamp with time zone))),
     CONSTRAINT access_log_opened_at_check CHECK ((opened_at = date_bin('00:01:00'::interval, opened_at, '2000-01-01 00:00:00+00'::timestamp with time zone))),
-    CONSTRAINT access_log_reader_role_check CHECK ((reader_role = 'teacher'::text)),
-    CONSTRAINT access_log_surface_check CHECK ((surface = ANY (ARRAY['live_view'::text, 'process_summary'::text, 'fast_path'::text, 'replay'::text])))
+    CONSTRAINT access_log_reader_role_check CHECK ((reader_role = ANY (ARRAY['teacher'::text, 'mentor'::text, 'seminar_teacher'::text]))),
+    CONSTRAINT access_log_surface_check CHECK ((surface = ANY (ARRAY['live_view'::text, 'process_summary'::text, 'fast_path'::text, 'replay'::text, 'submitted_text'::text])))
 );
 
 ALTER TABLE ONLY audit.access_log FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: course_handover; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.course_handover (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    institution_id uuid NOT NULL,
+    course_id uuid NOT NULL,
+    from_holder_id uuid,
+    to_holder_id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    CONSTRAINT course_handover_check CHECK ((from_holder_id IS DISTINCT FROM to_holder_id)),
+    CONSTRAINT course_handover_check1 CHECK ((actor_id <> to_holder_id))
+);
+
+ALTER TABLE ONLY audit.course_handover FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -7081,10 +7317,15 @@ CREATE TABLE collaboration.comment (
     "position" integer NOT NULL,
     author_id uuid NOT NULL,
     author_role text NOT NULL,
-    body text NOT NULL,
+    body text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
     CONSTRAINT comment_author_role_check CHECK ((author_role = ANY (ARRAY['teacher'::text, 'student'::text]))),
-    CONSTRAINT comment_body_check CHECK (collaboration.is_comment_body(body)),
+    CONSTRAINT comment_body_check CHECK (
+CASE
+    WHEN (deleted_at IS NULL) THEN collaboration.is_comment_body(body)
+    ELSE ((body IS NULL) AND (deleted_at >= created_at))
+END),
     CONSTRAINT comment_position_check CHECK ((("position" >= 1) AND ("position" <= 10000)))
 );
 
@@ -8001,8 +8242,8 @@ CREATE TABLE institution.notification (
     target_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     read_at timestamp with time zone,
-    CONSTRAINT notification_check CHECK (((event_key ~ '^(comment_posted|assignment_version|submission_recorded):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[1-9][0-9]{0,9})?$'::text) AND (event_key ~~ (kind || ':%'::text)) AND ((kind = 'assignment_version'::text) = (event_key ~ ':[1-9][0-9]{0,9}$'::text)))),
-    CONSTRAINT notification_kind_check CHECK ((kind = ANY (ARRAY['comment_posted'::text, 'assignment_version'::text, 'submission_recorded'::text])))
+    CONSTRAINT notification_check CHECK (((event_key ~ '^(comment_posted|assignment_version|submission_recorded|course_handover):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[1-9][0-9]{0,9})?$'::text) AND (event_key ~~ (kind || ':%'::text)) AND ((kind = 'assignment_version'::text) = (event_key ~ ':[1-9][0-9]{0,9}$'::text)))),
+    CONSTRAINT notification_kind_check CHECK ((kind = ANY (ARRAY['comment_posted'::text, 'assignment_version'::text, 'submission_recorded'::text, 'course_handover'::text])))
 );
 
 ALTER TABLE ONLY institution.notification FORCE ROW LEVEL SECURITY;
@@ -8117,6 +8358,9 @@ CREATE TABLE institution.work_grant (
     created_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
     revoked_at timestamp with time zone,
     revoked_by uuid,
+    grantee_role_id uuid,
+    granter_role_id uuid,
+    granter_member_id uuid,
     CONSTRAINT work_grant_actions_check CHECK (institution.is_grant_action_set(actions)),
     CONSTRAINT work_grant_finite CHECK ((isfinite(valid_from) AND isfinite(valid_to))),
     CONSTRAINT work_grant_grantee CHECK (((grantee_id <> student_id) AND (grantee_id <> granted_by))),
@@ -8477,6 +8721,14 @@ ALTER TABLE ONLY pgboss.job ATTACH PARTITION pgboss.job_common DEFAULT;
 
 ALTER TABLE ONLY audit.access_log
     ADD CONSTRAINT access_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: course_handover course_handover_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_pkey PRIMARY KEY (id);
 
 
 --
@@ -9208,6 +9460,14 @@ ALTER TABLE ONLY institution.course_member
 
 
 --
+-- Name: course_member course_member_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_member
+    ADD CONSTRAINT course_member_id_institution_id_key UNIQUE (id, institution_id);
+
+
+--
 -- Name: course_member course_member_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -9261,6 +9521,14 @@ ALTER TABLE ONLY institution.faculty_work_rule
 
 ALTER TABLE ONLY institution.institution_role
     ADD CONSTRAINT institution_role_binding_key UNIQUE (id, institution_id, user_id, role);
+
+
+--
+-- Name: institution_role institution_role_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.institution_role
+    ADD CONSTRAINT institution_role_id_institution_id_key UNIQUE (id, institution_id);
 
 
 --
@@ -9531,6 +9799,13 @@ CREATE INDEX access_log_document_idx ON audit.access_log USING btree (document_i
 --
 
 CREATE UNIQUE INDEX access_log_opening_idx ON audit.access_log USING btree (document_id, institution_id, reader_id, surface, opened_at);
+
+
+--
+-- Name: course_handover_course_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX course_handover_course_idx ON audit.course_handover USING btree (course_id, occurred_at);
 
 
 --
@@ -10017,6 +10292,20 @@ CREATE TRIGGER access_log_no_truncate BEFORE TRUNCATE ON audit.access_log FOR EA
 
 
 --
+-- Name: course_handover course_handover_append_only; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER course_handover_append_only BEFORE DELETE OR UPDATE ON audit.course_handover FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+
+
+--
+-- Name: course_handover course_handover_no_truncate; Type: TRIGGER; Schema: audit; Owner: -
+--
+
+CREATE TRIGGER course_handover_no_truncate BEFORE TRUNCATE ON audit.course_handover FOR EACH STATEMENT EXECUTE FUNCTION audit.reject_change();
+
+
+--
 -- Name: course_member_event course_member_event_append_only; Type: TRIGGER; Schema: audit; Owner: -
 --
 
@@ -10388,6 +10677,13 @@ CREATE TRIGGER notice_acknowledgment_fingerprint_immutable BEFORE UPDATE OF noti
 
 
 --
+-- Name: work_grant work_grant_binding_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER work_grant_binding_fill BEFORE INSERT OR UPDATE OF grantee_role_id, granter_role_id, granter_member_id ON institution.work_grant FOR EACH ROW EXECUTE FUNCTION institution.work_grant_binding_fill();
+
+
+--
 -- Name: access_log access_log_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
 --
 
@@ -10409,6 +10705,38 @@ ALTER TABLE ONLY audit.access_log
 
 ALTER TABLE ONLY audit.access_log
     ADD CONSTRAINT access_log_reader_id_institution_id_fkey FOREIGN KEY (reader_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_actor_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_actor_id_institution_id_fkey FOREIGN KEY (actor_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_course_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_course_id_institution_id_fkey FOREIGN KEY (course_id, institution_id) REFERENCES institution.course(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_from_holder_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_from_holder_id_institution_id_fkey FOREIGN KEY (from_holder_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: course_handover course_handover_to_holder_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.course_handover
+    ADD CONSTRAINT course_handover_to_holder_id_institution_id_fkey FOREIGN KEY (to_holder_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
 --
@@ -11380,6 +11708,30 @@ ALTER TABLE ONLY institution.work_grant
 
 
 --
+-- Name: work_grant work_grant_grantee_role_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_grantee_role_id_institution_id_fkey FOREIGN KEY (grantee_role_id, institution_id) REFERENCES institution.institution_role(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_granter_member_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_granter_member_id_institution_id_fkey FOREIGN KEY (granter_member_id, institution_id) REFERENCES institution.course_member(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_granter_role_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_granter_role_id_institution_id_fkey FOREIGN KEY (granter_role_id, institution_id) REFERENCES institution.institution_role(id, institution_id);
+
+
+--
 -- Name: work_grant work_grant_revoked_by_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -11470,6 +11822,19 @@ ALTER TABLE audit.access_log ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY access_log_owner ON audit.access_log TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
+-- Name: course_handover; Type: ROW SECURITY; Schema: audit; Owner: -
+--
+
+ALTER TABLE audit.course_handover ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: course_handover course_handover_owner; Type: POLICY; Schema: audit; Owner: -
+--
+
+CREATE POLICY course_handover_owner ON audit.course_handover TO ductus_identity USING (true) WITH CHECK (true);
 
 
 --
@@ -12734,4 +13099,9 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261109030000'),
     ('20261109200000'),
     ('20261109210000'),
-    ('20261110120000');
+    ('20261110120000'),
+    ('20261111120000'),
+    ('20261111180000'),
+    ('20261111221500'),
+    ('20261111230000'),
+    ('20261111233000');

@@ -941,7 +941,7 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     const sheet = editorFor(session);
     sheet.type("x");
     await sheet.save();
-    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false, submitted: true });
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false, submitted: true, stopped: false, unconfirmed: true });
   });
 
   it("S2-S4: after it nothing is recorded, saved, started or sent, and the refused row stays", async () => {
@@ -1222,7 +1222,7 @@ describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", ()
     const { session } = setup({ open });
     const result = await ready(session);
     expect((result as { document: CanonicalDocument }).document).toEqual(ASSIGNED);
-    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false, submitted: true });
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false, submitted: true, stopped: false, unconfirmed: false });
   });
 
   it("O2-2: submitted: true never opens again, never commits, records or saves, and starts no runner or watch", async () => {
@@ -1587,5 +1587,115 @@ describe("#1542 sign-out while the server does not answer (plan #1546)", () => {
     expect(pending.length).toBeGreaterThan(0);
     expect(canonicalizeJcs(snapshot!.document)).toBe(canonicalizeJcs(sheet.current()));
     await expect(journal.destroyForLogout()).rejects.toThrow();
+  });
+});
+
+// DAN-699 (#1876): a stop used to leave the chip at "Spremljeno na uređaju"
+// and nothing told the student that the server no longer takes the text.
+describe("DAN-699: a stopped recorder is said and never SYNCED", () => {
+  it("the stop is in the snapshot at once, the rows before it drain, and nothing after reads SYNCED, after a reload as well", async () => {
+    const net = server();
+    const online = network(false);
+    const { session, journal } = setup({ net, online });
+    await ready(session);
+    expect(session.snapshot().stopped).toBe(false);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    await sheet.save();
+    expect(session.snapshot().stopped).toBe(false);
+    const seen: { state: string; stopped: boolean }[] = [];
+    session.subscribe((s) => seen.push({ state: s.state, stopped: s.stopped }));
+    vi.spyOn(EvidenceRecorder.prototype, "record").mockImplementationOnce(() => { throw new CaptureError("unsupported_step"); });
+    sheet.type("b");
+    // Said before any save: the record() catch itself tells the listeners.
+    expect(seen.at(-1)?.stopped).toBe(true);
+    await sheet.save();
+    online.set(true);
+    await session.settled();
+    // The row from before the stop was sent and receipted, yet "b" is only here.
+    expect(net.calls.length).toBeGreaterThan(0);
+    expect(session.snapshot()).toMatchObject({ stopped: true, state: "LOCAL_DURABLE" });
+    expect(seen.map((s) => s.state)).not.toContain("SYNCED");
+    expect((await journal.readEvidence(DOC)).meta?.state).not.toBe("SYNCED");
+
+    const again = setup({ journal, net, online });
+    await ready(again.session);
+    await again.session.settled();
+    expect(again.session.snapshot()).toMatchObject({ stopped: true });
+    expect(again.session.snapshot().state).not.toBe("SYNCED");
+  });
+
+  it("a gap found at save is a stop as well", async () => {
+    const net = server();
+    const { session } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    sheet.wiring.muted = true;
+    sheet.type("skriveno");
+    sheet.wiring.muted = false;
+    await sheet.save();
+    expect(session.snapshot()).toMatchObject({ stopped: true, state: "LOCAL_DURABLE" });
+  });
+});
+
+describe("DAN-314: unconfirmed, the gate of a revision answer", () => {
+  it("is true until the load, from the first keystroke, and while rows are owed; false once drained", async () => {
+    const online = network(false);
+    const { session } = setup({ online });
+    // What the panel renders is the last snapshot told to subscribers, so each change must be told.
+    const told: boolean[] = [];
+    session.subscribe((snapshot) => told.push(snapshot.unconfirmed));
+    expect(session.snapshot().unconfirmed).toBe(true);
+    await ready(session);
+    expect(session.snapshot().unconfirmed).toBe(false);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    // Inside the debounce: the editor has told the session, nothing is proposed yet.
+    session.edit();
+    expect(session.snapshot().unconfirmed).toBe(true);
+    await sheet.save();
+    expect(session.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", unconfirmed: true });
+    online.set(true);
+    await session.settled();
+    expect(session.snapshot()).toMatchObject({ state: "SYNCED", unconfirmed: false });
+    expect(told).toContain(true);
+    expect(told.at(-1)).toBe(false);
+  });
+
+  it("is false after a reload with nothing owed, though the state is LOCAL_DURABLE, not SYNCED (G3)", async () => {
+    const journal = openJournal();
+    const first = setup({ journal });
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type("x");
+    await sheet.save();
+    const second = setup({ journal });
+    await ready(second.session);
+    expect(second.session.snapshot().state).not.toBe("SYNCED");
+    expect(second.session.snapshot().unconfirmed).toBe(false);
+  });
+
+  it("stays true after a conflict, whose text the server never took", async () => {
+    const net = server(R0, () => json(409, { status: "stale_base", currentRevision: R0 + 3 }));
+    const { session } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect(session.snapshot()).toMatchObject({ state: "CONFLICT", unconfirmed: true });
+  });
+
+  it("is true once evidence has stopped, even with nothing owed", async () => {
+    const { session } = setup({
+      over: {
+        replayer: () => ({ ...createBrowserEditStepsV1Replayer(), apply: () => { throw new Error("step_failed"); } }),
+      },
+    });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect(session.snapshot().unconfirmed).toBe(true);
   });
 });

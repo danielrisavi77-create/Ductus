@@ -1,4 +1,5 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
+import "./help.mjs";
 import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
 import {
   evaluateChecks, externalReason, formatStatusRow, formatVerdict, headOrigin, latestVerdict, originText, overlapPairs,

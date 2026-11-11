@@ -8,6 +8,10 @@ import { promisify } from "node:util";
 import { parseLsRemote, pushVerdict, resolvePushTarget } from "./orchestrator-core.mjs";
 import { guardPush } from "./work-guard.mjs";
 
+// `--help` is loaded on demand, not as a static import: the push guard tests run
+// a copy of this script beside fixture modules, and a copy must not need help.mjs.
+if (process.argv.slice(2).some((a) => a === "--help" || a === "-h")) await import("./help.mjs");
+
 const run = promisify(execFile);
 const git = async (...args) => (await run("git", args, { windowsHide: true })).stdout.trim();
 

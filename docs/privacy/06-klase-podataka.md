@@ -115,6 +115,7 @@ Svaka tablica koju `-- migrate:up` dijelovi u `db/migrations/` ostavljaju na `ma
 | `evidence.signing_key` | — | Javni ključ potpisa ustanove |
 | `evidence.fast_path_window` | 25 | Vrijeme otvaranja rada po čitatelju |
 | `audit.access_log` | 25 | |
+| `audit.course_handover` | 26 | |
 | `audit.course_member_event` | 26 | |
 | `audit.enrollment_code_event` | 26 | |
 | `audit.faculty_rule_event` | 26 | |

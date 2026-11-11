@@ -1,4 +1,5 @@
 // DAN-274: PR Evidence Pack. Read-only. Usage: node evidence.mjs --pr <n> [--json]
+import "./help.mjs";
 import { checkRollup, prComments, prView, readGate, repoId } from "./gh.mjs";
 import { buildEvidence, parseEvidenceArgs, renderEvidence } from "./evidence-core.mjs";
 

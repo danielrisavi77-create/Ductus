@@ -1,6 +1,8 @@
 // F-6 / DAN-35: the browser sends only the assignment fields of the
 // create_assignment contract (#363). Identity, institution and role are never
 // form inputs; the server decides them from the session.
+import { zagrebInstant } from "@/lib/i18n/zagreb";
+
 import type { CoursePolicy } from "./course-create";
 
 export const WORK_TYPES = ["seminar_paper", "bachelor_thesis", "master_thesis", "essay"] as const;
@@ -43,7 +45,6 @@ export type AssignmentCreation =
   | { kind: "invalid" | "unauthorized" | "forbidden" | "conflict" | "unavailable" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LOCAL_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 const WORD_COUNT = /^\d+$/;
 
 export interface ParsedWordRange { wordMin: number | null; wordMax: number | null }
@@ -66,11 +67,8 @@ export function parseWordRange(min: string, max: string): ParsedWordRange | null
   return { wordMin, wordMax };
 }
 
-function instant(local: string): string | null {
-  if (!LOCAL_MINUTE.test(local)) return null;
-  const at = new Date(local);
-  return Number.isNaN(at.getTime()) ? null : at.toISOString();
-}
+/** A `datetime-local` minute means Zagreb time, whatever the browser's zone (DAN-700). */
+const instant = zagrebInstant;
 
 /**
  * The request body, or null when the draft cannot pass the server. A list of

@@ -107,6 +107,8 @@ export default defineConfig({
         test: {
           name: "integration",
           include: ["tests/integration/**/*.integration.test.ts"],
+          // F-019: refuses a database URL that is not this machine's.
+          setupFiles: ["tests/integration/setup.ts"],
           testTimeout: 30_000,
           // The application login of the local stack (.env.example); the
           // application itself has no default for it.

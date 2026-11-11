@@ -93,6 +93,12 @@
     "ticket": "DAN-379"
   },
   {
+    "function": "institution.hand_over_course",
+    "status": "ruta dolazi",
+    "reason": "Administrator ustanove predaje kolegij novom nositelju uz zapis u revizijskom tragu i obavijest studentima (M2.7-P04a); RPC postoji za ductus_app, ruta još nije spojena.",
+    "ticket": "DAN-351"
+  },
+  {
     "function": "institution.publish_faculty_rule_version",
     "status": "ruta dolazi",
     "reason": "Potvrđeni administrator ustanove objavljuje novu nepromjenjivu verziju pravila fakulteta uz očekivanu verziju (M2.12-P01a, D-175); RPC postoji za ductus_app, ruta nije u opsegu P01a.",
@@ -124,7 +130,7 @@
   {
     "function": "institution.set_course_holder",
     "status": "ruta dolazi",
-    "reason": "Nastavnik kolegija imenuje nositelja kolegija i završava prethodnog (M2.7-P01); RPC postoji za ductus_app, ruta još nije spojena.",
+    "reason": "Nastavnik kolegija imenuje prvog nositelja kolegija (M2.7-P01); promjenu postojećeg od M2.7-P04a radi samo administrator. RPC postoji za ductus_app, ruta još nije spojena.",
     "ticket": "DAN-351"
   },
   {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   MONTHS_GENITIVE_HR,
@@ -15,9 +15,9 @@ import {
 } from "./hr";
 
 /**
- * The instants are built from LOCAL components and then serialised, so these
- * expectations hold in every time zone the suite might run in — which is the
- * point: what the helpers promise is a stable shape, not a fixed offset.
+ * The instants are written with the Zagreb offset of their date (summer time
+ * from April to October for the days used here), so the expectations name the
+ * Zagreb wall clock. DAN-700: the suite below runs them under four host zones.
  */
 function localIso(
   year: number,
@@ -26,10 +26,22 @@ function localIso(
   hours = 0,
   minutes = 0,
 ): string {
-  return new Date(year, monthIndex, day, hours, minutes).toISOString();
+  const two = (value: number) => String(value).padStart(2, "0");
+  const offset = monthIndex >= 3 && monthIndex <= 9 ? "+02:00" : "+01:00";
+  return new Date(`${year}-${two(monthIndex + 1)}-${two(day)}T${two(hours)}:${two(minutes)}:00${offset}`).toISOString();
 }
 
-describe("formatDateHr", () => {
+const ZONES = ["Europe/Zagreb", "UTC", "America/New_York", "Asia/Tokyo"] as const;
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe.each(ZONES)("formatDateHr with TZ=%s", (zone) => {
+  beforeEach(() => {
+    vi.stubEnv("TZ", zone);
+  });
+
   it("renders the long Croatian form with the genitive month", () => {
     expect(formatDateHr(localIso(2026, 8, 19))).toBe("19. rujna 2026.");
   });
@@ -69,7 +81,11 @@ describe("formatDateHr", () => {
   });
 });
 
-describe("formatDateTimeHr", () => {
+describe.each(ZONES)("formatDateTimeHr with TZ=%s", (zone) => {
+  beforeEach(() => {
+    vi.stubEnv("TZ", zone);
+  });
+
   it("adds the clock time with the Croatian preposition", () => {
     expect(formatDateTimeHr(localIso(2026, 8, 19, 14, 5))).toBe(
       "19. rujna 2026. u 14:05",
@@ -90,6 +106,30 @@ describe("formatDateTimeHr", () => {
 
   it("shows an unreadable instant as it is", () => {
     expect(formatDateTimeHr("bilo kada")).toBe("bilo kada");
+  });
+
+  // DAN-700 (#1877): the comment posted at 01:50 UTC read 20:50 the day before in New York.
+  it("reads the clock in Zagreb, not in the host zone", () => {
+    expect(formatDateTimeHr("2026-11-11T01:50:00.000Z")).toBe("11. studenoga 2026. u 02:50");
+    expect(formatDateHr("2026-11-10T23:30:00.000Z")).toBe("11. studenoga 2026.");
+    expect(formatDateTimeHr("2026-12-14T22:59:00.000Z")).toBe("14. prosinca 2026. u 23:59");
+  });
+
+  it("follows both clock changes", () => {
+    expect(formatDateTimeHr("2026-03-29T00:59:00.000Z")).toBe("29. ožujka 2026. u 01:59");
+    expect(formatDateTimeHr("2026-03-29T01:00:00.000Z")).toBe("29. ožujka 2026. u 03:00");
+    expect(formatDateTimeHr("2026-10-25T00:30:00.000Z")).toBe("25. listopada 2026. u 02:30");
+    expect(formatDateTimeHr("2026-10-25T01:30:00.000Z")).toBe("25. listopada 2026. u 02:30");
+    expect(formatDateTimeHr("2026-10-25T02:00:00.000Z")).toBe("25. listopada 2026. u 03:00");
+  });
+
+  it("reads an instant with an offset as that instant", () => {
+    expect(formatDateTimeHr("2026-12-14T17:59:00-05:00")).toBe("14. prosinca 2026. u 23:59");
+  });
+
+  it("reads a minute without a zone as Zagreb time, as the form fields do", () => {
+    expect(formatDateTimeHr("2026-12-14T23:59")).toBe("14. prosinca 2026. u 23:59");
+    expect(formatDateHr("2026-12-31T23:59")).toBe("31. prosinca 2026.");
   });
 });
 

@@ -54,9 +54,11 @@
     "orch:evidence": "node scripts/orchestrator/evidence.mjs",
     "orch:override": "node scripts/orchestrator/override-block.mjs",
     "orch:preflight": "node scripts/orchestrator/preflight.mjs",
+    "orch:brief": "node scripts/orchestrator/pr-brief.mjs",
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
     "test:db:native": "node scripts/db/native-db.mjs test",
     "agents:lint": "pnpm dlx --allow-build=agnix agnix@0.57.0 .",
+    "decisions:get": "node scripts/engineering/decision-get.mjs",
     "tokens:report": "node scripts/engineering/token-report.mjs",
     "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize"
   },

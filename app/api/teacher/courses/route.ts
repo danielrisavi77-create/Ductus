@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { withActor } from "@/server/db";
 import { handleTeacherCoursesRequest } from "@/server/institution/teacher-courses";
 
@@ -13,6 +13,6 @@ export const revalidate = 0;
 export async function GET(request: NextRequest): Promise<Response> {
   return handleTeacherCoursesRequest(request, {
     withActor,
-    sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
+    sessionToken: liveSessionToken(request.cookies),
   });
 }

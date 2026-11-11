@@ -315,3 +315,110 @@ describe("work grants under withActor (DAN-379)", () => {
     expect(await grantCan(tokens.hana, "read_text")).toBe(false);
   });
 });
+
+// DAN-379 (M2.8-P02): a grant is bound to the role and membership rows that
+// made it live when it was given. A role revoked and confirmed again, or a
+// teacher removed from the course and added back, is a new row, so the old
+// grant stays closed even across connections and an open transaction.
+async function revokeRole(user: string) {
+  await admin.query(
+    `UPDATE institution.institution_role SET revoked_at = now()
+     WHERE institution_id = $1 AND user_id = $2 AND role = 'teacher' AND revoked_at IS NULL`,
+    [institutionId, user],
+  );
+}
+
+async function confirmRoleAgain(user: string) {
+  await admin.query(
+    `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at)
+     VALUES ($1, $2, 'teacher', now())`,
+    [institutionId, user],
+  );
+}
+
+describe("work grants bound to their rows (DAN-379, P02)", () => {
+  it("keeps a grant closed when the grantee's role is revoked before the grant commits and is confirmed again", async () => {
+    // Vesna's grant is held open on its own connection; Hana's role is
+    // revoked and confirmed again, both committed, before it commits.
+    const client = await appPool.connect();
+    let grantId: string;
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_catalog.set_config('app.session_token', $1, true)",
+        [tokens.vesna],
+      );
+      grantId = (
+        await client.query<{ id: string }>(
+          `SELECT institution.grant_work_access($1, $2, $3, 'committee', '{read_text}', NULL,
+                                                now() + interval '1 day') AS id`,
+          [assignmentId, people.ana, people.hana],
+        )
+      ).rows[0].id;
+      await revokeRole(people.hana);
+      await confirmRoleAgain(people.hana);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    expect(await grantCan(tokens.hana, "read_text")).toBe(false);
+    // A new grant binds the new row.
+    const fresh = await grant();
+    expect(await grantCan(tokens.hana, "read_text")).toBe(true);
+    await revoke(fresh);
+    await revoke(grantId);
+  });
+
+  it("closes access at the grantee's next statement when another connection revokes the role and confirms it again", async () => {
+    const grantId = await grant();
+    const client = await appPool.connect();
+    let seen: { before: boolean; after: boolean };
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_catalog.set_config('app.session_token', $1, true)",
+        [tokens.hana],
+      );
+      const ask = async () =>
+        (
+          await client.query<{ can: boolean }>(
+            "SELECT institution.grant_can('read_text', $1) AS can",
+            [documentId],
+          )
+        ).rows[0].can;
+      const before = await ask();
+      await revokeRole(people.hana);
+      await confirmRoleAgain(people.hana);
+      const after = await ask();
+      await client.query("COMMIT");
+      seen = { before, after };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    expect(seen).toStrictEqual({ before: true, after: false });
+    expect(await grantCan(tokens.hana, "read_text")).toBe(false);
+    await revoke(grantId);
+  });
+
+  it("keeps a grant closed when the granter is removed from the course and added back", async () => {
+    const grantId = await grant();
+    expect(await grantCan(tokens.hana, "read_text")).toBe(true);
+    await admin.query(
+      `UPDATE institution.course_member SET member_to = now()
+       WHERE course_id = $1 AND user_id = $2 AND role = 'teacher' AND member_to IS NULL`,
+      [courseId, people.vesna],
+    );
+    await admin.query(
+      "INSERT INTO institution.course_member (course_id, institution_id, user_id, role) VALUES ($1, $2, $3, 'teacher')",
+      [courseId, institutionId, people.vesna],
+    );
+    expect(await grantCan(tokens.hana, "read_text")).toBe(false);
+    await revoke(grantId);
+  });
+});

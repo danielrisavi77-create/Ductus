@@ -55,5 +55,5 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 - Nalaz s "Dohvatljivo kroz: nije pokazano" ili bez stvarnog pozivatelja ide vlasniku, ne piscu (§14).
 - Treći krug ide vlasniku s popisom krugova (§14).
-- D-97 PR spaja se tek na Danielovu naredbu; noćni prozor: `ORKESTRATOR.md` §4 (§5, §10).
+- D-97 PR spaja Danielova naredba ili prozor od 24 h: `ORKESTRATOR.md` §4 (§5, §10).
 - Zaštitu grane, uključujući `strict`, mijenja samo vlasnik (§10, §15).

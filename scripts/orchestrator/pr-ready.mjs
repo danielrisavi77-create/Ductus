@@ -1,5 +1,6 @@
 // Merge-readiness checklist for one PR. Read-only: never merges or edits.
 // Usage: node pr-ready.mjs <number>   (exit 0 only if all required checks pass)
+import "./help.mjs";
 import { pathToFileURL } from "node:url";
 
 import { checkRollup, ghJson, prPaths, prView, readGate, repoId, reviewThreads } from "./gh.mjs";

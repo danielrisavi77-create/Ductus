@@ -96,6 +96,21 @@ export type EvidenceSnapshot = SaverSnapshot & {
    * set (review codex:cxcr1742, c.6726896384). It changes nothing else.
    */
   submitted: boolean;
+  /**
+   * DAN-699 (#1876): the recorder stopped, so what is written from here on
+   * stays on this device and the server never takes it. Set from the stop
+   * itself or from `meta.evidenceStopped` after a reload; never with a
+   * closed package.
+   */
+  stopped: boolean;
+  /**
+   * The text on this device may hold changes the server has not confirmed
+   * (DAN-314, review c.6779406784): a change inside the save debounce or on
+   * its way to the journal, a row owed (offline, refused), a failure, a stop
+   * of the evidence, a sticky state, or no load yet. An answer to a revision
+   * request names the server's current revision, so it waits for `false`.
+   */
+  unconfirmed: boolean;
 };
 
 type Candidate = { doc: CanonicalDocument; gen: number; marks: number };
@@ -168,7 +183,15 @@ export class EvidenceSession {
     // LOCAL_DURABLE while the same row is still refused (review #811 c.6419592134).
     const refused = !this.closedBy && this.owed > 0 && (this.refused || this.manualOnly);
     const submitted = this.closedBy === "submission" || this.work?.submitted === true;
-    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused, submitted };
+    const stopped = !this.closedBy && this.stopped !== null;
+    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused, submitted, stopped, unconfirmed: this.unconfirmed() };
+  }
+
+  /** Read only; see `EvidenceSnapshot.unconfirmed`. */
+  private unconfirmed(): boolean {
+    return !this.loaded || this.halted || this.failure !== null || this.stopped !== null ||
+      this.owed > 0 || this.syncing || this.saving || this.next !== null || this.unsaved !== null ||
+      this.gen !== this.cleanGen || (this.stored !== null && STICKY.has(this.stored));
   }
 
   subscribe(listener: (snapshot: EvidenceSnapshot) => void): () => void {
@@ -259,6 +282,8 @@ export class EvidenceSession {
     } catch (error) {
       if (!(error instanceof CaptureError)) throw error;
       this.stopped = error.code;
+      // DAN-699: the student learns of the stop now, not at the next save.
+      this.emit();
     }
   }
 
