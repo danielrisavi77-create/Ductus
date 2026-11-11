@@ -282,7 +282,8 @@ const deb822 = "Types: deb\nURIs: http://azure.archive.ubuntu.com/ubuntu/\nSuite
 // As on the ubuntu-24.04 image (run 43034842276: "Get:1 file:/etc/apt/apt-mirrors.txt").
 const mirrors = "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n";
 const mirrorList = "Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates\n";
-const legacy = "deb http://azure.archive.ubuntu.com/ubuntu/ jammy main\ndeb http://security.ubuntu.com/ubuntu jammy-security main\n# see azure.archive.ubuntu.com for details\n";
+// The look-alike host keeps its line: the dots in the mirror name are literal.
+const legacy = "deb http://azure.archive.ubuntu.com/ubuntu/ jammy main\ndeb http://security.ubuntu.com/ubuntu jammy-security main\n# see azure.archive.ubuntu.com for details\ndeb http://azureXarchive.ubuntu.com/ubuntu/ jammy main\n";
 const switched = (text, host = "archive.ubuntu.com") => text.replaceAll("//azure.archive.ubuntu.com", `//${host}`);
 const azureProbe = "hosts azure.archive.ubuntu.com";
 const archiveProbe = "hosts archive.ubuntu.com";
@@ -317,9 +318,12 @@ for (const c of mirrorCases) {
 }
 
 test("apt mirror: a failed switch only warns and the retries run as before", async () => {
-  const { status, stdout, calls, after } = await run({ sources: { deb822 }, resolve: "fail", sedFails: true, failures: 1 });
+  const { status, stdout, calls, after, probes, sudo } = await run({ sources: { deb822 }, resolve: "fail", sedFails: true, failures: 1 });
   assert.equal(status, 0);
   assert.deepEqual(after, { deb822 });
+  // A failed switch ends the fallback search: no further probe, no second sed.
+  assert.deepEqual(probes, [azureProbe, archiveProbe]);
+  assert.equal(sudo.filter((line) => line.startsWith("sed")).length, 1);
   assert.match(stdout, /^::warning::azure\.archive\.ubuntu\.com does not resolve and the apt sources could not be switched to archive\.ubuntu\.com$/m);
   assert.match(stdout, /^::warning::playwright install attempt 1\/3 failed \(exit 7\)$/m);
   assert.deepEqual(calls, Array(2).fill("exec playwright install --with-deps chromium firefox"));
