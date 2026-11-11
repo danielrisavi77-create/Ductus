@@ -80,6 +80,26 @@ INSERT INTO ref VALUES ('h1', pg_temp.ask('iva', $$ SELECT institution.hand_over
 SELECT is((SELECT val FROM ref WHERE name = 'h1'), (SELECT id::text FROM audit.course_handover),
   'Iva hands K1 over to Marko and gets the trail row back');
 SELECT is(pg_temp.holders('k1'), 'vesna(ended) marko', 'Vesna''s row stays, ended; Marko is the one open holder');
+-- The admin role of Iva and the teacher role of Marko stay locked FOR SHARE
+-- until this transaction ends (review on #1923): a revocation that committed
+-- while the handover waited for the course leaves no row, and a later one
+-- waits for it. The lock is read from the infomask as in test 038: 0x50 is a
+-- share lock; a lock from a subtransaction makes xmax a MultiXact (0x1000).
+CREATE EXTENSION IF NOT EXISTS pageinspect;
+CREATE FUNCTION pg_temp.role_lock(p_user text, p_role text) RETURNS text
+LANGUAGE sql VOLATILE AS $$
+  SELECT CASE WHEN i.t_infomask & 4096 <> 0 THEN (
+                SELECT CASE WHEN bool_or(x.mode = 'sh') THEN 'share' ELSE 'other' END
+                  FROM pg_get_multixact_members(i.t_xmax) x)
+              WHEN i.t_infomask & 80 = 80 THEN 'share'
+              ELSE 'other' END
+    FROM institution.institution_role r
+    CROSS JOIN LATERAL heap_page_items(get_raw_page('institution.institution_role', (r.ctid::text::point)[0]::integer)) i
+   WHERE r.institution_id = pg_temp.id('fak_a') AND r.user_id = pg_temp.id(p_user) AND r.role = p_role
+     AND i.lp = (r.ctid::text::point)[1]::integer
+$$;
+SELECT is(pg_temp.role_lock('iva', 'admin'), 'share', 'Iva''s admin role stays locked FOR SHARE until commit');
+SELECT is(pg_temp.role_lock('marko', 'teacher'), 'share', 'Marko''s teacher role stays locked FOR SHARE until commit');
 SELECT is(
   (SELECT p.name FROM institution.course_holder h JOIN person p ON p.id = h.assigned_by
    WHERE h.course_id = pg_temp.id('k1') AND h.valid_to IS NULL),
