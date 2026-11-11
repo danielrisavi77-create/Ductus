@@ -26,7 +26,7 @@ import type { ReplayPlayer } from "@/domain/projection/replay-player";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import {
-  describeChange, fill, gapWords, historyRows, nearestStep, paragraphOption, replayBlocks, sourceLabel, stepsOf,
+  describeChange, fill, gapWords, historyRows, nearestStep, nodeText, paragraphOption, replayBlocks, sourceLabel, stepsOf,
   type ChangePart,
 } from "./replay-view";
 import styles from "./ReplayView.module.css";
@@ -137,7 +137,8 @@ export function ReplayPlayerView({ player }: { player: Player }) {
   });
   const live = n === 0 || change === null ? t.startLive : describeChange(n, change.kind, parts);
 
-  const rows = shownHistory === null ? [] : historyRows(shownHistory, n);
+  const shownNode = nodes.find((node) => node.id === shownId);
+  const rows = shownHistory === null ? [] : historyRows(shownHistory, n, shownNode === undefined ? null : nodeText(shownNode));
   const here = gaps.filter((g) => g.beforeIndex === n || (g.beforeIndex === n + 1 && (g.gap === "not_resumed" || n === 0)));
 
   // Only a paragraph of the final text can be chosen: the select lists those.

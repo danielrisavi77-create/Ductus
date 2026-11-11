@@ -27,8 +27,8 @@ const t = messagesHr.replay;
 const strings = (value: unknown): string[] =>
   typeof value === "string" ? [value] : Object.values(value as Record<string, unknown>).flatMap(strings);
 
-const change = (index: number, after: string | null, source: "editor" | "paste" = "editor"): ParagraphHistoryEntry =>
-  ({ entry: "change", index, kind: "insert", source, before: null, after, removed: "", inserted: "x" });
+const change = (index: number, after: string | null, source: "editor" | "paste" = "editor", before: string | null = null): ParagraphHistoryEntry =>
+  ({ entry: "change", index, kind: "insert", source, before, after, removed: "", inserted: "x" });
 
 describe("replay words (DAN-537)", () => {
   it("no text of the replay names a forbidden term or a measure of time", () => {
@@ -99,10 +99,11 @@ describe("replay words (DAN-537)", () => {
   it("shows the current, previous and first versions with the gaps between, newest first", () => {
     const history: ParagraphHistoryEntry[] = [
       change(1, "A"),
-      change(2, "AB", "paste"),
+      change(2, "AB", "paste", "A"),
+      // The verified document resumed from holds the paragraph as it was before the gap.
       { entry: "gap", gap: "resumed", beforeIndex: 3 },
-      change(3, "ABC"),
-      change(4, null),
+      change(3, "ABC", "editor", "AB"),
+      change(4, null, "editor", "ABC"),
     ];
     expect(historyRows(history, 0)).toEqual([]);
     expect(historyRows(history, 4)).toEqual([
@@ -117,6 +118,48 @@ describe("replay words (DAN-537)", () => {
       "Prva zabilježena (promjena 1)",
     ]);
     expect(historyRows(history, 2)[0]).toMatchObject({ source: t.sources.paste });
+  });
+
+  it("shows where the record stopped at the last change it replays", () => {
+    const history: ParagraphHistoryEntry[] = [change(1, "A"), { entry: "gap", gap: "not_resumed", beforeIndex: 2 }];
+    expect(historyRows(history, 1)[0]).toEqual({ row: "gap", text: fill(t.gapStopped, { a: 1 }) });
+  });
+
+  it("says a version was replaced inside a resumed gap, and shows the verified text after it", () => {
+    const history: ParagraphHistoryEntry[] = [
+      change(1, "Staro"),
+      { entry: "gap", gap: "resumed", beforeIndex: 2 },
+      change(2, "Novo!", "editor", "Novo"),
+    ];
+    expect(historyRows(history, 2)).toEqual([
+      { row: "version", label: "Sadašnja (promjena 2)", text: "„Novo!”", replacedBy: t.historyNotYet, source: "utipkano" },
+      { row: "version", label: "Iz provjerenog nastavka (prije promjene 2)", text: "„Novo”", replacedBy: "promjena 2", source: t.historyUnobserved },
+      { row: "gap", text: fill(t.gapBetween, { a: 1, b: 2 }) },
+      { row: "version", label: "Prva zabilježena (promjena 1)", text: "„Staro”", replacedBy: t.historyInGap, source: "utipkano" },
+    ]);
+  });
+
+  it("keeps the verified text a change deleted right after a resumed gap", () => {
+    const history: ParagraphHistoryEntry[] = [
+      { entry: "gap", gap: "resumed", beforeIndex: 2 },
+      change(2, null, "editor", "Tekst iz nastavka."),
+    ];
+    expect(historyRows(history, 2)).toEqual([
+      { row: "version", label: "Sadašnja (promjena 2)", text: t.historyDeleted, replacedBy: t.historyNotYet, source: "utipkano" },
+      { row: "version", label: "Iz provjerenog nastavka (prije promjene 2)", text: "„Tekst iz nastavka.”", replacedBy: "promjena 2", source: t.historyUnobserved },
+      { row: "gap", text: fill(t.gapBetween, { a: 1, b: 2 }) },
+    ]);
+  });
+
+  it("shows the verified text after a gap for a paragraph no later change touched", () => {
+    const history: ParagraphHistoryEntry[] = [change(1, "Staro"), { entry: "gap", gap: "resumed", beforeIndex: 2 }];
+    expect(historyRows(history, 3, "Novo")).toEqual([
+      { row: "version", label: t.historyResumedNow, text: "„Novo”", replacedBy: t.historyNotYet, source: t.historyUnobserved },
+      { row: "gap", text: fill(t.gapBetween, { a: 1, b: 2 }) },
+      { row: "version", label: "Prva zabilježena (promjena 1)", text: "„Staro”", replacedBy: t.historyInGap, source: "utipkano" },
+    ]);
+    // Unchanged across the gap: the version of change 1 is still the current one.
+    expect(historyRows(history, 3, "Staro")[1]).toMatchObject({ label: "Sadašnja (promjena 1)", replacedBy: t.historyNotYet });
   });
 
   it("names a paragraph by its place and the start of its text", () => {

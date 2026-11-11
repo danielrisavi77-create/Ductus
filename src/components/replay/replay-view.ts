@@ -99,20 +99,45 @@ export type HistoryRow =
  * The rows of a paragraph's history up to change `at`, newest first: the
  * current version, the one just before it and the first recorded one, with
  * every gap of the record up to `at` at its place, since the paragraph may
- * have changed inside it.
+ * have changed inside it. A record that stops after `at` shows its stop too.
+ *
+ * Across a resumed gap the paragraph may already differ in the verified
+ * document the replay resumes from. That text is a row of its own, and the
+ * version before the gap is said to be replaced inside the gap, not by the
+ * next change. `current` is the paragraph's text at `at` (null: not there),
+ * for a paragraph no change touched after the gap.
  */
-export function historyRows(history: readonly ParagraphHistoryEntry[], at: number): HistoryRow[] {
-  const shown = history.filter((entry) => (entry.entry === "change" ? entry.index : entry.beforeIndex) <= at);
+export function historyRows(history: readonly ParagraphHistoryEntry[], at: number, current?: string | null): HistoryRow[] {
+  const shown = history.filter((entry) => entry.entry === "change"
+    ? entry.index <= at
+    : entry.beforeIndex <= at || (entry.gap === "not_resumed" && entry.beforeIndex === at + 1));
   const changes = shown.flatMap((entry) => (entry.entry === "change" ? [entry] : []));
   if (changes.length === 0) return [];
+  const last = changes[changes.length - 1];
+  // A resumed gap after change `from` and up to change `to`.
+  const resumedIn = (from: number, to: number) =>
+    shown.some((entry) => entry.entry === "gap" && entry.gap === "resumed" && entry.beforeIndex > from && entry.beforeIndex <= to);
+  // The verified text a change started from, when a resumed gap put it there.
+  const resumedText = (entry: (typeof changes)[number]): string | null | undefined => {
+    const prior = changes[changes.indexOf(entry) - 1];
+    if (!resumedIn(prior?.index ?? 0, entry.index)) return undefined;
+    return entry.before !== (prior?.after ?? null) ? entry.before : undefined;
+  };
+  const trailing = current !== undefined && current !== last.after && resumedIn(last.index, at);
   // Later entries win: the current version is never called the first, and with
   // two versions the older one is the first recorded, which it is.
-  const labels = new Map<number, string>([
-    [changes[changes.length - 2]?.index ?? -1, t.historyPrevious],
-    [changes[0].index, t.historyFirst],
-    [changes[changes.length - 1].index, t.historyCurrent],
-  ]);
+  const labels = new Map<number, string>(trailing
+    ? [[last.index, t.historyPrevious], [changes[0].index, t.historyFirst]]
+    : [
+        [changes[changes.length - 2]?.index ?? -1, t.historyPrevious],
+        [changes[0].index, t.historyFirst],
+        [last.index, t.historyCurrent],
+      ]);
+  const versionText = (text: string | null) => (text === null ? t.historyDeleted : `„${text}”`);
   const rows: HistoryRow[] = [];
+  if (trailing) {
+    rows.push({ row: "version", label: t.historyResumedNow, text: versionText(current), replacedBy: t.historyNotYet, source: t.historyUnobserved });
+  }
   for (const entry of [...shown].reverse()) {
     if (entry.entry === "gap") {
       rows.push({ row: "gap", text: gapWords(entry.gap, entry.beforeIndex).text });
@@ -121,13 +146,24 @@ export function historyRows(history: readonly ParagraphHistoryEntry[], at: numbe
     const label = labels.get(entry.index);
     if (label === undefined) continue;
     const next = changes[changes.indexOf(entry) + 1];
+    const replacedInGap = next === undefined ? trailing : resumedText(next) !== undefined;
     rows.push({
       row: "version",
       label: fill(label, { n: entry.index }),
-      text: entry.after === null ? t.historyDeleted : `„${entry.after}”`,
-      replacedBy: next === undefined ? t.historyNotYet : fill(t.historyBy, { n: next.index }),
+      text: versionText(entry.after),
+      replacedBy: replacedInGap ? t.historyInGap : next === undefined ? t.historyNotYet : fill(t.historyBy, { n: next.index }),
       source: sourceLabel(entry.source),
     });
+    const before = resumedText(entry);
+    if (before !== undefined) {
+      rows.push({
+        row: "version",
+        label: fill(t.historyResumed, { n: entry.index }),
+        text: versionText(before),
+        replacedBy: fill(t.historyBy, { n: entry.index }),
+        source: t.historyUnobserved,
+      });
+    }
   }
   return rows;
 }
