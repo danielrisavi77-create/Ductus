@@ -144,15 +144,18 @@ Stanja su `EDITING` (početno), `SAVING_LOCAL`, `LOCAL_DURABLE`, `SYNCING`, `SYN
 | Let je već podmiren (poslani redak više nije u redu) | nijedan |
 | `committed` ili `duplicate`, potvrda nedostaje ili je neispravna | `SYNC_FAILED` (bez ponavljanja) |
 | `committed` ili `duplicate`, `pending_signature` | nijedan |
+| `committed` ili `duplicate`, potpisana, ali očekivani commit (`verification.expected`) je nepotpun ili mu se revizija ne slaže s odgovorom | `SYNC_FAILED` (bez ponavljanja), verifikator se ne poziva |
+| `committed` ili `duplicate`, potpisana, ali očekivani commit ne pripada poslanom retku (`documentId` ili `clientTransactionId`) | `SYNC_FAILED` (bez ponavljanja), verifikator se ne poziva |
 | `committed` ili `duplicate`, potpisana, verifikacija ne uspije | `SYNC_FAILED` (bez ponavljanja) |
-| `committed` ili `duplicate`, potpisana i provjerena, nema novijih redaka | `SYNC_ACK` |
+| `committed` ili `duplicate`, potpisana i provjerena, let čitljiv, nema novijih redaka | `SYNC_ACK` |
 | `committed` ili `duplicate`, potpisana i provjerena, postoji noviji redak | nijedan |
+| `committed` ili `duplicate`, potpisana i provjerena, let nečitljiv | nijedan (nečitljiv let nikad ne daje `SYNC_ACK`) |
 | `stale_base` | `SYNC_STALE_BASE` |
 | `transport_error` | `SYNC_FAILED` (s ponavljanjem) |
 | `txid_reused` | `SYNC_KEY_DIVERGED` |
 | `too_large`, `not_found`, `unauthenticated`, `invalid_document`, `invalid_client_transaction_id`, `invalid`, nepoznat status | `SYNC_FAILED` (bez ponavljanja) |
 
-`earnsAck` odlučuje zadnja dva retka s potvrdom: provjerena potvrda mora pripadati poslanom retku, a `newerRowsQueued` ne smije naći noviji redak. `nextAwaitingReceipt(sent, outcome, previous)` zatim odlučuje ostaje li redak zadržan: provjerena potvrda otpušta zadržavanje, neprovjeren `committed` ili `duplicate` ga postavlja, `txid_reused` ga označava kao razišlo, konačno odbijanje ključa ga otpušta, a greška prijenosa ga čuva.
+`earnsAck` se poziva prije verifikatora. Ako očekivani commit ne pripada poslanom retku, vraća `null` i ishod je `SYNC_FAILED` bez provjere potpisa. Inače unaprijed odlučuje hoće li provjerena potvrda dati `SYNC_ACK`: let mora biti čitljiv, a `newerRowsQueued` ne smije naći noviji redak. Nečitljiv let se ne smatra podmirenim, pa se odbijanje ne proguta. `nextAwaitingReceipt(sent, outcome, previous)` zatim odlučuje ostaje li redak zadržan: provjerena potvrda otpušta zadržavanje, neprovjeren `committed` ili `duplicate` ga postavlja, `txid_reused` ga označava kao razišlo, konačno odbijanje ključa ga otpušta, a greška prijenosa ga čuva.
 
 ### 5.4 Stanje na razini modula i redoslijed poziva
 
