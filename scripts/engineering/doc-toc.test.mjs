@@ -207,6 +207,20 @@ const cases = [
     output: `- a\n2. b\n${block("- unutra: retci 8-8", "- vani: retci 9-9")}\n\n  ## unutra\n## vani\n`,
   },
   {
+    // The QA scenario on #1952 (c.6807742083). An ordered item cannot continue a bullet list, so it
+    // starts a new list rather than a lazy line; commonmark.js 0.31.2 and markdown-it 14.1.0 render
+    // <ul>tekst</ul><ol start="2">nastavak</ol><h2>Unutar</h2><h2>B</h2>.
+    name: "the QA scenario: 2. after a bullet item is a new list, not a lazy line",
+    input: "## A\n- tekst\n2. nastavak\n  ## Unutar\n## B\n",
+    output: `${block("- A: retci 7-9", "- Unutar: retci 10-10", "- B: retci 11-11")}\n\n## A\n- tekst\n2. nastavak\n  ## Unutar\n## B\n`,
+  },
+  {
+    // The same with 1., which may interrupt a paragraph; the reference parsers give the same headings.
+    name: "the QA scenario with 1. after a bullet item",
+    input: "## A\n- tekst\n1. nastavak\n  ## Unutar\n## B\n",
+    output: `${block("- A: retci 7-9", "- Unutar: retci 10-10", "- B: retci 11-11")}\n\n## A\n- tekst\n1. nastavak\n  ## Unutar\n## B\n`,
+  },
+  {
     // The markers close the item, so the heading after them is a section only with the block in place.
     name: "the block closes a list item before it",
     input: `- a\n${block()}\n  ## B\n`,
