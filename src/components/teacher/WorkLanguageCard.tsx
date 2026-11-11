@@ -27,6 +27,8 @@ export default function WorkLanguageCard({ assignmentId, versionNo, current, ini
   const [chosen, setChosen] = useState<WorkLanguage>(current);
   const [result, setResult] = useState<WorkLanguageSave | null>(initial);
   const [pending, setPending] = useState(false);
+  // The language in force: the one read, or the one a confirmed save published.
+  const [inForce, setInForce] = useState<WorkLanguage>(current);
   const inFlight = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
@@ -38,17 +40,19 @@ export default function WorkLanguageCard({ assignmentId, versionNo, current, ini
   const saved = result?.kind === "saved";
   // Only an invalid choice may be corrected and sent again; every other outcome needs a fresh read.
   const locked = pending || (result !== null && result.kind !== "invalid");
-  const changed = chosen !== current;
+  const changed = chosen !== inForce;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (inFlight.current || locked || !changed) return;
     inFlight.current = true;
     setPending(true);
-    void saveAssignmentWorkLanguage(assignmentId, versionNo, chosen).then((reply) => {
+    const language = chosen;
+    void saveAssignmentWorkLanguage(assignmentId, versionNo, language).then((reply) => {
       inFlight.current = false;
       if (!alive.current) return;
       setPending(false);
+      if (reply.kind === "saved") setInForce(language);
       setResult(reply);
     });
   }
@@ -58,7 +62,7 @@ export default function WorkLanguageCard({ assignmentId, versionNo, current, ini
     <form className={styles.card} onSubmit={submit} aria-labelledby="jezik-rada">
       <h2 id="jezik-rada">{w.heading}</h2>
       <p className={styles.hint}>{w.lead}</p>
-      <p className={styles.hint}>{w.current.replace("{language}", names[current])}</p>
+      <p className={styles.hint}>{w.current.replace("{language}", names[inForce])}</p>
       <fieldset className={styles.tools} disabled={locked}>
         <legend className="visually-hidden">{w.heading}</legend>
         {WORK_LANGUAGES.map((language) => (

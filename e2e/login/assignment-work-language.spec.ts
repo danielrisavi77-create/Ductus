@@ -63,6 +63,9 @@ test("the teacher changes the language once; one request, the next version, the 
   await expect(card.getByText(w.consequence.replace("{n}", "2"))).toBeVisible();
   await card.getByRole("button", { name: w.save.replace("{language}", names.en) }).dblclick();
   await expect(card.getByRole("status")).toContainText(w.saved.replace("{n}", "2"));
+  // The card names the language the save published, not the one it was read with.
+  await expect(card.getByText(w.current.replace("{language}", names.en))).toBeVisible();
+  await expect(card.getByText(w.current.replace("{language}", names.hr))).toHaveCount(0);
   expect(saves).toHaveLength(1);
   expect(saves[0]!.postDataJSON()).toEqual({ expectedVersion: 1, language: "en" });
   expect(await versionOf(assignment)).toEqual({ version: 2, language: "en" });
