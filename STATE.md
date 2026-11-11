@@ -24,7 +24,7 @@ Agent ne uzima ove stavke i ne čeka na njima ako drugi posao može naprijed. �
 - [x] M8 UX #1793, #1794, #1795, #1798, #1799, #1800, #1801 odlučeni 9. 11. (D-281 do D-287); D-129 O-1 zatvoren (D-289). Ostaje paket Q-3 (PDF/A, D-129 potvrda) i zahtjev Srcu (Q-21), šalje vlasnik.
 - [ ] Q-7, pentest. Odabir: odrediti strop troška i dodati GO redak sada (`docs/PROGRAM.md:180` do 202); naručiti vanjski pentest za siječanj (#87 6639423372; D-264 Q14). Rok: 30. 11. 2026. Radnja: vlasnik.
 - [x] Q-8: referentne slike (M6 #1454 O9, M5 D-235, M7 Q16) odobravaju se po ekranu čim prođu gate (#87 6639423372).
-- [ ] Q-9: za #1443 i #1458 vlasnik daje „Spoji n” za točan head kad gate bude zelen; M0 se zatvara s njima (F-035, F-045, F-046, F-180; D-97 putanje). Svaka naredba vrijedi samo za točan head (#87 6639423372). Radnja: vlasnik, čeka zeleni gate.
+- [x] Q-9: #1443 i #1458 spojeni su 5. 11. 2026.; M0 se zatvara s njima (F-035, F-045, F-046, F-180; vlasnik 11. 11. 2026., audit maina; #87 6639423372).
 - [ ] Q-10, AI pomoćnik u pilotu (D-194). Odabir: t. 6 (model računa) i t. 7 (pružatelj nakon testa hrvatskog) odlučiti do 15. 12. 2026.; M9 ostaje u valu 1 (#87 6639423372). Otvoreno: proračun 10.000 EUR bez PDV-a (D-199 t. 2), razina 2 i „objašnjenje pojma” (D-64 prema D-80), `docs/privacy/05` t. 23 do 28 (Q25 15. 1. 2027.). Radnja: vlasnik.
 - [ ] Q-11, Lekta (dozvola 2. 11., #87 `6588746985`, `docs/lekta/RIGHTSSCOPE.md` §6a, DAN-513). Odabir: licencu i kanal isporuke odlučiti zajedno do 15. 12. 2026. (#87 6639423372). Otvoreno: vidljivost, potvrda za Lektin kod, DAN-513 naspram D-217, FPZG potvrda (D-219).
 - [ ] Q-12, pilot. Odabir: zapisati pragove uspjeha (`docs/PRODUCT.md` §12) i milestone M12 (P20, P21) prije probe (#87 6639423372). Rok: 20. 12. 2026. Radnja: vlasnik.
@@ -36,7 +36,7 @@ Agent ne uzima ove stavke i ne čeka na njima ako drugi posao može naprijed. �
 - [ ] Q-18, zapisi. Odabir: jedan docs PR koji samo bilježi donesene odluke u `docs/DECISIONS.md` (D-195, D-197 #87 `6548381010`, `6549030612`, D-260 #1484, D-157, odluke iz #87 6639423372) i usklađuje `docs/PROGRAM.md:65` (15. 12. naspram 20. 12.) i :192 (rok ugovora) (#87 6639423372). Rok: 30. 11. 2026.
 - [x] Q-19: do odluke vrijede zapisane odluke (#87 6639423372). Neskladi ostaju otvoreni: D-68 naspram N-09 val 3 i D-265 Q21; D-265 Q29 naspram RAZRADA Z-11; D-70 (EN) naspram `docs/PROGRAM.md:172`.
 - [ ] Q-20, poslovno (ne blokira kod). Odabir: jedan razgovor za sve stavke do 15. 1. 2027. (#87 6639423372): P8 žig/domena, P12 strop troška agenata, P14 fondovi i osiguranje, P22 SLA, P3 plagijat, P6 etika, P29 kraj studija, DAN-303 (P48). Radnja: vlasnik.
-- [ ] Q-21, operacije. Odabir: zahtjev Srcu za Registar resursa (`docs/PROGRAM.md:198`) šalje vlasnik; kostur `docs/OPERATIONS.md` (DAN-299 je Done, a datoteke nema) ide kroz DAN-540 (#87 6639423372). Rok: 30. 11. 2026.
+- [ ] Q-21, operacije: zahtjev Srcu za Registar resursa (`docs/PROGRAM.md:198`) šalje vlasnik; `docs/OPERATIONS.md` je na mainu (DAN-540; #87 6639423372). Rok: 30. 11. 2026.
 - [ ] D-105 ("zasad se ništa ne reže") ne poništava rez iz D-98 dopune (a); njegovo vraćanje bila bi nova odluka.
 - [ ] D-142/D-143 (Ustav v1.4): pravno mišljenje (D-55, GDPR čl. 4. t. 14., Prilog III. Akta o UI, t. 3(d) prema D-151) i DPIA prije pilota sa stvarnim studentima; ne blokira demo.
 - [ ] FPZG AAI: ovlast za AAI@EduHr Lab i registracija Ductusa kao usluge. Blokira M1, ne demo.
