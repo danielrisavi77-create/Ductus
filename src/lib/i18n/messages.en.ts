@@ -339,6 +339,24 @@ const en = {
       studentsNotified: "Students enrolled in the course see the assignment among their assignments.",
     },
     // DAN-310 (M2.4-P02): a new version of a published assignment.
+    workLanguage: {
+      heading: "Work language",
+      lead: "The language students write the works of this assignment in. The Ductura interface stays in Croatian.",
+      current: "Now: {language}.",
+      consequence: "Changing the language publishes version {n}. Students confirm it before they continue writing. Text already written stays as it is.",
+      save: "Change the language to {language}",
+      saveIdle: "Change the language",
+      pending: "Saving…",
+      saved: "The work language has been changed; version {n} is in force. Reload the page before other changes to the assignment.",
+      reload: "Load the current version",
+      errors: {
+        invalid: "The language has not been changed. Choose Croatian or English.",
+        unauthorized: "The sign-in is no longer valid. Sign in again; the language has not been changed.",
+        forbidden: "This account may not change the language of this assignment.",
+        conflict: "The language has not been changed. The assignment has a newer version in the meantime, or a work has already been asked to be submitted, after which the language no longer changes. Load the current version.",
+        unavailable: "The language change has not been confirmed. Load the current version and check the language before trying again.",
+      },
+    },
     newVersion: {
       title: "New version of the assignment",
       link: "New version",

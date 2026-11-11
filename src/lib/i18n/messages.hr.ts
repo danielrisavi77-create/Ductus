@@ -341,6 +341,24 @@ export const hr = {
       studentsNotified: "Studenti upisani u kolegij vide zadatak među svojim zadacima.",
     },
     // DAN-310 (M2.4-P02): a new version of a published assignment.
+    workLanguage: {
+      heading: "Jezik rada",
+      lead: "Jezik na kojem studenti pišu radove ovog zadatka. Sučelje Ducture ostaje na hrvatskom.",
+      current: "Sada: {language}.",
+      consequence: "Promjena jezika objavljuje verziju {n}. Studenti je potvrđuju prije nastavka pisanja. Već napisan tekst ostaje kakav jest.",
+      save: "Promijeni jezik u {language}",
+      saveIdle: "Promijeni jezik",
+      pending: "Spremanje…",
+      saved: "Jezik rada je promijenjen; na snazi je verzija {n}. Učitajte stranicu prije drugih izmjena zadatka.",
+      reload: "Učitaj aktualnu verziju",
+      errors: {
+        invalid: "Jezik nije promijenjen. Odaberite hrvatski ili engleski.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno; jezik nije promijenjen.",
+        forbidden: "Za ovaj račun nije dopuštena promjena jezika ovog zadatka.",
+        conflict: "Jezik nije promijenjen. Zadatak je u međuvremenu dobio noviju verziju ili je predaja rada već zatražena, a tada se jezik više ne mijenja. Učitajte aktualnu verziju.",
+        unavailable: "Promjena jezika nije potvrđena. Učitajte aktualnu verziju i provjerite jezik prije novog pokušaja.",
+      },
+    },
     newVersion: {
       title: "Nova verzija zadatka",
       link: "Nova verzija",
