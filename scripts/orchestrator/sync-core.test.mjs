@@ -52,9 +52,18 @@ test("ciWait waits for an empty, unreadable or running roll-up", () => {
 });
 
 test("ciWait waits for a required check that has not reported yet", () => {
-  const w = ciWait([run("Lint", "SUCCESS")], [{ context: "Lint", appId: 1 }, { context: "E2E", appId: 1 }]);
+  const w = ciWait([{ ...run("Lint", "SUCCESS"), appId: 1 }], [{ context: "Lint", appId: 1 }, "E2E"]);
   assert.equal(w.state, "waiting");
   assert.deepEqual(w.missing, ["E2E"]);
+});
+
+test("ciWait does not take a same-named check of another App for an App-bound required check", () => {
+  const required = [{ context: "Lint", appId: 1 }];
+  const other = ciWait([{ ...run("Lint", "SUCCESS"), appId: 2 }], required);
+  assert.equal(other.state, "waiting");
+  assert.deepEqual(other.missing, ["Lint app 1"]);
+  assert.equal(ciWait([{ context: "Lint", state: "SUCCESS" }], required).state, "waiting");
+  assert.equal(ciWait([{ ...run("Lint", "SUCCESS"), appId: 1 }], required).state, "settled");
 });
 
 test("ciWait is settled on finished checks, red or green, and ignores the statuses that wait for people", () => {

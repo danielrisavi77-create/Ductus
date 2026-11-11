@@ -55,9 +55,12 @@ export function ciWait(rollup, required) {
   const running = checks
     .filter((c) => RUNNING_STATES.has(String(c.conclusion || c.state || c.status || "").toUpperCase()))
     .map(nameOf);
+  // Same match as preflight: a check bound to an App is not reported by a same-named check of another App.
   const missing = (Array.isArray(required) ? required : [])
-    .map((r) => (typeof r === "string" ? r : r?.context))
-    .filter((name) => name && !skip(name) && !checks.some((c) => nameOf(c) === name));
+    .map((r) => (typeof r === "string" ? { context: r, appId: null } : r))
+    .filter((r) => r?.context && !skip(r.context)
+      && !checks.some((c) => nameOf(c) === r.context && (r.appId == null || c.appId === r.appId)))
+    .map((r) => (r.appId == null ? r.context : `${r.context} app ${r.appId}`));
   const settled = checks.length > 0 && running.length === 0 && missing.length === 0;
   return { state: settled ? "settled" : "waiting", running, missing };
 }
