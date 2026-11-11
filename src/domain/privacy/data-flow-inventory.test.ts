@@ -302,15 +302,15 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   const tables = new Set<string>();
   const functions: [string, string][] = [];
   for (const sql of Object.values(s.migrations)) {
-    for (const m of sql.matchAll(/create (?:unlogged )?table (?:if not exists )?"?([a-z_]+)"?\."?([a-z0-9_]+)"?/gi)) tables.add(`${m[1]}.${m[2]}`.toLowerCase());
-    for (const part of sql.split(/create (?:or replace )?function /i).slice(1)) {
+    for (const m of sql.matchAll(/create\s+(?:unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?"?([a-z_]+)"?\."?([a-z0-9_]+)"?/gi)) tables.add(`${m[1]}.${m[2]}`.toLowerCase());
+    for (const part of sql.split(/create\s+(?:or\s+replace\s+)?function\s+/i).slice(1)) {
       const name = part.match(/^([a-z_]+\.[a-z0-9_]+)\s*\(/i)?.[1]?.toLowerCase();
       if (name) functions.push([name, part.toLowerCase().split(/\n\$\$;|\n\$[a-z_]*\$;/)[0]]);
     }
   }
   // A table is covered when the inventory or a cited file names it, or a cited
   // code file calls a database function whose body uses it.
-  const called = functions.filter(([n]) => code.includes(n) || hasToken(code, `${n.split(".")[1]}(`, (c) => /[a-z0-9_.]/.test(c), () => false));
+  const called = functions.filter(([n]) => hasToken(code, n, (c) => /[a-z0-9_.]/.test(c), (c) => /[a-z0-9_]/.test(c)) || hasToken(code, `${n.split(".")[1]}(`, (c) => /[a-z0-9_.]/.test(c), () => false));
   const ident = (c: string) => /[a-z_]/.test(c);
   const word = (text: string, t: string) => hasToken(text, t, ident, ident);
   const covered = (t: string) => word(inv, t) || citedText.some((x) => word(x, t)) || called.some(([, b]) => word(b, t));
@@ -400,6 +400,8 @@ describe("completenessErrors", () => {
 
   it.each([
     ["a table no cited file reaches", { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE evidence.orphan (id int);" } }, "table evidence.orphan: no flow in the inventory"],
+    ["a table created across a line break", { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE\nevidence.orphan (id int);" } }, "table evidence.orphan: no flow in the inventory"],
+    ["a table used only by a function whose name is a prefix of a called one", { migrations: { ...FAKE.migrations, "b.sql": "CREATE FUNCTION app.put() RETURNS void AS $$\nINSERT INTO evidence.orphan VALUES (1);\n$$;\nCREATE TABLE evidence.orphan (id int);" } }, "table evidence.orphan: no flow in the inventory"],
     ["a table reached only by an uncalled function", { read: () => "" }, "table evidence.thing: no flow in the inventory"],
     ["a table only a cited document names", { migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE evidence.docd (id int);" }, read: (p: string) => (p === "docs/b.md" ? "evidence.docd" : FAKE.read(p)), inventory: FAKE.inventory.replace("`src/dl.ts`", "`src/dl.ts`, `docs/b.md`") }, "table evidence.docd: no flow in the inventory"],
     ["a table the inventory names that does not exist", { inventory: FAKE.inventory + "\nevidence.gone\n" }, "inventory names evidence.gone, not in the migrations"],
