@@ -290,18 +290,19 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   const citedText = cited.map((p) => (p.startsWith("docs/") ? "" : (s.read(p)?.toLowerCase() ?? "")));
   const code = citedText.filter((_, i) => !cited[i].startsWith("db/")).join("\n");
 
+  // Known limit: tables created dynamically (format(...%I)) are not seen; only literal CREATE [UNLOGGED] TABLE.
   const tables = new Set<string>();
   const functions: [string, string][] = [];
   for (const sql of Object.values(s.migrations)) {
-    for (const m of sql.matchAll(/create table (?:if not exists )?([a-z_]+\.[a-z_]+)/gi)) tables.add(m[1].toLowerCase());
+    for (const m of sql.matchAll(/create (?:unlogged )?table (?:if not exists )?"?([a-z_]+)"?\."?([a-z0-9_]+)"?/gi)) tables.add(`${m[1]}.${m[2]}`.toLowerCase());
     for (const part of sql.split(/create (?:or replace )?function /i).slice(1)) {
-      const name = part.match(/^([a-z_]+\.[a-z_]+)\s*\(/i)?.[1]?.toLowerCase();
+      const name = part.match(/^([a-z_]+\.[a-z0-9_]+)\s*\(/i)?.[1]?.toLowerCase();
       if (name) functions.push([name, part.toLowerCase().split(/\n\$\$;|\n\$[a-z_]*\$;/)[0]]);
     }
   }
   // A table is covered when the inventory or a cited file names it, or a cited
   // code file calls a database function whose body uses it.
-  const called = functions.filter(([n]) => code.includes(n) || code.includes(`${n.split(".")[1]}(`));
+  const called = functions.filter(([n]) => code.includes(n) || new RegExp(`(?<![a-z0-9_.])${n.split(".")[1]}\\(`).test(code));
   const word = (t: string) => new RegExp(`(?<![a-z_])${t.replace(".", "\\.")}(?![a-z_])`);
   const covered = (t: string) => word(t).test(inv) || citedText.some((x) => word(t).test(x)) || called.some(([, b]) => word(t).test(b));
   const stillGaps = new Set<string>();
