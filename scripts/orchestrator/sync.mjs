@@ -37,7 +37,9 @@ const child = (name, args) => new Promise((resolve) => {
 
 try {
   const pr = await prView(n);
-  await git("fetch", "origin", "main");
+  // Explicit refspec: in a single-branch checkout a plain "fetch origin main" only
+  // writes FETCH_HEAD and leaves origin/main missing or stale.
+  await git("fetch", "origin", "+refs/heads/main:refs/remotes/origin/main");
   const behind = await tryGit("rev-list", "--count", "HEAD..origin/main");
   const local = {
     branch: await tryGit("symbolic-ref", "--short", "HEAD"),
