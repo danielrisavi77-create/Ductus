@@ -48,7 +48,9 @@ CREATE FUNCTION pg_temp.answer(p_want text) RETURNS text
 LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE p_want
            WHEN 'teacher' THEN 'text,comments,summary,replay,checkpoints,fast_path,comment | read,comment,open_fast_path,propose'
-           WHEN 'owner' THEN 'text,comments,summary,replay,checkpoints | read,write'
+           -- The owner opens a thread on their own work (DAN-215, D-201 t. 3(c));
+           -- can('comment') stays the teacher's action.
+           WHEN 'owner' THEN 'text,comments,summary,replay,checkpoints,comment | read,write'
            WHEN '-' THEN '- | -'
          END
 $$;

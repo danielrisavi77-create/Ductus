@@ -74,7 +74,8 @@ SELECT bag_eq(
       WHERE p.pronamespace = 'collaboration'::regnamespace AND has_function_privilege('ductus_app', p.oid, 'EXECUTE') $$,
   $$ VALUES ('collaboration.create_comment(text,text,jsonb)'), ('collaboration.reply_comment(uuid,text)'),
             ('collaboration.resolve_thread(uuid)'), ('collaboration.reopen_thread(uuid)'),
-            ('collaboration.list_comments(text)'), ('collaboration.publish_live_state(text,uuid,text)'),
+            ('collaboration.list_comments(text)'), ('collaboration.delete_comment(uuid)'),
+            ('collaboration.publish_live_state(text,uuid,text)'),
             ('collaboration.read_live_state(text,text)'),
             ('collaboration.create_revision_request(text,jsonb,text,bigint)'),
             ('collaboration.list_revision_requests(text)'),
@@ -83,14 +84,15 @@ SELECT bag_eq(
             ('collaboration.reopen_revision_request(uuid,bigint,text,bigint)'),
             ('collaboration.withdraw_revision_request(uuid,bigint)'),
             ('collaboration.rereview_revision_request(uuid,bigint)') $$,
-  'the web role executes exactly the five comment RPCs, the two live RPCs of 051 and the seven revision-request RPCs of 110, 112 and 119');
+  'the web role executes exactly the six comment RPCs (delete_comment from DAN-215), the two live RPCs of 051 and the seven revision-request RPCs of 110, 112 and 119');
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.oid IN ('collaboration.create_comment(text,text,jsonb)'::regprocedure,
         'collaboration.reply_comment(uuid,text)'::regprocedure, 'collaboration.resolve_thread(uuid)'::regprocedure,
-        'collaboration.reopen_thread(uuid)'::regprocedure, 'collaboration.list_comments(text)'::regprocedure)
+        'collaboration.reopen_thread(uuid)'::regprocedure, 'collaboration.list_comments(text)'::regprocedure,
+        'collaboration.delete_comment(uuid)'::regprocedure)
       AND (NOT p.prosecdef OR p.proowner <> 'ductus_identity'::regrole) $$,
-  'the five RPCs are SECURITY DEFINER functions of the identity role');
+  'the six RPCs are SECURITY DEFINER functions of the identity role');
 SELECT is((SELECT proowner::regrole::text FROM pg_proc WHERE oid = 'collaboration.document_scope(text)'::regprocedure),
   'ductus_evidence', 'the evidence role owns the one bridge to the evidence schema');
 SELECT bag_eq(
@@ -105,15 +107,18 @@ SELECT ok(NOT has_schema_privilege('ductus_evidence', 'collaboration', 'USAGE')
 SELECT is(pg_get_function_arguments('collaboration.create_comment(text,text,jsonb)'::regprocedure),
   'p_document_id text, p_body text, p_anchor jsonb', 'no RPC takes an author: it comes from the session (attack 3)');
 SELECT is(pg_get_function_result('collaboration.list_comments(text)'::regprocedure),
-  'TABLE(thread_id uuid, comment_id uuid, comment_position integer, author_role text, is_own boolean, body text, anchor jsonb, state text, created_window timestamp with time zone)',
+  'TABLE(thread_id uuid, comment_id uuid, comment_position integer, author_role text, is_own boolean, body text, anchor jsonb, state text, created_window timestamp with time zone, deleted_window timestamp with time zone)',
   'list_comments returns no person id, exact time or document content (attack 8)');
 
--- Creating a thread: only the teacher of the assignment's course.
+-- Creating a thread: the teacher of the assignment's course and, since
+-- DAN-215 (D-201 t. 3(c)), the student who owns the work; nobody else.
 INSERT INTO ref SELECT 't1', pg_temp.ask('vesna', $$ SELECT collaboration.create_comment('doc-a', 'Ovdje nedostaje izvor.', {anchor}) $$);
 SELECT matches((SELECT val FROM ref WHERE name = 't1'), '^[0-9a-f-]{36}$', 'the teacher of K1 opens a thread on a document of Z1');
 SELECT is(pg_temp.ask(a.name, $$ SELECT collaboration.create_comment('doc-a', 'Tekst.', {anchor}) $$), 'ZD403: forbidden',
   a.name || ' cannot open a thread on Ana''s document (attack 1)')
-FROM (VALUES ('ana'), ('dora'), ('marko'), ('iva'), ('petra'), ('boris'), ('nina')) AS a (name);
+FROM (VALUES ('dora'), ('marko'), ('iva'), ('petra'), ('boris'), ('nina')) AS a (name);
+INSERT INTO ref SELECT 'ts', pg_temp.ask('ana', $$ SELECT collaboration.create_comment('doc-a', 'Je li ovaj izvor dovoljan?', {anchor_b}) $$);
+SELECT matches((SELECT val FROM ref WHERE name = 'ts'), '^[0-9a-f-]{36}$', 'Ana opens a thread on her own document (DAN-215)');
 SELECT is(pg_temp.ask('vesna', $$ SELECT collaboration.create_comment('doc-b', 'Tekst.', {anchor}) $$), 'ZD403: forbidden',
   'a teacher cannot open a thread on a document of another institution');
 SELECT is(pg_temp.ask('vesna', $$ SELECT collaboration.create_comment('doc-nema', 'Tekst.', {anchor}) $$), 'ZD403: forbidden',
@@ -135,8 +140,8 @@ SELECT row_eq(
   ROW(1, pg_temp.id('vesna'), 'teacher'::text, pg_temp.id('fak_a')), 'the opening comment is the teacher''s, at position 1');
 
 -- Reading: the owner and the teacher see the same shape, nobody else anything.
-SELECT is(pg_temp.ask(a.name, $$ SELECT count(*) FROM collaboration.list_comments('doc-a') $$), '1',
-  a.name || ' reads the thread on Ana''s document')
+SELECT is(pg_temp.ask(a.name, $$ SELECT count(*) FROM collaboration.list_comments('doc-a') $$), '2',
+  a.name || ' reads both threads on Ana''s document')
 FROM (VALUES ('ana'), ('vesna')) AS a (name);
 SELECT is(pg_temp.ask(a.name, $$ SELECT count(*) FROM collaboration.list_comments('doc-a') $$), 'ZD403: forbidden',
   a.name || ' reads nothing on Ana''s document (attack 1)')
@@ -148,8 +153,9 @@ SELECT is(pg_temp.ask('vesna', $$ SELECT count(*) FROM collaboration.list_commen
 SELECT is(pg_temp.ask('vesna', $$ SELECT count(*) FROM collaboration.list_comments('doc-b') $$), 'ZD403: forbidden',
   'the teacher of K1 cannot read the thread of another institution');
 SELECT is(pg_temp.ask('ana', $$ SELECT format('%s|%s|%s|%s', comment_position, author_role, is_own, anchor IS NOT NULL)
-    FROM collaboration.list_comments('doc-a') $$), '1|teacher|f|t', 'the student sees the teacher''s comment as not her own');
-SELECT is(pg_temp.ask('vesna', $$ SELECT format('%s|%s', is_own, anchor = {anchor}) FROM collaboration.list_comments('doc-a') $$),
+    FROM collaboration.list_comments('doc-a') WHERE thread_id = {t1} $$), '1|teacher|f|t', 'the student sees the teacher''s comment as not her own');
+SELECT is(pg_temp.ask('vesna', $$ SELECT format('%s|%s', is_own, anchor = {anchor}) FROM collaboration.list_comments('doc-a')
+    WHERE thread_id = {t1} $$),
   't|t', 'the anchor comes back exactly as the teacher stored it');
 SELECT is(pg_temp.ask('vesna', $$ SELECT extract(epoch FROM created_window)::bigint % 300 FROM collaboration.list_comments('doc-a') $$),
   '0', 'time is given only to the five-minute window');
@@ -198,7 +204,7 @@ SELECT is(pg_temp.ask('vesna', $$ SELECT collaboration.reopen_thread({t2}) $$), 
 SELECT is(pg_temp.ask('vesna', $$ SELECT 'done' FROM collaboration.resolve_thread({t2}) $$), 'done', 'the teacher resolves an answered thread');
 SELECT is((SELECT state FROM collaboration.comment_thread WHERE id = pg_temp.id('t2')), 'resolved', 'the answered thread is resolved');
 SELECT is(pg_temp.ask('ana', $$ SELECT string_agg(DISTINCT state, ',' ORDER BY state) FROM collaboration.list_comments('doc-a') $$),
-  'open,resolved', 'the student sees the state of every thread');
+  'answered,open,resolved', 'the student sees the state of every thread, her own one waiting on the teacher');
 
 -- Input limits (attack 9). Authorisation comes first, so a stranger learns
 -- nothing from a malformed request; the error never echoes the input.
@@ -282,7 +288,7 @@ INSERT INTO evidence.document_revision (document_id, institution_id, revision, b
 VALUES ('doc-a', pg_temp.id('fak_a'), 1, 0, pg_temp.id('ana'), repeat('9', 64));
 UPDATE evidence.document SET current_revision = 1, current_content_hash = repeat('9', 64) WHERE id = 'doc-a';
 RESET ROLE;
-SELECT is(pg_temp.ask('ana', $$ SELECT count(DISTINCT thread_id) FROM collaboration.list_comments('doc-a') $$), '4',
+SELECT is(pg_temp.ask('ana', $$ SELECT count(DISTINCT thread_id) FROM collaboration.list_comments('doc-a') $$), '5',
   'after the document changes every thread is still listed');
 
 -- A teacher who leaves the course loses reading and writing at once (attack 2).
@@ -295,7 +301,7 @@ FROM (VALUES
   ($$ SELECT collaboration.reply_comment({t1}, 'Tekst.') $$, 'reply'),
   ($$ SELECT collaboration.resolve_thread({t1}) $$, 'resolve')
 ) AS s (sql, what);
-SELECT is(pg_temp.ask('ana', $$ SELECT count(DISTINCT thread_id) FROM collaboration.list_comments('doc-a') $$), '4',
+SELECT is(pg_temp.ask('ana', $$ SELECT count(DISTINCT thread_id) FROM collaboration.list_comments('doc-a') $$), '5',
   'the student still reads the threads of the removed teacher');
 
 -- DAN-302 L4: a thread ends at position 10000 with the documented conflict,

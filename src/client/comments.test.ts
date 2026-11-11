@@ -14,7 +14,8 @@ let n = 0;
 const row = (threadId: string, position: number, extra: Record<string, unknown> = {}) => ({
   threadId, commentId: `bbbbbbbb-0000-4000-8000-${String(++n).padStart(12, "0")}`, position,
   authorRole: position === 1 ? "teacher" : "student", isOwn: position !== 1, body: `Tekst ${position}`,
-  anchor: position === 1 ? anchor : null, state: "answered", createdWindow: "2026-10-18T10:05:00.000Z", ...extra,
+  anchor: position === 1 ? anchor : null, state: "answered", createdWindow: "2026-10-18T10:05:00.000Z",
+  deletedWindow: null, ...extra,
 });
 
 describe("threadsFromList", () => {
@@ -38,8 +39,19 @@ describe("threadsFromList", () => {
     expect(threads[0]!.comments[0]!.body).toBe("<script>alert(1)</script>");
   });
 
+  it("keeps a deleted comment at its place, without text, with the window of deletion", () => {
+    const deletedWindow = "2026-10-18T11:20:00.000Z";
+    const threads = threadsFromList({ comments: [row(T1, 1), row(T1, 2, { body: null, deletedWindow }), row(T1, 3)] })!;
+    expect(threads[0]!.comments.map((c) => c.body)).toEqual(["Tekst 1", null, "Tekst 3"]);
+    expect(threads[0]!.comments[1]).toMatchObject({ role: "student", isOwn: true, deletedWindow });
+  });
+
   it.each([
     ["not an object", null],
+    ["no text and no deletion", { comments: [row(T1, 1, { body: null })] }],
+    ["text after deletion", { comments: [row(T1, 1, { deletedWindow: "2026-10-18T11:20:00.000Z" })] }],
+    ["bad deletion time", { comments: [row(T1, 1, { body: null, deletedWindow: "jučer" })] }],
+    ["no deletion field", { comments: [row(T1, 1, { deletedWindow: undefined })] }],
     ["no list", {}],
     ["unknown role", { comments: [row(T1, 1, { authorRole: "admin" })] }],
     ["unknown state", { comments: [row(T1, 1, { state: "closed" })] }],

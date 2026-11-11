@@ -46,7 +46,9 @@ $$;
 -- document_scope and actor_role) with the same session: read is what
 -- list_comments, read_live_state, thread_for_actor and the replay and summary
 -- sources ask (IS NOT NULL); comment and open_fast_path what create_comment
--- and record_fast_path_opening ask (= 'teacher'); write what
+-- asked before DAN-215 and record_fast_path_opening asks (= 'teacher'; since
+-- DAN-215 create_comment also lets the owner open a thread, which can()
+-- does not model as 'comment'); write what
 -- publish_live_state asks (= 'student'). propose has no check of today: by
 -- D-34 it is the teacher's action, so it is held to the teacher's check.
 CREATE FUNCTION pg_temp.legacy(p_actor text, p_action text, p_doc text) RETURNS text

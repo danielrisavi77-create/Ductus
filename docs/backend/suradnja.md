@@ -58,19 +58,20 @@ Ugovor prije koda (issue #177; vlasnikova odluka na #87, `issuecomment-623658250
 | --- | --- |
 | `id` | `uuid`, PK, generira baza |
 | `thread_id`, `institution_id` | `uuid NOT NULL`, strani ključ na nit iste ustanove |
-| `position` | `integer NOT NULL`, 1 do 10000, `UNIQUE (thread_id, position)`; 1 je nastavnikov komentar koji otvara nit |
+| `position` | `integer NOT NULL`, 1 do 10000, `UNIQUE (thread_id, position)`; 1 je komentar koji otvara nit (nastavnikov ili, od DAN-215, studentov) |
 | `author_id` | `uuid NOT NULL`, iz `app.current_actor()`; nema parametra autora |
 | `author_role` | `text NOT NULL CHECK IN ('teacher','student')`, iz `actor_assignment_role` u trenutku upisa |
-| `body` | `text NOT NULL`, granice ispod (`CHECK`) |
+| `body` | `text`, granice ispod (`CHECK`); `NULL` samo kad je komentar obrisan (DAN-215) |
 | `created_at` | `timestamptz NOT NULL DEFAULT now()` |
+| `deleted_at` | `timestamptz`, `NULL` dok komentar stoji; `CHECK`: obrisan komentar nema teksta i `deleted_at >= created_at` (DAN-215) |
 
-Tekst komentara je nepromjenjiv; u B-10 nema uređivanja ni brisanja komentara (brisanje ide uz pravila čuvanja, D-50 i kasniji korak). Odgovor zaključava redak niti, pa istodobni odgovori dobivaju različite pozicije.
+Tekst komentara je nepromjenjiv; uređivanja nema. U B-10 nije bilo ni brisanja; od DAN-215 student briše samo svoje komentare (pododjeljak „Nit studenta i brisanje” niže). Brisanje po pravilima čuvanja (D-50) je zaseban korak. Odgovor zaključava redak niti, pa istodobni odgovori dobivaju različite pozicije.
 
 **Tko što smije.** Odnos se računa pri svakom pozivu iz `document_scope` i `actor_assignment_role`, bez predmemorije, pa uklonjeni nastavnik gubi i čitanje i pisanje odmah (§4.4).
 
 | Akter | Čita | Novi korijen sa sidrom | Odgovor | Promjena stanja |
 | --- | --- | --- | --- | --- |
-| Student vlasnik dokumenta (`principal_id` = akter, ista ustanova, `actor_assignment_role` = `student`) | sve niti svog dokumenta | ne | da | ne |
+| Student vlasnik dokumenta (`principal_id` = akter, ista ustanova, `actor_assignment_role` = `student`) | sve niti svog dokumenta | da, od DAN-215 | da | ne |
 | Nastavnik kolegija tog zadatka (`actor_assignment_role` = `teacher`, otvoreno članstvo) | sve niti dokumenta | da | da | da |
 | Svi ostali (N2 drugog kolegija, Student B istog kolegija, N1 druge ustanove, administrator, istekla ili nepostojeća sesija) | ništa | ne | ne | ne |
 
@@ -81,6 +82,7 @@ Sesija bez aktera: `ZD401`. Svaki drugi odbijen slučaj, uključujući nepostoje
 | Iz | U | Okidač |
 | --- | --- | --- |
 | (nema) | `open` | nastavnik stvara korijen |
+| (nema) | `answered` | student stvara korijen (DAN-215): nit čeka nastavnika |
 | `open` | `answered` | odgovor studenta |
 | `answered` | `open` | odgovor nastavnika |
 | `open`, `answered` | `resolved` | nastavnik `resolve_thread` |
@@ -90,14 +92,15 @@ Odgovor u niti `resolved` je `ZD409` (nit se prvo ponovno otvara). Ostali prijel
 
 **RPC potpisi** (`SECURITY DEFINER`, `SET search_path = ''`, `EXECUTE` samo `ductus_app`):
 
-- `collaboration.create_comment(p_document_id text, p_body text, p_anchor jsonb) RETURNS uuid`: samo nastavnik; vraća `id` nove niti.
+- `collaboration.create_comment(p_document_id text, p_body text, p_anchor jsonb) RETURNS uuid`: nastavnik ili, od DAN-215, student vlasnik rada; vraća `id` nove niti.
 - `collaboration.reply_comment(p_thread_id uuid, p_body text) RETURNS uuid`
 - `collaboration.resolve_thread(p_thread_id uuid) RETURNS void`, `collaboration.reopen_thread(p_thread_id uuid) RETURNS void`
-- `collaboration.list_comments(p_document_id text) RETURNS TABLE (thread_id, comment_id, comment_position, author_role, is_own, body, anchor, state, created_window)`; `anchor` je popunjen samo u retku pozicije 1: **ista funkcija i isti oblik izlaza za studenta i nastavnika** (`PRODUCT.md` §5 t. 5).
+- `collaboration.delete_comment(p_comment_id uuid) RETURNS void` (DAN-215): samo student vlasnik rada, samo svoj komentar.
+- `collaboration.list_comments(p_document_id text) RETURNS TABLE (thread_id, comment_id, comment_position, author_role, is_own, body, anchor, state, created_window, deleted_window)` (`deleted_window` od DAN-215); `anchor` je popunjen samo u retku pozicije 1: **ista funkcija i isti oblik izlaza za studenta i nastavnika** (`PRODUCT.md` §5 t. 5).
 
 `ductus_app` nema nikakvu ovlast ni na jednoj tablici sheme `collaboration`, ni `SELECT`: izravno čitanje otkrilo bi točna vremena i ID-ove osoba, pa klijent čita samo kroz `list_comments` (napad 4). Tablice imaju `FORCE ROW LEVEL SECURITY` sa samo vlasnikovom politikom, pa ni pogrešno dodijeljen grant ne pokazuje ni ne mijenja nijedan redak; retci su u pgTAP matrici.
 
-**Što se nikad ne vraća.** `author_id` drugih osoba, `institution_id`, točno vrijeme (`created_at` se vraća samo zaokružen na prozor P-03 od 5 minuta, `created_window`; redoslijed nosi `comment_position`), sadržaj dokumenta, segmenti, hashevi i revizije. Poslužitelj **ne razrješuje sidro** prema sadržaju i ne vraća nikakav isječak dokumenta: vraća sidro kako ga je nastavnik spremio, iz teksta koji je već vidio, a klijent ga razrješuje lokalno s `resolveTextAnchor` (exact, moved, ambiguous, missing). Zato poziv ne može otkriti tekst noviji od nastavnikova pogleda (napad 8). Neprouzdano sidro (`ambiguous`, `missing`) prikazuje se kao "sidro nije pouzdano" uz komentar koji ostaje vidljiv, nikad na pogrešnom mjestu (napad 7). Student ne stvara sidro jer bi ono nosilo njegov noviji tekst.
+**Što se nikad ne vraća.** `author_id` drugih osoba, `institution_id`, točno vrijeme (`created_at` se vraća samo zaokružen na prozor P-03 od 5 minuta, `created_window`; redoslijed nosi `comment_position`), sadržaj dokumenta, segmenti, hashevi i revizije. Poslužitelj **ne razrješuje sidro** prema sadržaju i ne vraća nikakav isječak dokumenta: vraća sidro kako ga je nastavnik spremio, iz teksta koji je već vidio, a klijent ga razrješuje lokalno s `resolveTextAnchor` (exact, moved, ambiguous, missing). Zato poziv ne može otkriti tekst noviji od nastavnikova pogleda (napad 8). Neprouzdano sidro (`ambiguous`, `missing`) prikazuje se kao "sidro nije pouzdano" uz komentar koji ostaje vidljiv, nikad na pogrešnom mjestu (napad 7). U B-10 student nije stvarao sidro jer bi ono nosilo njegov noviji tekst. Od DAN-215 (D-201 t. 3(c)) student otvara nit na svom radu: citat u sidru je iz njegova vlastitog teksta i nastavniku ga daje sam, svojim komentarom, pa to nije bočni kanal kakav opisuje napad 8.
 
 **Granice ulaza** (strogi validator bez nove ovisnosti u `src/domain/collaboration/comment.ts`, po uzoru na `src/server/institution/create-course.ts`; ista pravila kao `CHECK` u bazi):
 
@@ -129,6 +132,35 @@ Odgovor u niti `resolved` je `ZD409` (nit se prvo ponovno otvara). Ostali prijel
 **Koraci.** (1) ovaj ugovor; (2) migracija, RLS, RPC-ovi i pgTAP matrica; (3) ugovor ulaza (validator), poslužiteljski omotač i ruta s unit testovima (`Closes #177`). Prikaz u editoru je Frontendov korak.
 
 **Poznate granice do B-11.** Nastavnikovo pravo komentiranja još ne ovisi o vidljivosti prema D-37, P-03 i potvrdi obavijesti; B-11 (§4.10, PR #395) to veže. Sidro se ne provjerava prema reviziji koju je nastavnik vidio jer bi provjera prema trenutačnoj reviziji bila bočni kanal (napad 8); vezanje uz reviziju pogleda dolazi s B-11.
+
+#### Nit studenta i brisanje (DAN-215, M6.1-P03)
+
+Odluka D-201 t. 3(c) (uz D-133 i D-134, odlučene kroz D-266 t. 1): student koji je vlasnik rada otvara nit i briše samo svoje komentare, a brisanje ostaje u povijesti niti. Plan napada #1886; ugovor na #1836. Migracija `20261111120000_comment_student_thread_delete.sql`; nova tablica se ne uvodi, `collaboration.comment` zadržava `FORCE ROW LEVEL SECURITY` i `ductus_app` je i dalje doseže samo kroz RPC-ove.
+
+- **Otvaranje niti.** `create_comment` prima nastavnika i studenta vlasnika rada (`collaboration.actor_role` daje `teacher` ili `student`); svi ostali, uključujući studenta na tuđem radu, dobivaju isti `ZD403` kao za nepostojeći dokument. Granice tijela i sidra jednake su nastavnikovima (`ZD422`). Studentova nit počinje u stanju `answered` jer čeka nastavnika; daljnji prijelazi su kao u tablici gore. Razrješava i ponovno otvara i dalje samo nastavnik (`ZD403`).
+- **Brisanje.** `delete_comment(p_comment_id)` smije samo student vlasnik rada, samo za komentar kojemu je sam autor (`author_role = 'student'`, `author_id` = akter), u bilo kojem stanju niti. Komentar nastavnika ili mentora, komentar druge osobe, komentar iz druge ustanove i nepostojeći id daju isti `ZD403`; drugo brisanje istog komentara je `ZD409`. Neispravan id (nije UUID) ruta odbija kao `ZD422` prije baze. Nastavnik i mentor ne brišu komentare: D-201 t. 3(c) govori samo o studentu.
+- **Što ostaje.** Obrisani komentar zadržava redak, poziciju, ulogu autora i (za poziciju 1) sidro niti; nestaje samo tekst (`body = NULL`), a `deleted_at` bilježi kada. Brisanje ne mijenja stanje niti i ne oslobađa poziciju, pa granica od 10 000 pozicija vrijedi kao i prije. Teksta nema ni u jednom odgovoru, ni u drugom RPC-u, ni u izravnom čitanju tablice.
+- **Prikaz.** `list_comments` vraća obrisani komentar na njegovu mjestu u niti, studentu i nastavniku isti redak: `body` je `null`, a `deleted_window` je vrijeme brisanja zaokruženo na prozor od 5 minuta (kao `created_window`). Za komentar koji stoji `deleted_window` je `null`. HTTP ruta vraća polje `deletedWindow`; klijent prihvaća samo komentar koji stoji (tekst, bez `deletedWindow`) ili obrisan komentar (bez teksta, s `deletedWindow`), a svaki drugi oblik smatra neispravnim odgovorom.
+- **Istodobnost.** `delete_comment` prvo zaključava redak niti (kao odgovor), zatim komentar. Dva brisanja istog komentara i brisanje u utrci s odgovorom zato se izvode jedno za drugim; drugi poziv vidi potvrđen rezultat prvoga.
+- **HTTP.** `POST /api/comments/delete` s tijelom `{commentId}`; uspjeh je 204 bez tijela. Vrijede zaštite mutacije kao za ostale radnje; zapisnik nosi samo radnju i kod greške, nikad tekst komentara.
+- **Silazna migracija.** Tekst obrisanog komentara ne može se vratiti, a stara tablica ne dopušta komentar bez teksta, pa silazna migracija odbija rad dok postoji ijedan obrisan komentar. Bez obrisanih komentara vraća stare funkcije; niti koje je otvorio student ostaju i stare ih funkcije čitaju kao svaku drugu nit.
+
+**Napadi iz #1886 na testove.**
+
+| Napad | Dokaz |
+| --- | --- |
+| N1, N2, N3, N4, N5, N6, N18 | pgTAP `121`: komentar nastavnika, mentora i druge osobe, druga ustanova, nepostojeći id i nastavnikovo brisanje daju `ZD403`, bez sesije `ZD401`; komentar je nakon toga nepromijenjen. Unit (`comments.test.ts`): neispravan id je 422 bez poziva baze |
+| N7, N12 | pgTAP `121`: drugo brisanje je `ZD409`, a vrijeme brisanja ostaje od prvoga; brisanje u stanju `open`, `answered` i `resolved` ne mijenja stanje |
+| N8, N9 | integracija (`tests/integration/comment-delete-race.integration.test.ts`): drugi poziv stvarno čeka na zaključanu nit (`pg_stat_activity`), zatim `ZD409`; utrka s odgovorom nastavnika daje neprekinute pozicije i ispravno stanje u oba redoslijeda |
+| N10, N11, N13 | pgTAP `121`: isti redak za studenta i nastavnika, bez teksta, sa sidrom niti; izravno čitanje pod `ductus_app` odbijeno |
+| N14, N15, N16, N17 | pgTAP `121`: otvaranje na tuđem, drugom ili nepostojećem radu `ZD403`; neispravno tijelo ili sidro `ZD422`; razrješavanje `ZD403`; nastavnik vidi nit i odgovara |
+| N19 | pgTAP `121` i katalog: evidencija netaknuta, `ductus_app` izvršava točno navedene RPC-ove |
+| N20 | pgTAP `121`: obrisani komentari ne oslobađaju pozicije |
+| N21 | unit (`comments.test.ts`): odgovor rute i zapisnik bez teksta komentara i id-ja osobe; zaštite mutacije |
+| N22 | opis PR-a i ovaj pododjeljak (silazna migracija) |
+| N23 | ovaj pododjeljak i polje `deletedWindow`: obrisan komentar opisuje se kao obrisan |
+
+**Poznate granice (DAN-215).** Sučelje za otvaranje niti i brisanje te prikaz obrisanog komentara su Frontendov korak; do tada postojeće sučelje obrisani komentar prikazuje kao prazan odlomak. `institution.can('comment', …)` se ne mijenja u ovom koraku i za studenta i dalje vraća `false`; usklađivanje s `actor_role` ide uz korak sučelja.
 
 ### 4.12 Prikaz uživo (B-LIVE, DAN-216)
 
