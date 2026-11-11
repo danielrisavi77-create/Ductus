@@ -20,7 +20,10 @@
 # and back after a success. The cache is a speed-up only; it never fails a run.
 # DAN-705: when the runner's apt mirror azure.archive.ubuntu.com does not
 # resolve (run 43034842276), the --with-deps path first points the apt sources
-# at archive.ubuntu.com, with a ::warning::. A resolving mirror changes nothing.
+# at the first fallback that does, with a ::warning::: archive.ubuntu.com, else
+# mirrors.edge.kernel.org, an Ubuntu mirror outside the ubuntu.com DNS zone
+# (archive.ubuntu.com stopped resolving too, run 43059075223). A resolving
+# mirror changes nothing.
 # The ubuntu-24.04 image names its mirrors in /etc/apt/apt-mirrors.txt
 # (mirror+file: in ubuntu.sources), older images in the sources files.
 # PLAYWRIGHT_APT_ROOT (tests only) is the directory that holds etc/apt.
@@ -125,22 +128,31 @@ save_apt_cache() {
 # The install runs apt-get update itself, so switched sources apply from the
 # first attempt. A failed switch only warns: the attempts below run as before.
 mirror="azure.archive.ubuntu.com"
-fallback="archive.ubuntu.com"
+fallbacks=(archive.ubuntu.com mirrors.edge.kernel.org)
+resolves() {
+  local t
+  t=$(window 10)
+  [ "$t" -gt 0 ] && cap "$t" getent hosts "$1" >/dev/null
+}
 use_reachable_mirror() {
-  local f t files=()
+  local f t fallback files=()
   local etc="${PLAYWRIGHT_APT_ROOT:-}/etc/apt"
   for f in "$etc/apt-mirrors.txt" "$etc/sources.list.d/ubuntu.sources" "$etc/sources.list"; do
     [ -f "$f" ] && grep -qF "//${mirror}" "$f" && files+=("$f")
   done
   [ "${#files[@]}" -gt 0 ] || return 0
-  t=$(window 10)
-  if [ "$t" -gt 0 ] && cap "$t" getent hosts "$mirror" >/dev/null; then return 0; fi
-  t=$(window 20)
-  if [ "$t" -gt 0 ] && cap "$t" sudo sed -i "s#//${mirror//./\\.}#//${fallback}#g" "${files[@]}"; then
-    echo "::warning::${mirror} does not resolve; the apt sources now use ${fallback}"
-  else
-    echo "::warning::${mirror} does not resolve and the apt sources could not be switched to ${fallback}"
-  fi
+  resolves "$mirror" && return 0
+  for fallback in "${fallbacks[@]}"; do
+    resolves "$fallback" || continue
+    t=$(window 20)
+    if [ "$t" -gt 0 ] && cap "$t" sudo sed -i "s#//${mirror//./\\.}#//${fallback}#g" "${files[@]}"; then
+      echo "::warning::${mirror} does not resolve; the apt sources now use ${fallback}"
+    else
+      echo "::warning::${mirror} does not resolve and the apt sources could not be switched to ${fallback}"
+    fi
+    return 0
+  done
+  echo "::warning::${mirror} does not resolve and neither does any fallback (${fallbacks[*]}); the apt sources stay as they are"
 }
 
 finish_ok() {

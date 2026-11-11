@@ -43,7 +43,9 @@ function removeDir(dir, deadlineMs = 10000) {
   }
 }
 
-async function run({ failures = 0, hang = 0, timeout = "2", budget = "60", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false, skipDeps = false, fakeTimeout = false, noPerl = false, aptCache = null, debs = true, slowCopy = false, expectCalls = true, sources = {}, resolve = "ok", sedFails = false }) {
+const answers = { ok: "echo \"10.0.0.1 $2\"; exit 0", fail: "exit 2", hang: "sleep 30" };
+
+async function run({ failures = 0, hang = 0, timeout = "2", budget = "60", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false, skipDeps = false, fakeTimeout = false, noPerl = false, aptCache = null, debs = true, slowCopy = false, expectCalls = true, sources = {}, resolve = "ok", fallbacks = {}, sedFails = false }) {
   const dir = await mkdtemp(path.join(tmpdir(), "pw-install-"));
   const bin = path.join(dir, "bin");
   const archives = path.join(dir, "archives");
@@ -76,8 +78,9 @@ exit 0
 `,
     // Only file copies run for real: pkill and dpkg must never touch this machine.
     sudo: `#!/usr/bin/env bash\necho "$*" >> "${sudoLog}"\n${sedFails ? 'case "$1" in sed) exit 4;; esac\n' : ""}case "$1" in cp|sed) exec "$@";; esac\nexit 0\n`,
-    // getent answers for the apt mirror: ok, fail (no such host) or hang.
-    getent: `#!/usr/bin/env bash\necho "$*" >> "${dir}/getent.log"\n${{ ok: "echo '10.0.0.1 $2'; exit 0", fail: "exit 2", hang: "sleep 30" }[resolve]}\n`,
+    // getent answers ok, fail (no such host) or hang: `resolve` for the Azure
+    // mirror, `fallbacks` per fallback host (ok when not named).
+    getent: `#!/usr/bin/env bash\necho "$*" >> "${dir}/getent.log"\ncase "$2" in\n${Object.entries({ "azure.archive.ubuntu.com": resolve, ...fallbacks }).map(([host, mode]) => `${host}) ${answers[mode]};;`).join("\n")}\n*) ${answers.ok};;\nesac\n`,
     "apt-get": "#!/usr/bin/env bash\nexit 0\n",
   };
   if (fakeTimeout) fakes.timeout = `#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "timeout: not coreutils"; exit 0; }\necho "fake timeout used" >> "${log}"\nexit 0\n`;
@@ -273,13 +276,17 @@ test("apt that keeps no .deb files leaves a notice, not a failure", async () => 
 
 // DAN-705: the runners' apt mirror azure.archive.ubuntu.com stopped resolving
 // (run 43034842276), so the --with-deps path switches the apt sources to
-// archive.ubuntu.com when, and only when, that mirror does not resolve.
+// archive.ubuntu.com when, and only when, that mirror does not resolve, and to
+// mirrors.edge.kernel.org when archive.ubuntu.com does not resolve either.
 const deb822 = "Types: deb\nURIs: http://azure.archive.ubuntu.com/ubuntu/\nSuites: noble noble-updates\n\nTypes: deb\nURIs: http://security.ubuntu.com/ubuntu\nSuites: noble-security\n";
 // As on the ubuntu-24.04 image (run 43034842276: "Get:1 file:/etc/apt/apt-mirrors.txt").
 const mirrors = "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n";
 const mirrorList = "Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates\n";
 const legacy = "deb http://azure.archive.ubuntu.com/ubuntu/ jammy main\ndeb http://security.ubuntu.com/ubuntu jammy-security main\n# see azure.archive.ubuntu.com for details\n";
-const switched = (text) => text.replaceAll("//azure.archive.ubuntu.com", "//archive.ubuntu.com");
+const switched = (text, host = "archive.ubuntu.com") => text.replaceAll("//azure.archive.ubuntu.com", `//${host}`);
+const azureProbe = "hosts azure.archive.ubuntu.com";
+const archiveProbe = "hosts archive.ubuntu.com";
+const kernelProbe = "hosts mirrors.edge.kernel.org";
 const mirrorWarning = /^::warning::azure\.archive\.ubuntu\.com does not resolve; the apt sources now use archive\.ubuntu\.com$/m;
 
 const mirrorCases = [
@@ -300,7 +307,7 @@ for (const c of mirrorCases) {
     const { status, stdout, after, atInstall, probes, seconds } = await run({ sources: c.sources, resolve: c.resolve, ...c.options });
     assert.equal(status, 0);
     assert.deepEqual(after, c.expect);
-    assert.deepEqual(probes, c.probed ? ["hosts azure.archive.ubuntu.com"] : []);
+    assert.deepEqual(probes, !c.probed ? [] : c.warn ? [azureProbe, archiveProbe] : [azureProbe]);
     if (c.warn) assert.match(stdout, mirrorWarning);
     else assert.doesNotMatch(stdout, /azure\.archive/);
     // The install already saw the switched sources (apt-get update runs inside it).
@@ -321,6 +328,29 @@ test("apt mirror: a failed switch only warns and the retries run as before", asy
 test("apt mirror: the switch is tried once, not on every retry", async () => {
   const { status, sudo, probes } = await run({ sources: { deb822 }, resolve: "fail", failures: 2 });
   assert.equal(status, 0);
-  assert.equal(probes.length, 1);
+  assert.deepEqual(probes, [azureProbe, archiveProbe]);
   assert.equal(sudo.filter((line) => line.startsWith("sed")).length, 1);
+});
+
+// Run 43059075223: archive.ubuntu.com did not resolve on the runners either.
+for (const archive of ["fail", "hang"]) {
+  test(`apt mirror: archive.ubuntu.com that does not resolve (${archive}) gives way to mirrors.edge.kernel.org`, async () => {
+    const { status, stdout, after, atInstall, probes, seconds } = await run({ sources: { mirrors, deb822: mirrorList }, resolve: "fail", fallbacks: { "archive.ubuntu.com": archive } });
+    assert.equal(status, 0);
+    assert.deepEqual(probes, [azureProbe, archiveProbe, kernelProbe]);
+    assert.deepEqual(after, { mirrors: switched(mirrors, "mirrors.edge.kernel.org"), deb822: mirrorList });
+    assert.match(stdout, /^::warning::azure\.archive\.ubuntu\.com does not resolve; the apt sources now use mirrors\.edge\.kernel\.org$/m);
+    assert.doesNotMatch(atInstall, /\/\/azure\.archive\.ubuntu\.com\//);
+    assert.ok(seconds < 25, `the step took ${seconds}s`);
+  });
+}
+
+test("apt mirror: with no fallback that resolves the sources stay and the install still runs", async () => {
+  const { status, stdout, calls, sudo, after, probes } = await run({ sources: { deb822 }, resolve: "fail", fallbacks: { "archive.ubuntu.com": "fail", "mirrors.edge.kernel.org": "fail" } });
+  assert.equal(status, 0);
+  assert.deepEqual(probes, [azureProbe, archiveProbe, kernelProbe]);
+  assert.deepEqual(after, { deb822 });
+  assert.equal(sudo.filter((line) => line.startsWith("sed")).length, 0);
+  assert.match(stdout, /^::warning::azure\.archive\.ubuntu\.com does not resolve and neither does any fallback \(archive\.ubuntu\.com mirrors\.edge\.kernel\.org\); the apt sources stay as they are$/m);
+  assert.deepEqual(calls, ["exec playwright install --with-deps chromium firefox"]);
 });
