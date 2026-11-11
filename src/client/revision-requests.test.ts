@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 
-import { listRevisionRequests, requestsFromList } from "./revision-requests";
+import { listRevisionRequests, requestsFromList, respondRevisionRequest } from "./revision-requests";
 
 const R1 = "aaaaaaaa-0000-4000-8000-000000000001";
 const R2 = "aaaaaaaa-0000-4000-8000-000000000002";
@@ -160,7 +160,7 @@ describe("requestsFromList: classes of version history", () => {
   });
 });
 
-describe("listRevisionRequests", () => {
+describe("listRevisionRequests and respondRevisionRequest", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   const answer = (status: number, body?: unknown) =>
@@ -194,5 +194,50 @@ describe("listRevisionRequests", () => {
   it("list that cannot reach the server is unavailable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
     expect((await listRevisionRequests("doc-1")).kind).toBe("unavailable");
+  });
+
+  const input = { requestId: R1, expectedSeq: 3, kind: "done" as const, explanation: "Café dodan.", responseRevision: 9 };
+
+  it("respond posts the read counter, never a computed one, in NFC", async () => {
+    const fetchMock = answer(200, { outcome: "applied", row_seq: 4, version: 1, state: "responded" });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await respondRevisionRequest(input)).toEqual({ kind: "ok" });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/revision-requests/respond");
+    expect(init.body).toBe(canonicalizeJcs({ ...input, explanation: "Café dodan." }));
+  });
+
+  it("a stale counter is a conflict with the current state, not a retry", async () => {
+    const fetchMock = answer(409, { outcome: "conflict", row_seq: 5, version: 2, state: "reopened" });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await respondRevisionRequest(input)).toEqual({ kind: "conflict", state: "reopened" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a transition the state no longer allows is a conflict without a state", async () => {
+    vi.stubGlobal("fetch", answer(409, { error: "not_allowed" }));
+    expect(await respondRevisionRequest(input)).toEqual({ kind: "conflict", state: null });
+  });
+
+  it.each([
+    [401, "signedOut"], [403, "forbidden"], [422, "invalid"], [503, "unavailable"],
+  ])("respond answered %i is %s", async (status, kind) => {
+    vi.stubGlobal("fetch", answer(status, { error: "x" }));
+    expect(await respondRevisionRequest(input)).toEqual({ kind });
+  });
+
+  it("respond refuses invalid input before any request", async () => {
+    const fetchMock = answer(200, {});
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await respondRevisionRequest({ ...input, explanation: "   " })).toEqual({ kind: "invalid" });
+    expect(await respondRevisionRequest({ ...input, expectedSeq: 0 })).toEqual({ kind: "invalid" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("respond sends nothing once the session has ended", async () => {
+    const fetchMock = answer(200, {});
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await respondRevisionRequest(input, () => false)).toEqual({ kind: "signedOut" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

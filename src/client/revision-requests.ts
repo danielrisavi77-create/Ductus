@@ -4,13 +4,17 @@
  * /api/revision-requests/<action> with exactly the JCS form of the input;
  * the client never names an author, a role or a state, the database takes
  * them from the session. A `list` body that is not exactly the documented
- * shape is treated as unavailable as a whole, never shown in part. This
- * step only reads; the student's answer comes in a later step.
+ * shape is treated as unavailable as a whole, never shown in part.
+ *
+ * Concurrency: a response carries the request's row_seq exactly as `list`
+ * returned it. A stale counter is answered 409 with the current state; that
+ * is shown to the student and never retried with a newer counter, since the
+ * request may have been reopened with another instruction meanwhile.
  */
 
 import { isTextAnchorInput, type TextAnchor } from "@/domain/collaboration";
 import {
-  isExpectedSeq, isRangeHash, isRequestId, isRevisionKind, isRevisionNumber, REVISION_TEXT_MAX,
+  isExpectedSeq, isRangeHash, isRequestId, isRevisionKind, isRevisionNumber, isRevisionText, REVISION_TEXT_MAX,
   type RevisionKind,
 } from "@/domain/collaboration/revision-input";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
@@ -60,6 +64,19 @@ export type RevisionRequest = {
 export type RevisionListOutcome =
   | { kind: "ok"; requests: RevisionRequest[] }
   | { kind: "signedOut" | "forbidden" | "unavailable" };
+
+export type RespondInput = {
+  readonly requestId: string;
+  readonly expectedSeq: number;
+  readonly kind: RevisionKind;
+  readonly explanation: string;
+  readonly responseRevision: number;
+};
+
+export type RespondOutcome =
+  | { kind: "ok" | "signedOut" | "forbidden" | "invalid" | "unavailable" }
+  /** `state` is the request's state now, or null when the route did not say. */
+  | { kind: "conflict"; state: RevisionState | null };
 
 const STATES: ReadonlySet<string> = new Set(["open", "responded", "accepted", "reopened", "withdrawn"]);
 const CLOSINGS: ReadonlySet<string> = new Set(["accepted", "reopened", "withdrawn"]);
@@ -174,7 +191,7 @@ export function requestsFromList(value: unknown): RevisionRequest[] | null {
   }));
 }
 
-async function post(action: "list", input: Record<string, unknown>): Promise<Response | null> {
+async function post(action: "list" | "respond", input: Record<string, unknown>): Promise<Response | null> {
   try {
     return await fetch(`/api/revision-requests/${action}`, {
       method: "POST",
@@ -199,4 +216,36 @@ export async function listRevisionRequests(
   if (!response || response.status !== 200) return { kind: "unavailable" };
   const requests = requestsFromList(await response.json().catch(() => null));
   return requests ? { kind: "ok", requests } : { kind: "unavailable" };
+}
+
+/**
+ * The student's answer to the current version: done, or declined with a
+ * reason. Input the route would refuse is refused here without a request.
+ */
+export async function respondRevisionRequest(
+  input: RespondInput, current: () => boolean = () => true,
+): Promise<RespondOutcome> {
+  const explanation = input.explanation.normalize("NFC");
+  if (!isRequestId(input.requestId) || !isExpectedSeq(input.expectedSeq) || !isRevisionKind(input.kind)
+    || !isRevisionText(explanation) || !isRevisionNumber(input.responseRevision)) {
+    return { kind: "invalid" };
+  }
+  if (!current()) return { kind: "signedOut" };
+  const response = await post("respond", {
+    requestId: input.requestId, expectedSeq: input.expectedSeq, kind: input.kind, explanation,
+    responseRevision: input.responseRevision,
+  });
+  switch (response?.status) {
+    case 200: return { kind: "ok" };
+    case 401: return { kind: "signedOut" };
+    case 403: return { kind: "forbidden" };
+    case 409: {
+      const body: unknown = await response.json().catch(() => null);
+      const state = isObject(body) && typeof body.state === "string" && STATES.has(body.state)
+        ? body.state as RevisionState : null;
+      return { kind: "conflict", state };
+    }
+    case 422: return { kind: "invalid" };
+    default: return { kind: "unavailable" };
+  }
 }

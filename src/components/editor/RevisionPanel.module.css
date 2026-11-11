@@ -17,6 +17,10 @@
   overflow-wrap: anywhere;
 }
 
+.on {
+  border-color: var(--accent);
+}
+
 .who {
   display: flex;
   flex-wrap: wrap;
@@ -60,11 +64,46 @@
   white-space: pre-wrap;
 }
 
-.meta {
+.meta,
+.hint,
+.live {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
   color: var(--ink-3);
+}
+
+.live:empty {
+  display: none;
+}
+
+.form {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.form textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
 }
 
 .btn {
@@ -84,6 +123,11 @@
   color: var(--ink);
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .link {
   justify-self: start;
   align-self: flex-start;
@@ -96,8 +140,13 @@
   cursor: pointer;
 }
 
-.link:hover {
+.link:hover:not(:disabled) {
   color: var(--ink);
+}
+
+.link:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .failed {
@@ -106,13 +155,23 @@
   justify-items: start;
 }
 
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink);
+}
+
 /* 12 px is the floor for interface text, 13 px on a phone (app/globals.css); targets 44 px there. */
 @media (max-width: 640px) {
   .card,
   .chip,
   .meta,
+  .hint,
+  .live,
+  .label,
   .btn,
-  .link {
+  .link,
+  .error {
     font-size: 13px;
   }
 

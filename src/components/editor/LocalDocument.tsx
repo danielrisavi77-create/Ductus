@@ -68,7 +68,7 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, writingClosed, type DocumentSaver, type DocumentSnapshot,
+  createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, unconfirmedOf, writingClosed, type DocumentSaver, type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
@@ -136,6 +136,14 @@ type LocalDocumentValue = {
    * what the journal holds afterwards, read again for the open dialog.
    */
   discardAfterSubmission: () => Promise<HoldRead>;
+  /** `unconfirmedOf` read from the saver at the moment of the call, not from the last render (DAN-314). */
+  unconfirmedNow: () => boolean;
+  /**
+   * How many changes the editor has reported in this tab, read at the moment
+   * of the call. Compared before and after an await, it tells a change typed
+   * meanwhile even when the server has already confirmed it (DAN-314).
+   */
+  editsNow: () => number;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
@@ -172,6 +180,17 @@ export function useLocalSignedOut(): boolean {
  */
 export function useLocalSubmitted(): boolean {
   return submittedOf(useLocalDocument().snapshot);
+}
+
+/**
+ * Whether the text in this tab may hold changes the server has not confirmed
+ * (DAN-314): `unconfirmed` for the render, `now` for a check after an await,
+ * when a change typed meanwhile may not have rendered yet; `edits` counts
+ * the changes, so a change made and confirmed during the await is still seen.
+ */
+export function useLocalUnconfirmed(): { unconfirmed: boolean; now: () => boolean; edits: () => number } {
+  const { phase, snapshot, invalid, unconfirmedNow, editsNow } = useLocalDocument();
+  return { unconfirmed: unconfirmedOf(phase, snapshot, invalid), now: unconfirmedNow, edits: editsNow };
 }
 
 /**
@@ -251,6 +270,8 @@ export function LocalDocumentProvider({
   const editorRef = useRef<Editor | null>(null);
   const readyRef = useRef(false);
   const dirtyRef = useRef(false);
+  // Only grows: every change the editor reports, confirmed or not (DAN-314).
+  const editsRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The live view's publisher (B-LIVE step 4): only while a signed-in tab
   // holds the lock and may write. It is not the evidence and never sets SYNCED.
@@ -258,6 +279,11 @@ export function LocalDocumentProvider({
   // The view as last rendered, for a load or "Ostani" that ends after a change.
   const heldRef = useRef(publishHeld);
   useLayoutEffect(() => { heldRef.current = publishHeld; });
+
+  // A change waiting out the debounce has already called `edit()`, so the saver's own snapshot says it.
+  const [unconfirmedNow] = useState(() => () =>
+    unconfirmedOf(phaseRef.current, saverRef.current?.snapshot() ?? null, dirtyRef.current));
+  const [editsNow] = useState(() => () => editsRef.current);
 
   // Builds and proposes the candidate for what the editor holds now.
   const flushRef = useRef(() => {
@@ -300,6 +326,7 @@ export function LocalDocumentProvider({
       }),
     },
     onUpdate: () => {
+      editsRef.current += 1;
       if (!readyRef.current) return;
       saverRef.current?.edit();
       dirtyRef.current = true;
@@ -662,6 +689,7 @@ export function LocalDocumentProvider({
 
   const value: LocalDocumentValue = {
     editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut, discardAfterSubmission,
+    unconfirmedNow, editsNow,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
