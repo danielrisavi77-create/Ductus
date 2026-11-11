@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import { isEvidenceSegment } from "@/domain/forensics/evidence-segment-v2";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
@@ -267,6 +268,31 @@ describe("commitEvidenceRequest with format v3", () => {
     },
   );
 });
+// DAN-411 step 1 (contract on #1836): the domain parses a valid v4 segment, but
+// the server keeps refusing v4 until step 2 opens it after the binding checks of
+// step 3; nothing is stored or committed.
+describe("commitEvidenceRequest with format v4 before step 2", () => {
+  const IMPORT = { source: "import", importId: "00000000-0000-4000-8000-0000000000b1", importManifestSha256: "1".repeat(64) };
+  const ORIGIN = { kind: "ai-response", refId: "00000000-0000-4000-8000-0000000000b2", textSha256: "2".repeat(64) };
+
+  it.each([
+    ["an import", IMPORT],
+    ["a paste with pasteOrigin", { source: "paste", pasteOrigin: ORIGIN }],
+  ])("refuses a valid v4 segment with %s without storing or committing", async (_name, change) => {
+    const { run, queries, payloads } = setup();
+    const segment = segmentWith({
+      evidenceSchema: "ductus-evidence-segment-v4",
+      events: golden.segment.events.map((event, index) => (index === 0 ? { ...event, ...change } : event)),
+    });
+    // The refusal is the server's: the domain accepts this segment.
+    expect(isEvidenceSegment(JSON.parse(new TextDecoder().decode(segment)))).toBe(true);
+    expect(await run({ segment })).toEqual({ status: "invalid" });
+    expect(payloads.putImmutable).not.toHaveBeenCalled();
+    expect(payloads.storageRefFor).not.toHaveBeenCalled();
+    expect(queries.map((q) => q.kind)).not.toContain("commit");
+  });
+});
+
 // DAN-453 PR 0 (#1258 G2): the real caller refuses every reserved value of
 // D-34 and D-132 before anything is stored or committed.
 describe("commitEvidenceRequest with a reserved value", () => {
