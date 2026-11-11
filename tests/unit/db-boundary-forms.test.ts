@@ -123,6 +123,37 @@ describe("app/ reaches the database through @/server/db only (F-019)", () => {
   });
 });
 
+const SKIPPED = /(?:^|\/)node_modules\/|^(?:\.git|\.next|\.claude|test-results|playwright-report)/;
+
+/** Whether the scan below lints a path from readdirSync, which on Windows separates with a backslash. */
+function isScanned(file: string): boolean {
+  const posix = file.replaceAll("\\", "/");
+  return !SKIPPED.test(posix) && /\.(?:[cm]?[jt]sx?)$/.test(posix);
+}
+
+describe("paths the directive scan reads", () => {
+  it.each([
+    ["node_modules\\pkg\\index.js"],
+    ["node_modules/pkg/index.js"],
+    ["packages\\a\\node_modules\\b\\index.ts"],
+    [".git\\hooks\\x.js"],
+    [".next\\server\\page.js"],
+    [".claude\\x.mjs"],
+    ["test-results\\x.ts"],
+    ["playwright-report\\x.js"],
+    ["src\\application\\notes.md"],
+  ])("skips %s", (file) => {
+    expect(isScanned(file)).toBe(false);
+  });
+
+  it.each([["src\\application\\probe.ts"], ["src/application/probe.ts"], ["app\\api\\route.tsx"], ["eslint.config.mjs"]])(
+    "reads %s",
+    (file) => {
+      expect(isScanned(file)).toBe(true);
+    },
+  );
+});
+
 const DIRECTIVES = [
   "// eslint-disable-next-line no-restricted-imports\n",
   "/* eslint-disable no-restricted-imports, database-boundary/no-restricted-dynamic-imports */\n",
@@ -140,9 +171,8 @@ describe("inline directives do not lift the boundary (F-019)", () => {
   // An inline directive needs the word "eslint" in a comment, so only files
   // with that word can lift a rule. Each is linted again with directives off.
   it("no file in the repository lifts a boundary rule with a comment", async () => {
-    const skip = /(?:^|\/)node_modules\/|^(?:\.git|\.next|\.claude|test-results|playwright-report)/;
     const files = readdirSync(REPO_ROOT, { recursive: true, encoding: "utf8" })
-      .filter((file) => !skip.test(file) && /\.(?:[cm]?[jt]sx?)$/.test(file))
+      .filter((file) => isScanned(file))
       .map((file) => join(REPO_ROOT, file))
       .filter((file) => /eslint/i.test(readFileSync(file, "utf8")));
     expect(files.length).toBeGreaterThan(0);

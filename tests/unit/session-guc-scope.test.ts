@@ -56,7 +56,9 @@ function skipSpace(source: string, i: number): number {
  */
 function setConfigArguments(source: string): string[][] {
   const calls: string[][] = [];
-  for (const match of source.matchAll(/\bset_config\b/gi)) {
+  // The name may be a quoted identifier, "set_config" or, in a TS string,
+  // \"set_config\"; the closing quote belongs to the name.
+  for (const match of source.matchAll(/\bset_config\b(?:\\?")?/gi)) {
     let i = skipSpace(source, match.index + match[0].length);
     if (source[i] !== "(") continue;
     const args: string[] = [];
@@ -91,21 +93,67 @@ function isLiteralTrue(argument: string): boolean {
 
 // SET where a statement starts: at the start of the text, after a quote, a
 // semicolon, a dollar quote, a comment, or a PL/pgSQL BEGIN, THEN, ELSE or
-// LOOP, in any case. SET LOCAL, SET TRANSACTION and SET CONSTRAINTS end with
-// the transaction; "SET SESSION CHARACTERISTICS" is still caught.
-const STATEMENT_SET =
-  /(?:^|["'`;]|\$[A-Za-z_]*\$|\*\/|--[^\n]*\n|\b(?:BEGIN|THEN|ELSE|LOOP)\b)\s*SET\s+(?!LOCAL\s|TRANSACTION\s|CONSTRAINTS\s)["A-Za-z_]/gi;
+// LOOP, in any case. What follows SET is read by opensSessionSet.
+const STATEMENT_SET = /(?:^|["'`;]|\$[A-Za-z_]*\$|\*\/|--[^\n]*\n|\b(?:BEGIN|THEN|ELSE|LOOP)\b)\s*SET\b/gi;
+
+/**
+ * Index of the next character that is not whitespace or a comment, with
+ * PostgreSQL's nested block comments: "/* a /* b *\/ c *\/" is one comment.
+ */
+function skipSqlSpace(source: string, i: number): number {
+  for (;;) {
+    while (i < source.length && /\s/.test(source[i])) i++;
+    if (source.startsWith("--", i)) {
+      const end = source.indexOf("\n", i);
+      i = end === -1 ? source.length : end + 1;
+    } else if (source.startsWith("/*", i)) {
+      let depth = 0;
+      do {
+        if (source.startsWith("/*", i)) {
+          depth++;
+          i += 2;
+        } else if (source.startsWith("*/", i)) {
+          depth--;
+          i += 2;
+        } else i++;
+      } while (depth > 0 && i < source.length);
+    } else return i;
+  }
+}
+
+// SET LOCAL, SET TRANSACTION and SET CONSTRAINTS end with the transaction;
+// "SET SESSION CHARACTERISTICS" is still caught.
+const TRANSACTION_SCOPED = new Set(["LOCAL", "TRANSACTION", "CONSTRAINTS"]);
+
+/**
+ * Whether the SET that ends at i outlives its transaction. A comment counts
+ * as whitespace, as it does for PostgreSQL. A comment is read both as
+ * PostgreSQL nests it and as a flat one; either reading that leaves a
+ * session SET is enough.
+ */
+function opensSessionSet(source: string, i: number): boolean {
+  return [skipSqlSpace, skipSpace].some((skip) => {
+    const start = skip(source, i);
+    if (!/["A-Za-z_]/.test(source[start] ?? "")) return false;
+    const word = /^[A-Za-z_]\w*/.exec(source.slice(start))?.[0] ?? "";
+    const end = start + word.length;
+    return !TRANSACTION_SCOPED.has(word.toUpperCase()) || skip(source, end) === end;
+  });
+}
 
 /** Each forbidden set_config call, and each SET statement up to its line end. */
 function sessionScoped(source: string): string[] {
   const calls = setConfigArguments(source)
     .filter((args) => args.length !== 3 || !isLiteralTrue(args[2]))
     .map((args) => `set_config(${args.join(",")})`);
-  const statements = [...source.matchAll(STATEMENT_SET)].map((match) => {
-    const start = match.index + match[0].toUpperCase().lastIndexOf("SET");
-    const end = source.indexOf("\n", start);
-    return source.slice(start, end === -1 ? source.length : end);
-  });
+  const statements = [...source.matchAll(STATEMENT_SET)]
+    .map((match) => match.index + match[0].length)
+    .filter((end) => opensSessionSet(source, end))
+    .map((end) => {
+      const start = end - "SET".length;
+      const lineEnd = source.indexOf("\n", start);
+      return source.slice(start, lineEnd === -1 ? source.length : lineEnd);
+    });
   return [...calls, ...statements];
 }
 
@@ -138,12 +186,22 @@ const SQL_EXCEPTIONS: Record<string, string> = {
     "a pgTAP test description, not a statement; pgTAP runs over its own psql session",
 };
 
+/** A relative path with "/" between its parts, where on Windows relative() gives db\schema.sql. */
+function toPosix(path: string): string {
+  return path.replaceAll("\\", "/");
+}
+
+/** The key a finding has in SQL_EXCEPTIONS. */
+function findingKey(name: string, hit: string): string {
+  return `${toPosix(name)}: ${hit.replace(/\s+/g, " ").trim()}`;
+}
+
 function sqlFindings(): string[] {
   const db = join(REPO_ROOT, "db");
   return sources(db, /\.sql$/).flatMap((file) => {
     const name = relative(REPO_ROOT, file);
     const source = readFileSync(file, "utf8");
-    return sessionScoped(source).map((hit) => `${name}: ${hit.replace(/\s+/g, " ").trim()}`);
+    return sessionScoped(source).map((hit) => findingKey(name, hit));
   });
 }
 
@@ -171,6 +229,7 @@ describe("session-scoped settings", () => {
       "set_config /* why */ ('a', $1, /* local */ true)",
       "set_config('a', ', false)', true)",
       "// set_config with is_local false is forbidden",
+      "SELECT pg_catalog.\"set_config\"('a', $1, true)",
     ]) {
       expect(sessionScoped(source), source).toEqual([]);
     }
@@ -187,6 +246,12 @@ describe("session-scoped settings", () => {
       "set_config\n('a', $1, false)",
       "set_config('a', $1)",
       "set_config('a', $1, true, false)",
+      // QA on #1888: PostgreSQL reads "set_config" in quotes as the same name.
+      "SELECT pg_catalog.\"set_config\"('app.session_token', 'x', false);",
+      "SELECT \"set_config\"('a', $1, false)",
+      "SELECT \"set_config\" /* r */ ('a', $1, false)",
+      "SELECT pg_catalog.\"set_config\"-- r\n('a', $1, false)",
+      'q("SELECT pg_catalog.\\"set_config\\"(\'a\', $1, false)")',
     ]) {
       expect(sessionScoped(source), source).toHaveLength(1);
     }
@@ -209,6 +274,53 @@ describe("session-scoped settings", () => {
     ]) {
       expect(sessionScoped(source), source).toEqual([]);
     }
+  });
+
+  // Review and QA on #1888: PostgreSQL reads a comment as whitespace, so a
+  // comment between SET and the next word must not hide the statement.
+  it.each([
+    ["block comment", "SET /* r */ statement_timeout = 0;"],
+    ["block comment, no space", "SET/* r */app.session_token = 'x';"],
+    ["line comment", "SET -- r\n  statement_timeout = 0;"],
+    ["line comment, no space", "SET--r\napp.session_token = 'x';"],
+    ["nested block comment", "SET /* a /* b */ c */ app.x = 1;"],
+    ["several comments", "SET /* a */ -- b\n /* c */ role x;"],
+    ["comment before SET", "SELECT 1; /* r */ SET role x;"],
+    ["comment, not LOCAL", "SET /* LOCAL */ app.x = 1;"],
+    ["word starting with LOCAL", "SET /* r */ LOCAL_x = 1;"],
+    ["in a string", "q(`SET/* r */app.session_token = 'x'`)"],
+    ["in a PL/pgSQL block", "DO $$ BEGIN SET /* r */ role x; END $$;"],
+    ["SESSION after a comment", "SET /* r */ SESSION AUTHORIZATION x;"],
+    // Read flat, the comment ends at the first "*/" and leaves "c": the
+    // check fails closed rather than trust one reading of the nesting.
+    ["LOCAL after a nested comment", "SET /* a /* b */ c */ LOCAL role x;"],
+  ])("finds SET without LOCAL past a comment: %s", (_name, source) => {
+    expect(sessionScoped(source), source).toHaveLength(1);
+  });
+
+  it.each([
+    ["LOCAL after a block comment", "SET /* r */ LOCAL role x;"],
+    ["LOCAL after a line comment", "SET -- r\n LOCAL role x;"],
+    ["comment after LOCAL", "SET LOCAL/* r */statement_timeout = 0;"],
+    ["TRANSACTION after a comment", "SET/* r */TRANSACTION READ ONLY;"],
+    ["CONSTRAINTS after a comment", "SET -- r\n CONSTRAINTS ALL DEFERRED;"],
+    ["SET clause of an UPDATE", "UPDATE t SET /* r */ a = 1;"],
+  ])("allows SET past a comment: %s", (_name, source) => {
+    expect(sessionScoped(source), source).toEqual([]);
+  });
+
+  it.each([
+    ["db\\schema.sql", "db/schema.sql"],
+    ["db\\local\\migrator.sql", "db/local/migrator.sql"],
+    ["db/tests\\010-roles-and-privileges.sql", "db/tests/010-roles-and-privileges.sql"],
+    ["db/schema.sql", "db/schema.sql"],
+  ])("compares the path %s to the exceptions as %s", (name, posix) => {
+    expect(findingKey(name, "SET  statement_timeout = 0;\n")).toBe(`${posix}: SET statement_timeout = 0;`);
+  });
+
+  it("finds a listed exception under a Windows path", () => {
+    expect(Object.keys(SQL_EXCEPTIONS)).toContain(findingKey("db\\schema.sql", "SET statement_timeout = 0;"));
+    expect(Object.keys(SQL_EXCEPTIONS)).toContain(findingKey("db\\local\\migrator.sql", "SET ROLE ductus_migrator;"));
   });
 
   it.each([
