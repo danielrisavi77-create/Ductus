@@ -198,6 +198,10 @@ test("fast-check: a served path never maps outside its root or keeps a parent se
 // served root, so a link, wherever it points, and any entry that is neither a
 // file nor a directory fails the check instead of being skipped. Real trees on
 // disk, laid out as the container's /app; the file contents are invented.
+// The link and FIFO rows below need symlinkSync and mkfifo: run this file on
+// Linux, macOS or WSL (CI runs on Linux). On Windows without developer mode
+// they fail with EPERM; that is the platform, not the check, and they are
+// never skipped (audit pass 14, item 2).
 const STATIC = "app/.next/static";
 const PUBLIC = "app/public";
 const tree = (build) => {
