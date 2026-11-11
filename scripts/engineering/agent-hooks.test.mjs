@@ -525,6 +525,66 @@ test("stateForRole: table of roles and STATE.md shapes", () => {
   for (const [input, expected] of cases) assert.equal(stateForRole(input, "worker"), expected, JSON.stringify(input));
 });
 
+// Review cxcr1949 and QA cxcq1949 on cfe2ed26: CommonMark counts only spaces
+// and tabs as blank after a closing fence, as indent before a fence or a
+// heading and after "##"; JavaScript trim(), \s and "." treat other characters
+// otherwise. Each class of such characters, in each of those places.
+const UNICODE_BLANKS = ["\u00A0", "\u2003", "\u3000", "\u1680", "\uFEFF", "\u200B", "\u0085", "\v", "\f", "\u2028", "\u2029"];
+// The scenario of both findings: when the second line does not close the
+// block, the Owner queue heading is inside it and the block ends at the third
+// fence. When it does close, there is no third fence (one would open a block
+// running to the end of the file).
+const fencedQueue = (open, close, closes = false) =>
+  `# S\n${open}\n${close}\n## Owner queue\n${"x".repeat(200)}\n${closes ? "" : `${open.slice(0, 3)}\n`}## Ne smije se izgubiti\n- B-8\n`;
+
+test("stateForRole: Unicode blanks around fences and headings follow CommonMark (cxcr1949, cxcq1949)", () => {
+  const unchanged = [];
+  const cut = [];
+  for (const fence of ["```", "~~~"]) {
+    // Only spaces and tabs after a closing fence close the block.
+    for (const blank of ["", " ", "\t", " \t \t"]) {
+      cut.push([fencedQueue(fence, fence + blank, true), `# S\n${fence}\n${fence + blank}\n## Owner queue\n\n${note(5, 5)}\n\n## Ne smije se izgubiti\n- B-8\n`]);
+    }
+    // Any other blank keeps the block open: the heading inside it is text and
+    // nothing after the block is lost.
+    for (const blank of UNICODE_BLANKS) {
+      unchanged.push(fencedQueue(fence, fence + blank), fencedQueue(`${fence}text`, fence + blank), fencedQueue(fence, `${fence} ${blank}\t`));
+      // An info string of any such character still opens a block.
+      unchanged.push(`# S\n${QUEUE}\n${fence}${blank}\n## A\n${item(1)}\n${fence}\n`.replace(QUEUE, "## B"));
+      unchanged.push(`# S\n${fence}${blank}\n${QUEUE}\n${item(1)}\n${fence}\n## Ne smije se izgubiti\n- B-8\n`);
+    }
+  }
+  // Indent other than up to three spaces makes neither a fence nor a heading,
+  // and "##" needs a space or a tab after it.
+  for (const blank of [...UNICODE_BLANKS, "\t"]) {
+    cut.push([`# S\n${QUEUE}\n${blank}\`\`\`\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 4)}\n\n## A\n`]);
+    unchanged.push(`# S\n${blank}${QUEUE}\n${item(1)}\n## A\n`);
+  }
+  for (const blank of UNICODE_BLANKS) unchanged.push(`# S\n##${blank}Owner queue\n${item(1)}\n## A\n`);
+  cut.push([`# S\n##\tOwner queue\n${item(1)}\n##\tA\n`, `# S\n##\tOwner queue\n\n${note(3, 3)}\n\n##\tA\n`]);
+  // A lone CR ends a line in CommonMark; such a text is handed over as it is.
+  unchanged.push(`# S\n${QUEUE}\n${item(1)}\r## A\n`, `# S\n\`\`\`\r\`\`\`\n${QUEUE}\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n${item(1)}\n## A\r`);
+  for (const input of unchanged) assert.equal(stateForRole(input, "worker"), input, JSON.stringify(input));
+  for (const [input, expected] of cut) assert.equal(stateForRole(input, "control"), expected, JSON.stringify(input));
+  assert.ok(unchanged.length > 100 && cut.length > 20);
+});
+
+test("property: a closing fence closes exactly when only spaces and tabs follow it", () => {
+  const blank = fc.constantFrom(" ", "\t", ...UNICODE_BLANKS);
+  fc.assert(
+    fc.property(fc.constantFrom("```", "~~~"), fc.integer({ min: 0, max: 3 }), fc.array(blank, { maxLength: 4 }), (fence, indent, tail) => {
+      const close = " ".repeat(indent) + fence + tail.join("");
+      // Independent of the code under test: CommonMark's rule for a closing fence.
+      const closes = /^[ \t]*$/.test(tail.join(""));
+      const text = fencedQueue(fence, close, closes);
+      const result = stateForRole(text, "worker");
+      if (closes) assert.match(result, /\n## Owner queue\n\n> Owner queue left out[^\n]*lines 5-5\./);
+      else assert.equal(result, text);
+      assert.match(result, /## Ne smije se izgubiti\n- B-8\n$/);
+    }),
+  );
+});
+
 test("start entry point leaves the Owner queue out for writer and control profiles only", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-state-"));
   try {

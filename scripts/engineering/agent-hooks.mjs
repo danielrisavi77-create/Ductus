@@ -216,10 +216,14 @@ export function budgetNotice(tokens, role = "unknown") {
 // a session with no detectable role, gets the text unchanged (DAN-695).
 // ATX headings and fenced blocks follow CommonMark: up to three spaces of
 // indent, and a fence closes only with the same character, at least as long.
+// Only a space or a tab counts as blank there, never what JavaScript trim(),
+// \s or "." also take for one (NBSP, U+3000, U+2028 and the like); a text
+// with a lone CR, which CommonMark reads as a line ending, is not cut at all.
 // Setext headings and HTML blocks are not recognised; STATE.md uses neither.
 const OWNER_QUEUE = /^ {0,3}##[ \t]+Owner queue\b/i;
 const SECTION = /^ {0,3}#{1,2}(?:[ \t]|$)/;
-const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})([^]*)$/;
+const BLANK = /^[ \t]*$/;
 const CUT_ROLES = new Set(["worker", "control"]);
 
 const ownerQueueNote = (from, to, cr, last = false, lastCr = cr) => [
@@ -238,7 +242,7 @@ function fenceTracker() {
   return (bare) => {
     const match = FENCE.exec(bare);
     if (open) {
-      if (match && match[1][0] === open[0] && match[1].length >= open.length && /^[ \t]*$/.test(match[2])) open = null;
+      if (match && match[1][0] === open[0] && match[1].length >= open.length && BLANK.test(match[2])) open = null;
       return true;
     }
     if (match && !(match[1][0] === "`" && match[2].includes("`"))) {
@@ -250,7 +254,7 @@ function fenceTracker() {
 }
 
 export function stateForRole(text, role) {
-  if (!CUT_ROLES.has(role)) return text;
+  if (!CUT_ROLES.has(role) || /\r(?!\n)/.test(text)) return text;
   // A final newline ends the last line; it is not one more line to count.
   const ends = text.endsWith("\n");
   const lines = (ends ? text.slice(0, -1) : text).split("\n");
