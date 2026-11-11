@@ -4,6 +4,20 @@ Verzija 0.4 · 10. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codexu. Nova instanca prvo čita `docs/ORKESTRATOR-SAZETAK.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM-SAZETAK.md` i `docs/PLAN-DEMO.md` §3 i §4. Ovaj dokument, `docs/ENGINEERING_SYSTEM.md` i ostalo čita po odjeljcima koje odluka traži, a `docs/MULTI-ACCOUNT.md` kod predaje ili rotacije sesije. U sukobu sa sažetkom vrijedi ovaj dokument. Vrijedi uz `CLAUDE.md` i `docs/SESSIONS.md`.
 
+<!-- toc:start -->
+- §1 Na početku svakog poteza: retci 21-33
+- §2 Kad stigne PR: retci 34-55
+- §3 Nakon spajanja: retci 56-65
+- §4 Što orkestrator odlučuje sam, a što pita: retci 66-114
+  - §4a Kako se pita Daniel: retci 105-114
+- §5 Poruke i cross-account koordinacija: retci 115-131
+- §6 Kontrolne točke: retci 132-135
+- §7 Štednja tokena orkestratora: retci 136-165
+- §8 Sesije: pregled, pokretanje i gašenje: retci 166-235
+- §9 Petlja poteza: retci 236-249
+- §10 Provjera zastoja (`pnpm orch:health`): retci 250-262
+<!-- toc:end -->
+
 ## 1. Na početku svakog poteza
 
 Četiri jeftine provjere, bez čitanja diffova. Za odabir i redoslijed zadataka koristi Linearov prioritet, nositelja i status; za grane, PR-ove, reviewe i CI koristi GitHub:
