@@ -22,7 +22,8 @@ describe("isLoopbackDatabaseUrl", () => {
       "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus",
       "postgresql://ductus:ductus-local-only@localhost:54329/ductus",
       "postgres://ductus:ductus-local-only@[::1]:54329/ductus",
-      "postgres://ductus@127.0.0.1/ductus",
+      // The native database of a cloud session (scripts/db/native-db.mjs).
+      "postgres://ductus:ductus-local-only@127.0.0.1:5432/ductus",
     ]) {
       expect(isLoopbackDatabaseUrl(url), url).toBe(true);
     }
@@ -51,6 +52,35 @@ describe("isLoopbackDatabaseUrl", () => {
       "http://127.0.0.1:54329/ductus",
       "127.0.0.1:54329/ductus",
       "",
+    ]) {
+      expect(isLoopbackDatabaseUrl(url), url).toBe(false);
+    }
+  });
+
+  // F-019: the port is part of "this machine's database"; without one pg
+  // takes PGPORT from the environment.
+  it("refuses a missing or foreign port", () => {
+    for (const url of [
+      "postgres://ductus@127.0.0.1/ductus",
+      "postgres://ductus@127.0.0.1:/ductus",
+      "postgres://u:p@127.0.0.1:6543/ductus",
+      "postgres://u:p@localhost:15432/ductus",
+      "postgres://u:p@[::1]:543/ductus",
+    ]) {
+      expect(isLoopbackDatabaseUrl(url), url).toBe(false);
+    }
+  });
+
+  it("refuses text that pg and URL could read apart", () => {
+    for (const url of [
+      "postgres://u:p@db.remote.example:5432@127.0.0.1:54329/ductus",
+      "postgres://u@x:p@127.0.0.1:54329/ductus",
+      "postgres://u:p@127.0.0.1:54329/duc tus",
+      " postgres://u:p@127.0.0.1:54329/ductus",
+      "postgres://u:p@127.0.0.1:54329/ductus\n",
+      "postgres://u:p%@127.0.0.1:54329/ductus",
+      "postgres://u:p%zz@127.0.0.1:54329/ductus",
+      "postgres://u:p@127.0.0.1:54329\\@remote.example/ductus",
     ]) {
       expect(isLoopbackDatabaseUrl(url), url).toBe(false);
     }
