@@ -10,7 +10,7 @@ import { chooseCourse, newAssignmentReturnTo } from "@/components/teacher/existi
 import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { withActor } from "@/server/db";
 import { readTeacherCourses } from "@/server/institution/teacher-courses";
 
@@ -33,7 +33,7 @@ export default async function TeacherNewAssignmentPage({ searchParams }: {
   searchParams: Promise<{ kolegij?: string | string[] }>;
 }) {
   const param = (await searchParams).kolegij;
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const token = liveSessionToken(await cookies());
   pageActivity(token);
   // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
   const { access, principal } = await teacherPageRead(token, withActor);

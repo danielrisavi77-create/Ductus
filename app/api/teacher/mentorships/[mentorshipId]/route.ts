@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { withActor } from "@/server/db";
 import { handleMentoredWorkRequest } from "@/server/institution/mentored-works";
 
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ men
   const { mentorshipId } = await context.params;
   return handleMentoredWorkRequest(request, {
     withActor,
-    sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
+    sessionToken: liveSessionToken(request.cookies),
   }, mentorshipId);
 }
 

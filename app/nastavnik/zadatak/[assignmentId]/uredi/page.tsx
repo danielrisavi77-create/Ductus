@@ -11,7 +11,7 @@ import { teacherPageRead } from "@/components/teacher/teacher-access";
 import WorkLanguageCard from "@/components/teacher/WorkLanguageCard";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { withActor } from "@/server/db";
 
 import styles from "../../novi/page.module.css";
@@ -28,7 +28,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // assignment, a missing one, a mentorship's and a malformed id read alike.
 export default async function AssignmentVersionPage({ params }: { params: Promise<{ assignmentId: string }> }) {
   const { assignmentId } = await params;
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const token = liveSessionToken(await cookies());
   pageActivity(token);
   const { access, principal } = await teacherPageRead(token, withActor);
   const screen = teacherPageAccess(access, principal.kind, token);
