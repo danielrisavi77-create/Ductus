@@ -7,7 +7,8 @@
 // posts nothing. On a conflict the merge is aborted and the files are listed.
 // Usage: node sync.mjs <number> [--wait-min N]     (default 30, 0 = do not wait)
 //   exit 0 = preflight PASS on the synced head
-//        1 = stopped: wrong branch or dirty tree, conflict, push, CI wait timeout or preflight FAIL
+//        1 = stopped: wrong branch or dirty tree, conflict, push, CI wait timeout, preflight FAIL
+//            or the local branch or head moved before success was reported
 //        2 = usage or read error
 import "./help.mjs";
 import { execFile, spawn } from "node:child_process";
@@ -16,7 +17,7 @@ import { promisify } from "node:util";
 
 import { checkRollup, ghJson, prView, repoId } from "./gh.mjs";
 import { requiredStatusChecks } from "./preflight-core.mjs";
-import { ciWait, parseSyncArgs, syncPlan } from "./sync-core.mjs";
+import { ciWait, headDrift, parseSyncArgs, STATUS_ARGS, syncPlan } from "./sync-core.mjs";
 
 const POLL_MS = 30_000;
 const parsed = parseSyncArgs(process.argv.slice(2));
@@ -44,8 +45,7 @@ try {
   const local = {
     branch: await tryGit("symbolic-ref", "--short", "HEAD"),
     head: await git("rev-parse", "HEAD"),
-    // Explicit flags: status.showUntrackedFiles or a submodule "ignore" setting must not hide changes.
-    dirty: (await git("status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none")) !== "",
+    dirty: (await git(...STATUS_ARGS)) !== "",
     behind: behind === null ? null : Number(behind),
   };
   const plan = syncPlan({ pr, local });
@@ -94,6 +94,13 @@ try {
   }
 
   const code = await child("preflight.mjs", [String(n), "--head", head]);
+  // CI and preflight speak for `head` only; a commit or checkout made meanwhile is not covered.
+  const drift = headDrift({ branch: await tryGit("symbolic-ref", "--short", "HEAD"), head: await tryGit("rev-parse", "HEAD") },
+    { branch: local.branch, head });
+  if (drift) {
+    console.error(`SYNC NOT READY: local ${drift}; CI and preflight cover ${head} on ${local.branch}`);
+    process.exit(1);
+  }
   console.log(code === 0 ? `SYNC OK: head ${head}` : `SYNC NOT READY: preflight exit ${code} on ${head}`);
   process.exit(code === 2 ? 2 : code === 0 ? 0 : 1);
 } catch (e) {

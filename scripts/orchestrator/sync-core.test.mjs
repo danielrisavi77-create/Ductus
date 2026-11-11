@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { GATE_CONTEXT } from "./orchestrator-core.mjs";
-import { ciWait, DEFAULT_WAIT_MIN, parseSyncArgs, syncPlan } from "./sync-core.mjs";
+import { ciWait, DEFAULT_WAIT_MIN, headDrift, parseSyncArgs, syncPlan } from "./sync-core.mjs";
 
 const HEAD = "a".repeat(40);
 const PR = { state: "OPEN", baseRefName: "main", headRefName: "claude/x", headRefOid: HEAD, sameRepository: true };
@@ -73,4 +73,22 @@ test("ciWait is settled on finished checks, red or green, and ignores the status
     { name: "Mergify Merge Queue", appSlug: "mergify", status: "IN_PROGRESS", conclusion: "" }];
   const w = ciWait(rollup, ["Lint", "E2E", GATE_CONTEXT, "Merge authorization", "Auto-merge eligible"]);
   assert.deepEqual(w, { state: "settled", running: [], missing: [] });
+});
+
+test("headDrift accepts only the exact branch and head that CI and preflight covered", () => {
+  const expected = { branch: "claude/x", head: HEAD };
+  const cases = [
+    ["same branch and head", { branch: "claude/x", head: HEAD }, null],
+    ["a new local commit", { branch: "claude/x", head: "b".repeat(40) }, /head moved to bbbbbbbb/],
+    ["another branch on the same head", { branch: "other", head: HEAD }, /branch moved to other/],
+    ["detached HEAD", { branch: null, head: HEAD }, /branch moved to \(detached\)/],
+    ["unreadable head", { branch: "claude/x", head: null }, /head moved to \(unreadable\)/],
+    ["abbreviated head", { branch: "claude/x", head: HEAD.slice(0, 12) }, /head moved/],
+    ["branch and head both moved", { branch: "other", head: "c".repeat(40) }, /branch moved to other.*head moved to cccccccc/],
+  ];
+  for (const [name, now, want] of cases) {
+    const got = headDrift(now, expected);
+    if (want === null) assert.equal(got, null, name);
+    else assert.match(String(got), want, name);
+  }
 });

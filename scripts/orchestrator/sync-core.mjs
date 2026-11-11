@@ -6,6 +6,9 @@ import { latestChecks } from "./orchestrator-core.mjs";
 // WAITING (environment approval) and REQUESTED are check runs that have not finished either.
 const RUNNING_STATES = new Set(["PENDING", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED"]);
 export const DEFAULT_WAIT_MIN = 30;
+// The command line overrides status.showUntrackedFiles, diff.ignoreSubmodules and
+// submodule.<name>.ignore, so a hidden untracked file or submodule change still counts.
+export const STATUS_ARGS = ["status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"];
 
 /** `<pr> [--wait-min N]`; null when the arguments are not exactly that. */
 export function parseSyncArgs(args) {
@@ -39,6 +42,18 @@ export function syncPlan({ pr, local }) {
   return local.behind === 0
     ? { action: "skip", reason: "branch already contains main" }
     : { action: "merge", reason: `branch lacks ${local.behind} commit(s) of main` };
+}
+
+/**
+ * null when the checkout is still the exact branch and head that CI and preflight
+ * covered, otherwise what moved. Only full equality counts.
+ *   now, expected   { branch, head } read from git (branch null = detached)
+ */
+export function headDrift(now, expected) {
+  const moved = [];
+  if (now.branch !== expected.branch) moved.push(`branch moved to ${now.branch ?? "(detached)"}`);
+  if (now.head !== expected.head) moved.push(`head moved to ${now.head ? now.head.slice(0, 8) : "(unreadable)"}`);
+  return moved.length ? moved.join(", ") : null;
 }
 
 /**
