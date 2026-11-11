@@ -1,4 +1,3 @@
-import { ENDED_MARK_PREFIX } from "./ended-session-cookie";
 import { sessionTag } from "./principal";
 
 /**
@@ -7,7 +6,7 @@ import { sessionTag } from "./principal";
  * (src/client/session-marks.ts, `endSessionsInCookie`), and the logout answer
  * writes it too, for the form without JavaScript (endedMarkCookie).
  */
-export { ENDED_MARK_PREFIX };
+export const ENDED_MARK_PREFIX = "ductus-ended-";
 const ENDED_MARK_MAX_AGE_S = 86_400;
 
 /**
@@ -32,4 +31,16 @@ export function endedMarkCookie(token: string | undefined): string | null {
 export function endedHere(token: string | undefined, has: (name: string) => boolean): boolean {
   const tag = sessionTag(token);
   return tag !== null && has(`${ENDED_MARK_PREFIX}${tag}`);
+}
+
+/**
+ * The cookie an access screen (/nastavnik*, /ustanova*) reads when it shows a
+ * closed session (#1929): undefined for a session this browser signed out,
+ * so it reads "not signed in" (I5) instead of expired (Z-03); otherwise the
+ * cookie itself. The screens use it only after the database found the session
+ * closed (closedSessionKind), so a mark never changes an open session's page
+ * (DAN-511b, #1444), and a mark of another session never matches this cookie.
+ */
+export function accessCookie(token: string | undefined, has: (name: string) => boolean): string | undefined {
+  return endedHere(token, has) ? undefined : token;
 }

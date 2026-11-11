@@ -8,6 +8,7 @@ import MentoredWorks from "@/components/teacher/MentoredWorks";
 import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
+import { accessCookie } from "@/server/auth/ended-mark";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { readMentoredWorks } from "@/server/institution/mentored-works";
@@ -27,13 +28,14 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 // (teacherPageRead), so the access screens are those of the other teacher
 // pages (DAN-378): Z-03, "not signed in" and Z-05, none of them a work.
 export default async function MentoredWorksPage() {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
   pageActivity(token);
   const [{ access, principal }, read] = await Promise.all([
     teacherPageRead(token, withActor),
     readMentoredWorks(token, withActor),
   ]);
-  const screen = teacherPageAccess(mentoredWorksAccess(access, read.kind), principal.kind, token);
+  const screen = teacherPageAccess(mentoredWorksAccess(access, read.kind), principal.kind, accessCookie(token, (name) => store.has(name)));
   const card = screen === "expired" || screen === "signedOut" || screen === "denied";
   let body;
   if (card) {

@@ -232,8 +232,9 @@ export async function logoutAll(request: Request, deps: AuthDeps): Promise<Respo
  * HTTP cannot clear a cookie only while it is still the one this request
  * read, so an answer that clears could land after a sign-in from another tab
  * and remove that newer cookie. It marks the closed session's tag instead
- * (ended-mark.ts), so its cookie reads as signed out on every page
- * (middleware.ts), and only the next sign-in replaces it. When the database
+ * (ended-mark.ts), so the closed session's cookie reads as signed out on the
+ * home (/), /prijava and the access screens of /nastavnik* and /ustanova*
+ * (accessCookie), and only the next sign-in replaces it. When the database
  * fails, nothing was closed, so both routes answer 503: the page then ends
  * the session on this device (Z-02), never reports a sign-out that the
  * server did not make, and can send it again (contract addendum on #1091,

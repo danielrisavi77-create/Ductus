@@ -9,6 +9,7 @@ import TeacherCourses from "@/components/teacher/TeacherCourses";
 import { readWorkAccommodationsMany } from "@/components/teacher/work-accommodations-read";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
+import { accessCookie } from "@/server/auth/ended-mark";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -29,7 +30,8 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 // closed one Z-03 and a person who is not a teacher Z-05, none of them a
 // course or whether one exists.
 export default async function TeacherHomePage() {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
   pageActivity(token);
   const [read, principal] = await Promise.all([
     token === undefined ? null : readTeacherCourses(token, withActor),
@@ -55,7 +57,7 @@ export default async function TeacherHomePage() {
     ids.map((id) => [id, marks === null ? [] : marks.kind === "ok" ? marks.marked[id.toLowerCase()] ?? [] : null]),
   );
 
-  const screen = teacherPageAccess(coursesAccess(read?.kind ?? null), principal.kind, token);
+  const screen = teacherPageAccess(coursesAccess(read?.kind ?? null), principal.kind, accessCookie(token, (name) => store.has(name)));
   const card = screen === "expired" || screen === "signedOut" || screen === "denied";
   let body;
   if (card) {

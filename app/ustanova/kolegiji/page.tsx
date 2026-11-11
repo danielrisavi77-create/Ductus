@@ -12,6 +12,7 @@ import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
+import { accessCookie } from "@/server/auth/ended-mark";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
@@ -30,7 +31,8 @@ export const runtime = "nodejs";
 // principal are read in parallel; the courses only for one of the
 // institution's own years, after them (coursesPage joins the two answers).
 const resolveScreen = cache(async (asked: string | undefined) => {
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
   pageActivity(token);
   const [years, principal] = await Promise.all([
     token === undefined ? null : readAcademicYears(token, withActor),
@@ -39,7 +41,7 @@ const resolveScreen = cache(async (asked: string | undefined) => {
   const year = years?.kind === "ok" ? chosenYear(years.years, asked) : null;
   const courses = year === null ? null : await readInstitutionCourses(token, year, withActor);
   const read = years === null ? null : coursesPage(years, courses);
-  return { token, read, principal, screen: institutionScreen(read?.kind ?? null, principal.kind, token) };
+  return { token, read, principal, screen: institutionScreen(read?.kind ?? null, principal.kind, accessCookie(token, (name) => store.has(name))) };
 });
 
 // No static title: the browser would apply it after a 404 and name the page in

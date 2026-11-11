@@ -9,6 +9,7 @@ import { FastPath, FastPathLive } from "@/components/teacher/FastPath";
 import { teacherPageRead } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
+import { accessCookie } from "@/server/auth/ended-mark";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -25,7 +26,8 @@ export const metadata = { title: `${t.fastPath.title} · ${t.app.name}` };
 // access screens of the other teacher pages, Z-05 without a sign-in.
 export default async function FastPathPage({ searchParams }: { searchParams: Promise<{ zadatak?: string | string[] }> }) {
   const assignmentId = assignmentParam((await searchParams).zadatak);
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
   pageActivity(token);
   const { tag, at } = shellSession(token);
   // One statement, one snapshot: the session and the role never disagree (#1242 round 1).
@@ -34,7 +36,7 @@ export default async function FastPathPage({ searchParams }: { searchParams: Pro
   const returnTo = assignmentId === null ? "/nastavnik/brz-put" : `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignmentId)}`;
   // An OIDC login: a real navigation, not a prefetchable Link.
   const signInHref = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
-  const screen = teacherPageAccess(access, principal.kind, token);
+  const screen = teacherPageAccess(access, principal.kind, accessCookie(token, (name) => store.has(name)));
   return (
     <AppShell session={{ tag, at }} role={screen === "allowed" ? "teacher" : null} scope={accessShellScope(screen, principal)} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
       <div className={`page ${styles.page}`}>
