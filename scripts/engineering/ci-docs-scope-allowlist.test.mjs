@@ -89,11 +89,12 @@ const skippedBlocks = workflow.split(/^(?= {2}[\w-]+:$)/m).flatMap((job) => (/^ 
 // Both the raw text and a joined form are searched: `"docs/" + "adr"` and
 // `join("docs/", "adr")` read as `docs/adr`, while the raw text keeps array items apart.
 const forms = (text) => [text, text.replace(/["'`]\s*\+\s*["'`]/g, "").replace(/["'`]\s*,\s*["'`]/g, "/").replace(/\/{2,}/g, "/")];
+const SHELL = /(?:\.(?:sh|bash|ya?ml)|(?:^|\/)(?:Dockerfile|Containerfile|Makefile)[\w.-]*)$/;
 const sources = [...tracked.filter(({ mode, path }) => !["160000", "120000"].includes(mode) && !path.endsWith(".md") && !FIXTURES.has(path))
   .flatMap(({ path }) => {
     const text = readFileSync(`${root}${path}`, "latin1");
-    return text.includes("\0") ? [] : [{ path, skipped: SKIPPED.test(path), forms: forms(text) }];
-  }), { path: ".github/workflows/ci.yml (skipped steps)", skipped: true, forms: forms(skippedBlocks.join("\n")) }];
+    return text.includes("\0") ? [] : [{ path, skipped: SKIPPED.test(path), shell: SHELL.test(path), forms: forms(text) }];
+  }), { path: ".github/workflows/ci.yml (skipped steps)", skipped: true, shell: true, forms: forms(skippedBlocks.join("\n")) }];
 
 const PATTERNS = new Map();
 for (const path of ORDINARY_DOCS) {
@@ -112,6 +113,11 @@ for (const path of ORDINARY_DOCS) {
 // A bare `docs` counts only in a string, a path, a glob or a shell word, so the
 // identifier `docs` in code is not a read.
 const WHOLE_DOCS = /(?<![\w.-])docs(?:\/?(?=["'`*{]|\$\{)|\/(?![\w.-])|\/[\w.-]*\*)|(?<=\.\.?\/)docs(?!\/?[\w.-])|(?<=\s)docs(?=[ \t]+(?:[./~]|\|(?!\|))|[ \t]*$)/m;
+// Any shell argument `docs` (`tar -cf x docs;`, `cp -R docs out`): every word in a shell
+// or YAML file, and a word inside a closed string literal elsewhere.
+const SHELL_WORD = /(?<=^|[\s;&|(])docs(?=[\s;&|)]|$)/m;
+const STRING_WORD = /(["'`])(?:(?!\1)[^\n])*?(?<=[\s"'`])docs(?=[\s;&|)])(?:(?!\1)[^\n])*\1/;
+const wholeDocs = (text, shell) => WHOLE_DOCS.test(text) || STRING_WORD.test(text) || (shell && SHELL_WORD.test(text));
 
 // How `file` reads the listed document `path`, or "" when it does not.
 function reads(path, file, texts) {
@@ -154,11 +160,17 @@ test("the reader matcher catches joined, concatenated and listed paths", () => {
   }
   for (const text of ['"docs"', '"./docs/"', "`docs/${f}`", '"docs/**/*.md"', "`${root}/docs`", '["app", "docs"]',
     'new URL("../../docs/", import.meta.url)', '"docs/{adr,x}/*.md"', "COPY docs /srv/docs", "grep -rl x docs",
-    "ls docs | wc -l", "- ./docs:/srv/docs:ro", "cp docs/ out", '"docs/PIL*.md"', "./docs"]) {
-    assert.ok(forms(text).some((form) => WHOLE_DOCS.test(form)), text);
+    "ls docs | wc -l", "- ./docs:/srv/docs:ro", "cp docs/ out", '"docs/PIL*.md"', "./docs", "execSync(\"cp -R docs out\")",
+    "'tar -cf x docs'"]) {
+    assert.ok(forms(text).some((form) => wholeDocs(form, false)), text);
+  }
+  for (const text of ['tar -cf "$work/m.tar" docs;', "cp -R docs artifacts", "(cd docs && ls)", "run: zip -r x.zip docs;"]) {
+    assert.deepEqual([wholeDocs(text, true), wholeDocs(text, false)], [true, false], text);
   }
   for (const text of ['"docsx"', '"my-docs"', "docs.length", "docs: readonly PmNode[]", "const docs = []",
-    "{ steps, docs, after }", "x = docs || []", '"../../docs/x.md"']) assert.ok(!forms(text).some((form) => WHOLE_DOCS.test(form)), text);
+    "{ steps, docs, after }", "x = docs || []", '"../../docs/x.md"', "return docs;", "// don't read docs here"]) {
+    assert.ok(!forms(text).some((form) => wholeDocs(form, false)), text);
+  }
 });
 
 test("no tracked file outside Markdown names a listed document, its directory or a sibling list", () => {
@@ -173,10 +185,10 @@ test("no tracked file outside Markdown names a listed document, its directory or
 });
 
 test("no file of a step the docs profile skips reads the whole docs directory", () => {
-  for (const { path, skipped, forms: texts } of sources) {
+  for (const { path, skipped, shell, forms: texts } of sources) {
     // The production image names docs only in the list it keeps out of the image.
     const kept = path === "scripts/engineering/production-image.mjs"
       ? texts.map((text) => text.replace(/^const NEVER_INCLUDED = new Set\(\[.*\]\);$/m, "")) : texts;
-    if (skipped) assert.ok(!kept.some((text) => WHOLE_DOCS.test(text)), path);
+    if (skipped) assert.ok(!kept.some((text) => wholeDocs(text, shell)), path);
   }
 });
