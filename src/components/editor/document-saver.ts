@@ -31,7 +31,9 @@ export function submittedOf(snapshot: DocumentSnapshot | null): boolean {
 /**
  * The notice of the evidence session, if any (3d-2c2 §3): the server's work
  * differs, or it refused the last step for good, or the recorder stopped and
- * what follows stays on this device (DAN-699).
+ * what follows stays on this device (DAN-699). A stopped recorder whose local
+ * save also failed gives no notice: the failure's own text says the text is
+ * not kept (Codex #1901 c.4533816077).
  */
 export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | "stopped" | null {
   // Only the evidence session sets `closedBy`: the local saver's own
@@ -39,7 +41,7 @@ export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | 
   if (!snapshot || snapshot.closedBy === undefined) return null;
   if (READ_ONLY_STATES.includes(snapshot.state) && snapshot.closedBy !== "submission") return "conflict";
   if (snapshot.refused) return "refused";
-  return snapshot.stopped ? "stopped" : null;
+  return snapshot.stopped && !snapshot.failure ? "stopped" : null;
 }
 
 /**

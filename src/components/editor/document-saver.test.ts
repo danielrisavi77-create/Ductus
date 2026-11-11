@@ -97,6 +97,16 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     expect(evidenceNotice({ ...base, state: "LOCAL_DURABLE", closedBy: "submission" })).toBeNull();
   });
 
+  // Codex #1901 (c.4533816077): a stopped recorder whose local save failed
+  // must not say the text is kept on this device; the failure text speaks.
+  it("a stopped recorder says so only while its local save holds", () => {
+    const base = { failure: null, capacity: "ok" as const, closedBy: null, state: "LOCAL_DURABLE" as const };
+    expect(evidenceNotice({ ...base, stopped: true })).toBe("stopped");
+    for (const failure of ["quota", "unavailable", "unknown"] as const) {
+      expect(evidenceNotice({ ...base, failure, stopped: true })).toBeNull();
+    }
+  });
+
   it("the local saver's own snapshot never gives an evidence notice (e2e local-editor stored ids)", () => {
     // Its RECOVERY_REQUIRED is an unreadable local record; the recovery text stays.
     const local = { failure: "corrupt" as const, capacity: "ok" as const };
