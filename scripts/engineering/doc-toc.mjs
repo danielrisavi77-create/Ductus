@@ -71,9 +71,9 @@ export function docSections(text) {
     .filter((s) => s.level === 2 || s.level === 3);
 }
 
-const markerLine = (text) => new RegExp(`^ {0,3}${text}[ \\t]*$`);
-const IS_START = markerLine(START);
-const IS_END = markerLine(END);
+// Literal patterns for START and END (semgrep flags RegExp built from a variable).
+const IS_START = /^ {0,3}<!-- toc:start -->[ \t]*$/;
+const IS_END = /^ {0,3}<!-- toc:end -->[ \t]*$/;
 
 function markers(lines) {
   const inFence = fenced(lines);

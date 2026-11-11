@@ -205,6 +205,9 @@ test("property: applyToc is idempotent", () => {
   );
 });
 
+/** ATX heading level of a line with a title, or 0. */
+const atxLevel = (line) => /^ {0,3}(#{1,6})[ \t]/.exec(line)?.[1].length ?? 0;
+
 test("property: every range starts at its heading and ends before the next one of its level or above", () => {
   fc.assert(
     fc.property(fc.oneof(freeDoc, structuredDoc), (text) => {
@@ -213,9 +216,9 @@ test("property: every range starts at its heading and ends before the next one o
       const lines = splitLines(out);
       const sections = docSections(out);
       for (const s of sections) {
-        assert.match(lines[s.start - 1], new RegExp(`^ {0,3}#{${s.level}}[ \\t]`));
+        assert.equal(atxLevel(lines[s.start - 1]), s.level);
         assert.ok(s.start <= s.end && s.end <= lines.length);
-        if (s.end < lines.length) assert.match(lines[s.end], new RegExp(`^ {0,3}#{1,${s.level}}[ \\t]`));
+        if (s.end < lines.length) assert.ok(atxLevel(lines[s.end]) >= 1 && atxLevel(lines[s.end]) <= s.level);
       }
       for (const level of [2, 3]) {
         const same = sections.filter((s) => s.level === level);
