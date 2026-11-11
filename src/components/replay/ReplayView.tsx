@@ -137,9 +137,9 @@ export function ReplayPlayerView({ player }: { player: Player }) {
 
   if (nodes === null) return h("p", { className: styles.state, role: "alert" }, t.unavailable);
 
-  const ordinal = (id: string) => ordinalIn(nodes, id) ?? ordinalIn(priorNodes, id) ?? 0;
   // Null: the paragraph is in neither this step's text nor the one before, so it is named as deleted.
-  const shownOrdinal = shownId === null ? null : ordinalIn(nodes, shownId) ?? ordinalIn(priorNodes, shownId);
+  const ordinal = (id: string) => ordinalIn(nodes, id) ?? ordinalIn(priorNodes, id);
+  const shownOrdinal = shownId === null ? null : ordinal(shownId);
   const parts: ChangePart[] = touchedHistories.flatMap(({ id, history }) => {
     const entry = history.find((e) => e.entry === "change" && e.index === n);
     return entry?.entry === "change" ? [{ ordinal: ordinal(id), removed: entry.removed, inserted: entry.inserted }] : [];

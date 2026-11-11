@@ -41,8 +41,11 @@ function counted(n: number, forms: { one: string; few: string; many: string }): 
   return fill(pluralHr(n, forms.one, forms.few, forms.many), { count: n });
 }
 
-/** What one change did to one paragraph; `ordinal` is the paragraph's place, from 1. */
-export type ChangePart = { ordinal: number; removed: string; inserted: string };
+/**
+ * What one change did to one paragraph; `ordinal` is the paragraph's place,
+ * from 1, or null when it is in neither text around the change (deleted).
+ */
+export type ChangePart = { ordinal: number | null; removed: string; inserted: string };
 
 /** The line read out for change `index`: "Promjena 12: umetnut 1 znak u odlomku 2." */
 export function describeChange(index: number, kind: ReplayChangeKind, parts: readonly ChangePart[]): string {
@@ -50,11 +53,14 @@ export function describeChange(index: number, kind: ReplayChangeKind, parts: rea
   const said = parts.map(({ ordinal, removed, inserted }) => {
     const out = characters(removed);
     const into = characters(inserted);
-    if (out === 0 && into === 0) return fill(kind === "format" ? t.format : t.structure, { k: ordinal });
+    if (out === 0 && into === 0) {
+      if (ordinal === null) return kind === "format" ? t.formatDeleted : t.structureDeleted;
+      return fill(kind === "format" ? t.format : t.structure, { k: ordinal });
+    }
     const what = out > 0 && into > 0
       ? fill(t.and, { a: counted(out, t.removed), b: counted(into, t.inserted) })
       : out > 0 ? counted(out, t.removed) : counted(into, t.inserted);
-    return fill(t.inBlock, { what, k: ordinal });
+    return ordinal === null ? fill(t.inBlockDeleted, { what }) : fill(t.inBlock, { what, k: ordinal });
   });
   return fill(t.change, { n: index, parts: said.join("; ") });
 }

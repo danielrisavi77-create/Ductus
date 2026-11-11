@@ -77,6 +77,13 @@ describe("replay words (DAN-537)", () => {
       { ordinal: 2, removed: "", inserted: "c" },
     ])).toBe("Promjena 7: umetnuta 2 znaka u odlomku 1; umetnut 1 znak u odlomku 2.");
     expect(describeChange(8, "delete", [])).toBe("Promjena 8.");
+    // A paragraph in neither text around the change is named as deleted, never "odlomak 0".
+    expect(describeChange(9, "delete", [{ ordinal: null, removed: "abc", inserted: "" }]))
+      .toBe("Promjena 9: obrisana 3 znaka u obrisanom odlomku.");
+    expect(describeChange(10, "format", [{ ordinal: null, removed: "", inserted: "" }]))
+      .toBe("Promjena 10: promijenjeno oblikovanje u obrisanom odlomku.");
+    expect(describeChange(11, "structure", [{ ordinal: null, removed: "", inserted: "" }]))
+      .toBe("Promjena 11: promijenjena vrsta obrisanog odlomka.");
   });
 
   it("names every gap and where it lets the reader go", () => {

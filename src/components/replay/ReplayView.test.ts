@@ -161,6 +161,8 @@ describe("ReplayPlayerView (DAN-537)", () => {
     const shown = text(renderToStaticMarkup(h(ReplayPlayerView, { player })));
     expect(shown).toContain(t.historyTitleDeleted);
     expect(shown).not.toContain(fill(t.historyTitle, { k: 0 }));
+    expect(shown).toContain("Promjena 2: obrisano 18 znakova u obrisanom odlomku.");
+    expect(shown).not.toContain("odlomku 0");
     expect(shown).toContain(verified);
     expect(findForbiddenTermsInMarkup(shown, shown)).toEqual([]);
   });
