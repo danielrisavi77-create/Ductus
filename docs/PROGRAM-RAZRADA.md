@@ -393,7 +393,7 @@ Izvoz (M8.4, M8.5, M8.14) je u valu 1 (D-203 A3); uvozni opseg se ne mijenja.
 
 **Cilj:** produkcija i staging u EU-u s dokazanim povratom, pravnim dokumentima, pristupačnošću i operacijama, tako da je svaki GO uvjet iz `docs/PROGRAM.md` zelen.
 
-**Gotovo na mainu:** axe E2E; test bez lažnog pružatelja u produkcijskom buildu; mapa `docs/privacy/`. **Nema:** `docs/OPERATIONS.md`, produkcijske i staging konfiguracije, statusne stranice, engleskog kataloga sučelja.
+**Gotovo na mainu:** axe E2E; test bez lažnog pružatelja u produkcijskom buildu; mapa `docs/privacy/`; `docs/OPERATIONS.md` (DAN-540). **Nema:** produkcijske i staging konfiguracije, statusne stranice, engleskog kataloga sučelja.
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
