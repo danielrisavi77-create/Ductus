@@ -43,7 +43,7 @@ test("the second demo student signs in and receives a distinct session identity"
   });
 });
 
-test("logout closes the session and clears the cookie", async ({ page, context }) => {
+test("logout closes the session on the server and leaves the cookie to the next sign-in", async ({ page, context }) => {
   await signIn(page, "/");
   const token = (await appCookie(context, SESSION_COOKIE))!.value;
 
@@ -54,7 +54,9 @@ test("logout closes the session and clears the cookie", async ({ page, context }
   // The 303 leads on to the provider's logout (DAN-212), another origin that a
   // fetch from the page does not follow; the editor posts natively after it.
   expect(type).toBe("opaqueredirect");
-  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+  // No logout answer touches the cookie (#1929): it could land after a sign-in
+  // in another tab. The closed session's cookie reads as signed out instead.
+  expect((await appCookie(context, SESSION_COOKIE))?.value).toBe(token);
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
 });
 
