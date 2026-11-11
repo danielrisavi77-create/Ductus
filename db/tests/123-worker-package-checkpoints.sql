@@ -97,7 +97,7 @@ FROM (VALUES
   ('00000000-0000-4000-8000-0000000000d1', 'pkg-a', ARRAY[repeat('g', 64)], 'a hash that is not hex'),
   ('00000000-0000-4000-8000-0000000000d1', 'pkg-a', ARRAY[pg_temp.h('d'), pg_temp.h('d')], 'a repeated hash'),
   ('00000000-0000-4000-8000-0000000000d1', 'pkg-a',
-   (SELECT array_agg(lpad(to_hex(n), 64, '0') ORDER BY n) FROM generate_series(1, 513) AS n), 'more than 512 hashes'),
+   (SELECT array_agg(lpad(to_hex(n), 64, '0') ORDER BY n) FROM generate_series(1, 257) AS n), 'more than 256 hashes'),
   ('00000000-0000-4000-8000-0000000000d1', 'pkg-a', ARRAY[[pg_temp.h('d')], [pg_temp.h('e')]], 'a two-level array'),
   ('00000000-0000-4000-8000-0000000000d1', 'Pkg-a', pg_temp.sorted('d'), 'an upper-case package id'),
   ('00000000-0000-4000-8000-0000000000d1', '', pg_temp.sorted('d'), 'an empty package id'),
@@ -105,8 +105,8 @@ FROM (VALUES
   AS d (domain, package, hashes, label);
 SELECT is(pg_temp.texts('00000000-0000-4000-8000-0000000000d1', 'pkg-a',
     (SELECT array_agg(h ORDER BY h) FROM (SELECT pg_temp.h('d') AS h
-       UNION ALL SELECT lpad(to_hex(n), 64, '0') FROM generate_series(1, 511) AS n) AS a)),
-  'd', '512 hashes are accepted');
+       UNION ALL SELECT lpad(to_hex(n), 64, '0') FROM generate_series(1, 255) AS n) AS a)),
+  'd', '256 hashes are accepted');
 
 -- C5: a text whose bytes no longer hash to its key is never returned.
 ALTER TABLE evidence.document_checkpoint DISABLE TRIGGER evidence_checkpoint_immutable;

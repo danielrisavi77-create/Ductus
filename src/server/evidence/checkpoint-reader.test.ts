@@ -60,7 +60,7 @@ describe("checkpoint reader input classes", () => {
     ["I6 a long hash", { hashes: ["a".repeat(65)] }],
     ["I6 a hash that is not hex", { hashes: [H("g")] }],
     ["I6 a hash that is not a string", { hashes: [null] }],
-    ["I7 more hashes than the limit", { hashes: sorted(CHECKPOINT_HASHES_MAX + 1) }],
+    ["I7 more than 256 hashes (contract c.6790948680)", { hashes: sorted(257) }],
   ];
 
   it.each(refused)("%s is refused without a query", async (_label, input) => {
@@ -77,8 +77,9 @@ describe("checkpoint reader input classes", () => {
     expect(db.calls[0].values).toEqual([DOMAIN, PACKAGE, ASKED]);
   });
 
-  it("I8 exactly the limit of hashes is accepted", async () => {
-    const { db, result } = read({ hashes: sorted(CHECKPOINT_HASHES_MAX) });
+  it("I8 exactly 256 hashes, the limit, are accepted", async () => {
+    expect(CHECKPOINT_HASHES_MAX).toBe(256);
+    const { db, result } = read({ hashes: sorted(256) });
     await expect(result).resolves.toMatchObject({ status: "found" });
     expect(db.calls).toHaveLength(1);
   });

@@ -2065,7 +2065,7 @@ BEGIN
   IF p_evidence_domain_id IS NULL OR p_evidence_package_id IS NULL
      OR p_evidence_package_id !~ '^[a-z0-9][a-z0-9_-]{0,127}$'
      OR p_content_hashes IS NULL OR pg_catalog.array_ndims(p_content_hashes) IS DISTINCT FROM 1
-     OR pg_catalog.cardinality(p_content_hashes) NOT BETWEEN 1 AND 512
+     OR pg_catalog.cardinality(p_content_hashes) NOT BETWEEN 1 AND 256
      OR EXISTS (SELECT 1 FROM pg_catalog.unnest(p_content_hashes) AS h (v)
                  WHERE h.v IS NULL OR h.v !~ '^[0-9a-f]{64}$')
      OR (SELECT pg_catalog.count(DISTINCT h.v) FROM pg_catalog.unnest(p_content_hashes) AS h (v))

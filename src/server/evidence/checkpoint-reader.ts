@@ -9,7 +9,7 @@ import { isEvidenceDomainId } from "@/domain/forensics/evidence-receipt";
 export type WorkerCheckpointQuery = (text: string, values: readonly unknown[]) => Promise<{ rows: readonly unknown[] }>;
 
 /** The most hashes one read may ask for; `app.worker_package_checkpoints` refuses more. */
-export const CHECKPOINT_HASHES_MAX = 512;
+export const CHECKPOINT_HASHES_MAX = 256;
 /** The table's own limit on a checkpoint body, in UTF-8 bytes. */
 export const CHECKPOINT_BODY_MAX_BYTES = 2_097_152;
 
