@@ -2,8 +2,10 @@
 // session typed into a headless Tiptap editor with the product's extensions
 // and recorded by the product's EvidenceRecorder, so steps, events, hashes and
 // segments are the ones the browser writes. No real text: words are built
-// from syllables. Time is simulated: a pause over 400 ms closes an event and
-// the drain takes segments every 30 s of writing.
+// from syllables. Time is simulated: a pause over 400 ms closes an event, and
+// a pause of at least the save debounce (400 ms, LocalDocument.tsx) drains
+// segments at once, as EvidenceSession.saveCovered does in the browser; the
+// 30 s span and the event cap are left to the recorder.
 import {
   Editor, EvidenceRecorder, changeOf, createEditorExtensions, tiptapToCanonical,
 } from '../out/real/real.mjs';
@@ -14,7 +16,8 @@ const SYLLABLES = [
 ];
 const LETTERS = 'abcdefghijklmnoprstuvzčćšžđ';
 const T0 = Date.parse('2026-11-02T09:00:00.000Z');
-const DRAIN_MS = 30_000;
+/** The browser saves this long after the last change (`DEBOUNCE_MS` in LocalDocument.tsx). */
+const SAVE_DEBOUNCE_MS = 400;
 
 /** mulberry32: the same sequence on every machine. */
 function prng(seed) {
@@ -59,7 +62,6 @@ export async function generateSession({ words: target, granularity = 'char', see
   const recorder = new EvidenceRecorder();
   let source = 'editor';
   let at = T0;
-  let nextDrain = T0 + DRAIN_MS;
   const counts = { segments: 0, events: 0, steps: 0, transactions: 0 };
   let sequence = 1;
   let predecessor = null;
@@ -90,13 +92,13 @@ export async function generateSession({ words: target, granularity = 'char', see
     }
   }
 
-  /** Advances the clock; the drain runs when its time has come, as in the browser. */
+  /**
+   * Advances the clock. A pause that reaches the save debounce fires the save,
+   * which closes the recorder and takes its segments, as in the browser.
+   */
   async function wait(ms) {
     at += ms;
-    if (at >= nextDrain) {
-      await drain();
-      nextDrain = at + DRAIN_MS;
-    }
+    if (ms >= SAVE_DEBOUNCE_MS) await drain();
   }
 
   const run = (build) => editor.view.dispatch(build(editor.state.tr));

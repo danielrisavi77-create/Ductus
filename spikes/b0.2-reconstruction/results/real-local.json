@@ -11,7 +11,7 @@
       2000,
       8000
     ],
-    "date": "2026-11-11T09:47:16.148Z"
+    "date": "2026-11-11T10:08:08.750Z"
   },
   "results": [
     {
@@ -20,28 +20,28 @@
       "gen": {
         "words": 3000,
         "blocks": 27,
-        "segments": 126,
-        "events": 640,
+        "segments": 524,
+        "events": 553,
         "steps": 18157,
         "transactions": 18135,
         "writingMs": 3811565,
-        "genMs": 1875.4,
+        "genMs": 2675.2,
         "finalDocKb": 28,
-        "largestSegmentKb": 20,
-        "segmentLogMb": 1.9,
+        "largestSegmentKb": 18,
+        "segmentLogMb": 2.2,
         "segmentLogGzipMb": 0.2,
-        "commitDocumentsMb": 1.8,
-        "peakRssMb": 226.2
+        "commitDocumentsMb": 7.6,
+        "peakRssMb": 213.7
       },
       "replay": {
         "mode": "replay",
-        "segments": 126,
-        "events": 640,
+        "segments": 524,
+        "events": 553,
         "steps": 18157,
-        "loadMs": 465.5,
-        "replayMs": 1140.6,
-        "stepsPerSec": 15919,
-        "peakRssMb": 175.2
+        "loadMs": 699.5,
+        "replayMs": 1058.4,
+        "stepsPerSec": 17155,
+        "peakRssMb": 151.3
       },
       "checkpoints": [
         {
@@ -49,24 +49,24 @@
           "checkpoint": {
             "mode": "checkpoint",
             "checkpointSteps": 500,
-            "checkpoints": 31,
-            "totalMs": 1216.7,
-            "checkpointMs": 12,
+            "checkpoints": 34,
+            "totalMs": 1840,
+            "checkpointMs": 16,
             "lastCheckpointKb": 28,
             "lastCheckpointGzipKb": 8,
-            "volumeRawMb": 0.4,
-            "volumeGzipMb": 0.1,
-            "peakRssMb": 196.4
+            "volumeRawMb": 0.5,
+            "volumeGzipMb": 0.2,
+            "peakRssMb": 204
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 123,
-            "segmentsReplayed": 3,
-            "stepsReplayed": 324,
-            "eventsReplayed": 11,
-            "medianMs": 30.9,
-            "maxMs": 49.4,
-            "peakRssMb": 139.6
+            "resumedAt": 520,
+            "segmentsReplayed": 4,
+            "stepsReplayed": 98,
+            "eventsReplayed": 4,
+            "medianMs": 12.6,
+            "maxMs": 29.8,
+            "peakRssMb": 124.3
           }
         },
         {
@@ -75,23 +75,23 @@
             "mode": "checkpoint",
             "checkpointSteps": 2000,
             "checkpoints": 8,
-            "totalMs": 1277.1,
+            "totalMs": 1518.9,
             "checkpointMs": 3,
-            "lastCheckpointKb": 26,
+            "lastCheckpointKb": 25,
             "lastCheckpointGzipKb": 8,
             "volumeRawMb": 0.1,
             "volumeGzipMb": 0,
-            "peakRssMb": 199.6
+            "peakRssMb": 199.7
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 115,
-            "segmentsReplayed": 11,
-            "stepsReplayed": 1552,
-            "eventsReplayed": 52,
-            "medianMs": 125.2,
-            "maxMs": 156.8,
-            "peakRssMb": 218.3
+            "resumedAt": 470,
+            "segmentsReplayed": 54,
+            "stepsReplayed": 1912,
+            "eventsReplayed": 57,
+            "medianMs": 135.3,
+            "maxMs": 175.8,
+            "peakRssMb": 231
           }
         },
         {
@@ -100,23 +100,23 @@
             "mode": "checkpoint",
             "checkpointSteps": 8000,
             "checkpoints": 2,
-            "totalMs": 1198.6,
+            "totalMs": 1565.6,
             "checkpointMs": 1,
             "lastCheckpointKb": 25,
             "lastCheckpointGzipKb": 8,
             "volumeRawMb": 0,
             "volumeGzipMb": 0,
-            "peakRssMb": 198.7
+            "peakRssMb": 202.5
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 112,
-            "segmentsReplayed": 14,
-            "stepsReplayed": 1950,
-            "eventsReplayed": 67,
-            "medianMs": 145.7,
-            "maxMs": 219,
-            "peakRssMb": 225.6
+            "resumedAt": 462,
+            "segmentsReplayed": 62,
+            "stepsReplayed": 2108,
+            "eventsReplayed": 65,
+            "medianMs": 162.1,
+            "maxMs": 254.9,
+            "peakRssMb": 232.8
           }
         }
       ]
@@ -127,28 +127,28 @@
       "gen": {
         "words": 3000,
         "blocks": 23,
-        "segments": 62,
-        "events": 1437,
+        "segments": 1413,
+        "events": 1430,
         "steps": 2952,
         "transactions": 2930,
         "writingMs": 1893603,
-        "genMs": 1115.9,
+        "genMs": 2518.7,
         "finalDocKb": 26,
-        "largestSegmentKb": 15,
-        "segmentLogMb": 0.6,
-        "segmentLogGzipMb": 0.1,
-        "commitDocumentsMb": 0.9,
-        "peakRssMb": 135.9
+        "largestSegmentKb": 2,
+        "segmentLogMb": 1.7,
+        "segmentLogGzipMb": 0.2,
+        "commitDocumentsMb": 18.7,
+        "peakRssMb": 106.3
       },
       "replay": {
         "mode": "replay",
-        "segments": 62,
-        "events": 1437,
+        "segments": 1413,
+        "events": 1430,
         "steps": 2952,
-        "loadMs": 157,
-        "replayMs": 819.2,
-        "stepsPerSec": 3604,
-        "peakRssMb": 102.3
+        "loadMs": 328.7,
+        "replayMs": 1001.7,
+        "stepsPerSec": 2947,
+        "peakRssMb": 106.2
       },
       "checkpoints": [
         {
@@ -157,23 +157,23 @@
             "mode": "checkpoint",
             "checkpointSteps": 500,
             "checkpoints": 5,
-            "totalMs": 919.6,
+            "totalMs": 1820.2,
             "checkpointMs": 2,
-            "lastCheckpointKb": 24,
+            "lastCheckpointKb": 23,
             "lastCheckpointGzipKb": 7,
             "volumeRawMb": 0.1,
             "volumeGzipMb": 0,
-            "peakRssMb": 106.8
+            "peakRssMb": 198.5
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 54,
-            "segmentsReplayed": 8,
-            "stepsReplayed": 300,
-            "eventsReplayed": 147,
-            "medianMs": 129.4,
-            "maxMs": 190.7,
-            "peakRssMb": 134.7
+            "resumedAt": 1200,
+            "segmentsReplayed": 213,
+            "stepsReplayed": 444,
+            "eventsReplayed": 213,
+            "medianMs": 211.9,
+            "maxMs": 268.8,
+            "peakRssMb": 188.9
           }
         },
         {
@@ -182,23 +182,23 @@
             "mode": "checkpoint",
             "checkpointSteps": 2000,
             "checkpoints": 1,
-            "totalMs": 962.8,
+            "totalMs": 1916.2,
             "checkpointMs": 1,
-            "lastCheckpointKb": 19,
+            "lastCheckpointKb": 18,
             "lastCheckpointGzipKb": 6,
             "volumeRawMb": 0,
             "volumeGzipMb": 0,
-            "peakRssMb": 105
+            "peakRssMb": 199.8
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 41,
-            "segmentsReplayed": 21,
-            "stepsReplayed": 925,
-            "eventsReplayed": 443,
-            "medianMs": 366.1,
-            "maxMs": 502.2,
-            "peakRssMb": 189
+            "resumedAt": 966,
+            "segmentsReplayed": 447,
+            "stepsReplayed": 952,
+            "eventsReplayed": 451,
+            "medianMs": 442.5,
+            "maxMs": 594.8,
+            "peakRssMb": 189.5
           }
         },
         {
@@ -207,13 +207,13 @@
             "mode": "checkpoint",
             "checkpointSteps": 8000,
             "checkpoints": 0,
-            "totalMs": 938.5,
+            "totalMs": 1886,
             "checkpointMs": 0,
             "lastCheckpointKb": 0,
             "lastCheckpointGzipKb": 0,
             "volumeRawMb": 0,
             "volumeGzipMb": 0,
-            "peakRssMb": 105.1
+            "peakRssMb": 198.5
           },
           "bounded": null
         }
@@ -225,28 +225,28 @@
       "gen": {
         "words": 15000,
         "blocks": 128,
-        "segments": 633,
-        "events": 3111,
+        "segments": 2533,
+        "events": 2653,
         "steps": 92597,
         "transactions": 92483,
         "writingMs": 19201417,
-        "genMs": 22557.1,
+        "genMs": 31559.1,
         "finalDocKb": 135,
-        "largestSegmentKb": 21,
-        "segmentLogMb": 9.7,
-        "segmentLogGzipMb": 1,
-        "commitDocumentsMb": 42.6,
-        "peakRssMb": 305.5
+        "largestSegmentKb": 20,
+        "segmentLogMb": 11.1,
+        "segmentLogGzipMb": 1.1,
+        "commitDocumentsMb": 167.6,
+        "peakRssMb": 287.9
       },
       "replay": {
         "mode": "replay",
-        "segments": 633,
-        "events": 3111,
+        "segments": 2533,
+        "events": 2653,
         "steps": 92597,
-        "loadMs": 2206.5,
-        "replayMs": 14276.9,
-        "stepsPerSec": 6486,
-        "peakRssMb": 346.6
+        "loadMs": 2716.1,
+        "replayMs": 15177.3,
+        "stepsPerSec": 6101,
+        "peakRssMb": 356.2
       },
       "checkpoints": [
         {
@@ -254,24 +254,24 @@
           "checkpoint": {
             "mode": "checkpoint",
             "checkpointSteps": 500,
-            "checkpoints": 158,
-            "totalMs": 16240.3,
-            "checkpointMs": 252,
+            "checkpoints": 173,
+            "totalMs": 24433.6,
+            "checkpointMs": 321,
             "lastCheckpointKb": 135,
             "lastCheckpointGzipKb": 39,
-            "volumeRawMb": 10.6,
-            "volumeGzipMb": 3.1,
-            "peakRssMb": 377
+            "volumeRawMb": 11.6,
+            "volumeGzipMb": 3.3,
+            "peakRssMb": 385.9
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 632,
-            "segmentsReplayed": 1,
-            "stepsReplayed": 106,
-            "eventsReplayed": 3,
-            "medianMs": 37.1,
-            "maxMs": 67.6,
-            "peakRssMb": 250.5
+            "resumedAt": 2522,
+            "segmentsReplayed": 11,
+            "stepsReplayed": 409,
+            "eventsReplayed": 11,
+            "medianMs": 109.8,
+            "maxMs": 188.6,
+            "peakRssMb": 291.7
           }
         },
         {
@@ -279,24 +279,24 @@
           "checkpoint": {
             "mode": "checkpoint",
             "checkpointSteps": 2000,
-            "checkpoints": 44,
-            "totalMs": 15530.9,
-            "checkpointMs": 70,
-            "lastCheckpointKb": 133,
+            "checkpoints": 45,
+            "totalMs": 23096.3,
+            "checkpointMs": 79,
+            "lastCheckpointKb": 134,
             "lastCheckpointGzipKb": 38,
-            "volumeRawMb": 3,
+            "volumeRawMb": 3.1,
             "volumeGzipMb": 0.9,
-            "peakRssMb": 361.3
+            "peakRssMb": 387.8
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 621,
-            "segmentsReplayed": 12,
-            "stepsReplayed": 1698,
-            "eventsReplayed": 50,
-            "medianMs": 410.2,
-            "maxMs": 465.6,
-            "peakRssMb": 344.7
+            "resumedAt": 2509,
+            "segmentsReplayed": 24,
+            "stepsReplayed": 913,
+            "eventsReplayed": 25,
+            "medianMs": 265.6,
+            "maxMs": 382.7,
+            "peakRssMb": 286.1
           }
         },
         {
@@ -305,23 +305,23 @@
             "mode": "checkpoint",
             "checkpointSteps": 8000,
             "checkpoints": 11,
-            "totalMs": 15641.3,
-            "checkpointMs": 20,
+            "totalMs": 23655.8,
+            "checkpointMs": 21,
             "lastCheckpointKb": 130,
             "lastCheckpointGzipKb": 37,
             "volumeRawMb": 0.8,
             "volumeGzipMb": 0.2,
-            "peakRssMb": 385.7
+            "peakRssMb": 379
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 607,
-            "segmentsReplayed": 26,
-            "stepsReplayed": 3816,
-            "eventsReplayed": 112,
-            "medianMs": 958.5,
-            "maxMs": 1063.1,
-            "peakRssMb": 360.8
+            "resumedAt": 2434,
+            "segmentsReplayed": 99,
+            "stepsReplayed": 4199,
+            "eventsReplayed": 101,
+            "medianMs": 1044.7,
+            "maxMs": 1356.7,
+            "peakRssMb": 334.8
           }
         }
       ]
@@ -332,28 +332,28 @@
       "gen": {
         "words": 15000,
         "blocks": 112,
-        "segments": 317,
-        "events": 7447,
+        "segments": 7335,
+        "events": 7411,
         "steps": 15136,
         "transactions": 15029,
         "writingMs": 9729108,
-        "genMs": 18672.1,
+        "genMs": 40553.4,
         "finalDocKb": 129,
-        "largestSegmentKb": 15,
-        "segmentLogMb": 3.3,
-        "segmentLogGzipMb": 0.6,
-        "commitDocumentsMb": 20.3,
-        "peakRssMb": 250.7
+        "largestSegmentKb": 2,
+        "segmentLogMb": 8.6,
+        "segmentLogGzipMb": 1,
+        "commitDocumentsMb": 465,
+        "peakRssMb": 219.6
       },
       "replay": {
         "mode": "replay",
-        "segments": 317,
-        "events": 7447,
+        "segments": 7335,
+        "events": 7411,
         "steps": 15136,
-        "loadMs": 559.7,
-        "replayMs": 15254.3,
-        "stepsPerSec": 992,
-        "peakRssMb": 224.8
+        "loadMs": 1919.7,
+        "replayMs": 18765.3,
+        "stepsPerSec": 807,
+        "peakRssMb": 246.1
       },
       "checkpoints": [
         {
@@ -361,24 +361,24 @@
           "checkpoint": {
             "mode": "checkpoint",
             "checkpointSteps": 500,
-            "checkpoints": 28,
-            "totalMs": 16333.8,
-            "checkpointMs": 40,
-            "lastCheckpointKb": 126,
-            "lastCheckpointGzipKb": 37,
-            "volumeRawMb": 1.8,
-            "volumeGzipMb": 0.5,
-            "peakRssMb": 244.7
+            "checkpoints": 30,
+            "totalMs": 37838,
+            "checkpointMs": 46,
+            "lastCheckpointKb": 129,
+            "lastCheckpointGzipKb": 38,
+            "volumeRawMb": 1.9,
+            "volumeGzipMb": 0.6,
+            "peakRssMb": 307
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 307,
-            "segmentsReplayed": 10,
-            "stepsReplayed": 440,
-            "eventsReplayed": 225,
-            "medianMs": 893.5,
-            "maxMs": 1011.2,
-            "peakRssMb": 247.6
+            "resumedAt": 7294,
+            "segmentsReplayed": 41,
+            "stepsReplayed": 89,
+            "eventsReplayed": 41,
+            "medianMs": 168.4,
+            "maxMs": 258.1,
+            "peakRssMb": 256.1
           }
         },
         {
@@ -387,23 +387,23 @@
             "mode": "checkpoint",
             "checkpointSteps": 2000,
             "checkpoints": 7,
-            "totalMs": 16845.7,
-            "checkpointMs": 10,
-            "lastCheckpointKb": 121,
-            "lastCheckpointGzipKb": 36,
+            "totalMs": 36566.8,
+            "checkpointMs": 13,
+            "lastCheckpointKb": 120,
+            "lastCheckpointGzipKb": 35,
             "volumeRawMb": 0.5,
             "volumeGzipMb": 0.1,
-            "peakRssMb": 257.7
+            "peakRssMb": 312.6
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 295,
-            "segmentsReplayed": 22,
-            "stepsReplayed": 990,
-            "eventsReplayed": 505,
-            "medianMs": 2097.4,
-            "maxMs": 2524.2,
-            "peakRssMb": 240.9
+            "resumedAt": 6765,
+            "segmentsReplayed": 570,
+            "stepsReplayed": 1132,
+            "eventsReplayed": 575,
+            "medianMs": 2324.8,
+            "maxMs": 2666,
+            "peakRssMb": 291.4
           }
         },
         {
@@ -412,23 +412,23 @@
             "mode": "checkpoint",
             "checkpointSteps": 8000,
             "checkpoints": 1,
-            "totalMs": 16591.8,
+            "totalMs": 37409.7,
             "checkpointMs": 2,
-            "lastCheckpointKb": 69,
+            "lastCheckpointKb": 68,
             "lastCheckpointGzipKb": 21,
             "volumeRawMb": 0.1,
             "volumeGzipMb": 0,
-            "peakRssMb": 245.2
+            "peakRssMb": 302.2
           },
           "bounded": {
             "mode": "bounded",
-            "resumedAt": 167,
-            "segmentsReplayed": 150,
-            "stepsReplayed": 7110,
-            "eventsReplayed": 3529,
-            "medianMs": 11553.6,
-            "maxMs": 12431.2,
-            "peakRssMb": 246.9
+            "resumedAt": 3846,
+            "segmentsReplayed": 3489,
+            "stepsReplayed": 7134,
+            "eventsReplayed": 3527,
+            "medianMs": 11798.9,
+            "maxMs": 13154.5,
+            "peakRssMb": 285.6
           }
         }
       ]
