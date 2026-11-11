@@ -87,10 +87,14 @@ describe("replay words (DAN-537)", () => {
     expect(gapWords("not_resumed", 1)).toEqual({ text: t.gapStoppedStart, note: t.gapStoppedNote, target: null });
   });
 
-  it("steps through every position, or only the paragraph's changes", () => {
+  it("steps through every position, or the paragraph's changes and the resumed gaps after its first", () => {
     expect(stepsOf(3, null)).toEqual([0, 1, 2, 3]);
     const history = [change(2, "a"), { entry: "gap", gap: "resumed", beforeIndex: 4 } as const, change(5, "b")];
-    expect(stepsOf(9, history)).toEqual([2, 5]);
+    expect(stepsOf(9, history)).toEqual([2, 4, 5]);
+    // A gap before the paragraph's first change, or one it changed right after, adds no step.
+    expect(stepsOf(9, [{ entry: "gap", gap: "resumed", beforeIndex: 1 }, change(2, "a"),
+      { entry: "gap", gap: "resumed", beforeIndex: 5 }, change(5, "b")])).toEqual([2, 5]);
+    expect(stepsOf(9, [{ entry: "gap", gap: "resumed", beforeIndex: 3 }])).toEqual([]);
     expect(nearestStep([2, 5], 4)).toBe(0);
     expect(nearestStep([2, 5], 5)).toBe(1);
     expect(nearestStep([2, 5], 1)).toBe(0);
@@ -160,6 +164,16 @@ describe("replay words (DAN-537)", () => {
     ]);
     // Unchanged across the gap: the version of change 1 is still the current one.
     expect(historyRows(history, 3, "Staro")[1]).toMatchObject({ label: "Sadašnja (promjena 1)", replacedBy: t.historyNotYet });
+  });
+
+  it("lets one paragraph's replay reach its verified text after a gap", () => {
+    // Changes 2 and 3 touch another paragraph; chosen at change 3, the paragraph stands at the gap.
+    const history: ParagraphHistoryEntry[] = [change(1, "Staro"), { entry: "gap", gap: "resumed", beforeIndex: 2 }];
+    const steps = stepsOf(3, history);
+    expect(steps).toEqual([1, 2]);
+    const at = steps[nearestStep(steps, 3)]!;
+    expect(at).toBe(2);
+    expect(historyRows(history, at, "Novo")[0]).toMatchObject({ label: t.historyResumedNow, text: "„Novo”" });
   });
 
   // One row per line: a version as "label | text | replaced by | source", a gap as "— text".

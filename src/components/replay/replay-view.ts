@@ -76,10 +76,19 @@ export function gapWords(gap: ReplayGap, beforeIndex: number): GapWords {
   };
 }
 
-/** The changes a reader steps through: every position for the whole work, else those that touched the paragraph. */
+/**
+ * The changes a reader steps through: every position for the whole work, else
+ * those that touched the paragraph and, after its first one, each resumed gap,
+ * where the paragraph may already read as the verified document has it.
+ */
 export function stepsOf(total: number, history: readonly ParagraphHistoryEntry[] | null): number[] {
   if (history === null) return Array.from({ length: total + 1 }, (_, i) => i);
-  return history.flatMap((entry) => (entry.entry === "change" ? [entry.index] : []));
+  const own = history.flatMap((entry) => (entry.entry === "change" ? [entry.index] : []));
+  if (own.length === 0) return own;
+  const resumed = history.flatMap((entry) =>
+    entry.entry === "gap" && entry.gap === "resumed" && entry.beforeIndex > own[0] && entry.beforeIndex <= total
+      ? [entry.beforeIndex] : []);
+  return [...new Set([...own, ...resumed])].sort((a, b) => a - b);
 }
 
 /** Where `at` stands among `steps`: the last step not after it, else the first. */
