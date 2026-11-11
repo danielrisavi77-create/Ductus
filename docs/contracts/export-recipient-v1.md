@@ -82,6 +82,7 @@ Nazivi i redoslijed odgovaraju DATA-CLASS. Test `src/domain/privacy/export-recip
 | 28 | Evidencija brisanja | ne | ne | ne | da | F-04 |
 | 29 | Kopije baze i bucketa | ne | ne | ne | ne | Kopije se ne izvoze; izlaz čita izvorne tablice |
 | 30 | Lokalni dnevnik na uređaju | ne | ne | ne | ne | Nije na poslužitelju |
+| 31 | Prijave problema | otvoreno | otvoreno | ne | otvoreno | DAN-431; D-173 i F-04 je ne navode; portfelj nikad (A9) |
 
 Za `da` kod studenta, bivšeg studenta i portfelja vrijedi samo onaj redak klase koji pripada tom radu i toj osobi (A2). Za `da` kod izlaza vrijede samo retci te ustanove (A10). Brojevi klasa osim sidara 1, 4, 12, 16 i 27 slijede DATA-CLASS. Ako se DATA-CLASS promijeni, ugovor se mijenja u istom PR-u, a test pada dok se to ne učini.
 

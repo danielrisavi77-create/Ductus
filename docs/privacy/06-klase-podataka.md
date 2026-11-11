@@ -2,7 +2,7 @@
 
 > **Ovo je radni nacrt, nije pravni savjet.** Rokove čuvanja potvrđuju FPZG i službenik za zaštitu podataka (D-30 je PRIJEDLOG, Owner queue Q-16, D-264 Q11).
 
-Zadatak: DAN-297, M10.1-P01. Popis je napravljen nad `main` na `d791364e` (8. 11. 2026.), kako traži D-271 MQ01. Ima 30 klasa i svaka pripada točno jednoj od 8 kategorija iz C-21 (`docs/ARCHITECTURE.md` §3, D-271 MQ03). Rok se potvrđuje po klasi, a ne po kategoriji.
+Zadatak: DAN-297, M10.1-P01. Popis je napravljen nad `main` na `d791364e` (8. 11. 2026.), kako traži D-271 MQ01. Imao je 30 klasa; klasa 31 (prijave problema, DAN-431) dodana je poslije. Svaka klasa pripada točno jednoj od 8 kategorija iz C-21 (`docs/ARCHITECTURE.md` §3, D-271 MQ03). Rok se potvrđuje po klasi, a ne po kategoriji.
 
 Ovaj popis ne odlučuje ni o jednom roku i na njemu se ništa ne gradi. Tablica `data_class`, tablica `erasure` i poslovi brisanja (M10.0-S1, M10.2) nastaju tek uz potvrđene rokove.
 
@@ -60,6 +60,7 @@ Test `src/domain/privacy/data-class-inventory.test.ts` čita odjeljke 2 i 3. Pad
 | 28 | Evidencija brisanja | Revizijski trag | Nadgrobni zapis brisanja (tablica `erasure`) | Završen posao brisanja | otvoreno (D-30 PRIJEDLOG, Q-16) | planirano (M10.0-S1) |
 | 29 | Kopije baze i bucketa | Kopije | PITR, dnevni dump, replika i verzije bucketa (BACKEND §4.7) | Nastanak kopije | otvoreno (D-30 PRIJEDLOG, Q-16); vlastiti rok po vrsti kopije (D-12); PITR 3 dana je tehnička postavka, ne rok | planirano |
 | 30 | Lokalni dnevnik na uređaju | Lokalni zapis na uređaju | Rad bez mreže (Dexie) | Sinkronizacija; odjava | otvoreno (D-30 PRIJEDLOG, Q-16); zapis živi do sinkronizacije, rok trajanja odlučuje se prije pilota (D-118, D-122) | izgrađeno u pregledniku, bez tablice |
+| 31 | Prijave problema | Sesije | Opis problema i zatvoreni tehnički kontekst koje korisnik šalje podršci, bez teksta rada (DAN-431) | Prijava poslana | otvoreno (D-30 PRIJEDLOG, Q-16) | izgrađeno; kategorija za potvrdu |
 
 ## 3. Tablice po klasama
 
@@ -70,6 +71,7 @@ Svaka tablica koju `-- migrate:up` dijelovi u `db/migrations/` ostavljaju na `ma
 | `identity.user_account` | 1 | |
 | `identity.person_name` | 2 | |
 | `identity.session` | 3 | |
+| `identity.problem_report` | 31 | Opis do 1000 znakova i kontekst iz zatvorenih skupova; podrška još nema pravo čitanja |
 | `identity.logout_token_jti` | 3 | Samo hash `jti` i istek, briše se pri sljedećem upisu |
 | `identity.institution` | — | Podaci ustanove, ne osobe |
 | `identity.institution_issuer` | — | Adresa OIDC izdavatelja ustanove |
