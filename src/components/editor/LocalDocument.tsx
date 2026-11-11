@@ -747,6 +747,7 @@ function showsSaverState({ phase, stickyLoad }: LocalDocumentValue): boolean {
 const EVIDENCE_TEXT = {
   conflict: t.editor.evidenceConflict,
   refused: t.editor.sendRefused,
+  stopped: t.editor.sendStopped,
 } as const;
 
 function exportText(editor: Editor): void {
@@ -822,7 +823,9 @@ function chipOf(value: LocalDocumentValue): LocalChip | null {
     blocked: value.phase === "blocked",
     // A sticky load says its own state: CONFLICT stays "Sukob" after a reload.
     recoveryRequired: (value.phase === "recovery" && !value.stickyLoad) || failure === "corrupt",
-    failed: failure !== null,
+    // DAN-699: a stopped recorder never shows "Spremljeno na uređaju" as if
+    // all were well; its notice says what stays on the device.
+    failed: failure !== null || (showsSaverState(value) && evidenceNotice(value.snapshot) === "stopped"),
     saverState: showsSaverState(value) ? value.snapshot?.state ?? null : null,
   });
 }

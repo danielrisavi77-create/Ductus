@@ -17,7 +17,7 @@ import {
 import { EvidenceSession, type EvidenceSnapshot } from "./evidence-session";
 
 /** A snapshot of either saver; only the evidence session ever sets `closedBy`. */
-export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused" | "submitted">>;
+export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused" | "submitted" | "stopped">>;
 
 /**
  * Whether the work is submitted (DAN-215, K7c/K7d): closed by submission, or
@@ -30,14 +30,16 @@ export function submittedOf(snapshot: DocumentSnapshot | null): boolean {
 
 /**
  * The notice of the evidence session, if any (3d-2c2 §3): the server's work
- * differs, or it refused the last step for good.
+ * differs, or it refused the last step for good, or the recorder stopped and
+ * what follows stays on this device (DAN-699).
  */
-export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | null {
+export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | "stopped" | null {
   // Only the evidence session sets `closedBy`: the local saver's own
   // RECOVERY_REQUIRED is the unreadable local record, not the server's work.
   if (!snapshot || snapshot.closedBy === undefined) return null;
   if (READ_ONLY_STATES.includes(snapshot.state) && snapshot.closedBy !== "submission") return "conflict";
-  return snapshot.refused ? "refused" : null;
+  if (snapshot.refused) return "refused";
+  return snapshot.stopped ? "stopped" : null;
 }
 
 /**

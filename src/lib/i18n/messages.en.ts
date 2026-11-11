@@ -863,6 +863,8 @@ const en = {
     // good. The contract's "spremljen na ovom uređaju" fails the PRODUCT §5
     // scan, so "ovom" is dropped.
     sendRefused: "The text is saved on the device, but the server did not receive it. Reload the page.",
+    sendStopped:
+      "Sending to the server has stopped. The text is saved on the device, but the server does not take new changes. Export the text and contact support.",
     // 3d-2c2b, owner approved 25 Oct: the package was closed by the submission (DAN-289 A1).
     submittedReadOnly:
       "The work has been submitted, so you can no longer write here. Changes made after submission are not in the submitted work and stay only on this device.",

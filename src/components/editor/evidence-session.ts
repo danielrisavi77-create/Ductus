@@ -96,6 +96,13 @@ export type EvidenceSnapshot = SaverSnapshot & {
    * set (review codex:cxcr1742, c.6726896384). It changes nothing else.
    */
   submitted: boolean;
+  /**
+   * DAN-699 (#1876): the recorder stopped, so what is written from here on
+   * stays on this device and the server never takes it. Set from the stop
+   * itself or from `meta.evidenceStopped` after a reload; never with a
+   * closed package.
+   */
+  stopped: boolean;
 };
 
 type Candidate = { doc: CanonicalDocument; gen: number; marks: number };
@@ -168,7 +175,8 @@ export class EvidenceSession {
     // LOCAL_DURABLE while the same row is still refused (review #811 c.6419592134).
     const refused = !this.closedBy && this.owed > 0 && (this.refused || this.manualOnly);
     const submitted = this.closedBy === "submission" || this.work?.submitted === true;
-    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused, submitted };
+    const stopped = !this.closedBy && this.stopped !== null;
+    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused, submitted, stopped };
   }
 
   subscribe(listener: (snapshot: EvidenceSnapshot) => void): () => void {
@@ -259,6 +267,8 @@ export class EvidenceSession {
     } catch (error) {
       if (!(error instanceof CaptureError)) throw error;
       this.stopped = error.code;
+      // DAN-699: the student learns of the stop now, not at the next save.
+      this.emit();
     }
   }
 
