@@ -5306,7 +5306,14 @@ DECLARE
   v_handover uuid;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
-  IF NOT institution.actor_has_role('admin') OR p_holder_id IS NOT DISTINCT FROM actor.user_id THEN
+  -- The administrator role row FOR SHARE until the end, taken before the
+  -- course: a revocation waits for this transaction, and one that committed
+  -- first, even while this call waited for the row, leaves no row to find.
+  PERFORM 1 FROM institution.institution_role r
+   WHERE r.institution_id = actor.institution_id AND r.user_id = actor.user_id AND r.role = 'admin'
+     AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
+   FOR SHARE OF r;
+  IF NOT FOUND OR p_holder_id IS NOT DISTINCT FROM actor.user_id THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
   -- Two handovers, or a handover and a first naming, of the same course wait

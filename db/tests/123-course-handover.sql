@@ -26,6 +26,26 @@ LANGUAGE sql AS $$
     'SELECT coalesce(institution.hand_over_course(%s, %s)::text, ''null'')', p_course, p_holder)),
     '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', 'id')
 $$;
+-- The row lock on Iva's active administrator row, from the infomask of its
+-- live tuple, as role_lock in 038: HEAP_XMAX_SHR_LOCK is 0x50,
+-- HEAP_XMAX_KEYSHR_LOCK 0x10; a lock from a subtransaction makes xmax a
+-- MultiXact (0x1000), whose members carry the modes.
+CREATE EXTENSION IF NOT EXISTS pageinspect;
+CREATE FUNCTION pg_temp.admin_lock() RETURNS text
+LANGUAGE sql VOLATILE AS $$
+  SELECT CASE WHEN i.t_infomask & 4096 <> 0 THEN (
+                SELECT CASE WHEN bool_or(x.mode = 'sh') THEN 'share'
+                            WHEN bool_or(x.mode = 'keysh') THEN 'key share'
+                            ELSE 'none' END
+                  FROM pg_get_multixact_members(i.t_xmax) x)
+              WHEN i.t_infomask & 80 = 80 THEN 'share'
+              WHEN i.t_infomask & 80 = 16 THEN 'key share'
+              ELSE 'none' END
+    FROM institution.institution_role r
+    CROSS JOIN LATERAL heap_page_items(get_raw_page('institution.institution_role', (r.ctid::text::point)[0]::integer)) i
+   WHERE r.user_id = pg_temp.id('iva') AND r.role = 'admin' AND r.revoked_at IS NULL
+     AND i.lp = (r.ctid::text::point)[1]::integer
+$$;
 
 -- Setup. Vesna names herself the first holder of K1, which a course teacher
 -- still may. Marko is a group teacher of K1 and not yet on its course team.
@@ -44,6 +64,9 @@ SELECT pg_temp.id('k1'), pg_temp.id('fak_a'), pg_temp.id(n), r
 FROM (VALUES ('nina', 'teacher'), ('iva', 'teacher'), ('boris', 'student')) AS m (n, r);
 SELECT is(pg_temp.ask('vesna', $$ SELECT institution.remove_student({k1}, {boris})::text $$), 'true',
   'Boris leaves K1');
+
+-- The fixture's foreign keys leave KEY SHARE on the row; nothing holds it FOR SHARE yet.
+SELECT isnt(pg_temp.admin_lock(), 'share', 'before any handover nothing holds Iva''s administrator row FOR SHARE');
 
 -- Every refused class of caller and input: nothing is written by any of them.
 SELECT is(pg_temp.hand(c.actor, c.course, c.holder), c.expected, 'refused: ' || c.note)
@@ -79,6 +102,9 @@ VALUES (pg_temp.id('k1'), pg_temp.id('fak_a'), pg_temp.id('marko'), 'teacher');
 INSERT INTO ref VALUES ('h1', pg_temp.ask('iva', $$ SELECT institution.hand_over_course({k1}, {marko}) $$));
 SELECT is((SELECT val FROM ref WHERE name = 'h1'), (SELECT id::text FROM audit.course_handover),
   'Iva hands K1 over to Marko and gets the trail row back');
+-- The administrator row stays locked until the caller's transaction ends,
+-- so a revocation started during the handover waits for it (c.6790658141).
+SELECT is(pg_temp.admin_lock(), 'share', 'the handover holds Iva''s administrator row FOR SHARE, so revoking it waits');
 SELECT is(pg_temp.holders('k1'), 'vesna(ended) marko', 'Vesna''s row stays, ended; Marko is the one open holder');
 SELECT is(
   (SELECT p.name FROM institution.course_holder h JOIN person p ON p.id = h.assigned_by
@@ -167,6 +193,22 @@ FROM (VALUES
              {k1}) RETURNING 'ok' $q$, 'ok', 'a well-formed handover key is stored')
 ) AS c (n, stmt, expected, note)
 ORDER BY c.n;
+
+-- An administrator whose role the operator revoked first hands nothing over:
+-- the call that would have given K1 back to Vesna is refused and writes
+-- nothing. A revocation that commits while the call waits for the role row
+-- is the same case, since the row is checked again after the wait.
+CREATE TEMP TABLE before_revoke AS SELECT pg_temp.trail() AS trail, pg_temp.notified() AS notified;
+SELECT is(pg_temp.ask_as('ductus', 'anon', $$ SELECT institution.revoke_institution_admin({iva}, 'Zahtjev iva/2026')::text $$),
+  'true', 'the operator revokes Iva''s administrator role');
+SELECT is(pg_temp.hand('iva', '{k1}', '{vesna}'), 'ZD403: forbidden', 'refused: an administrator whose role was revoked');
+SELECT is(pg_temp.holders('k1'), 'vesna(ended) marko', 'the revoked administrator did not change the holder');
+SELECT is(pg_temp.trail(), (SELECT trail FROM before_revoke), 'the revoked administrator left no trail row');
+SELECT is(pg_temp.notified(), (SELECT notified FROM before_revoke), 'the revoked administrator notified nobody');
+-- Appointed again, she passes the check: the present holder again is a no-op.
+SELECT is(pg_temp.ask_as('ductus', 'anon', $$ SELECT institution.appoint_institution_admin({iva}, 'Zahtjev iva/2027')::text $$),
+  'true', 'the operator appoints Iva again');
+SELECT is(pg_temp.hand('iva', '{k1}', '{marko}'), 'null', 'appointed again, Iva passes the check and changes nothing');
 
 -- A holder whose teacher role was revoked cannot be handed the course.
 SELECT is(pg_temp.ask('iva', $$ SELECT institution.revoke_teacher_role({vesna})::text $$), 'true',
