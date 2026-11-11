@@ -77,7 +77,7 @@ for (const [name, cloneArgs] of [["full clone", []], ["single-branch clone", ["-
     assert.equal(git(r.work, "rev-parse", "HEAD^1"), r.head);
     assert.equal(r.remoteSha(), head, res.out);
     // The fake gh has no routes for preflight, so it ends with a read error on the head it was given.
-    assert.match(res.out, new RegExp(`SYNC NOT READY: preflight exit 2 on ${head}`));
+    assert.ok(res.out.includes(`SYNC NOT READY: preflight exit 2 on ${head}`), res.out);
     assert.equal(res.code, 2);
   });
 }
