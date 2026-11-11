@@ -238,3 +238,39 @@ describe("RevisionPanel: an answer that lands after the session ended (Codex c.4
     });
   }
 });
+
+// ---- A 409 whose list read fails (QA FAIL c.6784961513) --------------------
+
+const fields = () => all(body, "textarea").map((n) => propsOf(n) as unknown as { value: string; readOnly?: boolean });
+const button = (label: string) => all(body, "button").find((b) => b.textContent === label);
+
+describe("RevisionPanel: a 409 whose list read fails (QA FAIL c.6784961513)", () => {
+  const EXPLANATION = "Tvrdnja se odnosi na primjer iz uvoda.";
+
+  it("keeps the unsent explanation readable and unsendable, and back in the form once the list is read", async () => {
+    await answer(ok);
+    const [field] = all(body, "textarea");
+    await act(async () => { propsOf(field!).onChange!({ target: { value: EXPLANATION } }); });
+    await act(async () => { propsOf(button(t.declined)!).onClick!(); });
+    expect(respond.calls).toBe(1);
+    await act(async () => { respond.resolve!({ kind: "conflict", state: "reopened" }); });
+    // The conflict reads the list again by itself, and that read fails.
+    expect(list.calls).toBe(2);
+    await act(async () => { list.resolve!({ kind: "unavailable" }); });
+
+    expect(body.textContent).toContain(t.unavailable);
+    expect(body.textContent).toContain(t.keptLabel);
+    expect(body.textContent).toContain(t.keptUnloadedHint);
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: true })]);
+    expect(button(t.done)).toBeUndefined();
+    expect(button(t.declined)).toBeUndefined();
+
+    // Read again: the card comes back with the same explanation in its form.
+    await act(async () => { propsOf(button(t.retry)!).onClick!(); });
+    expect(list.calls).toBe(3);
+    await act(async () => { list.resolve!(ok); });
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: false })]);
+    expect(body.textContent).not.toContain(t.keptUnloadedHint);
+    expect(respond.calls).toBe(1);
+  });
+});

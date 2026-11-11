@@ -213,16 +213,33 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
   error ? h("p", { role: "alert", className: styles.error }, errorText(t, error)) : null);
 }
 
+/**
+ * Explanations not sent when the list could not be read (QA FAIL c.6784961513):
+ * after a 409 the list is read again, and when that read fails the cards are
+ * gone, but what the student typed stays readable, to copy, with no way to send it.
+ */
+function unloadedDrafts(props: RevisionListProps): ReactNode[] {
+  const { t } = props;
+  return Object.entries(props.drafts).filter(([, draft]) => draft !== "").map(([id, draft]) => {
+    const field = `revision-${id}-kept`;
+    return h("div", { key: id, className: styles.form },
+      h("label", { htmlFor: field, className: styles.label }, t.keptLabel),
+      h("textarea", { id: field, rows: 3, value: draft, readOnly: true, "aria-describedby": `${field}-hint` }),
+      h("p", { id: `${field}-hint`, className: styles.hint }, t.keptUnloadedHint));
+  });
+}
+
 export function RevisionList(props: RevisionListProps): ReactNode {
   const { t } = props;
   let body: ReactNode;
   if (props.status === "loading") body = h("p", { className: "rail-empty" }, t.loading);
   else if (props.status === "signedOut") body = h("p", { className: "rail-empty", role: "status" }, t.signedOut);
-  else if (props.status === "forbidden") body = h("p", { className: "rail-empty" }, t.notAvailable);
+  else if (props.status === "forbidden") body = [h("p", { key: "", className: "rail-empty" }, t.notAvailable), ...unloadedDrafts(props)];
   else if (props.status === "unavailable") {
-    body = h("div", { className: styles.failed },
+    body = [h("div", { key: "", className: styles.failed },
       h("p", { className: "rail-empty", role: "alert" }, t.unavailable),
-      h("button", { type: "button", className: `${styles.btn} ${styles.secondary}`, onClick: props.onRetry }, t.retry));
+      h("button", { type: "button", className: `${styles.btn} ${styles.secondary}`, onClick: props.onRetry }, t.retry)),
+    ...unloadedDrafts(props)];
   } else if (props.requests.length === 0) body = h("p", { className: "rail-empty" }, t.empty);
   else body = props.requests.map((request) => h(RevisionCard, { key: request.id, request, props }));
 

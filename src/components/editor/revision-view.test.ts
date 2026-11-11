@@ -168,6 +168,37 @@ describe("every state of a request (N-08 states 6 to 10)", () => {
     expect(render({ requests: [STATES.open], drafts: { [STATES.open.id]: "x" } })).not.toContain(t.keptLabel);
   });
 
+  // QA FAIL c.6784961513: after a 409 the list is read again; when that read fails
+  // the cards are gone, but the explanation that was not sent stays readable.
+  it.each([
+    ["unavailable", true],
+    ["forbidden", true],
+    ["signedOut", false],
+    ["loading", false],
+  ] as const)("a list read that ends %s keeps the unsent explanation readable: %s", (status, kept) => {
+    const id = STATES.reopened.id;
+    const html = render({ status, drafts: { [id]: "Ne slažem se." }, errors: { [id]: "conflict" } });
+    expect(html.includes("Ne slažem se.")).toBe(kept);
+    expect(html.includes(t.keptLabel)).toBe(kept);
+    expect(html.includes(t.keptUnloadedHint)).toBe(kept);
+    if (kept) expect(html.match(/<textarea[^>]*>/)?.[0]).toMatch(/readonly=""/i);
+    expect(html).not.toContain(t.done);
+    expect(html).not.toContain(t.declined);
+    // An empty explanation leaves nothing behind.
+    expect(render({ status, drafts: { [id]: "" } })).not.toContain("<textarea");
+  });
+
+  it("a read list still shows the explanation where it was, not twice", () => {
+    const id = STATES.reopened.id;
+    const open = render({ requests: [STATES.reopened], drafts: { [id]: "Ne slažem se." } });
+    expect(open.match(/Ne slažem se\./g)).toHaveLength(1);
+    expect(open).not.toContain(t.keptUnloadedHint);
+    expect(open).toContain(t.done);
+    const closedHtml = render({ requests: [STATES.withdrawn], drafts: { [STATES.withdrawn.id]: "Ne slažem se." } });
+    expect(closedHtml).toContain(t.keptHint);
+    expect(closedHtml).not.toContain(t.keptUnloadedHint);
+  });
+
   it("keeps markup as plain text", () => {
     const req = request("open", [v(1, { instruction: "<img src=x onerror=alert(1)>" })]);
     const html = render({ requests: [req] });
