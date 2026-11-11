@@ -2149,18 +2149,46 @@ $$;
 
 
 --
+-- Name: reader_role(uuid, uuid, uuid); Type: FUNCTION; Schema: audit; Owner: -
+--
+
+CREATE FUNCTION audit.reader_role(p_institution_id uuid, p_assignment_id uuid, p_owner_id uuid) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT CASE
+    WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
+    WHEN p_owner_id = a.user_id THEN NULL
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN
+      CASE WHEN s.mentorship_id IS NOT NULL THEN 'mentor' ELSE 'teacher' END
+    WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'seminar_teacher'
+  END
+  FROM app.current_actor() a
+  LEFT JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+$$;
+
+
+--
 -- Name: record_work_opening(uuid, text, uuid, uuid, text); Type: FUNCTION; Schema: audit; Owner: -
 --
 
 CREATE FUNCTION audit.record_work_opening(p_institution_id uuid, p_document_id text, p_assignment_id uuid, p_owner_id uuid, p_surface text) RETURNS void
-    LANGUAGE sql
+    LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
+DECLARE
+  v_role text;
+BEGIN
+  v_role := audit.reader_role(p_institution_id, p_assignment_id, p_owner_id);
+  IF v_role IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
   INSERT INTO audit.access_log (institution_id, document_id, assignment_id, owner_id, reader_id, reader_role, surface, opened_at)
-  SELECT p_institution_id, p_document_id, p_assignment_id, p_owner_id, a.user_id, 'teacher', p_surface,
+  SELECT p_institution_id, p_document_id, p_assignment_id, p_owner_id, a.user_id, v_role, p_surface,
          date_bin('5 minutes', now(), timestamptz '2000-01-01 00:00:00+00')
   FROM app.current_actor() a
-  ON CONFLICT (document_id, institution_id, reader_id, surface, opened_at) DO NOTHING
+  ON CONFLICT (document_id, institution_id, reader_id, surface, opened_at) DO NOTHING;
+END
 $$;
 
 
@@ -2748,6 +2776,7 @@ DECLARE
   v_role text;
   v_current record;
   v_submitted record;
+  v_is_submitted boolean;
 BEGIN
   PERFORM institution.require_actor();
   SELECT * INTO scope FROM collaboration.document_scope(p_document_id);
@@ -2758,11 +2787,13 @@ BEGIN
   IF p_known_hash !~ '^[0-9a-f]{64}$' THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  IF v_role = 'teacher' THEN
-    PERFORM audit.record_work_opening(scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id, 'live_view');
-  END IF;
   SELECT t.content_hash, t.body INTO v_submitted FROM app.submitted_document_text(p_document_id) t;
-  IF FOUND THEN
+  v_is_submitted := FOUND;
+  IF v_role = 'teacher' THEN
+    PERFORM audit.record_work_opening(scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id,
+                                      CASE WHEN v_is_submitted THEN 'submitted_text' ELSE 'live_view' END);
+  END IF;
+  IF v_is_submitted THEN
     IF v_submitted.body IS NULL THEN
       RETURN QUERY SELECT 'unavailable'::text, NULL::text, NULL::text;
     ELSIF v_submitted.content_hash = p_known_hash THEN
@@ -7003,8 +7034,8 @@ CREATE TABLE audit.access_log (
     CONSTRAINT access_log_document_id_check CHECK (((length(document_id) >= 1) AND (length(document_id) <= 256))),
     CONSTRAINT access_log_interval_check CHECK ((opened_at = date_bin('00:05:00'::interval, opened_at, '2000-01-01 00:00:00+00'::timestamp with time zone))),
     CONSTRAINT access_log_opened_at_check CHECK ((opened_at = date_bin('00:01:00'::interval, opened_at, '2000-01-01 00:00:00+00'::timestamp with time zone))),
-    CONSTRAINT access_log_reader_role_check CHECK ((reader_role = 'teacher'::text)),
-    CONSTRAINT access_log_surface_check CHECK ((surface = ANY (ARRAY['live_view'::text, 'process_summary'::text, 'fast_path'::text, 'replay'::text])))
+    CONSTRAINT access_log_reader_role_check CHECK ((reader_role = ANY (ARRAY['teacher'::text, 'mentor'::text, 'seminar_teacher'::text]))),
+    CONSTRAINT access_log_surface_check CHECK ((surface = ANY (ARRAY['live_view'::text, 'process_summary'::text, 'fast_path'::text, 'replay'::text, 'submitted_text'::text])))
 );
 
 ALTER TABLE ONLY audit.access_log FORCE ROW LEVEL SECURITY;
@@ -12779,4 +12810,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261109200000'),
     ('20261109210000'),
     ('20261110120000'),
-    ('20261111120000');
+    ('20261111120000'),
+    ('20261111180000');
