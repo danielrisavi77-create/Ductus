@@ -121,6 +121,16 @@ const cases = [
     output: `# D\r\n\r\n${START}\r\n- §1 A: retci 7-8\r\n${END}\r\n\r\n## 1. A\r\na\r\n`,
   },
   {
+    name: "a number without a dot is part of the title",
+    input: "## 10 razloga\n## 2. B\n",
+    output: `${block("- 10 razloga: retci 6-6", "- §2 B: retci 7-7")}\n\n## 10 razloga\n## 2. B\n`,
+  },
+  {
+    name: "a closing run of hashes needs a space before it",
+    input: "## C# #\n## #\n## a\\#\n",
+    output: `${block("- C#: retci 7-7", "- : retci 8-8", "- a\\#: retci 9-9")}\n\n## C# #\n## #\n## a\\#\n`,
+  },
+  {
     name: "closing hashes and numbered subsections",
     input: "## 6. Dizajn ###\n### 6.1. Cilj #\nc\n",
     output: `${block("- §6 Dizajn: retci 6-8", "  - §6.1 Cilj: retci 7-8")}\n\n## 6. Dizajn ###\n### 6.1. Cilj #\nc\n`,
@@ -133,6 +143,16 @@ for (const { name, input, output } of cases) {
     assert.equal(applyToc(output), output);
   });
 }
+
+test("a long run of spaces or hashes in a heading takes linear time", () => {
+  for (const tail of ["x", "#", " #".repeat(20000) + "x"]) {
+    const text = `## a${" ".repeat(50000)}${tail}\n`;
+    const started = performance.now();
+    const [section] = docSections(text);
+    assert.ok(performance.now() - started < 500, `took ${performance.now() - started} ms`);
+    assert.equal(section.label, tail === "#" ? "a" : `a${" ".repeat(50000)}${tail}`);
+  }
+});
 
 for (const [name, input] of [
   ["start without end", `${START}\n## 1. A\n`],
@@ -241,6 +261,42 @@ test("property: every range starts at its heading and ends before the next one o
         const same = sections.filter((s) => s.level === level);
         for (let i = 1; i < same.length; i++) assert.ok(same[i].start > same[i - 1].end);
       }
+    }),
+    { numRuns: 1000 },
+  );
+});
+
+/** Headings outside fences of a structured document, where every fence is closed by the same line. */
+const topHeadings = (lines) => {
+  let fence = null;
+  return lines.flatMap((line, i) => {
+    if (fence) {
+      if (line === fence) fence = null;
+      return [];
+    }
+    if (line === "```" || line === "~~~~") fence = line;
+    const level = atxLevel(line);
+    return level ? [{ level, start: i + 1 }] : [];
+  });
+};
+
+test("property: on structured documents a range ends just before the next heading of its level or above", () => {
+  fc.assert(
+    fc.property(structuredDoc, (text) => {
+      const out = tryToc(text);
+      fc.pre(out !== null);
+      const lines = splitLines(out);
+      const headings = topHeadings(lines);
+      const expected = headings
+        .map((h, i) => {
+          const next = headings.slice(i + 1).find((o) => o.level <= h.level);
+          return { level: h.level, start: h.start, end: next ? next.start - 1 : lines.length };
+        })
+        .filter((h) => h.level === 2 || h.level === 3);
+      assert.deepEqual(
+        docSections(out).map(({ level, start, end }) => ({ level, start, end })),
+        expected,
+      );
     }),
     { numRuns: 1000 },
   );

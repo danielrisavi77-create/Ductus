@@ -14,11 +14,12 @@ import { fileURLToPath } from "node:url";
 export const DOCS = ["docs/ORKESTRATOR.md", "docs/SESSIONS.md"];
 const START = "<!-- toc:start -->";
 const END = "<!-- toc:end -->";
-// The s flag: U+2028 and U+2029 are not line endings in CommonMark, so they belong to the title
-// or info string; only spaces and tabs are trimmed around them.
-const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/s;
+// Only the opening hashes are matched by a regex; the title is trimmed by hand, so a long run of
+// spaces stays linear. U+2028 and U+2029 are not line endings in CommonMark, so they belong to the
+// title or to the info string (the s flag on FENCE); only spaces and tabs are trimmed around them.
+const HEADING = /^ {0,3}(#{1,6})(?=[ \t]|$)/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/s;
-const NUMBER = /^(\d+[a-z]?(?:\.\d+[a-z]?)*)\.?[ \t]+/;
+const NUMBER = /^(\d+[a-z]?(?:\.\d+[a-z]?)*)\.[ \t]+/;
 
 /** Lines without their end-of-line characters; a final newline does not start another line. */
 function splitLines(text) {
@@ -45,10 +46,25 @@ function fenced(lines) {
   });
 }
 
+const blank = (c) => c === " " || c === "\t";
+
+/** The text without leading and trailing spaces and tabs. */
+function trimBlank(text) {
+  let from = 0;
+  let to = text.length;
+  while (from < to && blank(text[from])) from++;
+  while (to > from && blank(text[to - 1])) to--;
+  return text.slice(from, to);
+}
+
 function heading(line) {
   const m = HEADING.exec(line);
   if (!m) return null;
-  const title = (m[2] ?? "").replace(/(?:^|[ \t]+)#+$/, "").replace(/^[ \t]+|[ \t]+$/g, "");
+  let title = trimBlank(line.slice(m[0].length));
+  // A closing run of #s is not part of the title when it stands alone or after a space or tab.
+  let hashes = title.length;
+  while (hashes > 0 && title[hashes - 1] === "#") hashes--;
+  if (hashes < title.length && (hashes === 0 || blank(title[hashes - 1]))) title = trimBlank(title.slice(0, hashes));
   return { level: m[1].length, title };
 }
 
