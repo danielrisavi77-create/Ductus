@@ -238,7 +238,7 @@ function fenceTracker() {
   return (bare) => {
     const match = FENCE.exec(bare);
     if (open) {
-      if (match && match[1][0] === open[0] && match[1].length >= open.length && !match[2].trim()) open = null;
+      if (match && match[1][0] === open[0] && match[1].length >= open.length && /^[ \t]*$/.test(match[2])) open = null;
       return true;
     }
     if (match && !(match[1][0] === "`" && match[2].includes("`"))) {

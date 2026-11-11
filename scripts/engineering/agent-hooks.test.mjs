@@ -515,6 +515,10 @@ test("stateForRole: table of roles and STATE.md shapes", () => {
     [`# S\r\n${QUEUE}\r\n${"y".repeat(ROOM_CRLF - 1)}\r\n## A\r\n`, `# S\r\n${QUEUE}\r\n\r\n${note(3, 3)}\r\n\r\n## A\r\n`],
     // Two queue sections in a row: each heading stays and gets its own note.
     [`# S\n${QUEUE}\n${item(1)}\n## Owner queue arhiva\n${item(2)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n\n## Owner queue arhiva\n\n${note(5, 5)}\n\n## A\n`],
+    // Only spaces and tabs may follow a closing fence: a no-break space keeps
+    // the block open, so the heading inside it is still text.
+    [`# S\n~~~text\n~~~\u00a0\n${QUEUE}\n${"x".repeat(200)}\n~~~\n## Ne smije se izgubiti\n- B-8\n`, `# S\n~~~text\n~~~\u00a0\n${QUEUE}\n${"x".repeat(200)}\n~~~\n## Ne smije se izgubiti\n- B-8\n`],
+    [`# S\n~~~\n~~~ \t\n${QUEUE}\n${item(1)}\n## A\n`, `# S\n~~~\n~~~ \t\n${QUEUE}\n\n${note(5, 5)}\n\n## A\n`],
     // An unclosed fence runs to the end of the file, as in CommonMark.
     [`# S\n${QUEUE}\n${item(1)}\n\`\`\`\n## A\nx\n`, `# S\n${QUEUE}\n\n${note(3, 6)}\n`],
   ];
