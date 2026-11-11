@@ -5218,11 +5218,15 @@ BEGIN
   END IF;
 
   RETURN EXISTS (
-    SELECT 1 FROM institution.institution_role r
-    WHERE r.user_id = v_user AND r.institution_id = v_institution AND r.role = 'teacher'
-      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL
-  ) AND EXISTS (
-    SELECT 1 FROM institution.work_grant g
+    SELECT 1
+    FROM institution.work_grant g
+    JOIN institution.assignment a ON a.id = g.assignment_id AND a.institution_id = g.institution_id
+    JOIN institution.institution_role ge ON ge.id = g.grantee_role_id
+     AND ge.user_id = g.grantee_id AND ge.institution_id = g.institution_id AND ge.role = 'teacher'
+     AND ge.confirmed_at IS NOT NULL AND ge.revoked_at IS NULL
+    JOIN institution.institution_role gr ON gr.id = g.granter_role_id
+     AND gr.user_id = g.granted_by AND gr.institution_id = g.institution_id AND gr.role = 'teacher'
+     AND gr.confirmed_at IS NOT NULL AND gr.revoked_at IS NULL
     WHERE g.institution_id = v_institution
       AND g.grantee_id = v_user
       AND g.assignment_id = v_scope.assignment_id
@@ -5231,7 +5235,17 @@ BEGIN
       AND statement_timestamp() >= g.valid_from
       AND statement_timestamp() < g.valid_to
       AND p_action = ANY (g.actions)
-      AND institution.work_relation(g.granted_by, g.assignment_id) = 'teacher'
+      AND CASE
+            WHEN a.course_id IS NOT NULL THEN EXISTS (
+              SELECT 1 FROM institution.course_member m
+              WHERE m.id = g.granter_member_id AND m.course_id = a.course_id
+                AND m.institution_id = a.institution_id AND m.user_id = g.granted_by
+                AND m.role = 'teacher' AND m.member_to IS NULL)
+            ELSE EXISTS (
+              SELECT 1 FROM institution.mentorship ms
+              WHERE ms.id = a.mentorship_id AND ms.institution_id = a.institution_id
+                AND ms.mentor_id = g.granted_by AND ms.ended_at IS NULL)
+          END
   );
 END
 $$;
@@ -6702,6 +6716,36 @@ BEGIN
     SELECT 1 FROM institution.work_accommodation w
      WHERE w.assignment_id = p_assignment_id AND w.student_id = p_student_id
        AND w.institution_id = v_institution);
+END
+$$;
+
+
+--
+-- Name: work_grant_binding_fill(); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.work_grant_binding_fill() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = 'ZD403';
+  END IF;
+  NEW.grantee_role_id := (
+    SELECT r.id FROM institution.institution_role r
+    WHERE r.user_id = NEW.grantee_id AND r.institution_id = NEW.institution_id AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL);
+  NEW.granter_role_id := (
+    SELECT r.id FROM institution.institution_role r
+    WHERE r.user_id = NEW.granted_by AND r.institution_id = NEW.institution_id AND r.role = 'teacher'
+      AND r.confirmed_at IS NOT NULL AND r.revoked_at IS NULL);
+  NEW.granter_member_id := (
+    SELECT m.id FROM institution.assignment a
+    JOIN institution.course_member m ON m.course_id = a.course_id AND m.institution_id = a.institution_id
+    WHERE a.id = NEW.assignment_id AND a.institution_id = NEW.institution_id
+      AND m.user_id = NEW.granted_by AND m.role = 'teacher' AND m.member_to IS NULL);
+  RETURN NEW;
 END
 $$;
 
@@ -8192,6 +8236,9 @@ CREATE TABLE institution.work_grant (
     created_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
     revoked_at timestamp with time zone,
     revoked_by uuid,
+    grantee_role_id uuid,
+    granter_role_id uuid,
+    granter_member_id uuid,
     CONSTRAINT work_grant_actions_check CHECK (institution.is_grant_action_set(actions)),
     CONSTRAINT work_grant_finite CHECK ((isfinite(valid_from) AND isfinite(valid_to))),
     CONSTRAINT work_grant_grantee CHECK (((grantee_id <> student_id) AND (grantee_id <> granted_by))),
@@ -9283,6 +9330,14 @@ ALTER TABLE ONLY institution.course_member
 
 
 --
+-- Name: course_member course_member_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.course_member
+    ADD CONSTRAINT course_member_id_institution_id_key UNIQUE (id, institution_id);
+
+
+--
 -- Name: course_member course_member_pkey; Type: CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -9336,6 +9391,14 @@ ALTER TABLE ONLY institution.faculty_work_rule
 
 ALTER TABLE ONLY institution.institution_role
     ADD CONSTRAINT institution_role_binding_key UNIQUE (id, institution_id, user_id, role);
+
+
+--
+-- Name: institution_role institution_role_id_institution_id_key; Type: CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.institution_role
+    ADD CONSTRAINT institution_role_id_institution_id_key UNIQUE (id, institution_id);
 
 
 --
@@ -10463,6 +10526,13 @@ CREATE TRIGGER notice_acknowledgment_fingerprint_immutable BEFORE UPDATE OF noti
 
 
 --
+-- Name: work_grant work_grant_binding_fill; Type: TRIGGER; Schema: institution; Owner: -
+--
+
+CREATE TRIGGER work_grant_binding_fill BEFORE INSERT OR UPDATE OF grantee_role_id, granter_role_id, granter_member_id ON institution.work_grant FOR EACH ROW EXECUTE FUNCTION institution.work_grant_binding_fill();
+
+
+--
 -- Name: access_log access_log_assignment_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: audit; Owner: -
 --
 
@@ -11452,6 +11522,30 @@ ALTER TABLE ONLY institution.work_grant
 
 ALTER TABLE ONLY institution.work_grant
     ADD CONSTRAINT work_grant_grantee_id_institution_id_fkey FOREIGN KEY (grantee_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_grantee_role_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_grantee_role_id_institution_id_fkey FOREIGN KEY (grantee_role_id, institution_id) REFERENCES institution.institution_role(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_granter_member_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_granter_member_id_institution_id_fkey FOREIGN KEY (granter_member_id, institution_id) REFERENCES institution.course_member(id, institution_id);
+
+
+--
+-- Name: work_grant work_grant_granter_role_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
+--
+
+ALTER TABLE ONLY institution.work_grant
+    ADD CONSTRAINT work_grant_granter_role_id_institution_id_fkey FOREIGN KEY (granter_role_id, institution_id) REFERENCES institution.institution_role(id, institution_id);
 
 
 --
@@ -12811,4 +12905,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261109210000'),
     ('20261110120000'),
     ('20261111120000'),
-    ('20261111180000');
+    ('20261111180000'),
+    ('20261111221500');
