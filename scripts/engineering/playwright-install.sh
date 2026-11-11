@@ -18,6 +18,12 @@
 # PLAYWRIGHT_APT_CACHE_DIR (a leading ~/ means $HOME) keeps the downloaded .deb
 # files between runs: they are copied into the apt archive before the install
 # and back after a success. The cache is a speed-up only; it never fails a run.
+# DAN-705: when the runner's apt mirror azure.archive.ubuntu.com does not
+# resolve (run 43034842276), the --with-deps path first points the apt sources
+# at archive.ubuntu.com, with a ::warning::. A resolving mirror changes nothing.
+# The ubuntu-24.04 image names its mirrors in /etc/apt/apt-mirrors.txt
+# (mirror+file: in ubuntu.sources), older images in the sources files.
+# PLAYWRIGHT_APT_ROOT (tests only) is the directory that holds etc/apt.
 set -u
 
 browsers="$*"
@@ -116,6 +122,27 @@ save_apt_cache() {
   echo "::warning::could not save the apt package cache to ${apt_cache}"
 }
 
+# The install runs apt-get update itself, so switched sources apply from the
+# first attempt. A failed switch only warns: the attempts below run as before.
+mirror="azure.archive.ubuntu.com"
+fallback="archive.ubuntu.com"
+use_reachable_mirror() {
+  local f t files=()
+  local etc="${PLAYWRIGHT_APT_ROOT:-}/etc/apt"
+  for f in "$etc/apt-mirrors.txt" "$etc/sources.list.d/ubuntu.sources" "$etc/sources.list"; do
+    [ -f "$f" ] && grep -qF "//${mirror}" "$f" && files+=("$f")
+  done
+  [ "${#files[@]}" -gt 0 ] || return 0
+  t=$(window 10)
+  if [ "$t" -gt 0 ] && cap "$t" getent hosts "$mirror" >/dev/null; then return 0; fi
+  t=$(window 20)
+  if [ "$t" -gt 0 ] && cap "$t" sudo sed -i "s#//${mirror//./\\.}#//${fallback}#g" "${files[@]}"; then
+    echo "::warning::${mirror} does not resolve; the apt sources now use ${fallback}"
+  else
+    echo "::warning::${mirror} does not resolve and the apt sources could not be switched to ${fallback}"
+  fi
+}
+
 finish_ok() {
   save_apt_cache
   exit 0
@@ -136,6 +163,7 @@ if [ "${PLAYWRIGHT_SKIP_DEPS:-}" = "1" ]; then
   install=(pnpm exec playwright install "$@")
 else
   install=(pnpm exec playwright install --with-deps "$@")
+  use_reachable_mirror
   restore_apt_cache
 fi
 

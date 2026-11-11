@@ -43,12 +43,19 @@ function removeDir(dir, deadlineMs = 10000) {
   }
 }
 
-async function run({ failures = 0, hang = 0, timeout = "2", budget = "60", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false, skipDeps = false, fakeTimeout = false, noPerl = false, aptCache = null, debs = true, slowCopy = false, expectCalls = true }) {
+async function run({ failures = 0, hang = 0, timeout = "2", budget = "60", browsers = ["chromium", "firefox"], withoutDeps = false, probeFails = false, skipDeps = false, fakeTimeout = false, noPerl = false, aptCache = null, debs = true, slowCopy = false, expectCalls = true, sources = {}, resolve = "ok", sedFails = false }) {
   const dir = await mkdtemp(path.join(tmpdir(), "pw-install-"));
   const bin = path.join(dir, "bin");
   const archives = path.join(dir, "archives");
   await mkdir(bin);
   await mkdir(archives);
+  // DAN-705: a fake /etc/apt under PLAYWRIGHT_APT_ROOT, so no test touches the real one.
+  const root = path.join(dir, "root");
+  const sourceFiles = { mirrors: path.join(root, "etc/apt/apt-mirrors.txt"), deb822: path.join(root, "etc/apt/sources.list.d/ubuntu.sources"), legacy: path.join(root, "etc/apt/sources.list") };
+  for (const [kind, text] of Object.entries(sources)) {
+    await mkdir(path.dirname(sourceFiles[kind]), { recursive: true });
+    await writeFile(sourceFiles[kind], text);
+  }
   const log = path.join(dir, "calls.log");
   const sudoLog = path.join(dir, "sudo.log");
   const count = path.join(dir, "count");
@@ -59,6 +66,7 @@ async function run({ failures = 0, hang = 0, timeout = "2", budget = "60", brows
     pnpm: `#!/usr/bin/env bash
 n=$(cat "${count}" 2>/dev/null || echo 0); echo $((n+1)) > "${count}"
 echo "$*" >> "${log}"
+cat "${sourceFiles.mirrors}" "${sourceFiles.deb822}" "${sourceFiles.legacy}" 2>/dev/null >> "${dir}/sources-at-install"
 [ -f "${archives}/cached_1.0_all.deb" ] && echo restored >> "${dir}/restored"
 ${probeFails ? 'case "$*" in "exec node"*) exit 9;; esac' : ""}
 [ "$n" -lt ${hang} ] && sleep 30
@@ -67,7 +75,9 @@ ${debs ? `case "$*" in *--with-deps*) : > "${archives}/new_2.0_all.deb";; esac` 
 exit 0
 `,
     // Only file copies run for real: pkill and dpkg must never touch this machine.
-    sudo: `#!/usr/bin/env bash\necho "$*" >> "${sudoLog}"\ncase "$1" in cp) exec "$@";; esac\nexit 0\n`,
+    sudo: `#!/usr/bin/env bash\necho "$*" >> "${sudoLog}"\n${sedFails ? 'case "$1" in sed) exit 4;; esac\n' : ""}case "$1" in cp|sed) exec "$@";; esac\nexit 0\n`,
+    // getent answers for the apt mirror: ok, fail (no such host) or hang.
+    getent: `#!/usr/bin/env bash\necho "$*" >> "${dir}/getent.log"\n${{ ok: "echo '10.0.0.1 $2'; exit 0", fail: "exit 2", hang: "sleep 30" }[resolve]}\n`,
     "apt-get": "#!/usr/bin/env bash\nexit 0\n",
   };
   if (fakeTimeout) fakes.timeout = `#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "timeout: not coreutils"; exit 0; }\necho "fake timeout used" >> "${log}"\nexit 0\n`;
@@ -95,6 +105,7 @@ exit 0
       PLAYWRIGHT_SKIP_DEPS: skipDeps ? "1" : "",
       PLAYWRIGHT_APT_CACHE_DIR: aptCache ? aptCache.dir ?? "~/apt" : "",
       PLAYWRIGHT_APT_ARCHIVES: archives,
+      PLAYWRIGHT_APT_ROOT: root,
     },
     encoding: "utf8",
   });
@@ -105,10 +116,14 @@ exit 0
   const restored = (await read(path.join(dir, "restored"))) !== "";
   const cached = await readdir(path.join(dir, "apt")).catch(() => null);
   const archived = await readdir(archives);
+  const after = {};
+  for (const kind of Object.keys(sources)) after[kind] = await read(sourceFiles[kind]);
+  const atInstall = await read(path.join(dir, "sources-at-install"));
+  const probes = (await read(path.join(dir, "getent.log"))).trim().split(/\r?\n/).filter(Boolean);
   removeDir(dir);
   // The fake pnpm must have answered: an empty log means the real one could have run.
   if (expectCalls) assert.ok(calls.length > 0, `the fake pnpm was never called (status ${result.status}): ${result.stderr?.slice(0, 300)}`);
-  return { status: result.status, stdout: result.stdout, calls, sudo, restored, cached, archived, seconds };
+  return { status: result.status, stdout: result.stdout, calls, sudo, restored, cached, archived, seconds, after, atInstall, probes };
 }
 
 test("every attempt keeps --with-deps and the requested browsers", async () => {
@@ -254,4 +269,58 @@ test("apt that keeps no .deb files leaves a notice, not a failure", async () => 
   assert.equal(status, 0);
   assert.equal(cached, null);
   assert.match(stdout, /^::notice::apt left no \.deb files in /m);
+});
+
+// DAN-705: the runners' apt mirror azure.archive.ubuntu.com stopped resolving
+// (run 43034842276), so the --with-deps path switches the apt sources to
+// archive.ubuntu.com when, and only when, that mirror does not resolve.
+const deb822 = "Types: deb\nURIs: http://azure.archive.ubuntu.com/ubuntu/\nSuites: noble noble-updates\n\nTypes: deb\nURIs: http://security.ubuntu.com/ubuntu\nSuites: noble-security\n";
+// As on the ubuntu-24.04 image (run 43034842276: "Get:1 file:/etc/apt/apt-mirrors.txt").
+const mirrors = "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n";
+const mirrorList = "Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates\n";
+const legacy = "deb http://azure.archive.ubuntu.com/ubuntu/ jammy main\ndeb http://security.ubuntu.com/ubuntu jammy-security main\n# see azure.archive.ubuntu.com for details\n";
+const switched = (text) => text.replaceAll("//azure.archive.ubuntu.com", "//archive.ubuntu.com");
+const mirrorWarning = /^::warning::azure\.archive\.ubuntu\.com does not resolve; the apt sources now use archive\.ubuntu\.com$/m;
+
+const mirrorCases = [
+  { name: "a resolving mirror leaves the sources alone", sources: { mirrors, deb822 }, resolve: "ok", probed: true, expect: { mirrors, deb822 } },
+  { name: "an unresolved mirror switches apt-mirrors.txt and leaves the mirror+file source", sources: { mirrors, deb822: mirrorList }, resolve: "fail", probed: true, warn: true, expect: { mirrors: switched(mirrors), deb822: mirrorList } },
+  { name: "an unresolved mirror switches ubuntu.sources before the install", sources: { deb822 }, resolve: "fail", probed: true, warn: true, expect: { deb822: switched(deb822) } },
+  { name: "an unresolved mirror switches sources.list", sources: { legacy }, resolve: "fail", probed: true, warn: true, expect: { legacy: switched(legacy) } },
+  { name: "an unresolved mirror switches every file that names it", sources: { mirrors, deb822, legacy }, resolve: "fail", probed: true, warn: true, expect: { mirrors: switched(mirrors), deb822: switched(deb822), legacy: switched(legacy) } },
+  { name: "a hanging lookup counts as unresolved", sources: { deb822 }, resolve: "hang", probed: true, warn: true, expect: { deb822: switched(deb822) } },
+  { name: "sources without the Azure mirror are not probed", sources: { mirrors: switched(mirrors), deb822: switched(deb822), legacy: "deb http://mirror.example.org/ubuntu jammy main\n" }, resolve: "fail", probed: false, expect: { mirrors: switched(mirrors), deb822: switched(deb822), legacy: "deb http://mirror.example.org/ubuntu jammy main\n" } },
+  { name: "no apt sources at all are not probed", sources: {}, resolve: "fail", probed: false, expect: {} },
+  { name: "PLAYWRIGHT_SKIP_DEPS never probes or switches", sources: { deb822 }, resolve: "fail", probed: false, expect: { deb822 }, options: { skipDeps: true } },
+  { name: "a Chromium run that needs no apt never probes or switches", sources: { deb822 }, resolve: "fail", probed: false, expect: { deb822 }, options: { browsers: ["chromium"], withoutDeps: true } },
+];
+
+for (const c of mirrorCases) {
+  test(`apt mirror: ${c.name}`, async () => {
+    const { status, stdout, after, atInstall, probes, seconds } = await run({ sources: c.sources, resolve: c.resolve, ...c.options });
+    assert.equal(status, 0);
+    assert.deepEqual(after, c.expect);
+    assert.deepEqual(probes, c.probed ? ["hosts azure.archive.ubuntu.com"] : []);
+    if (c.warn) assert.match(stdout, mirrorWarning);
+    else assert.doesNotMatch(stdout, /azure\.archive/);
+    // The install already saw the switched sources (apt-get update runs inside it).
+    if (c.warn) assert.ok(!atInstall.includes("//azure.archive.ubuntu.com"), atInstall);
+    assert.ok(seconds < 25, `the step took ${seconds}s`);
+  });
+}
+
+test("apt mirror: a failed switch only warns and the retries run as before", async () => {
+  const { status, stdout, calls, after } = await run({ sources: { deb822 }, resolve: "fail", sedFails: true, failures: 1 });
+  assert.equal(status, 0);
+  assert.deepEqual(after, { deb822 });
+  assert.match(stdout, /^::warning::azure\.archive\.ubuntu\.com does not resolve and the apt sources could not be switched to archive\.ubuntu\.com$/m);
+  assert.match(stdout, /^::warning::playwright install attempt 1\/3 failed \(exit 7\)$/m);
+  assert.deepEqual(calls, Array(2).fill("exec playwright install --with-deps chromium firefox"));
+});
+
+test("apt mirror: the switch is tried once, not on every retry", async () => {
+  const { status, sudo, probes } = await run({ sources: { deb822 }, resolve: "fail", failures: 2 });
+  assert.equal(status, 0);
+  assert.equal(probes.length, 1);
+  assert.equal(sudo.filter((line) => line.startsWith("sed")).length, 1);
 });
