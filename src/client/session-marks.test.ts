@@ -132,10 +132,10 @@ function tabOf(shared: CookieJar, other: () => void): CookieJar {
 
 // #1444: the ended sessions also go to a cookie only this page's script reads.
 describe("the ended-session cookie", () => {
-  it("is one cookie per session for the whole site, never sent cross-site, and leaves the others alone", () => {
+  it("is one cookie per session for the whole site, sent on a navigation back from another site, and leaves the others alone", () => {
     const one = jar(`other=1; ${ENDED_COOKIE}-${B}=1`, true);
     expect(endSessionsInCookie(one, [A])).toBe(true);
-    expect(one.writes).toEqual([`${ENDED_COOKIE}-${A}=1; Path=/; Max-Age=86400; SameSite=Strict; Secure`]);
+    expect(one.writes).toEqual([`${ENDED_COOKIE}-${A}=1; Path=/; Max-Age=86400; SameSite=Lax; Secure`]);
     expect(one.read()).toBe(`other=1; ${ENDED_COOKIE}-${B}=1; ${ENDED_COOKIE}-${A}=1`);
     expect(hasEnded(null, { tag: B, at: 0 }, one)).toBe(true);
     expect(endSessionsInCookie(jar(), ["<x>"])).toBe(false);
@@ -147,7 +147,7 @@ describe("the ended-session cookie", () => {
     expect(hasEnded(null, { tag: B, at: 0 }, old)).toBe(true);
     const C = "c".repeat(64);
     expect(endSessionsInCookie(old, [C])).toBe(true);
-    expect(old.writes).toEqual([`${ENDED_COOKIE}-${C}=1; Path=/; Max-Age=86400; SameSite=Strict`]);
+    expect(old.writes).toEqual([`${ENDED_COOKIE}-${C}=1; Path=/; Max-Age=86400; SameSite=Lax`]);
     for (const tag of [A, B, C]) expect(hasEnded(null, { tag, at: 0 }, old)).toBe(true);
   });
 

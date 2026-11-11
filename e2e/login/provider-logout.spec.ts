@@ -83,6 +83,24 @@ test("A1, A4, A5, G2: after a sign-out from the shell, the AAI@EduHr button lead
   expect(await sessionRow(second)).toMatchObject({ unique_id: "demo-student-2@demo.ductus.test", closed_at: null });
 });
 
+test("G2: the way back from a provider on another site still shows the public home", async ({ page, context }) => {
+  // #1929: the session cookie stays after a sign-out, so "/" tells a closed
+  // session signed out here from an expired one by the ended mark. AAI@EduHr
+  // is another site, unlike the fake provider here, and its way back is a
+  // cross-site navigation that carries no SameSite=Strict cookie.
+  await signIn(page, "/upis");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await signOutWithoutDialog(page);
+  await expectSignedOut(page, token);
+  const elsewhere = "http://aai.example.test/odjava";
+  await page.route(elsewhere, (route) => route.fulfill({ contentType: "text/html", body: `<a href="${APP}/">natrag</a>` }));
+  await page.goto(elsewhere);
+  await page.getByRole("link", { name: "natrag" }).click();
+  await page.waitForURL(`${APP}/`);
+  await expect(page.getByRole("link", { name: t.landing.enter }).first()).toBeVisible();
+  await expect(logoutOf(page)).toHaveCount(0);
+});
+
 test("A2, G1: from the editor with work on the device, the dialog's sign-out also ends the provider's session", async ({ page, context }) => {
   const seen = providerLogouts(page);
   await signIn(page, "/rad");

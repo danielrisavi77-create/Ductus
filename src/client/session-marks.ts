@@ -58,7 +58,9 @@ export function currentSession(store: MarkStore | null): SessionMark | null {
  * show a session signed out here as the public home, not as expired (#1929;
  * src/server/auth/ended-mark.ts). Each ended session has its own
  * cookie, `ductus-ended-<tag>`, so a write never reads or replaces another
- * tab's mark. It outlives a session.
+ * tab's mark. It outlives a session. SameSite=Lax, not Strict: the way back
+ * from the provider's sign-out is a navigation from another site, and "/"
+ * must still see the mark (#1929).
  */
 export const ENDED_COOKIE = "ductus-ended";
 const ENDED_COOKIE_PREFIX = `${ENDED_COOKIE}-`;
@@ -114,7 +116,7 @@ export function endSessionsInCookie(jar: CookieJar | null, tags: readonly string
   try {
     for (const tag of tags) {
       if (!COOKIE_TAG.test(tag)) continue;
-      jar.write(`${ENDED_COOKIE_PREFIX}${tag}=1; Path=/; Max-Age=${ENDED_COOKIE_MAX_AGE_S}; SameSite=Strict${jar.secure ? "; Secure" : ""}`);
+      jar.write(`${ENDED_COOKIE_PREFIX}${tag}=1; Path=/; Max-Age=${ENDED_COOKIE_MAX_AGE_S}; SameSite=Lax${jar.secure ? "; Secure" : ""}`);
     }
     const written = readEndedCookie(jar);
     return tags.every((tag) => written.includes(tag));
