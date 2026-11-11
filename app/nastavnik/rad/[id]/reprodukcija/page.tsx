@@ -7,8 +7,8 @@ import { teacherAccess } from "@/components/teacher/teacher-access";
 import { isDocumentId } from "@/domain/collaboration";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { sessionPrincipal } from "@/server/auth/principal";
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export const metadata = { title: `${t.replay.titleTeacher} · ${t.app.name}` };
  */
 export default async function TeacherReplayPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const token = liveSessionToken(await cookies());
   pageActivity(token);
   // The cookie digest and the server time of this render (D-118).
   const { tag, at } = shellSession(token);
