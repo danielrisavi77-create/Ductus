@@ -261,12 +261,15 @@ const PROVIDERS: Provider[] = [
   { name: "AAI@EduHr (OIDC)", dep: "openid-client", inventory: /AAI@EduHr/ },
   { name: "AWS KMS", dep: "@aws-sdk/client-kms", inventory: /KMS/ },
   { name: "job queue", dep: "pg-boss", inventory: /pgboss/ },
+  { name: "S3 storage", service: "objects", inventory: /S3/ },
   { name: "local mail", service: "mail", inventory: /E-pošta/ },
   { name: "browser journal", dep: "dexie", inventory: /Lokalni dnevnik/ },
 ];
 const LOCAL_ONLY_DEPS = [/^@tiptap\//, /^next$/, /^react(-dom)?$/, /^pg$/];
+// Compose services that send nothing out: the database and the fake login provider.
+const LOCAL_ONLY_SERVICES = ["postgres", "oidc"];
 // Tables no inventory-cited code reaches on main (DAN-709, found by this test).
-// The first seven have no caller in app code (the note under the table says so
+// The first eight have no caller in app code (the note under the table says so
 // for mentorships, faculty rules and admins); the last two are read by
 // src/server/institution/institution-courses.ts, which no flow cites yet.
 // An entry that stops being a gap fails the test, so the list cannot go stale.
@@ -276,7 +279,7 @@ const KNOWN_GAPS = [
   "institution.team_substitution", "institution.work_grant",
   "institution.course_holder", "institution.seminar_group_teacher",
 ];
-const SCHEMAS = "audit|collaboration|evidence|identity|institution|pgboss";
+const SCHEMAS = "app|audit|collaboration|evidence|identity|institution|pgboss";
 
 function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = PROVIDERS): string[] {
   const errors: string[] = [];
@@ -299,7 +302,8 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   // A table is covered when the inventory or a cited file names it, or a cited
   // code file calls a database function whose body uses it.
   const called = functions.filter(([n]) => code.includes(n) || code.includes(`${n.split(".")[1]}(`));
-  const covered = (t: string) => inv.includes(t) || citedText.some((x) => x.includes(t)) || called.some(([, b]) => b.includes(t));
+  const word = (t: string) => new RegExp(`(?<![a-z_])${t.replace(".", "\\.")}(?![a-z_])`);
+  const covered = (t: string) => word(t).test(inv) || citedText.some((x) => word(t).test(x)) || called.some(([, b]) => word(t).test(b));
   const stillGaps = new Set<string>();
   for (const t of [...tables].sort()) {
     if (covered(t)) continue;
@@ -327,6 +331,10 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
     else if (!p.inventory.test(s.inventory)) errors.push(`provider ${p.name}: missing from the inventory`);
   }
   const sorted = new Set(providers.flatMap((p) => (p.dep ? [p.dep] : [])));
+  const sortedServices = new Set(providers.flatMap((p) => (p.service ? [p.service] : [])));
+  for (const v of s.services) {
+    if (!sortedServices.has(v) && !LOCAL_ONLY_SERVICES.includes(v)) errors.push(`service ${v}: unclassified`);
+  }
   for (const d of s.deps) {
     if (!sorted.has(d) && !LOCAL_ONLY_DEPS.some((re) => re.test(d))) errors.push(`dependency ${d}: unclassified`);
   }
@@ -342,11 +350,11 @@ const FAKE: Sources = {
   inventory: doc([
     row("Evidencija", "`app/api/x/route.ts`, `db/migrations/a.sql`, `scripts/b.mjs`", "14"),
     row("Izvoz", "`src/dl.ts`", "20"),
-  ]).concat("\nOIDC: AAI@EduHr, KMS, pgboss, E-pošta, Lokalni dnevnik.\n"),
+  ]).concat("\nOIDC: AAI@EduHr, KMS, pgboss, E-pošta, Lokalni dnevnik, S3.\n"),
   migrations: { "a.sql": SQL("INSERT INTO evidence.thing VALUES (1); INSERT INTO audit.thing_event VALUES (1);") },
   read: (p) => ({ "app/api/x/route.ts": "select app.put_thing(1)", "db/migrations/a.sql": "evidence.thing audit.thing_event" })[p] ?? "",
   deps: ["openid-client", "@aws-sdk/client-kms", "pg-boss", "dexie", "react", "@tiptap/core"],
-  services: ["mail", "postgres"],
+  services: ["mail", "postgres", "objects"],
   exporters: ["src/dl.ts"],
 };
 
@@ -363,7 +371,9 @@ describe("completenessErrors", () => {
     ["a cited migration with no known table", { migrations: { "a.sql": "CREATE TABLE evidence.other (id int);" } }, "db/migrations/a.sql: cited migration touches no known table"],
     ["a provider missing from the inventory", { inventory: FAKE.inventory.replace("KMS", "kms-less") }, "provider AWS KMS: missing from the inventory"],
     ["a provider gone from the code", { deps: FAKE.deps.filter((d) => d !== "pg-boss") }, "provider job queue: no longer in the code, drop it from the list"],
-    ["a mail service gone from compose", { services: ["postgres"] }, "provider local mail: no longer in the code, drop it from the list"],
+    ["a new compose service", { services: ["mail", "postgres", "objects", "relay"] }, "service relay: unclassified"],
+    ["S3 dropped from the inventory", { inventory: FAKE.inventory.replace("S3", "bucket") }, "provider S3 storage: missing from the inventory"],
+    ["a mail service gone from compose", { services: ["postgres", "objects"] }, "provider local mail: no longer in the code, drop it from the list"],
     ["a new dependency nobody classified", { deps: [...FAKE.deps, "nodemailer"] }, "dependency nodemailer: unclassified"],
     ["a new outside SDK nobody classified", { deps: [...FAKE.deps, "@aws-sdk/client-s3"] }, "dependency @aws-sdk/client-s3: unclassified"],
     ["an export outside the Izvoz flows", { exporters: ["src/dl.ts", "src/new-export.tsx"] }, "src/new-export.tsx: export missing from the Izvoz flows"],
@@ -390,7 +400,7 @@ describe(`${INVENTORY} completeness`, () => {
       for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
         const p = `${dir}/${e.name}`;
         if (e.isDirectory()) walk(p);
-        else if (/\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) && /Content-Disposition|createObjectURL/.test(readFileSync(join(ROOT, p), "utf8"))) exporters.push(p);
+        else if (/\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) && /content-disposition|createObjectURL|\bdownload\b/i.test(readFileSync(join(ROOT, p), "utf8"))) exporters.push(p);
       }
     };
     walk("src");
