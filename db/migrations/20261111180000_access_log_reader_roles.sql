@@ -16,14 +16,20 @@ GRANT CREATE ON SCHEMA collaboration TO ductus_identity;
 
 SET LOCAL ROLE ductus_identity;
 
--- The closed lists grow; every existing row still holds.
+-- The closed lists grow; every existing row still holds. Each CHECK is
+-- replaced by a wider one (the drop is deliberate) and validated in the same
+-- transaction, as dbmate runs the migration in one.
+-- squawk-ignore ban-drop-constraint
 ALTER TABLE audit.access_log DROP CONSTRAINT access_log_reader_role_check;
 ALTER TABLE audit.access_log ADD CONSTRAINT access_log_reader_role_check
   CHECK (reader_role IN ('teacher', 'mentor', 'seminar_teacher')) NOT VALID;
+-- squawk-ignore constraint-missing-not-valid
 ALTER TABLE audit.access_log VALIDATE CONSTRAINT access_log_reader_role_check;
+-- squawk-ignore ban-drop-constraint
 ALTER TABLE audit.access_log DROP CONSTRAINT access_log_surface_check;
 ALTER TABLE audit.access_log ADD CONSTRAINT access_log_surface_check
   CHECK (surface IN ('live_view', 'process_summary', 'fast_path', 'replay', 'submitted_text')) NOT VALID;
+-- squawk-ignore constraint-missing-not-valid
 ALTER TABLE audit.access_log VALIDATE CONSTRAINT access_log_surface_check;
 
 -- The role in which the caller reads a work of another person, or NULL. The
