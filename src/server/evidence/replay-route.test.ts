@@ -171,3 +171,65 @@ describe("replay route R3: one page for the owner and the teacher (DAN-344)", ()
     expect(db.tokens).toStrictEqual([]);
   });
 });
+
+describe("replay route R3: later pages pinned to the first page's head (DAN-537)", () => {
+  const HEAD = { segmentHash: "a".repeat(64), segmentCount: 1 };
+
+  it("takes exactly {documentId, from: 0} or {documentId, from, head}, refusing every other body before the database", async () => {
+    const db = database(new Error("must not be reached"));
+    const bodies: unknown[] = [
+      { documentId: DOCUMENT, from: 1 },
+      { documentId: DOCUMENT, from: 0, head: HEAD },
+      { documentId: DOCUMENT, from: 0, head: null },
+      ...[null, [], "head", 1, {}].map((head) => ({ documentId: DOCUMENT, from: 1, head })),
+      { documentId: DOCUMENT, from: 1, head: { segmentHash: HEAD.segmentHash } },
+      { documentId: DOCUMENT, from: 1, head: { segmentCount: 1 } },
+      { documentId: DOCUMENT, from: 1, head: { ...HEAD, extra: 1 } },
+      ...["A".repeat(64), "a".repeat(63), "a".repeat(65), "g".repeat(64), 7, null].map((segmentHash) => ({
+        documentId: DOCUMENT, from: 1, head: { segmentHash, segmentCount: 1 },
+      })),
+      ...[0, -1, 1.5, "1", Number.MAX_SAFE_INTEGER + 1, null].map((segmentCount) => ({
+        documentId: DOCUMENT, from: 1, head: { segmentHash: HEAD.segmentHash, segmentCount },
+      })),
+      { documentId: DOCUMENT, from: 1, head: HEAD, role: "teacher" },
+      { documentId: DOCUMENT, from: 1, head: HEAD, institutionId: FAK_A },
+    ];
+    for (const body of bodies) {
+      const response = await handleReplayRequest(post(body), deps({ withActor: db.withActor }));
+      expect([body, response.status]).toStrictEqual([body, 422]);
+      expect(await response.json()).toStrictEqual({ error: "invalid_input" });
+    }
+    // A key named __proto__ in the JSON text is a key like any other.
+    const proto = await handleReplayRequest(
+      post(`{"documentId":"${DOCUMENT}","from":1,"head":{"segmentHash":"${HEAD.segmentHash}","segmentCount":1,"__proto__":{}}}`),
+      deps({ withActor: db.withActor }));
+    expect(proto.status).toBe(422);
+    expect(db.tokens).toStrictEqual([]);
+  });
+
+  it("serves a later page pinned to a head the record holds, and 409 record_changed once it no longer does", async () => {
+    const { store, hash, start } = await record();
+    const db = database(found(hash), [{ content_hash: start, body: START_TEXT }]);
+    const first = await handleReplayRequest(post({ documentId: DOCUMENT, from: 0 }), deps({ withActor: db.withActor, payloads: store }));
+    const { head } = await first.json();
+    expect(head).toStrictEqual({ segmentHash: hash, segmentCount: 1 });
+
+    // The record holds the head, so the pin is accepted; index 1 is past it.
+    const past = await handleReplayRequest(post({ documentId: DOCUMENT, from: 1, head }), deps({ withActor: db.withActor, payloads: store }));
+    expect(past.status).toBe(404);
+
+    const changed = await handleReplayRequest(
+      post({ documentId: DOCUMENT, from: 1, head: { segmentHash: "b".repeat(64), segmentCount: 1 } }),
+      deps({ withActor: db.withActor, payloads: store }));
+    expect(changed.status).toBe(409);
+    expect(changed.headers.get("cache-control")).toBe("no-store");
+    expect(await changed.json()).toStrictEqual({ error: "record_changed" });
+  });
+
+  it("answers 404, never 409, to a reader who may not see the document, whatever head it sends", async () => {
+    const db = database([{ outcome: "not_found" }]);
+    const response = await handleReplayRequest(post({ documentId: DOCUMENT, from: 3, head: HEAD }), deps({ withActor: db.withActor }));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toStrictEqual({ error: "not_found" });
+  });
+});

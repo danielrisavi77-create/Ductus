@@ -416,7 +416,8 @@ describe("replay over the API and the read RPCs (DAN-344 R3, PRODUCT 5 rule 5)",
   });
 
   it("starts a later page at its index, without the start document, and answers an index past the end like a refusal", async () => {
-    const page = await ask("vesna", { documentId, from: 2 });
+    const head = { segmentHash: record[2].hash, segmentCount: 3 };
+    const page = await ask("vesna", { documentId, from: 2, head });
     expect(page.status).toBe(200);
     expect(await page.json()).toMatchObject({
       from: 2,
@@ -425,9 +426,38 @@ describe("replay over the API and the read RPCs (DAN-344 R3, PRODUCT 5 rule 5)",
       segments: [record[2].payload],
       resumeDocuments: { [resumeHash]: RESUME_TEXT },
     });
-    expect((await ask("vesna", { documentId, from: 3 })).status).toBe(404);
+    expect((await ask("vesna", { documentId, from: 3, head })).status).toBe(404);
     expect((await ask("vesna", { documentId, from: -1 })).status).toBe(422);
     expect((await ask("vesna", { documentId, from: 0, role: "teacher" })).status).toBe(422);
+  });
+
+  it("reads a later page only from the record that ends at the first page's head (DAN-537)", async () => {
+    // A later page without the head is outside the contract.
+    expect((await ask("vesna", { documentId, from: 2 })).status).toBe(422);
+
+    // A head the record still holds, below its end: the page stops at it, as for a record that has grown since.
+    const earlier = await ask("ana", { documentId, from: 1, head: { segmentHash: record[1].hash, segmentCount: 2 } });
+    expect(earlier.status).toBe(200);
+    expect(await earlier.json()).toMatchObject({
+      segmentCount: 2,
+      head: { segmentHash: record[1].hash, segmentCount: 2 },
+      from: 1,
+      next: null,
+      segments: [record[1].payload],
+    });
+
+    // A head the record does not hold: 409, so the browser starts again from the first page.
+    const changed = await ask("vesna", { documentId, from: 1, head: { segmentHash: record[1].hash, segmentCount: 3 } });
+    expect(changed.status).toBe(409);
+    expect(changed.headers.get("cache-control")).toBe("no-store");
+    expect(await changed.json()).toStrictEqual({ error: "record_changed" });
+
+    // Dora may not see the work: 404 whatever head she sends, never 409.
+    for (const head of [{ segmentHash: record[2].hash, segmentCount: 3 }, { segmentHash: "f".repeat(64), segmentCount: 9 }]) {
+      const dora = await ask("dora", { documentId, from: 1, head });
+      expect(dora.status).toBe(404);
+      expect(await dora.json()).toStrictEqual({ error: "not_found" });
+    }
   });
 
   it("tells Ana's expired or closed session and an unknown token to sign in again with 401, not 404", async () => {
