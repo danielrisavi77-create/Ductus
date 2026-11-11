@@ -108,7 +108,7 @@ function inventoryErrors(markdown: string, repo: Repo): string[] {
   return errors;
 }
 
-/** True when `token` occurs in `text` with no `before` character directly ahead and no `after` character directly behind. */
+/** True when `token` occurs in `text` when the character immediately before it fails `before` and the character immediately after it fails `after`. */
 function hasToken(text: string, token: string, before: (c: string) => boolean, after: (c: string) => boolean): boolean {
   for (let i = text.indexOf(token); i !== -1; i = text.indexOf(token, i + 1)) {
     const b = text.charAt(i - 1);
@@ -367,6 +367,31 @@ const FAKE: Sources = {
   services: ["mail", "postgres", "objects"],
   exporters: ["src/dl.ts"],
 };
+
+describe("hasToken", () => {
+  const ident = (c: string) => /[a-z_]/.test(c);
+  it.each([
+    ["x audit.things y", "audit.thing", false],
+    ["x audit.thing y", "audit.thing", true],
+    ["xaudit.thing", "audit.thing", false],
+    ["audit.thing", "audit.thing", true],
+    ["audit.thing_x", "audit.thing", false],
+    ["xaudit.thing audit.thing", "audit.thing", true],
+    ["audit.things audit.thing", "audit.thing", true],
+  ])("%j contains %j: %s", (text, token, expected) => {
+    expect(hasToken(text, token, ident, ident)).toBe(expected);
+  });
+  it("does not count a schema-qualified call as a bare call", () => {
+    const prefix = (c: string) => /[a-z0-9_.]/.test(c);
+    expect(hasToken("other.put_thing(", "put_thing(", prefix, () => false)).toBe(false);
+    expect(hasToken("put_thing(", "put_thing(", prefix, () => false)).toBe(true);
+  });
+  it("treats a following digit as a boundary breaker only when asked", () => {
+    const digit = (c: string) => /\d/.test(c);
+    expect(hasToken("D-300", "D-30", () => false, digit)).toBe(false);
+    expect(hasToken("D-300 D-30.", "D-30", () => false, digit)).toBe(true);
+  });
+});
 
 describe("completenessErrors", () => {
   it("accepts an inventory that covers tables, providers and exports", () => {
