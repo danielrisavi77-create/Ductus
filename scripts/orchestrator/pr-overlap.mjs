@@ -4,6 +4,7 @@
 //   --plan adds advice per PR (plan-core.mjs); the work contract defaults to
 //   $DUCTUS_WORK_CONTRACT; --independent records the orchestrator's own check that
 //   two writers' PRs share no contract. Exit 1 when some PR's files could not be read.
+import "./help.mjs";
 import { openPrsWithPaths, repoId } from "./gh.mjs";
 import { overlapPairs, renderOverlap } from "./orchestrator-core.mjs";
 import { parseArgs, planParallel, renderPlan } from "./plan-core.mjs";
