@@ -5,7 +5,8 @@
 //   node scripts/engineering/doc-toc.mjs --write   rewrite the stale tables
 // ATX headings and fenced blocks follow CommonMark: up to three spaces of indent, closing #s are
 // not part of the title, and a fence closes only with the same character, at least as long.
-// Setext headings and HTML blocks are not recognised; the documents use neither.
+// Setext headings and HTML blocks are not recognised; the documents use neither. A CR outside CRLF
+// (a line ending in CommonMark) is an error, so line numbers never disagree with the reader.
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,8 +14,10 @@ import { fileURLToPath } from "node:url";
 export const DOCS = ["docs/ORKESTRATOR.md", "docs/SESSIONS.md"];
 const START = "<!-- toc:start -->";
 const END = "<!-- toc:end -->";
-const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/;
-const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+// The s flag: U+2028 and U+2029 are not line endings in CommonMark, so they belong to the title
+// or info string; only spaces and tabs are trimmed around them.
+const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/s;
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/s;
 const NUMBER = /^(\d+[a-z]?(?:\.\d+[a-z]?)*)\.?[ \t]+/;
 
 /** Lines without their end-of-line characters; a final newline does not start another line. */
@@ -45,7 +48,7 @@ function fenced(lines) {
 function heading(line) {
   const m = HEADING.exec(line);
   if (!m) return null;
-  const title = (m[2] ?? "").replace(/(?:^|[ \t]+)#+$/, "").trim();
+  const title = (m[2] ?? "").replace(/(?:^|[ \t]+)#+$/, "").replace(/^[ \t]+|[ \t]+$/g, "");
   return { level: m[1].length, title };
 }
 
@@ -90,10 +93,12 @@ function markers(lines) {
 const entry = (s) => `${s.level === 3 ? "  " : ""}- ${s.label}: retci ${s.start}-${s.end}`;
 
 /**
- * The text with its table of contents current; throws on unpaired, duplicate or reversed markers.
+ * The text with its table of contents current; throws on unpaired, duplicate or reversed markers
+ * and on a CR outside CRLF.
  * Lines outside the block keep their own line endings; new lines use CRLF when the text has any.
  */
 export function applyToc(text) {
+  if (/\r(?!\n)/.test(text)) throw new Error("toc: a CR outside CRLF is not supported");
   const raw = text.split("\n");
   if (text.endsWith("\n")) raw.pop();
   if (text === "") raw.pop();

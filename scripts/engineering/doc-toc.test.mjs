@@ -100,6 +100,17 @@ const cases = [
     output: `# D\n\n${block("- §1 A: retci 8-12", "- §2 B: retci 13-13")}\n\n## 1. A\n~~~\n~~~ \n## U bloku\n~~~ \t\n## 2. B\n`,
   },
   {
+    // U+2028 and U+2029 are not line endings in CommonMark: they belong to the info string or title.
+    name: "a line separator in the info string still opens a fence",
+    input: "# D\n\n## 1. A\n~~~\u2028x\n## U bloku\n~~~\n## 2. B\n",
+    output: `# D\n\n${block("- §1 A: retci 8-11", "- §2 B: retci 12-12")}\n\n## 1. A\n~~~\u2028x\n## U bloku\n~~~\n## 2. B\n`,
+  },
+  {
+    name: "a paragraph separator and a final no-break space stay in the title",
+    input: "## 1. A\u2029B\u00a0\nc\n",
+    output: `${block("- §1 A\u2029B\u00a0: retci 5-6")}\n\n## 1. A\u2029B\u00a0\nc\n`,
+  },
+  {
     name: "last section without a final newline",
     input: "## 1. A\na",
     output: `${block("- §1 A: retci 5-6")}\n\n## 1. A\na`,
@@ -128,6 +139,7 @@ for (const [name, input] of [
   ["end without start", `${END}\n## 1. A\n`],
   ["reversed", `${END}\n${START}\n## 1. A\n`],
   ["two blocks", `${START}\n${END}\n${START}\n${END}\n## 1. A\n`],
+  ["CR outside CRLF", "## 1. A\rb\n## 2. B\n"],
 ]) {
   test(`applyToc: marker error, ${name}`, () => {
     assert.throws(() => applyToc(input), /toc/);
