@@ -104,6 +104,7 @@ test("an untracked file stops the run even when git is configured to hide untrac
   assert.doesNotMatch(res.out, /preflight|SYNC/);
   assert.equal(git(r.work, "rev-parse", "HEAD"), r.head);
   assert.equal(r.remoteSha(), r.head);
+  assert.equal(readFileSync(join(r.work, "scratch.txt"), "utf8"), "local only\n");
   assert.equal(existsSync(join(r.work, ".git", "MERGE_HEAD")), false);
   assert.deepEqual(res.calls.map((c) => c[0].endsWith("sync.mjs")), [true]);
 });
