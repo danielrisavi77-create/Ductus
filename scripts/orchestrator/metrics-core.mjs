@@ -1,5 +1,6 @@
 // DAN-130 PR B: pure logic for `pnpm orch:metrics`. No gh/git calls here.
 import { field } from "../engineering/metadata-parser.mjs";
+import { lastBaseChange, sinceBaseChange } from "../engineering/review-gate-core.mjs";
 import { checkRole, OUTCOMES } from "./model-check.mjs";
 import { latestVerdict, parseAgentRisk, parseVerdicts } from "./orchestrator-core.mjs";
 
@@ -80,8 +81,12 @@ export function rounds(comments, kind) {
  * `paths === null` means the file list could not be read: the row is marked so
  * a "below" from that cannot pass for a real deviation. `ownerLogin` lets the
  * check count the owner's CLI channel as the gate does (review-gate-core).
+ * `events` are the PR's issue events: the model check reads only comments after
+ * the last base change, with the gate's own F-013 filter (cxcr1946, cxcq1946).
+ * Unread events (null) or a base change without a readable time count no PASS,
+ * as the gate stops there, and the row is marked `eventsRead: false`.
  */
-export function prMetrics(pr, comments, demoIds, paths = [], { ownerLogin = null } = {}) {
+export function prMetrics(pr, comments, demoIds, paths = [], { ownerLogin = null, events = [] } = {}) {
   const created = Date.parse(pr.createdAt);
   const merged = Date.parse(pr.mergedAt);
   const rev = rounds(comments, "review");
@@ -90,6 +95,8 @@ export function prMetrics(pr, comments, demoIds, paths = [], { ownerLogin = null
   if (pr.headRefOid && FULL_SHA.test(pr.headRefOid)) heads.add(pr.headRefOid.toLowerCase());
   const task = field(pr.body, "Task") ?? null;
   const risk = parseAgentRisk(pr.body).risk?.toLowerCase() ?? null;
+  const cutoff = lastBaseChange(events);
+  const gated = sinceBaseChange(comments, cutoff, "created_at", { codexEdits: true });
   return {
     number: pr.number,
     risk,
@@ -103,8 +110,9 @@ export function prMetrics(pr, comments, demoIds, paths = [], { ownerLogin = null
     qaRounds: qa.total,
     heads: heads.size,
     pathsRead: paths !== null,
-    reviewModel: checkRole(comments, "review", pr, risk, paths ?? [], { ownerLogin }),
-    qaModel: checkRole(comments, "qa", pr, risk, paths ?? [], { ownerLogin }),
+    eventsRead: cutoff !== Infinity,
+    reviewModel: checkRole(gated, "review", pr, risk, paths ?? [], { ownerLogin }),
+    qaModel: checkRole(gated, "qa", pr, risk, paths ?? [], { ownerLogin }),
   };
 }
 
@@ -122,7 +130,8 @@ export function modelSummary(rows) {
     ...(r.qaModel?.outcome === "below" ? [`#${r.number} qa${mark(r)}`] : []),
   ]);
   const unread = rows.filter((r) => r.pathsRead === false).map((r) => `#${r.number}`);
-  return { review: count("reviewModel"), qa: count("qaModel"), below, unread };
+  const eventsUnread = rows.filter((r) => r.eventsRead === false).map((r) => `#${r.number}`);
+  return { review: count("reviewModel"), qa: count("qaModel"), below, unread, eventsUnread };
 }
 
 const round = (n) => (n === null ? null : Math.round(n * 10) / 10);
@@ -171,7 +180,7 @@ export function renderMetrics(rows, summary, since) {
   const m = summary.modelCheck;
   const counts = (c) => OUTCOMES.map((o) => `${o} ${c[o]}`).join(", ");
   lines.push(
-    `model check (declared Review-Model/QA-Model on the merged head vs ORKESTRATOR §7; report, not a gate): review ${counts(m.review)}; qa ${counts(m.qa)}; below: ${m.below.join(", ") || "-"}; files unread (expects Opus): ${m.unread.join(", ") || "-"}`,
+    `model check (declared Review-Model/QA-Model on the merged head vs ORKESTRATOR §7; report, not a gate): review ${counts(m.review)}; qa ${counts(m.qa)}; below: ${m.below.join(", ") || "-"}; files unread (expects Opus): ${m.unread.join(", ") || "-"}; base events unread (no PASS counted): ${m.eventsUnread.join(", ") || "-"}`,
   );
   return lines;
 }
