@@ -21,7 +21,7 @@ export type ImportRecordV1 = Readonly<{
   baseRevision: number;
   preparedAtMs: number;
   state: ImportRecordStateV1;
-  /** Event id of the confirmation; set only in state `confirmed`. */
+  /** Event id of the confirmation, present only in state `confirmed`. */
   confirmedEventId?: string;
 }>;
 
