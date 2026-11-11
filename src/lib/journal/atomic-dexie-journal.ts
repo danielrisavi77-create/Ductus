@@ -326,6 +326,42 @@ function holdsUnsynced(
     metas.some((meta) => !settled.has(meta.documentId) || !snapshotIds.has(meta.documentId));
 }
 
+/**
+ * One document's share of `holdsUnsynced` (DAN-699): rows owed, a record not
+ * settled, or a snapshot and record that do not match. A kept copy is left
+ * out: the author chose the server's text over it.
+ */
+function documentHolds(pending: number, snapshot: boolean, meta: SyncMeta | undefined): boolean {
+  if (pending !== 0) return true;
+  if (meta === undefined) return snapshot;
+  return !snapshot || !settledForLogout(meta);
+}
+
+/**
+ * A plain IndexedDB open whose creation is aborted: it never creates or
+ * deletes the database and never changes its version. Null when none exists.
+ */
+async function openForPeek(scopeHash: string, options?: DexieOptions): Promise<IDBDatabase | null> {
+  if (!/^[a-f0-9]{64}$/.test(scopeHash)) throw new JournalError("invalid_input");
+  const factory = (options?.indexedDB ?? Dexie.dependencies.indexedDB) as Pick<IDBFactory, "open"> | undefined;
+  if (!factory) throw new JournalError("incomplete_store");
+  return new Promise<IDBDatabase | null>((resolve, reject) => {
+    const request = factory.open(`ductus-journal-v1-${scopeHash}`);
+    let missing = false;
+    request.onupgradeneeded = () => {
+      missing = true;
+      request.transaction?.abort();
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = (event) => {
+      event.preventDefault();
+      if (missing) resolve(null);
+      else reject(request.error ?? new JournalError("incomplete_store"));
+    };
+    request.onblocked = () => reject(new JournalError("logout_blocked"));
+  });
+}
+
 export type LogoutHold = { pending: number; copies: number; kept: boolean };
 
 const NOTHING_HELD: LogoutHold = { pending: 0, copies: 0, kept: false };
@@ -352,24 +388,7 @@ export class AtomicDexieJournal {
    * holds nothing by the fence's own rule; unexpected stores hold nothing.
    */
   static async peekLogoutHold(scopeHash: string, options?: DexieOptions): Promise<LogoutHold> {
-    if (!/^[a-f0-9]{64}$/.test(scopeHash)) throw new JournalError("invalid_input");
-    const factory = (options?.indexedDB ?? Dexie.dependencies.indexedDB) as Pick<IDBFactory, "open"> | undefined;
-    if (!factory) throw new JournalError("incomplete_store");
-    const db = await new Promise<IDBDatabase | null>((resolve, reject) => {
-      const request = factory.open(`ductus-journal-v1-${scopeHash}`);
-      let missing = false;
-      request.onupgradeneeded = () => {
-        missing = true;
-        request.transaction?.abort();
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = (event) => {
-        event.preventDefault();
-        if (missing) resolve(null);
-        else reject(request.error ?? new JournalError("incomplete_store"));
-      };
-      request.onblocked = () => reject(new JournalError("logout_blocked"));
-    });
+    const db = await openForPeek(scopeHash, options);
     if (!db) return NOTHING_HELD;
     try {
       const names = new Set(Array.from(db.objectStoreNames));
@@ -389,6 +408,38 @@ export class AtomicDexieJournal {
       ]);
       if (fence.some((row) => row.key === "logout")) return NOTHING_HELD;
       return { pending, copies, kept: holdsUnsynced(pending, copies, snapshots, metas) };
+    } finally {
+      db.close();
+    }
+  }
+
+  /**
+   * Whether this device holds text of one document the server does not have
+   * (DAN-699): the same read as `peekLogoutHold`, by document. Submission is
+   * not sent while it is true. A fenced journal holds nothing.
+   */
+  static async peekDocumentHold(scopeHash: string, documentId: string, options?: DexieOptions): Promise<boolean> {
+    if (!validDocumentId(documentId)) throw new JournalError("invalid_input");
+    const db = await openForPeek(scopeHash, options);
+    if (!db) return false;
+    try {
+      const names = new Set(Array.from(db.objectStoreNames));
+      if (!["snapshots", "pending", "meta"].every((name) => names.has(name))) return false;
+      const tx = db.transaction([...names], "readonly");
+      const ask = <T,>(name: string, read: (store: IDBObjectStore) => IDBRequest<T>, none: T): Promise<T> =>
+        !names.has(name) ? Promise.resolve(none) : new Promise<T>((resolve, reject) => {
+          const request = read(tx.objectStore(name));
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      const [fence, pending, snapshots, meta] = await Promise.all([
+        ask<JournalControl[]>("control", (store) => store.getAll() as IDBRequest<JournalControl[]>, []),
+        ask("pending", (store) => store.index("documentId").count(documentId), 0),
+        ask("snapshots", (store) => store.count(documentId), 0),
+        ask<SyncMeta | undefined>("meta", (store) => store.get(documentId) as IDBRequest<SyncMeta | undefined>, undefined),
+      ]);
+      if (fence.some((row) => row.key === "logout")) return false;
+      return documentHolds(pending, snapshots !== 0, meta);
     } finally {
       db.close();
     }

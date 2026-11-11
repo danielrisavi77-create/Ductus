@@ -14,7 +14,7 @@ import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionVi
 
 // F-10 (#476 contract 6384297464, QA criteria 3, 4, 5 and 8). Invented text only.
 const t = messagesHr.submission;
-const noop = { onSubmit: () => {}, onReload: () => {}, onReloadSummary: () => {} };
+const noop = { onSubmit: () => {}, onReload: () => {}, onReloadSummary: () => {}, onRecheck: () => {} };
 
 function doc(text: string): CanonicalDocument {
   const result = validateDocument({
@@ -39,7 +39,7 @@ const SUMMARY: ProcessSummaryV1 = {
 function ready(overrides: Partial<Extract<SubmissionState, { phase: "ready" }>> = {}): SubmissionState {
   return {
     phase: "ready", document: doc("Izmišljena rečenica o gradskim knjižnicama."), revision: 7,
-    sending: false, outcome: null, summary: { kind: "ok", summary: SUMMARY }, ...overrides,
+    sending: false, outcome: null, summary: { kind: "ok", summary: SUMMARY }, device: "clear", ...overrides,
   };
 }
 
@@ -143,6 +143,36 @@ describe("SubmissionView (F-10)", () => {
     for (const outcome of [{ kind: "submitted", receipt: RECEIPT }, { kind: "recordMismatch" }] as SubmitOutcome[]) {
       expect(render(ready({ outcome }))).toMatch(new RegExp(`id="${OUTCOME_ID}" tabindex="-1"`));
     }
+  });
+
+  // DAN-699 (#1876): text of the work on this device that the server lacks.
+  it("keeps the button closed until the device is read, and says it is reading", () => {
+    const html = render(ready({ device: "checking" }));
+    expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${t.submit}</button>`));
+    expect(html).toContain(t.device.checking);
+    expect(html).not.toContain(t.device.recheck);
+  });
+
+  it.each([["held", t.device.held], ["unknown", t.device.unknown]] as const)(
+    "with the device %s the button stays closed, the reason is an alert and a new check is offered",
+    (device, text) => {
+      const html = render(ready({ device }));
+      expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${t.submit}</button>`));
+      expect(html).toContain(`<p role="alert">${text}</p>`);
+      expect(html).toContain(`>${t.device.recheck}</button>`);
+    },
+  );
+
+  it("a clear device says nothing of it and leaves the button open", () => {
+    const html = render(ready());
+    expect(html).toMatch(submitButton);
+    expect(html).not.toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${t.submit}</button>`));
+    for (const text of Object.values(t.device)) expect(html).not.toContain(text);
+  });
+
+  it("after a receipt or with no text on the server the device check is not shown", () => {
+    expect(render(ready({ device: "held", outcome: { kind: "submitted", receipt: RECEIPT } }))).not.toContain(t.device.held);
+    expect(render(ready({ device: "held", revision: 0 }))).not.toContain(t.device.held);
   });
 
   it("offers a reload after a newer revision on the server", () => {

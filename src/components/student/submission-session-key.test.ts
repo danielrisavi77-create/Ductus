@@ -14,7 +14,7 @@ const source = readFileSync(join(process.cwd(), "src/components/student/Submissi
 describe("the submission is keyed by its session", () => {
   it("renders the stateful submission keyed by the session tag", () => {
     expect(source).toMatch(
-      /export default function Submission\([^)]*\)[^{]*\{\s*return <SessionSubmission key=\{session\.tag\} assignmentId=\{assignmentId\} session=\{session\} \/>;\s*\}/,
+      /export default function Submission\([^)]*\)[^{]*\{\s*return <SessionSubmission key=\{session\.tag\} assignmentId=\{assignmentId\} session=\{session\} scope=\{scope\} \/>;\s*\}/,
     );
   });
 
