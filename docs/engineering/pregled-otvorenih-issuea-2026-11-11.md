@@ -6,7 +6,7 @@ Snimka: 11. 11. 2026. Izvor: REST popis otvorenih issuea (bez PR-ova), povezani 
 
 - Otvoreno je **190 issuea, nijedan nema nositelja** (assignee); posao se vodi labelama i Linearom, pa „bez nositelja” ovdje ne znači „nitko ne radi na tome”. Aktivnu sesiju pokazuje labela `claude:in-progress` (3 issuea: #1880, #1889, #1893).
 - Prijedlog po stanju (točne brojke nisu izračunate, retke u tablicama treba čitati kao prijedlog):
-  - **Riješeno ili zastarjelo** (zatvoriti uz komentar nakon potvrde u Linearu): većinom jednokratni „Plan napada” issuei čiji su zadaci spojeni, neovisni planovi iz #1479 do #1491 i stari planski issuei iz listopada (#73 do #78, #325 do #342).
+  - **Riješeno ili zastarjelo** (zatvoriti uz komentar nakon potvrde u Linearu): većinom jednokratni „Plan napada” issuei čiji su zadaci spojeni, neovisni planovi #1479 do #1482, #1490 i #1491, te stari planski issuei iz listopada (#73 do #78, #325 do #338 i #341, osim #334). Točni popisi su u sekcijama 2 i 6; ostali issuei iz tih raspona (npr. #1486, #1488, #1489, #339, #340, #342) ostaju.
   - **Vrijedi, ima Linear vezu** (DAN-xxx iz naslova ili tijela): UX M4 do M8 (DAN-501, 502, 509, 599, 602), planovi napada za buduće korake i aktivni zadaci platforme.
   - **Vrijedi, nema Linear vezu**: nekoliko issuea (npr. #1880, #1894, #1503, #1345, #449); za njih je predložen novi DAN tiket ili spajanje u postojeći.
   - **Trajni pokazivači, ne zatvarati**: #87, #271, #152, #835, #1836, #1873.
