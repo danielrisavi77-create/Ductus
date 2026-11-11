@@ -43,6 +43,21 @@ test("real git additions, modifications and deletions of allowed docs use docs m
   assert.equal(r.profile(r.commit(["README.md", "docs/privacy/README.md", "docs/UX-EVAL.md"])), "docs");
 });
 
+test("DAN-710: a carrier signal only tightens the profile, a branch or author name never loosens it", (t) => {
+  const r = repository(t, { "README.md": "before\n", "src/code.ts": "before\n" });
+  r.put("README.md", "after\n");
+  const docsSha = r.commit(["README.md"]);
+  r.put("src/code.ts", "after\n");
+  const codeSha = r.commit(["src/code.ts"]);
+  const at = (headSha, headRef, author) => ciProfile({ eventName: "pull_request", baseRef: "main", headRef, author, baseSha: r.baseSha, headSha, cwd: r.cwd });
+  for (const [headRef, author] of [["docs-only", "writer"], ["docs/README.md", "docs[bot]"], ["mergify-docs", "mergify"], ["feature/x", "writer"]]) {
+    assert.equal(at(codeSha, headRef, author), "full", `${headRef} ${author}`);
+  }
+  assert.equal(at(docsSha, "docs-only", "writer"), "docs");
+  assert.equal(at(docsSha, "mergify/merge-queue/0123456789", "writer"), "full");
+  assert.equal(at(docsSha, "docs-only", "mergify[bot]"), "full");
+});
+
 test("ordinary docs cannot conceal runtime, governance, fixtures or unknown paths", () => {
   for (const path of ["src/ui.ts", "AGENTS.md", "STATE.md", "docs/PRODUCT.md", "docs/DECISIONS.md",
     "docs/ENGINEERING_SYSTEM.md", ".agents/skills/a/SKILL.md", ".github/workflows/ci.yml",
