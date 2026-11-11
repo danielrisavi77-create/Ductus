@@ -406,7 +406,7 @@ const en = {
     // DAN-36 (#576 6362017778): the teacher picks the deadline; there is no default.
     enrollmentCode: {
       validUntil: "Code valid until",
-      expiryHelp: "Required. Choose the date and time until which students can enrol in the course with this code, at most one year ahead.",
+      expiryHelp: "Required. Choose the date and time until which students can enrol in the course with this code, at most one year ahead, in Zagreb time.",
       selected: "Selected:",
       pending: "Issuing the code…",
       retry: "Issue the code again",
@@ -437,6 +437,7 @@ const en = {
       },
       opensAt: "Opens",
       dueAt: "Deadline",
+      timesHint: "Opening and deadline are entered in Zagreb time.",
       instructions: "Instructions for students",
       wordMin: "Minimum number of words (optional)",
       wordMax: "Maximum number of words (optional)",

@@ -263,14 +263,15 @@ export default function TeacherSetup({ existingCourse = null }: { existingCourse
               <label className={styles.field}>
                 <span>{a.opensAt}</span>
                 <input className={styles.control} type="datetime-local" value={opensAt}
-                  onChange={(e) => edit(setOpensAt)(e.target.value)} />
+                  aria-describedby="zadatak-vrijeme-pomoc" onChange={(e) => edit(setOpensAt)(e.target.value)} />
               </label>
               <label className={styles.field}>
                 <span>{a.dueAt}</span>
                 <input className={styles.control} type="datetime-local" value={dueAt}
-                  onChange={(e) => edit(setDueAt)(e.target.value)} />
+                  aria-describedby="zadatak-vrijeme-pomoc" onChange={(e) => edit(setDueAt)(e.target.value)} />
               </label>
             </div>
+            <p id="zadatak-vrijeme-pomoc" className={styles.hint}>{a.timesHint}</p>
             <label className={styles.field}>
               <span>{a.instructions}</span>
               <textarea className={styles.control} rows={4} value={instructions}

@@ -13,15 +13,18 @@
  *      them for us. "1 riječi" in a panel that is asking the author to trust it
  *      is a small dishonesty about how carefully the thing was made.
  *
- * Instants are rendered in the RUNTIME'S LOCAL TIME: these strings are read by
- * the author, and the author's clock is the one they will compare them
- * against. What is deterministic is the *shape* of the output, not the time
- * zone it is resolved in.
+ * Instants are rendered in Europe/Zagreb time, whatever the zone of the
+ * browser or server that runs the code (DAN-700, #1877): the student and the
+ * teacher of the pilot must read the same clock on a deadline and a comment.
+ * A minute with no zone (`2026-12-14T23:59`, as a `datetime-local` field
+ * holds it) is read as Zagreb time too.
  */
+
+import { type ZagrebWall, zagrebEpochMs, zagrebWall } from "./zagreb";
 
 /**
  * Month names in the genitive, which is the case a Croatian date uses:
- * "19. rujna", not "19. rujan". Index 0 is January, matching `Date#getMonth`.
+ * "19. rujna", not "19. rujan". Index 0 is January.
  */
 export const MONTHS_GENITIVE_HR = [
   "siječnja",
@@ -49,9 +52,9 @@ function pad2(value: number): string {
  * Callers show the raw input in that case rather than "Invalid Date" or, far
  * worse, silently substituting "now".
  */
-function parseInstant(iso: string): Date | null {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? null : at;
+function parseInstant(iso: string): ZagrebWall | null {
+  const epochMs = zagrebEpochMs(iso);
+  return epochMs === null ? null : zagrebWall(epochMs);
 }
 
 /**
@@ -65,7 +68,7 @@ export function formatDateHr(iso: string): string {
   if (at === null) {
     return iso;
   }
-  return `${at.getDate()}. ${MONTHS_GENITIVE_HR[at.getMonth()]} ${at.getFullYear()}.`;
+  return `${at.day}. ${MONTHS_GENITIVE_HR[at.month - 1]} ${at.year}.`;
 }
 
 /**
@@ -79,7 +82,7 @@ export function formatDateTimeHr(iso: string): string {
   if (at === null) {
     return iso;
   }
-  return `${formatDateHr(iso)} u ${pad2(at.getHours())}:${pad2(at.getMinutes())}`;
+  return `${formatDateHr(iso)} u ${pad2(at.hour)}:${pad2(at.minute)}`;
 }
 
 /**

@@ -408,7 +408,7 @@ export const hr = {
     // DAN-36 (#576 6362017778): the teacher picks the deadline; there is no default.
     enrollmentCode: {
       validUntil: "Kod vrijedi do",
-      expiryHelp: "Obavezno. Odaberite datum i vrijeme do kojih studenti mogu upisati kolegij ovim kodom, najviše godinu dana unaprijed.",
+      expiryHelp: "Obavezno. Odaberite datum i vrijeme do kojih studenti mogu upisati kolegij ovim kodom, najviše godinu dana unaprijed, po zagrebačkom vremenu.",
       selected: "Odabrano:",
       pending: "Izdavanje koda…",
       retry: "Ponovno izdaj kod",
@@ -439,6 +439,7 @@ export const hr = {
       },
       opensAt: "Otvaranje",
       dueAt: "Rok",
+      timesHint: "Otvaranje i rok unose se po zagrebačkom vremenu.",
       instructions: "Upute studentima",
       wordMin: "Najmanji broj riječi (neobvezno)",
       wordMax: "Najveći broj riječi (neobvezno)",
