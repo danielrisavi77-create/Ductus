@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+
 import fc from "fast-check";
 import { describe, expect, it, vi } from "vitest";
 
@@ -152,6 +155,30 @@ describe("the access screens of a session that was signed out", () => {
     const both = jar(answer.slice(0, answer.indexOf("=")), `${ENDED_MARK_PREFIX}${sessionTag(OTHER)}`);
     expect(teacherPageAccess("signedOut", "signed-out", accessCookie(OTHER, both))).toBe("signedOut");
     expect(teacherPageAccess("allowed", "signed-in", accessCookie(OTHER, both))).toBe("allowed");
+  });
+});
+
+// #1929: every access screen hands its closed session the cookie through
+// accessCookie, so a page that went back to the bare token fails here and not
+// only on /nastavnik (I5). Read from the source: the pages need a request.
+const pageSources = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return pageSources(path);
+    return /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+const screenCalls = pageSources(join(process.cwd(), "app")).flatMap((file) =>
+  [...readFileSync(file, "utf8").matchAll(/\b(?:teacherPageAccess|institutionScreen)\([^;]*/g)].map(
+    ([call]) => [relative(process.cwd(), file).replaceAll("\\", "/"), call] as const,
+  ));
+
+describe("every access screen of /nastavnik* and /ustanova*", () => {
+  it("is found", () => {
+    expect(screenCalls.length).toBeGreaterThanOrEqual(9);
+  });
+
+  it.each(screenCalls)("%s reads the cookie through accessCookie", (_file, call) => {
+    expect(call).toMatch(/,\s*accessCookie\(token, \(name\) => store\.has\(name\)\)\)/);
   });
 });
 
