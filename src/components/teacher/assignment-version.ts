@@ -2,10 +2,11 @@
 // sends the content and the version it was read from; the route and the RPC
 // decide who may, refuse a widening (PRODUCT rule 14) and a stale version
 // (409). Here the same rules only decide what the form offers and says.
+import { zagrebInstant, zagrebLocalMinute } from "@/lib/i18n/zagreb";
+
 import { AI_PURPOSES, parseWordRange, type AiPurpose } from "./assignment-create";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LOCAL_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 /** The version now in force, as the server read it. */
 export interface CurrentVersion {
@@ -24,7 +25,7 @@ export interface CurrentVersion {
   wordMax: number | null;
 }
 
-/** The form's text; times as `datetime-local` on the teacher's own clock. */
+/** The form's text; times as `datetime-local` in Zagreb time (DAN-700). */
 export interface VersionDraft {
   title: string;
   instructions: string;
@@ -61,14 +62,8 @@ export type VersionPublish =
   | { kind: "published"; versionNo: number }
   | { kind: "invalid" | "unauthorized" | "forbidden" | "conflict" | "unavailable" };
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
-/** An instant as `datetime-local` text on this device's clock, to the minute. */
-export function localMinute(iso: string): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return "";
-  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
-}
+/** An instant as `datetime-local` text in Zagreb time, to the minute, whatever the device's zone. */
+export const localMinute = zagrebLocalMinute;
 
 export function draftOf(current: CurrentVersion): VersionDraft {
   return {
@@ -82,12 +77,10 @@ export function draftOf(current: CurrentVersion): VersionDraft {
   };
 }
 
-/** An untouched time keeps the stored instant, seconds and all; an edited one is read on this clock. */
+/** An untouched time keeps the stored instant, seconds and all; an edited one is read as Zagreb time. */
 function instant(local: string, stored: string): string | null {
   if (local === localMinute(stored)) return stored;
-  if (!LOCAL_MINUTE.test(local)) return null;
-  const at = new Date(local);
-  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+  return zagrebInstant(local);
 }
 
 /** Rule 14: a bound may be dropped or relaxed, never added or tightened (as the RPC). */

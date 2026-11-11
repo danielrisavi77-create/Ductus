@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
@@ -34,7 +34,8 @@ describe("F-6 assignment body", () => {
       wordMin: null,
       wordMax: null,
     });
-    expect(body.opensAt).toBe(new Date("2026-11-02T09:00").toISOString());
+    expect(body.opensAt).toBe("2026-11-02T08:00:00.000Z");
+    expect(body.dueAt).toBe("2026-11-30T22:59:00.000Z");
   });
 
   it("prohibits use when nothing is checked or the course prohibits it (D-52)", () => {
@@ -133,5 +134,26 @@ describe("čl. 8 catalogue", () => {
     expect(AI_PURPOSES).toEqual(["formatting", "proofreading", "literature_search", "transcription", "translation"]);
     expect(t.teacher.tools.source).toContain("21. 5. 2026., članak 8.");
     expect(Object.keys(t.teacher.tools.alwaysBanned)).toHaveLength(10);
+  });
+});
+
+// DAN-700 (#1877): the opening and the deadline mean Zagreb time, whatever the browser's zone.
+describe.each(["Europe/Zagreb", "UTC", "America/New_York", "Asia/Tokyo"])("assignmentBody with TZ=%s", (zone) => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const course = "encouraged" as const;
+
+  it("reads both times as Zagreb minutes, across both clock changes", () => {
+    vi.stubEnv("TZ", zone);
+    const at = (opensAt: string, dueAt: string) => {
+      const body = assignmentBody({ ...draft, opensAt, dueAt }, course);
+      return body && [body.opensAt, body.dueAt];
+    };
+    expect(at("2026-11-02T09:00", "2026-12-14T23:59")).toEqual(["2026-11-02T08:00:00.000Z", "2026-12-14T22:59:00.000Z"]);
+    expect(at("2026-03-29T01:59", "2026-03-29T03:00")).toEqual(["2026-03-29T00:59:00.000Z", "2026-03-29T01:00:00.000Z"]);
+    expect(at("2026-10-25T02:30", "2026-10-25T03:00")).toEqual(["2026-10-25T00:30:00.000Z", "2026-10-25T02:00:00.000Z"]);
+    expect(at("2026-03-01T10:00", "2026-03-29T02:30")).toBeNull();
   });
 });

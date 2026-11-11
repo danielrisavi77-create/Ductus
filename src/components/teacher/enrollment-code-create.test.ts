@@ -14,7 +14,7 @@ const UNTIL = "2026-11-02T09:00:00.000Z";
 const ec = messagesHr.teacher.enrollmentCode;
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
-describe("enrollmentCodeExpiry: the teacher's local minute, no default", () => {
+describe("enrollmentCodeExpiry: a Zagreb minute, no default", () => {
   it.each(["", "bad", "2026-11-02", "2026-11-02T10:00:01", "2026-11-02T10:00Z",
     "0000-01-01T10:00", "2026-02-30T10:00", "2026-02-29T10:00", "2026-04-31T10:00",
     "2026-13-01T10:00", "2026-01-01T24:00", "2026-01-01T10:60"])("rejects %j without normalizing it", (local) => {
@@ -36,10 +36,13 @@ describe("enrollmentCodeExpiry: the teacher's local minute, no default", () => {
     expect(enrollmentCodeExpiry("2026-10-25T03:30")).toEqual({ validUntil: "2026-10-25T02:30:00.000Z", offset: "+01:00" });
   });
 
-  it("uses the teacher's own zone rather than assuming Zagreb", () => {
-    vi.stubEnv("TZ", "America/New_York");
-    expect(enrollmentCodeExpiry("2026-11-02T10:07")).toEqual({ validUntil: "2026-11-02T15:07:00.000Z", offset: "-05:00" });
-    expect(enrollmentCodeExpiry("2026-03-08T02:30")).toBeNull();
+  // DAN-700 (#1877): the form shows the expiry in Zagreb time, so the minute is read there too.
+  it.each(["America/New_York", "Asia/Tokyo"])("reads the minute as Zagreb time under TZ=%s", (zone) => {
+    vi.stubEnv("TZ", zone);
+    expect(enrollmentCodeExpiry("2026-11-02T10:07")).toEqual({ validUntil: "2026-11-02T09:07:00.000Z", offset: "+01:00" });
+    expect(enrollmentCodeExpiry("2026-03-08T02:30")).toEqual({ validUntil: "2026-03-08T01:30:00.000Z", offset: "+01:00" });
+    expect(enrollmentCodeExpiry("2026-03-29T02:30")).toBeNull();
+    expect(enrollmentCodeExpiry("2026-10-25T02:30")).toEqual({ validUntil: "2026-10-25T00:30:00.000Z", offset: "+02:00" });
   });
 });
 
