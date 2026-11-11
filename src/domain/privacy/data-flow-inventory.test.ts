@@ -99,14 +99,23 @@ function inventoryErrors(markdown: string, repo: Repo): string[] {
   }
   const open = sectionLines(markdown, OPEN_HEADING).filter((l) => l.startsWith("- "));
   for (const q of OPEN_QUESTIONS) {
-    const mention = new RegExp(`\\b${q}(?!\\d)`);
-    const lines = open.filter((l) => mention.test(l));
+    const lines = open.filter((l) => hasToken(l, q, (c) => /\w/.test(c), (c) => /\d/.test(c)));
     if (lines.length === 0) errors.push(`${q}: not listed as open`);
     else if (!lines.some((l) => l.includes("otvoreno"))) errors.push(`${q}: not marked otvoreno`);
     if (lines.some((l) => l.includes("ODLUČEN"))) errors.push(`${q}: must not be answered here`);
   }
   if (!open.some((l) => /\bD-30(?!\d)/.test(l) && l.includes("PRIJEDLOG"))) errors.push("D-30: must stay PRIJEDLOG");
   return errors;
+}
+
+/** True when `token` occurs in `text` with no `before` character directly ahead and no `after` character directly behind. */
+function hasToken(text: string, token: string, before: (c: string) => boolean, after: (c: string) => boolean): boolean {
+  for (let i = text.indexOf(token); i !== -1; i = text.indexOf(token, i + 1)) {
+    const b = text.charAt(i - 1);
+    const a = text.charAt(i + token.length);
+    if ((i === 0 || !before(b)) && (a === "" || !after(a))) return true;
+  }
+  return false;
 }
 
 function apiRoutes(dir: string): string[] {
@@ -279,7 +288,6 @@ const KNOWN_GAPS = [
   "institution.team_substitution", "institution.work_grant",
   "institution.course_holder", "institution.seminar_group_teacher",
 ];
-const SCHEMAS = "app|audit|collaboration|evidence|identity|institution|pgboss";
 
 function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = PROVIDERS): string[] {
   const errors: string[] = [];
@@ -302,9 +310,10 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   }
   // A table is covered when the inventory or a cited file names it, or a cited
   // code file calls a database function whose body uses it.
-  const called = functions.filter(([n]) => code.includes(n) || new RegExp(`(?<![a-z0-9_.])${n.split(".")[1]}\\(`).test(code));
-  const word = (t: string) => new RegExp(`(?<![a-z_])${t.replace(".", "\\.")}(?![a-z_])`);
-  const covered = (t: string) => word(t).test(inv) || citedText.some((x) => word(t).test(x)) || called.some(([, b]) => word(t).test(b));
+  const called = functions.filter(([n]) => code.includes(n) || hasToken(code, `${n.split(".")[1]}(`, (c) => /[a-z0-9_.]/.test(c), () => false));
+  const ident = (c: string) => /[a-z_]/.test(c);
+  const word = (text: string, t: string) => hasToken(text, t, ident, ident);
+  const covered = (t: string) => word(inv, t) || citedText.some((x) => word(x, t)) || called.some(([, b]) => word(b, t));
   const stillGaps = new Set<string>();
   for (const t of [...tables].sort()) {
     if (covered(t)) continue;
@@ -317,7 +326,7 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   }
   // Reverse: tables or functions the inventory names, and migrations it cites, exist and matter.
   const known = new Set([...tables, ...functions.map(([n]) => n)]);
-  for (const m of inv.matchAll(new RegExp(`\\b(?:${SCHEMAS})\\.[a-z_]+`, "g"))) {
+  for (const m of inv.matchAll(/\b(?:app|audit|collaboration|evidence|identity|institution|pgboss)\.[a-z_]+/g)) {
     if (!known.has(m[0])) errors.push(`inventory names ${m[0]}, not in the migrations`);
   }
   for (const [i, p] of cited.entries()) {
