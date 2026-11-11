@@ -31,19 +31,33 @@ export type WithActor = <T>(
 // cookie can neither raise an error that echoes it nor reach a log.
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
 
-// The configuration lock: the connection must be a login that is neither
-// superuser nor BYPASSRLS, inherits ductus_app, and is the role it
-// authenticated as with no role switched for the session. pg_stat_activity
-// keeps the role that authenticated, which SET SESSION AUTHORIZATION does not
-// change: a superuser connection that took on an app login's name would
-// otherwise pass and could RESET back to superuser inside fn.
-// The lock does not look at other memberships: a login that is also a member
-// of another role keeps what that role grants, also through a role switched
-// inside fn and switched back before the exit check. Provisioning keeps app
-// logins in ductus_app alone (pgTAP 010 checks it locally).
+// The configuration lock (F-018): the connection must be a login with none of
+// SUPERUSER, BYPASSRLS, CREATEROLE, CREATEDB and REPLICATION, whose one
+// membership is a direct grant of ductus_app, inherited and without ADMIN
+// OPTION, and which is the role it authenticated as with no role switched for
+// the session. The grant must exist: pg_has_role answers true for ductus_app
+// itself, which has no membership rows, so a LOGIN on the group role would
+// otherwise pass.
+// pg_stat_activity keeps the role that authenticated, which SET SESSION
+// AUTHORIZATION does not change: a superuser connection that took on an app
+// login's name would otherwise pass and could RESET back to superuser inside
+// fn. The exit check runs the same statement, so an attribute or membership
+// given to the login while fn runs rolls the transaction back. It sees such a
+// change only under READ COMMITTED, which withActor states in BEGIN: under a
+// connection default of REPEATABLE READ or SERIALIZABLE the catalogue would be
+// read from the snapshot taken at the entry check.
+// Provisioning keeps app logins this way (db/local/app-login.sql, pgTAP 010).
 const APP_ROLE_SQL = `
 (SELECT NOT r.rolsuper AND NOT r.rolbypassrls
+        AND NOT r.rolcreaterole AND NOT r.rolcreatedb AND NOT r.rolreplication
         AND pg_catalog.pg_has_role(r.oid, 'ductus_app', 'USAGE')
+        AND EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m
+                     WHERE m.member = r.oid
+                       AND m.roleid = 'ductus_app'::pg_catalog.regrole
+                       AND m.inherit_option AND NOT m.admin_option)
+        AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m
+                         WHERE m.member = r.oid
+                           AND (m.roleid <> 'ductus_app'::pg_catalog.regrole OR m.admin_option))
    FROM pg_catalog.pg_roles r
    JOIN pg_catalog.pg_stat_activity a ON a.usesysid = r.oid
   WHERE a.pid = pg_catalog.pg_backend_pid()
@@ -161,7 +175,7 @@ export function createWithActor(pool: Pick<Pool, "connect">): WithActor {
     };
 
     try {
-      await client.query("BEGIN");
+      await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
       const entered = await client.query(ENTER_ACTOR_SQL, [sessionToken, marker]);
       if (entered.rows[0]?.token_set !== true || entered.rows[0]?.app_role !== true) {
         connectionError = new Error("withActor: the database connection is not a ductus_app login");
