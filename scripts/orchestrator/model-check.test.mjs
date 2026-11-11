@@ -16,7 +16,8 @@ const verdict = (kind, head, v, model, over = {}) => {
   const line = model === undefined ? "" : `${m}: ${model}\n`;
   const scope = kind === "qa" ? "QA-Scope: full\n" : "";
   const slot = over.slot ?? "x";
-  const { slot: _slot, ...rest } = over;
+  const rest = { ...over };
+  delete rest.slot;
   return {
     author_association: "OWNER", user: { login: "u", type: "User" }, performed_via_github_app: { slug: "claude" },
     created_at: "2026-10-01T10:00:00Z", updated_at: "2026-10-01T10:00:00Z",
