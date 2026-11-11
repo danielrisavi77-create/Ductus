@@ -8,7 +8,7 @@ import { MAX_IMPORT_FILE_NAME_LENGTH, normalizeImportFileName } from "./file-nam
 
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
-const anyText = fc.oneof(fc.string({ unit: "binary", maxLength: 300 }), fc.string({ unit: fc.constantFrom("a", " ", "/", "\\", ".", "́", "​", "‮", "\uD800", "\uDC00", "\u{1F600}", "C"), maxLength: 260 }));
+const anyText = fc.oneof(fc.string({ unit: "binary", maxLength: 300 }), fc.string({ unit: fc.constantFrom("a", " ", "/", "\\", ".", "\u0301", "\u200B", "\u202E", "\uD800", "\uDC00", "\u{1F600}", "C"), maxLength: 260 }));
 
 describe("import file name: properties", () => {
   it("N9: normalizing twice equals normalizing once", () => {
