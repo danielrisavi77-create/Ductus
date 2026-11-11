@@ -31,7 +31,7 @@ function repository(t, files = { "README.md": "before\n" }) {
   };
   for (const [path, value] of Object.entries(files)) put(path, value);
   const baseSha = commit(Object.keys(files));
-  const profile = (headSha) => ciProfile({ eventName: "pull_request", baseRef: "main", baseSha, headSha, cwd });
+  const profile = (headSha) => ciProfile({ eventName: "pull_request", baseRef: "main", headRef: "feature/docs", author: "writer", baseSha, headSha, cwd });
   return { cwd, git, put, commit, baseSha, profile };
 }
 
@@ -98,7 +98,7 @@ test("real git errors, bad SHAs and empty diffs cannot bypass the stack", (t) =>
   }
   r.put("README.md", "changed\n");
   const headSha = r.commit(["README.md"]);
-  assert.throws(() => ciProfile({ eventName: "pull_request", baseRef: "main", baseSha: "main", headSha, cwd: r.cwd }));
+  assert.throws(() => ciProfile({ eventName: "pull_request", baseRef: "main", headRef: "feature/docs", author: "writer", baseSha: "main", headSha, cwd: r.cwd }));
   // Repository configuration must not hide a change using an external diff.
   r.git("config", "diff.external", "this-command-must-not-be-executed");
   assert.equal(r.profile(headSha), "docs");
@@ -130,6 +130,12 @@ test("scope uses only protected main and immutable objects with read permissions
   assert.match(scope, /PR_BASE: \$\{\{ github.event.pull_request.base.sha \}\}/);
   assert.match(scope, /PR_BASE_REF: \$\{\{ github.event.pull_request.base.ref \}\}/);
   assert.match(scope, /PR_HEAD: \$\{\{ github.event.pull_request.head.sha \}\}/);
+  // DAN-710: the Mergify carrier signals reach both classifiers through env only.
+  const review = readFileSync(new URL("../../.github/workflows/dependency-review.yml", import.meta.url), "utf8");
+  for (const text of [scope, review]) {
+    assert.match(text, /PR_HEAD_REF: \$\{\{ github.event.pull_request.head.ref \}\}/);
+    assert.match(text, /PR_AUTHOR: \$\{\{ github.event.pull_request.user.login \}\}/);
+  }
   assert.match(scope, /git fetch --no-tags --depth=1 origin "\$PR_HEAD"/);
   assert.doesNotMatch(scope, /pnpm install|pull_request_target|continue-on-error/);
   assert.doesNotMatch(scope, /^ {4}if:/m);

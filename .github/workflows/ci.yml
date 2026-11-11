@@ -40,6 +40,8 @@ jobs:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           if [ "$EVENT_NAME" != pull_request ] || [ "$PR_BASE_REF" != main ]; then
             echo 'profile=full' >> "$GITHUB_OUTPUT"
