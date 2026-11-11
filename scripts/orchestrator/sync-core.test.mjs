@@ -138,14 +138,32 @@ test("mergeCheck lets only a concluded merge that contains main and the PR head 
 // `git check-attr -z merge -- <paths>` prints path NUL attribute NUL value NUL per path.
 test("mergeDriverStop lets through only git's own text and binary merges", () => {
   const out = (...rows) => rows.map(([p, v]) => `${p}\0merge\0${v}\0`).join("");
-  for (const v of ["unspecified", "set", "unset", "text", "binary"]) assert.equal(mergeDriverStop(out(["a.txt", v])), null, v);
-  assert.equal(mergeDriverStop(""), null);
-  assert.equal(mergeDriverStop(out(["a.txt", "set"], ["d/b c.txt", "union"])), "merge attribute union on d/b c.txt");
-  assert.equal(mergeDriverStop(out(["x", "keepours"])), "merge attribute keepours on x");
+  for (const v of ["unspecified", "set", "unset", "text", "binary"]) assert.equal(mergeDriverStop(out(["a.txt", v]), ""), null, v);
+  assert.equal(mergeDriverStop("", ""), null);
+  assert.equal(mergeDriverStop(out(["a.txt", "set"], ["d/b c.txt", "union"]), ""), "merge attribute union on d/b c.txt");
+  assert.equal(mergeDriverStop(out(["x", "keepours"]), ""), "merge attribute keepours on x");
   // A path with a newline stays one field; output that is not whole triples is unreadable.
-  assert.equal(mergeDriverStop(out(["a\nb", "union"])), "merge attribute union on a\nb");
-  assert.match(String(mergeDriverStop("a.txt\0merge\0")), /could not be read/);
-  assert.match(String(mergeDriverStop(null)), /could not be read/);
+  assert.equal(mergeDriverStop(out(["a\nb", "union"]), ""), "merge attribute union on a\nb");
+  assert.match(String(mergeDriverStop("a.txt\0merge\0", "")), /could not be read/);
+  assert.match(String(mergeDriverStop(null, "")), /could not be read/);
+});
+
+// `git config -z --list` prints key NL value NUL per entry.
+test("mergeDriverStop stops on merge.default and on a driver configured under the attribute's name", () => {
+  const out = (...rows) => rows.map(([p, v]) => `${p}\0merge\0${v}\0`).join("");
+  const cfg = (...rows) => rows.map(([k, v]) => `${k}\n${v}\0`).join("");
+  const text = out(["a.txt", "unspecified"], ["b.txt", "text"]);
+  assert.equal(mergeDriverStop(text, ""), null);
+  assert.equal(mergeDriverStop(text, cfg(["user.name", "x"], ["merge.ours.driver", "true"], ["merge.renamelimit", "9"])), null);
+  assert.equal(mergeDriverStop(text, cfg(["merge.default", "union"])), "merge.default is set (union)");
+  assert.equal(mergeDriverStop(text, cfg(["merge.text.driver", "true"])), "merge driver text is configured for b.txt");
+  assert.equal(mergeDriverStop(text, cfg(["merge.unspecified.driver", "x"])), "merge driver unspecified is configured for a.txt");
+  // A subsection keeps its case and may hold dots; a value with a newline stays one entry.
+  assert.equal(mergeDriverStop(out(["c", "a.B"]), cfg(["merge.a.B.driver", "x\ny"])), "merge attribute a.B on c");
+  assert.equal(mergeDriverStop(out(["c", "set"]), cfg(["merge.Set.driver", "x"])), null);
+  assert.equal(mergeDriverStop(out(["c", "set"]), cfg(["merge.set.driver", "x\ny"])), "merge driver set is configured for c");
+  assert.match(String(mergeDriverStop(text, null)), /could not be read/);
+  assert.match(String(mergeDriverStop(text, "merge.default")), /could not be read/);
 });
 
 test("gitOperations reports every unfinished operation marker that exists and nothing it cannot read", async () => {

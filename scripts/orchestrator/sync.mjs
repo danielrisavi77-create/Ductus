@@ -49,8 +49,9 @@ const gitIo = (args, input, cwd) => new Promise((resolve) => {
 
 /**
  * Why the merge of `main` must not run here, or null. Attributes come from the checkout,
- * as for git merge itself; the paths are every file either side changed since any merge
- * base, so a renamed or conflicting file is among them. No base: git refuses the merge.
+ * as for git merge itself, and drivers from the config git merge reads; the paths are every
+ * file either side changed since any merge base, so a renamed or conflicting file is among
+ * them. No base: git refuses the merge.
  */
 async function mergeDriverCheck(main) {
   const bases = await tryGit("merge-base", "--all", "HEAD", main);
@@ -66,7 +67,8 @@ async function mergeDriverCheck(main) {
     }
   }
   if (paths.size === 0) return null;
-  return mergeDriverStop(await gitIo(["check-attr", "--stdin", "-z", "merge"], `${[...paths].join("\0")}\0`, top));
+  const attrs = await gitIo(["check-attr", "--stdin", "-z", "merge"], `${[...paths].join("\0")}\0`, top);
+  return mergeDriverStop(attrs, await gitIo(["config", "-z", "--list"], "", top));
 }
 const script = (name) => fileURLToPath(new URL(name, import.meta.url));
 const child = (name, args) => new Promise((resolve) => {

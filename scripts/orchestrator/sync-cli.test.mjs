@@ -326,6 +326,27 @@ for (const [driver, config] of [["union", null], ["keepours", ["merge.keepours.d
   });
 }
 
+// Git looks up a configured driver before its own merge, also under a built-in name, and an
+// unspecified attribute takes merge.default; each can drop one side of a conflict.
+for (const [attrs, key, value, want] of [
+  [null, "merge.default", "union", "merge.default is set (union)"],
+  ["* merge=text\n", "merge.text.driver", "true", "merge driver text is configured for pr.txt"],
+  ["* merge=binary\n", "merge.binary.driver", "true", "merge driver binary is configured for pr.txt"],
+  ["* merge=unspecified\n", "merge.unspecified.driver", "true", "merge driver unspecified is configured for pr.txt"],
+]) {
+  test(`${key} ${value} stops before the merge`, (t) => {
+    const r = setup(t, { mainFile: "pr.txt" });
+    if (attrs) writeFileSync(join(r.work, ".git", "info", "attributes"), attrs);
+    git(r.work, "config", key, value);
+    const res = r.sync();
+    assert.equal(res.code, 1, res.out);
+    assert.ok(res.out.includes(want), res.out);
+    assert.doesNotMatch(res.out, /preflight|SYNC OK|CONFLICT/);
+    assert.deepEqual(res.preflight, []);
+    untouched(r);
+  });
+}
+
 for (const attr of ["merge=text", "merge=binary", "-merge", "merge", "!merge"]) {
   test(`merge attribute "${attr}" is git's own merge and does not stop the run`, (t) => {
     const r = setup(t);

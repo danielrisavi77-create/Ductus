@@ -32,14 +32,26 @@ export async function gitOperations(tryGit, exists = existsSync) {
 /**
  * null when every path in `git check-attr -z merge -- <paths>` output merges with git's own
  * text or binary merge, otherwise the reason: a driver may resolve a conflict silently.
+ * `config` is `git config -z --list` output: git takes merge.default for an unspecified
+ * attribute and a configured merge.<name>.driver before its own merge of that name.
  */
-export function mergeDriverStop(out) {
-  if (typeof out !== "string") return "merge attributes could not be read";
+export function mergeDriverStop(out, config) {
+  const unreadable = "merge attributes could not be read";
+  if (typeof out !== "string" || typeof config !== "string") return unreadable;
   const f = out.split("\0");
   // Whole path, attribute, value triples followed by the final empty field.
-  if ((f.length - 1) % 3 !== 0 || f[f.length - 1] !== "") return "merge attributes could not be read";
+  if ((f.length - 1) % 3 !== 0 || f[f.length - 1] !== "") return unreadable;
+  const entries = config.split("\0");
+  if (entries.pop() !== "") return unreadable;
+  const drivers = new Set();
+  for (const entry of entries) {
+    const key = entry.split("\n", 1)[0];
+    if (key === "merge.default") return `merge.default is set (${entry.slice(key.length + 1)})`;
+    if (key.startsWith("merge.") && key.endsWith(".driver")) drivers.add(key.slice(6, -7));
+  }
   for (let i = 0; i + 2 < f.length; i += 3) {
     if (!GIT_MERGES.has(f[i + 2])) return `merge attribute ${f[i + 2]} on ${f[i]}`;
+    if (drivers.has(f[i + 2])) return `merge driver ${f[i + 2]} is configured for ${f[i]}`;
   }
   return null;
 }
