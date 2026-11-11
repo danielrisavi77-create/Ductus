@@ -1,3 +1,4 @@
+import { parseWorkLanguage, type WorkLanguage } from "@/domain/assignment/work-language";
 import type { WithActor } from "@/server/db/with-actor";
 
 import { AI_PURPOSES } from "./assignment-create";
@@ -13,7 +14,7 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type VersionRead =
-  | { kind: "available"; current: CurrentVersion }
+  | { kind: "available"; current: CurrentVersion; workLanguage: WorkLanguage | null }
   | { kind: "signedOut" | "notFound" | "unavailable" };
 
 interface Row {
@@ -32,12 +33,13 @@ interface Row {
   ai_purposes: string[];
   word_min: number | null;
   word_max: number | null;
+  work_language: unknown;
 }
 
 const QUERY = `WITH me AS (SELECT app.current_user_id() AS user_id)
 SELECT me.user_id, institution.actor_assignment_role(a.id) AS role, a.mentorship_id IS NOT NULL AS mentorship,
   v.version_no, v.title, v.instructions, v.work_type, v.evidence_profile, v.import_allowed,
-  v.opens_at, v.due_at, v.ai_policy, v.ai_purposes, v.word_min, v.word_max
+  v.opens_at, v.due_at, v.ai_policy, v.ai_purposes, v.word_min, v.word_max, v.work_language
 FROM me
 LEFT JOIN institution.assignment a ON a.id = $1
 LEFT JOIN institution.assignment_version v ON v.assignment_id = a.id AND v.version_no = a.current_version`;
@@ -71,6 +73,9 @@ export async function readCurrentVersion(
         wordMin: row.word_min,
         wordMax: row.word_max,
       },
+      // DAN-386 (P02c): read with the version, so the card saves against it.
+      // Anything outside the closed set hides the card, not the form.
+      workLanguage: parseWorkLanguage(row.work_language),
     };
   } catch {
     return { kind: "unavailable" };

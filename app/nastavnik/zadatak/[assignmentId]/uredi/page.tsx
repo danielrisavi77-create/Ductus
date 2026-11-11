@@ -8,6 +8,7 @@ import { shellSession } from "@/components/shell/shell-session";
 import AssignmentVersionForm from "@/components/teacher/AssignmentVersionForm";
 import { readCurrentVersion } from "@/components/teacher/assignment-version-read";
 import { teacherPageRead } from "@/components/teacher/teacher-access";
+import WorkLanguageCard from "@/components/teacher/WorkLanguageCard";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
@@ -51,6 +52,10 @@ export default async function AssignmentVersionPage({ params }: { params: Promis
         )}
         {read?.kind === "notFound" || read?.kind === "signedOut" ? <p role="alert">{n.missing}</p> : null}
         {read?.kind === "unavailable" ? <p role="status">{n.unavailable}</p> : null}
+        {read?.kind === "available" && read.workLanguage ? (
+          <WorkLanguageCard key={`jezik-${read.current.versionNo}`} assignmentId={read.current.assignmentId}
+            versionNo={read.current.versionNo} current={read.workLanguage} />
+        ) : null}
         {read?.kind === "available" ? <AssignmentVersionForm key={read.current.versionNo} current={read.current} /> : null}
         {screen === "unavailable" ? <p role="status">{t.teacher.unavailable}</p> : null}
         {screen === "denied" ? null : <p><Link href="/nastavnik">{t.teacher.backCourses}</Link></p>}
