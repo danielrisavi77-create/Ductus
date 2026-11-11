@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -11,8 +12,9 @@ import { GITLEAKS_ENTROPY, MIN_ENTROPY, canaryProblem, drawCanary, shannonEntrop
 // classes of the contract on #1836 (w701 UGOVOR). The values are invented.
 const script = resolve(dirname(fileURLToPath(import.meta.url)), "image-canary.mjs");
 const SYMBOLS = "0123456789abcdef";
-// A hex string with the given count per symbol, interleaved so no symbol repeats
-// in a row.
+// A hex string with the given count per symbol, spread out round-robin. At length
+// 40 no count gives an entropy of exactly 3.5 (the nearest is about 3.50016), so
+// LOW and MID bracket the gitleaks threshold.
 const fromCounts = (counts) => {
   const left = [...counts];
   let out = "";
@@ -35,6 +37,10 @@ test("entropy matches shannonEntropy of gitleaks on known values", () => {
 });
 
 test("the accepted floor keeps a margin over the gitleaks 8.30.1 threshold", () => {
+  // The threshold and stopwords are copied from gitleaks 8.30.1: a new pin in
+  // the smoke script must fail here until they are compared again.
+  const smoke = readFileSync(resolve(dirname(script), "production-image-smoke.sh"), "utf8");
+  assert.match(smoke, /^gitleaks_image="ghcr\.io\/gitleaks\/gitleaks:v8\.30\.1@sha256:[0-9a-f]{64}"$/m);
   assert.equal(GITLEAKS_ENTROPY, 3.5);
   assert.ok(MIN_ENTROPY - GITLEAKS_ENTROPY >= 0.1);
 });
@@ -50,6 +56,7 @@ test("each input class is accepted or rejected with its reason", () => {
     ["stopword feed", `${EVEN.slice(0, 20)}feed${EVEN.slice(24)}`, "stopword"],
     ["stopword 000000", `${EVEN.slice(0, 34)}000000`, "stopword"],
     ["stopword aaaaaa", `aaaaaa${EVEN.slice(6)}`, "stopword"],
+    ["32-character hex stopword", "6fe4476ee5a1832882e326b506d1412679c0b3da", "stopword"],
     ["stopword in capitals", `DEAD${EVEN.slice(4)}`, "not-hex"],
     ["no digit", "abcdef".repeat(6) + "abcd", "low-entropy"],
     ["one symbol", "7".repeat(40), "low-entropy"],

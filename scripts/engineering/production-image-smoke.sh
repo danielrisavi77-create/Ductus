@@ -111,6 +111,7 @@ echo "files and secrets: none in $(find "$layers" -type f | wc -l) files of the 
 # key name, and a Next.js key name with a value of the wrong form. The canary is
 # drawn until gitleaks cannot skip it for low entropy or a stopword (DAN-701).
 canary="$(node "$repo/scripts/engineering/image-canary.mjs")" || fail "no canary drawn"
+[[ $canary =~ ^[0-9a-f]{40}$ ]] || fail "no canary drawn"
 printf '\n"DUCTUS_CANARY_API_KEY": "%s"\n"__NEXT_PREVIEW_MODE_SIGNING_KEY": "%s"\n' "$canary" "$canary" >> "$layers/$manifest"
 status=0; scan "$layers" canary || status=$?
 [ "$status" -eq 3 ] || fail "gitleaks missed the canaries (exit $status)"

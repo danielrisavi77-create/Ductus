@@ -5,7 +5,8 @@
 // when that rule cannot skip it. From the gitleaks v8.30.1 source:
 // - config/gitleaks.toml: generic-api-key has entropy = 3.5, and detect/detect.go
 //   skips a secret whose Shannon entropy is <= 3.5;
-// - the same rule skips a secret holding a stopword; the hex ones are below.
+// - the same rule skips a secret holding a stopword (config/gitleaks.toml); all
+//   of its stopwords made only of hex characters are below.
 // 40 hex characters: the 64-character form is what infra/docker/image-gitleaks.toml
 // allows. Prints one canary and exits 0, or exits 1 after too many draws.
 import { randomBytes } from "node:crypto";
@@ -13,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 export const GITLEAKS_ENTROPY = 3.5;
 export const MIN_ENTROPY = 3.6;
-const HEX_STOPWORDS = ["dead", "feed", "000000", "aaaaaa"];
+const HEX_STOPWORDS = ["dead", "feed", "000000", "aaaaaa", "6fe4476ee5a1832882e326b506d14126"];
 
 /** Shannon entropy in bits per character, as gitleaks computes it (detect/utils.go). */
 export function shannonEntropy(value) {
