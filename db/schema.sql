@@ -5323,7 +5323,12 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
-  IF NOT institution.is_confirmed_teacher(p_holder_id, p_course_id) OR NOT EXISTS (
+  -- The new holder's teacher role row FOR SHARE until the end, taken after
+  -- the course (the course is already known to be in the actor's institution):
+  -- a revocation waits for this transaction, and one that committed first,
+  -- even while this call waited for the row, leaves no row to find.
+  -- revoke_teacher_role locks only that row, so the order cannot deadlock.
+  IF institution.lock_teacher_role(p_holder_id) IS NULL OR NOT EXISTS (
        SELECT 1 FROM institution.course_member m
        WHERE m.course_id = p_course_id AND m.user_id = p_holder_id AND m.role = 'teacher' AND m.member_to IS NULL
      ) THEN
