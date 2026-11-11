@@ -14,8 +14,65 @@ const driverEntry = require.resolve("pg");
 const driver = dirname(driverEntry);
 const driverPool = dirname(createRequire(driverEntry).resolve("pg-pool"));
 
-/** Index just past a quoted text, a comment or a dollar quote that starts at i, or i. */
-function skipOpaque(source: string, i: number): number {
+// A dollar-quote tag as PostgreSQL reads it: empty, or a letter or "_" and
+// then letters, digits or "_". Right after a name character "$" belongs to
+// the name, and "$1" is a parameter.
+const DOLLAR_TAG = String.raw`\$(?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?\$`;
+const NAME_CHAR = /[\w$\u0080-\uffff]/;
+const DOLLAR_START = new RegExp(`^${DOLLAR_TAG}`);
+
+/** Index just past the dollar quote that starts at i, or i. */
+function skipDollarQuote(source: string, i: number): number {
+  if (NAME_CHAR.test(source[i - 1] ?? "")) return i;
+  const tag = DOLLAR_START.exec(source.slice(i))?.[0];
+  if (!tag) return i;
+  const end = source.indexOf(tag, i + tag.length);
+  return end === -1 ? source.length : end + tag.length;
+}
+
+/**
+ * Index just past a comment, a string, a quoted name or a dollar quote that
+ * starts at i, or i, by PostgreSQL's rules: block comments nest, a quote is
+ * escaped by doubling it, and a backslash escapes only in an E'...' string.
+ */
+function skipSqlOpaque(source: string, i: number): number {
+  if (source.startsWith("--", i)) {
+    const end = source.indexOf("\n", i);
+    return end === -1 ? source.length : end + 1;
+  }
+  if (source.startsWith("/*", i)) {
+    let depth = 0;
+    do {
+      if (source.startsWith("/*", i)) {
+        depth++;
+        i += 2;
+      } else if (source.startsWith("*/", i)) {
+        depth--;
+        i += 2;
+      } else i++;
+    } while (depth > 0 && i < source.length);
+    return i;
+  }
+  const dollar = skipDollarQuote(source, i);
+  if (dollar !== i) return dollar;
+  const escapes = /[eE]/.test(source[i]) && source[i + 1] === "'" && !NAME_CHAR.test(source[i - 1] ?? "");
+  const quote = escapes ? "'" : source[i];
+  if (quote !== "'" && quote !== '"') return i;
+  let j = escapes ? i + 2 : i + 1;
+  while (j < source.length) {
+    if (escapes && source[j] === "\\") j += 2;
+    else if (source[j] !== quote) j++;
+    else if (source[j + 1] === quote) j += 2;
+    else return j + 1;
+  }
+  return source.length;
+}
+
+/**
+ * The same as the text of a TS or JS file reads it: "//" comments, a block
+ * comment ending at its first "*\/", and a backslash escape in any quote.
+ */
+function skipHostOpaque(source: string, i: number): number {
   const rest = source.slice(i);
   if (rest.startsWith("--") || rest.startsWith("//")) {
     const end = source.indexOf("\n", i);
@@ -25,11 +82,8 @@ function skipOpaque(source: string, i: number): number {
     const end = source.indexOf("*/", i + 2);
     return end === -1 ? source.length : end + 2;
   }
-  const dollar = /^\$[A-Za-z_]*\$/.exec(rest);
-  if (dollar) {
-    const end = source.indexOf(dollar[0], i + dollar[0].length);
-    return end === -1 ? source.length : end + dollar[0].length;
-  }
+  const dollar = skipDollarQuote(source, i);
+  if (dollar !== i) return dollar;
   const quote = source[i];
   if (quote === "'" || quote === '"' || quote === "`") {
     let j = i + 1;
@@ -39,14 +93,25 @@ function skipOpaque(source: string, i: number): number {
   return i;
 }
 
+type SkipOpaque = (source: string, i: number) => number;
+
+// The check reads every text both ways and fails closed: a call or a SET that
+// either reading lets outlive its transaction is a finding.
+const READINGS: SkipOpaque[] = [skipSqlOpaque, skipHostOpaque];
+
 /** Index of the next character that is not whitespace or a comment. */
-function skipSpace(source: string, i: number): number {
+function skipSpace(source: string, i: number, skipOpaque: SkipOpaque): number {
   for (;;) {
     while (i < source.length && /\s/.test(source[i])) i++;
-    const rest = source.slice(i);
-    if (!rest.startsWith("--") && !rest.startsWith("/*")) return i;
+    if (!source.startsWith("--", i) && !source.startsWith("/*", i)) return i;
     i = skipOpaque(source, i);
   }
+}
+
+interface SetConfigCall {
+  index: number;
+  args: string[];
+  closed: boolean;
 }
 
 /**
@@ -54,16 +119,17 @@ function skipSpace(source: string, i: number): number {
  * parentheses. Strings, comments and nested calls inside an argument stay
  * whole, so a text like ", true)" inside one is no argument.
  */
-function setConfigArguments(source: string): string[][] {
-  const calls: string[][] = [];
+function setConfigCalls(source: string, skipOpaque: SkipOpaque): SetConfigCall[] {
+  const calls: SetConfigCall[] = [];
   // The name may be a quoted identifier, "set_config" or, in a TS string,
   // \"set_config\"; the closing quote belongs to the name.
   for (const match of source.matchAll(/\bset_config\b(?:\\?")?/gi)) {
-    let i = skipSpace(source, match.index + match[0].length);
+    let i = skipSpace(source, match.index + match[0].length, skipOpaque);
     if (source[i] !== "(") continue;
     const args: string[] = [];
     let depth = 0;
     let start = ++i;
+    let closed = false;
     while (i < source.length) {
       const next = skipOpaque(source, i);
       if (next !== i) {
@@ -72,54 +138,35 @@ function setConfigArguments(source: string): string[][] {
       }
       const char = source[i];
       if (char === "(") depth++;
-      else if (char === ")" && depth-- === 0) break;
-      else if (char === "," && depth === 0) {
+      else if (char === ")" && depth-- === 0) {
+        closed = true;
+        break;
+      } else if (char === "," && depth === 0) {
         args.push(source.slice(start, i));
         start = i + 1;
       }
       i++;
     }
     args.push(source.slice(start, i));
-    calls.push(args);
+    calls.push({ index: match.index, args, closed });
   }
   return calls;
 }
 
 /** The literal word true, with only whitespace and comments around it. */
-function isLiteralTrue(argument: string): boolean {
-  const bare = argument.replace(/\/\*[\s\S]*?\*\/|--[^\n]*/g, "").trim();
-  return /^true$/i.test(bare);
+function isLiteralTrue(argument: string, skipOpaque: SkipOpaque): boolean {
+  const start = skipSpace(argument, 0, skipOpaque);
+  if (!/^true/i.test(argument.slice(start, start + 4))) return false;
+  return skipSpace(argument, start + 4, skipOpaque) === argument.length;
 }
 
 // SET where a statement starts: at the start of the text, after a quote, a
 // semicolon, a dollar quote, a comment, or a PL/pgSQL BEGIN, THEN, ELSE or
 // LOOP, in any case. What follows SET is read by opensSessionSet.
-const STATEMENT_SET = /(?:^|["'`;]|\$[A-Za-z_]*\$|\*\/|--[^\n]*\n|\b(?:BEGIN|THEN|ELSE|LOOP)\b)\s*SET\b/gi;
-
-/**
- * Index of the next character that is not whitespace or a comment, with
- * PostgreSQL's nested block comments: "/* a /* b *\/ c *\/" is one comment.
- */
-function skipSqlSpace(source: string, i: number): number {
-  for (;;) {
-    while (i < source.length && /\s/.test(source[i])) i++;
-    if (source.startsWith("--", i)) {
-      const end = source.indexOf("\n", i);
-      i = end === -1 ? source.length : end + 1;
-    } else if (source.startsWith("/*", i)) {
-      let depth = 0;
-      do {
-        if (source.startsWith("/*", i)) {
-          depth++;
-          i += 2;
-        } else if (source.startsWith("*/", i)) {
-          depth--;
-          i += 2;
-        } else i++;
-      } while (depth > 0 && i < source.length);
-    } else return i;
-  }
-}
+const STATEMENT_SET = new RegExp(
+  String.raw`(?:^|["'\`;]|(?<![\w$\u0080-\uffff])${DOLLAR_TAG}|\*\/|--[^\n]*\n|\b(?:BEGIN|THEN|ELSE|LOOP)\b)\s*SET\b`,
+  "gi",
+);
 
 // SET LOCAL, SET TRANSACTION and SET CONSTRAINTS end with the transaction;
 // "SET SESSION CHARACTERISTICS" is still caught.
@@ -127,25 +174,30 @@ const TRANSACTION_SCOPED = new Set(["LOCAL", "TRANSACTION", "CONSTRAINTS"]);
 
 /**
  * Whether the SET that ends at i outlives its transaction. A comment counts
- * as whitespace, as it does for PostgreSQL. A comment is read both as
- * PostgreSQL nests it and as a flat one; either reading that leaves a
- * session SET is enough.
+ * as whitespace, as it does for PostgreSQL. Read flat, "/* a /* b *\/ c *\/"
+ * leaves "c"; either reading that leaves a session SET is enough.
  */
 function opensSessionSet(source: string, i: number): boolean {
-  return [skipSqlSpace, skipSpace].some((skip) => {
-    const start = skip(source, i);
+  return READINGS.some((skipOpaque) => {
+    const start = skipSpace(source, i, skipOpaque);
     if (!/["A-Za-z_]/.test(source[start] ?? "")) return false;
     const word = /^[A-Za-z_]\w*/.exec(source.slice(start))?.[0] ?? "";
     const end = start + word.length;
-    return !TRANSACTION_SCOPED.has(word.toUpperCase()) || skip(source, end) === end;
+    return !TRANSACTION_SCOPED.has(word.toUpperCase()) || skipSpace(source, end, skipOpaque) === end;
   });
 }
 
 /** Each forbidden set_config call, and each SET statement up to its line end. */
 function sessionScoped(source: string): string[] {
-  const calls = setConfigArguments(source)
-    .filter((args) => args.length !== 3 || !isLiteralTrue(args[2]))
-    .map((args) => `set_config(${args.join(",")})`);
+  // One finding per call, worded as the first reading that rejects it.
+  const calls = new Map<number, string>();
+  for (const skipOpaque of READINGS) {
+    for (const call of setConfigCalls(source, skipOpaque)) {
+      if (calls.has(call.index)) continue;
+      if (call.closed && call.args.length === 3 && isLiteralTrue(call.args[2], skipOpaque)) continue;
+      calls.set(call.index, `set_config(${call.args.join(",")})`);
+    }
+  }
   const statements = [...source.matchAll(STATEMENT_SET)]
     .map((match) => match.index + match[0].length)
     .filter((end) => opensSessionSet(source, end))
@@ -154,7 +206,7 @@ function sessionScoped(source: string): string[] {
       const lineEnd = source.indexOf("\n", start);
       return source.slice(start, lineEnd === -1 ? source.length : lineEnd);
     });
-  return [...calls, ...statements];
+  return [...calls.values(), ...statements];
 }
 
 function sources(directory: string, pattern = /\.(ts|tsx|js|mjs)$/): string[] {
@@ -255,6 +307,52 @@ describe("session-scoped settings", () => {
     ]) {
       expect(sessionScoped(source), source).toHaveLength(1);
     }
+  });
+
+  // Review and QA on #1888, second round: the third argument as PostgreSQL
+  // reads it, past nested comments, dollar quotes with any tag, E-strings,
+  // doubled quotes and quoted names that hold ", true)".
+  it.each([
+    ["nested comment, one level", "SELECT set_config('app.session_token', 'x', /* a /* b */ true) */ false);"],
+    ["nested comment, two levels", "SELECT set_config('a', 'x', /* a /* b /* c */ true) */ */ false);"],
+    ["nested comments side by side", "set_config('a', $1, /* a /* b */ /* c */ true) */ false)"],
+    ["nested comment around true", "set_config('a', $1, /* a /* b */ true */ false)"],
+    ["unclosed nested comment", "set_config('a', $1, /* a /* b */ true)"],
+    ["dollar tag with a digit", "SELECT set_config('app.session_token', $k3$x, true)$k3$, false);"],
+    ["empty dollar tag", "set_config('a', $$x, true)$$, false)"],
+    ["dollar tag starting with an underscore", "set_config('a', $_t$x, true)$_t$, false)"],
+    ["dollar tag with an underscore and a digit", "set_config('a', $t_1$x, true)$t_1$, false)"],
+    ["dollar tag with a letter outside ASCII", "set_config('a', $č$x, true)$č$, false)"],
+    ["dollar quote closed only by its own tag", "set_config('a', $a$x, true)$b$ $a$, false)"],
+    [", true) in a string", "set_config('a', ', true)', false)"],
+    [", true) after a doubled quote", "set_config('a', 'it'', true)', false)"],
+    [", true) in an E-string", "set_config('a', E'\\', true) ', false)"],
+    [", true) in a lower case e-string", "set_config('a', e'\\', true) ', false)"],
+    ["backslash in a standard string", "set_config('a', '\\', false) --', true)"],
+    [", true) in a quoted name", 'set_config(\'a\', "x"", true)", false)'],
+    [", true) in a dollar quote", "set_config('a', $q$, true)$q$, false)"],
+  ])("rejects set_config whose real third argument is not true: %s", (_name, source) => {
+    expect(sessionScoped(source), source).toHaveLength(1);
+  });
+
+  it.each([
+    ["dollar tag with a digit", "set_config('a', $k3$x, false)$k3$, true)"],
+    ["empty dollar tag", "set_config('a', $$x$$, true)"],
+    ["dollar tag with an underscore", "set_config('a', $_t1$x$_t1$, true)"],
+    ["positional parameter", "set_config($1, $2, true)"],
+    ["E-string", "set_config('a', E'it\\'s', true)"],
+    ["doubled quote", "set_config('a', 'it''s, false)', true)"],
+    ["quoted name", 'set_config(\'a\', "x"", false)", true)'],
+    ["comment around true", "set_config('a', $1, /* a */ true -- b\n)"],
+  ])("accepts set_config whose real third argument is true: %s", (_name, source) => {
+    expect(sessionScoped(source), source).toEqual([]);
+  });
+
+  it.each([
+    ["dollar tag with a digit", "DO $k3$ SET role x; $k3$;"],
+    ["dollar tag with an underscore", "DO $_b$\nSET app.x = '1';\n$_b$;"],
+  ])("finds SET right after a dollar quote: %s", (_name, source) => {
+    expect(sessionScoped(source), source).toHaveLength(1);
   });
 
   it("finds SET where an SQL file or a PL/pgSQL block starts a statement", () => {

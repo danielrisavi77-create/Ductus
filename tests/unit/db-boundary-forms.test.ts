@@ -123,7 +123,10 @@ describe("app/ reaches the database through @/server/db only (F-019)", () => {
   });
 });
 
-const SKIPPED = /(?:^|\/)node_modules\/|^(?:\.git|\.next|\.claude|test-results|playwright-report)/;
+// Whole directories, as the ignores in eslint.config.mjs name them: a file
+// whose name only starts the same, such as test-results-helper.ts, is read.
+const SKIPPED =
+  /(?:^|\/)node_modules\/|^(?:\.git|\.next|\.claude\/worktrees|playwright-report(?:-login)?|test-results(?:-login)?)\//;
 
 /** Whether the scan below lints a path from readdirSync, which on Windows separates with a backslash. */
 function isScanned(file: string): boolean {
@@ -138,20 +141,38 @@ describe("paths the directive scan reads", () => {
     ["packages\\a\\node_modules\\b\\index.ts"],
     [".git\\hooks\\x.js"],
     [".next\\server\\page.js"],
-    [".claude\\x.mjs"],
+    [".claude\\worktrees\\a\\x.mjs"],
     ["test-results\\x.ts"],
+    ["test-results-login\\x.ts"],
     ["playwright-report\\x.js"],
+    ["playwright-report-login/x.js"],
     ["src\\application\\notes.md"],
   ])("skips %s", (file) => {
     expect(isScanned(file)).toBe(false);
   });
 
-  it.each([["src\\application\\probe.ts"], ["src/application/probe.ts"], ["app\\api\\route.tsx"], ["eslint.config.mjs"]])(
-    "reads %s",
-    (file) => {
-      expect(isScanned(file)).toBe(true);
-    },
-  );
+  // Review on #1888: only the directories themselves, not names that start alike.
+  it.each([
+    ["src\\application\\probe.ts"],
+    ["src/application/probe.ts"],
+    ["app\\api\\route.tsx"],
+    ["eslint.config.mjs"],
+    ["test-results-helper.ts"],
+    ["test-results.ts"],
+    ["test-resultsx\\x.ts"],
+    ["src\\test-results\\x.ts"],
+    ["playwright-report-x.js"],
+    ["playwright-report-login.ts"],
+    [".github\\scripts\\x.mjs"],
+    [".gitx.js"],
+    [".next-x.ts"],
+    [".claude\\x.mjs"],
+    [".claude\\worktrees-x.ts"],
+    ["node_modules-x.ts"],
+    ["src\\node_modules.ts"],
+  ])("reads %s", (file) => {
+    expect(isScanned(file)).toBe(true);
+  });
 });
 
 const DIRECTIVES = [
