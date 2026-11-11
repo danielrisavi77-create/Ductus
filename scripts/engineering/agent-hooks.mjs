@@ -214,8 +214,9 @@ export function budgetNotice(tokens, role = "unknown") {
 // A writer or control session gets STATE.md with the body of that section
 // replaced by one line naming the lines left out; every other role, including
 // a session with no detectable role, gets the text unchanged (DAN-695).
-// Headings and fenced blocks follow CommonMark: up to three spaces of indent,
-// and a fence closes only with the same character, at least as long.
+// ATX headings and fenced blocks follow CommonMark: up to three spaces of
+// indent, and a fence closes only with the same character, at least as long.
+// Setext headings and HTML blocks are not recognised; STATE.md uses neither.
 const OWNER_QUEUE = /^ {0,3}##[ \t]+Owner queue\b/i;
 const SECTION = /^ {0,3}#{1,2}(?:[ \t]|$)/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
@@ -268,7 +269,7 @@ export function stateForRole(text, role) {
     const bare = line.replace(/\r$/, "");
     const section = !fenced(bare) && SECTION.test(bare);
     const queue = section && OWNER_QUEUE.test(bare);
-    if (body && section && !queue) flush();
+    if (body && section) flush();
     if (body) return void body.lines.push(line);
     out.push(line);
     if (queue) body = { from: index + 2, lines: [], cr: line.endsWith("\r") ? "\r" : "" };

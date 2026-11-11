@@ -465,8 +465,10 @@ const QUEUE = "## Owner queue (samo Daniel)";
 const NOTE = "> Owner queue left out for this session's role:";
 const note = (from, to) => `${NOTE} STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`;
 // A body is cut only when it is longer than the note with seven-digit line
-// numbers and its blank lines; an item this long always is.
-const ROOM = 3 + note(9_999_999, 9_999_999).length + 1 + 1;
+// numbers and the blank line on each side, newlines counted; an item this long
+// always is. With CRLF each of those three lines also carries a "\r".
+const ROOM = 1 + note(9_999_999, 9_999_999).length + 1 + 1;
+const ROOM_CRLF = ROOM + 3;
 const item = (n) => `- [ ] Q-${n} ${"x".repeat(140)}`;
 
 test("stateForRole: table of roles and STATE.md shapes", () => {
@@ -505,6 +507,16 @@ test("stateForRole: table of roles and STATE.md shapes", () => {
     [`# S\r\n${QUEUE}\r\n${item(1)}\r\n# T\r\n`, `# S\r\n${QUEUE}\r\n\r\n${note(3, 3)}\r\n\r\n# T\r\n`],
     // Text that was already cut is handed over as it is.
     [`# S\n${QUEUE}\n\n${note(3, 9)}\n\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 9)}\n\n## A\n`],
+    // The threshold: a body exactly as long as the note's room stays, one more
+    // character is cut; with CRLF the room is three characters larger.
+    [`# S\n${QUEUE}\n${"y".repeat(ROOM - 1)}\n## A\n`, `# S\n${QUEUE}\n${"y".repeat(ROOM - 1)}\n## A\n`],
+    [`# S\n${QUEUE}\n${"y".repeat(ROOM)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n\n## A\n`],
+    [`# S\r\n${QUEUE}\r\n${"y".repeat(ROOM_CRLF - 2)}\r\n## A\r\n`, `# S\r\n${QUEUE}\r\n${"y".repeat(ROOM_CRLF - 2)}\r\n## A\r\n`],
+    [`# S\r\n${QUEUE}\r\n${"y".repeat(ROOM_CRLF - 1)}\r\n## A\r\n`, `# S\r\n${QUEUE}\r\n\r\n${note(3, 3)}\r\n\r\n## A\r\n`],
+    // Two queue sections in a row: each heading stays and gets its own note.
+    [`# S\n${QUEUE}\n${item(1)}\n## Owner queue arhiva\n${item(2)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n\n## Owner queue arhiva\n\n${note(5, 5)}\n\n## A\n`],
+    // An unclosed fence runs to the end of the file, as in CommonMark.
+    [`# S\n${QUEUE}\n${item(1)}\n\`\`\`\n## A\nx\n`, `# S\n${QUEUE}\n\n${note(3, 6)}\n`],
   ];
   for (const [input, expected] of cases) assert.equal(stateForRole(input, "worker"), expected, JSON.stringify(input));
 });
@@ -544,14 +556,17 @@ const arbSection = fc.record({
   body: fc.array(fc.oneof(arbLine, fc.constant(item(9))), { maxLength: 4 }),
 });
 
-function expectedState(sections, role) {
+function expectedState(sections, role, crlf = false, final = true) {
   const out = [];
   let line = 0;
   let open = null; // the Owner queue section being cut: { from, lines }
   const close = (last = false) => {
     if (!open) return;
-    const size = open.lines.reduce((sum, text) => sum + text.length + 1, 0);
-    if (size > ROOM) out.push("", note(open.from, open.from + open.lines.length - 1), ...(last ? [] : [""]));
+    // With CRLF every body line carries a "\r", except the file's last line
+    // when there is no final newline.
+    const returns = crlf ? open.lines.length - (last && !final && open.lines.length ? 1 : 0) : 0;
+    const size = open.lines.reduce((sum, text) => sum + text.length + 1, 0) + returns;
+    if (size > (crlf ? ROOM_CRLF : ROOM)) out.push("", note(open.from, open.from + open.lines.length - 1), ...(last ? [] : [""]));
     else out.push(...open.lines);
     open = null;
   };
@@ -559,7 +574,7 @@ function expectedState(sections, role) {
     const level = heading.trim().match(/^#+/)[0].length;
     const queue = /^## Owner queue\b/.test(heading.trim());
     line += 1;
-    if (open && level <= 2 && !queue) close();
+    if (open && level <= 2) close();
     if (open) open.lines.push(heading);
     else out.push(heading);
     if (!open && queue && (role === "worker" || role === "control")) open = { from: line + 1, lines: [] };
@@ -570,7 +585,7 @@ function expectedState(sections, role) {
     }
   }
   close(true);
-  return out.join("\n");
+  return out.join(crlf ? "\r\n" : "\n");
 }
 
 const arbState = fc.tuple(fc.array(arbSection, { maxLength: 6 }), fc.boolean(), fc.boolean()).map(([sections, final, crlf]) => {
@@ -583,9 +598,9 @@ test("property: only Owner queue lines leave, the note names them, other roles g
     fc.property(arbState, fc.constantFrom("worker", "control", "orchestrator", "unknown"), ({ sections, final, text, crlf }, role) => {
       // "a\n" is one line with a final newline, never "a" and an empty line: such a
       // case is drawn with final = true instead.
-      fc.pre(!crlf && (final || !text.endsWith("\n")));
+      fc.pre(final || !text.endsWith("\n"));
       const result = stateForRole(text, role);
-      assert.equal(result, expectedState(sections, role) + (final ? "\n" : ""));
+      assert.equal(result, expectedState(sections, role, crlf, final) + (final ? (crlf ? "\r\n" : "\n") : ""));
       if (role === "orchestrator" || role === "unknown") assert.equal(result, text);
     }),
   );
