@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { usageOf, wantsHelp } from "./help.mjs";
 
@@ -32,7 +33,10 @@ for (const [name, cmd] of ORCH) {
   test(`${name} --help prints its usage and exits 0 without gh or git`, () => {
     for (const flag of ["--help", "-h"]) {
       // An empty PATH: any attempt to start gh or git fails instead of reaching GitHub.
-      const r = spawnSync(process.execPath, [script.pathname, "1", flag], { encoding: "utf8", env: { PATH: "" } });
+      // fileURLToPath, not URL.pathname: the pathname keeps percent-encoding
+      // (a space is %20) and, on Windows, a slash before the drive letter
+      // (/D:/...), so node would look for a file that does not exist.
+      const r = spawnSync(process.execPath, [fileURLToPath(script), "1", flag], { encoding: "utf8", env: { PATH: "" } });
       assert.equal(r.status, 0, r.stderr);
       assert.match(r.stdout, /usage:/i);
       assert.equal(r.stderr, "");
