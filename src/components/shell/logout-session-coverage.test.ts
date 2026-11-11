@@ -65,6 +65,18 @@ describe("the sign-outs read with the session", () => {
     expect(source).toMatch(/step\.kind === "leave"\)\s*\{\s*window\.location\.assign\("\/"\);\s*return;/);
   });
 
+  // DAN-99: the shell signs out like the editor, so an unanswered POST still
+  // ends the page's session here instead of leaving for the browser's error page.
+  it("ShellLogout ends its own session through the shared sign-out", () => {
+    const source = readFileSync(join(ROOT, "src/components/shell/ShellLogout.tsx"), "utf8");
+    expect(source).toContain("signOutHere(session, browserSignOutDeps())");
+    expect(source).toMatch(/reached \? followLogoutNatively\(\) : unanswered\(\)/);
+    expect(source).toContain("signedOutHere={signedOutHere}");
+    expect(source).not.toMatch(/\.submit\(\)/);
+    // Without JS the form still posts to the route (I5).
+    expect(source).toContain('method="post" action="/api/auth/logout"');
+  });
+
   it("the editor's sign-out reads with it and leaves without posting", () => {
     const source = readFileSync(join(ROOT, "src/components/editor/LocalDocument.tsx"), "utf8");
     expect(source).toMatch(/editorSignOutPlan\(.*, scope, \{ session \}\);/);

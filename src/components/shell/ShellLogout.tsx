@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { readLogoutHold, shellLogoutStep } from "@/client/logout-hold";
+import { browserSignOutDeps, followLogoutNatively, signOutHere } from "@/client/logout-request";
 import type { SessionMark } from "@/client/session-marks";
 import LogoutDialog from "@/components/editor/LogoutDialog";
 import type { LogoutPlan } from "@/components/editor/logout-plan";
@@ -20,21 +21,35 @@ export type ShellLogoutProps = {
   children?: ReactNode;
 };
 
+/** What the dialog shows after a sign-out that held nothing and went unanswered. */
+const NOTHING_HELD: LogoutPlan = { unsaved: false, pending: 0, copies: 0, kept: false };
+
 /**
  * Sign-out from a shell page without the editor (D-118): reads per click what
  * this person's journal holds; nothing posts at once, else the dialog names
- * it. The same POST either way; nothing is deleted here; without JS it posts (I5).
+ * it. The same POST as the editor's either way (DAN-99): the session ends on
+ * this device whatever the route answers, and an unanswered sign-out says so
+ * in the dialog instead of leaving for an error page. Nothing is deleted
+ * here; without JS the form posts (I5).
  */
 export default function ShellLogout({ scope, session, className, buttonClassName, lead, children }: ShellLogoutProps) {
-  const formRef = useRef<HTMLFormElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
+  const [signedOutHere, setSignedOutHere] = useState(false);
 
-  // `submit()` fires no submit event, so this handler does not run again.
-  const post = () => {
+  const unanswered = () => {
+    setPlan((open) => open ?? NOTHING_HELD);
+    setSignedOutHere(true);
+    setBusy(false);
+  };
+  // Answered: on to the provider's logout. Otherwise ended here all the same.
+  const signOut = () => {
     setBusy(true);
-    formRef.current?.submit();
+    void signOutHere(session, browserSignOutDeps()).then(
+      (reached) => (reached ? followLogoutNatively() : unanswered()),
+      unanswered,
+    );
   };
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -48,7 +63,7 @@ export default function ShellLogout({ scope, session, className, buttonClassName
         return;
       }
       if (step.kind === "plain") {
-        post();
+        signOut();
         return;
       }
       setBusy(false);
@@ -68,7 +83,7 @@ export default function ShellLogout({ scope, session, className, buttonClassName
 
   return (
     <>
-      <form ref={formRef} method="post" action="/api/auth/logout" className={className} onSubmit={onSubmit}>
+      <form method="post" action="/api/auth/logout" className={className} onSubmit={onSubmit}>
         {lead}
         <button ref={buttonRef} type="submit" className={buttonClassName} disabled={busy}>
           {children}
@@ -79,8 +94,8 @@ export default function ShellLogout({ scope, session, className, buttonClassName
         <LogoutDialog
           plan={plan}
           working={busy}
-          signedOutHere={false}
-          onConfirm={post}
+          signedOutHere={signedOutHere}
+          onConfirm={signOut}
           onStay={() => setPlan(null)}
           onExport={() => {}}
           copies={plan.copies}

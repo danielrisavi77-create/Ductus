@@ -3,7 +3,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import {
-  appCookie, clickSignOut, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+  appCookie, clickSignOut, logoutDialogOf, ROLE_HOME, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
 import { APP_ORIGIN } from "./origin";
 
@@ -19,6 +19,8 @@ const PREFIX = "ductus-journal-v1-";
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 const logoutOf = (page: Page) => page.getByRole("button", { name: t.auth.logout, exact: true });
+const phaseOf = (page: Page) => page.locator(".editor-surface");
+const noticeOf = (page: Page) => page.locator(".editor-notice[role=alert]");
 // An invented assignment id: the notice page shows its shell and "not found".
 const NOTICE = "/zadatak/5d1c9a2e-7b3f-4e6a-9c8d-0f1e2d3c4b5a";
 
@@ -125,6 +127,25 @@ async function workOnDevice(page: Page): Promise<number> {
   return owed;
 }
 
+/**
+ * Every request to the logout route, as "method type" (DAN-99, as #1444 class
+ * 6 for the editor): the page's own fetch, and on success the native POST that
+ * follows it to the provider. Nothing else may call the route.
+ */
+function logoutRequests(context: BrowserContext): string[] {
+  const seen: string[] = [];
+  context.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/logout") seen.push(`${request.method()} ${request.resourceType()}`);
+  });
+  return seen;
+}
+const ONE_FETCH = "POST fetch";
+const ENDED_COOKIE = /^ductus-ended-[0-9A-Za-z_-]+$/;
+
+async function endedCookies(context: BrowserContext): Promise<string[]> {
+  return (await context.cookies(ORIGIN)).map((c) => c.name).filter((name) => ENDED_COOKIE.test(name));
+}
+
 async function snapshot(page: Page, name: string): Promise<void> {
   await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 }
@@ -132,9 +153,13 @@ async function snapshot(page: Page, name: string): Promise<void> {
 test("T1: without work on the device, Odjava on /upis signs out at once and creates no journal", async ({ page, context }) => {
   await signIn(page, "/upis");
   const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  const logouts = logoutRequests(context);
   await signOutWithoutDialog(page);
   await expectSignedOut(page, token);
   expect(await journalNames(page)).toEqual([]);
+  // DAN-99: the fetch the editor sends, then the native POST on to the provider.
+  expect(logouts).toEqual([ONE_FETCH, "POST document"]);
+  expect(await endedCookies(context)).toHaveLength(1);
 });
 
 test("T2 and T3: work of this person opens the dialog with its number; another person's never does", async ({ page, context }) => {
@@ -331,4 +356,140 @@ test("T10: on /rad without a network, unsent changes open the dialog as before, 
   await clickSignOut(page);
   await page.waitForURL(`${ORIGIN}/`);
   await expectSignedOut(page, token);
+});
+
+// DAN-99 (Z-02, D-118): a 503, no network or no answer within the limit no
+// longer leaves for the browser's error page. The session ends on this device,
+// the dialog says so, and nothing sends the sign-out again.
+for (const answer of ["503", "network", "timeout"] as const) {
+  test(`T11: ${answer} on /upis without work: the sign-out ends here and says so, once`, async ({ page, context }) => {
+    test.setTimeout(60_000);
+    await signIn(page, "/upis");
+    const token = (await appCookie(context, SESSION_COOKIE))!.value;
+    const logouts = logoutRequests(context);
+    await page.route("**/api/auth/logout", async (route) => {
+      if (answer === "503") await route.fulfill({ status: 503, body: "" });
+      if (answer === "network") await route.abort("internetdisconnected");
+    });
+    await logoutOf(page).click();
+    const dialog = logoutDialogOf(page);
+    await expect(dialog.getByRole("alert")).toHaveText(t.auth.logoutDevice, { timeout: 15_000 });
+    await expect(dialog).not.toContainText(t.auth.logoutKept);
+    await expect(dialog.getByRole("button")).toHaveText([t.auth.logoutClose]);
+    await expect(dialog.getByRole("button", { name: t.auth.logoutClose })).toBeFocused();
+    expect(page.url()).toBe(`${ORIGIN}/upis`);
+    expect(await endedCookies(context)).toHaveLength(1);
+    await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(logoutOf(page)).toBeFocused();
+    // The route was not reached: the server session waits for its expiry.
+    await expectStillSignedIn(page, token);
+    expect(await journalNames(page)).toEqual([]);
+    // "Odjava" again reads the ended mark and leaves without a second POST;
+    // under the kept cookie `/` goes on to /rad, which stays closed.
+    await logoutOf(page).click();
+    await page.waitForURL(ROLE_HOME);
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+    await expect(editorOf(page)).toHaveText("");
+    expect(logouts).toEqual([ONE_FETCH]);
+  });
+}
+
+test("T12: unsent work and no network: the shell's sign-out keeps the work, stops the /rad tab, and it is back after sign-in", async ({ page, context }) => {
+  test.setTimeout(90_000);
+  const owed = await workOnDevice(page);
+  const shell = await context.newPage();
+  await shell.setViewportSize({ width: 1440, height: 900 });
+  await shell.goto("/upis");
+  const logouts = logoutRequests(context);
+  await shell.route("**/api/auth/logout", (route) => route.abort("internetdisconnected"));
+
+  await logoutOf(shell).click();
+  const dialog = logoutDialogOf(shell);
+  const sentence = (await dialog.locator("p").first().textContent()) ?? "";
+  expect(Number(sentence.split(" ")[0])).toBe(owed);
+  await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice, { timeout: 15_000 });
+  await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutKept);
+  await expect(dialog.getByRole("button")).toHaveText([t.auth.logoutClose]);
+  await snapshot(shell, "odjava-ljuska-uredaj-rad-1440-tamna");
+
+  // The /rad tab of the same session hears it and shows the text no more.
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expect(editorOf(page)).toHaveText("");
+  await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
+  // Nothing was deleted from the device (D-118).
+  expect(await pendingRows(shell)).toBe(owed);
+  expect(logouts).toEqual([ONE_FETCH]);
+
+  await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+  await expect(logoutOf(shell)).toBeFocused();
+  await shell.close();
+  // "Prijavi se" on /rad signs in anew; the text is back.
+  await forgetProviderLogin(context);
+  await noticeOf(page).getByRole("link", { name: t.auth.signInAgain }).click();
+  await page.getByRole("button", { name: "Demo studentica" }).click();
+  await page.waitForURL(`${ORIGIN}/rad`);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await expect(editorOf(page)).toHaveText("Nacrt B: zelena bilježnica, druga rečenica");
+  expect(logouts).toEqual([ONE_FETCH]);
+});
+
+// As the editor's (#1444 N1): another person signs in in a second tab while
+// the shell's sign-out waits; only the session of the click ends.
+test("T13 Istodobnost: a sign-in in another tab while the shell's sign-out waits keeps the newer session", async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await signIn(page, "/upis");
+  const logouts = logoutRequests(context);
+  await page.route("**/api/auth/logout", () => {});
+  await logoutOf(page).click();
+  await expect.poll(() => logouts).toEqual([ONE_FETCH]);
+
+  await forgetProviderLogin(context);
+  const second = await context.newPage();
+  await signIn(second, "/upis", "Demo student 2");
+  const tokenB = (await appCookie(context, SESSION_COOKIE))!.value;
+  await expect(logoutDialogOf(page).getByRole("alert")).toHaveText(t.auth.logoutDevice, { timeout: 15_000 });
+  await second.reload();
+  await expectStillSignedIn(second, tokenB);
+  expect(logouts).toEqual([ONE_FETCH]);
+  // B was not marked ended: its own "Odjava" reaches the route and closes it.
+  await signOutWithoutDialog(second);
+  await expectSignedOut(second, tokenB);
+});
+
+// D-183 (#1330, #1336): the shell's dialog after a sign-out that ended on this
+// device, full page, both themes, 1440 and 400 px. No new visual element: the
+// editor's dialog of the same state (reference docs/design/ductura/m0-rad-reference).
+test("D-183: the shell's sign-out that ended on this device, both themes, 1440 and 400 px", async ({ page, context }) => {
+  test.setTimeout(120_000);
+  const shoot = async (name: string) => {
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    await snapshot(page, name);
+    const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(axe.violations.filter((v) => v.impact === "critical" || v.impact === "serious")).toEqual([]);
+  };
+  await page.route("**/api/auth/logout", (route) => route.abort("internetdisconnected"));
+  // An ended sign-out leaves on the next click, so every picture signs in anew.
+  for (const theme of ["tamna", "svijetla"] as const) {
+    for (const width of [1440, 400]) {
+      await page.setViewportSize({ width, height: 900 });
+      await forgetProviderLogin(context);
+      await signIn(page, "/upis");
+      if (theme === "svijetla" && (await page.locator("html").getAttribute("data-theme")) !== "light") {
+        await page.evaluate(() => localStorage.setItem("ductura.theme", "light"));
+        await page.reload();
+      }
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme === "tamna" ? "dark" : "light");
+      // On a phone "Odjava" sits in the drawer behind the menu button.
+      if (width === 400) await page.getByRole("button", { name: t.shell.openNav }).click();
+      await logoutOf(page).click();
+      const dialog = logoutDialogOf(page);
+      await expect(dialog.getByRole("alert")).toHaveText(t.auth.logoutDevice, { timeout: 15_000 });
+      await shoot(`odjava-ljuska-uredaj-${theme}-${width}`);
+      await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+  }
 });
