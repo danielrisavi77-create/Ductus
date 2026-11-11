@@ -66,19 +66,14 @@ const FIXTURES = new Set([
   "scripts/engineering/pre-push-tests.mjs", "scripts/engineering/pre-push-tooling.test.mjs",
   "scripts/engineering/risk-floor.test.mjs",
 ]);
-const sources = tracked.filter(({ mode, path }) => mode !== "160000" && !path.endsWith(".md") && !FIXTURES.has(path))
-  .flatMap(({ path }) => {
-    const text = readFileSync(`${root}${path}`, "latin1");
-    // `join("docs", "adr")` and `"docs/" + "adr"` read as the joined path.
-    return text.includes("\0") ? [] : [{ path, text: text.replace(/["'`]\s*[,+]\s*["'`]/g, "/") }];
-  });
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-test("listed documents are tracked plain docs outside D-97 and the agent rules", () => {
+test("listed documents are plain docs outside D-97 and the agent rules", () => {
   assert.equal(new Set(ORDINARY_DOCS).size, ORDINARY_DOCS.length);
   const modes = new Map(tracked.map(({ mode, path }) => [path, mode]));
   for (const path of ORDINARY_DOCS) {
-    assert.equal(modes.get(path), "100644", `${path} is a tracked regular file`);
+    // A docs-only PR may delete a listed document, so only a present one is checked.
+    assert.ok([undefined, "100644"].includes(modes.get(path)), `${path} is a regular file`);
     assert.match(path, /^(?:README\.md|docs\/(?:[a-z0-9-]+\/)?[A-Za-z0-9.-]+\.md)$/, path);
     assert.ok(!isD97Path(path) && !/^(?:STATE|AGENTS|CLAUDE)\.md$|^\.(?:claude|agents)\//.test(path), path);
   }
@@ -86,31 +81,96 @@ test("listed documents are tracked plain docs outside D-97 and the agent rules",
 
 // Files of the steps a docs profile skips: stack, browser, database, property,
 // local launcher and fake OIDC tests, the Next build and the production image.
-const SKIPPED = /^(?:e2e|tests\/(?:property|integration)|infra|db|scripts\/(?:local|db)|config|public)\/|^scripts\/engineering\/production-image|\.(?:property|integration)\.test\.ts$|^(?:next\.config|middleware|instrumentation|playwright[\w.]*config|compose)\.|^(?:src|app)\/(?!.*\.test\.tsx?$)/;
+const SKIPPED = /^(?:e2e|tests\/(?:property|integration)|infra|db|scripts\/(?:local|db)|config|public)\/|^scripts\/engineering\/(?:production-image|ui-test-pilot|e2e-shards|login-shard|db-schema|playwright-(?:version|install))(?![\w.-]*\.test\.)|\.(?:property|integration)\.test\.ts$|^(?:next\.config|middleware|instrumentation|playwright[\w.]*config|compose|vitest\.config)\.|^(?:src|app)\/(?!.*\.test\.tsx?$)/;
+// The jobs and steps of ci.yml that run only on the full profile.
+const workflow = readFileSync(`${root}.github/workflows/ci.yml`, "utf8");
+const skippedBlocks = workflow.split(/^(?= {2}[\w-]+:$)/m).flatMap((job) => (/^ {4}if:.*profile == 'full'/m.test(job)
+  ? [job] : job.split(/^(?= {6}- )/m).filter((step) => step.includes("profile == 'full'"))));
+// Both the raw text and a joined form are searched: `"docs/" + "adr"` and
+// `join("docs/", "adr")` read as `docs/adr`, while the raw text keeps array items apart.
+const forms = (text) => [text, text.replace(/["'`]\s*\+\s*["'`]/g, "").replace(/["'`]\s*,\s*["'`]/g, "/").replace(/\/{2,}/g, "/")];
+const sources = [...tracked.filter(({ mode, path }) => mode !== "160000" && !path.endsWith(".md") && !FIXTURES.has(path))
+  .flatMap(({ path }) => {
+    const text = readFileSync(`${root}${path}`, "latin1");
+    return text.includes("\0") ? [] : [{ path, skipped: SKIPPED.test(path), forms: forms(text) }];
+  }), { path: ".github/workflows/ci.yml (skipped steps)", skipped: true, forms: forms(skippedBlocks.join("\n")) }];
+
+const PATTERNS = new Map();
+for (const path of ORDINARY_DOCS) {
+  const directory = [];
+  // The bare docs root is checked separately (WHOLE_DOCS).
+  for (let dir = dirname(path); dir !== "." && dir !== "docs"; dir = dirname(dir)) {
+    directory.push(new RegExp(`(?<![\\w.-])${escape(dir)}/?(?=["'\`*)$]|\\$\\{|$)`, "m"));
+  }
+  PATTERNS.set(path, {
+    // `docs/x/README.md` is another file, so a root name preceded by "/" is not it.
+    direct: new RegExp(`(?<![\\w.${path.includes("/") ? "" : "/"}-])${escape(path)}(?![\\w.-])`),
+    directory,
+    sibling: new RegExp(`(?<![\\w.-])${escape(posix.basename(path))}(?![\\w.-])`),
+  });
+}
+const WHOLE_DOCS = /(?<![\w.-])docs\/?(?=["'`*]|\$\{)/;
+
+// How `file` reads the listed document `path`, or "" when it does not.
+function reads(path, file, texts) {
+  const { direct, directory, sibling } = PATTERNS.get(path);
+  for (const text of texts) {
+    if (direct.test(text)) return "names";
+    if (directory.some((pattern) => pattern.test(text))) return "reads the directory of";
+    if (dirname(file) === dirname(path) && sibling.test(text)) return "lists";
+  }
+  return "";
+}
+
+test("every script a skipped ci.yml step runs is a skipped-step file", () => {
+  assert.ok(skippedBlocks.length >= 8 && ["pnpm build", "production-image.mjs", "login-shards.mjs"]
+    .every((word) => skippedBlocks.some((block) => block.includes(word))));
+  for (const block of skippedBlocks) {
+    for (const [script] of block.matchAll(/scripts\/[\w./-]+\.(?:mjs|sh)/g)) assert.match(script, SKIPPED, script);
+  }
+});
+
+test("the reader matcher catches joined, concatenated and listed paths", () => {
+  const nested = ORDINARY_DOCS.find((path) => path.split("/").length > 2);
+  const dir = dirname(nested);
+  const [top, name] = [doc.split("/")[0], doc.slice(doc.indexOf("/") + 1)];
+  const at = "scripts/engineering/x.mjs";
+  for (const text of [`"${doc}"`, `"${top}/" + "${name}"`, `"${top}" + "/${name}"`, `join("${top}/", "${name}")`,
+    `join("${top}", "${name}")`, `"${top}/" + '${name}'`]) {
+    assert.equal(reads(doc, at, forms(text)), "names", text);
+  }
+  assert.equal(reads(nested, at, forms(`"${top}/" + "${dir.slice(5)}/" + "${posix.basename(nested)}"`)), "names");
+  for (const text of [`"${dir}"`, `"${dir}/" + f`, `"${dir}" + "/" + f`, `join("${top}/", "${dir.slice(5)}")`,
+    `new URL("../../${dir}/", import.meta.url)`, `[\n  "${dir}",\n  "src/app",\n]`, `\`${dir}/\${f}\``]) {
+    assert.equal(reads(nested, at, forms(text)), "reads the directory of", text);
+  }
+  assert.equal(reads(nested, `${dir}/x.mjs`, forms(`"${posix.basename(nested)}"`)), "lists");
+  for (const text of [`"${doc}x"`, `"x${doc}"`, `"${dir}-old"`, `"x${dir}"`, `"${dir}.md"`]) {
+    assert.equal(reads(doc, at, forms(text)) + reads(nested, at, forms(text)), "", text);
+  }
+  for (const text of ['"docs"', '"./docs/"', "`docs/${f}`", '"docs/**/*.md"', "`${root}/docs`", '["app", "docs"]',
+    'new URL("../../docs/", import.meta.url)']) {
+    assert.ok(forms(text).some((form) => WHOLE_DOCS.test(form)), text);
+  }
+  for (const text of ['"docsx"', '"my-docs"', "docs.length"]) assert.ok(!forms(text).some((form) => WHOLE_DOCS.test(form)), text);
+});
 
 test("no tracked file outside Markdown names a listed document, its directory or a sibling list", () => {
   for (const path of ORDINARY_DOCS) {
     // A root name such as README.md is also every directory's README, so only
     // the skipped steps are searched for it; their tests read nothing at the root.
-    const readers = path.includes("/") ? sources : sources.filter(({ path: file }) => SKIPPED.test(file));
-    // `docs/x/README.md` is another file, so a root name preceded by "/" is not it.
-    const direct = new RegExp(`(?<![\\w.${path.includes("/") ? "" : "/"}-])${escape(path)}(?![\\w.-])`);
-    // The bare docs root is walked only by always-on engineering tests (below).
-    const directory = [];
-    for (let dir = dirname(path); dir !== "." && dir !== "docs"; dir = dirname(dir)) {
-      directory.push(new RegExp(`(?<![\\w.-])${escape(dir)}/?(?=["'\`*)$]|$)`, "m"));
-    }
-    const sibling = new RegExp(`(?<![\\w.-])${escape(posix.basename(path))}(?![\\w.-])`);
-    for (const { path: file, text } of readers) {
-      assert.doesNotMatch(text, direct, `${file} names ${path}`);
-      for (const pattern of directory) assert.doesNotMatch(text, pattern, `${file} reads the directory of ${path}`);
-      if (dirname(file) === dirname(path)) assert.doesNotMatch(text, sibling, `${file} lists ${path}`);
+    for (const { path: file, forms: texts } of path.includes("/") ? sources : sources.filter(({ skipped }) => skipped)) {
+      const how = reads(path, file, texts);
+      assert.equal(how, "", `${file} ${how} ${path}`);
     }
   }
 });
 
 test("no file of a step the docs profile skips reads the whole docs directory", () => {
-  for (const { path, text } of sources) {
-    if (SKIPPED.test(path)) assert.doesNotMatch(text, /["'`](?:\.\/)?docs\/?["'`]/, path);
+  for (const { path, skipped, forms: texts } of sources) {
+    // The production image names docs only in the list it keeps out of the image.
+    const kept = path === "scripts/engineering/production-image.mjs"
+      ? texts.map((text) => text.replace(/^const NEVER_INCLUDED = new Set\(\[.*\]\);$/m, "")) : texts;
+    if (skipped) assert.ok(!kept.some((text) => WHOLE_DOCS.test(text)), path);
   }
 });
