@@ -61,7 +61,7 @@ Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rje
 
 ## 5. Skills
 
-Repo sadrži adaptere za podržane runtimee (27 projektnih skillova `ductus-*`, iste mape u obje lokacije; uz njih je u `.claude/skills/` i preuzeti `supabase-postgres-best-practices`, koji nije adapter i nema kopiju u `.agents/skills/`, vidi `docs/REPOZITORIJI.md`):
+Repo sadrži adaptere za podržane runtimee (28 projektnih skillova `ductus-*`, iste mape u obje lokacije; uz njih je u `.claude/skills/` i preuzeti `supabase-postgres-best-practices`, koji nije adapter i nema kopiju u `.agents/skills/`, vidi `docs/REPOZITORIJI.md`):
 
 ```
 .claude/skills/
@@ -92,6 +92,7 @@ Repo sadrži adaptere za podržane runtimee (27 projektnih skillova `ductus-*`, 
   ductus-testing-map/
   ductus-ui-copy/
   ductus-ui-shell-i18n/
+  ductus-vlasnik/
   supabase-postgres-best-practices/
 
 .agents/skills/
@@ -122,6 +123,7 @@ Repo sadrži adaptere za podržane runtimee (27 projektnih skillova `ductus-*`, 
   ductus-testing-map/
   ductus-ui-copy/
   ductus-ui-shell-i18n/
+  ductus-vlasnik/
 ```
 
 Skillovi su namjerno tanki. Ne dupliciraju proizvodna pravila; upućuju na kanonske dokumente u korijenu i `docs/`. Tako se jedna promjena pravila ne mora ručno kopirati u više skillova.
