@@ -31,7 +31,7 @@ Oznake stanja: **R** riješeno na mainu, **Z** zastarjelo (zamijenjeno novijim i
 | #1902 | Nestabilni testovi na mainu | V | DAN-702; zadržati. |
 | #1869, #1868 | PR metapodaci i Squawk na pre-pushu | V | DAN-692, DAN-691; #1869 ima `ready-for-claude`. |
 | #1880, #1889, #1893 | Alati za sesije, audit čitljivosti, vodič forensics | V | U radu (`claude:in-progress`): DAN-696, DAN-698; #1880 nema DAN, predlažem novi tiket. |
-| #1823, #1826 | Proces workera (DAN-517 ostatak) i plan napada | V | DAN-517; spojeni PR-ovi #1829, #1720 pokrivaju dio. Provjeriti ostatak (N). |
+| #1823, #1826 | Proces workera (DAN-517 ostatak) i plan napada | N | DAN-517; spojeni PR-ovi #1829, #1720 pokrivaju dio. Provjeriti ostatak (N). |
 | #1843 | Plan napada DAN-381 M7.0-S1 | V | DAN-381; zadržati dok M7 nije gotov. |
 | #1671 | Plan napada DAN-574 PR B | N | PR-ovi #1672 do #1674 spojeni; vjerojatno R, potvrditi u Linearu. |
 | #1597 | Plan napada DAN-435 paket spikes/docx-provenance | R | #1600, #1606, #1610 spojeni; zatvoriti uz DAN-435. |
@@ -99,7 +99,7 @@ Oznake stanja: **R** riješeno na mainu, **Z** zastarjelo (zamijenjeno novijim i
 | #923 | Archivum, svi ekrani (DAN-344) | N | Više PR-ova spojeno; praćenje. |
 | #960 | Dizajn: jedan mjerodavni dokument | R | D-188 i `docs/design/DESIGN-SYSTEM.md` postoje; zatvoriti. |
 | #956, #954, #953, #951 | Početna stranica i editor (DAN-347, 353, 354, 355) | N | Bez spojenog PR-a po DAN oznaci; provjeriti u Linearu. |
-| #871 | Demo korak 2: citat i bibliografija bez unosa u sučelju | Z | Citiranje (DAN-343) je naknadno građeno; provjeriti. |
+| #871 | Demo korak 2: citat i bibliografija bez unosa u sučelju | N | Citiranje (DAN-343) je naknadno građeno; zamjena nije potvrđena, provjeriti. |
 | #397 | AI pomoć nastavniku nakon demoa | Z | Izvan vala 1; D-194, Q-10. Pridružiti DAN za M9. |
 | #417 | Čitljivost koda nakon demoa | Z | Zamijenjeno #1889 i #1893 (DAN-696, 698). Zatvoriti. |
 | #79 | GOV: Ustav i odobreni mockup | Z | Ustav v1.4 i D-188 vrijede; zatvoriti. |
