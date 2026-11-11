@@ -3,6 +3,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { readBodyWithLimit } from "@/server/http/mutation-request";
 
 import { identityFromClaims } from "./claims";
+import { endedMarkCookie } from "./ended-mark";
 import type { AuthConfig } from "./config";
 import { isProviderUnavailable, newLoginChecks, type LoginChecks, type OidcClient } from "./oidc";
 import { sessionTag } from "./principal";
@@ -230,8 +231,9 @@ export async function logoutAll(request: Request, deps: AuthDeps): Promise<Respo
  * whether a session existed or not. It never sets the session cookie (#1929):
  * HTTP cannot clear a cookie only while it is still the one this request
  * read, so an answer that clears could land after a sign-in from another tab
- * and remove that newer cookie. The closed session's cookie reads as signed
- * out on every page, and only the next sign-in replaces it. When the database
+ * and remove that newer cookie. It marks the closed session's tag instead
+ * (ended-mark.ts), so its cookie reads as signed out on every page
+ * (middleware.ts), and only the next sign-in replaces it. When the database
  * fails, nothing was closed, so both routes answer 503: the page then ends
  * the session on this device (Z-02), never reports a sign-out that the
  * server did not make, and can send it again (contract addendum on #1091,
@@ -265,7 +267,10 @@ async function endSessions(
       return failurePage(503);
     }
   }
-  return redirect(await providerLocation(deps), []);
+  // The mark of this cookie's session alone, from the cookie and not from the
+  // database, so the answer tells nothing about whether a session was open.
+  const mark = endedMarkCookie(token);
+  return redirect(await providerLocation(deps), mark === null ? [] : [mark]);
 }
 
 /**

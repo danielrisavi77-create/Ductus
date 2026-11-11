@@ -1,11 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { withoutEndedSession } from "@/server/auth/ended-session-cookie";
 import { issuerOriginOf, newNonce, pageContentSecurityPolicy } from "@/server/http/content-security-policy";
 
 // DAN-489 (M1.6b): a new nonce and Content-Security-Policy for every page
 // request. Next.js reads the nonce from the request header and puts it on its
 // own scripts; the browser enforces the response header.
-export function middleware(request: NextRequest) {
+//
+// #1929: a session this browser signed out reaches no page. A sign-out never
+// clears the session cookie; the pages read it as no session instead.
+export async function middleware(request: NextRequest) {
   const policy = pageContentSecurityPolicy({
     nonce: newNonce(),
     development: process.env.NODE_ENV === "development",
@@ -13,6 +17,9 @@ export function middleware(request: NextRequest) {
   });
   const headers = new Headers(request.headers);
   headers.set("content-security-policy", policy);
+  const cookie = await withoutEndedSession(request.headers.get("cookie"));
+  if (cookie === "") headers.delete("cookie");
+  else if (cookie !== null) headers.set("cookie", cookie);
   const response = NextResponse.next({ request: { headers } });
   response.headers.set("content-security-policy", policy);
   return response;

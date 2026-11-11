@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAuthConfig } from "@/server/auth/config";
 import { logout, logoutAll, type AuthDeps } from "@/server/auth/flow";
 import { createOidcClient } from "@/server/auth/oidc";
+import { sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
 import { CLIENT_ID, CLIENT_SECRET, createTestIdp, ISSUER } from "./test-idp";
@@ -61,13 +62,19 @@ function post(headers: Record<string, string> = SAME_ORIGIN, cookie: string | nu
   );
 }
 
-/** The answer sets no cookie (#1929): the closed session's cookie reads as signed out. */
-function expectNoCookie(response: Response): void {
-  expect(response.headers.getSetCookie()).toEqual([]);
+/**
+ * The answer never sets the session cookie (#1929). It sets only the ended
+ * mark of the cookie it read, so that closed cookie reads as signed out.
+ */
+function expectOnlyMark(response: Response, token: string | null = TOKEN): void {
+  const tag = sessionTag(token ?? undefined);
+  expect(response.headers.getSetCookie()).toEqual(
+    tag === null ? [] : [`ductus-ended-${tag}=1; Path=/; Max-Age=86400; SameSite=Lax; Secure`],
+  );
 }
 
 describe("POST /api/auth/logout-all", () => {
-  it("1: closes every session of the account first, then goes to the provider without setting a cookie", async () => {
+  it("1: closes every session of the account first, then goes to the provider without setting the session cookie", async () => {
     const response = await post();
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
@@ -77,7 +84,7 @@ describe("POST /api/auth/logout-all", () => {
     expect(deps.closeSession).not.toHaveBeenCalled();
     expect(events[0]).toBe("close_all");
     expect(events.slice(1).every((event) => event === "provider")).toBe(true);
-    expectNoCookie(response);
+    expectOnlyMark(response);
     expect(JSON.stringify([...response.headers])).not.toContain(TOKEN);
   });
 
@@ -86,7 +93,7 @@ describe("POST /api/auth/logout-all", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
     expect(deps.closeAllSessions).not.toHaveBeenCalled();
-    expectNoCookie(response);
+    expectOnlyMark(response, null);
   });
 
   it.each([
@@ -98,7 +105,8 @@ describe("POST /api/auth/logout-all", () => {
     expect(deps.closeAllSessions).toHaveBeenCalledExactlyOnceWith(value);
     expect(response.status).toBe(withNothing.status);
     expect(response.headers.get("location")).toBe(withNothing.headers.get("location"));
-    expect(response.headers.getSetCookie()).toEqual(withNothing.headers.getSetCookie());
+    // Only the mark of the cookie the browser sent itself, as for an open session.
+    expectOnlyMark(response, value);
   });
 
   it.each([
@@ -145,7 +153,7 @@ describe("POST /api/auth/logout-all", () => {
     const one = await logout(request("/api/auth/logout"), deps);
     const all = await logoutAll(request("/api/auth/logout-all"), deps);
     expect(one.status).toBe(503);
-    expectNoCookie(one);
+    expectOnlyMark(one, null);
     expect(all.status).toBe(503);
     expect(all.headers.getSetCookie()).toEqual([]);
     expect(errors).toHaveBeenCalledWith("login failed", "logout", "Error:57P01");
@@ -158,7 +166,7 @@ describe("POST /api/auth/logout-all", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(HOME);
     expect(deps.closeAllSessions).toHaveBeenCalledWith(TOKEN);
-    expectNoCookie(response);
+    expectOnlyMark(response);
     expect(errors).toHaveBeenCalledWith("login failed", "end_session", expect.any(String));
   });
 });

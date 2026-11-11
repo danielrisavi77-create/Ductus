@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAuthConfig } from "@/server/auth/config";
 import { finishLogin, LOGIN_COOKIE_NAME, logout, startLogin, type AuthDeps } from "@/server/auth/flow";
 import { createOidcClient, MAX_PROVIDER_RESPONSE_BYTES } from "@/server/auth/oidc";
+import { sessionTag } from "@/server/auth/principal";
 import { hashSessionToken, SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
 import { CLIENT_ID, CLIENT_SECRET, createTestIdp, ISSUER } from "./test-idp";
@@ -331,12 +332,12 @@ describe("logout", () => {
   const post = (headers: Record<string, string>) =>
     logout(new Request(`${APP}/api/auth/logout`, { method: "POST", headers: { cookie: `${SESSION_COOKIE_NAME}=${token}`, ...headers } }), deps);
 
-  it("#20 closes the session of the cookie on the server and sets no cookie (#1929)", async () => {
+  it("#20 closes the session of the cookie on the server and sets only its ended mark, never the session cookie (#1929)", async () => {
     const response = await post({ "sec-fetch-site": "same-origin", origin: APP });
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${APP}/`);
     expect(deps.closeSession).toHaveBeenCalledWith(token);
-    expect(response.headers.getSetCookie()).toEqual([]);
+    expect([...setCookies(response).keys()]).toEqual([`ductus-ended-${sessionTag(token)}`]);
   });
 
   it("#18 accepts a matching Origin when the browser sends no Sec-Fetch-Site", async () => {

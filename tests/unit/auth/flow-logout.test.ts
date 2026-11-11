@@ -64,12 +64,18 @@ function post(headers: Record<string, string> = SAME_ORIGIN, { cookie = true, ur
 }
 
 /**
- * The answer sets no cookie at all (E1; #1929): HTTP cannot clear only the
- * cookie this request read, so the closed session's cookie stays and reads
- * as signed out until the next sign-in replaces it.
+ * The answer never sets the session cookie (E1; #1929): HTTP cannot clear only
+ * the cookie this request read. It sets only the ended mark of the session it
+ * closed, which names that session's tag, so the closed cookie reads as signed
+ * out until the next sign-in replaces it. Without a cookie or after a failure
+ * it sets nothing.
  */
-function expectNoCookie(response: Response): void {
-  expect(response.headers.getSetCookie()).toEqual([]);
+function expectOnlyMark(response: Response, token: string | null = TOKEN): void {
+  const set = response.headers.getSetCookie();
+  expect(set).toEqual(
+    token === null ? [] : [`ductus-ended-${sessionTag(token)}=1; Path=/; Max-Age=86400; SameSite=Lax; Secure`],
+  );
+  expect(set.some((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`) || /HttpOnly/i.test(c))).toBe(false);
 }
 
 describe("logout at the provider", () => {
@@ -80,7 +86,7 @@ describe("logout at the provider", () => {
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(events[0]).toBe("close");
     expect(events.slice(1).every((event) => event === "provider")).toBe(true);
-    expectNoCookie(response);
+    expectOnlyMark(response);
   });
 
   it("C5: the redirect is not stored and sends no Referer", async () => {
@@ -117,13 +123,15 @@ describe("logout at the provider", () => {
     const response = await post(SAME_ORIGIN, { cookie: false });
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
     expect(deps.closeSession).not.toHaveBeenCalled();
-    expectNoCookie(response);
+    expectOnlyMark(response, null);
   });
 
   it("B4: goes to the provider when the session was already closed or had expired", async () => {
     deps.closeSession.mockResolvedValueOnce(false);
     const response = await post();
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
+    // The mark comes from the cookie, not the database: the answer does not tell.
+    expectOnlyMark(response);
   });
 
   it("B3: when closing fails, answers 503, sets no cookie and skips the provider (#1929)", async () => {
@@ -131,7 +139,7 @@ describe("logout at the provider", () => {
     const response = await post();
     expect(response.status).toBe(503);
     expect(response.headers.get("location")).toBeNull();
-    expectNoCookie(response);
+    expectOnlyMark(response, null);
     expect(events).toEqual([]);
     expect(errors).toHaveBeenCalledWith("login failed", "logout", "Error:ECONNREFUSED");
   });
@@ -142,7 +150,7 @@ describe("logout at the provider", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(HOME);
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
-    expectNoCookie(response);
+    expectOnlyMark(response);
     expect(errors).not.toHaveBeenCalled();
   });
 
@@ -172,7 +180,7 @@ describe("logout at the provider", () => {
     expect(response.headers.get("location")).toBe(HOME);
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(events[0]).toBe("close");
-    expectNoCookie(response);
+    expectOnlyMark(response);
     // Only the stage and an error code: nothing from the request or the provider.
     expect(errors).toHaveBeenCalledWith("login failed", "end_session", expect.any(String));
     const logged = JSON.stringify(errors.mock.calls);
@@ -238,14 +246,14 @@ describe("logout with the tag of the click's session", () => {
     const response = await send(TOKEN, init);
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
-    expectNoCookie(response);
+    expectOnlyMark(response);
   });
 
   it("t2 × cookie: the click's tag closes that session, then the provider", async () => {
     const response = await send(TOKEN, formBody(`session=${TAG}`));
     expect(deps.closeSession).toHaveBeenCalledWith(TOKEN);
     expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
-    expectNoCookie(response);
+    expectOnlyMark(response);
   });
 
   it.each(foreign)("Istodobnost, t3-t7 × newer cookie: %s touches nothing and goes to /", async (_name, init) => {
