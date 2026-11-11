@@ -66,7 +66,7 @@ Brojevi klasa su iz `06-klase-podataka.md`. Svaka kopija je i sama klasa 29 (`06
 | Dnevni šifrirani dump baze (`age`) | Drugi dobavljač | 29; iste klase kao PITR | Otvoreno (D-30 PRIJEDLOG, Q-16); vlastiti rok (D-12) |
 | Dnevna replika bucketa (`rclone sync` bez brisanja, šifrirano) | Drugi dobavljač (npr. Hetzner Object Storage) | 29; sadrži 21 (sadržaj odsječaka i paketa) i 23; jer replika ne briše, objekt obrisan u izvoru ostaje u replici do njezina roka; 20 samo ako izvozni paket živi u istom bucketu, što nije određeno `[IZVEDBA]` | Otvoreno (D-30 PRIJEDLOG, Q-16); vlastiti rok (D-12) |
 | Verzije objekata u bucketu | Scaleway, isti bucket | 29; prethodne verzije objekata klasa 21 i 23; 20 samo ako izvozni paket živi u istom bucketu `[IZVEDBA]` | Otvoreno (D-30 PRIJEDLOG, Q-16). Brisanje mora ukloniti i verzije (BACKEND §4.7) |
-| Bucket s potpisanim kontrolnim točkama brisanja | Zaseban bucket, vjerodajnica samo za upis, verzije ili object lock (D-272 MQ07; object lock NEPROVJERENO) | 28 (evidencija brisanja); nije kopija rada | Otvoreno (D-30 PRIJEDLOG, Q-16) |
+| Bucket s potpisanim kontrolnim točkama brisanja | Zaseban bucket, vjerodajnica samo za upis, verzije ili object lock (D-272 MQ07; object lock NEPROVJERENO); dobavljač nije određen `[ODLUKA]`, vidi `04` | 28 (evidencija brisanja); nije kopija rada | Otvoreno (D-30 PRIJEDLOG, Q-16) |
 
 Klasa 12 je rezervirana i ne gradi se (D-274 MQ09), a klasa 30 živi samo u pregledniku, pa ne ulaze ni u jednu kopiju. Povrat iz kopije radi operater, koji po pravilu D-172 ne vidi sadržaj studentskog rada; povrat se ne otvara dok se evidencija brisanja (klasa 28) ne usporedi s potpisanom kontrolnom točkom (D-272 MQ07). Bez toga bi povrat vratio podatke koje je brisanje već uklonilo (D-12).
 

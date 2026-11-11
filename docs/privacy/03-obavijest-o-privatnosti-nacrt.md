@@ -53,7 +53,7 @@ Koju ste tipku pritisnuli i koliko dugo ste je držali. Brzinu tipkanja i stanke
 
 ### 7. Koliko dugo čuvamo podatke
 
-Svaka vrsta podataka ima svoj rok, a kad rok istekne, podaci se brišu. `[Rokove predlaže Ductus, a potvrđuju ustanova i službenik za zaštitu podataka (D-30 PRIJEDLOG, Q-16). Određeni su samo rokovi za sesije i paket za izvoz (D-273 MQ08); sve ostalo je otvoreno i ne objavljuje se dok ne bude potvrđeno. Prijedlozi su iz 07, broj klase iz 06.]`
+Svaka vrsta podataka ima svoj rok, a kad rok istekne, podaci se brišu. `[Ciljno stanje: brisanje po isteku roka nije izgrađeno (M10.0-S1, M10.2) i ne smije se objaviti kao postojeće dok ne bude.]` `[Rokove predlaže Ductus, a potvrđuju ustanova i službenik za zaštitu podataka (D-30 PRIJEDLOG, Q-16). Određeni su samo rokovi za sesije i paket za izvoz (D-273 MQ08); sve ostalo je otvoreno i ne objavljuje se dok ne bude potvrđeno. Prijedlozi su iz 07, broj klase iz 06.]`
 
 | Vrsta podataka | Rok |
 | --- | --- |
