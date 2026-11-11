@@ -971,6 +971,7 @@ const en = {
       "You can answer once the server has received every change to the text. If an error or a conflict is reported with the text, follow that notice first; the explanation you typed stays here.",
     keptLabel: "Unsent explanation",
     keptHint: "This explanation was not sent because the request can no longer be answered. Copy it if you want to keep it.",
+    keptForLabel: "Unsent explanation for revision request {n}",
     keptUnloadedHint: "This explanation was not sent, and the requests cannot be loaded right now. Copy it if you want to keep it.",
     errors: {
       signedOut: "Your sign-in has expired. Sign in again.",

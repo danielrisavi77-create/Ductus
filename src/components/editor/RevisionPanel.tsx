@@ -54,6 +54,15 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
   const { unconfirmed, now: unconfirmedNow, edits } = useLocalUnconfirmed();
   const [outcome, setOutcome] = useState<RevisionListOutcome | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Each request's number from the lists read so far, for an explanation kept when a list read fails.
+  const [numbers, setNumbers] = useState<Record<string, number>>({});
+  const [numbered, setNumbered] = useState(outcome);
+  if (outcome !== numbered) {
+    setNumbered(outcome);
+    if (outcome?.kind === "ok") {
+      setNumbers((all) => ({ ...all, ...Object.fromEntries(outcome.requests.map((r) => [r.id, r.number])) }));
+    }
+  }
   const [errors, setErrors] = useState<Record<string, AnswerError>>({});
   const [sending, setSending] = useState<string | null>(null);
   const [live, setLive] = useState("");
@@ -100,6 +109,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
     if (stopped) {
       setOutcome(null);
       setDrafts({});
+      setNumbers({});
       setErrors({});
       setLive("");
     }
@@ -147,7 +157,7 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
   return (
     <RevisionList
       t={t} formatDate={formatDateHr} status={status} requests={requests} submitted={submitted} unconfirmed={unconfirmed}
-      drafts={drafts} sending={sending} errors={errors} live={live}
+      drafts={drafts} numbers={numbers} sending={sending} errors={errors} live={live}
       onDraft={(id, value) => setDrafts((all) => ({ ...all, [id]: value }))}
       onAnswer={(id, kind) => void answer(id, kind)}
       onRetry={() => void load()}

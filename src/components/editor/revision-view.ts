@@ -139,6 +139,8 @@ export type RevisionListProps = {
   /** The text may hold changes the server has not confirmed: the answer buttons wait, and say why. */
   readonly unconfirmed: boolean;
   readonly drafts: Readonly<Record<string, string>>;
+  /** The number of each request from the last list read, so an explanation kept without the list says which request it is for. */
+  readonly numbers?: Readonly<Record<string, number>>;
   readonly sending: string | null;
   readonly errors: Readonly<Record<string, AnswerError>>;
   /** The outcome of the last answer, read out once. */
@@ -220,10 +222,16 @@ function RevisionCard({ request, props }: { request: RevisionRequest; props: Rev
  */
 function unloadedDrafts(props: RevisionListProps): ReactNode[] {
   const { t } = props;
-  return Object.entries(props.drafts).filter(([, draft]) => draft !== "").map(([id, draft]) => {
+  const number = (id: string): number | undefined => props.numbers?.[id];
+  // In request order, and each labelled with its request when the last list named it (Grok c.6785580350).
+  const kept = Object.entries(props.drafts).filter(([, draft]) => draft !== "")
+    .sort(([a], [b]) => (number(a) ?? Number.MAX_SAFE_INTEGER) - (number(b) ?? Number.MAX_SAFE_INTEGER));
+  return kept.map(([id, draft]) => {
     const field = `revision-${id}-kept`;
+    const n = number(id);
     return h("div", { key: id, className: styles.form },
-      h("label", { htmlFor: field, className: styles.label }, t.keptLabel),
+      h("label", { htmlFor: field, className: styles.label },
+        n === undefined ? t.keptLabel : t.keptForLabel.replace("{n}", String(n))),
       h("textarea", { id: field, rows: 3, value: draft, readOnly: true, "aria-describedby": `${field}-hint` }),
       h("p", { id: `${field}-hint`, className: styles.hint }, t.keptUnloadedHint));
   });

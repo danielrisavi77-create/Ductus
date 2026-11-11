@@ -976,6 +976,7 @@ export const hr = {
       "Odgovor se može poslati kad poslužitelj primi sve izmjene teksta. Ako je uz tekst javljena greška ili sukob, najprije postupite prema toj obavijesti; upisano objašnjenje ostaje ovdje.",
     keptLabel: "Neposlano obrazloženje",
     keptHint: "Ovo obrazloženje nije poslano jer se na zahtjev više ne odgovara. Kopirajte ga ako ga želite sačuvati.",
+    keptForLabel: "Neposlano obrazloženje za zahtjev za doradu {n}",
     keptUnloadedHint: "Ovo obrazloženje nije poslano, a zahtjevi se trenutačno ne mogu učitati. Kopirajte ga ako ga želite sačuvati.",
     errors: {
       signedOut: "Prijava je istekla. Prijavite se ponovno.",

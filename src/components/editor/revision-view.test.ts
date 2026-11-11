@@ -188,6 +188,27 @@ describe("every state of a request (N-08 states 6 to 10)", () => {
     expect(render({ status, drafts: { [id]: "" } })).not.toContain("<textarea");
   });
 
+  // Grok c.6785580350: with more than one unsent explanation each says which
+  // request it is for, in request order; one whose request was never listed keeps the plain label.
+  it("explanations kept without the list name their request, in request order", () => {
+    const [first, second, unknown] = ["aaaaaaaa-0000-4000-8000-0000000000a1", "aaaaaaaa-0000-4000-8000-0000000000a2", "aaaaaaaa-0000-4000-8000-0000000000a3"];
+    const html = render({
+      status: "unavailable",
+      drafts: { [unknown!]: "Treće.", [second!]: "Drugo.", [first!]: "Prvo." },
+      numbers: { [first!]: 1, [second!]: 2 },
+    });
+    const at = (text: string) => html.indexOf(text);
+    const one = t.keptForLabel.replace("{n}", "1");
+    const two = t.keptForLabel.replace("{n}", "2");
+    expect(at(one)).toBeGreaterThan(-1);
+    expect(at(one)).toBeLessThan(at("Prvo."));
+    expect(at("Prvo.")).toBeLessThan(at(two));
+    expect(at(two)).toBeLessThan(at("Drugo."));
+    expect(at("Drugo.")).toBeLessThan(at(`>${t.keptLabel}<`));
+    expect(at(`>${t.keptLabel}<`)).toBeLessThan(at("Treće."));
+    expect(html.match(/<textarea[^>]*readonly=""/gi)).toHaveLength(3);
+  });
+
   it("a read list still shows the explanation where it was, not twice", () => {
     const id = STATES.reopened.id;
     const open = render({ requests: [STATES.reopened], drafts: { [id]: "Ne slažem se." } });

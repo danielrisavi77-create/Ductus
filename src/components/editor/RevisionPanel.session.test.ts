@@ -259,7 +259,8 @@ describe("RevisionPanel: a 409 whose list read fails (QA FAIL c.6784961513)", ()
     await act(async () => { list.resolve!({ kind: "unavailable" }); });
 
     expect(body.textContent).toContain(t.unavailable);
-    expect(body.textContent).toContain(t.keptLabel);
+    // It says which request it is for, from the list read before (Grok c.6785580350).
+    expect(body.textContent).toContain(t.keptForLabel.replace("{n}", "1"));
     expect(body.textContent).toContain(t.keptUnloadedHint);
     expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: true })]);
     expect(button(t.done)).toBeUndefined();
