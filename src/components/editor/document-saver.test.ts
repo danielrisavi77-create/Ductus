@@ -13,7 +13,7 @@ import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";
 import { DOC, journalKit, json } from "@/lib/sync/evidence-test-kit";
 
 import {
-  createDocumentSaver, evidenceNotice, snapshotSpeaks, stoppedSaved, submittedOf, writingClosed,
+  createDocumentSaver, evidenceNotice, saveAnnouncement, snapshotSpeaks, stoppedSaved, submittedOf, writingClosed,
 } from "./document-saver";
 import { EvidenceSession } from "./evidence-session";
 
@@ -131,6 +131,26 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     expect(messagesHr.editor.sendStopped).not.toMatch(/spremljen/i);
     expect(messagesEn.editor.sendStopped).not.toMatch(/\bsaved\b/i);
     expect(messagesHr.editor.sendStoppedSaved).toMatch(/spremljen na uređaju/);
+  });
+
+  // QA #1901 (c.6787896540): a stopped recorder keeps the chip at ERROR, so
+  // the polite region must hear typing and the finished local save from the
+  // snapshot, or the screen reader never learns the text is on the device.
+  it("a stopped recorder still announces the finished local save", () => {
+    const base = { failure: null, capacity: "ok" as const, closedBy: null, stopped: true };
+    for (const state of ["EDITING", "SAVING_LOCAL"] as const) {
+      expect(saveAnnouncement("ERROR", { ...base, state })).toEqual({ typing: true, saved: null });
+    }
+    expect(saveAnnouncement("ERROR", { ...base, state: "LOCAL_DURABLE" })).toEqual({ typing: false, saved: "stoppedSaved" });
+    // A failed local save claims nothing; neither does a sheet whose snapshot does not speak.
+    expect(saveAnnouncement("ERROR", { ...base, state: "LOCAL_DURABLE", failure: "quota" }).saved).toBeNull();
+    expect(saveAnnouncement("ERROR", null)).toEqual({ typing: false, saved: null });
+    // A running recorder: the chip speaks, as before.
+    const running = { ...base, stopped: false };
+    expect(saveAnnouncement("EDITING", { ...running, state: "EDITING" })).toEqual({ typing: true, saved: null });
+    expect(saveAnnouncement("SAVING_LOCAL", { ...running, state: "SAVING_LOCAL" })).toEqual({ typing: true, saved: null });
+    expect(saveAnnouncement("LOCAL_DURABLE", { ...running, state: "LOCAL_DURABLE" })).toEqual({ typing: false, saved: "durable" });
+    expect(saveAnnouncement("ERROR", { ...running, state: "LOCAL_DURABLE" }).saved).toBeNull();
   });
 
   it("the local saver's own snapshot never gives an evidence notice (e2e local-editor stored ids)", () => {
