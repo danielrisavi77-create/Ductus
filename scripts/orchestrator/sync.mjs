@@ -7,12 +7,13 @@
 // posts nothing. On a conflict the merge is aborted and the files are listed.
 // An unfinished merge, cherry-pick, revert or rebase, merge options set on the branch
 // and a merge driver on a file the merge touches stop it before the merge; after the
-// merge nothing is pushed unless nothing is left unfinished and HEAD contains main.
+// merge nothing is pushed unless nothing is left unfinished, HEAD contains main and HEAD
+// is the PR branch at that commit, since the push sends the branch.
 // Usage: node sync.mjs <number> [--wait-min N]     (default 30, 0 = do not wait)
 //   exit 0 = preflight PASS on the synced head
 //        1 = stopped: wrong branch, dirty tree or an operation in progress, merge options or
 //            a merge driver, conflict,
-//            unconcluded merge or HEAD without main, push, CI wait timeout, preflight FAIL
+//            unconcluded merge, HEAD without main or off the branch, push, CI wait timeout, preflight FAIL
 //            or the local branch or head moved before success was reported
 //        2 = usage or read error
 import "./help.mjs";
@@ -111,18 +112,23 @@ try {
     } catch (e) {
       const files = ((await tryGit("diff", "--name-only", "--diff-filter=U")) ?? "").split("\n").filter(Boolean);
       await tryGit("merge", "--abort");
+      // "Nothing changed" only when the abort left no operation open and HEAD where it was.
+      const left = await gitOperations(tryGit);
+      const after = await tryGit("rev-parse", "--verify", "HEAD");
+      const outcome = left?.length === 0 && after === local.head
+        ? "nothing changed" : `abort incomplete (${left === null ? "state unreadable" : left.join(", ") || `HEAD ${after ?? "unreadable"}`}), check git status`;
       // Only unmerged files mean a conflict; anything else is git's own failure, shown as is.
       if (files.length === 0) {
-        console.error(`merge failed, nothing changed: ${e.stderr?.trim() || e.message}`);
+        console.error(`merge failed, ${outcome}: ${e.stderr?.trim() || e.message}`);
         process.exit(1);
       }
-      console.error("CONFLICT: merge aborted, nothing changed. Resolve by hand: git merge origin/main");
+      console.error(`CONFLICT: merge aborted, ${outcome}. Resolve by hand: git merge origin/main`);
       for (const f of files) console.error(`  ${f}`);
       process.exit(1);
     }
   }
   // A zero exit from git merge is not proof: hooks or git itself may leave it unconcluded.
-  const state = await readMergeState(tryGit, { before: local.head, main, containedBefore: local.behind === 0 });
+  const state = await readMergeState(tryGit, { before: local.head, main, containedBefore: local.behind === 0, branch: local.branch });
   const stopped = mergeCheck(state);
   if (stopped) {
     // Only a merge this run started is aborted.

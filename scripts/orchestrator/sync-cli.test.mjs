@@ -364,6 +364,27 @@ test("a merge that ends without main in HEAD is not pushed", (t) => {
   untouched(r);
 });
 
+// The pushed ref is refs/heads/<branch>: a HEAD that passes the checks but is not that ref is not pushed.
+for (const [name, hook, want] of [
+  ["detached HEAD, branch moved back", `git checkout -q --detach && git branch -f ${BRANCH} HEAD~1`, /HEAD is on \(detached\), not on pr\/x/],
+  ["another branch", "git checkout -q -b other", /HEAD is on other, not on pr\/x/],
+]) {
+  test(`a merge whose HEAD is not the branch to push is not pushed: ${name}`, (t) => {
+    const r = setup(t);
+    const hooks = join(r.work, ".git", "test-hooks");
+    mkdirSync(hooks);
+    writeFileSync(join(hooks, "post-merge"), `#!/bin/sh\n${hook}\n`);
+    chmodSync(join(hooks, "post-merge"), 0o755);
+    git(r.work, "config", "core.hooksPath", hooks);
+    const res = r.sync();
+    assert.equal(res.code, 1, res.out);
+    assert.match(res.out, want);
+    assert.match(res.out, /SYNC STOPPED: .*; nothing pushed/);
+    assert.deepEqual(res.preflight, []);
+    assert.equal(r.remoteSha(), r.head);
+  });
+}
+
 // The same reads orch:sync makes, over real repositories in each state after the merge step.
 test("readMergeState and mergeCheck over real states after the merge", async (t) => {
   const tryGit = (cwd) => (...a) => new Promise((resolve) => {
@@ -376,6 +397,9 @@ test("readMergeState and mergeCheck over real states after the merge", async (t)
     ["(d) already up to date", false, null, null],
     ["(e) unreadable MERGE_HEAD after a commit", true, ["merge", "-q", "--no-edit", "origin/main"], /MERGE_HEAD/, "MERGE_HEAD"],
     ["(e) rebase left open after a commit", true, ["merge", "-q", "--no-edit", "origin/main"], /another unfinished operation/, "rebase-merge"],
+    ["(i) detached HEAD on the merge, branch not moved", true, ["merge", "-q", "--no-edit", "origin/main"], /HEAD is on \(detached\)/, "detach"],
+    // HEAD follows its branch, so only a move between the reads can part them.
+    ["(i) branch moved after HEAD was read", true, ["merge", "-q", "--no-edit", "origin/main"], /pr\/x is at [0-9a-f]{8}, not at HEAD/, "race"],
   ];
   for (const [name, mainMoves, merge, want, marker] of states) {
     const r = setup(t, { mainMoves });
@@ -384,8 +408,15 @@ test("readMergeState and mergeCheck over real states after the merge", async (t)
     const containedBefore = git(r.work, "rev-list", "--count", `HEAD..${main}`) === "0";
     if (merge) git(r.work, ...merge);
     if (marker === "MERGE_HEAD") writeFileSync(join(r.work, ".git", marker), "garbage\n");
-    else if (marker) mkdirSync(join(r.work, ".git", marker));
-    const got = mergeCheck(await readMergeState(tryGit(r.work), { before: r.head, main, containedBefore }));
+    else if (marker === "detach") git(r.work, "checkout", "-q", "--detach");
+    else if (marker && marker !== "race") mkdirSync(join(r.work, ".git", marker));
+    const read = tryGit(r.work);
+    const reader = marker !== "race" ? read : async (...a) => {
+      const out = await read(...a);
+      if (a.join(" ") === "rev-parse --verify HEAD") git(r.work, "update-ref", `refs/heads/${BRANCH}`, r.head);
+      return out;
+    };
+    const got = mergeCheck(await readMergeState(reader, { before: r.head, main, containedBefore, branch: BRANCH }));
     if (want === null) assert.equal(got, null, name);
     else assert.match(String(got), want, name);
   }

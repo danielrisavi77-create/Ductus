@@ -102,7 +102,10 @@ test("mergeCheck lets only a concluded merge that contains main and the PR head 
   const OLD = "b".repeat(40);
   const NEW = "c".repeat(40);
   const MAIN = "d".repeat(40);
-  const ok = { before: OLD, main: MAIN, containedBefore: false, head: NEW, mergeInProgress: false, mainInHead: true, beforeInHead: true };
+  const ok = {
+    before: OLD, main: MAIN, containedBefore: false, head: NEW, mergeInProgress: false, mainInHead: true, beforeInHead: true,
+    branch: "claude/x", headBranch: "claude/x", branchHead: NEW,
+  };
   const cases = [
     ["(a) concluded merge", {}, null],
     ["(b) MERGE_HEAD present, HEAD unchanged", { head: OLD, mergeInProgress: true, mainInHead: false }, /MERGE_HEAD/],
@@ -118,9 +121,15 @@ test("mergeCheck lets only a concluded merge that contains main and the PR head 
     ["(g) main ancestry unreadable", { mainInHead: null }, /does not contain the fetched main/],
     ["(g) PR head ancestry unreadable", { beforeInHead: null }, /does not contain the PR head/],
     ["(g) earlier containment unreadable", { head: OLD, containedBefore: null }, /did not move/],
+    ["(i) detached HEAD", { headBranch: null }, /HEAD is on \(detached\), not on claude\/x/],
+    ["(i) HEAD on another branch", { headBranch: "other" }, /HEAD is on other, not on claude\/x/],
+    ["(i) branch ref behind HEAD", { branchHead: OLD }, /claude\/x is at bbbbbbbb, not at HEAD cccccccc/],
+    ["(i) branch ref unreadable", { branchHead: null }, /claude\/x is at \(unreadable\), not at HEAD/],
+    ["(i) expected branch missing", { branch: null, headBranch: null }, /HEAD is on \(detached\)/],
   ];
   for (const [name, change, want] of cases) {
-    const got = mergeCheck({ ...ok, ...change });
+    // The branch ref follows HEAD unless a case moves it apart.
+    const got = mergeCheck({ ...ok, branchHead: change.head === undefined ? ok.head : change.head, ...change });
     if (want === null) assert.equal(got, null, name);
     else assert.match(String(got), want, name);
   }

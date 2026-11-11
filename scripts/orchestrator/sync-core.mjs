@@ -90,22 +90,28 @@ export function syncPlan({ pr, local }) {
  *   before           the PR head the run started from
  *   main             SHA of origin/main read once right after the fetch
  *   containedBefore  true when `before` already contained `main` (nothing to merge)
+ *   branch           the PR branch that will be pushed
  * `exists` as in gitOperations; mergeInProgress covers every unfinished operation.
  */
-export async function readMergeState(tryGit, { before, main, containedBefore }, exists = existsSync) {
+export async function readMergeState(tryGit, { before, main, containedBefore, branch }, exists = existsSync) {
   const head = await tryGit("rev-parse", "--verify", "HEAD");
   const operations = await gitOperations(tryGit, exists);
+  // Ancestry of the commit just read, not of a HEAD that may move meanwhile.
+  const contains = async (sha) => head !== null && (await tryGit("merge-base", "--is-ancestor", sha, head)) !== null;
   return {
-    before, main, containedBefore, head, operations,
+    before, main, containedBefore, head, operations, branch,
     mergeInProgress: head === null || operations === null ? null : operations.length > 0,
-    mainInHead: (await tryGit("merge-base", "--is-ancestor", main, "HEAD")) !== null,
-    beforeInHead: (await tryGit("merge-base", "--is-ancestor", before, "HEAD")) !== null,
+    mainInHead: await contains(main),
+    beforeInHead: await contains(before),
+    headBranch: await tryGit("symbolic-ref", "--short", "HEAD"),
+    branchHead: branch ? await tryGit("rev-parse", "--verify", `refs/heads/${branch}`) : null,
   };
 }
 
 /**
  * null when the checkout may be pushed: no merge or other operation left in progress, HEAD contains the
- * fetched main and the PR head, and HEAD moved or already contained main. Otherwise the
+ * fetched main and the PR head, HEAD moved or already contained main, and HEAD is the branch
+ * that is pushed, at that same commit. Otherwise the
  * reason; anything unread (null) is a reason too.
  */
 export function mergeCheck(s) {
@@ -116,6 +122,11 @@ export function mergeCheck(s) {
   if (s.mainInHead !== true) return `HEAD does not contain the fetched main ${String(s.main).slice(0, 8)}`;
   if (s.beforeInHead !== true) return `HEAD does not contain the PR head ${String(s.before).slice(0, 8)}`;
   if (s.head === s.before && s.containedBefore !== true) return "HEAD did not move and did not contain main";
+  // The push sends refs/heads/<branch>, so that ref must be the HEAD checked above.
+  if (!s.branch || s.headBranch !== s.branch) return `HEAD is on ${s.headBranch ?? "(detached)"}, not on ${s.branch}`;
+  if (s.branchHead !== s.head) {
+    return `${s.branch} is at ${s.branchHead ? s.branchHead.slice(0, 8) : "(unreadable)"}, not at HEAD ${s.head.slice(0, 8)}`;
+  }
   return null;
 }
 
