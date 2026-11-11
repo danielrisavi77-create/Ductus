@@ -40,8 +40,10 @@ export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | 
   // RECOVERY_REQUIRED is the unreadable local record, not the server's work.
   if (!snapshot || snapshot.closedBy === undefined) return null;
   if (READ_ONLY_STATES.includes(snapshot.state) && snapshot.closedBy !== "submission") return "conflict";
-  if (snapshot.refused) return "refused";
-  return snapshot.stopped && !snapshot.failure ? "stopped" : null;
+  // A stopped recorder comes before a refused row: a reload resumes nothing
+  // after it (#1901, review bot c.6786590285).
+  if (snapshot.stopped) return snapshot.failure ? null : "stopped";
+  return snapshot.refused ? "refused" : null;
 }
 
 /**

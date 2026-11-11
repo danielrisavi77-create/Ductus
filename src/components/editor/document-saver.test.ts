@@ -102,8 +102,11 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
   it("a stopped recorder says so only while its local save holds", () => {
     const base = { failure: null, capacity: "ok" as const, closedBy: null, state: "LOCAL_DURABLE" as const };
     expect(evidenceNotice({ ...base, stopped: true })).toBe("stopped");
+    // Before a refused row too: a reload does not resume sending (review bot c.6786590285).
+    expect(evidenceNotice({ ...base, refused: true, stopped: true })).toBe("stopped");
     for (const failure of ["quota", "unavailable", "unknown"] as const) {
       expect(evidenceNotice({ ...base, failure, stopped: true })).toBeNull();
+      expect(evidenceNotice({ ...base, failure, refused: true, stopped: true })).toBeNull();
     }
   });
 
