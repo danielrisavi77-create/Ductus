@@ -18,10 +18,14 @@ const firstLine = (body) => String(body ?? "").split(/\r?\n/).find((l) => l.trim
 
 /** Value of a `Name: value` line in a PR body, or null. Plain or bold label, optional list dash. */
 export function bodyField(body, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const m = new RegExp(`^[ \\t]*(?:- )?\\*{0,2}${escaped}:\\*{0,2}[ \\t]*(.*)$`, "m").exec(String(body ?? ""));
-  const value = m?.[1].trim();
-  return value ? value : null;
+  // A fixed pattern and a string comparison of the label: no pattern is built from `name`.
+  for (const line of String(body ?? "").split(/\r?\n/)) {
+    const m = /^[ \t]*(?:- )?\*{0,2}([^:\n]*):\*{0,2}[ \t]*(.*)$/.exec(line);
+    if (m?.[1] !== name) continue;
+    const value = m[2].trim();
+    return value ? value : null;
+  }
+  return null;
 }
 
 /** Latest comments of the advisory bots, newest first. */
