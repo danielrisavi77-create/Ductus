@@ -79,7 +79,7 @@ async function markEnded(page: Page, sessionToken: string): Promise<string> {
   const tag = sessionTag(sessionToken);
   expect(tag).not.toBeNull();
   await page.evaluate((value) => {
-    document.cookie = `ductus-ended-${value}=1; Path=/; Max-Age=2592000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
+    document.cookie = `ductus-ended-${value}=1; Path=/; Max-Age=86400; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
   }, tag!);
   expect(await appCookie(page.context(), `ductus-ended-${tag}`)).toBeDefined();
   return tag!;
@@ -108,8 +108,13 @@ test("the teacher's screens and course list read the mark of an ended session, a
   expect((await page.request.get("/api/teacher/courses")).status()).toBe(200);
 
   await markEnded(page, session);
-  for (const path of ["/nastavnik", "/nastavnik/zadatak/novi", "/nastavnik/mentorstva"]) {
-    await expectSignedOutCard(page, path, t.teacherCourses.title);
+  for (const [path, title] of [
+    ["/nastavnik", t.teacherCourses.title],
+    ["/nastavnik/zadatak/novi", t.teacherCourses.title],
+    ["/nastavnik/mentorstva", t.teacherCourses.title],
+    ["/nastavnik/brz-put", t.fastPath.title],
+  ] as const) {
+    await expectSignedOutCard(page, path, title);
   }
   const courses = await page.request.get("/api/teacher/courses");
   expect(courses.status()).toBe(401);
@@ -126,8 +131,12 @@ test("the administrator's overview reads the mark of an ended session, and close
     await expect(page.getByRole("heading", { level: 1, name: t.institutionOverview.title })).toBeVisible();
 
     await markEnded(page, session);
-    for (const path of ["/ustanova", "/ustanova/korisnici"]) {
-      await expectSignedOutCard(page, path, t.institutionOverview.title);
+    for (const [path, title] of [
+      ["/ustanova", t.institutionOverview.title],
+      ["/ustanova/korisnici", t.institutionOverview.title],
+      ["/ustanova/pravila", t.facultyRuleVersions.title],
+    ] as const) {
+      await expectSignedOutCard(page, path, title);
     }
     await expect(page.getByRole("link", { name: t.shell.nav.institutionCourses })).toHaveCount(0);
     await expectSessionUntouched(page, session);
