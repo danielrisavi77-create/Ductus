@@ -53,6 +53,27 @@ async function paste(page: Page, text: string): Promise<void> {
   }, text);
 }
 
+/** Rows this device still owes the server, over every journal of the browser. */
+async function owedRows(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const read = <T,>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let owed = 0;
+    for (const { name } of await indexedDB.databases()) {
+      if (!name?.startsWith("ductus-journal-v1-")) continue;
+      const db = await read(indexedDB.open(name));
+      try {
+        if (db.objectStoreNames.contains("pending")) owed += await read(db.transaction("pending").objectStore("pending").count());
+      } finally {
+        db.close();
+      }
+    }
+    return owed;
+  });
+}
+
 /** Full page in both themes (the shell's own toggle) at 1440 and 400 px (docs/SESSIONS.md §6). */
 async function shoot(page: Page, name: string): Promise<void> {
   const toggle = page.getByRole("button", { name: t.shell.theme });
@@ -99,6 +120,9 @@ test("#1876 negative: text the server does not have holds the submission, and no
   await type(page, " Izmišljena rečenica samo na uređaju.");
   await expect(editorOf(page)).toContainText("samo na uređaju");
   await expect(chipOf(page)).not.toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+  // Leave only once the device really holds it: a page left before the local
+  // save keeps nothing, and the submission is then right to be open.
+  await expect.poll(() => owedRows(page), { timeout: OPEN }).toBeGreaterThan(0);
 
   const bodies = recordSubmissions(page);
   await page.goto(`/rad/${assignment}/predaja`);
