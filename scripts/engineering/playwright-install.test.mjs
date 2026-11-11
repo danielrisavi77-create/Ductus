@@ -304,7 +304,7 @@ for (const c of mirrorCases) {
     if (c.warn) assert.match(stdout, mirrorWarning);
     else assert.doesNotMatch(stdout, /azure\.archive/);
     // The install already saw the switched sources (apt-get update runs inside it).
-    if (c.warn) assert.ok(!atInstall.includes("//azure.archive.ubuntu.com"), atInstall);
+    if (c.warn) assert.doesNotMatch(atInstall, /\/\/azure\.archive\.ubuntu\.com\//);
     assert.ok(seconds < 25, `the step took ${seconds}s`);
   });
 }
