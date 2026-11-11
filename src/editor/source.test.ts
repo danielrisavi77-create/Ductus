@@ -8,7 +8,7 @@ import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-rep
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
 import { writeSource } from "@/components/editor/sources";
-import type { EvidenceSegment, EvidenceSource } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceEvent, EvidenceSegment, EvidenceSource } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 import { projectProcessSummary } from "@/domain/projection/process-summary";
 
@@ -201,7 +201,7 @@ async function check(t: Setup) {
   const replay = await replayEvidenceSegmentsV2(t.initial, segments, createEditStepsV1Replayer());
   expect(replay).toMatchObject({ ok: true, documentSha256: segments.at(-1)!.finalDocumentHash });
   const replayer = createEditStepsV1Replayer();
-  const rebuilt = segments.flatMap((s) => s.events).reduce((doc, event) => replayer.apply(doc, event), replayer.load(t.initial));
+  const rebuilt = segments.flatMap((s): EvidenceEvent[] => s.events).reduce((doc, event) => replayer.apply(doc, event), replayer.load(t.initial));
   expect(replayer.toCanonical(rebuilt)).toEqual(canonical(t.editor));
   const summary = await projectProcessSummary({
     payloads: built.map((one) => one.bytes),
@@ -209,7 +209,7 @@ async function check(t: Setup) {
     thresholds: THRESHOLDS,
   });
   if (!summary.ok) throw new Error(`summary: ${summary.reason}`);
-  return { built, events: segments.flatMap((s) => s.events), sources: segments.flatMap((s) => s.events.map((e) => e.source)), pastes: summary.summary.pastes };
+  return { built, events: segments.flatMap((s): EvidenceEvent[] => s.events), sources: segments.flatMap((s) => s.events.map((e) => e.source)), pastes: summary.summary.pastes };
 }
 
 const text = (n: number) => "Izmisljeno lijepljenje ".repeat(Math.ceil(n / 23)).slice(0, n);

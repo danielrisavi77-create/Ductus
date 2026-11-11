@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createEditStepsV1Replayer, removedRangeSha256 } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceEvent, EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 
 import { changeOf, EvidenceRecorder, type BuiltSegment, type SegmentContext } from "./capture";
@@ -145,7 +145,7 @@ function setup(kinds: Kind[]) {
       const replay = await replayEvidenceSegmentsV2(initial, segments, createEditStepsV1Replayer());
       expect(replay).toMatchObject({ ok: true, documentSha256: segments.at(-1)!.finalDocumentHash });
       const replayer = createEditStepsV1Replayer();
-      const rebuilt = segments.flatMap((s) => s.events).reduce((doc, event) => replayer.apply(doc, event), replayer.load(initial));
+      const rebuilt = segments.flatMap((s): EvidenceEvent[] => s.events).reduce((doc, event) => replayer.apply(doc, event), replayer.load(initial));
       expect(replayer.toCanonical(rebuilt)).toEqual(canonical(editor));
     },
   };

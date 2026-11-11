@@ -52,7 +52,10 @@ export const EVIDENCE_SOURCES_V3 = [...EVIDENCE_SOURCES_V2, "citation-form"] as 
 
 export type EvidenceSourceV3 = (typeof EVIDENCE_SOURCES_V3)[number];
 
-/** Any source a segment of any accepted version may carry. */
+/**
+ * A source the capture layer writes today. v4 sources are written only by the
+ * client capture step of the v4 contract (step 5), which widens this type.
+ */
 export type EvidenceSource = EvidenceSourceV3;
 
 /**
@@ -107,21 +110,94 @@ export type EvidenceSegmentV3 = Omit<EvidenceSegmentV2, "evidenceSchema" | "even
   events: EvidenceEventV3[];
 };
 
+/**
+ * Format v4 (contract docs/contracts/evidence-segment-v4.md, O-4 confirmed on
+ * #87; attack plan #1659) is v3 with three additions to the closed set of an
+ * event, and nothing else:
+ *
+ * - source `import` (M8), with `importId` and `importManifestSha256`, the id
+ *   and hash of the import manifest the server created;
+ * - source `ai-transfer` (M9), with `aiTransferId` and `aiTransferSha256`, the
+ *   id and hash of the transfer record the server created;
+ * - an optional `pasteOrigin` on `paste` only (D-58): the claimed origin, an
+ *   AI response or a source notebook item, and the hash of the pasted text.
+ *
+ * Each added key appears only with its source and is required with it. A v4
+ * segment carries at least one of the three, so every content has exactly one
+ * schema, the one `evidenceSchemaForEvents` picks. The format checks shape
+ * only: that a binding hash matches its record, and that `textSha256` matches
+ * the steps, is checked by the server and by replay (contract steps 3 and 4).
+ */
+export const EVIDENCE_SEGMENT_SCHEMA_V4 = "ductus-evidence-segment-v4" as const;
+
+export const EVIDENCE_SOURCES_V4 = [...EVIDENCE_SOURCES_V3, "import", "ai-transfer"] as const;
+
+export type EvidenceSourceV4 = (typeof EVIDENCE_SOURCES_V4)[number];
+
+/** What a `pasteOrigin` may name. The set is closed, like the sources. */
+export const EVIDENCE_PASTE_ORIGIN_KINDS_V4 = ["ai-response", "source-notebook"] as const;
+
+/** No text, title or author of the origin (D9): an id and a hash only. */
+export type EvidencePasteOriginV4 = {
+  kind: (typeof EVIDENCE_PASTE_ORIGIN_KINDS_V4)[number];
+  refId: string;
+  textSha256: string;
+};
+
+type EvidenceEventBaseV4 = Omit<EvidenceEventV2, "source">;
+
+export type EvidenceEventV4 =
+  | (EvidenceEventBaseV4 & { source: Exclude<EvidenceSourceV3, "paste"> })
+  | (EvidenceEventBaseV4 & { source: "paste"; pasteOrigin?: EvidencePasteOriginV4 })
+  | (EvidenceEventBaseV4 & { source: "import"; importId: string; importManifestSha256: string })
+  | (EvidenceEventBaseV4 & { source: "ai-transfer"; aiTransferId: string; aiTransferSha256: string });
+
+export type EvidenceSegmentV4 = Omit<EvidenceSegmentV2, "evidenceSchema" | "events"> & {
+  evidenceSchema: typeof EVIDENCE_SEGMENT_SCHEMA_V4;
+  events: EvidenceEventV4[];
+};
+
 /** A segment of any accepted version. */
-export type EvidenceSegment = EvidenceSegmentV2 | EvidenceSegmentV3;
+export type EvidenceSegment = EvidenceSegmentV2 | EvidenceSegmentV3 | EvidenceSegmentV4;
+
+/** An event of a segment of any accepted version. */
+export type EvidenceEvent = EvidenceSegment["events"][number];
 
 export type EvidenceSegmentSchema = EvidenceSegment["evidenceSchema"];
 
-/** The schema a segment with these events is written in (contract #896, P1). */
+/** Whether an event uses something only v4 has: the one rule for v4. */
+function isV4Event(event: { source: unknown }): boolean {
+  return (
+    event.source === "import" ||
+    event.source === "ai-transfer" ||
+    Object.hasOwn(event, "pasteOrigin")
+  );
+}
+
+/**
+ * The schema a segment with these events is written in (contract #896, P1;
+ * v4 contract, A6): v4 when an event uses a v4 feature, else v3 when an event
+ * is `citation-form`, else v2, so a segment without v4 features keeps its
+ * bytes.
+ */
 export function evidenceSchemaForEvents(
-  events: readonly { source: EvidenceSource }[],
+  events: readonly { source: EvidenceSourceV4; pasteOrigin?: EvidencePasteOriginV4 }[],
 ): EvidenceSegmentSchema {
+  if (events.some(isV4Event)) return EVIDENCE_SEGMENT_SCHEMA_V4;
   return events.some((event) => event.source === "citation-form")
     ? EVIDENCE_SEGMENT_SCHEMA_V3
     : EVIDENCE_SEGMENT_SCHEMA_V2;
 }
 
-export function isEvidenceSegmentSchema(value: unknown): value is EvidenceSegmentSchema {
+/**
+ * The schemas a segment descriptor and a receipt may name. v4 is not among
+ * them yet: until the descriptor and reservation migration (contract step 2)
+ * the server refuses a v4 segment as `invalid` before it stores anything,
+ * even though the shared segment check reads v4.
+ */
+export function isEvidenceSegmentSchema(
+  value: unknown,
+): value is typeof EVIDENCE_SEGMENT_SCHEMA_V2 | typeof EVIDENCE_SEGMENT_SCHEMA_V3 {
   return value === EVIDENCE_SEGMENT_SCHEMA_V2 || value === EVIDENCE_SEGMENT_SCHEMA_V3;
 }
 
@@ -166,13 +242,17 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 const WHOLE_MINUTE_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
 const MAX_ID_LENGTH = 256;
 const MAX_EVENTS = 5000;
-type SourcesBySchema = ReadonlyMap<string, ReadonlySet<string>>;
-const SOURCES_V2: ReadonlySet<string> = new Set<string>(EVIDENCE_SOURCES_V2);
-const SOURCES_V3: ReadonlySet<string> = new Set<string>(EVIDENCE_SOURCES_V3);
-const ONLY_V2: SourcesBySchema = new Map([[EVIDENCE_SEGMENT_SCHEMA_V2, SOURCES_V2]]);
-const V2_OR_V3: SourcesBySchema = new Map([
-  [EVIDENCE_SEGMENT_SCHEMA_V2, SOURCES_V2],
-  [EVIDENCE_SEGMENT_SCHEMA_V3, SOURCES_V3],
+/** One accepted version: its closed set of sources, and whether it is v4. */
+type SegmentVersion = { sources: ReadonlySet<string>; v4: boolean };
+type VersionsBySchema = ReadonlyMap<string, SegmentVersion>;
+const V2: SegmentVersion = { sources: new Set<string>(EVIDENCE_SOURCES_V2), v4: false };
+const V3: SegmentVersion = { sources: new Set<string>(EVIDENCE_SOURCES_V3), v4: false };
+const V4: SegmentVersion = { sources: new Set<string>(EVIDENCE_SOURCES_V4), v4: true };
+const ONLY_V2: VersionsBySchema = new Map([[EVIDENCE_SEGMENT_SCHEMA_V2, V2]]);
+const ANY_VERSION: VersionsBySchema = new Map([
+  [EVIDENCE_SEGMENT_SCHEMA_V2, V2],
+  [EVIDENCE_SEGMENT_SCHEMA_V3, V3],
+  [EVIDENCE_SEGMENT_SCHEMA_V4, V4],
 ]);
 const EDITOR_MODELS = new Set<string>(EVIDENCE_EDITOR_MODELS_V2);
 const SEGMENT_KEYS = new Set([
@@ -202,6 +282,15 @@ const EVENT_KEYS = new Set([
   "afterDocumentHash",
 ]);
 const CAPTURE_CONTEXT_KEYS = new Set(["editorModel", "transactionFormat"]);
+/** v4 event keys allowed only with one source, and required with it. */
+const BINDING_KEYS_V4: ReadonlyMap<unknown, readonly string[]> = new Map([
+  ["import", ["importId", "importManifestSha256"]],
+  ["ai-transfer", ["aiTransferId", "aiTransferSha256"]],
+]);
+const PASTE_ORIGIN_KEYS = new Set(["kind", "refId", "textSha256"]);
+const PASTE_ORIGIN_KINDS: ReadonlySet<unknown> = new Set(EVIDENCE_PASTE_ORIGIN_KINDS_V4);
+// Canonical lower-case UUID v4: the nil UUID and every other version are refused.
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function hasOnlyKeys(
   value: Record<string, unknown>,
@@ -274,19 +363,59 @@ function isSortedUniqueStrings(value: unknown): value is string[] {
   return true;
 }
 
+function isUuidV4(value: unknown): value is string {
+  return typeof value === "string" && UUID_V4.test(value);
+}
+
+function isPasteOrigin(value: unknown): value is EvidencePasteOriginV4 {
+  return (
+    isPlainObject(value) &&
+    hasOnlyKeys(value, PASTE_ORIGIN_KEYS) &&
+    PASTE_ORIGIN_KINDS.has(value.kind) &&
+    isUuidV4(value.refId) &&
+    isSha256(value.textSha256)
+  );
+}
+
+/**
+ * The keys of an event: those of v2, and in v4 also the keys of its own
+ * source. A key that belongs to another source is unknown here.
+ */
+function hasEventKeys(value: Record<string, unknown>, version: SegmentVersion): boolean {
+  const own = version.v4 ? BINDING_KEYS_V4.get(value.source) : undefined;
+  return Object.keys(value).every(
+    (key) =>
+      EVENT_KEYS.has(key) ||
+      (version.v4 && key === "pasteOrigin" && value.source === "paste") ||
+      own?.includes(key) === true,
+  );
+}
+
+/** The keys v4 requires with a source, in the form it requires. */
+function hasV4Fields(value: Record<string, unknown>): boolean {
+  if (value.source === "import") {
+    return isUuidV4(value.importId) && isSha256(value.importManifestSha256);
+  }
+  if (value.source === "ai-transfer") {
+    return isUuidV4(value.aiTransferId) && isSha256(value.aiTransferSha256);
+  }
+  return !Object.hasOwn(value, "pasteOrigin") || isPasteOrigin(value.pasteOrigin);
+}
+
 function isEvent(
   value: unknown,
   expectedSequence: number,
-  sources: ReadonlySet<string>,
-): value is EvidenceEventV3 {
-  if (!isPlainObject(value) || !hasOnlyKeys(value, EVENT_KEYS)) return false;
+  version: SegmentVersion,
+): value is EvidenceEvent {
+  if (!isPlainObject(value) || !hasEventKeys(value, version)) return false;
   if (
     value.sequence !== expectedSequence ||
     typeof value.source !== "string" ||
     // Before the closed set, so that a version that took a reserved source
     // into its set by mistake still refuses it (D-34, D-132).
     RESERVED_SOURCES.has(value.source) ||
-    !sources.has(value.source) ||
+    !version.sources.has(value.source) ||
+    (version.v4 && !hasV4Fields(value)) ||
     !areSteps(value.steps) ||
     !isSha256(value.beforeDocumentHash) ||
     !isSha256(value.afterDocumentHash)
@@ -315,26 +444,27 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
 }
 
 /**
- * A segment of v2 or v3: each version with its own closed set of sources and
- * every other rule shared. Never throws, like `isEvidenceSegmentV2`. This is
- * the one check the client (before it sends) and the server (before it
- * accepts) both use, through `verifyCanonicalEvidencePayloadV2`.
+ * A segment of v2, v3 or v4: each version with its own closed set of sources
+ * (and in v4 its own event keys) and every other rule shared. Never throws,
+ * like `isEvidenceSegmentV2`. This is the one check the client (before it
+ * sends) and the server (before it accepts) both use, through
+ * `verifyCanonicalEvidencePayloadV2`.
  */
 export function isEvidenceSegment(value: unknown): value is EvidenceSegment {
   try {
-    return isSegmentUnguarded(value, V2_OR_V3);
+    return isSegmentUnguarded(value, ANY_VERSION);
   } catch {
     return false;
   }
 }
 
-function isSegmentUnguarded(value: unknown, schemas: SourcesBySchema): boolean {
+function isSegmentUnguarded(value: unknown, schemas: VersionsBySchema): boolean {
   if (!isPlainObject(value) || !hasOnlyKeys(value, SEGMENT_KEYS)) return false;
-  const sources =
+  const version =
     typeof value.evidenceSchema === "string" ? schemas.get(value.evidenceSchema) : undefined;
 
   if (
-    sources === undefined ||
+    version === undefined ||
     value.canonicalization !== EVIDENCE_CANONICALIZATION_V2 ||
     value.hashAlgorithm !== EVIDENCE_HASH_ALGORITHM_V2 ||
     !nonEmptyBounded(value.documentId) ||
@@ -377,7 +507,7 @@ function isSegmentUnguarded(value: unknown, schemas: SourcesBySchema): boolean {
   for (let index = 0; index < value.events.length; index++) {
     const event = value.events[index];
     if (
-      !isEvent(event, sequenceFrom + index, sources) ||
+      !isEvent(event, sequenceFrom + index, version) ||
       event.beforeDocumentHash !== previousAfter
     ) {
       return false;
@@ -386,6 +516,9 @@ function isSegmentUnguarded(value: unknown, schemas: SourcesBySchema): boolean {
   }
 
   if (previousAfter !== value.finalDocumentHash) return false;
+  // A v4 header around content an older version can carry is refused, so the
+  // same content never has two schemas (and two hashes).
+  if (version.v4 && !value.events.some(isV4Event)) return false;
 
   try {
     canonicalizeJcs(value);

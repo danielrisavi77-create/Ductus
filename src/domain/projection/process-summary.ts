@@ -5,7 +5,7 @@ import {
   type EvidenceChainFailureV2,
   type EvidenceChainHeadV2,
 } from "../forensics/evidence-chain-v2";
-import type { EvidenceSegment, EvidenceSource } from "../forensics/evidence-segment-v2";
+import type { EvidenceSegment, EvidenceSourceV4 } from "../forensics/evidence-segment-v2";
 
 /**
  * Process summary, core of B-13 (PRODUCT §7, rule 5 of §5, D-80 point 6).
@@ -35,7 +35,7 @@ export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
  * the writer's own text inside the document, and `unattributed` is never a
  * paste (#384, owner question 3 is open; changing this list is the only edit).
  */
-export const PASTE_SOURCES: readonly EvidenceSource[] = ["paste"];
+export const PASTE_SOURCES: readonly EvidenceSourceV4[] = ["paste"];
 
 /** Faculty thresholds (P-01, P-02); configuration, never literals (PRODUCT §5 rule 12). */
 export type ProcessSummaryThresholds = {
