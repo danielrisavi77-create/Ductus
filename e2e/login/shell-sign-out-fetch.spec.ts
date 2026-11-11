@@ -36,7 +36,6 @@ async function operator(sessionToken: string, procedure: "appoint" | "revoke"): 
 
 /** Signs in as the invented administrator; returns the session token. */
 async function asAdministrator(page: Page): Promise<string> {
-  await page.context().clearCookies({ name: /^_session/ });
   await signIn(page, "/zadaci", "Ustanova B: nastavnica");
   const token = (await appCookie(page.context(), SESSION_COOKIE))?.value;
   expect(token).toBeDefined();
@@ -78,8 +77,14 @@ test("Odjava on /ustanova without an answer ends the session on this device and 
     for (const theme of ["dark", "light"] as const) {
       if (theme === "light") await page.evaluate(() => localStorage.setItem("ductura.theme", "light"));
       const session = theme === "dark" ? first : await asAdministrator(page);
-      await page.goto("/ustanova");
+      // The overview is reached by a link, so the client keeps it in its
+      // router cache: Back must not bring it back (QA, finding 2).
+      await page.goto("/ustanova/korisnici");
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await expect(page.getByRole("heading", { level: 1, name: t.teacherRoles.title })).toBeVisible();
+      await page.getByRole("navigation", { name: t.shell.workNav })
+        .getByRole("link", { name: t.shell.nav.institution, exact: true }).click();
+      await page.waitForURL(`${APP_ORIGIN}/ustanova`);
       await expect(page.getByRole("heading", { level: 1, name: t.institutionOverview.title })).toBeVisible();
 
       const logouts = logoutRequests(context);
@@ -93,22 +98,20 @@ test("Odjava on /ustanova without an answer ends the session on this device and 
       expect(await appCookie(context, `ductus-ended-${tag}`)).toBeDefined();
       await shoot(page, `odjava-ljuska-uredaj-${theme}`, 1440);
       await shoot(page, `odjava-ljuska-uredaj-${theme}`, 400);
+      // Closing reloads the page: the card, not the overview the session saw.
       await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
-      await expect(dialog).toHaveCount(0);
-      await expect(signOutButton(page)).toBeFocused();
-      // One request; nothing calls the route again.
-      expect(logouts).toEqual(["POST fetch"]);
-      await page.unroute("**/api/auth/logout");
-
-      await page.goto("/ustanova");
-      await expectSignedOutCard(page, "/ustanova", t.institutionOverview.title);
-      await page.goto("/nastavnik");
-      await expectSignedOutCard(page, "/nastavnik", t.teacherCourses.title);
-      // Back renders /ustanova again from the server: the card, not the overview.
-      await page.goBack();
       await expect(page).toHaveURL(`${APP_ORIGIN}/ustanova`);
       await expectSignedOutCard(page, "/ustanova", t.institutionOverview.title);
-      // Ended by its mark only: the row and the cookie stay (DAN-511b).
+      await page.unroute("**/api/auth/logout");
+
+      // Back to the page before the link: the card, not the router's copy.
+      await page.goBack();
+      await expect(page).toHaveURL(`${APP_ORIGIN}/ustanova/korisnici`);
+      await expectSignedOutCard(page, "/ustanova/korisnici", t.teacherRoles.title);
+      await page.goto("/nastavnik");
+      await expectSignedOutCard(page, "/nastavnik", t.teacherCourses.title);
+      // Ended by its mark only: the row and the cookie stay (DAN-511b), and
+      // nothing called the route again.
       expect((await sessionRow(session))?.closed_at).toBeNull();
       expect((await appCookie(context, SESSION_COOKIE))?.value).toBe(session);
       expect(logouts).toEqual(["POST fetch"]);
@@ -147,3 +150,50 @@ for (const second of ["answered", "503"] as const) {
     }
   });
 }
+
+// The dialog path: a journal that cannot be read opens the dialog first (T5 of
+// shell-sign-out.spec.ts); Odjavi se without an answer turns it into the
+// device message, and the session of the click has ended here.
+test("Odjava from the dialog without an answer says the session ended on this device", async ({ page, context }) => {
+  const session = await asAdministrator(page);
+  await operator(session, "appoint");
+  try {
+    await page.addInitScript(() => {
+      const open = IDBFactory.prototype.open;
+      IDBFactory.prototype.open = function (this: IDBFactory, name: string, version?: number) {
+        if (name.startsWith("ductus-journal-v1-")) throw new DOMException("Made-up refusal", "SecurityError");
+        return version === undefined ? open.call(this, name) : open.call(this, name, version);
+      };
+    });
+    await page.goto("/ustanova");
+    await expect(page.getByRole("heading", { level: 1, name: t.institutionOverview.title })).toBeVisible();
+    const logouts = logoutRequests(context);
+    await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503, body: "" }));
+    await signOutButton(page).click();
+    const dialog = logoutDialogOf(page);
+    await expect(dialog).toContainText(t.auth.logoutPlain);
+    await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
+    await expect(dialog.getByRole("alert")).toContainText(t.auth.logoutDevice, { timeout: 15_000 });
+    await expect(dialog.getByRole("button")).toHaveText([t.auth.logoutClose]);
+    await expect(dialog.getByRole("button", { name: t.auth.logoutClose })).toBeFocused();
+    expect(await appCookie(context, `ductus-ended-${sessionTag(session)!}`)).toBeDefined();
+    await dialog.getByRole("button", { name: t.auth.logoutClose }).click();
+    await expectSignedOutCard(page, "/ustanova", t.institutionOverview.title);
+    expect(logouts).toEqual(["POST fetch"]);
+    expect((await sessionRow(session))?.closed_at).toBeNull();
+  } finally {
+    await operator(session, "revoke");
+  }
+});
+
+// A student screen does not read the mark, so it would keep rendering for a
+// session the dialog called ended: its Odjava posts the form as before (QA,
+// finding 1; the contract leaves student screens as they are).
+test("Odjava on a student screen still posts the form, without the device message", async ({ page, context }) => {
+  await signIn(page, "/upis");
+  const logouts = logoutRequests(context);
+  await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 503, body: "" }));
+  await page.getByRole("button", { name: t.shell.signOut, exact: true }).click();
+  await expect.poll(() => logouts).toEqual(["POST document"]);
+  await expect(logoutDialogOf(page)).toHaveCount(0);
+});

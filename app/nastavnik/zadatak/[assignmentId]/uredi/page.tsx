@@ -38,6 +38,7 @@ export default async function AssignmentVersionPage({ params }: { params: Promis
   const n = t.teacher.newVersion;
   return (
     <AppShell
+      endsOnDevice
       session={shellSession(token)}
       scope={accessShellScope(screen, principal)}
       role={screen === "allowed" ? "teacher" : null}

@@ -14,6 +14,12 @@ export type ShellLogoutProps = {
   scope: string | null;
   /** The session this page was rendered under; null without a session cookie. */
   session: SessionMark | null;
+  /**
+   * The page shows the sign-in card for a session its mark ended
+   * (`liveSessionToken`), so a sign-out the route does not answer can end the
+   * session on this device (DAN-99). Elsewhere the form posts as before.
+   */
+  endsOnDevice?: boolean;
   className?: string;
   buttonClassName?: string;
   /** Before the button (who is signed in); `children` go before its label. */
@@ -21,23 +27,26 @@ export type ShellLogoutProps = {
   children?: ReactNode;
 };
 
+const NOTHING_HELD: LogoutPlan = { unsaved: false, pending: 0, copies: 0, kept: false };
+
 /**
  * Sign-out from a shell page without the editor (D-118): reads per click what
  * this person's journal holds; nothing posts at once, else the dialog names
- * it. The same request as the editor's (DAN-99): the session ends on this
- * device whatever the route answers, and without an answer the dialog says
- * so. Nothing is deleted here; without JS the form posts (I5).
+ * it. Where the page reads the mark, the same request as the editor's
+ * (DAN-99): the session ends on this device whatever the route answers, and
+ * without an answer the dialog says so and closing it reloads the page, which
+ * then shows the sign-in card. Elsewhere the form posts. Nothing is deleted
+ * here; without JS the form posts (I5).
  */
-const NOTHING_HELD: LogoutPlan = { unsaved: false, pending: 0, copies: 0, kept: false };
-
-export default function ShellLogout({ scope, session, className, buttonClassName, lead, children }: ShellLogoutProps) {
+export default function ShellLogout({ scope, session, endsOnDevice = false, className, buttonClassName, lead, children }: ShellLogoutProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
   const [signedOutHere, setSignedOutHere] = useState(false);
 
-  // No answer: ended here all the same, and the dialog says so. A later
-  // click finds the session ended and goes to `/` without posting.
+  // No answer: ended here all the same, and the dialog says so. Nothing
+  // calls the route again; a click before the reload goes to `/`.
   const unanswered = () => {
     setPlan((open) => open ?? NOTHING_HELD);
     setSignedOutHere(true);
@@ -45,12 +54,21 @@ export default function ShellLogout({ scope, session, className, buttonClassName
   };
   const post = () => {
     setBusy(true);
+    // `submit()` fires no submit event, so onSubmit does not run again.
+    if (!endsOnDevice) {
+      formRef.current?.submit();
+      return;
+    }
     void signOutHere(session, browserSignOutDeps())
       .then((reached) => (reached ? followLogoutNatively() : unanswered()), unanswered);
   };
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy || plan) return;
+    if (signedOutHere) {
+      window.location.assign("/");
+      return;
+    }
     setBusy(true);
     void readLogoutHold(scope, { session }).then((read) => {
       const step = shellLogoutStep(read);
@@ -80,7 +98,7 @@ export default function ShellLogout({ scope, session, className, buttonClassName
 
   return (
     <>
-      <form method="post" action="/api/auth/logout" className={className} onSubmit={onSubmit}>
+      <form ref={formRef} method="post" action="/api/auth/logout" className={className} onSubmit={onSubmit}>
         {lead}
         <button ref={buttonRef} type="submit" className={buttonClassName} disabled={busy}>
           {children}
@@ -93,7 +111,9 @@ export default function ShellLogout({ scope, session, className, buttonClassName
           working={busy}
           signedOutHere={signedOutHere}
           onConfirm={post}
-          onStay={() => setPlan(null)}
+          // After the device message the page reloads: the server shows the
+          // card, and no client cache keeps what the session could see.
+          onStay={() => (signedOutHere ? window.location.replace(window.location.href) : setPlan(null))}
           onExport={() => {}}
           copies={plan.copies}
         />

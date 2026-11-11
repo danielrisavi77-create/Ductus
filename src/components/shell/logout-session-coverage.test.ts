@@ -70,9 +70,16 @@ describe("the sign-outs read with the session", () => {
     expect(source).toContain("signOutHere(session, browserSignOutDeps())");
     expect(source).toContain("reached ? followLogoutNatively() : unanswered()");
     expect(source).toContain("signedOutHere={signedOutHere}");
-    expect(source).not.toMatch(/\.submit\(\)/);
+    // Only where the page reads the mark; elsewhere the form posts as before.
+    expect(source).toMatch(/if \(!endsOnDevice\) \{\s*formRef\.current\?\.submit\(\);\s*return;\s*\}\s*void signOutHere/);
+    // Closing the device message reloads: the server shows the card.
+    expect(source).toContain("signedOutHere ? window.location.replace(window.location.href) : setPlan(null)");
+    // A click before the reload leaves without posting again.
+    expect(source).toMatch(/if \(signedOutHere\) \{\s*window\.location\.assign\("\/"\);\s*return;/);
     // Without JS the form still posts (I5).
-    expect(source).toContain('<form method="post" action="/api/auth/logout"');
+    expect(source).toContain('<form ref={formRef} method="post" action="/api/auth/logout"');
+    const shell = readFileSync(join(ROOT, "src/components/shell/AppShell.tsx"), "utf8");
+    expect(tags(shell, "ShellLogout")[0]).toContain("endsOnDevice={endsOnDevice}");
     const editor = readFileSync(join(ROOT, "src/components/editor/LocalDocument.tsx"), "utf8");
     expect(editor).toMatch(/import \{ followLogoutNatively, postLogout \} from "@\/client\/logout-request";/);
   });
@@ -83,6 +90,14 @@ describe("the sign-outs read with the session", () => {
     expect(source).not.toMatch(/readLogoutHold\(scope\)/);
     expect(source).toMatch(/next === "leave"\)\s*\{\s*window\.location\.assign\("\/"\);\s*return;/);
   });
+
+  // A page whose server does not read the mark would keep rendering for a
+  // session the dialog calls ended (student screens, `/`).
+  it.each(files.filter((file) => /[\\/]page\.tsx$/.test(file)).flatMap((file) =>
+    tags(readFileSync(file, "utf8"), "AppShell").map((tag) => [relative(ROOT, file).replaceAll("\\", "/"), file, tag] as const)))(
+    "%s ends on the device only where it reads the mark", (_name, file, tag) => {
+      expect(/\sendsOnDevice[\s=>]/.test(tag)).toBe(readFileSync(file, "utf8").includes("liveSessionToken("));
+    });
 
   it("a tag without the session is caught", () => {
     const [tag] = tags('<ShellLogout scope={s} className="a">', "ShellLogout");
