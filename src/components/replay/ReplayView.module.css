@@ -1,0 +1,246 @@
+/* DAN-537 (rb 261): the replay of S-34 and N-09, on the shared tokens (app/globals.css),
+   after docs/design/ductura/m6-reference/reference.css. */
+.replay,
+.player {
+  display: grid;
+  gap: 16px;
+}
+
+:global(.page) > .replay {
+  max-width: 900px;
+  width: 100%;
+}
+
+.intro,
+.card,
+.controls {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--rule-2);
+  border-radius: 6px;
+}
+
+.controls {
+  gap: 12px;
+  border-radius: 8px;
+}
+
+.intro p + p {
+  color: var(--ink-2);
+}
+
+.lead,
+.card .cardTitle {
+  margin: 0;
+  font: 500 17px/1.4 var(--ff-display);
+}
+
+.meta,
+.state {
+  color: var(--ink-2);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.secondary {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.secondary:hover {
+  background: var(--well);
+  color: var(--ink);
+}
+
+.secondary[aria-pressed="true"] {
+  background: var(--well);
+  border-color: var(--ink-2);
+}
+
+.secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.row :global(.btn) {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--well);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+}
+
+.srcLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  color: var(--ink-2);
+}
+
+.srcTag {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.gap {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  color: var(--ink-2);
+}
+
+.gap strong {
+  color: var(--ink);
+}
+
+.text h2,
+.text h3,
+.text h4 {
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.text p {
+  margin: 0 0 0.9em;
+}
+
+/* The blocks the shown change touched: marked, never coloured as a judgement (D-128). */
+.touched {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+  border-radius: 2px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.table th {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.gapRow {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.slider {
+  display: grid;
+  gap: 4px;
+}
+
+.slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.sliderLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--ff-mono);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.live {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.gapList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gapList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule-2);
+  color: var(--ink-2);
+}
+
+.note {
+  color: var(--ink-2);
+}
+
+.foot {
+  padding-top: 10px;
+  border-top: 1px solid var(--rule-2);
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.skel {
+  height: 12px;
+  margin-top: 8px;
+  border-radius: 4px;
+  background: var(--well);
+}
+
+.w80 { width: 80%; }
+.w60 { width: 60%; }
+.w40 { width: 40%; }
+
+@media (max-width: 640px) {
+  .meta,
+  .foot,
+  .live,
+  .sliderLabel,
+  .table th {
+    font-size: 13px;
+  }
+  .row :global(.btn),
+  .secondary {
+    min-height: 44px;
+  }
+}
