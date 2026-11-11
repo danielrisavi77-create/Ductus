@@ -65,6 +65,18 @@ describe("the sign-outs read with the session", () => {
     expect(source).toMatch(/step\.kind === "leave"\)\s*\{\s*window\.location\.assign\("\/"\);\s*return;/);
   });
 
+  it("ShellLogout sends the editor's request and says when it was not answered (DAN-99)", () => {
+    const source = readFileSync(join(ROOT, "src/components/shell/ShellLogout.tsx"), "utf8");
+    expect(source).toContain("signOutHere(session, browserSignOutDeps())");
+    expect(source).toContain("reached ? followLogoutNatively() : unanswered()");
+    expect(source).toContain("signedOutHere={signedOutHere}");
+    expect(source).not.toMatch(/\.submit\(\)/);
+    // Without JS the form still posts (I5).
+    expect(source).toContain('<form method="post" action="/api/auth/logout"');
+    const editor = readFileSync(join(ROOT, "src/components/editor/LocalDocument.tsx"), "utf8");
+    expect(editor).toMatch(/import \{ followLogoutNatively, postLogout \} from "@\/client\/logout-request";/);
+  });
+
   it("the editor's sign-out reads with it and leaves without posting", () => {
     const source = readFileSync(join(ROOT, "src/components/editor/LocalDocument.tsx"), "utf8");
     expect(source).toMatch(/editorSignOutPlan\(.*, scope, \{ session \}\);/);
