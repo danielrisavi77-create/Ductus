@@ -95,10 +95,11 @@ test("no tracked file outside Markdown names a listed document, its directory or
     const readers = path.includes("/") ? sources : sources.filter(({ path: file }) => SKIPPED.test(file));
     // `docs/x/README.md` is another file, so a root name preceded by "/" is not it.
     const direct = new RegExp(`(?<![\\w.${path.includes("/") ? "" : "/"}-])${escape(path)}(?![\\w.-])`);
-    const dirs = [];
-    for (let dir = dirname(path); dir !== "." && dir !== "docs"; dir = dirname(dir)) dirs.push(dir);
     // The bare docs root is walked only by always-on engineering tests (below).
-    const directory = dirs.map((dir) => new RegExp(`(?<![\\w.-])${escape(dir)}/?(?=["'\`*)$]|$)`, "m"));
+    const directory = [];
+    for (let dir = dirname(path); dir !== "." && dir !== "docs"; dir = dirname(dir)) {
+      directory.push(new RegExp(`(?<![\\w.-])${escape(dir)}/?(?=["'\`*)$]|$)`, "m"));
+    }
     const sibling = new RegExp(`(?<![\\w.-])${escape(posix.basename(path))}(?![\\w.-])`);
     for (const { path: file, text } of readers) {
       assert.doesNotMatch(text, direct, `${file} names ${path}`);
