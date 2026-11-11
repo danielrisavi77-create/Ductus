@@ -1045,6 +1045,13 @@ export const hr = {
       unavailable: "Potvrda nije stigla, pa ishod predaje nije poznat. Pokušajte ponovno.",
     },
     openUnavailable: "Rad trenutačno nije moguće učitati s poslužitelja. Pokušajte ponovno.",
+    // DAN-699 (#1876): text of this work on this device that the server does not have.
+    device: {
+      checking: "Provjera ima li na ovom uređaju izmjena koje poslužitelj još nema…",
+      held: "Na ovom uređaju ima izmjena ovog rada koje poslužitelj još nema. Predaja nije moguća dok ne stignu na poslužitelj. Vratite se na rad i provjerite stanje spremanja.",
+      unknown: "Nije moguće provjeriti ima li na ovom uređaju izmjena koje poslužitelj još nema. Predaja nije moguća dok se to ne provjeri. Pokušajte ponovno.",
+      recheck: "Provjeri ponovno",
+    },
   },
   teacherComments: {
     hint: "Označite tekst u radu za komentar.",

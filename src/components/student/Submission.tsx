@@ -9,6 +9,9 @@
  * that names an unacknowledged notice sends the student to the notice
  * (criterion 6). Once the session ends in this browser nothing more is sent
  * and the text, receipt and summary leave the page (criterion 7, D-118).
+ * DAN-699 (#1876): while this device holds text of the work the server does
+ * not have, or a recorder that stopped, nothing is submitted; the device is
+ * read again on the click, right before the request.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -18,6 +21,7 @@ import { fetchProcessSummary } from "@/client/process-summary";
 import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
 import type { SessionMark } from "@/client/session-marks";
 import { submitWork } from "@/client/submission";
+import { readDocumentHold, submitWhenClear } from "@/client/submission-hold";
 import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
 
 import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionView";
@@ -28,11 +32,18 @@ import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionVi
  * or summary of the session before stays on it, even when the end of that
  * session never reached this tab (review 6386405994 on #653; as CommentPanel, F-088).
  */
-export default function Submission({ assignmentId, session }: { assignmentId: string; session: SessionMark }) {
-  return <SessionSubmission key={session.tag} assignmentId={assignmentId} session={session} />;
+export default function Submission({ assignmentId, session, scope }: Props) {
+  return <SessionSubmission key={session.tag} assignmentId={assignmentId} session={session} scope={scope} />;
 }
 
-function SessionSubmission({ assignmentId, session }: { assignmentId: string; session: SessionMark }) {
+type Props = {
+  assignmentId: string;
+  session: SessionMark;
+  /** The journal scope of this sign-in; null reads as unknown and holds the submission (DAN-699). */
+  scope: string | null;
+};
+
+function SessionSubmission({ assignmentId, session, scope }: Props) {
   const [state, setState] = useState<SubmissionState>({ phase: "loading" });
   const [ended, setEnded] = useState(false);
   const [focusOutcome, setFocusOutcome] = useState(0);
@@ -63,6 +74,16 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
     setState((s) => (s.phase === "ready" ? { ...s, summary } : s));
   }, [current]);
 
+  // The device check (DAN-699); only the last one started counts, as for the summary.
+  const deviceTicket = useRef(0);
+  const checkDevice = useCallback(async (documentId: string, mine: number) => {
+    const ticket = ++deviceTicket.current;
+    setState((s) => (s.phase === "ready" ? { ...s, device: "checking" } : s));
+    const device = await readDocumentHold(scope, documentId);
+    if (mine !== generation.current || ticket !== deviceTicket.current) return;
+    setState((s) => (s.phase === "ready" ? { ...s, device } : s));
+  }, [scope]);
+
   // The read itself; `mine` is the generation of the load that started it.
   const read = useCallback(async (mine: number) => {
     if (!current()) return;
@@ -87,10 +108,11 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
     workRef.current = opened.work;
     setState({
       phase: "ready", document: snapshot.document, revision: opened.work.currentRevision,
-      sending: false, outcome: null, summary: null,
+      sending: false, outcome: null, summary: null, device: "checking",
     });
     void loadSummary(opened.work.documentId, mine);
-  }, [assignmentId, current, loadSummary, noticePath]);
+    void checkDevice(opened.work.documentId, mine);
+  }, [assignmentId, checkDevice, current, loadSummary, noticePath]);
 
   // "Učitaj ponovno": back to "loading", then the read.
   const load = useCallback(() => {
@@ -120,16 +142,27 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
     sendingRef.current = true;
     const mine = generation.current;
     setState((s) => (s.phase === "ready" ? { ...s, sending: true } : s));
-    const outcome = await submitWork({ documentId: work.documentId, revision: work.currentRevision }, current);
+    // A check made on load says nothing of text saved since: the device is
+    // read again here, and anything but clear sends no request (DAN-699).
+    deviceTicket.current += 1;
+    const gated = await submitWhenClear(
+      () => readDocumentHold(scope, work.documentId),
+      () => submitWork({ documentId: work.documentId, revision: work.currentRevision }, current),
+    );
     sendingRef.current = false;
     if (mine !== generation.current) return;
+    if (gated.kind === "held") {
+      setState((s) => (s.phase === "ready" ? { ...s, sending: false, device: gated.device } : s));
+      return;
+    }
+    const { outcome } = gated;
     if (outcome.kind === "notAcknowledged") {
       window.location.assign(noticePath);
       return;
     }
     setState((s) => (s.phase === "ready" ? { ...s, sending: false, outcome } : s));
     setFocusOutcome((n) => n + 1);
-  }, [current, noticePath]);
+  }, [current, noticePath, scope]);
 
   // The outcome of a submission takes the focus once it is drawn (#385 H8).
   useEffect(() => {
@@ -149,6 +182,11 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
     };
   }, []);
 
+  const recheck = useCallback(() => {
+    const work = workRef.current;
+    if (work && !sendingRef.current) void checkDevice(work.documentId, generation.current);
+  }, [checkDevice]);
+
   const reloadSummary = useCallback(() => {
     const work = workRef.current;
     if (work) void loadSummary(work.documentId, generation.current);
@@ -160,7 +198,7 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
     <SubmissionView
       state={shown}
       offline={!online}
-      handlers={{ onSubmit: () => void submit(), onReload: () => void load(), onReloadSummary: reloadSummary }}
+      handlers={{ onSubmit: () => void submit(), onReload: () => void load(), onReloadSummary: reloadSummary, onRecheck: recheck }}
     />
   );
 }
