@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   checkVersion,
@@ -9,6 +9,10 @@ import {
   type CurrentVersion,
   type VersionBody,
 } from "./assignment-version";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // Invented assignment only.
 const ID = "00000000-0000-4000-8000-0000000000a1";
@@ -53,7 +57,7 @@ describe("DAN-310 new version: what is sent", () => {
       instructions: CURRENT.instructions,
       workType: "short_paper",
       opensAt: CURRENT.opensAt,
-      dueAt: new Date("2026-12-05T12:00").toISOString(),
+      dueAt: "2026-12-05T11:00:00.000Z",
       aiPolicy: "encouraged",
       aiPurposes: ["formatting", "proofreading"],
       evidenceProfile: "extended",
@@ -89,9 +93,17 @@ describe("DAN-310 new version: what is sent", () => {
     }
   });
 
-  it("writes instants as datetime-local text on this clock", () => {
+  // DAN-700 (#1877): the form shows and reads Zagreb time, whatever the device's zone.
+  it.each(["Europe/Zagreb", "UTC", "America/New_York", "Asia/Tokyo"])("writes instants as datetime-local text in Zagreb time under TZ=%s", (zone) => {
+    vi.stubEnv("TZ", zone);
     expect(localMinute("bad")).toBe("");
-    expect(new Date(localMinute(CURRENT.dueAt)).toISOString()).toBe(CURRENT.dueAt);
+    expect(localMinute(CURRENT.dueAt)).toBe("2026-11-30T23:59");
+    expect(localMinute(CURRENT.opensAt)).toBe("2026-11-01T09:00");
+    expect(localMinute("2026-10-25T01:30:00.000Z")).toBe("2026-10-25T02:30");
+    const edited = checkVersion(CURRENT, { ...draftOf(CURRENT), dueAt: "2026-12-14T23:59" });
+    expect(edited.kind === "ready" && edited.body.dueAt).toBe("2026-12-14T22:59:00.000Z");
+    const kept = checkVersion(CURRENT, { ...draftOf(CURRENT), title: "Drugi" });
+    expect(kept.kind === "ready" && [kept.body.opensAt, kept.body.dueAt]).toEqual([CURRENT.opensAt, CURRENT.dueAt]);
   });
 });
 

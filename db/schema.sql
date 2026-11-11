@@ -2257,11 +2257,13 @@ CREATE FUNCTION collaboration.create_comment(p_document_id text, p_body text, p_
 DECLARE
   actor record;
   scope record;
+  v_role text;
   v_thread uuid;
 BEGIN
   SELECT * INTO actor FROM institution.require_actor();
   SELECT * INTO scope FROM collaboration.document_scope(p_document_id);
-  IF collaboration.actor_role(scope.institution_id, scope.assignment_id, scope.principal_id) IS DISTINCT FROM 'teacher' THEN
+  v_role := collaboration.actor_role(scope.institution_id, scope.assignment_id, scope.principal_id);
+  IF v_role IS NULL THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
   -- Checked before the table constraints, whose errors would quote the row.
@@ -2269,11 +2271,12 @@ BEGIN
      OR NOT coalesce(collaboration.is_text_anchor(p_anchor), false) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
-  INSERT INTO collaboration.comment_thread (institution_id, document_id, assignment_id, owner_id, anchor, created_by)
-  VALUES (scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id, p_anchor, actor.user_id)
+  INSERT INTO collaboration.comment_thread (institution_id, document_id, assignment_id, owner_id, anchor, state, created_by)
+  VALUES (scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id, p_anchor,
+          CASE WHEN v_role = 'student' THEN 'answered' ELSE 'open' END, actor.user_id)
   RETURNING id INTO v_thread;
   INSERT INTO collaboration.comment (thread_id, institution_id, position, author_id, author_role, body)
-  VALUES (v_thread, scope.institution_id, 1, actor.user_id, 'teacher', p_body);
+  VALUES (v_thread, scope.institution_id, 1, actor.user_id, v_role, p_body);
   RETURN v_thread;
 END
 $$;
@@ -2323,6 +2326,41 @@ BEGIN
     (request_id, institution_id, version, instruction, requested_revision, opened_by)
   VALUES (v_id, scope.institution_id, 1, p_instruction, p_requested_revision, actor.user_id);
   RETURN QUERY SELECT v_id, v_seq, 1, 'open'::text;
+END
+$$;
+
+
+--
+-- Name: delete_comment(uuid); Type: FUNCTION; Schema: collaboration; Owner: -
+--
+
+CREATE FUNCTION collaboration.delete_comment(p_comment_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  actor record;
+  v_thread uuid;
+  t record;
+  c record;
+BEGIN
+  SELECT * INTO actor FROM institution.require_actor();
+  SELECT x.thread_id INTO v_thread FROM collaboration.comment x
+  WHERE x.id = p_comment_id AND x.institution_id = actor.institution_id;
+  IF v_thread IS NULL THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  SELECT * INTO t FROM collaboration.thread_for_actor(v_thread, true);
+  SELECT x.author_id, x.author_role, x.deleted_at INTO c FROM collaboration.comment x
+  WHERE x.id = p_comment_id FOR UPDATE;
+  IF t.role IS DISTINCT FROM 'student' OR c.author_role IS DISTINCT FROM 'student'
+     OR c.author_id IS DISTINCT FROM actor.user_id THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
+  END IF;
+  IF c.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'conflict' USING ERRCODE = 'ZD409';
+  END IF;
+  UPDATE collaboration.comment x SET body = NULL, deleted_at = now() WHERE x.id = p_comment_id;
 END
 $$;
 
@@ -2475,7 +2513,7 @@ $_$;
 -- Name: list_comments(text); Type: FUNCTION; Schema: collaboration; Owner: -
 --
 
-CREATE FUNCTION collaboration.list_comments(p_document_id text) RETURNS TABLE(thread_id uuid, comment_id uuid, comment_position integer, author_role text, is_own boolean, body text, anchor jsonb, state text, created_window timestamp with time zone)
+CREATE FUNCTION collaboration.list_comments(p_document_id text) RETURNS TABLE(thread_id uuid, comment_id uuid, comment_position integer, author_role text, is_own boolean, body text, anchor jsonb, state text, created_window timestamp with time zone, deleted_window timestamp with time zone)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -2491,7 +2529,8 @@ BEGIN
   RETURN QUERY
     SELECT t.id, c.id, c.position, c.author_role, c.author_id = actor.user_id, c.body,
            CASE WHEN c.position = 1 THEN t.anchor END, t.state,
-           date_bin('5 minutes', c.created_at, timestamptz '2000-01-01 00:00:00+00')
+           date_bin('5 minutes', c.created_at, timestamptz '2000-01-01 00:00:00+00'),
+           date_bin('5 minutes', c.deleted_at, timestamptz '2000-01-01 00:00:00+00')
     FROM collaboration.comment_thread t
     JOIN collaboration.comment c ON c.thread_id = t.id AND c.institution_id = t.institution_id
     WHERE t.document_id = p_document_id AND t.institution_id = scope.institution_id
@@ -7081,10 +7120,15 @@ CREATE TABLE collaboration.comment (
     "position" integer NOT NULL,
     author_id uuid NOT NULL,
     author_role text NOT NULL,
-    body text NOT NULL,
+    body text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
     CONSTRAINT comment_author_role_check CHECK ((author_role = ANY (ARRAY['teacher'::text, 'student'::text]))),
-    CONSTRAINT comment_body_check CHECK (collaboration.is_comment_body(body)),
+    CONSTRAINT comment_body_check CHECK (
+CASE
+    WHEN (deleted_at IS NULL) THEN collaboration.is_comment_body(body)
+    ELSE ((body IS NULL) AND (deleted_at >= created_at))
+END),
     CONSTRAINT comment_position_check CHECK ((("position" >= 1) AND ("position" <= 10000)))
 );
 
@@ -12734,4 +12778,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261109030000'),
     ('20261109200000'),
     ('20261109210000'),
-    ('20261110120000');
+    ('20261110120000'),
+    ('20261111120000');

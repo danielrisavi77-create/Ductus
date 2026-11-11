@@ -12,7 +12,7 @@ const SQLSTATE = /^[0-9A-Z]{5}$/;
 const ROLES = new Set(["teacher", "student"]);
 const STATES = new Set(["open", "answered", "resolved"]);
 
-export type CommentAction = "create" | "reply" | "resolve" | "reopen" | "list";
+export type CommentAction = "create" | "reply" | "resolve" | "reopen" | "delete" | "list";
 
 export interface CommentDeps {
   withActor: WithActor;
@@ -26,10 +26,13 @@ export interface CommentView {
   position: number;
   authorRole: string;
   isOwn: boolean;
-  body: string;
+  /** Null once the student who wrote it has deleted it (DAN-215). */
+  body: string | null;
   anchor: unknown;
   state: string;
   createdWindow: string;
+  /** Start of the 5-minute window of the deletion; null while the comment stands. */
+  deletedWindow: string | null;
 }
 
 interface Spec {
@@ -68,11 +71,18 @@ const SPECS: Record<CommentAction, Spec> = {
     sql: "SELECT collaboration.reopen_thread($1::uuid)",
     params: (i) => [i.threadId],
   },
+  // Only the student who wrote the comment deletes it; the RPC decides who.
+  delete: {
+    keys: ["commentId"],
+    valid: (i) => isThreadId(i.commentId),
+    sql: "SELECT collaboration.delete_comment($1::uuid)",
+    params: (i) => [i.commentId],
+  },
   list: {
     keys: ["documentId"],
     valid: (i) => isDocumentId(i.documentId),
-    sql: "SELECT thread_id, comment_id, comment_position, author_role, is_own, body, anchor, state, created_window"
-      + " FROM collaboration.list_comments($1)",
+    sql: "SELECT thread_id, comment_id, comment_position, author_role, is_own, body, anchor, state, created_window,"
+      + " deleted_window FROM collaboration.list_comments($1)",
     params: (i) => [i.documentId],
   },
 };
@@ -91,11 +101,16 @@ function strictInput(value: unknown, spec: Spec): Record<string, unknown> | null
   return spec.valid(obj) ? obj : null;
 }
 
+const asDate = (value: unknown) => (value instanceof Date ? value : new Date(String(value)));
+
 function commentView(row: Record<string, unknown>): CommentView | null {
-  const created = row.created_window instanceof Date ? row.created_window : new Date(String(row.created_window));
+  const created = asDate(row.created_window);
+  const deleted = row.deleted_window === null ? null : asDate(row.deleted_window);
   const anchor = row.anchor;
+  // A standing comment has text and no deletion; a deleted one the reverse.
+  const bodyOk = deleted === null ? typeof row.body === "string" : row.body === null && !Number.isNaN(deleted.getTime());
   if (!isThreadId(row.thread_id) || !isThreadId(row.comment_id) || !Number.isSafeInteger(row.comment_position)
-    || !ROLES.has(String(row.author_role)) || typeof row.is_own !== "boolean" || typeof row.body !== "string"
+    || !ROLES.has(String(row.author_role)) || typeof row.is_own !== "boolean" || !bodyOk
     || !STATES.has(String(row.state)) || Number.isNaN(created.getTime())
     || (anchor !== null && (typeof anchor !== "object" || Array.isArray(anchor)))) {
     return null;
@@ -106,15 +121,16 @@ function commentView(row: Record<string, unknown>): CommentView | null {
     position: row.comment_position as number,
     authorRole: row.author_role as string,
     isOwn: row.is_own,
-    body: row.body,
+    body: row.body as string | null,
     anchor,
     state: row.state as string,
     createdWindow: created.toISOString(),
+    deletedWindow: deleted === null ? null : deleted.toISOString(),
   };
 }
 
 function success(action: CommentAction, rows: Record<string, unknown>[]): Response {
-  if (action === "resolve" || action === "reopen") return respond(204);
+  if (action === "resolve" || action === "reopen" || action === "delete") return respond(204);
   if (action === "list") {
     const comments = rows.map(commentView);
     if (comments.some((c) => c === null)) return respond(503);

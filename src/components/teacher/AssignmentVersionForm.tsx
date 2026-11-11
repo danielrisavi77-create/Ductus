@@ -133,14 +133,15 @@ function VersionEditor({ current }: { current: CurrentVersion }) {
             <label className={`${styles.field} ${own.time}`}>
               <span>{a.opensAt}</span>
               <input className={styles.control} type="datetime-local" value={draft.opensAt}
-                onChange={(e) => edit("opensAt", e.target.value)} />
+                aria-describedby="verzija-vrijeme-pomoc" onChange={(e) => edit("opensAt", e.target.value)} />
             </label>
             <label className={`${styles.field} ${own.time}`}>
               <span>{a.dueAt}</span>
               <input className={styles.control} type="datetime-local" value={draft.dueAt}
-                onChange={(e) => edit("dueAt", e.target.value)} />
+                aria-describedby="verzija-vrijeme-pomoc" onChange={(e) => edit("dueAt", e.target.value)} />
             </label>
           </div>
+          <p id="verzija-vrijeme-pomoc" className={styles.hint}>{a.timesHint}</p>
           <label className={styles.field}>
             <span>{a.instructions}</span>
             <textarea className={styles.control} rows={4} value={draft.instructions}
