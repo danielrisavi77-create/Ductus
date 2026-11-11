@@ -86,8 +86,12 @@ describe("accessCookie", () => {
     ["a malformed session cookie", "kratko", [`${ENDED_MARK_PREFIX}${sessionTag("kratko")}`], "kratko"],
     ["no records at all", TOKEN, [], TOKEN],
     ["the record of another session", TOKEN, [`${ENDED_MARK_PREFIX}${sessionTag(OTHER)}`], TOKEN],
+    ["the prefix without a tag", TOKEN, [ENDED_MARK_PREFIX], TOKEN],
     ["the old list cookie", TOKEN, ["ductus-ended"], TOKEN],
     ["the tag in capitals", TOKEN, [`${ENDED_MARK_PREFIX}${TAG.toUpperCase()}`], TOKEN],
+    ["the tag with a space", TOKEN, [`${ENDED_MARK_PREFIX}${TAG} `], TOKEN],
+    ["the bare tag", TOKEN, [TAG], TOKEN],
+    ["the session token itself in place of its tag", TOKEN, [`${ENDED_MARK_PREFIX}${TOKEN}`], TOKEN],
     ["the session's own record", TOKEN, [`${ENDED_MARK_PREFIX}${TAG}`], undefined],
   ])("with %s reads %s", (_name, token, names, expected) => {
     expect(accessCookie(token, jar(...names))).toBe(expected);
