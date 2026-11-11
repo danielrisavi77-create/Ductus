@@ -162,6 +162,143 @@ describe("replay words (DAN-537)", () => {
     expect(historyRows(history, 3, "Staro")[1]).toMatchObject({ label: "Sadašnja (promjena 1)", replacedBy: t.historyNotYet });
   });
 
+  // One row per line: a version as "label | text | replaced by | source", a gap as "— text".
+  const brief = (rows: ReturnType<typeof historyRows>) =>
+    rows.map((row) => (row.row === "gap" ? `— ${row.text}` : `${row.label} | ${row.text} | ${row.replacedBy} | ${row.source}`));
+  const stopped = (a: number) => `— ${fill(t.gapStopped, { a })}`;
+  const between = (a: number, b: number) => `— ${fill(t.gapBetween, { a, b })}`;
+
+  it.each<{ name: string; history: ParagraphHistoryEntry[]; at: number; current?: string | null; rows: string[] }>([
+    {
+      name: "K1 no gap: each version is replaced by the next change",
+      history: [change(1, "A"), change(2, "AB", "editor", "A"), change(3, "ABC", "editor", "AB")],
+      at: 3,
+      current: "ABC",
+      rows: [
+        `Sadašnja (promjena 3) | „ABC” | ${t.historyNotYet} | utipkano`,
+        "Prethodna (promjena 2) | „AB” | promjena 3 | utipkano",
+        "Prva zabilježena (promjena 1) | „A” | promjena 2 | utipkano",
+      ],
+    },
+    {
+      name: "K2 the record stops at the last change it replays",
+      history: [change(1, "A"), change(3, "AB", "editor", "A"), { entry: "gap", gap: "not_resumed", beforeIndex: 4 }],
+      at: 3,
+      current: "AB",
+      rows: [stopped(3), `Sadašnja (promjena 3) | „AB” | ${t.historyNotYet} | utipkano`, "Prva zabilježena (promjena 1) | „A” | promjena 3 | utipkano"],
+    },
+    {
+      name: "K2 the record stops after a change of another paragraph",
+      history: [change(1, "A"), { entry: "gap", gap: "not_resumed", beforeIndex: 4 }],
+      at: 3,
+      current: "A",
+      rows: [stopped(3), `Sadašnja (promjena 1) | „A” | ${t.historyNotYet} | utipkano`],
+    },
+    {
+      name: "K2 before the last change replayed, the stop is not shown yet",
+      history: [change(1, "A"), { entry: "gap", gap: "not_resumed", beforeIndex: 4 }],
+      at: 2,
+      current: "A",
+      rows: [`Sadašnja (promjena 1) | „A” | ${t.historyNotYet} | utipkano`],
+    },
+    {
+      name: "K3 a replacement inside a resumed gap is not credited to the next change",
+      history: [change(1, "Staro"), { entry: "gap", gap: "resumed", beforeIndex: 2 }, change(2, "Novo!", "editor", "Novo")],
+      at: 2,
+      current: "Novo!",
+      rows: [
+        `Sadašnja (promjena 2) | „Novo!” | ${t.historyNotYet} | utipkano`,
+        `Iz provjerenog nastavka (prije promjene 2) | „Novo” | promjena 2 | ${t.historyUnobserved}`,
+        between(1, 2),
+        `Prva zabilježena (promjena 1) | „Staro” | ${t.historyInGap} | utipkano`,
+      ],
+    },
+    {
+      name: "K4 a deletion right after the resumption keeps the verified text",
+      history: [change(1, "Staro"), { entry: "gap", gap: "resumed", beforeIndex: 2 }, change(2, null, "editor", "Iz nastavka.")],
+      at: 2,
+      current: null,
+      rows: [
+        `Sadašnja (promjena 2) | ${t.historyDeleted} | ${t.historyNotYet} | utipkano`,
+        `Iz provjerenog nastavka (prije promjene 2) | „Iz nastavka.” | promjena 2 | ${t.historyUnobserved}`,
+        between(1, 2),
+        `Prva zabilježena (promjena 1) | „Staro” | ${t.historyInGap} | utipkano`,
+      ],
+    },
+    {
+      name: "K5 a late start, a resumed gap the text survived, and a stop",
+      history: [
+        { entry: "gap", gap: "starts_later", beforeIndex: 1 },
+        change(1, "A", "paste"),
+        { entry: "gap", gap: "resumed", beforeIndex: 3 },
+        change(3, "AB", "editor", "A"),
+        { entry: "gap", gap: "not_resumed", beforeIndex: 5 },
+      ],
+      at: 4,
+      current: "AB",
+      rows: [
+        stopped(4),
+        `Sadašnja (promjena 3) | „AB” | ${t.historyNotYet} | utipkano`,
+        between(2, 3),
+        `Prva zabilježena (promjena 1) | „A” | promjena 3 | ${t.sources.paste}`,
+        `— ${t.gapStartsLater}`,
+      ],
+    },
+    {
+      name: "K5 two resumed gaps in a row, with the text replaced inside them",
+      history: [
+        change(1, "A"),
+        { entry: "gap", gap: "resumed", beforeIndex: 2 },
+        { entry: "gap", gap: "resumed", beforeIndex: 3 },
+        change(3, "XY", "editor", "X"),
+      ],
+      at: 3,
+      current: "XY",
+      rows: [
+        `Sadašnja (promjena 3) | „XY” | ${t.historyNotYet} | utipkano`,
+        `Iz provjerenog nastavka (prije promjene 3) | „X” | promjena 3 | ${t.historyUnobserved}`,
+        between(2, 3),
+        between(1, 2),
+        `Prva zabilježena (promjena 1) | „A” | ${t.historyInGap} | utipkano`,
+      ],
+    },
+    {
+      name: "K6 a paragraph made right after the resumption has no verified text before it",
+      history: [{ entry: "gap", gap: "resumed", beforeIndex: 2 }, change(2, "Novi")],
+      at: 2,
+      current: "Novi",
+      rows: [`Sadašnja (promjena 2) | „Novi” | ${t.historyNotYet} | utipkano`, between(1, 2)],
+    },
+    {
+      name: "K7 a gap after the current version: replaced inside it",
+      history: [change(1, "Staro"), { entry: "gap", gap: "resumed", beforeIndex: 2 }],
+      at: 3,
+      current: "Novo",
+      rows: [
+        `${t.historyResumedNow} | „Novo” | ${t.historyNotYet} | ${t.historyUnobserved}`,
+        between(1, 2),
+        `Prva zabilježena (promjena 1) | „Staro” | ${t.historyInGap} | utipkano`,
+      ],
+    },
+    {
+      name: "K7 a gap after the current version: unchanged by it",
+      history: [change(1, "Staro"), { entry: "gap", gap: "resumed", beforeIndex: 2 }],
+      at: 3,
+      current: "Staro",
+      rows: [between(1, 2), `Sadašnja (promjena 1) | „Staro” | ${t.historyNotYet} | utipkano`],
+    },
+    {
+      name: "K8 before the paragraph's first change: no history",
+      history: [{ entry: "gap", gap: "starts_later", beforeIndex: 1 }, change(2, "A")],
+      at: 1,
+      current: null,
+      rows: [],
+    },
+    { name: "K8 position 0", history: [change(1, "A")], at: 0, current: null, rows: [] },
+  ])("lists the paragraph history in every class of input: $name", ({ history, at, current, rows }) => {
+    expect(brief(historyRows(history, at, current))).toEqual(rows);
+  });
+
   it("names a paragraph by its place and the start of its text", () => {
     const node = (text: string): DocumentNode =>
       ({ type: "paragraph", id: "p", children: [{ type: "text", text, marks: [] }] }) as unknown as DocumentNode;
