@@ -12,7 +12,9 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";
 import { DOC, journalKit, json } from "@/lib/sync/evidence-test-kit";
 
-import { createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, writingClosed } from "./document-saver";
+import {
+  createDocumentSaver, evidenceNotice, snapshotSpeaks, stoppedSaved, submittedOf, writingClosed,
+} from "./document-saver";
 import { EvidenceSession } from "./evidence-session";
 
 /**
@@ -112,16 +114,23 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     }
   });
 
-  // Review #1901 (c.6786923958): the stop notice also shows while typing or
-  // saving locally, so its text must not claim the save already finished.
-  it("a stopped recorder gives its notice while saving locally too, in words that claim no finished save", () => {
+  // Review #1901 (c.6786923958), orchestrator c.6786961844: the stop notice
+  // shows while typing too, so it claims no save; the claim waits for the save.
+  it("a stopped recorder says the text is saved on the device only after the local save", () => {
     const base = { failure: null, capacity: "ok" as const, closedBy: null, stopped: true };
-    for (const state of ["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE"] as const) {
+    for (const state of ["EDITING", "SAVING_LOCAL"] as const) {
       expect(evidenceNotice({ ...base, state })).toBe("stopped");
+      expect(stoppedSaved({ ...base, state })).toBe(false);
     }
+    expect(evidenceNotice({ ...base, state: "LOCAL_DURABLE" })).toBe("stopped");
+    expect(stoppedSaved({ ...base, state: "LOCAL_DURABLE" })).toBe(true);
+    // Not stopped, or a failed local save: no claim either.
+    expect(stoppedSaved({ ...base, state: "LOCAL_DURABLE", stopped: false })).toBe(false);
+    expect(stoppedSaved({ ...base, state: "LOCAL_DURABLE", failure: "quota" })).toBe(false);
+    expect(stoppedSaved(null)).toBe(false);
     expect(messagesHr.editor.sendStopped).not.toMatch(/spremljen/i);
-    expect(messagesHr.editor.sendStopped).toMatch(/i dalje spremaju na ovom uređaju/);
-    expect(messagesEn.editor.sendStopped).not.toMatch(/\bis saved\b/i);
+    expect(messagesEn.editor.sendStopped).not.toMatch(/\bsaved\b/i);
+    expect(messagesHr.editor.sendStoppedSaved).toMatch(/spremljen na uređaju/);
   });
 
   it("the local saver's own snapshot never gives an evidence notice (e2e local-editor stored ids)", () => {

@@ -68,7 +68,8 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, writingClosed, type DocumentSaver, type DocumentSnapshot,
+  createDocumentSaver, evidenceNotice, snapshotSpeaks, stoppedSaved, submittedOf, writingClosed, type DocumentSaver,
+  type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
@@ -785,6 +786,11 @@ export function LocalEditor({ lang = null }: { lang?: WorkLanguage | null } = {}
         {alert ? <p>{alert}</p> : null}
         {phase === "signed-out" ? <SignInAgain /> : null}
       </div>
+      {/* Not live: inside the alert it would be read out again at every pause
+          in typing. The status region by the chip already says the save. */}
+      {notice === "stopped" && stoppedSaved(value.snapshot) ? (
+        <p className="editor-notice">{t.editor.sendStoppedSaved}</p>
+      ) : null}
       <div className="editor-notice" role="status">
         {phase === "blocked" ? <p>{t.editor.blockedHint}</p>
           : phase === "ready" && value.snapshot?.closedBy === "submission" ? <p>{t.editor.submittedReadOnly}</p>
