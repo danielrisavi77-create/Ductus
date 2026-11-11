@@ -95,6 +95,11 @@ const cases = [
     output: `# D\n\n${block("- §1 A: retci 8-13", "- §2 B: retci 14-14")}\n\n## 1. A\n\`\`\`\`\n\`\`\`\n~~~~\n## U bloku\n\`\`\`\`\n## 2. B\n`,
   },
   {
+    name: "only spaces and tabs may follow a closing fence; a no-break space keeps it open",
+    input: "# D\n\n## 1. A\n~~~\n~~~ \n## U bloku\n~~~ \t\n## 2. B\n",
+    output: `# D\n\n${block("- §1 A: retci 8-12", "- §2 B: retci 13-13")}\n\n## 1. A\n~~~\n~~~ \n## U bloku\n~~~ \t\n## 2. B\n`,
+  },
+  {
     name: "last section without a final newline",
     input: "## 1. A\na",
     output: `${block("- §1 A: retci 5-6")}\n\n## 1. A\na`,

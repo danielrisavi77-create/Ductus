@@ -31,7 +31,7 @@ function fenced(lines) {
   return lines.map((line) => {
     const m = FENCE.exec(line);
     if (open) {
-      if (m && m[1][0] === open[0] && m[1].length >= open.length && m[2].trim() === "") open = null;
+      if (m && m[1][0] === open[0] && m[1].length >= open.length && /^[ \t]*$/.test(m[2])) open = null;
       return true;
     }
     if (m && !(m[1][0] === "`" && m[2].includes("`"))) {
