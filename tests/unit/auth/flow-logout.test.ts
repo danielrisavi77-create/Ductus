@@ -130,6 +130,25 @@ describe("logout at the provider", () => {
     expectOnlyClearedCookie(response);
   });
 
+  // DAN-99, finding (2) on #1836: the shell's sign-out sends a fetch POST and,
+  // once answered, the same POST as a document. The second close is not a
+  // condition for going on: when it fails, the browser still reaches the
+  // provider with the cookie cleared, never a 503.
+  it("DAN-99: a confirmed logout sent again goes to the provider when the second close fails", async () => {
+    deps.closeSession
+      .mockImplementationOnce(async () => true)
+      .mockRejectedValueOnce(Object.assign(new Error("down"), { code: "ECONNREFUSED" }));
+    const first = await post();
+    const second = await post();
+    for (const response of [first, second]) {
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe(PROVIDER_LOGOUT);
+      expectOnlyClearedCookie(response);
+    }
+    expect(deps.closeSession).toHaveBeenCalledTimes(2);
+    expect(errors).toHaveBeenCalledWith("login failed", "logout", "Error:ECONNREFUSED");
+  });
+
   it("B2: without an end_session_endpoint the local logout stands and / follows", async () => {
     idp.state.next = {};
     const response = await post();
