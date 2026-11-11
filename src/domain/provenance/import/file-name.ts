@@ -11,10 +11,11 @@
 export const MAX_IMPORT_FILE_NAME_LENGTH = 200;
 
 const LONE_SURROGATES = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/gu;
-// Controls (C0, DEL, C1), format characters (bidi, zero width, BOM, soft hyphen)
-// and line or paragraph separators: none is visible, so none may change what
-// the mentor reads.
-const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+// Controls (C0, DEL, C1), format characters (bidi, zero width, BOM, soft hyphen),
+// line or paragraph separators and default-ignorable code points (combining
+// grapheme joiner, variation selectors, Hangul fillers): none is visible, so
+// none may change what the mentor reads.
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/gu;
 const WHITESPACE = /\s+/gu;
 
 function clean(value: string): string {
