@@ -65,7 +65,8 @@ export default async function SubmissionPage({ params }: { params: Promise<{ ass
   } else if (doc.kind !== "document") {
     body = <p role="status">{t.submission.outcome.notFound}</p>;
   } else {
-    body = <Submission assignmentId={assignmentId} session={session} />;
+    // The journal of this scope says whether the device holds text the server lacks (DAN-699).
+    body = <Submission assignmentId={assignmentId} session={session} scope={principal.kind === "signed-in" ? principal.scope : null} />;
   }
 
   const work = read.kind === "ready" ? read : null;

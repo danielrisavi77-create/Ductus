@@ -1081,6 +1081,12 @@ const en = {
       unavailable: "The receipt did not arrive, so the outcome of the submission is not known. Try again.",
     },
     openUnavailable: "The work cannot be loaded from the server right now. Try again.",
+    device: {
+      checking: "Checking whether this device holds changes the server does not have yet…",
+      held: "This device holds changes to this work that the server does not have yet. The work cannot be submitted until they reach the server. Go back to the work and check its save state.",
+      unknown: "It cannot be checked whether this device holds changes the server does not have yet. The work cannot be submitted until this is checked. Try again.",
+      recheck: "Check again",
+    },
   },
   teacherComments: {
     hint: "Select text in the work to comment on it.",

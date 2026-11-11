@@ -102,3 +102,21 @@
   gap: 10px;
   align-items: center;
 }
+
+/*
+ * M7 reference S-30 (states 5, 9 and 11): a closed submit button is grey, and
+ * a recovery action is a secondary, outlined button, never a second gold one.
+ */
+.actions :global(.btn):disabled {
+  border: 1px solid var(--rule-2);
+  background: var(--well);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+.secondary:global(.btn),
+.secondary:global(.btn):hover {
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+}
