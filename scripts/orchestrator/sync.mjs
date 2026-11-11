@@ -44,7 +44,8 @@ try {
   const local = {
     branch: await tryGit("symbolic-ref", "--short", "HEAD"),
     head: await git("rev-parse", "HEAD"),
-    dirty: (await git("status", "--porcelain")) !== "",
+    // Explicit flags: status.showUntrackedFiles or a submodule "ignore" setting must not hide changes.
+    dirty: (await git("status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none")) !== "",
     behind: behind === null ? null : Number(behind),
   };
   const plan = syncPlan({ pr, local });

@@ -3,7 +3,7 @@
 // single-branch clone. `gh` is answered by fake-gh-git-preload.mjs; no network.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -53,9 +53,12 @@ function setup(t, { cloneArgs = [], mainFile = "main.txt" } = {}) {
       number: 7, state: "open", mergeable: true, head: { sha: head, ref: BRANCH, repo: { full_name: "o/r" } },
       base: { ref: "main", repo: { full_name: "o/r" } },
     } }));
-    const env = { ...base, FAKE_GH_ROUTES: routes, NODE_OPTIONS: `--import ${PRELOAD}` };
+    const argvLog = join(root, "argv.log");
+    const env = { ...base, FAKE_GH_ROUTES: routes, FAKE_GH_ARGV_LOG: argvLog, NODE_OPTIONS: `--import ${PRELOAD}` };
     const r = spawnSync(process.execPath, [SCRIPT, "7", "--wait-min", "0"], { cwd: work, env, encoding: "utf8" });
-    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    // Arguments of every script the run started, sync.mjs itself included.
+    const calls = existsSync(argvLog) ? readFileSync(argvLog, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
+    return { code: r.status, out: `${r.stdout}${r.stderr}`, calls };
   };
   return { remote, seed, work, head, sync, remoteSha: () => git(remote, "rev-parse", `refs/heads/${BRANCH}`) };
 }
@@ -79,8 +82,24 @@ for (const [name, cloneArgs] of [["full clone", []], ["single-branch clone", ["-
     // The fake gh has no routes for preflight, so it ends with a read error on the head it was given.
     assert.ok(res.out.includes(`SYNC NOT READY: preflight exit 2 on ${head}`), res.out);
     assert.equal(res.code, 2);
+    const preflight = res.calls.filter((c) => c[0].endsWith("preflight.mjs"));
+    assert.deepEqual(preflight.map((c) => c.slice(1)), [["7", "--head", head]]);
   });
 }
+
+test("an untracked file stops the run even when git is configured to hide untracked files", (t) => {
+  const r = setup(t);
+  git(r.work, "config", "status.showUntrackedFiles", "no");
+  writeFileSync(join(r.work, "scratch.txt"), "local only\n");
+  const res = r.sync();
+  assert.equal(res.code, 1, res.out);
+  assert.match(res.out, /working tree has uncommitted changes/);
+  assert.doesNotMatch(res.out, /preflight|SYNC/);
+  assert.equal(git(r.work, "rev-parse", "HEAD"), r.head);
+  assert.equal(r.remoteSha(), r.head);
+  assert.equal(existsSync(join(r.work, ".git", "MERGE_HEAD")), false);
+  assert.deepEqual(res.calls.map((c) => c[0].endsWith("sync.mjs")), [true]);
+});
 
 test("conflict: the merge is aborted, the file is listed and nothing is pushed", (t) => {
   const r = setup(t, { mainFile: "pr.txt" });
