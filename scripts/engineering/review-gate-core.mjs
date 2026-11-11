@@ -497,9 +497,12 @@ const VERDICT_SPECS = {
  * The verdicts of `kind` ("review" | "qa") the gate counts on `headSha` alone
  * (no carried heads): `negative` when any principal holds a FAIL or BLOCK
  * there, `passes` the PASS results of principals other than `authorAgent`,
- * each with the comment `body` it came from. Same rules as the gate: App or
- * owner CLI channel, runtime of the App, F-012, F-023 and F-027. Read-only;
- * DAN-695 uses it so a report reads only a PASS the gate would count.
+ * each with the comment `body` it came from. Same validity rules as the gate:
+ * App or owner CLI channel, runtime of the App, F-012, F-023 and F-027. It does
+ * not apply the gate's rules on which QA PASS counts towards the gate (separate
+ * App, quota fallback, pairing with the review), so a PASS listed here is valid
+ * but not always the one the gate relied on. Read-only; DAN-695 uses it so a
+ * report never reads the model from a verdict the gate would reject.
  */
 export function countedVerdicts({ comments, kind, headSha, ownerLogin, authorAgent, trustedLogins = TRUSTED_VERDICT_LOGINS }) {
   const spec = VERDICT_SPECS[kind];

@@ -54,6 +54,8 @@ test("modelTier: allowlist of Claude forms; anything else is other", () => {
     ["mixed, unknown family", "Opus + Nova", "other"],
     ["mixed, known family", "claude-opus-5-5 + gpt-5-codex", "other"],
     ["mixed, known family", "claude-fable-5-5 opus", "other"],
+    ["mixed, known family", "Opus / gpt-5-codex", "other"],
+    ["unknown word before the tier", "Astra opus", "other"],
     ["id and name together", "claude-opus-5-5 / Opus 5.5", "other"],
     ["two lines", "claude-opus-5-5\nAstra", "other"],
     // Placeholders name no model: undeclared, not a model outside the table.
@@ -79,6 +81,17 @@ test("property: an allowed form followed by any other word is other", () => {
     // A trailing version number is part of the name form ("Opus 5.5").
     fc.pre(!/^\d/.test(extra));
     assert.equal(modelTier(`${model}${s}${extra}`), "other", `${model}${s}${extra}`);
+  }));
+});
+
+test("property: any other word before an allowed form is other", () => {
+  const allowed = fc.constantFrom("claude-opus-5-5", "claude-sonnet-5-5[1m]", "Opus 5.5", "haiku");
+  const word = fc.stringMatching(/^[A-Za-z][A-Za-z0-9.-]{0,11}$/);
+  const sep = fc.constantFrom(" ", " + ", ", ", " / ", " & ");
+  fc.assert(fc.property(word, sep, allowed, (extra, s, model) => {
+    // "Claude Opus 5.5" is itself a listed name form.
+    fc.pre(!(s === " " && extra.toLowerCase() === "claude"));
+    assert.equal(modelTier(`${extra}${s}${model}`), "other", `${extra}${s}${model}`);
   }));
 });
 
@@ -170,6 +183,8 @@ test("declaredModel counts only a PASS the gate counts on the merged head", () =
     "review", { found: true, model: "gpt-5-codex" }],
     ["owner comment without App or CLI line", [verdict("review", head, "PASS", "claude-opus-5-5", { performed_via_github_app: null })], "review", none],
     ["App that does not run the declared runtime", [verdict("review", head, "PASS", "claude-opus-5-5", { performed_via_github_app: { slug: "grok-by-xai" } })], "review", none],
+    ["codex slot through the claude App", [verdict("review", head, "PASS", "gpt-5-codex", {
+      body: `Agent-Review: codex:c:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\nReview-Model: gpt-5-codex\n` })], "review", none],
     ["agent without a reviewer role", [verdict("review", head, "PASS", "claude-opus-5-5", {
       body: `Agent-Review: claude:x\nReview-Head: ${head}\nReview-Verdict: PASS\nReview-Model: claude-opus-5-5\n` })], "review", none],
     // Finding (1) of cxcr1946, F-012: an edited PASS is never counted.
