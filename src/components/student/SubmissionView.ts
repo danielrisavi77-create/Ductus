@@ -128,7 +128,7 @@ function DeviceNotice(device: DeviceHold, onRecheck: () => void): ReactNode {
     "div",
     { className: styles.actions },
     h("p", { role: "alert" }, device === "held" ? t.device.held : t.device.unknown),
-    h("button", { type: "button", className: "btn", onClick: onRecheck }, t.device.recheck),
+    h("button", { type: "button", className: `btn ${styles.secondary}`, onClick: onRecheck }, t.device.recheck),
   );
 }
 
