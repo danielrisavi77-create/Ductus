@@ -75,6 +75,9 @@ test("Odjava on /ustanova without an answer ends the session on this device and 
   await operator(first, "appoint");
   try {
     for (const theme of ["dark", "light"] as const) {
+      // The previous pass ended its shots at 400 px, where the work nav sits
+      // behind the menu button.
+      await page.setViewportSize({ width: 1440, height: 900 });
       if (theme === "light") {
         await page.evaluate(() => localStorage.setItem("ductura.theme", "light"));
         // The route never reached the fake provider, which still remembers the
