@@ -549,8 +549,9 @@ test("stateForRole: Unicode blanks around fences and headings follow CommonMark 
     // nothing after the block is lost.
     for (const blank of UNICODE_BLANKS) {
       unchanged.push(fencedQueue(fence, fence + blank), fencedQueue(`${fence}text`, fence + blank), fencedQueue(fence, `${fence} ${blank}\t`));
-      // An info string of any such character still opens a block.
-      unchanged.push(`# S\n${QUEUE}\n${fence}${blank}\n## A\n${item(1)}\n${fence}\n`.replace(QUEUE, "## B"));
+      // An info string of any such character still opens a block, so the
+      // heading inside it does not end the Owner queue.
+      cut.push([`# S\n${QUEUE}\n${fence}${blank}\n## A\n${item(1)}\n${fence}\n## Z\n`, `# S\n${QUEUE}\n\n${note(3, 6)}\n\n## Z\n`]);
       unchanged.push(`# S\n${fence}${blank}\n${QUEUE}\n${item(1)}\n${fence}\n## Ne smije se izgubiti\n- B-8\n`);
     }
   }
@@ -561,6 +562,10 @@ test("stateForRole: Unicode blanks around fences and headings follow CommonMark 
     unchanged.push(`# S\n${blank}${QUEUE}\n${item(1)}\n## A\n`);
   }
   for (const blank of UNICODE_BLANKS) unchanged.push(`# S\n##${blank}Owner queue\n${item(1)}\n## A\n`);
+  // Nor does such a line end the Owner queue it stands in.
+  for (const line of [...UNICODE_BLANKS.flatMap((blank) => [`##${blank}X`, `${blank}## X`]), "\t## X"]) {
+    cut.push([`# S\n${QUEUE}\n${item(1)}\n${line}\n${item(2)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 5)}\n\n## A\n`]);
+  }
   cut.push([`# S\n##\tOwner queue\n${item(1)}\n##\tA\n`, `# S\n##\tOwner queue\n\n${note(3, 3)}\n\n##\tA\n`]);
   // A lone CR ends a line in CommonMark; such a text is handed over as it is.
   unchanged.push(`# S\n${QUEUE}\n${item(1)}\r## A\n`, `# S\n\`\`\`\r\`\`\`\n${QUEUE}\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n${item(1)}\n## A\r`);
