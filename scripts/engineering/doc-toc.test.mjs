@@ -2,7 +2,13 @@
 // Tests were written before doc-toc.mjs; contract #1836 (OBLAK w695 · UGOVOR, korak 6).
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -12,7 +18,11 @@ import fc from "fast-check";
 
 import { applyToc, DOCS, docSections, main } from "./doc-toc.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+);
 const START = "<!-- toc:start -->";
 const END = "<!-- toc:end -->";
 const block = (...entries) => [START, ...entries, END].join("\n");
@@ -36,7 +46,12 @@ test("docSections lists level 2 and 3 headings with their line ranges", () => {
     "",
   ].join("\n");
   assert.deepEqual(
-    docSections(text).map(({ level, label, start, end }) => ({ level, label, start, end })),
+    docSections(text).map(({ level, label, start, end }) => ({
+      level,
+      label,
+      start,
+      end,
+    })),
     [
       { level: 2, label: "§1 Prvi", start: 3, end: 6 },
       { level: 3, label: "§1a Pod", start: 5, end: 6 },
@@ -135,6 +150,56 @@ const cases = [
     input: "## 6. Dizajn ###\n### 6.1. Cilj #\nc\n",
     output: `${block("- §6 Dizajn: retci 6-8", "  - §6.1 Cilj: retci 7-8")}\n\n## 6. Dizajn ###\n### 6.1. Cilj #\nc\n`,
   },
+  {
+    name: "a fence in a list item hides its headings",
+    input: "- ```\n  ## not\n  ```\n## real\n",
+    output: `- \`\`\`\n  ## not\n  \`\`\`\n${block("- real: retci 8-8")}\n\n## real\n`,
+  },
+  {
+    name: "a fence in an ordered item",
+    input: "1. ```sh\n   ## not\n   ```\n\n## real\n",
+    output: `1. \`\`\`sh\n   ## not\n   \`\`\`\n\n${block("- real: retci 9-9")}\n\n## real\n`,
+  },
+  {
+    name: "the next item closes a fence left open",
+    input: "- a\n  ```\n- b\n\n## real\n",
+    output: `- a\n  \`\`\`\n- b\n\n${block("- real: retci 9-9")}\n\n## real\n`,
+  },
+  {
+    name: "a less indented paragraph closes a fence left open in an item",
+    input: "- a\n\n  ```\n  code\n\nPara\n\n## real\n",
+    output: `- a\n\n  \`\`\`\n  code\n\nPara\n\n${block("- real: retci 12-12")}\n\n## real\n`,
+  },
+  {
+    name: "a heading in a list item is not a section",
+    input: "## 1. A\n- ## x\n  ## y\n## 2. B\n",
+    output: `${block("- §1 A: retci 6-8", "- §2 B: retci 9-9")}\n\n## 1. A\n- ## x\n  ## y\n## 2. B\n`,
+  },
+  {
+    name: "an empty item does not interrupt a paragraph",
+    input: "tekst\n*\n   ## e\n",
+    output: `tekst\n*\n${block("- e: retci 7-7")}\n\n   ## e\n`,
+  },
+  {
+    name: "an empty item holds the heading indented into it",
+    input: "10. q\n-\n   ## e\n",
+    output: "10. q\n-\n   ## e\n",
+  },
+  {
+    name: "a heading needs a space or the end of the line after its hashes",
+    input: "# D\n\n## 1. A\n#87, x\n##x\n##\n## 2. B\n",
+    output: `# D\n\n${block("- §1 A: retci 9-11", "- : retci 12-12", "- §2 B: retci 13-13")}\n\n## 1. A\n#87, x\n##x\n##\n## 2. B\n`,
+  },
+  {
+    name: "a backtick in the info string means no fence",
+    input: "## 1. A\n```x`\n## 2. B\n",
+    output: `${block("- §1 A: retci 6-7", "- §2 B: retci 8-8")}\n\n## 1. A\n\`\`\`x\`\n## 2. B\n`,
+  },
+  {
+    name: "five spaces after a marker is indented code, not a fence",
+    input: "-     ```\n## 1. A\n",
+    output: `-     \`\`\`\n${block("- §1 A: retci 6-6")}\n\n## 1. A\n`,
+  },
 ];
 
 for (const { name, input, output } of cases) {
@@ -149,8 +214,29 @@ test("a long run of spaces or hashes in a heading takes linear time", () => {
     const text = `## a${" ".repeat(50000)}${tail}\n`;
     const started = performance.now();
     const [section] = docSections(text);
-    assert.ok(performance.now() - started < 500, `took ${performance.now() - started} ms`);
-    assert.equal(section.label, tail === "#" ? "a" : `a${" ".repeat(50000)}${tail}`);
+    assert.ok(
+      performance.now() - started < 500,
+      `took ${performance.now() - started} ms`,
+    );
+    assert.equal(
+      section.label,
+      tail === "#" ? "a" : `a${" ".repeat(50000)}${tail}`,
+    );
+  }
+});
+
+test("many headings and deep lists take linear time", () => {
+  for (const text of [
+    "## x\n".repeat(100000),
+    "## x\n### y\n".repeat(50000),
+    "- a\n  ".repeat(20000) + "## y\n",
+  ]) {
+    const started = performance.now();
+    docSections(text);
+    assert.ok(
+      performance.now() - started < 1000,
+      `took ${performance.now() - started} ms`,
+    );
   }
 });
 
@@ -168,28 +254,75 @@ for (const [name, input] of [
 
 // Free documents: any mix of headings, prose, fence lines and markers, balanced or not.
 const freeLine = fc.constantFrom(
-  "# H", "## 1. A", "## B", "### 2a. C", "### Zadatak (x)", "#### D", "   ## E", "    ## F",
-  "tekst", "", "- stavka", "```", "~~~", "````", "```x`", START, END, `   ${END}`,
+  "# H",
+  "## 1. A",
+  "## B",
+  "### 2a. C",
+  "### Zadatak (x)",
+  "#### D",
+  "   ## E",
+  "    ## F",
+  "tekst",
+  "",
+  "- stavka",
+  "```",
+  "~~~",
+  "````",
+  "```x`",
+  START,
+  END,
+  `   ${END}`,
+  "- ```",
+  "  ```",
+  "1. x",
+  "-",
+  "*",
 );
 const withEol = (lines, crlf, final) => {
   const eol = crlf ? "\r\n" : "\n";
   return lines.join(eol) + (final && lines.length ? eol : "");
 };
 const freeDoc = fc
-  .record({ lines: fc.array(freeLine, { maxLength: 30 }), crlf: fc.boolean(), final: fc.boolean() })
+  .record({
+    lines: fc.array(freeLine, { maxLength: 30 }),
+    crlf: fc.boolean(),
+    final: fc.boolean(),
+  })
   .map(({ lines, crlf, final }) => withEol(lines, crlf, final));
 
 // Structured documents: top-level lines, closed fences that may hide headings and markers, and at
 // most one real block (possibly stale) at a top-level position. Its line index is known.
 const fenceArb = fc
-  .record({ fence: fc.constantFrom("```", "~~~~"), inner: fc.array(fc.constantFrom("## U", "kod", START, END, "~~~"), { maxLength: 4 }) })
-  .map(({ fence, inner }) => [fence, ...inner.filter((l) => !(fence === "~~~~" && l === "~~~")), fence]);
+  .record({
+    fence: fc.constantFrom("```", "~~~~"),
+    inner: fc.array(fc.constantFrom("## U", "kod", START, END, "~~~"), {
+      maxLength: 4,
+    }),
+  })
+  .map(({ fence, inner }) => [
+    fence,
+    ...inner.filter((l) => !(fence === "~~~~" && l === "~~~")),
+    fence,
+  ]);
 const topArb = fc.oneof(
-  fc.constantFrom("# H", "## 1. A", "## B", "### 2a. C", "### Zadatak (x)", "#### D", "tekst", "").map((l) => [l]),
+  fc
+    .constantFrom(
+      "# H",
+      "## 1. A",
+      "## B",
+      "### 2a. C",
+      "### Zadatak (x)",
+      "#### D",
+      "tekst",
+      "",
+    )
+    .map((l) => [l]),
   fenceArb,
 );
 const staleBlock = fc
-  .array(fc.constantFrom("- §1 A: retci 1-2", "  - x: retci 9-9", "- stara"), { maxLength: 3 })
+  .array(fc.constantFrom("- §1 A: retci 1-2", "  - x: retci 9-9", "- stara"), {
+    maxLength: 3,
+  })
   .map((entries) => [START, ...entries, END]);
 const structuredDoc = fc
   .record({
@@ -255,11 +388,15 @@ test("property: every range starts at its heading and ends before the next one o
       for (const s of sections) {
         assert.equal(atxLevel(lines[s.start - 1]), s.level);
         assert.ok(s.start <= s.end && s.end <= lines.length);
-        if (s.end < lines.length) assert.ok(atxLevel(lines[s.end]) >= 1 && atxLevel(lines[s.end]) <= s.level);
+        if (s.end < lines.length)
+          assert.ok(
+            atxLevel(lines[s.end]) >= 1 && atxLevel(lines[s.end]) <= s.level,
+          );
       }
       for (const level of [2, 3]) {
         const same = sections.filter((s) => s.level === level);
-        for (let i = 1; i < same.length; i++) assert.ok(same[i].start > same[i - 1].end);
+        for (let i = 1; i < same.length; i++)
+          assert.ok(same[i].start > same[i - 1].end);
       }
     }),
     { numRuns: 1000 },
@@ -290,11 +427,19 @@ test("property: on structured documents a range ends just before the next headin
       const expected = headings
         .map((h, i) => {
           const next = headings.slice(i + 1).find((o) => o.level <= h.level);
-          return { level: h.level, start: h.start, end: next ? next.start - 1 : lines.length };
+          return {
+            level: h.level,
+            start: h.start,
+            end: next ? next.start - 1 : lines.length,
+          };
         })
         .filter((h) => h.level === 2 || h.level === 3);
       assert.deepEqual(
-        docSections(out).map(({ level, start, end }) => ({ level, start, end })),
+        docSections(out).map(({ level, start, end }) => ({
+          level,
+          start,
+          end,
+        })),
         expected,
       );
     }),
@@ -317,13 +462,19 @@ test("property: the block lists every section, and outside it the output equals 
       }
       assert.deepEqual(
         after.slice(range[0] + 1, range[1]),
-        sections.map((s) => `${s.level === 3 ? "  " : ""}- ${s.label}: retci ${s.start}-${s.end}`),
+        sections.map(
+          (s) =>
+            `${s.level === 3 ? "  " : ""}- ${s.label}: retci ${s.start}-${s.end}`,
+        ),
       );
       const old = blockRange(before);
       const outside = old
         ? [...before.slice(0, old[0]), ...before.slice(old[1] + 1)]
         : before;
-      const kept = [...after.slice(0, range[0]), ...after.slice(range[1] + 1 + (old ? 0 : 1))];
+      const kept = [
+        ...after.slice(0, range[0]),
+        ...after.slice(range[1] + 1 + (old ? 0 : 1)),
+      ];
       assert.deepEqual(kept, outside);
       if (!old) assert.equal(after[range[1] + 1], "");
       assert.equal(out.endsWith("\n"), text.endsWith("\n"));
@@ -347,27 +498,45 @@ test("CLI: --check fails on a stale table, --write fixes it, bad markers fail", 
   const dir = mkdtempSync(path.join(tmpdir(), "doc-toc-"));
   try {
     mkdirSync(path.join(dir, "docs"));
-    const write = (text) => DOCS.forEach((rel) => writeFileSync(path.join(dir, rel), text));
+    const write = (text) =>
+      DOCS.forEach((rel) => writeFileSync(path.join(dir, rel), text));
     const errors = [];
     const log = { log() {}, error: (line) => errors.push(line) };
     write("# D\n\n## 1. A\na\n");
     assert.equal(main(["--check"], dir, log), 1);
     assert.match(errors[0], /node scripts\/engineering\/doc-toc\.mjs --write/);
+    assert.equal(
+      readFileSync(path.join(dir, DOCS[0]), "utf8"),
+      "# D\n\n## 1. A\na\n",
+    );
     assert.equal(main(["--write"], dir, log), 0);
     assert.equal(main(["--check"], dir, log), 0);
-    assert.equal(readFileSync(path.join(dir, DOCS[0]), "utf8"), applyToc("# D\n\n## 1. A\na\n"));
+    assert.equal(
+      readFileSync(path.join(dir, DOCS[0]), "utf8"),
+      applyToc("# D\n\n## 1. A\na\n"),
+    );
     write(`${START}\n## 1. A\n`);
     assert.equal(main(["--write"], dir, log), 1);
-    assert.equal(readFileSync(path.join(dir, DOCS[0]), "utf8"), `${START}\n## 1. A\n`);
+    assert.equal(
+      readFileSync(path.join(dir, DOCS[0]), "utf8"),
+      `${START}\n## 1. A\n`,
+    );
     assert.equal(main([], dir, log), 2);
+    rmSync(path.join(dir, DOCS[1]));
+    assert.equal(main(["--check"], dir, log), 1);
+    assert.match(errors.at(-1), /ENOENT/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test("--check exits 0 on the repository documents", () => {
-  execFileSync(process.execPath, [path.join(root, "scripts/engineering/doc-toc.mjs"), "--check"], {
-    cwd: root,
-    stdio: "pipe",
-  });
+  execFileSync(
+    process.execPath,
+    [path.join(root, "scripts/engineering/doc-toc.mjs"), "--check"],
+    {
+      cwd: root,
+      stdio: "pipe",
+    },
+  );
 });
