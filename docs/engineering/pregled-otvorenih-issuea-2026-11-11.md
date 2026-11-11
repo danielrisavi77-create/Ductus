@@ -6,7 +6,7 @@ Snimka: 11. 11. 2026. Izvor: REST popis otvorenih issuea (bez PR-ova), povezani 
 
 - Otvoreno je **190 issuea, nijedan nema nositelja** (assignee); posao se vodi labelama i Linearom, pa „bez nositelja” ovdje ne znači „nitko ne radi na tome”. Aktivnu sesiju pokazuje labela `claude:in-progress` (3 issuea: #1880, #1889, #1893).
 - Prijedlog po stanju (točne brojke nisu izračunate, retke u tablicama treba čitati kao prijedlog):
-  - **Riješeno ili zastarjelo** (zatvoriti uz komentar nakon potvrde u Linearu): većinom jednokratni „Plan napada” issuei čiji su zadaci spojeni, neovisni planovi #1479 do #1482, #1490 i #1491, te stari planski issuei iz listopada (#73 do #78, #325 do #338 i #341, osim #334). Točni popisi su u sekcijama 2 i 6; ostali issuei iz tih raspona (npr. #1486, #1488, #1489, #339, #340, #342) ostaju.
+  - **Riješeno ili zastarjelo** (zatvoriti uz komentar nakon potvrde u Linearu): većinom jednokratni „Plan napada” issuei čiji su zadaci spojeni, neovisni planovi #1479 do #1482, #1490 i #1491, te stari planski issuei iz listopada (#73, #75, #77, #78, #325 do #338 i #341, osim #334). Točni popisi su u sekcijama 2 i 6; ostali issuei iz tih raspona (npr. #1486, #1488, #1489, #339, #340, #342) ostaju.
   - **Vrijedi, ima Linear vezu** (DAN-xxx iz naslova ili tijela): UX M4 do M8 (DAN-501, 502, 509, 599, 602), planovi napada za buduće korake i aktivni zadaci platforme.
   - **Vrijedi, nema Linear vezu**: nekoliko issuea (npr. #1880, #1894, #1503, #1345, #449); za njih je predložen novi DAN tiket ili spajanje u postojeći.
   - **Trajni pokazivači, ne zatvarati**: #87, #271, #152, #835, #1836, #1873.
@@ -51,8 +51,8 @@ Oznake stanja: **R** riješeno na mainu, **Z** zastarjelo (zamijenjeno novijim i
 | #1481, #1482, #1480, #1479, #1491, #1490 | Neovisni planovi (DAN-515, 168, 232, 511) | R | #1469, #1453, #1458, #1456, #1444 spojeni; zatvoriti. |
 | #1546 | Odjava ne visi dok slanje čeka (DAN-571) | V | DAN-571; #1444 je spojen samo za DAN-511. |
 | #681 | Shadow Integration Lab (DAN-269) | N | #632 je DAN-268 (Contract Radar), ne ovaj posao; jedini DAN-269 PR #684 zatvoren je bez spajanja, `orch:shadow` nije u `package.json`. Vjerojatno vrijedi. |
-| #624, #623, #621, #620 | Token V2 i Workflow B (DAN-275 do 278) | Z | Bez spojenog PR-a; #1880 ih ne spominje, pa je zamjena tumačenje. Predlažem zatvoriti uz Linear. |
-| #626 | Izvještaj DAN-280: katalog 78 ideja | Z | Push je bio blokiran; sadržaj nije na mainu (N). Pitati vlasnika tiketa. |
+| #624, #623, #621, #620 | Token V2 i Workflow B (DAN-275 do 278) | N | Bez spojenog PR-a; #1880 ih ne spominje, pa je zamjena samo tumačenje. Ne zatvarati dok vlasnik tiketa u Linearu ne potvrdi zamjenu ili napuštanje. |
+| #626 | Izvještaj DAN-280: katalog 78 ideja | N | Push je bio blokiran; sadržaj nije na mainu. Ne zatvarati; pitati vlasnika tiketa. |
 | #602 | Mjerenje login E2E (DAN-262) | N | PR-ovi #606 i #628 zatvoreni bez spajanja; #946 je analiza uzroka padova, ne mjerenje. Odlučiti je li posao napušten. |
 | #749 | Health/readiness (DAN-299) | N | #1691 spojen; provjeriti graceful shutdown. |
 | #761 | Testovi auth/flow.ts i oidc.ts (DAN-307) | N | #1084 (DAN-307) spojen 1. 11. 2026., vjerojatno riješeno; provjeriti pokrivenost i ugovorni test. |
@@ -122,7 +122,8 @@ Napomena: #1793, #1796, #1799, #1800 imaju spojen PR (#1851, #1863, #1867, #1892
 
 | Issue | Opis | Stanje | Prijedlog |
 |---|---|---|---|
-| #73 do #78 | Epici E1 do E6 | Z | Zamijenjeni programom M0 do M11 (D-191) i Linear projektima. Zatvoriti uz komentar. |
+| #73, #75, #77, #78 | Epici E1, E3, E5, E6 | Z | Zamijenjeni programom M0 do M11 (D-191) i Linear projektima. Zatvoriti uz komentar. |
+| #74, #76 | Epici E2 Policy, E4 Evidence | N | Isto kao u sekciji 3: bez DAN, zamijeniti Linear projektima; ne zatvarati dok se to ne potvrdi. |
 | #325 do #338, #341 (osim #334) | UI issuei po ekranima iz 13. 10. | Z | Zamijenjeni `docs/design/EKRANI.md` i UX M-klasterima iz sekcije 5. Predlažem skupno zatvaranje uz popis. #339 (UX-EVAL) i #342 (rječnik) zadržati dok se ne ponovi evaluacija. |
 | #340 | Feature flagovi vala 2/3 | N | Pitati vlasnika; nema DAN. |
 
