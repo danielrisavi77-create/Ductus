@@ -21,15 +21,27 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 const t = messagesHr.revisions;
 
-vi.mock("./LocalDocument", () => ({ useLocalSignedOut: () => false }));
+vi.mock("./LocalDocument", () => ({
+  useLocalSignedOut: () => false,
+  useLocalSubmitted: () => false,
+  useLocalUnconfirmed: () => ({ unconfirmed: false, now: () => false, edits: () => 0 }),
+}));
 
 const list = vi.hoisted(() => ({ calls: 0, resolve: null as null | ((outcome: unknown) => void) }));
+const respond = vi.hoisted(() => ({ calls: 0, resolve: null as null | ((outcome: unknown) => void) }));
 vi.mock("@/client/revision-requests", async (original) => ({
   ...(await original<typeof import("@/client/revision-requests")>()),
   listRevisionRequests: vi.fn(() => {
     list.calls += 1;
     return new Promise((resolve) => { list.resolve = resolve; });
   }),
+  respondRevisionRequest: vi.fn(() => {
+    respond.calls += 1;
+    return new Promise((resolve) => { respond.resolve = resolve; });
+  }),
+}));
+vi.mock("@/client/evidence-ingest", () => ({
+  openWork: vi.fn(async () => ({ status: "opened", work: { submitted: false, currentRevision: 5 } })),
 }));
 
 // ---- A DOM just large enough for React -------------------------------------
@@ -145,11 +157,13 @@ let root: Root;
 beforeEach(async () => {
   list.calls = 0;
   list.resolve = null;
+  respond.calls = 0;
+  respond.resolve = null;
   body = installDom();
   const { default: RevisionPanel } = await import("./RevisionPanel");
   root = createRoot(body as never);
   await act(async () => {
-    root.render(createElement(RevisionPanel, { documentId: "doc-1", session: { tag: "sesijaA", at: 1 } }));
+    root.render(createElement(RevisionPanel, { documentId: "doc-1", assignmentId: "asg-1", session: { tag: "sesijaA", at: 1 } }));
   });
 });
 
@@ -181,5 +195,107 @@ describe("RevisionPanel: a list that lands after the session ended", () => {
     expect(endSessionsInCookie(browserCookieJar(), ["sesijaB"])).toBe(true);
     await answer(ok);
     expect(body.textContent).toContain(INSTRUCTION);
+  });
+});
+
+// React keeps an element's props on it; the fake DOM dispatches no events, so handlers are called directly.
+function propsOf(node: FakeNode): Record<string, (arg?: unknown) => void> {
+  const key = Object.keys(node).find((k) => k.startsWith("__reactProps"));
+  return (node as unknown as Record<string, Record<string, (arg?: unknown) => void>>)[key!]!;
+}
+function all(node: FakeNode, tag: string): FakeNode[] {
+  return node.childNodes.flatMap((c) => [...(c instanceof FakeElement && c.tagName === tag ? [c] : []), ...all(c, tag)]);
+}
+
+const TYPED = "Izvor je dodan u fusnotu 3.";
+
+/** Lists the request, types an explanation and presses "done"; respond is then on the way. */
+async function answerOnTheWay() {
+  await answer(ok);
+  const [textarea] = all(body, "textarea");
+  await act(async () => { propsOf(textarea!).onChange!({ target: { value: TYPED } }); });
+  const [done] = all(body, "button");
+  await act(async () => { propsOf(done!).onClick!(); });
+  expect(respond.calls).toBe(1);
+}
+
+describe("RevisionPanel: an answer that lands after the session ended (Codex c.4532645041)", () => {
+  it("control: in the same session an error keeps the request and the typed explanation", async () => {
+    await answerOnTheWay();
+    await act(async () => { respond.resolve!({ kind: "unavailable" }); });
+    expect(body.textContent).toContain(INSTRUCTION);
+    expect(all(body, "textarea").some((n) => propsOf(n).value as unknown === TYPED)).toBe(true);
+  });
+
+  for (const outcome of [{ kind: "signedOut" }, { kind: "unavailable" }] as const) {
+    it(`a ${outcome.kind} answer after a cookie-only end clears the requests and the explanation`, async () => {
+      await answerOnTheWay();
+      expect(endSessionsInCookie(browserCookieJar(), ["sesijaA"])).toBe(true);
+      await act(async () => { respond.resolve!(outcome); });
+      expect(body.textContent).not.toContain(INSTRUCTION);
+      expect(all(body, "textarea")).toHaveLength(0);
+      expect(body.textContent).toContain(t.signedOut);
+    });
+  }
+});
+
+// ---- A 409 whose list read fails (QA FAIL c.6784961513) --------------------
+
+const fields = () => all(body, "textarea").map((n) => propsOf(n) as unknown as { value: string; readOnly?: boolean });
+const button = (label: string) => all(body, "button").find((b) => b.textContent === label);
+
+describe("RevisionPanel: a 409 whose list read fails (QA FAIL c.6784961513)", () => {
+  const EXPLANATION = "Tvrdnja se odnosi na primjer iz uvoda.";
+
+  it("keeps the unsent explanation readable and unsendable, and back in the form once the list is read", async () => {
+    await answer(ok);
+    const [field] = all(body, "textarea");
+    await act(async () => { propsOf(field!).onChange!({ target: { value: EXPLANATION } }); });
+    await act(async () => { propsOf(button(t.declined)!).onClick!(); });
+    expect(respond.calls).toBe(1);
+    await act(async () => { respond.resolve!({ kind: "conflict", state: "reopened" }); });
+    // The conflict reads the list again by itself, and that read fails.
+    expect(list.calls).toBe(2);
+    await act(async () => { list.resolve!({ kind: "unavailable" }); });
+
+    expect(body.textContent).toContain(t.unavailable);
+    // It says which request it is for, from the list read before (Grok c.6785580350).
+    expect(body.textContent).toContain(t.keptForLabel.replace("{n}", "1"));
+    expect(body.textContent).toContain(t.keptUnloadedHint);
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: true })]);
+    expect(button(t.done)).toBeUndefined();
+    expect(button(t.declined)).toBeUndefined();
+
+    // Read again: the card comes back with the same explanation in its form.
+    await act(async () => { propsOf(button(t.retry)!).onClick!(); });
+    expect(list.calls).toBe(3);
+    await act(async () => { list.resolve!(ok); });
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: false })]);
+    expect(body.textContent).not.toContain(t.keptUnloadedHint);
+    expect(respond.calls).toBe(1);
+  });
+
+  it("after a 403 on the list read the same retry brings the explanation back unchanged (QA FAIL c.6786063110)", async () => {
+    await answer(ok);
+    const [field] = all(body, "textarea");
+    await act(async () => { propsOf(field!).onChange!({ target: { value: EXPLANATION } }); });
+    await act(async () => { propsOf(button(t.done)!).onClick!(); });
+    expect(respond.calls).toBe(1);
+    await act(async () => { respond.resolve!({ kind: "conflict", state: "reopened" }); });
+    expect(list.calls).toBe(2);
+    await act(async () => { list.resolve!({ kind: "forbidden" }); });
+
+    expect(body.textContent).toContain(t.notAvailable);
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: true })]);
+    expect(button(t.done)).toBeUndefined();
+    expect(button(t.declined)).toBeUndefined();
+
+    // Access is back: the retry reads the list once more, and nothing is sent again.
+    await act(async () => { propsOf(button(t.retry)!).onClick!(); });
+    expect(list.calls).toBe(3);
+    await act(async () => { list.resolve!(ok); });
+    expect(fields()).toEqual([expect.objectContaining({ value: EXPLANATION, readOnly: false })]);
+    expect(body.textContent).not.toContain(t.keptUnloadedHint);
+    expect(respond.calls).toBe(1);
   });
 });

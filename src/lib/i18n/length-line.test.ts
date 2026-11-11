@@ -1,6 +1,7 @@
+import { fc, test } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 
-import { countTextWords, groupHr, lengthLine, pagesOf, wordRangeHr } from "./length-line";
+import { countTextWords, groupHr, lengthLine, pagesOf, wordRange, wordRangeHr, type WordRange } from "./length-line";
 
 const NBSP = " ";
 const RANGE = { min: 2000, max: 2500 };
@@ -81,4 +82,72 @@ describe("length line of the status bar (FE-D6)", () => {
       expect(lengthLine(words, 0, null).rest).not.toMatch(/[–/]/u);
     }
   });
+});
+
+// M11.5-P01b: the same line in English. Input classes: no words, one, two,
+// thousands, tens of thousands; no range, min only, max only, both, equal
+// bounds; with and without a selection.
+describe("length line in English", () => {
+  it.each<[WordRange | null, string | null]>([
+    [null, null],
+    [{ min: null, max: null }, null],
+    [{ min: 1, max: null }, "at least 1 word"],
+    [{ min: 2000, max: null }, "at least 2,000 words"],
+    [{ min: null, max: 1 }, "at most 1 word"],
+    [{ min: null, max: 1_000_000 }, "at most 1,000,000 words"],
+    [RANGE, "2,000–2,500 words"],
+    [{ min: 1, max: 1 }, "1–1 word"],
+  ])("labels the range %j as %j", (range, label) => {
+    expect(wordRange(range, "en")).toBe(label);
+  });
+
+  it.each<[number, number, WordRange | null, ReturnType<typeof lengthLine>]>([
+    [0, 0, null, { selected: null, count: "0", rest: " words" }],
+    [1, 0, null, { selected: null, count: "1", rest: " word · ≈ 1 pp." }],
+    [2, 0, null, { selected: null, count: "2", rest: " words · ≈ 1 pp." }],
+    [11, 0, null, { selected: null, count: "11", rest: " words · ≈ 1 pp." }],
+    [1000, 0, null, { selected: null, count: "1,000", rest: " words · ≈ 3 pp." }],
+    [12500, 0, null, { selected: null, count: "12,500", rest: " words · ≈ 42 pp." }],
+    [0, 0, RANGE, { selected: null, count: "0", rest: " / 2,000–2,500 words" }],
+    [210, 0, RANGE, { selected: null, count: "210", rest: " / 2,000–2,500 words · ≈ 1 pp." }],
+    [210, 0, { min: 2000, max: null }, { selected: null, count: "210", rest: " / at least 2,000 words · ≈ 1 pp." }],
+    [210, 0, { min: null, max: 2 }, { selected: null, count: "210", rest: " / at most 2 words · ≈ 1 pp." }],
+    [210, 1, RANGE, { selected: "1 word selected", count: "210", rest: " / 2,000–2,500 words · ≈ 1 pp." }],
+    [210, 12, RANGE, { selected: "12 words selected", count: "210", rest: " / 2,000–2,500 words · ≈ 1 pp." }],
+  ])("renders %i words, %i selected, range %j", (words, selected, range, line) => {
+    expect(lengthLine(words, selected, range, "en")).toEqual(line);
+  });
+
+  const ranges = fc.option(
+    fc.record({ min: fc.option(fc.nat(2_000_000)), max: fc.option(fc.nat(2_000_000)) }),
+  );
+
+  test.prop([fc.nat(2_000_000), fc.nat(2_000_000), ranges])(
+    "has no Croatian word, letter or no-break space",
+    (words, selected, range) => {
+      const line = lengthLine(words, selected, range, "en");
+      const text = [line.selected ?? "", line.count, line.rest, wordRange(range, "en") ?? ""].join(" ");
+      expect(text).not.toMatch(/[čćđšžČĆĐŠŽ\u00a0]|riječ|str\.|označeno|najmanje|najviše/u);
+    },
+  );
+
+  test.prop([fc.nat(2_000_000), fc.nat(2_000_000), ranges])(
+    "defaults to Croatian, unchanged",
+    (words, selected, range) => {
+      expect(lengthLine(words, selected, range)).toEqual(lengthLine(words, selected, range, "hr"));
+      expect(wordRange(range)).toBe(wordRangeHr(range));
+    },
+  );
+
+  test.prop([fc.nat(2_000_000), fc.nat(2_000_000), ranges])(
+    "keeps the numbers and page estimate of the Croatian line",
+    (words, selected, range) => {
+      const digits = (text: string | null) => (text ?? "").replace(/\D/gu, "");
+      const hr = lengthLine(words, selected, range);
+      const en = lengthLine(words, selected, range, "en");
+      expect(digits(en.count)).toBe(digits(hr.count));
+      expect(digits(en.rest)).toBe(digits(hr.rest));
+      expect(digits(en.selected)).toBe(digits(hr.selected));
+    },
+  );
 });
