@@ -51,10 +51,12 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", SAVED_HERE);
   const nodeId = (await editor.locator("p[data-node-id]").first().getAttribute("data-node-id")) as NodeId;
   const documentId = await workDocument(assignment);
-  // The student may not open a comment: an anchor would carry text the teacher has not seen.
+  // DAN-215 (D-201 t. 3(c)): the student opens a thread only on their own work;
+  // a document that is not theirs answers as a missing one, 403. Their own
+  // thread is covered by db/tests/121 and the server tests.
   const start = TEXT.indexOf(QUOTE);
   const anchor = createTextAnchor({ nodeId, nodeText: TEXT, start, end: start + QUOTE.length });
-  expect((await post(student, "create", { documentId, body: "Ne.", anchor })).status()).toBe(403);
+  expect((await post(student, "create", { documentId: "doc-nije-njihov-1", body: "Ne.", anchor })).status()).toBe(403);
   const created = await post(teacher, "create", { documentId, body: BODY, anchor });
   expect(created.status()).toBe(200);
 
