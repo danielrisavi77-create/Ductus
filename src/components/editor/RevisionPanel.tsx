@@ -129,7 +129,9 @@ function SessionRevisionPanel({ documentId, assignmentId, session }: {
       edits,
     });
     setSending(null);
-    if (stoppedRef.current || mine !== generation.current) return;
+    // Asked again, as after `list`: an end the cookie alone tells is heard
+    // here, and then clears the requests and every typed explanation.
+    if (mine !== generation.current || !current()) return;
     if (result.kind === "sent") {
       setDrafts((all) => clearSent(all, id, sent));
       setErrors((all) => without(all, id));
