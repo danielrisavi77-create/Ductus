@@ -569,6 +569,9 @@ test("stateForRole: Unicode blanks around fences and headings follow CommonMark 
   cut.push([`# S\n##\tOwner queue\n${item(1)}\n##\tA\n`, `# S\n##\tOwner queue\n\n${note(3, 3)}\n\n##\tA\n`]);
   // A lone CR ends a line in CommonMark; such a text is handed over as it is.
   unchanged.push(`# S\n${QUEUE}\n${item(1)}\r## A\n`, `# S\n\`\`\`\r\`\`\`\n${QUEUE}\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n${item(1)}\n## A\r`);
+  // A leading byte order mark is not read as indent: such a text is handed over
+  // as it is too, so a fence on the first line cannot be missed (QA on 444dd55f).
+  for (const start of ["# S", "```", "~~~", QUEUE]) unchanged.push(`\uFEFF${start}\n${QUEUE}\n${item(1)}\n${start.slice(0, 3)}\n## Ne smije se izgubiti\n- B-8\n`);
   for (const input of unchanged) assert.equal(stateForRole(input, "worker"), input, JSON.stringify(input));
   for (const [input, expected] of cut) assert.equal(stateForRole(input, "control"), expected, JSON.stringify(input));
   assert.ok(unchanged.length > 100 && cut.length > 20);

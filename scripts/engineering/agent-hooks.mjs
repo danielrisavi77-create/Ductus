@@ -217,8 +217,10 @@ export function budgetNotice(tokens, role = "unknown") {
 // ATX headings and fenced blocks follow CommonMark: up to three spaces of
 // indent, and a fence closes only with the same character, at least as long.
 // Only a space or a tab counts as blank there, never what JavaScript trim(),
-// \s or "." also take for one (NBSP, U+3000, U+2028 and the like); a text
-// with a lone CR, which CommonMark reads as a line ending, is not cut at all.
+// \s or "." also take for one (NBSP, U+3000, U+2028 and the like). A text
+// with a lone CR, which CommonMark reads as a line ending, or with a leading
+// byte order mark, which a reader may drop before the first line, is not cut
+// at all.
 // Setext headings and HTML blocks are not recognised; STATE.md uses neither.
 const OWNER_QUEUE = /^ {0,3}##[ \t]+Owner queue\b/i;
 const SECTION = /^ {0,3}#{1,2}(?:[ \t]|$)/;
@@ -254,7 +256,7 @@ function fenceTracker() {
 }
 
 export function stateForRole(text, role) {
-  if (!CUT_ROLES.has(role) || /\r(?!\n)/.test(text)) return text;
+  if (!CUT_ROLES.has(role) || text.startsWith("\uFEFF") || /\r(?!\n)/.test(text)) return text;
   // A final newline ends the last line; it is not one more line to count.
   const ends = text.endsWith("\n");
   const lines = (ends ? text.slice(0, -1) : text).split("\n");
