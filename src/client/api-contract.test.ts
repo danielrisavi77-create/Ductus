@@ -8,12 +8,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
+import { buildRecord, jcsOf, RECORD_DOCUMENT_ID, recordSchema, sha, startNode } from "@/domain/projection/replay-record.fixture";
 import { handleCommentRequest } from "@/server/collaboration/comments";
 import { handleLiveReadRequest, LIVE_STATE_HEADER as ROUTE_LIVE_STATE_HEADER } from "@/server/collaboration/live-route";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
+import { handleReplayRequest } from "@/server/evidence/replay-route";
 
 import { listComments } from "./comments";
 import { LIVE_STATE_HEADER, readLiveState } from "./live-reader";
+import { loadReplay } from "./replay";
 
 const ORIGIN = "http://localhost:3000";
 const TOKEN = "A".repeat(43);
@@ -129,5 +133,44 @@ describe("contract: POST /api/comments/list and listComments", () => {
   it("a thread without rows is an empty list, not an error", async () => {
     stubFetch([]);
     expect(await listComments(DOC)).toStrictEqual({ kind: "ok", threads: [] });
+  });
+});
+
+describe("contract: POST /api/evidence/replay and loadReplay (DAN-537)", () => {
+  const PACKAGE = "pkg-test-z1";
+  const INSTITUTION = "44444444-4444-4444-8444-444444444444";
+  const record = buildRecord(startNode, [
+    { at: "10:00", events: [{ edit: (tr) => void tr.insert(17, recordSchema.text("X")) }] },
+    { at: "10:01", events: [{ edit: (tr) => void tr.insert(18, recordSchema.text("Y")) }] },
+  ]);
+
+  /** The real route behind a stand-in database and payload store, for one session. */
+  async function fetcherFor(sessionToken: string): Promise<typeof fetch> {
+    const store = new InMemoryEvidencePayloadStore();
+    for (const [i, payload] of record.segments.entries()) {
+      await store.putImmutable({ institutionId: INSTITUTION, evidencePackageId: PACKAGE, segmentHash: record.hashes[i], canonicalPayload: payload });
+    }
+    const withActor = (async (_token: string | null | undefined, fn: (tx: ActorTransaction) => Promise<unknown>) =>
+      fn({
+        async query(text: string) {
+          const rows = text.includes("read_replay_checkpoints")
+            ? [{ content_hash: sha(jcsOf(startNode)), body: jcsOf(startNode) }]
+            : [{ outcome: "found", institution_id: INSTITUTION, evidence_package_id: PACKAGE, segment_hashes: record.hashes }];
+          return { rows, rowCount: rows.length };
+        },
+      } as unknown as ActorTransaction)) as unknown as WithActor;
+    return (async (input, init) =>
+      handleReplayRequest(browserRequest(String(input), init), { withActor, payloads: store, expectedOrigin: ORIGIN, sessionToken })) as typeof fetch;
+  }
+
+  it("the client takes the route's page and both sessions get the same player", async () => {
+    const [owner, teacher] = await Promise.all([
+      loadReplay(RECORD_DOCUMENT_ID, () => true, await fetcherFor(TOKEN)),
+      loadReplay(RECORD_DOCUMENT_ID, () => true, await fetcherFor("B".repeat(43))),
+    ]);
+    if (owner.kind !== "ok" || teacher.kind !== "ok") throw new Error(`${owner.kind} ${teacher.kind}`);
+    expect(owner.player.total).toBe(2);
+    expect(owner.player.documentAt(2)).toStrictEqual(record.ends[1].toJSON());
+    expect(teacher.player.entries).toStrictEqual(owner.player.entries);
   });
 });
