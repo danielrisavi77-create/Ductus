@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchLike } from "@/client/evidence-ingest";
 import type { CanonicalDocument } from "@/domain/document";
 import { tiptapToCanonical } from "@/editor/interop";
+import { messagesEn } from "@/lib/i18n/messages.en";
+import { messagesHr } from "@/lib/i18n/messages.hr";
 import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";
 import { DOC, journalKit, json } from "@/lib/sync/evidence-test-kit";
 
@@ -108,6 +110,18 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
       expect(evidenceNotice({ ...base, failure, stopped: true })).toBeNull();
       expect(evidenceNotice({ ...base, failure, refused: true, stopped: true })).toBeNull();
     }
+  });
+
+  // Review #1901 (c.6786923958): the stop notice also shows while typing or
+  // saving locally, so its text must not claim the save already finished.
+  it("a stopped recorder gives its notice while saving locally too, in words that claim no finished save", () => {
+    const base = { failure: null, capacity: "ok" as const, closedBy: null, stopped: true };
+    for (const state of ["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE"] as const) {
+      expect(evidenceNotice({ ...base, state })).toBe("stopped");
+    }
+    expect(messagesHr.editor.sendStopped).not.toMatch(/spremljen/i);
+    expect(messagesHr.editor.sendStopped).toMatch(/i dalje spremaju na ovom uređaju/);
+    expect(messagesEn.editor.sendStopped).not.toMatch(/\bis saved\b/i);
   });
 
   it("the local saver's own snapshot never gives an evidence notice (e2e local-editor stored ids)", () => {

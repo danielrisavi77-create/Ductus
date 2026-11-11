@@ -33,7 +33,9 @@ export function submittedOf(snapshot: DocumentSnapshot | null): boolean {
  * differs, or it refused the last step for good, or the recorder stopped and
  * what follows stays on this device (DAN-699). A stopped recorder whose local
  * save also failed gives no notice: the failure's own text says the text is
- * not kept (Codex #1901 c.4533816077).
+ * not kept (Codex #1901 c.4533816077). The stop notice shows while the newest
+ * change is still being saved locally, so its text names no finished save
+ * (review #1901 c.6786923958).
  */
 export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | "stopped" | null {
   // Only the evidence session sets `closedBy`: the local saver's own
