@@ -14,7 +14,7 @@ npm run test:real                 # gradi out/real/real.mjs i pokreće testove
 node real/run.mjs <oznaka-stroja> # 15.000 i 80.000 riječi, char i word
 ```
 
-`--words`, `--granularity` i `--checkpoint-steps` (zadano `500,2000,8000`) sužavaju ili mijenjaju scenarije. Rezultati idu u `results/real-<oznaka>.json`, a tablice na stdout. Pojedini mod: `node real/bench.mjs gen|replay|checkpoint|bounded …` (upute su na vrhu `real/bench.mjs`).
+`--words` i `--granularity` sužavaju scenarije. Razmak kontrolnih točaka mjeri se u segmentima (`--checkpoint-segments`, zadano `100,500,2000`) i u koracima (`--checkpoint-steps`, zadano `500,2000,8000`); bez ijedne od tih zastavica mjere se obje jedinice, a uz jednu samo ta. Rezultati idu u `results/real-<oznaka>.json`, a tablice na stdout. Pojedini mod: `node real/bench.mjs gen|replay|checkpoint|bounded …` (upute su na vrhu `real/bench.mjs`).
 
 ## Zamjenska shema (3. 10. 2026., povijest)
 

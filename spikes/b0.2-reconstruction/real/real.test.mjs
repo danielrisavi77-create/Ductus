@@ -1,11 +1,16 @@
 // B0.2 workload on the real code (DAN-388, M3.4-P01). Needs `node real/build.mjs`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   canonicalizeJcs, createEditStepsV1Replayer, digestCanonicalDocumentV2, replayEvidenceFromCheckpointV2,
   replayEvidenceSegmentsV2, verifyCanonicalEvidencePayloadV2,
 } from '../out/real/real.mjs';
 import { generateSession } from './gen.mjs';
+import { checkpointIndices, checkpointSpacing } from './spacing.mjs';
 
 /** A session as the ingest sees it: every segment verified from its bytes. */
 async function record(words, granularity, seed = 11) {
@@ -93,3 +98,43 @@ for (const granularity of ['char', 'word']) {
     assert.ok(!kinds.has('delete'), 'a delete without removedSha256');
   });
 }
+
+test('a checkpoint every K segments goes in front of segments K, 2K, ...', () => {
+  const steps = Array.from({ length: 524 }, (_, i) => (i % 7) * 40);
+  assert.deepEqual(checkpointIndices(steps, checkpointSpacing('segments', 500)), [500]);
+  assert.deepEqual(checkpointIndices(steps, checkpointSpacing('segments', 100)), [100, 200, 300, 400, 500]);
+  assert.deepEqual(checkpointIndices(steps, checkpointSpacing('segments', 524)), []);
+  assert.deepEqual(checkpointIndices(steps.slice(0, 3), checkpointSpacing('segments', 1)), [1, 2]);
+});
+
+test('a checkpoint every N steps waits for N steps, whatever the segment count', () => {
+  const steps = [300, 300, 0, 0, 450, 60, 600, 5];
+  assert.deepEqual(checkpointIndices(steps, checkpointSpacing('steps', 500)), [2, 6, 7]);
+  assert.deepEqual(checkpointIndices(steps, checkpointSpacing('steps', 5000)), []);
+});
+
+test('the spacing refuses an unknown unit or a distance that is not a positive integer', () => {
+  assert.throws(() => checkpointSpacing('events', 10), /unit/);
+  for (const every of ['0', '-5', '2.5', 'abc', '']) assert.throws(() => checkpointSpacing('segments', every), /distance/);
+});
+
+test('bench checkpoint and bounded run with a distance in segments', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'b02-real-'));
+  try {
+    const bench = (env, ...args) => JSON.parse(execFileSync(process.execPath, [join(import.meta.dirname, 'bench.mjs'), ...args],
+      { encoding: 'utf8', env: { ...process.env, ...env } }));
+    const { segments } = bench({}, 'gen', '300', 'char', dir);
+    const every = Math.floor(segments / 3);
+    const env = { CHECKPOINT_UNIT: 'segments', CHECKPOINT_EVERY: String(every) };
+    const checkpoint = bench(env, 'checkpoint', dir);
+    assert.equal(checkpoint.checkpointUnit, 'segments');
+    assert.equal(checkpoint.checkpoints, Math.floor((segments - 1) / every));
+    assert.equal(checkpoint.firstCheckpointAt, every);
+    assert.equal(checkpoint.lastCheckpointAt, checkpoint.checkpoints * every);
+    const bounded = bench(env, 'bounded', dir);
+    assert.equal(bounded.resumedAt, checkpoint.lastCheckpointAt);
+    assert.equal(bounded.segmentsReplayed, segments - checkpoint.lastCheckpointAt);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

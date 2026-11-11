@@ -2,9 +2,9 @@
 // so peak memory belongs to that measurement. Needs `node real/build.mjs` first.
 //   node real/bench.mjs gen <words> <granularity> <dir>
 //   node real/bench.mjs replay|checkpoint|bounded <dir>
-// Prints one JSON line. CHECKPOINT_STEPS (default 2000) is the step distance
-// between checkpoints; a checkpoint is only ever taken between segments, since
-// the record asks for one by a segment's initialDocumentHash.
+// Prints one JSON line. CHECKPOINT_UNIT (segments or steps, default segments)
+// and CHECKPOINT_EVERY (default 500) give the distance between checkpoints,
+// e.g. every K segments; see real/spacing.mjs.
 import { createReadStream, createWriteStream, readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { gzipSync } from 'node:zlib';
@@ -14,8 +14,9 @@ import {
   verifyCanonicalEvidencePayloadV2,
 } from '../out/real/real.mjs';
 import { generateSession } from './gen.mjs';
+import { checkpointIndices, checkpointSpacing } from './spacing.mjs';
 
-const CHECKPOINT_STEPS = Number(process.env.CHECKPOINT_STEPS ?? 2000);
+const SPACING = checkpointSpacing(process.env.CHECKPOINT_UNIT ?? 'segments', process.env.CHECKPOINT_EVERY ?? 500);
 const BOUNDED_RUNS = 21;
 const SEED = 2026;
 
@@ -99,14 +100,16 @@ async function replay(dir) {
 
 /**
  * Replay segment by segment, as the ingest receives them, keeping a checkpoint
- * (JCS bytes of the document a segment starts from) every CHECKPOINT_STEPS
- * steps. Measures checkpoint cost and stored volume; writes the newest one.
+ * (JCS bytes of the document a segment starts from) every SPACING.every
+ * segments or steps. Measures checkpoint cost and stored volume; writes the
+ * newest one.
  */
 async function checkpoint(dir) {
   const segments = await readSegments(dir);
   const replayer = createEditStepsV1Replayer();
   let document = readJson(dir, 'initial.json');
-  let sinceLast = 0;
+  const indices = checkpointIndices(segments.map(stepsOf), SPACING);
+  const due = new Set(indices);
   let count = 0;
   let rawBytes = 0;
   let gzipBytes = 0;
@@ -114,7 +117,7 @@ async function checkpoint(dir) {
   let last = null;
   const start = process.hrtime.bigint();
   for (let index = 0; index < segments.length; index++) {
-    if (index > 0 && sinceLast >= CHECKPOINT_STEPS) {
+    if (due.has(index)) {
       const cpStart = process.hrtime.bigint();
       const bytes = Buffer.from(canonicalizeJcs(document));
       checkpointMs += ms(cpStart);
@@ -122,13 +125,11 @@ async function checkpoint(dir) {
       rawBytes += bytes.length;
       gzipBytes += gzipSync(bytes).length;
       last = { index, hash: segments[index].initialDocumentHash, bytes };
-      sinceLast = 0;
     }
     const result = await replayEvidenceSegmentsV2(document, [segments[index]], replayer);
     if (!result.ok) throw new Error(`replay failed: ${result.reason} at segment ${index}`);
     // canonicalDocument is the JCS text; the next segment starts from its value.
     document = JSON.parse(result.canonicalDocument);
-    sinceLast += stepsOf(segments[index]);
   }
   const totalMs = ms(start);
   if (last) {
@@ -136,7 +137,8 @@ async function checkpoint(dir) {
     writeFileSync(join(dir, 'checkpoint.meta.json'), JSON.stringify({ index: last.index, hash: last.hash }));
   }
   finish({
-    mode: 'checkpoint', checkpointSteps: CHECKPOINT_STEPS, checkpoints: count,
+    mode: 'checkpoint', checkpointUnit: SPACING.unit, checkpointEvery: SPACING.every, checkpoints: count,
+    firstCheckpointAt: indices[0] ?? null, lastCheckpointAt: last?.index ?? null,
     totalMs, checkpointMs: Math.round(checkpointMs),
     lastCheckpointKb: last ? kb(last.bytes.length) : 0,
     lastCheckpointGzipKb: last ? kb(gzipSync(last.bytes).length) : 0,
