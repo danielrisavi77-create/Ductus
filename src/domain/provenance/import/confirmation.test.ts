@@ -86,6 +86,30 @@ describe("import confirmation: idempotent decision", () => {
     expect(decideImportConfirmation({ ...pending, state: "confirmed" }, request, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
     expect(decideImportConfirmation({ ...confirmed, confirmedEventId: "" }, request, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
     expect(decideImportConfirmation({ ...pending, state: "unknown" as "pending" }, request, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
+    for (const empty of [{ importId: "" }, { ownerId: "" }, { documentId: "" }]) {
+      const record = { ...pending, ...empty };
+      const same = { importId: record.importId, actorId: record.ownerId, documentId: record.documentId, manifestSha256: MANIFEST };
+      expect(decideImportConfirmation(record, same, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
+    }
+    for (const stored of ["", "A".repeat(64), "a".repeat(63)]) {
+      const same = { ...request, manifestSha256: stored };
+      expect(decideImportConfirmation({ ...pending, manifestSha256: stored }, same, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
+      expect(decideImportConfirmation({ ...confirmed, manifestSha256: stored }, same, context)).toEqual({ kind: "reject", code: "NOT_FOUND" });
+    }
+  });
+
+  it("P2: a malformed reviewed hash is a mismatch, never a confirmation", () => {
+    for (const reviewed of ["", "A".repeat(64), "a".repeat(63), "a".repeat(65), ` ${"a".repeat(63)}`]) {
+      const malformed = { ...request, manifestSha256: reviewed };
+      expect(decideImportConfirmation(pending, malformed, context)).toEqual({ kind: "reject", code: "MANIFEST_MISMATCH" });
+      expect(decideImportConfirmation(confirmed, malformed, context)).toEqual({ kind: "reject", code: "MANIFEST_MISMATCH" });
+    }
+  });
+
+  it("P9: a non-finite revision on either side is a changed revision", () => {
+    expect(decideImportConfirmation(pending, request, { ...context, currentRevision: Number.NaN })).toEqual({ kind: "reject", code: "REVISION_CHANGED" });
+    const nanBase = { ...pending, baseRevision: Number.NaN };
+    expect(decideImportConfirmation(nanBase, request, { ...context, currentRevision: Number.NaN })).toEqual({ kind: "reject", code: "REVISION_CHANGED" });
   });
 
   it("a rejection carries a code only", () => {

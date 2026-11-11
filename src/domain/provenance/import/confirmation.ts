@@ -56,6 +56,9 @@ export type ImportConfirmDecisionV1 =
 
 const reject = (code: ImportConfirmRejectCode): ImportConfirmDecisionV1 => ({ kind: "reject", code });
 
+/** The stored and the reviewed hash: SHA-256 in lowercase hex (§2). */
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
 /**
  * Decides one confirmation. The order is fixed: a stranger learns nothing
  * beyond `NOT_FOUND` (another owner and another document look like a missing
@@ -69,11 +72,15 @@ export function decideImportConfirmation(
 ): ImportConfirmDecisionV1 {
   if (
     record === null ||
+    record.importId === "" || record.ownerId === "" || record.documentId === "" ||
     record.importId !== request.importId ||
     record.ownerId !== request.actorId ||
     record.documentId !== request.documentId
   ) return reject("NOT_FOUND");
+  // A record without a valid stored hash is inconsistent and is never confirmed.
+  if (!SHA256_HEX.test(record.manifestSha256)) return reject("NOT_FOUND");
 
+  // A malformed reviewed hash can never equal the valid stored one.
   const sameManifest = record.manifestSha256 === request.manifestSha256;
   if (record.state === "confirmed") {
     if (!sameManifest) return reject("MANIFEST_MISMATCH");
