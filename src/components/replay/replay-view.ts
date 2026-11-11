@@ -181,9 +181,29 @@ export function historyRows(history: readonly ParagraphHistoryEntry[], at: numbe
   return rows;
 }
 
+const shortened = (value: string): string => {
+  const text = value.trim();
+  return characters(text) > 60 ? `${Array.from(text).slice(0, 60).join("").trimEnd()}…` : text;
+};
+
 /** A paragraph as the select names it: its place and the start of its text. */
 export function paragraphOption(ordinal: number, node: DocumentNode): string {
-  const text = nodeText(node).trim();
-  const short = characters(text) > 60 ? `${Array.from(text).slice(0, 60).join("").trimEnd()}…` : text;
-  return fill(t.paragraphOption, { k: ordinal, text: short });
+  return fill(t.paragraphOption, { k: ordinal, text: shortened(nodeText(node)) });
+}
+
+/** A paragraph the final text no longer holds, named by the last text the record shows for it. */
+export function deletedOption(history: readonly ParagraphHistoryEntry[]): string {
+  let last = "";
+  for (const entry of history) {
+    if (entry.entry === "change") last = entry.after ?? entry.before ?? last;
+  }
+  return fill(t.deletedOption, { text: shortened(last) });
+}
+
+/**
+ * The paragraphs the record's changes touched that the final text no longer
+ * holds, in the order they were first touched: their history stays reachable.
+ */
+export function deletedParagraphs(changes: readonly { blockIds: readonly string[] }[], finalIds: ReadonlySet<string>): string[] {
+  return [...new Set(changes.flatMap((change) => change.blockIds))].filter((id) => !finalIds.has(id));
 }

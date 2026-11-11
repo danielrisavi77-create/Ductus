@@ -10,6 +10,7 @@ import { createBrowserReplayStepsV1 } from "@/adapters/evidence/edit-steps-v1-re
 import { buildReplayPlayer, type ReplayRecord } from "@/domain/projection/replay-player";
 import {
   BLOCK_A as A,
+  BLOCK_C as C,
   BLOCK_D as D,
   buildRecord,
   jcsOf,
@@ -24,7 +25,7 @@ import type { JcsJsonValue } from "@/domain/forensics/jcs";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import ReplayView, { ReplayPlayerView } from "./ReplayView";
-import { fill } from "./replay-view";
+import { fill, historyRows, stepsOf } from "./replay-view";
 
 /**
  * DAN-537 (rb 261): the replay view over a real player built from a synthetic
@@ -125,6 +126,43 @@ describe("ReplayPlayerView (DAN-537)", () => {
     expect(shown).toContain("Promjena 2 od 2");
     expect(shown).toContain(fill(t.gapBetween, { a: 1, b: 2 }));
     expect(shown).toContain("Idi na promjenu 2");
+  });
+
+  // Re-review c.6796489301 on #1937: a paragraph written inside a resumed break
+  // and deleted by the first change after it is in neither the final text nor
+  // the step before that change; its verified text must still be reachable.
+  const paragraph = (id: string, value: string) => ({ type: "paragraph", id, children: [{ type: "text", text: value, marks: [] }] });
+  const resumed = server.load({
+    schemaVersion: 1,
+    nodes: [paragraph(A, "Prvi odlomak."), paragraph(D, "Napisan u prekidu."), paragraph(C, "Treći odlomak.")],
+  } as JcsJsonValue);
+  const afterBreak = (edit: RecordEdit["edit"]) => playerOf(
+    buildRecord(start, [{ at: "10:00", events: [typeAt(17, "X")] }, { at: "10:05", from: resumed, events: [{ edit }] }]),
+    { resumeDocuments: { [sha(jcsOf(resumed))]: jcsOf(resumed) } },
+  );
+  const verified = "„Napisan u prekidu.”";
+
+  it("offers a paragraph deleted after a resumed break, with its steps and its verified text", async () => {
+    // The first change after the break joins the first and the third paragraph, deleting the one between.
+    const endOfFirst = 1 + resumed.child(0).content.size;
+    const player = await afterBreak((tr) => tr.delete(endOfFirst, resumed.child(0).nodeSize + resumed.child(1).nodeSize + 1));
+    expect(player.total).toBe(2);
+    const markup = renderToStaticMarkup(h(ReplayPlayerView, { player }));
+    expect(markup).toContain(`<option value="${D}">${fill(t.deletedOption, { text: "Napisan u prekidu." })}</option>`);
+    const history = player.paragraphHistory(D);
+    expect(stepsOf(player.total, history)).toEqual([2]);
+    expect(historyRows(history, 2, null)).toContainEqual(expect.objectContaining({ row: "version", text: verified }));
+  });
+
+  it("names the history of a paragraph deleted after a resumed break as a deleted one's", async () => {
+    // The change deletes only the paragraph written inside the break.
+    const from = resumed.child(0).nodeSize;
+    const player = await afterBreak((tr) => tr.delete(from, from + resumed.child(1).nodeSize));
+    const shown = text(renderToStaticMarkup(h(ReplayPlayerView, { player })));
+    expect(shown).toContain(t.historyTitleDeleted);
+    expect(shown).not.toContain(fill(t.historyTitle, { k: 0 }));
+    expect(shown).toContain(verified);
+    expect(findForbiddenTermsInMarkup(shown, shown)).toEqual([]);
   });
 
   it("keeps repeated spaces of the replayed text, in the markup and on the page", async () => {

@@ -26,7 +26,8 @@ import type { ReplayPlayer } from "@/domain/projection/replay-player";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import {
-  describeChange, fill, gapWords, historyRows, nearestStep, nodeText, paragraphOption, replayBlocks, sourceLabel, stepsOf,
+  deletedOption, deletedParagraphs, describeChange, fill, gapWords, historyRows, nearestStep, nodeText, paragraphOption, replayBlocks,
+  sourceLabel, stepsOf,
   type ChangePart,
 } from "./replay-view";
 import styles from "./ReplayView.module.css";
@@ -59,9 +60,10 @@ export function useReplay(documentId: string, session: SessionMark | null) {
   useEffect(() => {
     if (ended) return;
     let live = true;
+    // Asked again when the answer lands: an end heard by no event still keeps it off the page.
     loadReplay(documentId, current).then(
-      (outcome) => { if (live) setRead({ key, outcome }); },
-      () => { if (live) setRead({ key, outcome: { kind: "unavailable" } }); },
+      (outcome) => { if (live && current()) setRead({ key, outcome }); },
+      () => { if (live && current()) setRead({ key, outcome: { kind: "unavailable" } }); },
     );
     return () => { live = false; };
   }, [documentId, current, ended, key]);
@@ -118,6 +120,11 @@ export function ReplayPlayerView({ player }: { player: Player }) {
   const change = useMemo(() => player.entries.flatMap((e) =>
     e.entry === "change" && e.change.index === n ? [e.change] : [])[0] ?? null, [player, n]);
   const gaps = useMemo(() => player.entries.flatMap((e) => (e.entry === "gap" ? [e] : [])), [player]);
+  // Paragraphs the record touched that the final text no longer holds: listed after the others.
+  const deleted = useMemo(() => deletedParagraphs(
+    player.entries.flatMap((e) => (e.entry === "change" ? [e.change] : [])),
+    new Set(finalNodes.map((node) => node.id)),
+  ), [player, finalNodes]);
 
   const steps = useMemo(() => stepsOf(player.total, scoped === null ? null : player.paragraphHistory(scoped)), [player, scoped]);
   // The paragraph whose history is shown: the chosen one, else the first one this change touched.
@@ -131,6 +138,8 @@ export function ReplayPlayerView({ player }: { player: Player }) {
   if (nodes === null) return h("p", { className: styles.state, role: "alert" }, t.unavailable);
 
   const ordinal = (id: string) => ordinalIn(nodes, id) ?? ordinalIn(priorNodes, id) ?? 0;
+  // Null: the paragraph is in neither this step's text nor the one before, so it is named as deleted.
+  const shownOrdinal = shownId === null ? null : ordinalIn(nodes, shownId) ?? ordinalIn(priorNodes, shownId);
   const parts: ChangePart[] = touchedHistories.flatMap(({ id, history }) => {
     const entry = history.find((e) => e.entry === "change" && e.index === n);
     return entry?.entry === "change" ? [{ ordinal: ordinal(id), removed: entry.removed, inserted: entry.inserted }] : [];
@@ -141,8 +150,8 @@ export function ReplayPlayerView({ player }: { player: Player }) {
   const rows = shownHistory === null ? [] : historyRows(shownHistory, n, shownNode === undefined ? null : nodeText(shownNode));
   const here = gaps.filter((g) => g.beforeIndex === n || (g.beforeIndex === n + 1 && (g.gap === "not_resumed" || n === 0)));
 
-  // Only a paragraph of the final text can be chosen: the select lists those.
-  const inFinal = (id: string | undefined) => (finalNodes.some((node) => node.id === id) ? id : undefined);
+  // Only a paragraph the select lists can be chosen: those of the final text, then the deleted ones.
+  const listed = (id: string | undefined) => (id !== undefined && (finalNodes.some((node) => node.id === id) || deleted.includes(id)) ? id : undefined);
   const choose = (id: string | null) => {
     setScoped(id);
     if (id === null) return;
@@ -166,7 +175,8 @@ export function ReplayPlayerView({ player }: { player: Player }) {
     shownId === null ? null : h(
       "section",
       { className: styles.card, "aria-labelledby": "replay-history" },
-      h("h2", { id: "replay-history", className: styles.cardTitle }, fill(t.historyTitle, { k: ordinal(shownId) })),
+      h("h2", { id: "replay-history", className: styles.cardTitle }, shownOrdinal === null
+        ? t.historyTitleDeleted : fill(t.historyTitle, { k: shownOrdinal })),
       rows.length === 0 ? h("p", { className: styles.meta }, t.historyNone) : h(
         "div",
         { className: styles.tableWrap },
@@ -188,7 +198,7 @@ export function ReplayPlayerView({ player }: { player: Player }) {
       h("h2", { id: "replay-scope", className: styles.cardTitle }, t.scopeTitle),
       h("div", { className: styles.row },
         scopeButton(t.scopeWhole, scoped === null, () => choose(null)),
-        scopeButton(t.scopeOne, scoped !== null, () => choose(inFinal(change?.blockIds[0]) ?? finalNodes[0]?.id ?? null)),
+        scopeButton(t.scopeOne, scoped !== null, () => choose(listed(change?.blockIds[0]) ?? finalNodes[0]?.id ?? null)),
         h("label", { className: styles.meta, htmlFor: "replay-paragraph" }, t.paragraph),
         h("select", {
           id: "replay-paragraph",
@@ -196,7 +206,8 @@ export function ReplayPlayerView({ player }: { player: Player }) {
           value: scoped ?? "",
           disabled: scoped === null,
           onChange: (event: { target: { value: string } }) => choose(event.target.value),
-        }, ...finalNodes.map((node, i) => h("option", { key: node.id, value: node.id }, paragraphOption(i + 1, node)))),
+        }, ...finalNodes.map((node, i) => h("option", { key: node.id, value: node.id }, paragraphOption(i + 1, node))),
+        ...deleted.map((id) => h("option", { key: id, value: id }, deletedOption(player.paragraphHistory(id))))),
       ),
       h("p", { className: styles.meta }, t.scopeNote),
     ),
