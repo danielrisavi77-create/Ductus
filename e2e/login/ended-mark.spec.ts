@@ -110,15 +110,15 @@ test("the teacher's screens and course list read the mark of an ended session, a
   await markEnded(page, session);
   for (const [path, title] of [
     ["/nastavnik", t.teacherCourses.title],
-    ["/nastavnik/zadatak/novi", t.teacherCourses.title],
-    ["/nastavnik/mentorstva", t.teacherCourses.title],
+    ["/nastavnik/zadatak/novi", t.teacher.title],
+    ["/nastavnik/mentorstva", t.mentoredWorks.title],
     ["/nastavnik/brz-put", t.fastPath.title],
   ] as const) {
     await expectSignedOutCard(page, path, title);
   }
   const courses = await page.request.get("/api/teacher/courses");
   expect(courses.status()).toBe(401);
-  expect(JSON.stringify(await courses.json())).not.toContain("Izmišljeni kolegij");
+  expect(await courses.json()).toEqual({ error: "unauthorized" });
   await expectSessionUntouched(page, session);
 });
 
@@ -133,7 +133,7 @@ test("the administrator's overview reads the mark of an ended session, and close
     await markEnded(page, session);
     for (const [path, title] of [
       ["/ustanova", t.institutionOverview.title],
-      ["/ustanova/korisnici", t.institutionOverview.title],
+      ["/ustanova/korisnici", t.teacherRoles.title],
       ["/ustanova/pravila", t.facultyRuleVersions.title],
     ] as const) {
       await expectSignedOutCard(page, path, title);

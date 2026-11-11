@@ -13,13 +13,15 @@ import { describe, expect, it } from "vitest";
  */
 const ROOT = process.cwd();
 
-function files(dir: string, name: string): string[] {
+function files(dir: string, names: readonly string[]): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) return files(path, name);
-    return entry.name === name ? [path] : [];
+    if (entry.isDirectory()) return files(path, names);
+    return names.includes(entry.name) ? [path] : [];
   });
 }
+
+const relativePath = (file: string) => relative(ROOT, file).replaceAll("\\", "/");
 
 /** Whether a route module answers GET, the method an address typed in the browser uses. */
 function answersGet(source: string): boolean {
@@ -27,14 +29,22 @@ function answersGet(source: string): boolean {
     || /export\s*\{[^}]*\bGET\b[^}]*\}/.test(source);
 }
 
-const GET_ROUTES = files(join(ROOT, "app/api/teacher"), "route.ts")
+const GET_ROUTES = files(join(ROOT, "app/api/teacher"), ["route.ts"])
   .filter((file) => answersGet(readFileSync(file, "utf8")))
-  .map((file) => relative(ROOT, file).replaceAll("\\", "/"))
+  .map(relativePath)
   .sort();
 
-const SCREENS = [...files(join(ROOT, "app/nastavnik"), "page.tsx"), ...files(join(ROOT, "app/ustanova"), "page.tsx")]
-  .map((file) => relative(ROOT, file).replaceAll("\\", "/"))
+// Pages, layouts and route handlers under the two screen trees (QA pre-review
+// on #1942, finding 2): a layout or a route placed beside a screen reads the
+// same cookie.
+const SCREEN_TREES = ["app/nastavnik", "app/ustanova"];
+const SCREENS = SCREEN_TREES
+  .flatMap((tree) => files(join(ROOT, tree), ["page.tsx", "layout.tsx", "route.ts"]))
+  .map(relativePath)
   .sort();
+
+/** The session cookie read by its name, through the constant or spelled out. */
+const RAW_SESSION_READ = /SESSION_COOKIE_NAME|ductus_session/;
 
 describe("ended sessions on institution and teacher screens (DAN-99)", () => {
   it("covers every screen named in the contract", () => {
@@ -62,6 +72,12 @@ describe("ended sessions on institution and teacher screens (DAN-99)", () => {
     expect(GET_ROUTES).not.toContain("app/api/teacher/fast-path/route.ts");
   });
 
+  it("would catch the cookie read by its constant or by its spelled-out name", () => {
+    expect(RAW_SESSION_READ.test("jar.get(SESSION_COOKIE_NAME)?.value")).toBe(true);
+    expect(RAW_SESSION_READ.test('jar.get("__Host-ductus_session")?.value')).toBe(true);
+    expect(RAW_SESSION_READ.test("liveSessionToken(await cookies())")).toBe(false);
+  });
+
   it("would find a new GET route however it is exported", () => {
     expect(answersGet("export async function GET(request: NextRequest) {}")).toBe(true);
     expect(answersGet("export function GET() {}")).toBe(true);
@@ -73,8 +89,7 @@ describe("ended sessions on institution and teacher screens (DAN-99)", () => {
 
   it.each([...SCREENS, ...GET_ROUTES])("%s reads the session only through liveSessionToken", (file) => {
     const source = readFileSync(join(ROOT, file), "utf8");
-    expect(source).not.toMatch(/\.get\(\s*SESSION_COOKIE_NAME\s*\)/);
-    expect(source).not.toContain("SESSION_COOKIE_NAME");
+    expect(source).not.toMatch(RAW_SESSION_READ);
     if (source.includes("cookies")) expect(source).toMatch(/liveSessionToken\((await cookies\(\)|request\.cookies)\)/);
   });
 
