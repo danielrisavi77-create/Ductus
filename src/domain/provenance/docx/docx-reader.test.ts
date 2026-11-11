@@ -52,7 +52,15 @@ const unicodeComment = extraRecord(0x6375, concat([new Uint8Array([1, 0, 0, 0, 0
 // Four bytes chosen so that the CRC-32 of this invented part equals the data
 // descriptor signature 0x08074b50; the test below checks that premise (#1851).
 const sigCrc = concat([enc("<a>izmisljeno</a>"), new Uint8Array([192, 46, 189, 27])]);
-const sigCrcEntry = (signed: boolean, after = new Uint8Array()): FixtureEntry => ({ name: "a.bin", data: sigCrc, flags: 0x8, after: concat([descriptorFor(sigCrc, signed), after]) });
+const sigCrcEntry = (signed: boolean, after = new Uint8Array()): FixtureEntry => ({
+  name: "a.bin",
+  data: sigCrc,
+  method: 8,
+  flags: 0x8,
+  after: concat([descriptorFor(sigCrc, signed, undefined, true), after]),
+});
+// A data descriptor follows deflated data only: stored with the flag is refused (F-264).
+const described = (signed: boolean, crc?: number): FixtureEntry => ({ name: "a.xml", data: "<a/>", method: 8, flags: 0x8, after: descriptorFor("<a/>", signed, crc, true) });
 const emptyEnd = fixtureZip([]);
 
 const zipRows: Row[] = [
@@ -131,24 +139,24 @@ const zipRows: Row[] = [
   ["Z13", "empty archive", fixtureZip([]), "OK"],
   ["Z13", "deflated parts", fixtureZip(ok.map((e) => ({ ...e, method: 8 }))), "OK"],
   ["Z13", "directory entry", fixtureZip([{ name: "word/" }, ...ok]), "OK"],
-  ["Z13", "data descriptor with signature", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, after: descriptorFor("<a/>", true) }, ...ok]), "OK"],
-  ["Z13", "data descriptor without signature", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, after: descriptorFor("<a/>", false) }]), "OK"],
-  ["Z11", "data descriptor flag without a descriptor", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8 }, ...ok]), "ZIP_INVALID"],
+  ["Z13", "data descriptor with signature", fixtureZip([described(true), ...ok]), "OK"],
+  ["Z13", "data descriptor without signature", fixtureZip([described(false)]), "OK"],
+  ["Z11", "data descriptor flag without a descriptor", fixtureZip([{ name: "a.xml", data: "<a/>", method: 8, flags: 0x8 }, ...ok]), "ZIP_INVALID"],
   // A descriptor is 12 bytes, or 16 with its optional signature; a CRC equal to that
   // signature must not be read as one (#1851).
   ["Z13", "unsigned descriptor whose CRC equals the signature, then another entry", fixtureZip([sigCrcEntry(false), ...ok]), "OK"],
   ["Z13", "unsigned descriptor whose CRC equals the signature, last entry", fixtureZip([...ok, sigCrcEntry(false)]), "OK"],
   ["Z13", "signed descriptor whose CRC equals the signature, then another entry", fixtureZip([sigCrcEntry(true), ...ok]), "OK"],
   ["Z11", "unsigned descriptor whose CRC equals the signature, then hidden bytes", fixtureZip([sigCrcEntry(false, new Uint8Array(4)), ...ok]), "ZIP_INVALID"],
-  ["Z11", "data descriptor that disagrees with the directory", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, after: descriptorFor("<a/>", true, 1) }]), "ZIP_INVALID"],
+  ["Z11", "data descriptor that disagrees with the directory", fixtureZip([described(true, 1)]), "ZIP_INVALID"],
   ["Z11", "bytes hidden between two entries", fixtureZip([{ name: "a.xml", data: "<a/>", after: enc("PK\u0003\u0004xx") }, ...ok]), "ZIP_INVALID"],
   ["Z11", "bytes hidden before the central directory", fixtureZip([...ok, { name: "b.xml", data: "<b/>", after: new Uint8Array(4) }]), "ZIP_INVALID"],
   ["Z13", "UTF-8 name flag and Croatian name", fixtureZip([{ name: "word/čćžšđ.xml", data: "<a/>", flags: 0x800 }]), "OK"],
   ["Z6", "non-ASCII name without the UTF-8 flag", fixtureZip([{ name: "word/č.xml", data: "<a/>", flags: 0 }]), "ZIP_PATH"],
   ["Z11", "UTF-8 name flag only in the directory", fixtureZip([{ name: "word/č.xml", data: "<a/>", flags: 0x800, localFlags: 0 }]), "ZIP_INVALID"],
   ["Z11", "UTF-8 name flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0, localFlags: 0x800 }]), "ZIP_INVALID"],
-  ["Z11", "data descriptor flag only in the directory", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x8, localFlags: 0 }, ...ok]), "ZIP_INVALID"],
-  ["Z11", "data descriptor flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", localFlags: 0x8, after: descriptorFor("<a/>", true) }]), "ZIP_INVALID"],
+  ["Z11", "data descriptor flag only in the directory", fixtureZip([{ name: "a.xml", data: "<a/>", method: 8, flags: 0x8, localFlags: 0 }, ...ok]), "ZIP_INVALID"],
+  ["Z11", "data descriptor flag only in the local header", fixtureZip([{ name: "a.xml", data: "<a/>", method: 8, localFlags: 0x8, after: descriptorFor("<a/>", true, undefined, true) }]), "ZIP_INVALID"],
   ["Z6", "UTF-8 name with a leading byte order mark", fixtureZip([{ name: "\ufeffword/document.xml", data: "<a/>", flags: 0x800 }]), "ZIP_PATH"],
   ["Z6", "UTF-8 name with a byte order mark inside", fixtureZip([{ name: "word/a\ufeff.xml", data: "<a/>", flags: 0x800 }]), "ZIP_PATH"],
   ["Z13", "UTF-8 name flag on an ASCII name", fixtureZip([{ name: "a.xml", data: "<a/>", flags: 0x800 }]), "OK"],
