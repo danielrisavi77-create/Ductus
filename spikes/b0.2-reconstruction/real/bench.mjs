@@ -169,6 +169,8 @@ async function bounded(dir) {
   finish({
     mode: 'bounded', resumedAt, segmentsReplayed: segments.length - resumedAt,
     stepsReplayed: segments.slice(resumedAt).reduce((sum, segment) => sum + stepsOf(segment), 0),
+    // The replay digests the document after every event, so events drive the cost.
+    eventsReplayed: segments.slice(resumedAt).reduce((sum, segment) => sum + segment.events.length, 0),
     medianMs: sorted[Math.floor(sorted.length / 2)], maxMs: sorted.at(-1),
   });
 }

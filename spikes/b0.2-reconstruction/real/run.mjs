@@ -70,12 +70,12 @@ for (const r of results) {
   lines.push(`| ${r.words} (${r.granularity}) | ${r.gen.segments} | ${r.gen.events} | ${r.gen.steps} | ${r.replay.loadMs} ms | `
     + `${r.replay.replayMs} ms | ${r.replay.peakRssMb} MB | ${r.gen.segmentLogMb} MB (${r.gen.segmentLogGzipMb} MB) | ${r.gen.commitDocumentsMb} MB |`);
 }
-lines.push('', '| Riječi | Razmak (koraci) | Kontrolne točke | Zadnja točka (gzip) | Volumen točaka (gzip) | Od točke: koraci | Od točke (medijan / max) | Vrh RSS |',
+lines.push('', '| Riječi | Razmak (koraci) | Kontrolne točke | Zadnja točka (gzip) | Volumen točaka (gzip) | Od točke: koraci (događaji) | Od točke (medijan / max) | Vrh RSS |',
   '| --- | --- | --- | --- | --- | --- | --- | --- |');
 for (const r of results) {
   for (const { steps, checkpoint: c, bounded: b } of r.checkpoints) {
     lines.push(`| ${r.words} (${r.granularity}) | ${steps} | ${c.checkpoints} | ${c.lastCheckpointKb} KB (${c.lastCheckpointGzipKb} KB) | `
-      + `${c.volumeRawMb} MB (${c.volumeGzipMb} MB) | ${b ? b.stepsReplayed : '–'} | ${b ? `${b.medianMs} / ${b.maxMs} ms` : '–'} | `
+      + `${c.volumeRawMb} MB (${c.volumeGzipMb} MB) | ${b ? `${b.stepsReplayed} (${b.eventsReplayed})` : '–'} | ${b ? `${b.medianMs} / ${b.maxMs} ms` : '–'} | `
       + `${Math.max(c.peakRssMb, b?.peakRssMb ?? 0)} MB |`);
   }
 }
