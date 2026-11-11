@@ -1,0 +1,266 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
+import { purposeCatalog } from "./purpose-catalog";
+
+/**
+ * Guards the synthetic Croatian evaluation corpus (DAN-400, M9.1-P03,
+ * docs/AI-HRVATSKI-PROTOKOL.md). The corpus is data for people who rate
+ * model output; these checks keep it inside the catalogue, free of dictionary
+ * terms and free of anything shaped like personal data, and make sure every
+ * criterion rates model output, never a student.
+ */
+
+const CORPUS_PATH = path.join(__dirname, "../../../docs/ai-hrvatski/korpus.json");
+
+const ITEM_KEYS = ["id", "purpose", "level", "instruction", "input", "criteria"] as const;
+const CRITERION_KEYS = ["id", "subject", "text"] as const;
+const MIN_ITEMS_PER_PURPOSE = 2;
+
+interface Criterion {
+  id: string;
+  subject: string;
+  text: string;
+}
+interface Item {
+  id: string;
+  purpose: string;
+  level: number;
+  instruction: string;
+  input: string;
+  criteria: string[];
+}
+interface Corpus {
+  catalogVersion: number;
+  criteria: Criterion[];
+  items: Item[];
+}
+
+/** Up to three spaces, dots, slashes or dashes between the digit groups of a number. */
+const PHONE_GAP = String.raw`[\s./\u2010-\u2014-]{0,3}`;
+
+/**
+ * A Croatian number in international form: "+385", "00385" or bare "385", an
+ * optional trunk zero in brackets, a one- or two-digit area code (also in
+ * brackets) and a subscriber number of six to eight digits, with any of the
+ * gaps above or none. Years and task labels do not start with 385 followed by
+ * eight or more digits, so they are left alone.
+ */
+const INTERNATIONAL_PHONE = new RegExp(
+  String.raw`(?<!\d)(?:\+\s?|00\s?)?385${PHONE_GAP}(?:\(0\)${PHONE_GAP})?\(?\d{1,2}\)?(?:${PHONE_GAP}\d){6,8}(?!\d)`,
+  "u",
+);
+
+const PERSONAL_DATA_SHAPES: readonly [string, RegExp][] = [
+  ["email", /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/u],
+  ["oib or jmbag", /(?<!\d)\d{10,11}(?!\d)/u],
+  ["phone", /(?:\+385|\b0\d{1,2})[\s/-]?\d{3}[\s/-]?\d{3,4}\b/u],
+  ["phone", INTERNATIONAL_PHONE],
+  // Only roles with a letter ("Student A", "Autorica B") stand for people, so
+  // no name in the corpus can be taken for a real person at the faculty.
+  ["name", /\p{Lu}\p{Ll}+\s+\p{Lu}\p{Ll}+/u],
+  ["name", /\p{Lu}\p{Ll}+,\s*(?:\p{Lu}\.\s*)?\(?\d{4}/u],
+  ["name", /\p{Lu}\p{Ll}+,\s+\p{Lu}\p{Ll}+,/u],
+];
+
+/**
+ * Anything that starts like a link, even glued to a word, up to the next space
+ * or the next link start, so links joined without a space are checked one by one.
+ */
+const URL_CANDIDATE = /(?:https?:|www\.)(?:(?!https?:|(?<!\/\/)www\.)\S)*/giu;
+const TRAILING_PUNCTUATION = /[.,;:!?)\]}"'»”]+$/u;
+
+/**
+ * Whether a link reaches a host reserved by the corpus rule
+ * (docs/AI-HRVATSKI-PROTOKOL.md): example.org or a subdomain, or a name under
+ * .invalid. The URL parser decodes %2E, lowers capitals and splits off the user
+ * and the port, so the host the link really reaches is judged; a link the
+ * parser refuses is not reserved.
+ */
+function isReservedUrl(candidate: string): boolean {
+  const text = candidate.replace(TRAILING_PUNCTUATION, "");
+  let host: string;
+  try {
+    host = new URL(/^www\./iu.test(text) ? `http://${text}` : text).hostname;
+  } catch {
+    return false;
+  }
+  const labels = host.replace(/\.$/u, "").split(".");
+  if (labels.some((label) => !/^[a-z0-9-]+$/u.test(label))) return false;
+  const name = labels.join(".");
+  return name === "example.org" || name.endsWith(".example.org") || (labels.length > 1 && name.endsWith(".invalid"));
+}
+
+function hasUnreservedUrl(text: string): boolean {
+  return [...text.matchAll(URL_CANDIDATE)].some(([candidate]) => !isReservedUrl(candidate));
+}
+
+function sameKeys(value: object, keys: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  return actual.length === keys.length && [...keys].sort().every((key, i) => key === actual[i]);
+}
+
+/** Every reason the corpus breaks a rule; empty when it keeps them all. */
+function corpusProblems(corpus: Corpus): string[] {
+  const problems: string[] = [];
+  const catalogue = purposeCatalog(corpus.catalogVersion);
+  if (!catalogue.ok) return ["unknown catalogue version"];
+  const levels = new Map(catalogue.purposes.map((p) => [p.key, p.level]));
+
+  const criterionIds = new Set<string>();
+  for (const criterion of corpus.criteria) {
+    if (!sameKeys(criterion, CRITERION_KEYS)) problems.push(`criterion ${criterion.id}: fields`);
+    if (criterionIds.has(criterion.id)) problems.push(`criterion ${criterion.id}: duplicate id`);
+    criterionIds.add(criterion.id);
+    if (criterion.subject !== "model_output") problems.push(`criterion ${criterion.id}: subject`);
+  }
+
+  const itemIds = new Set<string>();
+  const perPurpose = new Map<string, number>();
+  for (const item of corpus.items) {
+    if (!sameKeys(item, ITEM_KEYS)) problems.push(`item ${item.id}: fields`);
+    if (itemIds.has(item.id)) problems.push(`item ${item.id}: duplicate id`);
+    itemIds.add(item.id);
+    const level = levels.get(item.purpose);
+    if (level === undefined) problems.push(`item ${item.id}: purpose`);
+    else if (level !== item.level) problems.push(`item ${item.id}: level`);
+    perPurpose.set(item.purpose, (perPurpose.get(item.purpose) ?? 0) + 1);
+    if (!Array.isArray(item.criteria) || item.criteria.length === 0) problems.push(`item ${item.id}: no criteria`);
+    for (const id of item.criteria ?? []) if (!criterionIds.has(id)) problems.push(`item ${item.id}: criterion ${id}`);
+  }
+  for (const key of levels.keys()) {
+    if ((perPurpose.get(key) ?? 0) < MIN_ITEMS_PER_PURPOSE) problems.push(`purpose ${key}: too few items`);
+  }
+
+  const texts = [
+    ...corpus.criteria.map((c) => [`criterion ${c.id}`, c.text] as const),
+    ...corpus.items.flatMap((i) => [[`item ${i.id}`, i.instruction] as const, [`item ${i.id}`, i.input] as const]),
+  ];
+  for (const [where, text] of texts) {
+    for (const term of findForbiddenTerms(String(text))) problems.push(`${where}: dictionary term ${term.entry}`);
+    for (const [shape, pattern] of PERSONAL_DATA_SHAPES) if (pattern.test(String(text))) problems.push(`${where}: ${shape}`);
+    if (hasUnreservedUrl(String(text))) problems.push(`${where}: url`);
+  }
+  return problems;
+}
+
+const corpus = JSON.parse(readFileSync(CORPUS_PATH, "utf8")) as Corpus;
+
+function broken(change: (copy: Corpus) => void): Corpus {
+  const copy = structuredClone(corpus);
+  change(copy);
+  return copy;
+}
+
+describe("synthetic Croatian evaluation corpus", () => {
+  it("keeps every rule", () => {
+    expect(corpusProblems(corpus)).toEqual([]);
+  });
+
+  it("covers all ten purposes of catalogue version 2", () => {
+    expect(corpus.catalogVersion).toBe(2);
+    expect(new Set(corpus.items.map((i) => i.purpose)).size).toBe(10);
+  });
+
+  // One deliberately broken copy per class of input, so the guard is shown to fail.
+  const breakages: readonly [string, (copy: Corpus) => void, string][] = [
+    ["purpose outside the catalogue", (c) => void (c.items[0]!.purpose = "essay_writing"), "purpose"],
+    ["missing purpose", (c) => void (c.items = c.items.filter((i) => i.purpose !== "data_coding")), "purpose data_coding: too few items"],
+    ["wrong level", (c) => void (c.items[0]!.level = 2), "level"],
+    ["duplicate item id", (c) => void (c.items[1]!.id = c.items[0]!.id), "duplicate id"],
+    ["unknown criterion", (c) => void c.items[0]!.criteria.push("no-such-criterion"), "criterion no-such-criterion"],
+    ["criterion about the student", (c) => void (c.criteria[0]!.subject = "student"), "subject"],
+    ["dictionary term", (c) => void (c.items[0]!.input += " Tekst je sumnjiv."), "dictionary term"],
+    ["english dictionary term", (c) => void (c.criteria[0]!.text += " No AI percentage."), "dictionary term"],
+    ["email", (c) => void (c.items[0]!.input += " pisite na ime.prezime@fakultet.hr"), "email"],
+    ["oib", (c) => void (c.items[0]!.input += " OIB 12345678903"), "oib or jmbag"],
+    ["jmbag", (c) => void (c.items[0]!.instruction += " JMBAG 0067123456"), "oib or jmbag"],
+    ["phone", (c) => void (c.items[0]!.input += " nazovite 091 000 0000"), "phone"],
+    ["full name", (c) => void (c.items[0]!.input += " Razgovor je vodila Ana Kovač."), "name"],
+    ["surname in a citation", (c) => void (c.items[0]!.input += " (Babić, 2020: 14)"), "name"],
+    ["surname with an initial", (c) => void (c.items[0]!.input += " Babić, I. (2020)"), "name"],
+    ["surname with a given name", (c) => void (c.items[0]!.input += " Babić, Iva, Naslov"), "name"],
+    ["real url", (c) => void (c.items[0]!.input += " https://www.fpzg.unizg.hr/"), "url"],
+    ["host merely ending in example.org", (c) => void (c.items[0]!.input += " https://notexample.org/"), "url"],
+    ["reserved name inside a real host", (c) => void (c.items[0]!.input += " https://example.org.fpzg.unizg.hr/"), "url"],
+    // The old pattern missed all but the look-alike and the joined links; the parsed hostname decides now.
+    ...[
+      ["encoded dot", "https://example.org%2Efpzg.unizg.hr/"],
+      ["lowercase encoded dot", "https://example.org%2efpzg.unizg.hr/"],
+      ["capitals with an encoded dot", "https://EXAMPLE.ORG%2Efpzg.unizg.hr/"],
+      ["double encoded dot", "https://example.org%252Efpzg.unizg.hr/"],
+      ["empty label after the reserved name", "https://example.org..fpzg.unizg.hr/"],
+      ["reserved name as the user", "https://example.org@fpzg.unizg.hr/"],
+      ["reserved name and port as the user", "https://example.org:443@fpzg.unizg.hr/"],
+      ["scheme without slashes", "https:fpzg.unizg.hr/"],
+      ["link glued to a word", "vidinothttps://fpzg.unizg.hr/"],
+      ["look-alike letter", "https://ex\u0430mple.org/"],
+      ["second link after a comma", "https://example.org/clanak,https://www.fpzg.unizg.hr/"],
+      ["second link after a semicolon", "https://example.org/a;www.fpzg.unizg.hr"],
+      ["second link after a bar", "https://example.org/x|https://fpzg.unizg.hr"],
+    ].map(([name, url]): [string, (copy: Corpus) => void, string] => [name!, (c) => void (c.items[0]!.input += ` ${url}`), "url"]),
+    ["unknown item field", (c) => void Object.assign(c.items[0]!, { author: "x" }), "fields"],
+    ["unknown criterion field", (c) => void Object.assign(c.criteria[0]!, { weight: 1 }), "fields"],
+  ];
+
+  it.each(breakages)("rejects %s", (_name, change, expected) => {
+    const problems = corpusProblems(broken(change));
+    expect(problems.some((p) => p.includes(expected))).toBe(true);
+  });
+
+  it.each([
+    "https://example.org/clanak,",
+    "https://www.example.org",
+    "www.example.org/rad",
+    "https://arhiv.invalid/rad.",
+    "https://EXAMPLE.org/",
+    "https://example.org./",
+    "https://example.org:8443/rad",
+    "(https://ured.example.org/upute)",
+  ])("allows the reserved address %s", (url) => {
+    expect(corpusProblems(broken((c) => void (c.items[0]!.input += ` ${url}`)))).toEqual([]);
+  });
+
+  // QA c.6781874004: the international forms of a Croatian number, one row per
+  // class of input. All numbers are invented (subscriber part of zeros).
+  it.each([
+    ["+385 with spaces and a two-digit code", "+385 91 000 0000"],
+    ["+385 without any separator", "+385910000000"],
+    ["+385 with hyphens", "+385-91-000-0000"],
+    ["+385 with dots", "+385.91.000.0000"],
+    ["+385 with slashes", "+385/91/000/0000"],
+    ["00385 with the one-digit Zagreb code", "00385 1 000 0000"],
+    ["00 385 with a space in the prefix", "00 385 1 000 0000"],
+    ["385 without + or 00, with hyphens", "385-91-000-0000"],
+    ["385 without + or 00, without any separator", "385910000000"],
+    ["the trunk zero in brackets", "+385 (0)91 000 0000"],
+    ["the area code in brackets", "+385 (1) 000 0000"],
+    ["a six-digit subscriber number", "+385 20 000 000"],
+    ["digits in pairs", "+385 91 000 00 00"],
+    ["a separator between spaces", "+385 - 91 - 000 - 0000"],
+    ["no-break spaces", "+385\u00a091\u00a0000\u00a00000"],
+    ["a space after the plus", "+ 385 91 000 0000"],
+  ])("rejects the phone number in the form %s", (_name, phone) => {
+    const problems = corpusProblems(broken((c) => void (c.items[0]!.input += ` Kontakt: ${phone}.`)));
+    expect(problems.some((p) => p.endsWith(": phone"))).toBe(true);
+  });
+
+  it.each([
+    "Istraživanje je trajalo od 2019. do 2021. godine.",
+    "U akademskoj godini 2025./2026. upisano je 385 ispitanika.",
+    "Razdoblje 1990–2020 obuhvaća tri popisa.",
+    "Valovi su bili 2020 2021 2022 2023.",
+    "Uzorak je N = 385, a navod je na str. 385–386.",
+    "Oznake DAN-385, M9.1-P03, Z-11 i example_generation-2 te zadatak 3.85.",
+  ])("does not take years or task labels for a phone number: %s", (text) => {
+    expect(corpusProblems(broken((c) => void (c.items[0]!.input += ` ${text}`)))).toEqual([]);
+  });
+
+  it("allows roles with a letter in place of names", () => {
+    const roles = " Student A i Mentorica B citiraju (Autorica C, 2020: 14) i Autor D (2021).";
+    expect(corpusProblems(broken((c) => void (c.items[0]!.input += roles)))).toEqual([]);
+  });
+});
