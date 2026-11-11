@@ -1,5 +1,6 @@
 // DAN-267: CI Digital Twin phase A. Reads recent successful CI runs and prints p50/p95 per job.
 // Read-only. Usage: node ci-twin.mjs --since YYYY-MM-DD [--limit N] [--json]
+import "./help.mjs";
 import { ghJson, ghList } from "./gh.mjs";
 import { mapLimit } from "./metrics-core.mjs";
 import { isOwnRun, parseTwinArgs, renderTwin, runShape, summarizeRuns } from "./ci-twin-core.mjs";

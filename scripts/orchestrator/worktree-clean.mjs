@@ -6,6 +6,7 @@
 // A dry run lists these first as "would prune".
 // Usage: node worktree-clean.mjs [--dry-run | --apply] [--keep <name>]...
 // Exit: 0 ok, 1 fetch or removal failure, 2 usage or path-guard error.
+import "./help.mjs";
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, realpathSync, rmSync, unlinkSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";

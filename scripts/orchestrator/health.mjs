@@ -2,6 +2,7 @@
 // every gh/git call passes readOnlyCall() first; no files written, no cache.
 // Usage: node health.mjs   Exit 0 = all checked, nothing stalls; 1 = something
 // stalls (FAIL); 2 = no FAIL, but some check could not run (NEPROVJERENO).
+import "./help.mjs";
 import { execFile } from "node:child_process";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";

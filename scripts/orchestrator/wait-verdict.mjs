@@ -1,6 +1,7 @@
 // Wait for a new canonical verdict or new head on the given PRs. Read-only.
 // Usage: node wait-verdict.mjs <pr...> [--timeout-min N]
 // Exit: 10 new verdict, 11 new head, 12 timeout, 2 usage/baseline error.
+import "./help.mjs";
 import { ghJson, prComments } from "./gh.mjs";
 import { compareSnapshots, snapshot } from "./orchestrator-core.mjs";
 

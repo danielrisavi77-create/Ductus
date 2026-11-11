@@ -1,5 +1,6 @@
 // DAN-130 PR B: lead time, verdict counts and demo tasks of merged PRs.
 // Read-only. Usage: node pr-metrics.mjs --since YYYY-MM-DD [--json]
+import "./help.mjs";
 import { readFile } from "node:fs/promises";
 
 import { mergedPrs, prComments } from "./gh.mjs";
