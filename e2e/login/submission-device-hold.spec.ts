@@ -82,7 +82,7 @@ async function shoot(page: Page, name: string): Promise<void> {
     await page.setViewportSize({ width, height: 900 });
     for (let i = 0; i < 2; i += 1) {
       const theme = await page.locator("[data-theme]").first().getAttribute("data-theme");
-      await test.info().attach(`dan699-${name}-${width}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+      await test.info().attach(`dan699-${name}-${width}-${theme}`, { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
       await toggle.click();
     }
   }
