@@ -44,7 +44,7 @@ CREATE TABLE identity.problem_report (
   )),
   app_version text NOT NULL CHECK (app_version ~ '^(?:(?:0|[1-9][0-9]{0,3})\.(?:0|[1-9][0-9]{0,3})\.(?:0|[1-9][0-9]{0,3})(?:\+[0-9a-f]{7,40})?|[0-9a-f]{7,40})$'),
   browser_family text NOT NULL CHECK (browser_family IN ('chromium', 'firefox', 'safari', 'other')),
-  browser_major smallint CHECK (browser_major BETWEEN 0 AND 999),
+  browser_major integer CHECK (browser_major BETWEEN 0 AND 999),
   sync_state text CHECK (sync_state IN (
     'EDITING', 'SAVING_LOCAL', 'LOCAL_DURABLE', 'SYNCING', 'SYNCED', 'CONFLICT', 'ERROR', 'RECOVERY_REQUIRED'
   )),
@@ -66,7 +66,7 @@ CREATE FUNCTION identity.submit_problem_report(
   p_route text,
   p_app_version text,
   p_browser_family text,
-  p_browser_major smallint,
+  p_browser_major integer,
   p_sync_state text
 ) RETURNS text
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
@@ -111,8 +111,8 @@ BEGIN
 END
 $$;
 
-REVOKE ALL ON FUNCTION identity.submit_problem_report(text, text, text, text, text, smallint, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION identity.submit_problem_report(text, text, text, text, text, smallint, text) TO ductus_app;
+REVOKE ALL ON FUNCTION identity.submit_problem_report(text, text, text, text, text, integer, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION identity.submit_problem_report(text, text, text, text, text, integer, text) TO ductus_app;
 
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA identity FROM ductus_identity;
@@ -122,7 +122,7 @@ REVOKE CREATE ON SCHEMA identity FROM ductus_identity;
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
-DROP FUNCTION identity.submit_problem_report(text, text, text, text, text, smallint, text);
+DROP FUNCTION identity.submit_problem_report(text, text, text, text, text, integer, text);
 DROP TABLE identity.problem_report;
 
 SET LOCAL ROLE ductus_migrator;

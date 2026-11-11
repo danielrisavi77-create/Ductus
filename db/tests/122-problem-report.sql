@@ -14,7 +14,7 @@ SELECT is(
                      ', ' ORDER BY a.attnum)
    FROM pg_attribute a WHERE a.attrelid = 'identity.problem_report'::regclass AND a.attnum > 0 AND NOT a.attisdropped),
   'id uuid not null, reference text not null, institution_id uuid not null, user_id uuid not null, category text not null, '
-  'description text not null, route text, app_version text not null, browser_family text not null, browser_major smallint, '
+  'description text not null, route text, app_version text not null, browser_family text not null, browser_major integer, '
   'sync_state text, created_at timestamp with time zone not null',
   'problem_report has no column for a title, a paragraph, a work or a journal'
 );
@@ -40,7 +40,7 @@ SELECT is(
    FROM pg_proc p
    WHERE p.proname LIKE '%problem\_report%'),
   'submit_problem_report(p_category text, p_description text, p_route text, p_app_version text, p_browser_family text, '
-  'p_browser_major smallint, p_sync_state text) text v definer search_path="" app',
+  'p_browser_major integer, p_sync_state text) text v definer search_path="" app',
   'one call for ductus_app, with no argument for a user, an institution or a work, and PUBLIC calls it not'
 );
 SELECT ok(
@@ -93,16 +93,16 @@ CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY
 SELECT ok(has_table_privilege('ductus_identity', 'identity.problem_report', o.op),
   format('ductus_identity (owner): %s on problem_report', o.op))
 FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) AS o (op);
-SELECT ok(NOT has_function_privilege(r.role, 'identity.submit_problem_report(text, text, text, text, text, smallint, text)', 'EXECUTE'),
+SELECT ok(NOT has_function_privilege(r.role, 'identity.submit_problem_report(text, text, text, text, text, integer, text)', 'EXECUTE'),
   format('%s does not call submit_problem_report', r.role))
 FROM unnest(ARRAY['ductus_auth', 'ductus_evidence', 'ductus_worker', 'ductus_retention', 'ductus_test_stranger']) AS r (role);
 
 -- 3. The classes of input. A call with every value in its class; then each
 -- argument alone moved out of its class (ZD422), with nothing written.
 CREATE FUNCTION pg_temp.submit(p_actor text, p_category text, p_description text, p_route text,
-                               p_app_version text, p_family text, p_major integer, p_sync text) RETURNS text
+                               p_app_version text, p_family text, p_major bigint, p_sync text) RETURNS text
 LANGUAGE sql AS $$
-  SELECT pg_temp.ask(p_actor, format('SELECT identity.submit_problem_report(%L, %L, %L, %L, %L, %L::smallint, %L)',
+  SELECT pg_temp.ask(p_actor, format('SELECT identity.submit_problem_report(%L, %L, %L, %L, %L, %L::integer, %L)',
                                      p_category, p_description, p_route, p_app_version, p_family, p_major, p_sync))
 $$;
 CREATE FUNCTION pg_temp.owner(p_sql text) RETURNS text
@@ -158,8 +158,8 @@ FROM (VALUES
   ('sync state outside the set', 'technical', 'Opis.', '/', '1.0.0', 'chromium', 1, 'synced'),
   ('sync state carrying text', 'technical', 'Opis.', '/', '1.0.0', 'chromium', 1, 'Prvi odlomak rada')
 ) AS c (what, category, description, route, app_version, family, major, sync);
-SELECT is(pg_temp.submit('ana', 'technical', 'Opis.', '/', '1.0.0', 'chromium', 40000, 'SYNCED'),
-          '22003: value "40000" is out of range for type smallint', 'a browser major beyond smallint is refused before the call');
+SELECT is(pg_temp.submit('ana', 'technical', 'Opis.', '/', '1.0.0', 'chromium', 3000000000, 'SYNCED'),
+          '22003: value "3000000000" is out of range for type integer', 'a browser major beyond integer is refused before the call');
 SELECT is(pg_temp.submit('ana', 'account', repeat('ž', 1000), '/', '1.0.0', 'safari', 0, NULL) ~ '^PR-[0-9A-F]{10}$', true,
   '1000 characters, not bytes, is the limit');
 SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '3', 'no refused call wrote a row');

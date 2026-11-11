@@ -34,7 +34,7 @@ const people = Object.fromEntries(names.map((name) => [name, { id: randomUUID(),
 
 const submit = async (tx: ActorTransaction) =>
   (await tx.query<{ reference: string }>(
-    "SELECT identity.submit_problem_report($1, $2, $3, $4, $5, $6::smallint, $7) AS reference",
+    "SELECT identity.submit_problem_report($1, $2, $3, $4, $5, $6::integer, $7) AS reference",
     ["technical", `Izmisljena prijava ${suffix}.`, "/rad", "1.0.0", "firefox", 128, "SYNCED"])).rows[0].reference;
 
 /** Waits until a report is in PostgreSQL and blocked by another transaction. */

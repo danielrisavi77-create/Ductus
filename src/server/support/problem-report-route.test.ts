@@ -24,7 +24,7 @@ const VALID = {
   route: "/rad/[assignmentId]/predaja",
   syncState: "SYNCING",
 };
-const SQL = "SELECT identity.submit_problem_report($1, $2, $3, $4, $5, $6::smallint, $7) AS reference";
+const SQL = "SELECT identity.submit_problem_report($1, $2, $3, $4, $5, $6::integer, $7) AS reference";
 
 function request(value: unknown, headers: Record<string, string> = {}): Request {
   return new Request(`${ORIGIN}/api/support/problem-report`, {

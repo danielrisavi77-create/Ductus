@@ -4011,10 +4011,10 @@ $$;
 
 
 --
--- Name: submit_problem_report(text, text, text, text, text, smallint, text); Type: FUNCTION; Schema: identity; Owner: -
+-- Name: submit_problem_report(text, text, text, text, text, integer, text); Type: FUNCTION; Schema: identity; Owner: -
 --
 
-CREATE FUNCTION identity.submit_problem_report(p_category text, p_description text, p_route text, p_app_version text, p_browser_family text, p_browser_major smallint, p_sync_state text) RETURNS text
+CREATE FUNCTION identity.submit_problem_report(p_category text, p_description text, p_route text, p_app_version text, p_browser_family text, p_browser_major integer, p_sync_state text) RETURNS text
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -7722,7 +7722,7 @@ CREATE TABLE identity.problem_report (
     route text,
     app_version text NOT NULL,
     browser_family text NOT NULL,
-    browser_major smallint,
+    browser_major integer,
     sync_state text,
     created_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
     CONSTRAINT problem_report_app_version_check CHECK ((app_version ~ '^(?:(?:0|[1-9][0-9]{0,3})\.(?:0|[1-9][0-9]{0,3})\.(?:0|[1-9][0-9]{0,3})(?:\+[0-9a-f]{7,40})?|[0-9a-f]{7,40})$'::text)),

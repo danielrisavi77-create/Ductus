@@ -26,7 +26,7 @@ const REFERENCE = /^PR-[0-9A-F]{10}$/;
 
 // Spelled out in full: the RPC/HTTP inventory looks for "identity.submit_problem_report(".
 const SUBMIT_SQL =
-  "SELECT identity.submit_problem_report($1, $2, $3, $4, $5, $6::smallint, $7) AS reference";
+  "SELECT identity.submit_problem_report($1, $2, $3, $4, $5, $6::integer, $7) AS reference";
 
 export interface ProblemReportDeps {
   withActor: WithActor;
