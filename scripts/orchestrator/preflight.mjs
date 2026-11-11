@@ -2,6 +2,7 @@
 // Read-only: never merges, edits, comments or re-runs anything.
 // Usage: node preflight.mjs <number> [--head <sha>]
 //   exit 0 = every check PASS, 1 = at least one FAIL, 2 = usage or read error
+import "./help.mjs";
 import { checkRollup, ghJson, mainPathsSince, prPaths as readPrPaths, prView, repoId } from "./gh.mjs";
 import { evaluatePreflight, INFORMATIONAL_READS, preflightExitCode, requiredStatusChecks } from "./preflight-core.mjs";
 

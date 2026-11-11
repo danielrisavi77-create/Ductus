@@ -1,5 +1,6 @@
 // DAN-270: Failure Capsule. Names what is needed to reproduce a failed CI run.
 // Read-only. Usage: node failure-capsule.mjs --run <run id> [--json]
+import "./help.mjs";
 import { ghJson, ghList } from "./gh.mjs";
 import { buildCapsule, parseCapsuleArgs, renderCapsule } from "./failure-capsule-core.mjs";
 
