@@ -1,7 +1,8 @@
 // The real sync.mjs against a local bare repository as the remote: merge, push,
 // conflict, a merge that fails without a conflict, a rejected push, a single-branch
 // clone, a tree dirty under hostile git config, a local head that moves while
-// CI is awaited, merge options set on the branch and every state after the merge. `gh` is answered by fake-gh-git-preload.mjs; no network.
+// CI is awaited, merge options set on the branch, pull.twohead, a local ref named
+// origin/main and every state after the merge. `gh` is answered by fake-gh-git-preload.mjs; no network.
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -231,6 +232,32 @@ for (const option of ["--no-commit", "--squash", "-s ours", "-Xours"]) {
     assert.doesNotMatch(res.out, /preflight|SYNC OK|CONFLICT/);
     assert.deepEqual(res.preflight, []);
     untouched(r);
+  });
+}
+
+test("pull.twohead=ours does not choose the strategy: main's change is in the pushed merge", (t) => {
+  const r = setup(t);
+  // Without -s on the command line git merges with pull.twohead, and "ours" drops main.
+  git(r.work, "config", "pull.twohead", "ours");
+  const res = r.sync();
+  const head = git(r.work, "rev-parse", "HEAD");
+  assert.notEqual(head, r.head, res.out);
+  assert.equal(git(r.work, "show", `${head}:main.txt`), "main", res.out);
+  assert.equal(r.remoteSha(), head, res.out);
+  assert.deepEqual(res.preflight, [["7", "--head", head]]);
+});
+
+for (const kind of ["branch", "tag"]) {
+  test(`a local ${kind} named origin/main does not replace the fetched main`, (t) => {
+    const r = setup(t);
+    // refs/tags/ and refs/heads/ win over refs/remotes/ for the short name origin/main.
+    git(r.work, kind, "origin/main", "HEAD~1");
+    const res = r.sync();
+    const head = git(r.work, "rev-parse", "HEAD");
+    assert.notEqual(head, r.head, res.out);
+    assert.equal(git(r.work, "show", `${head}:main.txt`), "main", res.out);
+    assert.equal(r.remoteSha(), head, res.out);
+    assert.deepEqual(res.preflight, [["7", "--head", head]]);
   });
 }
 

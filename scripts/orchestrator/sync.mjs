@@ -60,13 +60,14 @@ try {
 
   if (plan.action === "merge") {
     // The command line beats --no-commit and --squash from here, not -s ours or -X ours.
+    // -s ort beats pull.twohead; the full ref name beats a local branch or tag origin/main.
     const options = await tryGit("config", "--get-all", `branch.${local.branch}.mergeOptions`);
     if (options !== null) {
       console.error(`branch.${local.branch}.mergeOptions is set (${options}): orch:sync merges only with git's defaults; unset it or merge by hand`);
       process.exit(1);
     }
     try {
-      await git("merge", "--no-squash", "--commit", "--no-edit", "origin/main");
+      await git("merge", "-s", "ort", "--no-squash", "--commit", "--no-edit", "refs/remotes/origin/main");
     } catch (e) {
       const files = ((await tryGit("diff", "--name-only", "--diff-filter=U")) ?? "").split("\n").filter(Boolean);
       await tryGit("merge", "--abort");
