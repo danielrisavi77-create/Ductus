@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegment } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceEvent, EvidenceSegment } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 
 import { CaptureError, EvidenceRecorder, type SegmentContext } from "./capture";
@@ -223,7 +223,7 @@ describe("F-8 3d-1c: random edits with the observer", () => {
     let standalone = 0;
     for (let seed = 1; seed <= SEEDS; seed += 1) {
       const { segments, initial, stop, final, standaloneChanges } = await run(seed);
-      const events = segments.flatMap((s) => s.events);
+      const events = segments.flatMap((s): EvidenceEvent[] => s.events);
       expect(events.some((e) => e.source === "composition"), `seed ${seed}`).toBe(false);
       if (stop !== null) {
         stops.push(stop);
