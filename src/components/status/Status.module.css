@@ -16,6 +16,9 @@
 }
 
 .top h2 {
+  font-family: var(--ff-display);
+  font-weight: 500;
+  letter-spacing: -0.015em;
   font-size: 19px;
   margin: 0;
 }
