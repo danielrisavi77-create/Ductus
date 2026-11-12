@@ -13,17 +13,17 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
   - Izvještaj (sesija → orkestrator): retci 105-124
   - Trag rada (autor → PR, nakon svakog pusha): retci 125-136
   - QA upit (orkestrator → QA sesija): retci 137-154
-- §4 Štednja tokena: retci 155-223
-  - §4a Tehnička provedba (DAN-93): retci 167-223
-- §5 Neovisni pregled: retci 224-255
-- §6 Dizajn: retci 256-341
-  - §6.1 Cilj i mjerodavna referenca: retci 264-275
-  - §6.2 Vizualni ugovor u zadatku: retci 276-294
-  - §6.3 Kratka priprema i jedan vizualni stil: retci 295-303
-  - §6.4 Izvedba, snimanje i ispravci: retci 304-315
-  - §6.5 Vizualni dokaz i predaja: retci 316-333
-  - §6.6 Prihvat i regresijske snimke: retci 334-341
-- §7 Okruženje i održavanje: retci 342-360
+- §4 Štednja tokena: retci 155-225
+  - §4a Tehnička provedba (DAN-93): retci 167-225
+- §5 Neovisni pregled: retci 226-257
+- §6 Dizajn: retci 258-343
+  - §6.1 Cilj i mjerodavna referenca: retci 266-277
+  - §6.2 Vizualni ugovor u zadatku: retci 278-296
+  - §6.3 Kratka priprema i jedan vizualni stil: retci 297-305
+  - §6.4 Izvedba, snimanje i ispravci: retci 306-317
+  - §6.5 Vizualni dokaz i predaja: retci 318-335
+  - §6.6 Prihvat i regresijske snimke: retci 336-343
+- §7 Okruženje i održavanje: retci 344-362
 <!-- toc:end -->
 
 ## 1. Uloge
