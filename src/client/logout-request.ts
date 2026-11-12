@@ -13,7 +13,8 @@ import {
 
 /**
  * POST to the logout route; true only for its redirect, which comes after
- * the session was closed and the cookie cleared. A lost request, an error
+ * the route cleared the cookie (and closed the session, unless the database
+ * refused). A lost request, an error
  * status and no answer within the time limit are false, and so is an answer
  * that comes after the limit: by then the page may have said it is
  * unconfirmed (F-285).

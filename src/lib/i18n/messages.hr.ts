@@ -1399,9 +1399,10 @@ export const hr = {
     // #1330, #1444: ended here; nothing calls the server again.
     logoutDevice:
       "Odjava je na ovom uređaju gotova. Poslužitelj trenutačno ne odgovara, pa ondje prijava prestaje pri sljedećoj prijavi ili kad istekne.",
-    // F-285: the server did not confirm the sign-out, so nothing has ended.
+    // F-285: the server did not confirm the sign-out, so nothing ended on this
+    // device. It claims nothing about the server, which may have closed it.
     logoutUnconfirmed:
-      "Poslužitelj nije potvrdio odjavu, pa prijava na ovom uređaju i dalje vrijedi. Pokušajte ponovno.",
+      "Poslužitelj nije potvrdio odjavu. Pokušajte ponovno.",
     logoutClose: "Zatvori",
     signedOutElsewhere:
       "Prijava više ne vrijedi, pa ova kartica više ne prikazuje rad. Rad nastavljate kad se ponovno prijavite.",
