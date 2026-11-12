@@ -26,6 +26,7 @@ import {
   sendProblemReport,
   singleFlight,
   type DescriptionCheck,
+  type FailureReason,
   type SendOutcome,
 } from "./problem-report-client";
 
@@ -35,7 +36,7 @@ export type ProblemReportStep =
   | { kind: "editing" }
   | { kind: "sending" }
   | { kind: "sent"; reference: string }
-  | { kind: "failed"; message: string };
+  | { kind: "failed"; lead: string; message: string };
 
 /** The text under the field for a description that cannot be sent yet. */
 export function checkMessage(check: DescriptionCheck, length: number): string | null {
@@ -46,11 +47,20 @@ export function checkMessage(check: DescriptionCheck, length: number): string | 
   return t.check[check];
 }
 
+/**
+ * Answers after which the report may still have been recorded: these must not
+ * say it was not sent, or the person sends it twice (Grok review, #1967).
+ */
+const MAYBE_RECORDED: ReadonlySet<FailureReason> = new Set(["timeout", "unknown"]);
+
 /** The step a finished send leads to. */
 export function stepAfter(outcome: SendOutcome): ProblemReportStep {
-  return outcome.kind === "sent"
-    ? { kind: "sent", reference: outcome.reference }
-    : { kind: "failed", message: t.failure[outcome.reason] };
+  if (outcome.kind === "sent") return { kind: "sent", reference: outcome.reference };
+  return {
+    kind: "failed",
+    lead: MAYBE_RECORDED.has(outcome.reason) ? t.keptLead : t.failedLead,
+    message: t.failure[outcome.reason],
+  };
 }
 
 export default function ProblemReport({ buttonClassName }: { buttonClassName?: string }) {
@@ -222,7 +232,7 @@ export function ProblemReportDialog({ onClose }: { onClose: () => void }) {
               </div>
               {step.kind === "failed" ? (
                 <p className={styles.error} role="alert">
-                  {t.failedLead} {step.message}
+                  {step.lead} {step.message}
                 </p>
               ) : null}
               {sending ? (

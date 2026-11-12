@@ -1673,6 +1673,7 @@ const en = {
     sentReference: "Report number: {reference}",
     sentNote: "Give the report number if you get in touch about the same matter.",
     failedLead: "The report was not sent. The description is still in the form.",
+    keptLead: "The description is still in the form.",
     retry: "Try again",
     check: {
       empty: "Enter a description of the problem.",

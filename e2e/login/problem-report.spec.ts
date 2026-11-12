@@ -104,6 +104,18 @@ for (const [status, reason] of [
   });
 }
 
+// A 201 without a reference may still be recorded: the alert keeps the
+// description and does not say the report was not sent (Grok review, #1967).
+test("an unconfirmed answer does not claim the report was not sent", async ({ page }) => {
+  await page.route(ENDPOINT, (route) => route.fulfill({ status: 201, json: {} }));
+  const { dialog } = await openDialog(page);
+  const field = dialog.getByRole("textbox", { name: t.description });
+  await field.fill(DESCRIPTION);
+  await dialog.getByRole("button", { name: t.send }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(`${t.keptLead} ${t.failure.unknown}`);
+  await expect(field).toHaveValue(DESCRIPTION);
+});
+
 test("a double click and a resend while sending make one request, then the reference shows", async ({ page }) => {
   const held: Route[] = [];
   const bodies: string[] = [];

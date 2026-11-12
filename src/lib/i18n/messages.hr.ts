@@ -1683,6 +1683,7 @@ export const hr = {
     sentReference: "Broj prijave: {reference}",
     sentNote: "Broj prijave navedite ako se javite istim povodom.",
     failedLead: "Prijava nije poslana. Opis je ostao u obrascu.",
+    keptLead: "Opis je ostao u obrascu.",
     retry: "Pokušaj ponovno",
     check: {
       empty: "Upišite opis problema.",

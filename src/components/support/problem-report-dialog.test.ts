@@ -24,11 +24,32 @@ const TECHNICAL = /\b(?:HTTP|JSON|API|status|server|request|payload|\d{3})\b|pos
 describe("failure messages", () => {
   it.each(REASONS)("%s reads as plain Croatian with a next step", (reason) => {
     const step = stepAfter({ kind: "failed", reason });
-    expect(step).toEqual({ kind: "failed", message: t.failure[reason] });
+    expect(step).toMatchObject({ kind: "failed", message: t.failure[reason] });
     if (step.kind !== "failed") return;
     expect(step.message).not.toMatch(TECHNICAL);
     expect(step.message).toMatch(/pokušajte ponovno|pošaljite/i);
     expect(findForbiddenTerms(step.message)).toEqual([]);
+  });
+
+  // A timeout or an unconfirmed answer may still have been recorded, so the
+  // lead must not say the report was not sent (Grok review, #1967).
+  it.each(["timeout", "unknown"] as const)("%s does not claim the report was not sent", (reason) => {
+    const step = stepAfter({ kind: "failed", reason });
+    expect(step).toMatchObject({ kind: "failed", lead: t.keptLead });
+    if (step.kind !== "failed") return;
+    expect(`${step.lead} ${step.message}`).not.toMatch(/nije poslana/);
+  });
+
+  it.each(["network", "signedOut", "tooLarge", "invalid", "tooMany", "unavailable"] as const)(
+    "%s says the report was not sent",
+    (reason) => {
+      expect(stepAfter({ kind: "failed", reason })).toMatchObject({ lead: t.failedLead });
+      expect(t.failedLead).toMatch(/nije poslana/);
+    },
+  );
+
+  it("shows the lead the step carries", () => {
+    expect(read("src/components/support/ProblemReport.tsx")).toContain("{step.lead} {step.message}");
   });
 
   it("names the hourly limit for 429 and asks to shorten for 413", () => {
