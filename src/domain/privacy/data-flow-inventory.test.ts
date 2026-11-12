@@ -321,9 +321,13 @@ function lexSql(sql: string): { text: string; bodies: { start: number; end: numb
       let depth = 1;
       let j = i + 2;
       while (j < sql.length && depth > 0) {
-        if (sql[j] === "/" && sql[j + 1] === "*") (depth++, (j += 2));
-        else if (sql[j] === "*" && sql[j + 1] === "/") (depth--, (j += 2));
-        else j++;
+        if (sql[j] === "/" && sql[j + 1] === "*") {
+          depth++;
+          j += 2;
+        } else if (sql[j] === "*" && sql[j + 1] === "/") {
+          depth--;
+          j += 2;
+        } else j++;
       }
       if (depth > 0) errors.push("unterminated block comment");
       out += " ";
