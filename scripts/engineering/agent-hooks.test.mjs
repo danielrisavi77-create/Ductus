@@ -593,6 +593,101 @@ test("property: a closing fence closes exactly when only spaces and tabs follow 
   );
 });
 
+// Review cxcr1949 on 96973234 (c.6815325061): a fence opened inside a list
+// item closes when the item ends (CommonMark 5.2 and 4.5), so a heading in
+// column 0 after it is a section again. Classes of the contract on #1836
+// (c.6815417587); each row also runs with CRLF line endings.
+const KEEP = "## Ne smije se izgubiti\n- B-8\n";
+const QUEUED = `# S\n${QUEUE}\n${item(1)}\n`;
+// The Owner queue body runs from line 3 to `to`; the lines after it stay.
+const queueTo = (to, rest = KEEP) => `# S\n${QUEUE}\n\n${note(3, to)}\n\n${rest}`;
+const LIST_FENCES = [
+  // 1. A fence in column 0: a heading inside it is text, as before.
+  ["column 0, closed", `${QUEUED}- a\n~~~\n## X\n~~~\n${KEEP}`, queueTo(7)],
+  ["column 0, unclosed runs to the end", `${QUEUED}- a\n~~~\n${KEEP}`, `# S\n${QUEUE}\n\n${note(3, 7)}\n`],
+  // 2. A fence in a list item closed inside the item: the text in it stays
+  // text, and the item goes on after it.
+  ["item, closed inside", `${QUEUED}- a\n  ~~~\n  ## X\n  ~~~\n${KEEP}`, queueTo(7)],
+  ["item, closed inside, heading after it ends the queue", `${QUEUED}- a\n  ~~~\n  x\n  ~~~\n  ## Y\n${KEEP}`, queueTo(7, `  ## Y\n${KEEP}`)],
+  ["item, closing fence indented four is text", `${QUEUED}- a\n  ~~~\n  x\n      ~~~\n  ## Y\n${KEEP}`, queueTo(8)],
+  ["item, other character does not close", `${QUEUED}- a\n  ~~~\n  x\n  \`\`\`\n  ## Y\n${KEEP}`, queueTo(8)],
+  ["item, shorter fence does not close", `${QUEUED}- a\n  \`\`\`\`\n  x\n  \`\`\`\n  ## Y\n${KEEP}`, queueTo(8)],
+  ["item, blank line inside the fence", `${QUEUED}- a\n  ~~~\n\n  ## X\n  ~~~\n${KEEP}`, queueTo(8)],
+  // 3. A fence in a list item closed by the end of the item (the finding).
+  ["finding, ~~~", `${QUEUED}- primjer\n  ~~~\n  kod\n\n${KEEP}`, queueTo(7)],
+  ["finding, backticks", `${QUEUED}- primjer\n  \`\`\`\n  kod\n\n${KEEP}`, queueTo(7)],
+  ["finding, no blank line", `${QUEUED}- primjer\n  ~~~\n  kod\n${KEEP}`, queueTo(6)],
+  ["fence on the marker line", `${QUEUED}- ~~~\n  kod\n${KEEP}`, queueTo(5)],
+  ["text in column 0 ends the item and its fence", `${QUEUED}- a\n  ~~~\nb\n${KEEP}`, queueTo(6)],
+  ["ordered item", `${QUEUED}1. a\n   ~~~\n   kod\n${KEEP}`, queueTo(6)],
+  ["ordered item, wide marker", `${QUEUED}10) ~~~\n    kod\n${KEEP}`, queueTo(5)],
+  ["empty first line of an item", `${QUEUED}-\n  ~~~\n${KEEP}`, queueTo(5)],
+  ["tab as indent counts to column 4", `${QUEUED}- a\n\t~~~\n\tkod\n${KEEP}`, queueTo(6)],
+  // 4. Nested lists.
+  ["nested, end of both items", `${QUEUED}- a\n  - b\n    ~~~\n    kod\n${KEEP}`, queueTo(7)],
+  ["nested, end of the inner item only", `${QUEUED}- a\n  - b\n    ~~~\n  ## X\n${KEEP}`, queueTo(6, `  ## X\n${KEEP}`)],
+  ["nested on one line", `${QUEUED}- - ~~~\n    kod\n${KEEP}`, queueTo(5)],
+  ["nested ordered in bullet", `${QUEUED}* a\n  1. ~~~\n     kod\n${KEEP}`, queueTo(6)],
+  // 7. Edges: a lazy line keeps the item open; an item that starts with a
+  // blank line ends at the second one; a thematic break is no list; an
+  // ordered list from 2 does not interrupt a paragraph, from 1 it does.
+  ["lazy continuation", `${QUEUED}- a\nb\n  ~~~\n${KEEP}`, queueTo(6)],
+  ["empty item ends at a blank line", `${QUEUED}-\n\n  ~~~\n## X\n~~~\n${KEEP}`, queueTo(8)],
+  ["thematic break", `${QUEUED}* * *\n  ~~~\n## X\n~~~\n${KEEP}`, queueTo(7)],
+  ["ordered from 2 does not interrupt a paragraph", `${QUEUED}\ntext\n2. a\n   ~~~\n## X\n~~~\n${KEEP}`, queueTo(9)],
+  ["ordered from 1 interrupts a paragraph", `${QUEUED}\ntext\n1. a\n   ~~~\n${KEEP}`, queueTo(7)],
+  ["indented code in an item is no fence", `${QUEUED}- a\n      ~~~\n${KEEP}`, queueTo(5)],
+];
+
+test("stateForRole: a fence in a list item closes with the item (cxcr1949 on 96973234)", () => {
+  for (const [name, input, expected] of LIST_FENCES) {
+    assert.equal(stateForRole(input, "worker"), expected, name);
+    const crlf = (text) => text.replaceAll("\n", "\r\n");
+    assert.equal(stateForRole(crlf(input), "control"), crlf(expected), `${name}, CRLF`);
+    assert.ok(stateForRole(input, "worker").endsWith(name.includes("unclosed") ? "\n" : KEEP), name);
+  }
+  // Where the parser cannot place the boundary (a tab right after a list
+  // marker), the text is handed over as it is: nothing is cut at all.
+  for (const input of [`${QUEUED}-\t~~~\n  kod\n${KEEP}`, `${QUEUED}- a\n  1.\t~~~\n${KEEP}`]) {
+    assert.equal(stateForRole(input, "worker"), input, JSON.stringify(input));
+  }
+});
+
+test("property: a heading in column 0 after any list item fence ends the Owner queue", () => {
+  const level = fc.record({ marker: fc.constantFrom("-", "*", "+", "1.", "1)", "9."), gap: fc.integer({ min: 1, max: 4 }) });
+  const text = fc.stringMatching(/^[a-z ]{1,12}$/);
+  fc.assert(
+    fc.property(
+      fc.array(level, { minLength: 1, maxLength: 3 }),
+      fc.constantFrom("`", "~"),
+      fc.integer({ min: 3, max: 5 }),
+      fc.integer({ min: 0, max: 3 }),
+      fc.array(fc.oneof(text, fc.constant("## Owner queue"), fc.constant("")), { maxLength: 3 }),
+      fc.option(fc.record({ indent: fc.integer({ min: 0, max: 3 }), extra: fc.integer({ min: 0, max: 2 }), after: text }), { nil: undefined }),
+      fc.boolean(),
+      (levels, char, length, indent, body, close, crlf) => {
+        const lines = [];
+        let width = 0;
+        for (const { marker, gap } of levels) {
+          lines.push(`${" ".repeat(width)}${marker}${" ".repeat(gap)}item`);
+          width += marker.length + gap;
+        }
+        const fence = char.repeat(length);
+        lines.push(" ".repeat(width + indent) + fence);
+        // Fenced lines stay inside the innermost item.
+        for (const line of body) lines.push(line && " ".repeat(width) + line);
+        if (close) lines.push(" ".repeat(width + close.indent) + char.repeat(length + close.extra), " ".repeat(width) + close.after);
+        const input = `${QUEUED}${lines.join("\n")}\n${KEEP}`;
+        // Independent of the code under test: a line in column 0 that is not
+        // a lazy line ends every list item and so every fence opened in one.
+        const expected = queueTo(3 + lines.length);
+        const eol = (value) => (crlf ? value.replaceAll("\n", "\r\n") : value);
+        assert.equal(stateForRole(eol(input), "worker"), eol(expected));
+      },
+    ),
+  );
+});
+
 test("start entry point leaves the Owner queue out for writer and control profiles only", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-state-"));
   try {
@@ -622,7 +717,8 @@ test("start entry point leaves the Owner queue out for writer and control profil
 
 // A STATE.md built from sections, so the expected output follows from the
 // structure and not from the code under test.
-const arbLine = fc.string({ maxLength: 60 }).filter((l) => !/[\r\n]/.test(l) && !/^\s*(#|```|~~~)/.test(l));
+// A list item can open a fence anywhere in its line, so no line holds one.
+const arbLine = fc.string({ maxLength: 60 }).filter((l) => !/[\r\n]/.test(l) && !/^\s*#/.test(l) && !/```|~~~/.test(l));
 const arbSection = fc.record({
   heading: fc.constantFrom(QUEUE, "## Owner queue", "  ## Owner queue arhiva", "## Engineering", " ## Plan", "# Stanje", "### Sub"),
   body: fc.array(fc.oneof(arbLine, fc.constant(item(9))), { maxLength: 4 }),

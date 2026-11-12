@@ -224,7 +224,6 @@ export function budgetNotice(tokens, role = "unknown") {
 // Setext headings and HTML blocks are not recognised; STATE.md uses neither.
 const OWNER_QUEUE = /^ {0,3}##[ \t]+Owner queue\b/i;
 const SECTION = /^ {0,3}#{1,2}(?:[ \t]|$)/;
-const FENCE = /^ {0,3}(`{3,}|~{3,})([^]*)$/;
 const BLANK = /^[ \t]*$/;
 const CUT_ROLES = new Set(["worker", "control"]);
 
@@ -239,19 +238,105 @@ const ownerQueueNote = (from, to, cr, last = false, lastCr = cr) => [
 const size = (lines) => lines.reduce((sum, line) => sum + line.length + 1, 0);
 const noteRoom = (cr) => size(ownerQueueNote(9_999_999, 9_999_999, cr));
 
+// Fenced blocks inside list items (review cxcr1949 on 96973234): CommonMark
+// closes such a block when its item ends, that is at a non-blank line indented
+// less than the item's content that is not a lazy paragraph line. The tracker
+// keeps the content column of each open item; a tab in indent counts to the
+// next multiple of four columns. A tab right after a list marker splits into
+// columns the tracker does not follow: it throws UNSURE and nothing is cut.
+const UNSURE = Symbol("unsure");
+const MARKER = /^(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/;
+const THEMATIC = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+const OPENS = /^(`{3,}|~{3,})([^]*)$/;
+const BLOCK = /^(?:#{1,6}(?:[ \t]|$)|>)/;
+const isFence = (rest) => {
+  const match = OPENS.exec(rest);
+  return match && !(match[1][0] === "`" && match[2].includes("`")) ? match[1] : null;
+};
+
+// The column of the first character that is not a space or a tab, and that character's index.
+function indentOf(line) {
+  let column = 0;
+  let index = 0;
+  for (; index < line.length && (line[index] === " " || line[index] === "\t"); index += 1) {
+    column = line[index] === "\t" ? column + 4 - (column % 4) : column + 1;
+  }
+  return { column, index };
+}
+
+// Whether `rest`, at `relative` columns past its container, would start a
+// block that ends a paragraph instead of continuing it lazily.
+const startsBlock = (rest, relative) =>
+  relative < 4 && (BLOCK.test(rest) || THEMATIC.test(rest) || isFence(rest) !== null || MARKER.test(rest));
+
 function fenceTracker() {
-  let open = null;
+  const items = []; // content column of each open list item, { width, empty }
+  let fence = null; // { mark, depth, base }
+  let paragraph = false;
+  const base = () => (items.length ? items.at(-1).width : 0);
   return (bare) => {
-    const match = FENCE.exec(bare);
-    if (open) {
-      if (match && match[1][0] === open[0] && match[1].length >= open.length && BLANK.test(match[2])) open = null;
+    if (BLANK.test(bare)) {
+      if (fence) return true;
+      // An item can start with at most one blank line.
+      if (items.length && items.at(-1).empty) items.pop();
+      paragraph = false;
+      return false;
+    }
+    const { column, index } = indentOf(bare);
+    let rest = bare.slice(index);
+    if (items.length && column < base()) {
+      const kept = items.filter((item) => item.width <= column);
+      const lazy = !fence && paragraph && !startsBlock(rest, column - (kept.at(-1)?.width ?? 0));
+      // The items that end close the paragraph in them too.
+      if (!lazy) {
+        items.length = kept.length;
+        paragraph = false;
+      }
+    }
+    if (items.length) items.at(-1).empty = false;
+    if (fence && items.length < fence.depth) {
+      fence = null;
+      paragraph = false;
+    }
+    if (fence) {
+      const match = OPENS.exec(rest);
+      const closes = column - fence.base < 4 && match && match[1][0] === fence.mark[0] && match[1].length >= fence.mark.length && BLANK.test(match[2]);
+      if (closes) fence = null;
       return true;
     }
-    if (match && !(match[1][0] === "`" && match[2].includes("`"))) {
-      open = match[1];
-      return true;
+    let at = column;
+    for (;;) {
+      const relative = at - base();
+      // Indented code, or a paragraph line that goes on: neither opens a block.
+      if (relative >= 4) return false;
+      if (THEMATIC.test(rest)) return (paragraph = false);
+      const mark = isFence(rest);
+      if (mark) {
+        fence = { mark, depth: items.length, base: base() };
+        paragraph = false;
+        return true;
+      }
+      const marker = MARKER.exec(rest);
+      if (!marker) {
+        paragraph = !BLOCK.test(rest) || rest[0] === ">";
+        return false;
+      }
+      const after = rest.slice(marker[0].length);
+      const content = after.replace(/^ +/, "");
+      // Only an item with content, and an ordered one only from 1, interrupts a paragraph.
+      if (paragraph && (BLANK.test(after) || (marker[1] !== undefined && Number(marker[1]) !== 1))) return false;
+      if (after[0] === "\t" || content[0] === "\t") throw UNSURE;
+      const gap = after.length - content.length;
+      if (content === "" || gap > 4) {
+        items.push({ width: at + marker[0].length + 1, empty: content === "" });
+        paragraph = false;
+        return false;
+      }
+      at += marker[0].length + gap;
+      items.push({ width: at, empty: false });
+      paragraph = false;
+      rest = content;
     }
-    return false;
   };
 }
 
@@ -271,15 +356,25 @@ export function stateForRole(text, role) {
     else out.push(...kept);
     body = null;
   };
-  lines.forEach((line, index) => {
+  for (const [index, line] of lines.entries()) {
     const bare = line.replace(/\r$/, "");
-    const section = !fenced(bare) && SECTION.test(bare);
+    let inFence;
+    try {
+      inFence = fenced(bare);
+    } catch (error) {
+      if (error === UNSURE) return text;
+      throw error;
+    }
+    const section = !inFence && SECTION.test(bare);
     const queue = section && OWNER_QUEUE.test(bare);
     if (body && section) flush();
-    if (body) return void body.lines.push(line);
+    if (body) {
+      body.lines.push(line);
+      continue;
+    }
     out.push(line);
     if (queue) body = { from: index + 2, lines: [], cr: line.endsWith("\r") ? "\r" : "" };
-  });
+  }
   if (body) flush(true);
   return out.join("\n") + (ends ? "\n" : "");
 }
