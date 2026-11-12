@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -19,6 +19,20 @@ import { SYNC_STATES } from "@/domain/sync/states";
 const ROOT = join(import.meta.dirname, "..", "..");
 const MIGRATION = readFileSync(join(ROOT, "db/migrations/20261112110000_problem_report.sql"), "utf8");
 const UP = MIGRATION.slice(0, MIGRATION.indexOf("-- migrate:down"));
+
+/** Every `page.tsx` under app/, as the route template Next.js serves it. */
+function appPages(dir = join(ROOT, "app")): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...appPages(path));
+    else if (entry.name === "page.tsx") {
+      const folder = relative(join(ROOT, "app"), dir).split(sep).join("/");
+      found.push(folder === "" ? "/" : `/${folder}`);
+    }
+  }
+  return found.sort();
+}
 
 /** The quoted members of `column ... IN (...)` in the table's CHECK. */
 function checkSet(column: string): string[] {
@@ -61,6 +75,12 @@ describe("DAN-431 problem report: route templates are real pages", () => {
   it.each(PROBLEM_REPORT_ROUTES)("%s has an app page", (route) => {
     const page = route === "/" ? "app/page.tsx" : `app${route}/page.tsx`;
     expect(existsSync(join(ROOT, page))).toBe(true);
+  });
+
+  it("every app page has a route template, so a new page cannot be reported without one", () => {
+    const pages = appPages();
+    expect(pages.length).toBeGreaterThan(20);
+    expect(pages.filter((page) => !(PROBLEM_REPORT_ROUTES as readonly string[]).includes(page))).toEqual([]);
   });
 
   it.each(PROBLEM_REPORT_ROUTES)("%s maps back to itself", (route) => {

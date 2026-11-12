@@ -37,8 +37,9 @@ CREATE TABLE identity.problem_report (
   ),
   route text CHECK (route IN (
     '/', '/nastavnik', '/nastavnik/brz-put', '/nastavnik/kolegiji', '/nastavnik/mentorstva',
-    '/nastavnik/rad/[id]', '/nastavnik/zadatak/[assignmentId]/uredi', '/nastavnik/zadatak/novi',
-    '/prijava', '/rad', '/rad/[assignmentId]/predaja', '/upis', '/upis/kolegij/[courseId]',
+    '/nastavnik/rad/[id]', '/nastavnik/rad/[id]/reprodukcija', '/nastavnik/zadatak/[assignmentId]/uredi',
+    '/nastavnik/zadatak/novi', '/prijava', '/rad', '/rad/[assignmentId]/predaja',
+    '/rad/[assignmentId]/reprodukcija', '/upis', '/upis/kolegij/[courseId]',
     '/ustanova', '/ustanova/kolegiji', '/ustanova/korisnici', '/ustanova/pravila',
     '/zadaci', '/zadaci/kolegiji', '/zadaci/radovi', '/zadatak/[id]'
   )),
