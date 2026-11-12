@@ -180,7 +180,7 @@ describe("inventoryErrors", () => {
 describe(INVENTORY, () => {
   it("agrees with the API routes, paths and DATA-CLASS list on main", () => {
     const classCodes = tableUnder(readFileSync(join(ROOT, CLASSES_DOC), "utf8"), CLASSES_HEADING).map(([c]) => c);
-    expect(classCodes).toHaveLength(30);
+    expect(classCodes).toHaveLength(31);
     const routes = apiRoutes("app/api");
     expect(routes.length).toBeGreaterThan(30);
     const exists = (p: string) => {

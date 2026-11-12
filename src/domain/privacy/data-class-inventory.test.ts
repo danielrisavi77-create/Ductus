@@ -18,6 +18,8 @@ const OPEN = "otvoreno (D-30 PRIJEDLOG, Q-16)";
 // The only periods already decided: sessions 30 days, export 24 h, discarded
 // temporary objects (D-273 MQ08, D-173). Every other class stays OPEN.
 const DECIDED = ["3", "20", "23"];
+// 30 from the DAN-297 inventory, 31 problem reports (DAN-431).
+const CLASS_COUNT = 31;
 
 // The 8 C-21 categories (docs/ARCHITECTURE.md §3, D-271 MQ03).
 const CATEGORIES = [
@@ -117,8 +119,8 @@ function parseInventory(markdown: string): { classes: ClassRow[]; tables: TableR
 function coverageErrors(live: Set<string>, inv: { classes: ClassRow[]; tables: TableRow[] }): string[] {
   const errors: string[] = [];
   const codes = inv.classes.map((c) => c.code);
-  const expected = Array.from({ length: 30 }, (_, i) => String(i + 1));
-  if (codes.join() !== expected.join()) errors.push(`class codes are not 1..30 in order: ${codes.join()}`);
+  const expected = Array.from({ length: CLASS_COUNT }, (_, i) => String(i + 1));
+  if (codes.join() !== expected.join()) errors.push(`class codes are not 1..${CLASS_COUNT} in order: ${codes.join()}`);
   for (const c of inv.classes) {
     if (!CATEGORIES.includes(c.category)) errors.push(`class ${c.code}: unknown category ${c.category}`);
     if (!DECIDED.includes(c.code) && !c.retention.startsWith(OPEN)) {
@@ -156,7 +158,7 @@ function coverageErrors(live: Set<string>, inv: { classes: ClassRow[]; tables: T
 const CLASSES = [
   "| Klasa | Naziv | Kategorija | Svrha | Okidač | Rok | Stanje |",
   "| --- | --- | --- | --- | --- | --- | --- |",
-  ...Array.from({ length: 30 }, (_, i) => {
+  ...Array.from({ length: CLASS_COUNT }, (_, i) => {
     const n = i + 1;
     const rok = DECIDED.includes(String(n)) ? "30 dana" : OPEN;
     return `| ${n} | ${ANCHORS[n] ?? `Klasa ${n}`} | ${CATEGORIES[i % 8]} | s | o | ${rok} | izgrađeno |`;
@@ -203,15 +205,15 @@ describe("coverageErrors", () => {
     ["a stale wildcard", [...ok, "| `z.*` | — | razlog |"], "z.*: not created by any migration on main"],
     ["a table listed twice", [...ok, "| `a.t` | 3 | |"], "a.t: listed twice"],
     ["a table under a wildcard and its own row", [...ok, "| `q.job` | 27 | |"], "q.job: covered by 2 rows (q.*, q.job)"],
-    ["an unknown class", ["| `a.t` | 31 | |", ok[1]], "a.t: unknown class 31"],
+    ["an unknown class", ["| `a.t` | 32 | |", ok[1]], "a.t: unknown class 32"],
     ["no personal data without a reason", ["| `a.t` | — | |", ok[1]], "a.t: no personal data needs a reason"],
   ])("fails on %s", (_case, rows, error) => {
     expect(coverageErrors(live, parseInventory(doc(rows)))).toContain(error);
   });
 
   it.each([
-    ["29 classes", (c: string) => c.replace(/\n\| 30 \|[^\n]*/, ""), "class codes are not 1..30 in order"],
-    ["a duplicate code", (c: string) => c.replace("| 30 |", "| 29 |"), "class codes are not 1..30 in order"],
+    ["30 classes", (c: string) => c.replace(/\n\| 31 \|[^\n]*/, ""), "class codes are not 1..31 in order"],
+    ["a duplicate code", (c: string) => c.replace("| 31 |", "| 30 |"), "class codes are not 1..31 in order"],
     ["a category outside C-21", (c: string) => c.replace("| 2 | Klasa 2 | Sesije |", "| 2 | Klasa 2 | Pogon |"), "class 2: unknown category Pogon"],
     ["an invented retention period", (c: string) => c.replace(`| 2 | Klasa 2 | Sesije | s | o | ${OPEN} |`, "| 2 | Klasa 2 | Sesije | s | o | 5 godina |"), "class 2: retention must start with"],
     ["an empty retention period", (c: string) => c.replace(`| 5 | Klasa 5 | Predaja | s | o | ${OPEN} |`, "| 5 | Klasa 5 | Predaja | s | o |  |"), "class 5: retention must start with"],
