@@ -81,3 +81,9 @@ export function homeHref(role: ShellRole | null): string {
   if (role === "admin") return "/ustanova";
   return "/";
 }
+
+/**
+ * "Kako Ductura radi" (DAN-431, J-02): one static page for every reader, so
+ * the shell links it for everyone, with or without a role.
+ */
+export const HOW_IT_WORKS_HREF = "/kako-radi";
