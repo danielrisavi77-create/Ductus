@@ -8,9 +8,10 @@ import { shellSession } from "@/components/shell/shell-session";
 import AssignmentVersionForm from "@/components/teacher/AssignmentVersionForm";
 import { readCurrentVersion } from "@/components/teacher/assignment-version-read";
 import { teacherPageRead } from "@/components/teacher/teacher-access";
+import WorkLanguageCard from "@/components/teacher/WorkLanguageCard";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { pageActivity } from "@/server/auth/activity";
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { liveSessionToken } from "@/server/auth/ended-mark";
 import { withActor } from "@/server/db";
 
 import styles from "../../novi/page.module.css";
@@ -27,7 +28,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // assignment, a missing one, a mentorship's and a malformed id read alike.
 export default async function AssignmentVersionPage({ params }: { params: Promise<{ assignmentId: string }> }) {
   const { assignmentId } = await params;
-  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const token = liveSessionToken(await cookies());
   pageActivity(token);
   const { access, principal } = await teacherPageRead(token, withActor);
   const screen = teacherPageAccess(access, principal.kind, token);
@@ -51,6 +52,10 @@ export default async function AssignmentVersionPage({ params }: { params: Promis
         )}
         {read?.kind === "notFound" || read?.kind === "signedOut" ? <p role="alert">{n.missing}</p> : null}
         {read?.kind === "unavailable" ? <p role="status">{n.unavailable}</p> : null}
+        {read?.kind === "available" && read.workLanguage ? (
+          <WorkLanguageCard key={`jezik-${read.current.versionNo}`} assignmentId={read.current.assignmentId}
+            versionNo={read.current.versionNo} current={read.workLanguage} />
+        ) : null}
         {read?.kind === "available" ? <AssignmentVersionForm key={read.current.versionNo} current={read.current} /> : null}
         {screen === "unavailable" ? <p role="status">{t.teacher.unavailable}</p> : null}
         {screen === "denied" ? null : <p><Link href="/nastavnik">{t.teacher.backCourses}</Link></p>}

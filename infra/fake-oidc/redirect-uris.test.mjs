@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEFAULT_POST_LOGOUT_REDIRECT_URIS, DEFAULT_REDIRECT_URIS, redirectUriList } from "./redirect-uris.mjs";
+import { DEFAULT_POST_LOGOUT_REDIRECT_URIS, DEFAULT_REDIRECT_URIS, loopbackIssuer, redirectUriList } from "./redirect-uris.mjs";
 
 const FALLBACK = ["http://localhost:3000/x"];
 
@@ -27,6 +27,12 @@ const REFUSED = [
   ["a file scheme", "file:///etc/passwd"],
   ["one bad entry among good ones", "https://localhost:3000/a,nonsense"],
   ["only separators", " , ,"],
+  // F-019: only this machine. Hosts are invented.
+  ["another host", "https://ductus.example.test/api/auth/callback"],
+  ["a host that starts with a loopback name", "http://localhost.example.test:3000/a"],
+  ["a host that starts with a loopback address", "http://127.0.0.1.example.test:3000/a"],
+  ["another loopback-looking address", "http://127.0.0.2:3000/a"],
+  ["a foreign entry among local ones", "https://localhost:3000/a,https://ductus.example.test/a"],
 ];
 for (const [name, value] of REFUSED) {
   test(`redirect list refuses ${name}`, () => assert.throws(() => redirectUriList(value, FALLBACK), /redirect/i));
@@ -39,4 +45,14 @@ test("the defaults register the callback and the way back for http and https, on
     "https://127.0.0.1:3000/api/auth/callback",
   ]);
   assert.deepEqual(DEFAULT_POST_LOGOUT_REDIRECT_URIS, ["http://localhost:3000/", "https://localhost:3000/", "https://127.0.0.1:3000/"]);
+});
+
+test("the issuer defaults to the local one and accepts only this machine", () => {
+  assert.equal(loopbackIssuer(undefined, "http://localhost:8080"), "http://localhost:8080");
+  for (const issuer of ["http://localhost:8090", "https://127.0.0.1:8090/oidc", "http://[::1]:8090"]) {
+    assert.equal(loopbackIssuer(issuer, "http://localhost:8080"), issuer);
+  }
+  for (const issuer of ["https://idp.example.test", "http://localhost.example.test:8090", "http://127.0.0.2:8090", "ftp://localhost", "localhost:8090", ""]) {
+    assert.throws(() => loopbackIssuer(issuer, "http://localhost:8080"), /ISSUER/, issuer);
+  }
 });

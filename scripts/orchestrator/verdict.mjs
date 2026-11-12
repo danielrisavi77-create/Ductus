@@ -4,6 +4,7 @@
 // Print only: stdout is exactly the body, the reviewer posts it through its runtime's App.
 // Reads are three GETs of this repository, each checked by readOnlyCall before it runs.
 // Exit: 0 printed, 1 refused (author, stale head, bad report), 2 usage or read error.
+import "./help.mjs";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";

@@ -30,8 +30,8 @@ LANGUAGE sql STABLE AS $$ SELECT count(*) FROM audit.access_log $$;
 SELECT has_schema('audit');
 SELECT bag_eq(
   $$ SELECT relname::text FROM pg_class WHERE relnamespace = 'audit'::regnamespace AND relkind IN ('r', 'p') $$,
-  $$ VALUES ('access_log'), ('enrollment_code_event'), ('course_member_event'), ('teacher_role_event'), ('mentorship_event'), ('faculty_rule_event') $$,
-  'the audit schema holds the access log, the enrollment code events (082), since DAN-338 (083) the membership events, since DAN-497 (099) the teacher role events, since DAN-515 (104) the mentorship request events and, since DAN-315 (105), the faculty rule events');
+  $$ VALUES ('access_log'), ('enrollment_code_event'), ('course_member_event'), ('teacher_role_event'), ('mentorship_event'), ('faculty_rule_event'), ('course_handover') $$,
+  'the audit schema holds the access log, the enrollment code events (082), since DAN-338 (083) the membership events, since DAN-497 (099) the teacher role events, since DAN-515 (104) the mentorship request events, since DAN-315 (105) the faculty rule events and, since DAN-351 (123), the course handovers');
 SELECT row_eq(
   $$ SELECT relowner::regrole::text, relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'audit.access_log'::regclass $$,
   ROW('ductus_identity'::text, true, true), 'the identity role owns access_log and RLS is enabled and forced');

@@ -1,0 +1,836 @@
+{
+  "machine": {
+    "label": "local",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 4,
+    "memoryGb": 16,
+    "platform": "linux",
+    "node": "v24.21.0",
+    "checkpointSpacings": [
+      {
+        "unit": "segments",
+        "every": 100
+      },
+      {
+        "unit": "segments",
+        "every": 500
+      },
+      {
+        "unit": "segments",
+        "every": 2000
+      },
+      {
+        "unit": "steps",
+        "every": 500
+      },
+      {
+        "unit": "steps",
+        "every": 2000
+      },
+      {
+        "unit": "steps",
+        "every": 8000
+      }
+    ],
+    "date": "2026-11-11T10:45:56.383Z"
+  },
+  "results": [
+    {
+      "words": 3000,
+      "granularity": "char",
+      "gen": {
+        "words": 3000,
+        "blocks": 27,
+        "segments": 524,
+        "events": 553,
+        "steps": 18157,
+        "transactions": 18135,
+        "writingMs": 3811565,
+        "genMs": 2616.8,
+        "finalDocKb": 28,
+        "largestSegmentKb": 18,
+        "segmentLogMb": 2.2,
+        "segmentLogGzipMb": 0.2,
+        "commitDocumentsMb": 7.6,
+        "peakRssMb": 220.9
+      },
+      "replay": {
+        "mode": "replay",
+        "segments": 524,
+        "events": 553,
+        "steps": 18157,
+        "loadMs": 562.2,
+        "replayMs": 1004.7,
+        "stepsPerSec": 18072,
+        "peakRssMb": 149.5
+      },
+      "checkpoints": [
+        {
+          "unit": "segments",
+          "every": 100,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 100,
+            "checkpoints": 5,
+            "firstCheckpointAt": 100,
+            "lastCheckpointAt": 500,
+            "totalMs": 1376,
+            "checkpointMs": 2,
+            "lastCheckpointKb": 27,
+            "lastCheckpointGzipKb": 8,
+            "volumeRawMb": 0.1,
+            "volumeGzipMb": 0,
+            "peakRssMb": 201.9
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 500,
+            "segmentsReplayed": 24,
+            "stepsReplayed": 768,
+            "eventsReplayed": 26,
+            "medianMs": 76.7,
+            "maxMs": 97.4,
+            "peakRssMb": 203.4
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 500,
+            "checkpoints": 1,
+            "firstCheckpointAt": 500,
+            "lastCheckpointAt": 500,
+            "totalMs": 1395.5,
+            "checkpointMs": 1,
+            "lastCheckpointKb": 27,
+            "lastCheckpointGzipKb": 8,
+            "volumeRawMb": 0,
+            "volumeGzipMb": 0,
+            "peakRssMb": 202.9
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 500,
+            "segmentsReplayed": 24,
+            "stepsReplayed": 768,
+            "eventsReplayed": 26,
+            "medianMs": 70.1,
+            "maxMs": 133.6,
+            "peakRssMb": 201.5
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 2000,
+            "checkpoints": 0,
+            "firstCheckpointAt": null,
+            "lastCheckpointAt": null,
+            "totalMs": 1473.5,
+            "checkpointMs": 0,
+            "lastCheckpointKb": 0,
+            "lastCheckpointGzipKb": 0,
+            "volumeRawMb": 0,
+            "volumeGzipMb": 0,
+            "peakRssMb": 202.3
+          },
+          "bounded": null
+        },
+        {
+          "unit": "steps",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 500,
+            "checkpoints": 34,
+            "firstCheckpointAt": 11,
+            "lastCheckpointAt": 520,
+            "totalMs": 1527.1,
+            "checkpointMs": 13,
+            "lastCheckpointKb": 28,
+            "lastCheckpointGzipKb": 8,
+            "volumeRawMb": 0.5,
+            "volumeGzipMb": 0.2,
+            "peakRssMb": 204.1
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 520,
+            "segmentsReplayed": 4,
+            "stepsReplayed": 98,
+            "eventsReplayed": 4,
+            "medianMs": 12,
+            "maxMs": 30,
+            "peakRssMb": 123
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 2000,
+            "checkpoints": 8,
+            "firstCheckpointAt": 55,
+            "lastCheckpointAt": 470,
+            "totalMs": 1588.2,
+            "checkpointMs": 3,
+            "lastCheckpointKb": 25,
+            "lastCheckpointGzipKb": 8,
+            "volumeRawMb": 0.1,
+            "volumeGzipMb": 0,
+            "peakRssMb": 203.2
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 470,
+            "segmentsReplayed": 54,
+            "stepsReplayed": 1912,
+            "eventsReplayed": 57,
+            "medianMs": 134.3,
+            "maxMs": 172.4,
+            "peakRssMb": 223.1
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 8000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 8000,
+            "checkpoints": 2,
+            "firstCheckpointAt": 216,
+            "lastCheckpointAt": 462,
+            "totalMs": 1453.5,
+            "checkpointMs": 1,
+            "lastCheckpointKb": 25,
+            "lastCheckpointGzipKb": 8,
+            "volumeRawMb": 0,
+            "volumeGzipMb": 0,
+            "peakRssMb": 202.1
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 462,
+            "segmentsReplayed": 62,
+            "stepsReplayed": 2108,
+            "eventsReplayed": 65,
+            "medianMs": 168.8,
+            "maxMs": 226.7,
+            "peakRssMb": 233.4
+          }
+        }
+      ]
+    },
+    {
+      "words": 3000,
+      "granularity": "word",
+      "gen": {
+        "words": 3000,
+        "blocks": 23,
+        "segments": 1413,
+        "events": 1430,
+        "steps": 2952,
+        "transactions": 2930,
+        "writingMs": 1893603,
+        "genMs": 2585.2,
+        "finalDocKb": 26,
+        "largestSegmentKb": 2,
+        "segmentLogMb": 1.7,
+        "segmentLogGzipMb": 0.2,
+        "commitDocumentsMb": 18.7,
+        "peakRssMb": 106
+      },
+      "replay": {
+        "mode": "replay",
+        "segments": 1413,
+        "events": 1430,
+        "steps": 2952,
+        "loadMs": 346.1,
+        "replayMs": 1158.2,
+        "stepsPerSec": 2549,
+        "peakRssMb": 104.7
+      },
+      "checkpoints": [
+        {
+          "unit": "segments",
+          "every": 100,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 100,
+            "checkpoints": 14,
+            "firstCheckpointAt": 100,
+            "lastCheckpointAt": 1400,
+            "totalMs": 2377.2,
+            "checkpointMs": 6,
+            "lastCheckpointKb": 26,
+            "lastCheckpointGzipKb": 8,
+            "volumeRawMb": 0.2,
+            "volumeGzipMb": 0.1,
+            "peakRssMb": 205.1
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 1400,
+            "segmentsReplayed": 13,
+            "stepsReplayed": 17,
+            "eventsReplayed": 13,
+            "medianMs": 15.2,
+            "maxMs": 46.7,
+            "peakRssMb": 105.9
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 500,
+            "checkpoints": 2,
+            "firstCheckpointAt": 500,
+            "lastCheckpointAt": 1000,
+            "totalMs": 2489.3,
+            "checkpointMs": 1,
+            "lastCheckpointKb": 19,
+            "lastCheckpointGzipKb": 6,
+            "volumeRawMb": 0,
+            "volumeGzipMb": 0,
+            "peakRssMb": 197.2
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 1000,
+            "segmentsReplayed": 413,
+            "stepsReplayed": 874,
+            "eventsReplayed": 414,
+            "medianMs": 389.9,
+            "maxMs": 524.6,
+            "peakRssMb": 190
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 2000,
+            "checkpoints": 0,
+            "firstCheckpointAt": null,
+            "lastCheckpointAt": null,
+            "totalMs": 2130.8,
+            "checkpointMs": 0,
+            "lastCheckpointKb": 0,
+            "lastCheckpointGzipKb": 0,
+            "volumeRawMb": 0,
+            "volumeGzipMb": 0,
+            "peakRssMb": 197.7
+          },
+          "bounded": null
+        },
+        {
+          "unit": "steps",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 500,
+            "checkpoints": 5,
+            "firstCheckpointAt": 241,
+            "lastCheckpointAt": 1200,
+            "totalMs": 2124.7,
+            "checkpointMs": 2,
+            "lastCheckpointKb": 23,
+            "lastCheckpointGzipKb": 7,
+            "volumeRawMb": 0.1,
+            "volumeGzipMb": 0,
+            "peakRssMb": 197.7
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 1200,
+            "segmentsReplayed": 213,
+            "stepsReplayed": 444,
+            "eventsReplayed": 213,
+            "medianMs": 202.3,
+            "maxMs": 234,
+            "peakRssMb": 187.2
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 2000,
+            "checkpoints": 1,
+            "firstCheckpointAt": 966,
+            "lastCheckpointAt": 966,
+            "totalMs": 2143.3,
+            "checkpointMs": 1,
+            "lastCheckpointKb": 18,
+            "lastCheckpointGzipKb": 6,
+            "volumeRawMb": 0,
+            "volumeGzipMb": 0,
+            "peakRssMb": 199.4
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 966,
+            "segmentsReplayed": 447,
+            "stepsReplayed": 952,
+            "eventsReplayed": 451,
+            "medianMs": 398.5,
+            "maxMs": 497.6,
+            "peakRssMb": 192
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 8000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 8000,
+            "checkpoints": 0,
+            "firstCheckpointAt": null,
+            "lastCheckpointAt": null,
+            "totalMs": 2226.7,
+            "checkpointMs": 0,
+            "lastCheckpointKb": 0,
+            "lastCheckpointGzipKb": 0,
+            "volumeRawMb": 0,
+            "volumeGzipMb": 0,
+            "peakRssMb": 199.3
+          },
+          "bounded": null
+        }
+      ]
+    },
+    {
+      "words": 15000,
+      "granularity": "char",
+      "gen": {
+        "words": 15000,
+        "blocks": 128,
+        "segments": 2533,
+        "events": 2653,
+        "steps": 92597,
+        "transactions": 92483,
+        "writingMs": 19201417,
+        "genMs": 30518,
+        "finalDocKb": 135,
+        "largestSegmentKb": 20,
+        "segmentLogMb": 11.1,
+        "segmentLogGzipMb": 1.1,
+        "commitDocumentsMb": 167.6,
+        "peakRssMb": 279.8
+      },
+      "replay": {
+        "mode": "replay",
+        "segments": 2533,
+        "events": 2653,
+        "steps": 92597,
+        "loadMs": 2886.1,
+        "replayMs": 14094.7,
+        "stepsPerSec": 6570,
+        "peakRssMb": 376.7
+      },
+      "checkpoints": [
+        {
+          "unit": "segments",
+          "every": 100,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 100,
+            "checkpoints": 25,
+            "firstCheckpointAt": 100,
+            "lastCheckpointAt": 2500,
+            "totalMs": 21868.9,
+            "checkpointMs": 45,
+            "lastCheckpointKb": 133,
+            "lastCheckpointGzipKb": 38,
+            "volumeRawMb": 1.7,
+            "volumeGzipMb": 0.5,
+            "peakRssMb": 389.7
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 2500,
+            "segmentsReplayed": 33,
+            "stepsReplayed": 1302,
+            "eventsReplayed": 34,
+            "medianMs": 324.4,
+            "maxMs": 460.7,
+            "peakRssMb": 321.9
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 500,
+            "checkpoints": 5,
+            "firstCheckpointAt": 500,
+            "lastCheckpointAt": 2500,
+            "totalMs": 23185.9,
+            "checkpointMs": 11,
+            "lastCheckpointKb": 133,
+            "lastCheckpointGzipKb": 38,
+            "volumeRawMb": 0.4,
+            "volumeGzipMb": 0.1,
+            "peakRssMb": 386.7
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 2500,
+            "segmentsReplayed": 33,
+            "stepsReplayed": 1302,
+            "eventsReplayed": 34,
+            "medianMs": 348.4,
+            "maxMs": 511.6,
+            "peakRssMb": 293.7
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 2000,
+            "checkpoints": 1,
+            "firstCheckpointAt": 2000,
+            "lastCheckpointAt": 2000,
+            "totalMs": 23486.6,
+            "checkpointMs": 4,
+            "lastCheckpointKb": 107,
+            "lastCheckpointGzipKb": 31,
+            "volumeRawMb": 0.1,
+            "volumeGzipMb": 0,
+            "peakRssMb": 379
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 2000,
+            "segmentsReplayed": 533,
+            "stepsReplayed": 19651,
+            "eventsReplayed": 560,
+            "medianMs": 4826.5,
+            "maxMs": 5353.8,
+            "peakRssMb": 390.1
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 500,
+            "checkpoints": 173,
+            "firstCheckpointAt": 11,
+            "lastCheckpointAt": 2522,
+            "totalMs": 23509.5,
+            "checkpointMs": 297,
+            "lastCheckpointKb": 135,
+            "lastCheckpointGzipKb": 39,
+            "volumeRawMb": 11.6,
+            "volumeGzipMb": 3.3,
+            "peakRssMb": 400.4
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 2522,
+            "segmentsReplayed": 11,
+            "stepsReplayed": 409,
+            "eventsReplayed": 11,
+            "medianMs": 113.1,
+            "maxMs": 170.9,
+            "peakRssMb": 288.2
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 2000,
+            "checkpoints": 45,
+            "firstCheckpointAt": 55,
+            "lastCheckpointAt": 2509,
+            "totalMs": 21491.1,
+            "checkpointMs": 75,
+            "lastCheckpointKb": 134,
+            "lastCheckpointGzipKb": 38,
+            "volumeRawMb": 3.1,
+            "volumeGzipMb": 0.9,
+            "peakRssMb": 381.3
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 2509,
+            "segmentsReplayed": 24,
+            "stepsReplayed": 913,
+            "eventsReplayed": 25,
+            "medianMs": 238.3,
+            "maxMs": 360.7,
+            "peakRssMb": 307.1
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 8000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 8000,
+            "checkpoints": 11,
+            "firstCheckpointAt": 216,
+            "lastCheckpointAt": 2434,
+            "totalMs": 21565.1,
+            "checkpointMs": 22,
+            "lastCheckpointKb": 130,
+            "lastCheckpointGzipKb": 37,
+            "volumeRawMb": 0.8,
+            "volumeGzipMb": 0.2,
+            "peakRssMb": 378.7
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 2434,
+            "segmentsReplayed": 99,
+            "stepsReplayed": 4199,
+            "eventsReplayed": 101,
+            "medianMs": 1025.9,
+            "maxMs": 1161.2,
+            "peakRssMb": 365.9
+          }
+        }
+      ]
+    },
+    {
+      "words": 15000,
+      "granularity": "word",
+      "gen": {
+        "words": 15000,
+        "blocks": 112,
+        "segments": 7335,
+        "events": 7411,
+        "steps": 15136,
+        "transactions": 15029,
+        "writingMs": 9729108,
+        "genMs": 39092.1,
+        "finalDocKb": 129,
+        "largestSegmentKb": 2,
+        "segmentLogMb": 8.6,
+        "segmentLogGzipMb": 1,
+        "commitDocumentsMb": 465,
+        "peakRssMb": 219.2
+      },
+      "replay": {
+        "mode": "replay",
+        "segments": 7335,
+        "events": 7411,
+        "steps": 15136,
+        "loadMs": 1779,
+        "replayMs": 17019.1,
+        "stepsPerSec": 889,
+        "peakRssMb": 272.4
+      },
+      "checkpoints": [
+        {
+          "unit": "segments",
+          "every": 100,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 100,
+            "checkpoints": 73,
+            "firstCheckpointAt": 100,
+            "lastCheckpointAt": 7300,
+            "totalMs": 36279.3,
+            "checkpointMs": 105,
+            "lastCheckpointKb": 129,
+            "lastCheckpointGzipKb": 38,
+            "volumeRawMb": 4.7,
+            "volumeGzipMb": 1.4,
+            "peakRssMb": 319.2
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 7300,
+            "segmentsReplayed": 35,
+            "stepsReplayed": 78,
+            "eventsReplayed": 35,
+            "medianMs": 190.3,
+            "maxMs": 238.7,
+            "peakRssMb": 246.7
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 500,
+            "checkpoints": 14,
+            "firstCheckpointAt": 500,
+            "lastCheckpointAt": 7000,
+            "totalMs": 36192,
+            "checkpointMs": 21,
+            "lastCheckpointKb": 124,
+            "lastCheckpointGzipKb": 37,
+            "volumeRawMb": 0.9,
+            "volumeGzipMb": 0.3,
+            "peakRssMb": 316.3
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 7000,
+            "segmentsReplayed": 335,
+            "stepsReplayed": 669,
+            "eventsReplayed": 335,
+            "medianMs": 1354.9,
+            "maxMs": 1519.2,
+            "peakRssMb": 262.6
+          }
+        },
+        {
+          "unit": "segments",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "segments",
+            "checkpointEvery": 2000,
+            "checkpoints": 3,
+            "firstCheckpointAt": 2000,
+            "lastCheckpointAt": 6000,
+            "totalMs": 36286.9,
+            "checkpointMs": 5,
+            "lastCheckpointKb": 105,
+            "lastCheckpointGzipKb": 31,
+            "volumeRawMb": 0.2,
+            "volumeGzipMb": 0.1,
+            "peakRssMb": 310.5
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 6000,
+            "segmentsReplayed": 1335,
+            "stepsReplayed": 2732,
+            "eventsReplayed": 1356,
+            "medianMs": 5370.4,
+            "maxMs": 5695.5,
+            "peakRssMb": 257.3
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 500,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 500,
+            "checkpoints": 30,
+            "firstCheckpointAt": 241,
+            "lastCheckpointAt": 7294,
+            "totalMs": 38285.4,
+            "checkpointMs": 52,
+            "lastCheckpointKb": 129,
+            "lastCheckpointGzipKb": 38,
+            "volumeRawMb": 1.9,
+            "volumeGzipMb": 0.6,
+            "peakRssMb": 306.4
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 7294,
+            "segmentsReplayed": 41,
+            "stepsReplayed": 89,
+            "eventsReplayed": 41,
+            "medianMs": 188.5,
+            "maxMs": 272.6,
+            "peakRssMb": 244.3
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 2000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 2000,
+            "checkpoints": 7,
+            "firstCheckpointAt": 966,
+            "lastCheckpointAt": 6765,
+            "totalMs": 36150.5,
+            "checkpointMs": 11,
+            "lastCheckpointKb": 120,
+            "lastCheckpointGzipKb": 35,
+            "volumeRawMb": 0.5,
+            "volumeGzipMb": 0.1,
+            "peakRssMb": 307.7
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 6765,
+            "segmentsReplayed": 570,
+            "stepsReplayed": 1132,
+            "eventsReplayed": 575,
+            "medianMs": 2439.7,
+            "maxMs": 2937.6,
+            "peakRssMb": 278.3
+          }
+        },
+        {
+          "unit": "steps",
+          "every": 8000,
+          "checkpoint": {
+            "mode": "checkpoint",
+            "checkpointUnit": "steps",
+            "checkpointEvery": 8000,
+            "checkpoints": 1,
+            "firstCheckpointAt": 3846,
+            "lastCheckpointAt": 3846,
+            "totalMs": 36543.8,
+            "checkpointMs": 3,
+            "lastCheckpointKb": 68,
+            "lastCheckpointGzipKb": 21,
+            "volumeRawMb": 0.1,
+            "volumeGzipMb": 0,
+            "peakRssMb": 306.8
+          },
+          "bounded": {
+            "mode": "bounded",
+            "resumedAt": 3846,
+            "segmentsReplayed": 3489,
+            "stepsReplayed": 7134,
+            "eventsReplayed": 3527,
+            "medianMs": 12021.9,
+            "maxMs": 12670.7,
+            "peakRssMb": 261.2
+          }
+        }
+      ]
+    }
+  ]
+}

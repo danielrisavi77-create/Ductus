@@ -5,7 +5,10 @@
   "description": "B0.2: ProseMirror reconstruction benchmark in Node (time, memory, checkpoint volume)",
   "scripts": {
     "bench": "node run.mjs",
-    "test": "node --test"
+    "test": "node --test spike.test.mjs",
+    "build:real": "node real/build.mjs",
+    "bench:real": "node real/run.mjs",
+    "test:real": "node real/build.mjs && node --test real/real.test.mjs"
   },
   "engines": {
     "node": ">=22"

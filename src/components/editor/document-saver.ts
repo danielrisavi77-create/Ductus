@@ -17,7 +17,7 @@ import {
 import { EvidenceSession, type EvidenceSnapshot } from "./evidence-session";
 
 /** A snapshot of either saver; only the evidence session ever sets `closedBy`. */
-export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused" | "submitted" | "unconfirmed">>;
+export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused" | "submitted" | "stopped" | "unconfirmed">>;
 
 /**
  * Whether the sheet may hold changes the server has not confirmed (DAN-314).
@@ -39,14 +39,54 @@ export function submittedOf(snapshot: DocumentSnapshot | null): boolean {
 
 /**
  * The notice of the evidence session, if any (3d-2c2 §3): the server's work
- * differs, or it refused the last step for good.
+ * differs, or it refused the last step for good, or the recorder stopped and
+ * what follows stays on this device (DAN-699). A stopped recorder whose local
+ * save also failed gives no notice: the failure's own text says the text is
+ * not kept (Codex #1901 c.4533816077). The stop notice shows while the newest
+ * change is still being saved locally, so its text names no finished save
+ * (review #1901 c.6786923958); `stoppedSaved` says when that save is done.
  */
-export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | null {
+export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | "stopped" | null {
   // Only the evidence session sets `closedBy`: the local saver's own
   // RECOVERY_REQUIRED is the unreadable local record, not the server's work.
   if (!snapshot || snapshot.closedBy === undefined) return null;
   if (READ_ONLY_STATES.includes(snapshot.state) && snapshot.closedBy !== "submission") return "conflict";
+  // A stopped recorder comes before a refused row: a reload resumes nothing
+  // after it (#1901, review bot c.6786590285).
+  if (snapshot.stopped) return snapshot.failure ? null : "stopped";
   return snapshot.refused ? "refused" : null;
+}
+
+/** States in which the newest change is already in the local journal. */
+const LOCALLY_SAVED: readonly SyncState[] = ["LOCAL_DURABLE", "SYNCING", "SYNCED"];
+
+/**
+ * Whether the stop notice may add that the text is saved on the device: only
+ * once the local save of the newest change has finished, never while it is
+ * typed (EDITING) or still being written (SAVING_LOCAL) (review #1901
+ * c.6786923958, orchestrator c.6786961844).
+ */
+export function stoppedSaved(snapshot: DocumentSnapshot | null): boolean {
+  return evidenceNotice(snapshot) === "stopped" && snapshot !== null && LOCALLY_SAVED.includes(snapshot.state);
+}
+
+/** States in which this tab is typing or writing the newest change. */
+const WRITING: readonly SyncState[] = ["EDITING", "SAVING_LOCAL"];
+
+/**
+ * What the polite save region of the status bar may say (attack 14): `typing`
+ * when a change is typed or written in this tab now, `saved` once it is on
+ * the device. A stopped recorder keeps the chip at ERROR, so its snapshot
+ * says both, and the saved line is the stop notice's (QA #1901 c.6787896540).
+ * `snapshot` is null when it does not speak for the sheet.
+ */
+export function saveAnnouncement(
+  chip: SyncState | "blocked" | null, snapshot: DocumentSnapshot | null,
+): { readonly typing: boolean; readonly saved: "durable" | "stoppedSaved" | null } {
+  const stopped = evidenceNotice(snapshot) === "stopped" && snapshot !== null;
+  const typing = (chip === "EDITING" || chip === "SAVING_LOCAL") || (stopped && WRITING.includes(snapshot.state));
+  const saved = chip === "LOCAL_DURABLE" ? "durable" : stoppedSaved(snapshot) ? "stoppedSaved" : null;
+  return { typing, saved };
 }
 
 /**

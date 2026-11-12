@@ -1,6 +1,7 @@
 // Print the Owner-Override comment for each PR's current head, for Daniel to
 // post himself. Read-only: an agent never posts an override (self-approval).
 // Usage: node override-block.mjs <pr...> --reason "<concrete reason>"
+import "./help.mjs";
 import { ghJson, repoId, toPr } from "./gh.mjs";
 import { headOrigin, overrideOutput, parseOverrideArgs } from "./orchestrator-core.mjs";
 

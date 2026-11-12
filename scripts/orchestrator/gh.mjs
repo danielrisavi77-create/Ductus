@@ -42,6 +42,8 @@ export async function ghList(path, exec = sh, { key } = {}) {
 }
 
 export const prComments = (n) => ghList(`repos/{owner}/{repo}/issues/${n}/comments?per_page=100`);
+// F-013: base change events, from the issue events endpoint the gate reads.
+export const prEvents = (n) => ghList(`repos/{owner}/{repo}/issues/${n}/events?per_page=100`);
 
 const FILES_CAP = 3000; // GitHub lists at most 3000 files of a pull request
 

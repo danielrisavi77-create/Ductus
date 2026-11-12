@@ -17,7 +17,7 @@ import { SYNC_STATES } from "@/domain/sync/states";
 // DAN-431: the migration's CHECKs and the domain module are one contract; a
 // value one accepts and the other refuses is a report lost or a class widened.
 const ROOT = join(import.meta.dirname, "..", "..");
-const MIGRATION = readFileSync(join(ROOT, "db/migrations/20261111130000_problem_report.sql"), "utf8");
+const MIGRATION = readFileSync(join(ROOT, "db/migrations/20261112110000_problem_report.sql"), "utf8");
 const UP = MIGRATION.slice(0, MIGRATION.indexOf("-- migrate:down"));
 
 /** The quoted members of `column ... IN (...)` in the table's CHECK. */

@@ -68,7 +68,8 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, evidenceNotice, snapshotSpeaks, submittedOf, unconfirmedOf, writingClosed, type DocumentSaver, type DocumentSnapshot,
+  createDocumentSaver, evidenceNotice, saveAnnouncement, snapshotSpeaks, stoppedSaved, submittedOf, unconfirmedOf, writingClosed, type DocumentSaver,
+  type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
@@ -775,6 +776,7 @@ function showsSaverState({ phase, stickyLoad }: LocalDocumentValue): boolean {
 const EVIDENCE_TEXT = {
   conflict: t.editor.evidenceConflict,
   refused: t.editor.sendRefused,
+  stopped: t.editor.sendStopped,
 } as const;
 
 function exportText(editor: Editor): void {
@@ -812,6 +814,11 @@ export function LocalEditor({ lang = null }: { lang?: WorkLanguage | null } = {}
         {alert ? <p>{alert}</p> : null}
         {phase === "signed-out" ? <SignInAgain /> : null}
       </div>
+      {/* Not live: inside the alert it would be read out again at every pause
+          in typing. The status region by the chip already says the save. */}
+      {notice === "stopped" && stoppedSaved(value.snapshot) ? (
+        <p className="editor-notice">{t.editor.sendStoppedSaved}</p>
+      ) : null}
       <div className="editor-notice" role="status">
         {phase === "blocked" ? <p>{t.editor.blockedHint}</p>
           : phase === "ready" && value.snapshot?.closedBy === "submission" ? <p>{t.editor.submittedReadOnly}</p>
@@ -850,7 +857,9 @@ function chipOf(value: LocalDocumentValue): LocalChip | null {
     blocked: value.phase === "blocked",
     // A sticky load says its own state: CONFLICT stays "Sukob" after a reload.
     recoveryRequired: (value.phase === "recovery" && !value.stickyLoad) || failure === "corrupt",
-    failed: failure !== null,
+    // DAN-699: a stopped recorder never shows "Spremljeno na uređaju" as if
+    // all were well; its notice says what stays on the device.
+    failed: failure !== null || (showsSaverState(value) && evidenceNotice(value.snapshot) === "stopped"),
     saverState: showsSaverState(value) ? value.snapshot?.state ?? null : null,
   });
 }
@@ -865,9 +874,11 @@ function chipOf(value: LocalDocumentValue): LocalChip | null {
  * the sheet, a blocked tab by its status notice.
  */
 export function LocalSaveChip() {
-  const chip = chipOf(useLocalDocument());
+  const value = useLocalDocument();
+  const chip = chipOf(value);
+  const said = saveAnnouncement(chip?.state ?? null, showsSaverState(value) ? value.snapshot : null);
   const [edited, setEdited] = useState(false);
-  if (!edited && (chip?.state === "EDITING" || chip?.state === "SAVING_LOCAL")) setEdited(true);
+  if (!edited && said.typing) setEdited(true);
   return (
     <>
       {chip ? (
@@ -878,7 +889,7 @@ export function LocalSaveChip() {
         </span>
       ) : null}
       <span className="visually-hidden" role="status">
-        {edited && chip?.state === "LOCAL_DURABLE" ? chip.text : null}
+        {!edited ? null : said.saved === "durable" ? chip?.text : said.saved === "stoppedSaved" ? t.editor.sendStoppedSaved : null}
       </span>
     </>
   );

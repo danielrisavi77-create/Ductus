@@ -53,8 +53,22 @@ Hashevi lanca i čvorovi Merkle stabla ne brišu se (ne sadrže sadržaj; ARCHIT
 | Sigurnosni zapisi poslužitelja (IP, podaci o uređaju) | Smiju postojati samo odvojeno od evidencije (PRODUCT §9); planirano | Rok nije predložen `[ODLUKA]` |
 | Praćenje grešaka bez tijela zahtjeva; gumb "Prijavi problem" (stanje spremanja i verzija, bez sadržaja; D-69) | Planirano; GlitchTip ili Sentry EU nije odabran | Rok nije predložen |
 | E-pošta obavijesti (nastavniku o novoj reviziji) | Planirano (Scaleway TEM); nije jasno odakle adresa | Rok nije predložen `[ODLUKA]` |
-| Kopije: PITR 3 dana, dnevni šifrirani dump, dnevna replika bucketa kod drugog dobavljača | Planirano (BACKEND §4.7) | "Zapisan je rok po vrsti kopije"; brisanje je potpuno tek kad istekne najdulji |
+| Kopije: PITR 3 dana, dnevni šifrirani dump, dnevna replika bucketa kod drugog dobavljača | Planirano (BACKEND §4.7); po vrsti kopije u tablici ispod | Vlastiti rok po vrsti kopije (D-12); brisanje je potpuno tek kad istekne najdulji. Nijedan rok nije određen |
 | Evaluacija pilota (ankete, razgovori) | Planirano; odvojeno od evidencije | Do kraja evaluacije; svrha i osnova nisu opisane `[ODLUKA]` |
+
+### Kopije po vrsti i klasi podataka (DATA-CLASS)
+
+Brojevi klasa su iz `06-klase-podataka.md`. Svaka kopija je i sama klasa 29 (`06`); stupac „Klase u kopiji” kaže koje klase kopija nosi. Rok kopije nije odlučen: D-30 je PRIJEDLOG, a odgovor se traži od FPZG-a i DPO-a (Owner queue Q-16, paket Q-3). Ništa ovdje nije izgrađeno.
+
+| Vrsta kopije | Gdje (BACKEND §4.7) | Klase u kopiji | Rok kopije |
+| --- | --- | --- | --- |
+| PITR baze | UpCloud, ista usluga kao baza | 29; sadrži klase iz baze: 1 do 11, 13 do 19, 21 (metapodaci), 22, 24 do 28 | Otvoreno (D-30 PRIJEDLOG, Q-16). PITR 3 dana je tehnička postavka, ne rok (`07` §1) |
+| Dnevni šifrirani dump baze (`age`) | Drugi dobavljač | 29; iste klase kao PITR | Otvoreno (D-30 PRIJEDLOG, Q-16); vlastiti rok (D-12) |
+| Dnevna replika bucketa (`rclone sync` bez brisanja, šifrirano) | Drugi dobavljač (npr. Hetzner Object Storage) | 29; sadrži 21 (sadržaj odsječaka i paketa) i 23; jer replika ne briše, objekt obrisan u izvoru ostaje u replici do njezina roka; 20 samo ako izvozni paket živi u istom bucketu, što nije određeno `[IZVEDBA]` | Otvoreno (D-30 PRIJEDLOG, Q-16); vlastiti rok (D-12) |
+| Verzije objekata u bucketu | Scaleway, isti bucket | 29; prethodne verzije objekata klasa 21 i 23; 20 samo ako izvozni paket živi u istom bucketu `[IZVEDBA]` | Otvoreno (D-30 PRIJEDLOG, Q-16). Brisanje mora ukloniti i verzije (BACKEND §4.7) |
+| Bucket s potpisanim kontrolnim točkama brisanja | Zaseban bucket, vjerodajnica samo za upis, verzije ili object lock (D-272 MQ07; object lock NEPROVJERENO); dobavljač nije određen `[ODLUKA]`, vidi `04` | 28 (evidencija brisanja); nije kopija rada | Otvoreno (D-30 PRIJEDLOG, Q-16) |
+
+Klasa 12 je rezervirana i ne gradi se (D-274 MQ09), a klasa 30 živi samo u pregledniku, pa ne ulaze ni u jednu kopiju. Povrat iz kopije radi operater, koji po pravilu D-172 ne vidi sadržaj studentskog rada; povrat se ne otvara dok se evidencija brisanja (klasa 28) ne usporedi s potpisanom kontrolnom točkom (D-272 MQ07). Bez toga bi povrat vratio podatke koje je brisanje već uklonilo (D-12).
 
 ## E. Što se izričito ne bilježi (PRODUCT §9, §5 pr. 4) `[PRAVILO]`
 

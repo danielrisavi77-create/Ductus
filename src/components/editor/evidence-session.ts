@@ -97,6 +97,13 @@ export type EvidenceSnapshot = SaverSnapshot & {
    */
   submitted: boolean;
   /**
+   * DAN-699 (#1876): the recorder stopped, so what is written from here on
+   * stays on this device and the server never takes it. Set from the stop
+   * itself or from `meta.evidenceStopped` after a reload; never with a
+   * closed package.
+   */
+  stopped: boolean;
+  /**
    * The text on this device may hold changes the server has not confirmed
    * (DAN-314, review c.6779406784): a change inside the save debounce or on
    * its way to the journal, a row owed (offline, refused), a failure, a stop
@@ -176,7 +183,8 @@ export class EvidenceSession {
     // LOCAL_DURABLE while the same row is still refused (review #811 c.6419592134).
     const refused = !this.closedBy && this.owed > 0 && (this.refused || this.manualOnly);
     const submitted = this.closedBy === "submission" || this.work?.submitted === true;
-    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused, submitted, unconfirmed: this.unconfirmed() };
+    const stopped = !this.closedBy && this.stopped !== null;
+    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused, submitted, stopped, unconfirmed: this.unconfirmed() };
   }
 
   /** Read only; see `EvidenceSnapshot.unconfirmed`. */
@@ -274,6 +282,8 @@ export class EvidenceSession {
     } catch (error) {
       if (!(error instanceof CaptureError)) throw error;
       this.stopped = error.code;
+      // DAN-699: the student learns of the stop now, not at the next save.
+      this.emit();
     }
   }
 

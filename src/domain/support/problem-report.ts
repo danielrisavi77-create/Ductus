@@ -7,7 +7,7 @@
  * any other key is refused (D-69, PRODUCT §5).
  *
  * The same limits are CHECKs on identity.problem_report (migration
- * 20261111130000); the database stays the authority. Lengths are code
+ * 20261112110000); the database stays the authority. Lengths are code
  * points, like char_length.
  */
 import { SYNC_STATES, type SyncState } from "@/domain/sync/states";

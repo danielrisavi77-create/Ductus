@@ -193,10 +193,15 @@ SELECT is((SELECT count(*)::integer FROM institution.seminar_group_teacher WHERE
   'T057: as a new row beside the ended one');
 
 -- T050 (end): a new holder ends the previous one. Marko becomes a teacher of
--- K1 here, so this comes after every check that he is not.
+-- K1 here, so this comes after every check that he is not. Since P04a
+-- (DAN-351) only an administrator hands a held course over; the course
+-- teacher is refused (123-course-handover covers the handover itself).
 INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
 VALUES (pg_temp.id('k1'), pg_temp.id('fak_a'), pg_temp.id('marko'), 'teacher');
-SELECT is(pg_temp.run('vesna', $$ institution.set_course_holder({k1}, {marko}) $$), 'ok', 'T050: Marko becomes holder of K1');
+SELECT is(pg_temp.run('vesna', $$ institution.set_course_holder({k1}, {marko}) $$), 'ZD403: forbidden',
+  'T050: the course teacher no longer replaces the holder');
+SELECT is(pg_temp.ask('iva', $$ SELECT (institution.hand_over_course({k1}, {marko}) IS NOT NULL)::text $$), 'true',
+  'T050: Iva hands K1 over to Marko');
 SELECT is(
   (SELECT string_agg(p.name || CASE WHEN h.valid_to IS NULL THEN '' ELSE '(ended)' END, ' ' ORDER BY h.valid_to IS NULL, p.name)
    FROM institution.course_holder h JOIN person p ON p.id = h.user_id WHERE h.course_id = pg_temp.id('k1')),
@@ -204,7 +209,7 @@ SELECT is(
 SELECT is(
   (SELECT string_agg(p.name, ' ') FROM institution.course_holder h JOIN person p ON p.id = h.assigned_by
    WHERE h.course_id = pg_temp.id('k1') AND h.valid_to IS NULL),
-  'vesna', 'T050: the row names who made the change');
+  'iva', 'T050: the row names who made the change');
 
 -- T058: a row opened by a transaction that started after this one (so its
 -- valid_from is later than this now()) is still ended, and never before it
@@ -212,7 +217,7 @@ SELECT is(
 -- valid_from forward stands in for that later transaction.
 UPDATE institution.course_holder SET valid_from = now() + interval '1 minute'
  WHERE course_id = pg_temp.id('k1') AND valid_to IS NULL;
-SELECT is(pg_temp.run('vesna', $$ institution.set_course_holder({k1}, {vesna}) $$), 'ok',
+SELECT is(pg_temp.ask('iva', $$ SELECT (institution.hand_over_course({k1}, {vesna}) IS NOT NULL)::text $$), 'true',
   'T058: a holder opened later is still replaced');
 SELECT is(
   (SELECT string_agg(p.name || ':' || (h.valid_from >= now() + interval '1 minute')::text
