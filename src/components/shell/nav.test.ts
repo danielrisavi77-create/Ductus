@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { homeHref, navFor } from "./nav";
+import { accountPlace, homeHref, navFor, offersProblemReport } from "./nav";
 
 // #802 part B, QA (4), and D-202 t. 2: the brand and "Početna" lead to the
 // home of the signed-in person's role.
@@ -72,5 +72,20 @@ describe("navFor", () => {
       { href: "/ustanova/pravila", label: "Pravila fakulteta" },
     ]);
     expect(navFor("teacher").concat(navFor("student")).some((item) => item.href.startsWith("/ustanova"))).toBe(false);
+  });
+});
+
+// DAN-431 (Z-10): "Prijavi problem" goes with the signed-in person, not with
+// which sign-out the account place holds (the workspace brings LocalLogout).
+describe("offersProblemReport", () => {
+  it("offers it to a signed-in person also where the page brings its own account control", () => {
+    expect(accountPlace("scope-a", true)).toBe("own");
+    expect(offersProblemReport("scope-a")).toBe(true);
+    expect(accountPlace("scope-a", false)).toBe("signOut");
+    expect(offersProblemReport("scope-a")).toBe(true);
+  });
+
+  it("never offers it without a signed-in person", () => {
+    expect(offersProblemReport(null)).toBe(false);
   });
 });
