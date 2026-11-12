@@ -477,7 +477,7 @@ test.describe("workspace shell", () => {
     const menu = await page.getByRole("button", { name: "Otvori navigaciju" }).boundingBox();
     expect(menu!.height).toBeGreaterThanOrEqual(32);
     await page.getByRole("button", { name: "Otvori navigaciju" }).click();
-    const box = await page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ }).boundingBox();
+    const box = await page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: "Ductura, početna" }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(32);
   });
 
