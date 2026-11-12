@@ -337,22 +337,24 @@ describe(`${INVENTORY} against the migrated database`, () => {
     expect(errors).toContain("inventory names institution.notification, not in the database");
   });
 
+  // The committed probe lives in public: route tests in parallel compare
+  // snapshots of every table in identity, institution, evidence and audit.
   it("reads one snapshot: a table committed during the read appears only in the next one", async () => {
     const reader = await pool.connect();
     const writer = await pool.connect();
     try {
       await reader.query(SNAPSHOT);
       const before = catalogErrors(await readCatalog(reader), inventory);
-      await writer.query("CREATE TABLE institution.dan709_concurrent (x int)");
+      await writer.query("CREATE TABLE public.dan709_concurrent (x int)");
       expect(catalogErrors(await readCatalog(reader), inventory)).toEqual(before);
       await reader.query("ROLLBACK");
       await reader.query(SNAPSHOT);
       expect(catalogErrors(await readCatalog(reader), inventory)).toContain(
-        "relation (r) institution.dan709_concurrent: no flow in the inventory",
+        "relation (r) public.dan709_concurrent: no flow in the inventory",
       );
     } finally {
       await reader.query("ROLLBACK");
-      await writer.query("DROP TABLE IF EXISTS institution.dan709_concurrent");
+      await writer.query("DROP TABLE IF EXISTS public.dan709_concurrent");
       reader.release();
       writer.release();
     }
