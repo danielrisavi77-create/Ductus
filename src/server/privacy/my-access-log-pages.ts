@@ -30,12 +30,17 @@ export type MyAccessLogPage =
   | { kind: "ok"; days: AccessLogDay[]; next: AccessLogCursor | null; continued: boolean }
   | { kind: "unauthorized" | "not_found" | "unavailable" };
 
+/** PostgreSQL has no year zero: an instant before the first of year one is not a cursor. */
+const FIRST_INSTANT = Date.parse("0001-01-01T00:00:00Z");
+
 /** The cursor of the address, or null for the first page. */
 function cursorParam(query: AccessLogQuery, now: number): AccessLogCursor | null {
   const { prije, zapis } = query;
   if (typeof prije !== "string" || typeof zapis !== "string") return null;
   const checked = cursorOf({ beforeAt: prije, beforeId: zapis });
-  if (checked === null || Date.parse(checked[0]) > now) return null;
+  if (checked === null) return null;
+  const at = Date.parse(checked[0]);
+  if (at > now || at < FIRST_INSTANT) return null;
   return { beforeAt: checked[0], beforeId: checked[1] };
 }
 

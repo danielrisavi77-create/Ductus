@@ -97,6 +97,9 @@ describe("DAN-294 access log cursor: the classes of input", () => {
     ["no zone", { prije: "2026-11-10T11:45:00", zapis: id(3) }, null],
     ["in the future", { prije: new Date(START + WINDOW).toISOString(), zapis: id(3) }, null],
     ["far in the future", { prije: "9999-12-31T23:55:00Z", zapis: id(3) }, null],
+    ["year zero (PostgreSQL has none)", { prije: "0000-01-01T00:00:00Z", zapis: id(3) }, null],
+    ["year one pushed into year zero by its zone", { prije: "0001-01-01T00:00:00+01:00", zapis: id(3) }, null],
+    ["the first instant of year one", { prije: "0001-01-01T00:00:00Z", zapis: id(3) }, ["0001-01-01T00:00:00.000Z", id(3)]],
     ["the old page count", { stranica: "21" } as AccessLogQuery, null],
   ] as [string, AccessLogQuery, [string, string] | null][])("%s", async (_, query, cursor) => {
     const { withActor, calls } = database([page(1, 2)]);
