@@ -369,15 +369,30 @@ const FAKE: Sources = {
 };
 
 // Top-level keys under `services:` of a compose file; names may hold `_`, a trailing comment is allowed.
+// Any other entry at that depth (inline map, quoted key, anchor) throws, so a service is never skipped silently.
 function composeServices(compose: string): string[] {
   const block = compose.match(/^services:[^\n]*\n((?:[ \t]+.*\n?|[ \t]*\n)*)/m)?.[1] ?? "";
-  return [...block.matchAll(/^ {2}([a-z][a-z0-9_-]*):[ \t]*(?:#.*)?$/gm)].map((m) => m[1]);
+  const names: string[] = [];
+  for (const line of block.split("\n")) {
+    if (!/^ {2}\S/.test(line) || /^ {2}#/.test(line)) continue;
+    const m = line.match(/^ {2}([a-z][a-z0-9_-]*):[ \t]*(?:#.*)?$/);
+    if (!m) throw new Error(`unsupported compose service syntax: ${line.trim()}`);
+    names.push(m[1]);
+  }
+  return names;
 }
 
 describe("composeServices", () => {
   it("reads names with underscores and lines with a trailing comment, only under services", () => {
     const text = "name: x\nservices:\n  # note\n  postgres:\n    image: a\n  external_relay:\n    image: b\n  relay: # outside\n    image: c\nvolumes:\n  data:\n";
     expect(composeServices(text)).toEqual(["postgres", "external_relay", "relay"]);
+  });
+  it.each([
+    ["an inline map", '  relay: { image: "example/relay:1" }'],
+    ["a quoted key", '  "relay":\n    image: a'],
+    ["an anchor key", "  <<: *base"],
+  ])("rejects %s instead of skipping the service", (_n, entry) => {
+    expect(() => composeServices(`services:\n  postgres:\n    image: a\n${entry}\n`)).toThrow(/unsupported compose service syntax/);
   });
 });
 
