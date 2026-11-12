@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { ORDINARY_DOCS, classifyDiff, ciProfile } from "./ci-docs-scope.mjs";
 import { isD97Path } from "./protected-paths.mjs";
 
@@ -120,6 +121,18 @@ const TOKEN = String.raw`(?<![\w.\/$~-])docs\/?(?![\w.\/-])`;
 const SHELL_WORD = new RegExp(TOKEN);
 const STRING_WORD = new RegExp(String.raw`(["'\`])(?:(?!\1)[^\n])*?${TOKEN}(?:(?!\1)[^\n])*\1`);
 const wholeDocs = (text, shell) => WHOLE_DOCS.test(text) || STRING_WORD.test(text) || (shell && SHELL_WORD.test(text));
+// Every string and template literal of parsed code, multi-line ones too; comments are not literals.
+function literals(path, text) {
+  const found = [];
+  const visit = (node) => {
+    if (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) found.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(ts.createSourceFile(path, text, ts.ScriptTarget.Latest));
+  return found;
+}
+const readsWholeDocs = (path, text, shell) =>
+  wholeDocs(text, shell) || (!shell && literals(path, text).some((value) => SHELL_WORD.test(value)));
 
 // How `file` reads the listed document `path`, or "" when it does not.
 function reads(path, file, texts) {
@@ -182,6 +195,14 @@ test("the reader matcher catches joined, concatenated and listed paths", () => {
     "{ steps, docs, after }", "x = docs || []", '"../../docs/x.md"', "return docs;", "// don't read docs here"]) {
     assert.ok(!forms(text).some((form) => wholeDocs(form, false)), text);
   }
+  // A closed multi-line template or string spans lines; a comment is not a literal.
+  for (const text of ['execFileSync("sh", ["-c", `\ntar -cf x docs;\n`]);', "const s = `a\n${x}\nls docs|wc -l\n`;",
+    "f('a\\\nls docs;');", "<a title={`\ncp -R docs x`} />"]) {
+    assert.ok(readsWholeDocs("x.tsx", text, false), text);
+  }
+  for (const text of ["// `\nls docs;\n`", "/** `a` */\nconst docs = [];\n/** `b` */", "const t = `${docs.length}\n`;"]) {
+    assert.ok(!readsWholeDocs("x.tsx", text, false), text);
+  }
 });
 
 test("a file is searched as shell unless it is known JavaScript, TypeScript or JSON", () => {
@@ -205,6 +226,6 @@ test("no file of a step the docs profile skips reads the whole docs directory", 
     // The production image names docs only in the list it keeps out of the image.
     const kept = path === "scripts/engineering/production-image.mjs"
       ? texts.map((text) => text.replace(/^const NEVER_INCLUDED = new Set\(\[.*\]\);$/m, "")) : texts;
-    if (skipped) assert.ok(!kept.some((text) => wholeDocs(text, shell)), path);
+    if (skipped) assert.ok(!kept.some((text) => readsWholeDocs(path, text, shell)), path);
   }
 });
