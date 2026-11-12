@@ -210,6 +210,185 @@ export function budgetNotice(tokens, role = "unknown") {
   return `${where}Finish the current step, then ${handoff} and tell the user this session should be rotated. Do not take on a new task here.`;
 }
 
+// The Owner queue is for the owner and the orchestrator (CLAUDE.md, STATE.md).
+// A writer or control session gets STATE.md with the body of that section
+// replaced by one line naming the lines left out; every other role, including
+// a session with no detectable role, gets the text unchanged (DAN-695).
+// ATX headings and fenced blocks follow CommonMark: up to three spaces of
+// indent, and a fence closes only with the same character, at least as long.
+// Only a space or a tab counts as blank there, never what JavaScript trim(),
+// \s or "." also take for one (NBSP, U+3000, U+2028 and the like). A text
+// with a lone CR, which CommonMark reads as a line ending, or with a leading
+// byte order mark, which a reader may drop before the first line, is not cut
+// at all.
+// Setext headings and HTML blocks are not recognised; STATE.md uses neither.
+const OWNER_QUEUE = /^ {0,3}##[ \t]+Owner queue\b/i;
+const SECTION = /^ {0,3}#{1,2}(?:[ \t]|$)/;
+const BLANK = /^[ \t]*$/;
+const CUT_ROLES = new Set(["worker", "control"]);
+
+const ownerQueueNote = (from, to, cr, last = false, lastCr = cr) => [
+  "" + cr,
+  `> Owner queue left out for this session's role: STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.` + (last ? lastCr : cr),
+  ...(last ? [] : ["" + cr]),
+];
+// A body is cut only when it is longer than the longest note, so the text
+// handed over is never longer than the file, and a second pass keeps the note
+// as it is: the decision does not depend on where the section sits.
+const size = (lines) => lines.reduce((sum, line) => sum + line.length + 1, 0);
+const noteRoom = (cr) => size(ownerQueueNote(9_999_999, 9_999_999, cr));
+
+// Fenced blocks inside list items (review cxcr1949 on 96973234): CommonMark
+// closes such a block when its item ends, that is at a non-blank line indented
+// less than the item's content that is not a lazy paragraph line. The tracker
+// keeps the content column of each open item; a tab in indent counts to the
+// next multiple of four columns. A tab right after a list marker splits into
+// columns the tracker does not follow, and a block quote holds lists, fences
+// and lazy lines of its own: either throws UNSURE and nothing is cut. A text
+// already cut carries the note, itself a block quote, so it stays as it is.
+const UNSURE = Symbol("unsure");
+const MARKER = /^(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/;
+const THEMATIC = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+const OPENS = /^(`{3,}|~{3,})([^]*)$/;
+const BLOCK = /^(?:#{1,6}(?:[ \t]|$)|>)/;
+const isFence = (rest) => {
+  const match = OPENS.exec(rest);
+  return match && !(match[1][0] === "`" && match[2].includes("`")) ? match[1] : null;
+};
+
+// The column of the first character that is not a space or a tab, and that character's index.
+function indentOf(line) {
+  let column = 0;
+  let index = 0;
+  for (; index < line.length && (line[index] === " " || line[index] === "\t"); index += 1) {
+    column = line[index] === "\t" ? column + 4 - (column % 4) : column + 1;
+  }
+  return { column, index };
+}
+
+// Whether `rest`, at `relative` columns past its container, would start a
+// block that ends a paragraph instead of continuing it lazily.
+const startsBlock = (rest, relative) =>
+  relative < 4 && (BLOCK.test(rest) || THEMATIC.test(rest) || isFence(rest) !== null || MARKER.test(rest));
+
+const MAX_DEPTH = 16;
+
+function fenceTracker() {
+  const items = []; // content column of each open list item, { width, empty }
+  let fence = null; // { mark, depth, base }
+  let paragraph = false;
+  const base = () => (items.length ? items.at(-1).width : 0);
+  return (bare) => {
+    if (BLANK.test(bare)) {
+      if (fence) return true;
+      // An item can start with at most one blank line.
+      if (items.length && items.at(-1).empty) items.pop();
+      paragraph = false;
+      return false;
+    }
+    const { column, index } = indentOf(bare);
+    let rest = bare.slice(index);
+    if (items.length && column < base()) {
+      const kept = items.filter((item) => item.width <= column);
+      const lazy = !fence && paragraph && !startsBlock(rest, column - (kept.at(-1)?.width ?? 0));
+      // The items that end close the paragraph in them too.
+      if (!lazy) {
+        items.length = kept.length;
+        paragraph = false;
+      }
+    }
+    if (items.length) items.at(-1).empty = false;
+    if (fence && items.length < fence.depth) {
+      fence = null;
+      paragraph = false;
+    }
+    if (fence) {
+      const match = OPENS.exec(rest);
+      const closes = column - fence.base < 4 && match && match[1][0] === fence.mark[0] && match[1].length >= fence.mark.length && BLANK.test(match[2]);
+      if (closes) fence = null;
+      return true;
+    }
+    let at = column;
+    for (;;) {
+      const relative = at - base();
+      // Indented code, or a paragraph line that goes on: neither opens a block.
+      if (relative >= 4) return false;
+      if (THEMATIC.test(rest)) return (paragraph = false);
+      const mark = isFence(rest);
+      if (mark) {
+        fence = { mark, depth: items.length, base: base() };
+        paragraph = false;
+        return true;
+      }
+      const marker = MARKER.exec(rest);
+      // A block quote can hold its own lists, fences and lazy lines, which
+      // this tracker does not follow: hand the text over as it is.
+      if (rest[0] === ">") throw UNSURE;
+      if (!marker) {
+        paragraph = !BLOCK.test(rest);
+        return false;
+      }
+      // Deeper nesting than any real STATE.md holds is handed over as it is,
+      // which also keeps a long line of markers from taking quadratic time.
+      if (items.length >= MAX_DEPTH) throw UNSURE;
+      const after = rest.slice(marker[0].length);
+      const content = after.replace(/^ +/, "");
+      // Only an item with content, and an ordered one only from 1, interrupts a paragraph.
+      if (paragraph && (BLANK.test(after) || (marker[1] !== undefined && Number(marker[1]) !== 1))) return false;
+      if (after[0] === "\t" || content[0] === "\t") throw UNSURE;
+      const gap = after.length - content.length;
+      if (content === "" || gap > 4) {
+        items.push({ width: at + marker[0].length + 1, empty: content === "" });
+        paragraph = false;
+        return false;
+      }
+      at += marker[0].length + gap;
+      items.push({ width: at, empty: false });
+      paragraph = false;
+      rest = content;
+    }
+  };
+}
+
+export function stateForRole(text, role) {
+  if (!CUT_ROLES.has(role) || text.startsWith("\uFEFF") || /\r(?!\n)/.test(text)) return text;
+  // A final newline ends the last line; it is not one more line to count.
+  const ends = text.endsWith("\n");
+  const lines = (ends ? text.slice(0, -1) : text).split("\n");
+  const out = [];
+  const fenced = fenceTracker();
+  let body = null; // the Owner queue body being collected: { from (1-based), lines, cr }
+  const flush = (last = false) => {
+    const kept = body.lines;
+    const to = body.from + kept.length - 1;
+    const lastCr = kept.length && kept.at(-1).endsWith("\r") ? "\r" : "";
+    if (size(kept) > noteRoom(body.cr)) out.push(...ownerQueueNote(body.from, to, body.cr, last, lastCr));
+    else out.push(...kept);
+    body = null;
+  };
+  for (const [index, line] of lines.entries()) {
+    const bare = line.replace(/\r$/, "");
+    let inFence;
+    try {
+      inFence = fenced(bare);
+    } catch (error) {
+      if (error === UNSURE) return text;
+      throw error;
+    }
+    const section = !inFence && SECTION.test(bare);
+    const queue = section && OWNER_QUEUE.test(bare);
+    if (body && section) flush();
+    if (body) {
+      body.lines.push(line);
+      continue;
+    }
+    out.push(line);
+    if (queue) body = { from: index + 2, lines: [], cr: line.endsWith("\r") ? "\r" : "" };
+  }
+  if (body) flush(true);
+  return out.join("\n") + (ends ? "\n" : "");
+}
+
 // STATE.md as session-start context, or null when it would be truncated.
 export function stateContext(file, text) {
   if (text.length > STATE_LIMIT) return null;
@@ -306,7 +485,8 @@ const modes = {
     // can make STATE.md point at .env or any other file; a path that resolves
     // anywhere but the same place under <root> is not read.
     const text = projectText(root, "STATE.md", io);
-    const state = text === undefined ? null : stateContext(path.join(root, "STATE.md"), text);
+    // The limit is measured on the text handed over, after the role's cut.
+    const state = text === undefined ? null : stateContext(path.join(root, "STATE.md"), stateForRole(text, sessionRole(event)));
     // A directory without a lockfile is not a checkout to install, so it gets no notice.
     const lock = projectText(root, "pnpm-lock.yaml", io);
     const installed = lock === undefined ? undefined : projectText(root, "node_modules/.pnpm/lock.yaml", io);

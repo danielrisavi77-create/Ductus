@@ -59,9 +59,10 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
+import { followLogoutNatively, postLogout } from "@/client/logout-request";
 import { signInHref, signInTarget, SIGN_IN_DEFAULT_TARGET } from "@/components/auth/sign-in-link";
 import {
-  editorSignOutPlan, LOGOUT_TIMEOUT_MS, planAfterDiscard, readLogoutHold, unsavedAfterSettle, untilLoaded, withinHoldLimit, type HoldRead,
+  editorSignOutPlan, planAfterDiscard, readLogoutHold, unsavedAfterSettle, untilLoaded, withinHoldLimit, type HoldRead,
 } from "@/client/logout-hold";
 import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
@@ -693,41 +694,6 @@ export function LocalDocumentProvider({
     unconfirmedNow, editsNow,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
-}
-
-/**
- * POST to the logout route; true only for its redirect, which comes after
- * the session was closed and the cookie cleared. A lost request, an error
- * status and no answer within the time limit are false.
- */
-async function postLogout(): Promise<boolean> {
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), LOGOUT_TIMEOUT_MS);
-  try {
-    const response = await fetch("/api/auth/logout", {
-      method: "POST", redirect: "manual", cache: "no-store", signal: abort.signal,
-    });
-    return response.type === "opaqueredirect";
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * After a successful `postLogout`: the same POST once more, natively, so the
- * browser follows the route's redirect on to the provider's logout (DAN-212);
- * the fetch cannot follow it. It arrives without the cookie, so it closes
- * nothing twice. A form of its own, so it holds while the page re-renders.
- */
-function followLogoutNatively(): void {
-  const form = document.createElement("form");
-  form.method = "post";
-  form.action = "/api/auth/logout";
-  form.hidden = true;
-  document.body.append(form);
-  form.submit();
 }
 
 /**

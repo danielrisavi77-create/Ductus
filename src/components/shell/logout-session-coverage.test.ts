@@ -65,12 +65,43 @@ describe("the sign-outs read with the session", () => {
     expect(source).toMatch(/step\.kind === "leave"\)\s*\{\s*window\.location\.assign\("\/"\);\s*return;/);
   });
 
+  it("ShellLogout sends the editor's request and calls nothing ended without the route's confirmation (DAN-99, F-285)", () => {
+    const source = readFileSync(join(ROOT, "src/components/shell/ShellLogout.tsx"), "utf8");
+    expect(source).toContain("signOutHere(session, browserSignOutDeps())");
+    // Only the latest attempt's confirmation follows on; anything else is unconfirmed.
+    expect(source).toContain("reached && mine === attempt.current ? followLogoutNatively() : unanswered(mine)");
+    expect(source).toContain("() => unanswered(mine)");
+    expect(source).toMatch(/const unanswered = \(mine: number\) => \{\s*if \(mine !== attempt\.current\) return;/);
+    // The device message is never shown from the shell: nothing sets it.
+    expect(source).toContain("signedOutHere={false}");
+    expect(source).not.toMatch(/setSignedOutHere|signedOutHere=\{(?!false\})/);
+    expect(source).toContain("unconfirmed={unconfirmed}");
+    // "Ostani" retires the attempt that may still be running.
+    expect(source).toMatch(/const stay = \(\) => \{\s*attempt\.current \+= 1;/);
+    // Only where the page reads the mark; elsewhere the form posts as before.
+    expect(source).toMatch(/if \(!endsOnDevice\) \{\s*formRef\.current\?\.submit\(\);\s*return;\s*\}\s*const mine = \+\+attempt\.current;\s*void signOutHere/);
+    // Without JS the form still posts (I5).
+    expect(source).toContain('<form ref={formRef} method="post" action="/api/auth/logout"');
+    const shell = readFileSync(join(ROOT, "src/components/shell/AppShell.tsx"), "utf8");
+    expect(tags(shell, "ShellLogout")[0]).toContain("endsOnDevice={endsOnDevice}");
+    const editor = readFileSync(join(ROOT, "src/components/editor/LocalDocument.tsx"), "utf8");
+    expect(editor).toMatch(/import \{ followLogoutNatively, postLogout \} from "@\/client\/logout-request";/);
+  });
+
   it("the editor's sign-out reads with it and leaves without posting", () => {
     const source = readFileSync(join(ROOT, "src/components/editor/LocalDocument.tsx"), "utf8");
     expect(source).toMatch(/editorSignOutPlan\(.*, scope, \{ session \}\);/);
     expect(source).not.toMatch(/readLogoutHold\(scope\)/);
     expect(source).toMatch(/next === "leave"\)\s*\{\s*window\.location\.assign\("\/"\);\s*return;/);
   });
+
+  // A page whose server does not read the mark would keep rendering for a
+  // session the dialog calls ended (student screens, `/`).
+  it.each(files.filter((file) => /[\\/]page\.tsx$/.test(file)).flatMap((file) =>
+    tags(readFileSync(file, "utf8"), "AppShell").map((tag) => [relative(ROOT, file).replaceAll("\\", "/"), file, tag] as const)))(
+    "%s ends on the device only where it reads the mark", (_name, file, tag) => {
+      expect(/\sendsOnDevice[\s=>]/.test(tag)).toBe(readFileSync(file, "utf8").includes("liveSessionToken("));
+    });
 
   it("a tag without the session is caught", () => {
     const [tag] = tags('<ShellLogout scope={s} className="a">', "ShellLogout");

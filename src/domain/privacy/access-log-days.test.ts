@@ -131,7 +131,15 @@ describe("DAN-294 access log days: the classes of input", () => {
 
   it.each([
     ["2026-11-10T13:10:00Z", Date.UTC(2026, 10, 10, 13, 10)],
+    ["2026-11-10T13:10:00.0Z", Date.UTC(2026, 10, 10, 13, 10)],
+    ["2026-11-10T13:10:00.000Z", Date.UTC(2026, 10, 10, 13, 10)],
     ["2026-11-10T13:10:00.000000Z", Date.UTC(2026, 10, 10, 13, 10)],
+    ["2026-11-10T13:10:00.001Z", Date.UTC(2026, 10, 10, 13, 10) + 1],
+    ["2026-11-10T13:10:00.000999Z", Number.NaN],
+    ["2026-11-10T13:10:00.0001Z", Number.NaN],
+    ["2026-11-10T13:10:00.00001Z", Number.NaN],
+    ["2026-11-10T13:10:00.000100Z", Number.NaN],
+    ["2026-11-10T13:10:00.0000000Z", Number.NaN],
     ["2026-11-10T13:10:00.123Z", Date.UTC(2026, 10, 10, 13, 10) + 123],
     ["2026-11-10T13:10:00.123000Z", Date.UTC(2026, 10, 10, 13, 10) + 123],
     ["2026-11-10T13:10:00.123001Z", Number.NaN],
@@ -186,5 +194,43 @@ describe("DAN-294 access log days: properties", () => {
     expect([...keys].sort().reverse()).toEqual(keys);
     expect(new Set(keys).size).toBe(keys.length);
     expect(JSON.stringify(days)).not.toMatch(/"(count|total|duration|visits)"/);
+  });
+});
+
+// #1968 QA c.6816961587: Date.parse rolls an impossible calendar date over
+// (2026-02-30 reads as 2026-03-02), so the fields are checked before it.
+// Every invalid class is on the five-minute grid. V8's Date.parse already refuses
+// month 00 and 13, day 00, minute 60 and second 60; the others it would roll over.
+const INVALID_CALENDAR: [string, string][] = [
+  ["30 February", "2026-02-30T08:00:00Z"],
+  ["29 February of a common year", "2026-02-29T08:00:00Z"],
+  ["29 February of a century not divisible by 400", "1900-02-29T08:00:00Z"],
+  ["31 April", "2026-04-31T08:00:00Z"],
+  ["month 00", "2026-00-10T08:00:00Z"],
+  ["month 13", "2026-13-10T08:00:00Z"],
+  ["day 00", "2026-11-00T08:00:00Z"],
+  ["hour 24", "2026-11-10T24:00:00Z"],
+  ["minute 60", "2026-11-10T08:60:00Z"],
+  ["second 60", "2026-11-10T08:00:60Z"],
+  ["30 February with an offset", "2026-02-30T09:00:00+01:00"],
+];
+const VALID_CALENDAR: [string, string, number][] = [
+  ["29 February of a leap year", "2028-02-29T08:00:00Z", Date.UTC(2028, 1, 29, 8)],
+  ["29 February of a year divisible by 400", "2000-02-29T08:00:00Z", Date.UTC(2000, 1, 29, 8)],
+  ["31 December", "2026-12-31T23:55:00Z", Date.UTC(2026, 11, 31, 23, 55)],
+  ["1 January", "2027-01-01T00:00:00Z", Date.UTC(2027, 0, 1)],
+  ["the last minute and second of a day", "2026-11-10T23:59:59.000Z", Date.UTC(2026, 10, 10, 23, 59, 59)],
+];
+
+describe("DAN-294 access log days: calendar validity of a time given as text", () => {
+  it.each(INVALID_CALENDAR)("refuses %s as an instant and as a row (%s)", (_, iso) => {
+    expect(zonedInstantOf(iso)).toBeNaN();
+    expect(accessLogEntryOf(row({ opened_at: iso }))).toBeNull();
+    expect(accessLogDaysOf([row(), row({ entry_id: id(2), opened_at: iso })])).toBeNull();
+  });
+
+  it.each(VALID_CALENDAR)("reads %s exactly (%s)", (_, iso, ms) => {
+    expect(zonedInstantOf(iso)).toBe(ms);
+    if (ms % 300_000 === 0) expect(accessLogEntryOf(row({ opened_at: iso }))?.at).toBe(ms);
   });
 });

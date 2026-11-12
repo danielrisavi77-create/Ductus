@@ -47,6 +47,7 @@ export default async function TeacherNewAssignmentPage({ searchParams }: {
   const title = existing ? t.teacher.existingCourse.title : t.teacher.title;
   return (
     <AppShell
+      endsOnDevice
       session={shellSession(token)}
       scope={accessShellScope(screen, principal)}
       role={screen === "allowed" ? "teacher" : null}

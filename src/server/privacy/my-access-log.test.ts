@@ -122,11 +122,44 @@ describe("DAN-294 my access log: refusals", () => {
     ["one microsecond past the grid", { beforeAt: "2026-11-10T08:00:00.000001Z", beforeId: id(1) }],
     ["999999 microseconds", { beforeAt: "2026-11-10T07:59:59.999999Z", beforeId: id(1) }],
     ["999 microseconds", { beforeAt: "2026-11-10T08:00:00.000999Z", beforeId: id(1) }],
+    ["100 microseconds as four digits", { beforeAt: "2026-11-10T08:00:00.0001Z", beforeId: id(1) }],
+    ["10 microseconds as five digits", { beforeAt: "2026-11-10T08:00:00.00001Z", beforeId: id(1) }],
     ["nonzero milliseconds", { beforeAt: "2026-11-10T08:00:00.001Z", beforeId: id(1) }],
   ])("a malformed cursor (%s) is unavailable without a query", async (_, cursor) => {
     const { withActor, calls } = database({ rows: [] });
     expect(await readMyAccessLog(TOKEN, withActor, DOC, cursor)).toEqual({ kind: "unavailable" });
     expect(calls).toHaveLength(0);
+  });
+
+  // #1968 QA c.6816961587: an impossible calendar date is refused before Date.parse rolls it over.
+  it.each([
+    ["30 February", "2026-02-30T08:00:00Z"],
+    ["29 February of a common year", "2026-02-29T08:00:00Z"],
+    ["29 February of a century not divisible by 400", "1900-02-29T08:00:00Z"],
+    ["30 February with an offset", "2026-02-30T09:00:00+01:00"],
+    ["31 April", "2026-04-31T08:00:00Z"],
+    ["month 00", "2026-00-10T08:00:00Z"],
+    ["month 13", "2026-13-10T08:00:00Z"],
+    ["day 00", "2026-11-00T08:00:00Z"],
+    ["hour 24", "2026-11-10T24:00:00Z"],
+    ["minute 60", "2026-11-10T08:60:00Z"],
+    ["second 60", "2026-11-10T08:00:60Z"],
+  ])("a cursor on an impossible date (%s) is unavailable and withActor is not called", async (_, beforeAt) => {
+    const { withActor, calls } = database({ rows: [] });
+    expect(await readMyAccessLog(TOKEN, withActor, DOC, { beforeAt, beforeId: id(1) })).toEqual({ kind: "unavailable" });
+    expect(withActor).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["29 February of a leap year", "2028-02-29T08:00:00Z", "2028-02-29T08:00:00.000Z"],
+    ["29 February of a year divisible by 400", "2000-02-29T08:00:00Z", "2000-02-29T08:00:00.000Z"],
+    ["31 December", "2026-12-31T23:55:00Z", "2026-12-31T23:55:00.000Z"],
+    ["1 January", "2027-01-01T00:00:00Z", "2027-01-01T00:00:00.000Z"],
+  ])("a cursor on a real edge date (%s) goes to the RPC as the same instant", async (_, beforeAt, sent) => {
+    const { withActor, calls } = database({ rows: [] });
+    expect((await readMyAccessLog(TOKEN, withActor, DOC, { beforeAt, beforeId: id(1) })).kind).toBe("ok");
+    expect(calls[0]?.values).toEqual([DOC, ACCESS_LOG_PAGE, sent, id(1)]);
   });
 
   it("any other failure and a malformed row are unavailable, logging only the SQLSTATE or a fixed word", async () => {
