@@ -301,10 +301,34 @@ const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*tab
 const FUNCTION_HEAD = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/gi;
 const FUNCTION_FULL = /create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+([a-z_]+\.[a-z0-9_]+)\s*\(/iy;
 
+/** Removes SQL comments but leaves '...', "..." and $tag$...$tag$ intact, so `'image/*'` or `'a--b'` cannot swallow a statement. */
+function stripSqlComments(sql: string): string {
+  let out = "";
+  let i = 0;
+  while (i < sql.length) {
+    const rest = sql.slice(i);
+    const q = rest.match(/^(?:'(?:[^']|'')*'|"(?:[^"]|"")*"|\$([a-z_]*)\$[\s\S]*?\$\1\$)/i);
+    if (q) {
+      out += q[0];
+      i += q[0].length;
+    } else if (rest.startsWith("--")) {
+      const nl = rest.indexOf("\n");
+      i += nl < 0 ? rest.length : nl;
+    } else if (rest.startsWith("/*")) {
+      const end = rest.indexOf("*/", 2);
+      i += end < 0 ? rest.length : end + 2;
+    } else {
+      out += sql[i];
+      i += 1;
+    }
+  }
+  return out;
+}
+
 /** Tables and functions a migration creates. Fail-closed: a CREATE TABLE/FUNCTION/PROCEDURE head that does not parse is an error, never skipped. Known limit: names built at run time are flagged, not read. */
 function sqlObjects(sql: string): { tables: string[]; functions: [string, string][]; errors: string[] } {
-  const bare = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "");
   const errors: string[] = [];
+  const bare = stripSqlComments(sql);
   const tables: string[] = [];
   const functions: [string, string][] = [];
   const seen = (m: RegExpMatchArray) => bare.slice(m.index, (m.index ?? 0) + 40).replace(/\s+/g, " ");
@@ -484,6 +508,8 @@ describe("sqlObjects", () => {
     ["a temporary table", "CREATE TEMP TABLE a.t (id int);", ["a.t"]],
     ["quoted names", 'CREATE TABLE "a"."t2" (id int);', ["a.t2"]],
     ["a break after TABLE", "CREATE TABLE\n  a.t (id int);", ["a.t"]],
+    ["a MIME pattern before a later comment", "CREATE TABLE a.t0 (m text DEFAULT 'image/*');\nCREATE TABLE a.t (id int); /* c */ SELECT '*/';", ["a.t0", "a.t"]],
+    ["a double dash inside a string", "SELECT 'a--b'; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a commented-out table", "-- CREATE TABLE a.old (id int);\n/* create table a.older (x int) */\nCREATE TABLE a.t (id int);", ["a.t"]],
   ])("reads %s", (_n, sql, tables) => {
     const r = sqlObjects(sql);
