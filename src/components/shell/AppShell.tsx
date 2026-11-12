@@ -190,7 +190,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
         ) : null}
         <div className={styles.bottom}>
           {/* "Prijavi problem" (Z-10) for a signed-in person, wherever the side bar is. */}
-          {offersProblemReport(scope) ? <ProblemReport buttonClassName={styles.report} /> : null}
+          {offersProblemReport(scope) ? <ProblemReport buttonClassName={styles.report} session={session.tag === null ? null : { tag: session.tag, at: session.at }} /> : null}
           <p className={styles.note}>
             <strong>{t.shell.demoBadge}</strong>
             {t.shell.demoNote}

@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+import { CURRENT_KEY, SESSION_END_CHANNEL } from "../../src/client/session-marks";
 import { THEME_KEY } from "../../src/components/shell/theme";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { signIn } from "./support";
@@ -142,6 +143,47 @@ test("a double click and a resend while sending make one request, then the refer
   const sent = JSON.parse(bodies[0]!) as { description: string; route: string | null };
   expect(sent.description).toBe(DESCRIPTION);
   expect(sent.route).not.toContain("0000");
+});
+
+// Another person signing in in another tab leaves their cookie in this
+// browser; the open dialog must not send the earlier description under it.
+// The later sign-in is written where the other tab writes it, without the
+// storage event, so only the check right before sending can see it (Codex,
+// #1967).
+test("a description written before someone else signed in is not sent", async ({ page }) => {
+  let requests = 0;
+  await page.route(ENDPOINT, (route) => {
+    requests += 1;
+    return route.fulfill({ status: 201, json: { reference: "PR-3FA9C01B2E" } });
+  });
+  const { dialog } = await openDialog(page);
+  await dialog.getByRole("textbox", { name: t.description }).fill(DESCRIPTION);
+  await page.evaluate((key) => {
+    const mark = JSON.parse(localStorage.getItem(key) ?? "null") as { tag: string; at: number } | null;
+    if (!mark) throw new Error("The signed-in page must record its session mark");
+    localStorage.setItem(key, JSON.stringify({ tag: `${mark.tag}-other`, at: mark.at + 1 }));
+  }, CURRENT_KEY);
+  await dialog.getByRole("button", { name: t.send }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(t.ended);
+  await expect(dialog.getByRole("heading", { name: t.title })).toBeFocused();
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  expect(requests).toBe(0);
+});
+
+test("a sign-out in another tab clears the open dialog", async ({ page }) => {
+  const { dialog } = await openDialog(page);
+  await dialog.getByRole("textbox", { name: t.description }).fill(DESCRIPTION);
+  await page.evaluate(({ key, channelName }) => {
+    const mark = JSON.parse(localStorage.getItem(key) ?? "null") as { tag: string } | null;
+    if (!mark) throw new Error("The signed-in page must record its session mark");
+    const channel = new BroadcastChannel(channelName);
+    channel.postMessage(mark.tag);
+    channel.close();
+  }, { key: CURRENT_KEY, channelName: SESSION_END_CHANNEL });
+  await expect(dialog.getByRole("alert")).toHaveText(t.ended);
+  await expect(page.getByText(DESCRIPTION)).toHaveCount(0);
+  await dialog.getByRole("button", { name: t.close }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 // Shots beside docs/design/ductura (§6.5, D-183): the form, a refusal and the

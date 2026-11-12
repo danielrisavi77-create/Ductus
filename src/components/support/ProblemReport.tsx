@@ -5,10 +5,15 @@
  * `<dialog>` that posts one report to `POST /api/support/problem-report`
  * (#1919). The form asks for no name; the description stays in the form
  * when sending fails, and one send runs at a time (`singleFlight`), so a
- * double click or a resend makes no second request.
+ * double click or a resend makes no second request. Once the session the
+ * page was opened under ends (sign-out, or another person signing in in
+ * another tab), nothing more is sent and the description leaves the form.
  */
-import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
+
+import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
+import type { SessionMark } from "@/client/session-marks";
 
 import {
   PROBLEM_REPORT_CATEGORIES,
@@ -36,7 +41,8 @@ export type ProblemReportStep =
   | { kind: "editing" }
   | { kind: "sending" }
   | { kind: "sent"; reference: string }
-  | { kind: "failed"; lead: string; message: string };
+  | { kind: "failed"; lead: string; message: string }
+  | { kind: "ended" };
 
 /** The text under the field for a description that cannot be sent yet. */
 export function checkMessage(check: DescriptionCheck, length: number): string | null {
@@ -56,6 +62,7 @@ const MAYBE_RECORDED: ReadonlySet<FailureReason> = new Set(["timeout", "unknown"
 /** The step a finished send leads to. */
 export function stepAfter(outcome: SendOutcome): ProblemReportStep {
   if (outcome.kind === "sent") return { kind: "sent", reference: outcome.reference };
+  if (outcome.kind === "ended") return { kind: "ended" };
   return {
     kind: "failed",
     lead: MAYBE_RECORDED.has(outcome.reason) ? t.keptLead : t.failedLead,
@@ -63,7 +70,13 @@ export function stepAfter(outcome: SendOutcome): ProblemReportStep {
   };
 }
 
-export default function ProblemReport({ buttonClassName }: { buttonClassName?: string }) {
+type ProblemReportProps = {
+  buttonClassName?: string;
+  /** The session the page was rendered under; null without a session cookie. */
+  session: SessionMark | null;
+};
+
+export default function ProblemReport({ buttonClassName, session }: ProblemReportProps) {
   const [open, setOpen] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
@@ -91,12 +104,12 @@ export default function ProblemReport({ buttonClassName }: { buttonClassName?: s
       {/* Below 800 px the side bar is `visibility: hidden` until opened, and a
           modal dialog still inherits that from its ancestors, so it lives in
           <body> (Codex, #1967). `open` is only ever true in the browser. */}
-      {open ? createPortal(<ProblemReportDialog onClose={() => setOpen(false)} />, document.body) : null}
+      {open ? createPortal(<ProblemReportDialog session={session} onClose={() => setOpen(false)} />, document.body) : null}
     </>
   );
 }
 
-export function ProblemReportDialog({ onClose }: { onClose: () => void }) {
+export function ProblemReportDialog({ session, onClose }: { session: SessionMark | null; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
@@ -108,12 +121,33 @@ export function ProblemReportDialog({ onClose }: { onClose: () => void }) {
   const [description, setDescription] = useState("");
   const [shownCheck, setShownCheck] = useState(false);
   const [step, setStep] = useState<ProblemReportStep>({ kind: "editing" });
-  // One send at a time for this dialog (stable across renders).
+  const watchRef = useRef<SessionWatch | null>(null);
+  const tag = session?.tag ?? null;
+  const at = session?.at ?? 0;
+
+  // The session this dialog was opened under (F-5, D-118): once it ends, the
+  // description is not this browser's person's to send any more (Codex, #1967).
+  useLayoutEffect(() => {
+    const watch = watchSessionEnd(tag === null ? null : { tag, at }, () => {
+      setDescription("");
+      setStep({ kind: "ended" });
+    });
+    watchRef.current = watch;
+    return () => {
+      watch.close();
+      if (watchRef.current === watch) watchRef.current = null;
+    };
+  }, [tag, at]);
+
+  // One send at a time for this dialog (stable across renders). The session
+  // is checked again right before posting and once the answer is in, so a
+  // late answer does not cover the ended state.
+  const current = useCallback(() => !(watchRef.current?.ended() ?? false), []);
   const [send] = useState(() =>
-    singleFlight(async (body: string) => {
+    singleFlight(async (body: string, stillCurrent: () => boolean) => {
       setStep({ kind: "sending" });
-      const outcome = await sendProblemReport(body);
-      setStep(stepAfter(outcome));
+      const outcome = await sendProblemReport(body, undefined, undefined, stillCurrent);
+      setStep(stillCurrent() ? stepAfter(outcome) : { kind: "ended" });
       return outcome;
     }),
   );
@@ -128,9 +162,10 @@ export function ProblemReportDialog({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // Once sent, the form (and the focused button) is gone: focus the new heading.
+  // Once sent or ended, the form (and the focused button) is gone: focus the
+  // new heading.
   useEffect(() => {
-    if (step.kind === "sent") headingRef.current?.focus();
+    if (step.kind === "sent" || step.kind === "ended") headingRef.current?.focus();
   }, [step.kind]);
 
   const sending = step.kind === "sending";
@@ -152,7 +187,7 @@ export function ProblemReportDialog({ onClose }: { onClose: () => void }) {
       syncState: null,
       userAgent: navigator.userAgent,
     });
-    if (body !== null) void send(body);
+    if (body !== null) void send(body, current);
   };
 
   const onCancel = (event: SyntheticEvent<HTMLDialogElement>) => {
@@ -172,7 +207,18 @@ export function ProblemReportDialog({ onClose }: { onClose: () => void }) {
         <h2 ref={headingRef} id={titleId} className={styles.title} tabIndex={-1}>
           {step.kind === "sent" ? t.sentTitle : t.title}
         </h2>
-        {step.kind === "sent" ? (
+        {step.kind === "ended" ? (
+          <>
+            <p className={styles.text} role="alert">
+              {t.ended}
+            </p>
+            <div className={styles.actions}>
+              <button type="button" className={styles.secondary} onClick={onClose}>
+                {t.close}
+              </button>
+            </div>
+          </>
+        ) : step.kind === "sent" ? (
           <>
             <p className={styles.text} role="status">
               {t.sentReference.replace("{reference}", step.reference)}

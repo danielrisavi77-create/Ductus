@@ -157,6 +157,30 @@ describe("server answers", () => {
   });
 });
 
+// Another person signing in in another tab puts their cookie in this browser:
+// a report written before that must not go out under it (Codex, #1967).
+describe("a send after the session has ended", () => {
+  it("posts nothing and says the session ended", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ reference: "PR-ABCDEF0123" }, { status: 201 }));
+    await expect(sendProblemReport("{}", fetcher, 10, () => false)).resolves.toEqual({ kind: "ended" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("asks right before posting, not earlier", async () => {
+    const order: string[] = [];
+    const fetcher = vi.fn(() => {
+      order.push("post");
+      return Promise.resolve(Response.json({ reference: "PR-ABCDEF0123" }, { status: 201 }));
+    });
+    const current = () => {
+      order.push("check");
+      return true;
+    };
+    await expect(sendProblemReport("{}", fetcher, 1000, current)).resolves.toEqual({ kind: "sent", reference: "PR-ABCDEF0123" });
+    expect(order).toEqual(["check", "post"]);
+  });
+});
+
 // A stalled send would hold the locked dialog shut (Codex, #1967).
 describe("a send that gets no answer in time", () => {
   it("ends as a timeout and aborts the request when the connection stalls", async () => {

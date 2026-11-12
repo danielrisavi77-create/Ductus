@@ -1684,6 +1684,7 @@ export const hr = {
     sentNote: "Broj prijave navedite ako se javite istim povodom.",
     failedLead: "Prijava nije poslana. Opis je ostao u obrascu.",
     keptLead: "Opis je ostao u obrascu.",
+    ended: "Ovaj preglednik više nije prijavljen pod Vašim računom: odjavili ste se ili se prijavio netko drugi. Opis nije poslan i uklonjen je iz obrasca. Prijavite se ponovno pa opišite problem.",
     retry: "Pokušaj ponovno",
     check: {
       empty: "Upišite opis problema.",

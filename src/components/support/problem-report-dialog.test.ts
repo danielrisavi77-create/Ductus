@@ -59,6 +59,15 @@ describe("failure messages", () => {
     expect(stepAfter({ kind: "failed", reason: "tooLarge" })).toMatchObject({ message: expect.stringContaining("Skratite") });
   });
 
+  // Codex, #1967: once the session ends, the dialog says so and keeps nothing.
+  it("an ended session reads in plain words and keeps no description", () => {
+    expect(stepAfter({ kind: "ended" })).toEqual({ kind: "ended" });
+    expect(t.ended).toMatch(/nije poslan/);
+    expect(t.ended).toMatch(/uklonjen/);
+    expect(t.ended).not.toMatch(TECHNICAL);
+    expect(findForbiddenTerms(t.ended)).toEqual([]);
+  });
+
   it("shows the reference after a sent report", () => {
     expect(stepAfter({ kind: "sent", reference: "PR-0123456789" })).toEqual({ kind: "sent", reference: "PR-0123456789" });
   });
@@ -81,7 +90,7 @@ describe("description check messages", () => {
 });
 
 describe("the dialog markup", () => {
-  const html = renderToStaticMarkup(createElement(ProblemReportDialog, { onClose: () => {} }));
+  const html = renderToStaticMarkup(createElement(ProblemReportDialog, { session: null, onClose: () => {} }));
 
   it("is a dialog named by its heading", () => {
     const id = /<h2[^>]*id="([^"]+)"/.exec(html)?.[1];
@@ -124,7 +133,7 @@ describe("the dialog markup", () => {
 
 describe("the opener", () => {
   it("is one button that announces a dialog, with the dialog closed", () => {
-    const html = renderToStaticMarkup(createElement(ProblemReport, { buttonClassName: "x" }));
+    const html = renderToStaticMarkup(createElement(ProblemReport, { buttonClassName: "x", session: null }));
     expect(html).toBe(`<button type="button" class="x" aria-haspopup="dialog">${t.open}</button>`);
   });
 
@@ -132,6 +141,20 @@ describe("the opener", () => {
     const shell = read("src/components/shell/AppShell.tsx");
     expect(shell).toMatch(/offersProblemReport\(scope\) \? <ProblemReport /);
     expect(shell).not.toMatch(/place === "signOut" \? <ProblemReport /);
+  });
+
+  // Codex, #1967: the dialog follows the session the page was rendered under,
+  // as every other part that sends this person's data (D-118).
+  it("gets the shell's session and checks it right before sending", () => {
+    const shell = read("src/components/shell/AppShell.tsx");
+    expect(shell).toMatch(/<ProblemReport [^>]*session=\{session\.tag === null \? null : \{ tag: session\.tag, at: session\.at \}\}/);
+    const dialog = read("src/components/support/ProblemReport.tsx");
+    expect(dialog).toMatch(/<ProblemReportDialog session=\{session\}/);
+    expect(dialog).toMatch(/watchSessionEnd\(tag === null \? null : \{ tag, at \}/);
+    expect(dialog).toMatch(/const current = useCallback\(\(\) => !\(watchRef\.current\?\.ended\(\) \?\? false\), \[\]\)/);
+    expect(dialog).toMatch(/void send\(body, current\)/);
+    expect(dialog).toMatch(/sendProblemReport\(body, undefined, undefined, stillCurrent\)/);
+    expect(dialog).toMatch(/setStep\(stillCurrent\(\) \? stepAfter\(outcome\) : \{ kind: "ended" \}\)/);
   });
 
   it("opens the dialog in <body>, so a hidden side bar does not hide it", () => {

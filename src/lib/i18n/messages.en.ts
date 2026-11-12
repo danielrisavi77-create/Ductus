@@ -1674,6 +1674,7 @@ const en = {
     sentNote: "Give the report number if you get in touch about the same matter.",
     failedLead: "The report was not sent. The description is still in the form.",
     keptLead: "The description is still in the form.",
+    ended: "This browser is no longer signed in to your account: you signed out or someone else signed in. The description was not sent and has been removed from the form. Sign in again and describe the problem.",
     retry: "Try again",
     check: {
       empty: "Enter a description of the problem.",

@@ -90,7 +90,10 @@ export type FailureReason =
   | "unavailable"
   | "unknown";
 
-export type SendOutcome = { kind: "sent"; reference: string } | { kind: "failed"; reason: FailureReason };
+export type SendOutcome =
+  | { kind: "sent"; reference: string }
+  | { kind: "failed"; reason: FailureReason }
+  | { kind: "ended" };
 
 // As the route and the table write it: upper-case hex (#1919).
 const REFERENCE = /^PR-[0-9A-F]{10}$/;
@@ -125,13 +128,18 @@ export const SEND_TIMEOUT_MS = 20_000;
 /**
  * Posts the bytes once; never throws. A lost connection is "network"; no
  * complete answer within `timeoutMs` (reading the body included) is "timeout",
- * and the request is aborted.
+ * and the request is aborted. When `stillCurrent` says the session the page
+ * was opened under has ended (signed out, or someone else signed in in
+ * another tab), nothing is posted: the browser's cookie may now be another
+ * person's, and the report would be recorded as theirs (Codex, #1967).
  */
 export async function sendProblemReport(
   body: string,
   fetcher: Fetcher = fetch,
   timeoutMs: number = SEND_TIMEOUT_MS,
+  stillCurrent: () => boolean = () => true,
 ): Promise<SendOutcome> {
+  if (!stillCurrent()) return { kind: "ended" };
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<SendOutcome>((resolve) => {
