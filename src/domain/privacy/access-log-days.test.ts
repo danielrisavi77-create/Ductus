@@ -112,6 +112,35 @@ describe("DAN-294 access log days: the classes of input", () => {
     expect(mergeAccessLogPages(long, [at("2026-11-09T13:10:00Z", 1)])).toHaveLength(200_001);
   });
 
+  // #1968 QA c.6815947103, review c.6815958601: the whole fraction of a second, not the milliseconds Date.parse keeps.
+  it.each([
+    ["no fraction", "2026-11-10T13:10:00Z", true],
+    ["a zero fraction", "2026-11-10T13:10:00.0Z", true],
+    ["six zero digits", "2026-11-10T13:10:00.000000Z", true],
+    ["exactly milliseconds", "2026-11-10T13:10:00.000Z", true],
+    ["one microsecond", "2026-11-10T13:10:00.000001Z", false],
+    ["999999 microseconds", "2026-11-10T13:09:59.999999Z", false],
+    ["999 microseconds", "2026-11-10T13:10:00.000999Z", false],
+    ["one microsecond with an offset", "2026-11-10T14:10:00.000001+01:00", false],
+    ["nonzero milliseconds", "2026-11-10T13:10:00.001Z", false],
+  ])("9b. a row's opened_at as text with %s is read only when it is exactly on the grid", (_, openedAt, ok) => {
+    const entry = accessLogEntryOf(row({ opened_at: openedAt }));
+    expect(entry?.at ?? null).toBe(ok ? Date.UTC(2026, 10, 10, 13, 10) : null);
+    expect(accessLogDaysOf([row({ opened_at: openedAt })]) === null).toBe(!ok);
+  });
+
+  it.each([
+    ["2026-11-10T13:10:00Z", Date.UTC(2026, 10, 10, 13, 10)],
+    ["2026-11-10T13:10:00.000000Z", Date.UTC(2026, 10, 10, 13, 10)],
+    ["2026-11-10T13:10:00.123Z", Date.UTC(2026, 10, 10, 13, 10) + 123],
+    ["2026-11-10T13:10:00.123000Z", Date.UTC(2026, 10, 10, 13, 10) + 123],
+    ["2026-11-10T13:10:00.123001Z", Number.NaN],
+    ["2026-11-10T13:10:00.000001Z", Number.NaN],
+    ["2026-11-10T13:10:00.999999Z", Number.NaN],
+  ])("9c. zonedInstantOf(%s) keeps an instant only when milliseconds hold it exactly", (value, ms) => {
+    expect(zonedInstantOf(value)).toBe(ms);
+  });
+
   it("10. unordered input comes out newest day and row first", () => {
     expect(shape([at("2026-11-09T08:00:00Z", 1), at("2026-11-10T08:00:00Z", 2), at("2026-11-09T09:00:00Z", 3)])).toEqual([
       ["2026-11-10", ["09:00–09:05 mentor live_view"]],
