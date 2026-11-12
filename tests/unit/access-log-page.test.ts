@@ -206,21 +206,22 @@ const OWN = { kind: "document", documentId: "dokument-1" };
 const NO_OWN = { kind: "none" };
 describe("DAN-294 S-42 the owner reads the log without the right to write", () => {
   it.each([
-    ["the owner with an active membership", ready, OWN, OWN, true],
-    ["the owner before acknowledging a new notice", { kind: "noticeFirst" }, { kind: "notAccepting" }, OWN, true],
-    ["the owner after the membership ended", { kind: "none" }, { kind: "none" }, OWN, true],
+    ["the owner with an active membership", ready, OWN, OWN, a.note],
+    ["the owner before acknowledging a new notice", { kind: "noticeFirst" }, { kind: "notAccepting" }, OWN, a.note],
+    ["the owner after the membership ended", { kind: "none" }, { kind: "none" }, OWN, a.note],
     // The address names an assignment, never another student's work: a
     // classmate without an own work sees "not started", someone outside the
     // course "not available", and neither reads a log.
-    ["a classmate without an own work", ready, { kind: "notOpened" }, NO_OWN, false],
-    ["a student outside the course", { kind: "none" }, { kind: "none" }, NO_OWN, false],
-    ["an unknown assignment", { kind: "none" }, { kind: "none" }, NO_OWN, false],
-  ] as [string, unknown, unknown, unknown, boolean][])("%s", async (_name, read, doc, own, shown) => {
+    ["a classmate without an own work", ready, { kind: "notOpened" }, NO_OWN, a.notStarted],
+    ["a student outside the course", { kind: "none" }, { kind: "none" }, NO_OWN, a.notFound],
+    ["an unknown assignment", { kind: "none" }, { kind: "none" }, NO_OWN, a.notFound],
+  ] as [string, unknown, unknown, unknown, string][])("%s", async (_name, read, doc, own, text) => {
     state.read = read;
     state.doc = doc;
     state.own = own;
     const out = await render(WORK);
-    if (shown) {
+    expect(out).toContain(text);
+    if (text === a.note) {
       expect(state.logCalls).toEqual([{ documentId: "dokument-1", query: {} }]);
       expect(out).toContain(a.note);
       expect(out.match(/<li /g)).toHaveLength(2);
