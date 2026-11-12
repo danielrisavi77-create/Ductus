@@ -40,6 +40,7 @@ export const PROBLEM_REPORT_ROUTES = [
   "/nastavnik/zadatak/novi",
   "/prijava",
   "/rad",
+  "/rad/[assignmentId]/dnevnik-pristupa",
   "/rad/[assignmentId]/predaja",
   "/rad/[assignmentId]/reprodukcija",
   "/upis",
