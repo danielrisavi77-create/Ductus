@@ -60,6 +60,15 @@ export function accountPlace(scope: string | null, ownAccount: boolean): Account
 }
 
 /**
+ * Whether the side bar offers "Prijavi problem" (Z-10, DAN-431): for every
+ * signed-in person, also where the page brings its own account control (the
+ * workspace's LocalLogout), so a student need not leave the editor to report.
+ */
+export function offersProblemReport(scope: string | null): boolean {
+  return scope !== null;
+}
+
+/**
  * Where "Početna" and the brand lead (#802 part B, D-202 t. 2): each role's
  * own home, the general home without a role. A student's home is S01 on
  * /zadaci (D-180), never the workspace; a teacher, also as a mentor (D-204),

@@ -1,0 +1,160 @@
+/*
+ * "Prijavi problem" (Z-10, DAN-431) on the shared dialog base
+ * (../shell/Dialog.module.css); this module adds only the form's parts.
+ * Two columns as in docs/design/ductura/m11-reference/z10-prijavi-problem.html,
+ * one under the other on a narrow screen.
+ */
+.dialog {
+  composes: dialog from "../shell/Dialog.module.css";
+  width: 640px;
+}
+
+.body {
+  composes: body from "../shell/Dialog.module.css";
+}
+
+.title {
+  composes: title from "../shell/Dialog.module.css";
+}
+
+.text {
+  composes: text from "../shell/Dialog.module.css";
+}
+
+.note {
+  composes: note from "../shell/Dialog.module.css";
+}
+
+.error {
+  composes: error from "../shell/Dialog.module.css";
+}
+
+.actions {
+  composes: actions from "../shell/Dialog.module.css";
+}
+
+.primary {
+  composes: primary from "../shell/Dialog.module.css";
+}
+
+.secondary {
+  composes: secondary from "../shell/Dialog.module.css";
+}
+
+.quiet {
+  composes: quiet from "../shell/Dialog.module.css";
+}
+
+.section {
+  composes: section from "../shell/Dialog.module.css";
+  align-self: start;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 16px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin: 0 0 4px;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.choice:hover {
+  background: var(--hover);
+}
+
+.choice input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.who {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input {
+  width: 100%;
+  min-height: 112px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+@media (max-width: 640px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The interface floor on a phone (app/globals.css). */
+  .choice,
+  .input,
+  .list,
+  .who {
+    font-size: 13px;
+  }
+}
