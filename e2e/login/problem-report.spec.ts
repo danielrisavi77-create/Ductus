@@ -94,9 +94,9 @@ test("a double click and a resend while sending make one request, then the refer
   await expect(dialog).toBeVisible();
   expect(held).toHaveLength(1);
 
-  await held[0]!.fulfill({ status: 201, json: { reference: "PR-0123456789" } });
-  await expect(dialog.getByRole("heading", { name: t.sentTitle })).toBeVisible();
-  await expect(dialog.getByText(t.sentReference.replace("{reference}", "PR-0123456789"))).toBeVisible();
+  await held[0]!.fulfill({ status: 201, json: { reference: "PR-3FA9C01B2E" } });
+  await expect(dialog.getByRole("heading", { name: t.sentTitle })).toBeFocused();
+  await expect(dialog.getByText(t.sentReference.replace("{reference}", "PR-3FA9C01B2E"))).toBeVisible();
   expect(bodies).toHaveLength(1);
   const sent = JSON.parse(bodies[0]!) as { description: string; route: string | null };
   expect(sent.description).toBe(DESCRIPTION);
@@ -120,7 +120,7 @@ test("shots of the dialog in each state", async ({ page }) => {
     await expect(dialog.getByRole("alert")).toBeVisible();
     await shootWidths(page, `prijava-problema-429-${theme}`);
     await page.unroute(ENDPOINT);
-    await page.route(ENDPOINT, (route) => route.fulfill({ status: 201, json: { reference: "PR-0123456789" } }));
+    await page.route(ENDPOINT, (route) => route.fulfill({ status: 201, json: { reference: "PR-3FA9C01B2E" } }));
     await dialog.getByRole("button", { name: t.retry }).click();
     await expect(dialog.getByRole("heading", { name: t.sentTitle })).toBeVisible();
     await shootWidths(page, `prijava-problema-poslano-${theme}`);

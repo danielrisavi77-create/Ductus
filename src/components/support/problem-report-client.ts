@@ -84,7 +84,8 @@ export type FailureReason = "network" | "signedOut" | "tooLarge" | "invalid" | "
 
 export type SendOutcome = { kind: "sent"; reference: string } | { kind: "failed"; reason: FailureReason };
 
-const REFERENCE = /^PR-[0-9a-f]{10}$/;
+// As the route and the table write it: upper-case hex (#1919).
+const REFERENCE = /^PR-[0-9A-F]{10}$/;
 
 const FAILURE_BY_STATUS: Readonly<Record<number, FailureReason>> = {
   401: "signedOut",

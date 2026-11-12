@@ -114,8 +114,10 @@ describe("browser from the user agent", () => {
 
 describe("server answers", () => {
   const rows: Array<[string, number, unknown, FailureReason | "sent"]> = [
-    ["created", 201, { reference: "PR-0123456789" }, "sent"],
+    // The server writes the number in upper-case hex (migration, route guard).
+    ["created", 201, { reference: "PR-3FA9C01B2E" }, "sent"],
     ["created without a reference", 201, {}, "unknown"],
+    ["created with a lower-case number", 201, { reference: "PR-3fa9c01b2e" }, "unknown"],
     ["signed out", 401, { error: "unauthorized" }, "signedOut"],
     ["body too large", 413, { error: "too_large" }, "tooLarge"],
     ["refused input", 422, { error: "invalid_input" }, "invalid"],
@@ -127,7 +129,7 @@ describe("server answers", () => {
 
   it.each(rows)("%s → %s", (_name, status, json, expected) => {
     const outcome = outcomeFromResponse(status, json);
-    if (expected === "sent") expect(outcome).toEqual({ kind: "sent", reference: "PR-0123456789" });
+    if (expected === "sent") expect(outcome).toEqual({ kind: "sent", reference: "PR-3FA9C01B2E" });
     else expect(outcome).toEqual({ kind: "failed", reason: expected });
   });
 
@@ -142,9 +144,9 @@ describe("server answers", () => {
   });
 
   it("posts the exact bytes as JSON to the route, with the session cookie", async () => {
-    const fetcher = vi.fn().mockResolvedValue(Response.json({ reference: "PR-abcdef0123" }, { status: 201 }));
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ reference: "PR-ABCDEF0123" }, { status: 201 }));
     const body = buildBody("x") ?? "";
-    await expect(sendProblemReport(body, fetcher)).resolves.toEqual({ kind: "sent", reference: "PR-abcdef0123" });
+    await expect(sendProblemReport(body, fetcher)).resolves.toEqual({ kind: "sent", reference: "PR-ABCDEF0123" });
     expect(fetcher).toHaveBeenCalledWith("/api/support/problem-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

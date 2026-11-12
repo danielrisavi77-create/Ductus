@@ -1670,7 +1670,6 @@ export const hr = {
       course: { label: "Pitanje o uputama ili roku", who: "Odgovara koordinator pilota." },
     },
     description: "Opis",
-    descriptionHint: "Najviše {max} znakova.",
     counter: "{n} od {max} znakova",
     attachedTitle: "Uz opis se šalje",
     attachedPage: "Vrsta stranice, bez oznake rada",

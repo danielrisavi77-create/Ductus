@@ -1660,7 +1660,6 @@ const en = {
       course: { label: "A question about instructions or a deadline", who: "Answered by the pilot coordinator." },
     },
     description: "Description",
-    descriptionHint: "At most {max} characters.",
     counter: "{n} of {max} characters",
     attachedTitle: "Sent with the description",
     attachedPage: "Kind of page, without the work's identifier",

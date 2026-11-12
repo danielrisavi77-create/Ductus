@@ -114,6 +114,11 @@ export function ProblemReportDialog({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
+  // Once sent, the form (and the focused button) is gone: focus the new heading.
+  useEffect(() => {
+    if (step.kind === "sent") headingRef.current?.focus();
+  }, [step.kind]);
+
   const sending = step.kind === "sending";
   const check = checkDescription(description);
   const length = descriptionLength(description);

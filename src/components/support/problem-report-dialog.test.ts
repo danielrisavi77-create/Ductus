@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { PROBLEM_REPORT_DESCRIPTION_MAX } from "@/domain/support/problem-report";
+import { PROBLEM_REPORT_DESCRIPTION_MAX, PROBLEM_REPORT_HOURLY_LIMIT } from "@/domain/support/problem-report";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
@@ -32,6 +32,8 @@ describe("failure messages", () => {
   });
 
   it("names the hourly limit for 429 and asks to shorten for 413", () => {
+    // The text names the limit in words, so it is tied to the domain constant.
+    expect(PROBLEM_REPORT_HOURLY_LIMIT).toBe(5);
     expect(stepAfter({ kind: "failed", reason: "tooMany" })).toMatchObject({ message: expect.stringContaining("pet prijava") });
     expect(stepAfter({ kind: "failed", reason: "tooLarge" })).toMatchObject({ message: expect.stringContaining("Skratite") });
   });
