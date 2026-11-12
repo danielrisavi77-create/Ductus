@@ -341,7 +341,13 @@ function lexSql(sql: string): { text: string; bodies: { start: number; end: numb
       i = j;
     } else if (c === "'" || c === '"') {
       let j = i + 1;
+      // An E'…' string treats a backslash as an escape, so `\'` does not close it.
+      const escapes = c === "'" && /^e$/i.test(sql[i - 1] ?? "") && !/\w/.test(sql[i - 2] ?? "");
       for (; j < sql.length; j++) {
+        if (escapes && sql[j] === "\\") {
+          j++;
+          continue;
+        }
         if (sql[j] !== c) continue;
         if (sql[j + 1] === c) j++;
         else break;
@@ -380,7 +386,7 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
   let outside = bare;
   for (const d of bodies) outside = outside.slice(0, d.start) + " ".repeat(d.end - d.start) + outside.slice(d.end);
   // A `;` inside a string or quoted name must not end the SELECT_INTO scan early; lexSql already errored on unbalanced quotes.
-  outside = outside.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, (q) => " ".repeat(q.length));
+  outside = outside.replace(/(?<!\w)[eE]'(?:[^'\\]|\\[^]|'')*'|'(?:[^']|'')*'|"(?:[^"]|"")*"/g, (q) => " ".repeat(q.length));
   for (const m of outside.matchAll(SELECT_INTO)) errors.push(`select into creates a table, not supported: ${seen(m)}`);
   const heads = [...bare.matchAll(FUNCTION_HEAD)];
   for (const [i, m] of heads.entries()) {
@@ -565,6 +571,9 @@ describe("sqlObjects", () => {
     ["a partition of", "CREATE TABLE a.t PARTITION OF a.p FOR VALUES IN (1);", ["a.t"]],
     ["a block-comment opener inside a line comment", "-- see app/api/*\nCREATE TABLE a.t (id int);\n-- db/tests/**/x.sql */\n", ["a.t"]],
     ["a double dash inside a string", "SELECT 'a--b'; CREATE TABLE a.t (id int);", ["a.t"]],
+    ["an escaped quote then a double dash in an E string", "SELECT E'it\\'s--'; CREATE TABLE a.t (id int);", ["a.t"]],
+    ["an escaped quote then a semicolon in a lower-case e string", "SELECT e'a\\'; b'; CREATE TABLE a.t (id int);", ["a.t"]],
+    ["a letter e before a plain string", "SELECT name'x\\'; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a double dash inside a dollar quote", "SELECT $$--$$; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a nested block comment", "/* a /* b */ CREATE TABLE a.old (id int); */ CREATE TABLE a.t (id int);", ["a.t"]],
     ["a MIME pattern before a later comment", "CREATE TABLE a.t0 (m text DEFAULT 'image/*');\nCREATE TABLE a.t (id int); /* c */ SELECT '*/';", ["a.t0", "a.t"]],
@@ -667,6 +676,7 @@ describe("sqlObjects", () => {
   it.each([
     ["a select into a new table", "SELECT 1 AS id INTO evidence.unlisted;"],
     ["a semicolon in a string before into", "SELECT ';' AS sep, 1 AS id INTO evidence.unlisted;"],
+    ["an escaped quote and semicolon in an E string before into", "SELECT E'a\\'; b' AS sep, 1 AS id INTO evidence.unlisted;"],
     ["a semicolon in a quoted name before into", 'SELECT 1 AS "a;b" INTO evidence.unlisted;'],
     ["a multi-line select into", "select a,\n  b\ninto temp x\nfrom y;"],
   ])("flags %s", (_n, sql) => {
