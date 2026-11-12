@@ -42,7 +42,7 @@ Oznake stanja: **R** riješeno na mainu, **Z** zastarjelo (zamijenjeno novijim i
 | #998 | Orkestrator: nalog za review i QA iz skripte | N | Tijelo traži posao nakon DAN-370, #993 i #994; #1003 samo dodaje OSV iznimke. Provjeriti postoji li skripta na mainu. |
 | #988, #987, #985 | DAN-368 plan napada (PR 1, PR 2) i izvještaj | N | #993 i #994 nose DAN-361, ne DAN-368; izvještaj #985 kaže da implementacija nije dovršena. Provjeriti prije zatvaranja. DAN-9001/9002 u tijelu su probni, ne tiketi. |
 | #946 | Login E2E: uzroci padova 25. do 27. 10. | R | DAN-348; PR-ovi #919 do #940 spojeni. |
-| #930, #929, #928 | Vizualne referentne slike, podjela kataloga tekstova, preflight pisca | N | Nemaju DAN; `pnpm orch:preflight` postoji (#928 vjerojatno R). Predlažem zatvoriti #928, a #929 i #930 provjeriti. |
+| #930, #929, #928 | Vizualne referentne slike, podjela kataloga tekstova, preflight pisca | N | Nemaju DAN; `pnpm orch:preflight` postoji (#928 možda R, ali opseg issuea nije uspoređen s preflightom). Ne zatvarati #928 dok se opseg ne provjeri; #929 i #930 također provjeriti. |
 | #853 | Dnevna provjera sažetaka botova (DAN-339) | V | Zadržati. |
 | #852, #473, #472 | Trijaža: pravilo postotka, Risk po putanji, `check:pr-metadata` | V | DAN-340/134, DAN-219, DAN-137/218. `check:pr-metadata` ne postoji u `package.json`; #472 vrijedi, a #1869 je njegov nasljednik (spojiti). |
 | #474 | Dokument: Akt o UI nije visokorizičan | V | DAN-220; dokument nije na mainu. |
