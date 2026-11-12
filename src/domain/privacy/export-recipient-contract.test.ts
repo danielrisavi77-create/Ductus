@@ -207,7 +207,7 @@ describe(CONTRACT, () => {
   it("gives every DATA-CLASS row an outcome for every recipient, within the decisions", () => {
     const md = readFileSync(join(ROOT, CONTRACT), "utf8");
     const inventory = inventoryClasses(readFileSync(join(ROOT, INVENTORY), "utf8"));
-    expect(inventory).toHaveLength(30);
+    expect(inventory).toHaveLength(31);
     const classes = parseRows(md, CLASSES_HEADING, ["Klasa", "Naziv"]);
     const extras = parseRows(md, EXTRAS_HEADING, ["Podatak"]);
     expect(contractErrors(inventory, classes, extras)).toEqual([]);
