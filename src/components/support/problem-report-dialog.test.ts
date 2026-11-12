@@ -112,4 +112,9 @@ describe("the opener", () => {
     expect(shell).toMatch(/offersProblemReport\(scope\) \? <ProblemReport /);
     expect(shell).not.toMatch(/place === "signOut" \? <ProblemReport /);
   });
+
+  it("opens the dialog in <body>, so a hidden side bar does not hide it", () => {
+    const opener = read("src/components/support/ProblemReport.tsx");
+    expect(opener).toMatch(/open \? createPortal\(<ProblemReportDialog [^]*?, document\.body\)/);
+  });
 });

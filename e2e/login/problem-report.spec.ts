@@ -58,6 +58,20 @@ test("in the workspace the drawer offers the report beside its own sign-out", as
   await expect(dialog).toHaveCount(0);
 });
 
+// Below 800 px the side bar that holds the opener is hidden; the dialog lives
+// in <body>, so narrowing the window while it is open keeps it on screen
+// (Codex, #1967).
+test("the dialog stays on screen when the side bar hides below 800 px", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { dialog } = await openDialog(page);
+  await page.setViewportSize({ width: 400, height: 900 });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: t.title })).toBeVisible();
+  expect(await dialog.evaluate((node) => node.parentElement === document.body)).toBe(true);
+  await dialog.getByRole("textbox", { name: t.description }).fill(DESCRIPTION);
+  await expect(dialog.getByRole("textbox", { name: t.description })).toHaveValue(DESCRIPTION);
+});
+
 test("an empty description is named at the field and nothing is sent", async ({ page }) => {
   let requests = 0;
   await page.route(ENDPOINT, (route) => {
@@ -147,6 +161,7 @@ test("shots of the dialog in each state", async ({ page }) => {
 async function shootWidths(page: Page, name: string): Promise<void> {
   for (const width of [1440, 400]) {
     await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("dialog")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await test.info().attach(`${name}-${width}`, {
       body: await page.screenshot({ fullPage: true, animations: "disabled" }),

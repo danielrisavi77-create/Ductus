@@ -8,6 +8,7 @@
  * double click or a resend makes no second request.
  */
 import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent } from "react";
+import { createPortal } from "react-dom";
 
 import {
   PROBLEM_REPORT_CATEGORIES,
@@ -77,7 +78,10 @@ export default function ProblemReport({ buttonClassName }: { buttonClassName?: s
       >
         {t.open}
       </button>
-      {open ? <ProblemReportDialog onClose={() => setOpen(false)} /> : null}
+      {/* Below 800 px the side bar is `visibility: hidden` until opened, and a
+          modal dialog still inherits that from its ancestors, so it lives in
+          <body> (Codex, #1967). `open` is only ever true in the browser. */}
+      {open ? createPortal(<ProblemReportDialog onClose={() => setOpen(false)} />, document.body) : null}
     </>
   );
 }
