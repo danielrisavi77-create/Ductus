@@ -135,6 +135,8 @@ describe("DAN-294 my access log: refusals", () => {
   it.each([
     ["30 February", "2026-02-30T08:00:00Z"],
     ["29 February of a common year", "2026-02-29T08:00:00Z"],
+    ["29 February of a century not divisible by 400", "1900-02-29T08:00:00Z"],
+    ["30 February with an offset", "2026-02-30T09:00:00+01:00"],
     ["31 April", "2026-04-31T08:00:00Z"],
     ["month 00", "2026-00-10T08:00:00Z"],
     ["month 13", "2026-13-10T08:00:00Z"],
@@ -151,6 +153,7 @@ describe("DAN-294 my access log: refusals", () => {
 
   it.each([
     ["29 February of a leap year", "2028-02-29T08:00:00Z", "2028-02-29T08:00:00.000Z"],
+    ["29 February of a year divisible by 400", "2000-02-29T08:00:00Z", "2000-02-29T08:00:00.000Z"],
     ["31 December", "2026-12-31T23:55:00Z", "2026-12-31T23:55:00.000Z"],
     ["1 January", "2027-01-01T00:00:00Z", "2027-01-01T00:00:00.000Z"],
   ])("a cursor on a real edge date (%s) goes to the RPC as the same instant", async (_, beforeAt, sent) => {

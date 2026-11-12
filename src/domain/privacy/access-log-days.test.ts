@@ -199,7 +199,8 @@ describe("DAN-294 access log days: properties", () => {
 
 // #1968 QA c.6816961587: Date.parse rolls an impossible calendar date over
 // (2026-02-30 reads as 2026-03-02), so the fields are checked before it.
-// Every invalid class is on the five-minute grid, so only the calendar refuses it.
+// Every invalid class is on the five-minute grid. V8's Date.parse already refuses
+// month 00 and 13, day 00, minute 60 and second 60; the others it would roll over.
 const INVALID_CALENDAR: [string, string][] = [
   ["30 February", "2026-02-30T08:00:00Z"],
   ["29 February of a common year", "2026-02-29T08:00:00Z"],
