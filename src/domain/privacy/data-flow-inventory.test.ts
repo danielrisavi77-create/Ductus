@@ -303,6 +303,8 @@ const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*tab
 const ALTER_MOVE = /\balter\s+(?:foreign\s+)?(?:table|function|procedure)\b[^;]*?\b(?:rename\s+to|set\s+schema)\b/gi;
 /** A quoted name in an ALTER head (also one holding a semicolon, which would end ALTER_MOVE early) is an error. */
 const ALTER_QUOTED = /\balter\s+(?:foreign\s+)?(?:table|function|procedure)\s+(?:if\s+exists\s+)?(?:only\s+)?[\w.]*"/gi;
+/** `SELECT … INTO name` outside a function body creates a table the CREATE TABLE heads never see, so it is an error. Inside a body it only fills a variable (bodies are blanked before this runs). */
+const SELECT_INTO = /\bselect\b[^;]*?\binto\b/gi;
 const FUNCTION_HEAD = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/gi;
 const FUNCTION_FULL = /create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+([a-z_]+\.[a-z0-9_]+)\s*\(/iy;
 const DOLLAR_OPEN = /^\$(?:[a-z_][a-z0-9_]*)?\$/i;
@@ -375,6 +377,9 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
   }
   for (const m of bare.matchAll(ALTER_MOVE)) errors.push(`alter that renames or moves an object not supported: ${seen(m)}`);
   for (const m of bare.matchAll(ALTER_QUOTED)) errors.push(`alter with a quoted identifier not supported: ${seen(m)}`);
+  let outside = bare;
+  for (const d of bodies) outside = outside.slice(0, d.start) + " ".repeat(d.end - d.start) + outside.slice(d.end);
+  for (const m of outside.matchAll(SELECT_INTO)) errors.push(`select into creates a table, not supported: ${seen(m)}`);
   const heads = [...bare.matchAll(FUNCTION_HEAD)];
   for (const [i, m] of heads.entries()) {
     FUNCTION_FULL.lastIndex = m.index ?? 0;
@@ -655,6 +660,18 @@ describe("sqlObjects", () => {
     ["a quoted name without a move", 'ALTER TABLE IF EXISTS ONLY evidence."Document" ADD COLUMN z int;'],
   ])("flags %s in ALTER", (_n, sql) => {
     expect(sqlObjects(sql).errors.some((e) => e.includes("quoted identifier"))).toBe(true);
+  });
+
+  it.each([
+    ["a select into a new table", "SELECT 1 AS id INTO evidence.unlisted;"],
+    ["a multi-line select into", "select a,\n  b\ninto temp x\nfrom y;"],
+  ])("flags %s", (_n, sql) => {
+    expect(sqlObjects(sql).errors.some((e) => e.includes("select into"))).toBe(true);
+  });
+
+  it("does not flag select into a variable inside a function body", () => {
+    const sql = "CREATE FUNCTION a.f() RETURNS int LANGUAGE plpgsql AS $$ DECLARE v int; BEGIN SELECT 1 INTO v; RETURN v; END $$;";
+    expect(sqlObjects(sql).errors).toEqual([]);
   });
 
   it("does not flag a column rename or an add column", () => {
