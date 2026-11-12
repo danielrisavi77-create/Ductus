@@ -300,7 +300,8 @@ describe("DAN-431: the 8 KiB body limit holds every valid report and nothing lar
   // The largest context every closed class allows.
   const MAX_CONTEXT = {
     appVersion: `9999.9999.9999+${"f".repeat(40)}`,
-    browser: { family: longest(BROWSER_FAMILIES), major: 999 },
+    // `null` is one byte longer than the largest major version, 999.
+    browser: { family: longest(BROWSER_FAMILIES), major: null },
     category: longest(PROBLEM_REPORT_CATEGORIES),
     route: longest(PROBLEM_REPORT_ROUTES),
     syncState: longest(SYNC_STATES),
@@ -393,6 +394,7 @@ describe("DAN-431: the 8 KiB body limit holds every valid report and nothing lar
       // The activity touch is a second withActor; the report RPC runs only for a valid report.
       const rpc = p.query.mock.calls.filter(([sql]) => sql === SQL);
       expect(rpc).toHaveLength(status === 201 ? 1 : 0);
+      if (status !== 201) expect(p.withActor).not.toHaveBeenCalled();
       if (status === 201) expect(rpc[0]?.[1]?.[1]).toBe(LONGEST_DESCRIPTION);
     });
   }
