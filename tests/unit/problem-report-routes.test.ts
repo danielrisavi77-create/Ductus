@@ -20,6 +20,21 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const MIGRATION = readFileSync(join(ROOT, "db/migrations/20261112110000_problem_report.sql"), "utf8");
 const UP = MIGRATION.slice(0, MIGRATION.indexOf("-- migrate:down"));
 
+/** The quoted members of a `CHECK (route IN (...))` that replaces problem_report_route_check. */
+function routeCheck(sql: string): string[] {
+  const match = /ADD CONSTRAINT problem_report_route_check\s+CHECK \(route IN \(([^)]*)\)\)/.exec(sql);
+  if (!match?.[1]) throw new Error("no route CHECK");
+  return [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1] ?? "");
+}
+
+/** Later migrations that replace the route CHECK, oldest first (DAN-431, /kako-radi). */
+const ROUTE_MIGRATIONS = readdirSync(join(ROOT, "db/migrations"))
+  .filter((name) => name > "20261112110000_problem_report.sql" && name.endsWith(".sql"))
+  .sort()
+  .map((name) => readFileSync(join(ROOT, "db/migrations", name), "utf8"))
+  .filter((sql) => sql.includes("problem_report_route_check"))
+  .map((sql) => ({ up: sql.slice(0, sql.indexOf("-- migrate:down")), down: sql.slice(sql.indexOf("-- migrate:down")) }));
+
 /** Every `page.tsx` under app/, as the route template Next.js serves it. */
 function appPages(dir = join(ROOT, "app")): string[] {
   const found: string[] = [];
@@ -43,10 +58,25 @@ function checkSet(column: string): string[] {
 
 describe("DAN-431 problem report: migration and domain agree", () => {
   it("every closed set is the same in both", () => {
-    expect(checkSet("route")).toEqual([...PROBLEM_REPORT_ROUTES]);
+    const latest = ROUTE_MIGRATIONS.at(-1);
+    expect(latest).toBeDefined();
+    expect(routeCheck(latest?.up ?? "")).toEqual([...PROBLEM_REPORT_ROUTES]);
     expect(checkSet("category")).toEqual([...PROBLEM_REPORT_CATEGORIES]);
     expect(checkSet("browser_family")).toEqual([...BROWSER_FAMILIES]);
     expect(checkSet("sync_state")).toEqual([...SYNC_STATES]);
+  });
+
+  it("each route CHECK keeps every earlier route, and its down restores the one before", () => {
+    let before = checkSet("route");
+    for (const { up, down } of ROUTE_MIGRATIONS) {
+      const after = routeCheck(up);
+      expect(after.filter((route) => !before.includes(route))).not.toEqual([]);
+      expect(before.filter((route) => !after.includes(route))).toEqual([]);
+      expect([...after].sort()).toEqual(after);
+      expect(routeCheck(down)).toEqual(before);
+      before = after;
+    }
+    expect(before).toContain("/kako-radi");
   });
 
   it("the description length, the app version pattern and the character classes are the same", () => {

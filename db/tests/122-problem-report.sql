@@ -147,6 +147,7 @@ FROM (VALUES
   ('route with a title in it', 'technical', 'Opis.', '/rad/Moj esej o Krleži', '1.0.0', 'chromium', 1, 'SYNCED'),
   ('route with a real id instead of the template', 'technical', 'Opis.', '/zadatak/00000000-0000-4000-8000-0000000000a1', '1.0.0', 'chromium', 1, 'SYNCED'),
   ('route with a query', 'technical', 'Opis.', '/rad?naslov=esej', '1.0.0', 'chromium', 1, 'SYNCED'),
+  ('route outside the set', 'technical', 'Opis.', '/nepostojeca', '1.0.0', 'chromium', 1, 'SYNCED'),
   ('app version with words', 'technical', 'Opis.', '/', '1.0.0 Moj esej', 'chromium', 1, 'SYNCED'),
   ('app version with a sentence after a hash', 'technical', 'Opis.', '/', '1.0.0+abcdef0 tekst', 'chromium', 1, 'SYNCED'),
   ('app version of hex letters only, too short', 'technical', 'Opis.', '/', 'abc', 'chromium', 1, 'SYNCED'),
@@ -162,13 +163,18 @@ SELECT is(pg_temp.submit('ana', 'technical', 'Opis.', '/', '1.0.0', 'chromium', 
           '22003: value "3000000000" is out of range for type integer', 'a browser major beyond integer is refused before the call');
 SELECT is(pg_temp.submit('ana', 'account', repeat('ž', 1000), '/', '1.0.0', 'safari', 0, NULL) ~ '^PR-[0-9A-F]{10}$', true,
   '1000 characters, not bytes, is the limit');
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '3', 'no refused call wrote a row');
+-- DAN-431: "Kako Ductura radi" is a page in the shell, so its route is in the set.
+SELECT is(pg_temp.submit('vesna', 'technical', 'Stranica se ne učitava.', '/kako-radi', '1.0.0', 'chromium', 1, NULL) ~ '^PR-[0-9A-F]{10}$', true,
+  'a report from /kako-radi is accepted');
+SELECT is(pg_temp.owner($$ SELECT count(*)::text FROM identity.problem_report WHERE route = '/kako-radi' AND user_id = {vesna} $$), '1',
+  'the /kako-radi route is stored as sent');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '4', 'no refused call wrote a row');
 
 -- 4. No live session: ZD401, nothing written.
 SELECT is(pg_temp.submit(t.name, 'technical', 'Opis.', '/', '1.0.0', 'chromium', 1, NULL), 'ZD401: not authenticated',
   format('ZD401 for %s', t.name))
 FROM unnest(ARRAY['anon', 'expired', 'closed', 'unknown']) AS t (name);
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '3', 'no call without a session wrote a row');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '4', 'no call without a session wrote a row');
 
 -- 5. At most five in a sliding hour, per account. Ana has sent two; older
 -- reports of Dora's do not count.
