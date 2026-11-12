@@ -7928,7 +7928,7 @@ CREATE TABLE identity.problem_report (
     CONSTRAINT problem_report_category_check CHECK ((category = ANY (ARRAY['technical'::text, 'account'::text, 'course'::text]))),
     CONSTRAINT problem_report_description_check CHECK ((((char_length(description) >= 1) AND (char_length(description) <= 1000)) AND (description !~ '[\u0001-\u0008\u000B-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]'::text) AND (description ~ '[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200D\u2028\u2029\u202F\u205F\u2060\u3000\uFEFF]'::text))),
     CONSTRAINT problem_report_reference_check CHECK ((reference ~ '^PR-[0-9A-F]{10}$'::text)),
-    CONSTRAINT problem_report_route_check CHECK ((route = ANY (ARRAY['/'::text, '/nastavnik'::text, '/nastavnik/brz-put'::text, '/nastavnik/kolegiji'::text, '/nastavnik/mentorstva'::text, '/nastavnik/rad/[id]'::text, '/nastavnik/rad/[id]/reprodukcija'::text, '/nastavnik/zadatak/[assignmentId]/uredi'::text, '/nastavnik/zadatak/novi'::text, '/prijava'::text, '/rad'::text, '/rad/[assignmentId]/predaja'::text, '/rad/[assignmentId]/reprodukcija'::text, '/upis'::text, '/upis/kolegij/[courseId]'::text, '/ustanova'::text, '/ustanova/kolegiji'::text, '/ustanova/korisnici'::text, '/ustanova/pravila'::text, '/zadaci'::text, '/zadaci/kolegiji'::text, '/zadaci/radovi'::text, '/zadatak/[id]'::text]))),
+    CONSTRAINT problem_report_route_check CHECK ((route = ANY (ARRAY['/'::text, '/kako-radi'::text, '/nastavnik'::text, '/nastavnik/brz-put'::text, '/nastavnik/kolegiji'::text, '/nastavnik/mentorstva'::text, '/nastavnik/rad/[id]'::text, '/nastavnik/rad/[id]/reprodukcija'::text, '/nastavnik/zadatak/[assignmentId]/uredi'::text, '/nastavnik/zadatak/novi'::text, '/prijava'::text, '/rad'::text, '/rad/[assignmentId]/dnevnik-pristupa'::text, '/rad/[assignmentId]/predaja'::text, '/rad/[assignmentId]/reprodukcija'::text, '/stanje'::text, '/upis'::text, '/upis/kolegij/[courseId]'::text, '/ustanova'::text, '/ustanova/kolegiji'::text, '/ustanova/korisnici'::text, '/ustanova/pravila'::text, '/zadaci'::text, '/zadaci/kolegiji'::text, '/zadaci/radovi'::text, '/zadatak/[id]'::text]))),
     CONSTRAINT problem_report_sync_state_check CHECK ((sync_state = ANY (ARRAY['EDITING'::text, 'SAVING_LOCAL'::text, 'LOCAL_DURABLE'::text, 'SYNCING'::text, 'SYNCED'::text, 'CONFLICT'::text, 'ERROR'::text, 'RECOVERY_REQUIRED'::text])))
 );
 
@@ -13228,4 +13228,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261111221500'),
     ('20261111230000'),
     ('20261111233000'),
-    ('20261112110000');
+    ('20261112110000'),
+    ('20261112170000');
