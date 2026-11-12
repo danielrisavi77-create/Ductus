@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
-import { readWorkDocument, WORK_DOCUMENT_SQL } from "./work-document-read";
+import { OWN_WORK_DOCUMENT_SQL, readOwnWorkDocument, readWorkDocument, WORK_DOCUMENT_SQL } from "./work-document-read";
 
 // #711 step B1: which document /rad?zadatak=<id> writes into. The SQL itself
 // runs against the database in tests/integration/work-document-read; this
@@ -91,5 +91,38 @@ describe("document of an assignment for the session (#711 B1)", () => {
     expect(WORK_DOCUMENT_SQL).toContain("app.current_institution_id()");
     expect(WORK_DOCUMENT_SQL).not.toMatch(/\b(INSERT|UPDATE|DELETE|MERGE|open_student_work|FOR (SHARE|UPDATE))\b/i);
     expect(WORK_DOCUMENT_SQL).not.toContain(";");
+  });
+});
+
+// DAN-294 (review FAIL c.6820050088): the own work apart from the right to write.
+describe("the session's own work for an assignment, apart from the right to write (DAN-294)", () => {
+  it("names the own document from ownership alone, one read", async () => {
+    const { withActor, query } = actor([{ document_id: DOCUMENT }]);
+    expect(await readOwnWorkDocument(TOKEN, ID, withActor)).toEqual({ kind: "document", documentId: DOCUMENT });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith(OWN_WORK_DOCUMENT_SQL, [ID]);
+  });
+
+  it.each([
+    ["no own row", []], ["a null id", [{ document_id: null }]], ["an empty id", [{ document_id: "" }]],
+  ])("answers none for %s and for a failed read", async (_name, rows) => {
+    expect(await readOwnWorkDocument(TOKEN, ID, actor(rows).withActor)).toEqual(NONE);
+    expect(await readOwnWorkDocument(TOKEN, ID, actor().withActor)).toEqual(NONE);
+  });
+
+  it("does not reach the database without a well-formed token and assignment id", async () => {
+    const { withActor } = actor([{ document_id: DOCUMENT }]);
+    for (const [token, id] of [[undefined, ID], ["short", ID], [TOKEN, null], [TOKEN, "1; DROP"]] as const) {
+      expect(await readOwnWorkDocument(token, id, withActor)).toEqual(NONE);
+    }
+    expect(withActor).not.toHaveBeenCalled();
+  });
+
+  it("only reads own rows: no membership, notice or write condition, no write", () => {
+    expect(OWN_WORK_DOCUMENT_SQL).toContain("p.principal_id = app.current_user_id()");
+    expect(OWN_WORK_DOCUMENT_SQL).toContain("p.institution_id = app.current_institution_id()");
+    expect(OWN_WORK_DOCUMENT_SQL).not.toMatch(/actor_assignment_role|notice_acknowledgment|course_member|opens_at/);
+    expect(OWN_WORK_DOCUMENT_SQL).not.toMatch(/\b(INSERT|UPDATE|DELETE|MERGE|open_student_work|FOR (SHARE|UPDATE))\b/i);
+    expect(OWN_WORK_DOCUMENT_SQL).not.toContain(";");
   });
 });

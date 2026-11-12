@@ -1,0 +1,103 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
+import { readShellRole } from "@/components/shell/shell-role";
+import { AccessLogDays, AccessLogUnavailable } from "@/components/student/AccessLogView";
+import { assignmentParam, readWorkContext } from "@/components/student/work-context-read";
+import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { pageActivity } from "@/server/auth/activity";
+import { sessionPrincipal } from "@/server/auth/principal";
+import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { withActor } from "@/server/db";
+import { readOwnWorkDocument, readWorkDocument } from "@/server/evidence/work-document-read";
+import { type AccessLogQuery, olderHref, readMyAccessLogPage } from "@/server/privacy/my-access-log-pages";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const metadata = { title: `${t.accessLog.context} · ${t.app.name}` };
+
+/**
+ * S-42: the student's own access log (DAN-294, M10.4; contract on #1836,
+ * c.6814737263; PRODUCT §5 rule 17). The work is found as on
+ * `/rad/<id>/reprodukcija`; loading this page never starts a work. The log is
+ * read on the server through app.read_my_access_log, which answers only for
+ * the owner of the session; another student's work, an unknown one and a
+ * failed read never show a row. The owner's own work is found apart from the
+ * right to write, so the log stays readable after the membership ends and
+ * before a new notice is acknowledged (PRODUCT §5 rule 17, review FAIL
+ * c.6820050088).
+ */
+export default async function StudentAccessLogPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ assignmentId: string }>;
+  searchParams: Promise<AccessLogQuery>;
+}) {
+  const { assignmentId: raw } = await params;
+  const query = await searchParams;
+  const assignmentId = assignmentParam(raw);
+  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  pageActivity(token);
+  // The cookie digest and the server time of this render (D-118).
+  const { tag, at } = shellSession(token);
+  const [principal, read, role, doc, own] = await Promise.all([
+    sessionPrincipal(token, withActor),
+    readWorkContext(token, assignmentId, withActor),
+    readShellRole(token, withActor),
+    readWorkDocument(token, assignmentId, withActor),
+    readOwnWorkDocument(token, assignmentId, withActor),
+  ]);
+  // Only a student without an own work goes to the notice first; the owner reads the log regardless.
+  if (read.kind === "noticeFirst" && assignmentId && own.kind !== "document") redirect(`/zadatak/${assignmentId}`);
+  const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
+  const here = `/rad/${encodeURIComponent(raw)}/dnevnik-pristupa`;
+
+  const signIn = (
+    <>
+      <p role="status">{t.accessLog.signInFirst}</p>
+      {/* The login route answers with a redirect: a plain link, never a prefetched one. */}
+      <p><a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(here)}`}>{t.accessLog.signIn}</a></p>
+    </>
+  );
+  // The note explains the log, so it stands only above a log that was read.
+  let logShown = false;
+  let body;
+  if (assignmentId === null) {
+    body = <p role="status">{t.accessLog.invalid}</p>;
+  } else if (session === null) {
+    body = signIn;
+  } else if (own.kind !== "document") {
+    body = <p role="status">{read.kind === "ready" && doc.kind === "notOpened" ? t.accessLog.notStarted : t.accessLog.notFound}</p>;
+  } else {
+    // One read per request, from the cursor of the address when it is valid (review FAIL c.6819070024).
+    const log = await readMyAccessLogPage(token, withActor, own.documentId, query);
+    if (log.kind === "ok") {
+      logShown = true;
+      const older = log.next === null ? null : olderHref(here, log.next);
+      body = <AccessLogDays days={log.days} olderHref={older} newestHref={log.continued ? here : null} />;
+    } else if (log.kind === "unavailable") {
+      const { prije, zapis } = query;
+      const again = typeof prije === "string" && typeof zapis === "string" ? olderHref(here, { beforeAt: prije, beforeId: zapis }) : here;
+      body = <AccessLogUnavailable retryHref={again} />;
+    } else {
+      body = log.kind === "unauthorized" ? signIn : <p role="status">{t.accessLog.notFound}</p>;
+    }
+  }
+
+  const work = read.kind === "ready" ? read : null;
+  return (
+    <AppShell session={{ tag, at }} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} crumbs={[t.accessLog.context]}>
+      <div className="page access-log">
+        <h1>{t.accessLog.title}</h1>
+        {work ? <p className="muted">{`${work.course} / ${work.notice.title}`}</p> : null}
+        {assignmentId ? <p><Link href={`/rad?zadatak=${assignmentId}`}>{t.accessLog.backToWork}</Link></p> : null}
+        {logShown ? <p className="access-log__note">{t.accessLog.note}</p> : null}
+        {body}
+      </div>
+    </AppShell>
+  );
+}
