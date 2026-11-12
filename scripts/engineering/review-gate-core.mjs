@@ -454,7 +454,7 @@ function latestVerdicts(entries, {
     const key = `${identity.appSlug}|${identity.principal}`;
     const candidate = { agent, head: place.head, verdict: negative ?? (entry.edited ? "EDITED" : "PASS"), extra,
       fallback, fallbackLine, identity, cli: entry.cliChannel != null, order: [entry.createdAt, entry.index],
-      current: place.current };
+      current: place.current, body: entry.body };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
@@ -486,6 +486,35 @@ function latestVerdicts(entries, {
     key,
     prevailing({ current: held(slots.current, key), carried: held(slots.carried, key) }),
   ]));
+}
+
+const VERDICT_SPECS = {
+  review: { agentField: "Agent-Review", headField: "Review-Head", verdictField: "Review-Verdict", role: "reviewer" },
+  qa: { agentField: "QA-Agent", headField: "QA-Head", verdictField: "QA-Verdict", role: "qa", extraField: "QA-Scope" },
+};
+
+/**
+ * The verdicts of `kind` ("review" | "qa") the gate counts on `headSha` alone
+ * (no carried heads): `negative` when any principal holds a FAIL or BLOCK
+ * there, `passes` the PASS results of principals other than `authorAgent`,
+ * each with the comment `body` it came from. Same validity rules as the gate:
+ * App or owner CLI channel, runtime of the App, F-012, F-023 and F-027. It does
+ * not apply the gate's rules on which QA PASS counts towards the gate (separate
+ * App, quota fallback, pairing with the review), so a PASS listed here is valid
+ * but not always the one the gate relied on. Read-only; DAN-695 uses it so a
+ * report never reads the model from a verdict the gate would reject.
+ */
+export function countedVerdicts({ comments, kind, headSha, ownerLogin, authorAgent, trustedLogins = TRUSTED_VERDICT_LOGINS }) {
+  const spec = VERDICT_SPECS[kind];
+  if (!spec) throw new Error(`Unknown verdict kind ${kind}.`);
+  if (!SHA_RE.test(headSha ?? "")) return { negative: false, passes: [] };
+  const trusted = trustedComments(comments, trustedLogins, ownerLogin);
+  const results = [...latestVerdicts(trusted, { ...spec, headSha, carriedHeads: new Set() }).values()];
+  const author = declaredPrincipal(authorAgent);
+  return {
+    negative: results.some((result) => NEGATIVE.has(result.verdict)),
+    passes: results.filter((result) => result.verdict === "PASS" && result.identity.principal !== author),
+  };
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the

@@ -65,8 +65,106 @@ test("prMetrics: a round is one distinct head per kind; gate rules decide its ou
   const m = prMetrics(merged({ title: "feat: model (B-7, 1/2)" }), comments, demoTaskIds(plan));
   assert.deepEqual(m, {
     number: 7, risk: "critical", task: "DAN-1", demoTasks: [{ id: "B-7", part: "1/2" }], leadHours: 36,
-    reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2,
+    reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2, pathsRead: true, eventsRead: true,
+    // No paths given: the check expects Opus. These verdicts carry no App, so
+    // the gate counts none of them and the model check reads nothing.
+    reviewModel: { declared: null, expected: "opus", outcome: "n/a" },
+    qaModel: { declared: null, expected: "opus", outcome: "n/a" },
   });
+});
+
+test("prMetrics: the model check reads the merged head's PASS against the changed paths", () => {
+  const head = SHA("b");
+  // Verdicts the gate counts: posted through the Claude App, valid slots, QA with scope.
+  const withModel = (c, line) => ({ ...c, performed_via_github_app: { slug: "claude" }, body: `${c.body}${line}\n` });
+  const comments = [
+    withModel(review(head, "PASS", "2026-10-01T10:00:00Z", "claude:reviewX:reviewer"), "Review-Model: claude-sonnet-5-5"),
+    withModel(qa(head, "PASS", "2026-10-01T11:00:00Z", "claude:qaX:qa"), "QA-Scope: full\nQA-Model: claude-opus-5-5"),
+    withModel(qa(SHA("a"), "PASS", "2026-10-01T09:00:00Z", "claude:qaX:qa"), "QA-Scope: full\nQA-Model: claude-haiku-5-5"),
+  ];
+  const code = prMetrics(merged(), comments, new Set(), ["src/domain/sync/drain.ts"]);
+  assert.deepEqual(code.reviewModel, { declared: "claude-sonnet-5-5", expected: "opus", outcome: "below" });
+  assert.deepEqual(code.qaModel, { declared: "claude-opus-5-5", expected: "opus", outcome: "ok" });
+  const testsOnly = prMetrics(merged(), comments, new Set(), ["tests/unit/a.test.ts"]);
+  assert.equal(testsOnly.reviewModel.outcome, "ok");
+  const standard = prMetrics(merged({ body: body("standard", "DAN-1") }), comments, new Set(), ["src/lib/x.ts"]);
+  assert.equal(standard.reviewModel.outcome, "ok");
+  assert.equal(standard.qaModel.outcome, "n/a");
+  const s = summarize([code, testsOnly, standard]);
+  assert.deepEqual(s.modelCheck.review, { ok: 2, below: 1, undeclared: 0, other: 0, "n/a": 0 });
+  assert.deepEqual(s.modelCheck.qa, { ok: 2, below: 0, undeclared: 0, other: 0, "n/a": 1 });
+  assert.deepEqual(s.modelCheck.below, ["#7 review"]);
+  const line = renderMetrics([code], summarize([code]), "2026-10-01").at(-1);
+  assert.match(line, /^model check .*review ok 0, below 1, undeclared 0, other 0, n\/a 0; qa ok 1,.*below: #7 review; files unread \(expects Opus\): -; base events unread \(no PASS counted\): -$/);
+  // A file list that could not be read (null): Opus is expected and the row is marked.
+  const unread = prMetrics(merged({ body: body("low", "DAN-1") }), comments, new Set(), null);
+  assert.equal(unread.pathsRead, false);
+  assert.deepEqual(unread.reviewModel, { declared: "claude-sonnet-5-5", expected: "opus", outcome: "below" });
+  const su = summarize([unread]);
+  assert.deepEqual(su.modelCheck.below, ["#7 review (files unread)"]);
+  assert.deepEqual(su.modelCheck.unread, ["#7"]);
+  assert.match(renderMetrics([unread], su, "2026-10-01").at(-1), /below: #7 review \(files unread\); files unread \(expects Opus\): #7; base events unread \(no PASS counted\): -$/);
+});
+
+test("prMetrics: the owner's CLI channel counts only with the owner's login", () => {
+  const head = SHA("b");
+  const cli = {
+    ...review(head, "PASS", "2026-10-01T10:00:00Z", "codex:c:reviewer"),
+    body: `Agent-Review: codex:c:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\nReview-Model: gpt-5-codex\nReview-Channel: codex-cli\n`,
+  };
+  const paths = ["src/lib/x.ts"];
+  assert.deepEqual(prMetrics(merged(), [cli], new Set(), paths, { ownerLogin: "u" }).reviewModel,
+    { declared: "gpt-5-codex", expected: "opus", outcome: "other" });
+  assert.equal(prMetrics(merged(), [cli], new Set(), paths).reviewModel.outcome, "n/a");
+});
+
+test("F-013 (cxcr1946, cxcq1946): the model check reads only verdicts after the last base change", () => {
+  // Input classes (contract on #1836 c.6805366952), written before the code.
+  // Standard PR over a sync path, so the table expects Opus: an old FAIL of
+  // reviewer A on head H at 10:00, a valid Sonnet PASS of reviewer B on H at 12:00.
+  const head = SHA("b");
+  const app = { performed_via_github_app: { slug: "claude" } };
+  const fail = { ...review(head, "FAIL", "2026-10-01T10:00:00Z", "claude:revA:reviewer"), ...app };
+  const pass = (agent = "claude:revB:reviewer") => {
+    const c = review(head, "PASS", "2026-10-01T12:00:00Z", agent);
+    return { ...c, ...app, body: `${c.body}Review-Model: claude-sonnet-5-5\n` };
+  };
+  const ev = (event, at) => ({ event, created_at: at });
+  const at11 = "2026-10-01T11:00:00Z";
+  const cases = [
+    ["manual base change between FAIL and PASS", [ev("base_ref_changed", at11)], "below", true],
+    ["automatic base change between FAIL and PASS", [ev("automatic_base_change_succeeded", at11)], "below", true],
+    ["no base change: the old FAIL still counts", [], "n/a", true],
+    ["base change before the FAIL", [ev("base_ref_changed", "2026-10-01T09:00:00Z")], "n/a", true],
+    ["base change after the PASS drops the PASS too", [ev("base_ref_changed", "2026-10-01T13:00:00Z")], "n/a", true],
+    ["failed automatic change keeps the base", [ev("automatic_base_change_failed", at11)], "n/a", true],
+    ["other events are no base change", [ev("head_ref_force_pushed", at11), ev("labeled", at11)], "n/a", true],
+    ["several base changes: the last one counts", [ev("base_ref_changed", "2026-10-01T09:00:00Z"), ev("base_ref_changed", at11)], "below", true],
+    ["events not read: closed, no PASS counts", null, "n/a", false],
+    ["base change without a readable time: closed", [ev("base_ref_changed", "not a time")], "n/a", false],
+    ["base change without a time: closed", [ev("automatic_base_change_succeeded", undefined)], "n/a", false],
+  ];
+  const pr = merged({ body: body("standard", "DAN-1") });
+  const paths = ["src/domain/sync/drain.ts"];
+  for (const [name, events, outcome, eventsRead] of cases) {
+    const m = prMetrics(pr, [fail, pass()], new Set(), paths, { events });
+    assert.equal(m.reviewModel.outcome, outcome, name);
+    assert.equal(m.reviewModel.expected, "opus", name);
+    assert.equal(m.eventsRead, eventsRead, name);
+  }
+  // The same reviewer's later PASS after a base change reads the same way.
+  const same = prMetrics(pr, [fail, pass("claude:revA:reviewer")], new Set(), paths, { events: [ev("base_ref_changed", at11)] });
+  assert.equal(same.reviewModel.outcome, "below");
+  // Only the model check is filtered: the round counts keep the whole history.
+  const counted = prMetrics(pr, [fail, pass()], new Set(), paths, { events: [ev("base_ref_changed", at11)] });
+  assert.equal(counted.reviewPass + counted.reviewFail, 1);
+  // Unread events are named in the summary and the report line.
+  const unread = prMetrics(pr, [fail, pass()], new Set(), paths, { events: null });
+  const s = summarize([counted, unread]);
+  assert.deepEqual(s.modelCheck.below, ["#7 review"]);
+  assert.deepEqual(s.modelCheck.eventsUnread, ["#7"]);
+  assert.match(renderMetrics([unread], summarize([unread]), "2026-10-01").at(-1), /; base events unread \(no PASS counted\): #7$/);
+  assert.match(renderMetrics([counted], summarize([counted]), "2026-10-01").at(-1), /; base events unread \(no PASS counted\): -$/);
 });
 
 test("two verdicts on the same head are one round", () => {
@@ -120,8 +218,9 @@ test("render puts the two T2 metrics first", () => {
   const lines = renderMetrics(rows, summarize(rows), "2026-10-01");
   assert.match(lines[1], /^1\. time from open to merge: median 4 h, p90 4 h/);
   assert.match(lines[2], /^2\. QA rounds per PR .*mean 2, max 2/);
-  assert.match(lines.at(-1), /PRs without a recognised plan id: 0/);
-  assert.match(lines.at(-1), /demo tasks with merged work .*: 1 \(B-7\)/);
+  assert.match(lines.at(-2), /PRs without a recognised plan id: 0/);
+  assert.match(lines.at(-2), /demo tasks with merged work .*: 1 \(B-7\)/);
+  assert.match(lines.at(-1), /^model check .*below: -; files unread \(expects Opus\): -; base events unread \(no PASS counted\): -$/);
   assert.doesNotMatch(lines.join("\n"), /tasks merged/);
   assert.ok(renderMetrics([], summarize([]), "2026-10-01").join("\n").includes("median ? h"));
 });

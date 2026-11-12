@@ -1,5 +1,7 @@
 // DAN-130 PR B: pure logic for `pnpm orch:metrics`. No gh/git calls here.
 import { field } from "../engineering/metadata-parser.mjs";
+import { lastBaseChange, sinceBaseChange } from "../engineering/review-gate-core.mjs";
+import { checkRole, OUTCOMES } from "./model-check.mjs";
 import { latestVerdict, parseAgentRisk, parseVerdicts } from "./orchestrator-core.mjs";
 
 const HOUR = 3_600_000;
@@ -74,9 +76,17 @@ export function rounds(comments, kind) {
 /**
  * Metrics of one merged PR. `heads` is a lower bound: the distinct full-SHA
  * heads that received a verdict plus the merged head (GitHub keeps no list of
- * earlier heads for non-forced pushes).
+ * earlier heads for non-forced pushes). `paths` are the changed files for the
+ * model check (DAN-695); without them the check expects Opus (rule of doubt).
+ * `paths === null` means the file list could not be read: the row is marked so
+ * a "below" from that cannot pass for a real deviation. `ownerLogin` lets the
+ * check count the owner's CLI channel as the gate does (review-gate-core).
+ * `events` are the PR's issue events: the model check reads only comments after
+ * the last base change, with the gate's own F-013 filter (cxcr1946, cxcq1946).
+ * Unread events (null) or a base change without a readable time count no PASS,
+ * as the gate stops there, and the row is marked `eventsRead: false`.
  */
-export function prMetrics(pr, comments, demoIds) {
+export function prMetrics(pr, comments, demoIds, paths = [], { ownerLogin = null, events = [] } = {}) {
   const created = Date.parse(pr.createdAt);
   const merged = Date.parse(pr.mergedAt);
   const rev = rounds(comments, "review");
@@ -84,9 +94,12 @@ export function prMetrics(pr, comments, demoIds) {
   const heads = new Set([...rev.heads, ...qa.heads]);
   if (pr.headRefOid && FULL_SHA.test(pr.headRefOid)) heads.add(pr.headRefOid.toLowerCase());
   const task = field(pr.body, "Task") ?? null;
+  const risk = parseAgentRisk(pr.body).risk?.toLowerCase() ?? null;
+  const cutoff = lastBaseChange(events);
+  const gated = sinceBaseChange(comments, cutoff, "created_at", { codexEdits: true });
   return {
     number: pr.number,
-    risk: parseAgentRisk(pr.body).risk?.toLowerCase() ?? null,
+    risk,
     task,
     demoTasks: demoTasksOf([task, pr.title], demoIds),
     leadHours: Number.isFinite(created) && Number.isFinite(merged) ? (merged - created) / HOUR : null,
@@ -96,7 +109,29 @@ export function prMetrics(pr, comments, demoIds) {
     qaFail: qa.total - qa.pass,
     qaRounds: qa.total,
     heads: heads.size,
+    pathsRead: paths !== null,
+    eventsRead: cutoff !== Infinity,
+    reviewModel: checkRole(gated, "review", pr, risk, paths ?? [], { ownerLogin }),
+    qaModel: checkRole(gated, "qa", pr, risk, paths ?? [], { ownerLogin }),
   };
+}
+
+/**
+ * Outcome counts per role and the PRs whose declared model is below the table;
+ * a "below" over an unread file list carries "(files unread)".
+ */
+export function modelSummary(rows) {
+  const count = (key) => Object.fromEntries(
+    OUTCOMES.map((o) => [o, rows.filter((r) => (r[key]?.outcome ?? "n/a") === o).length]),
+  );
+  const mark = (r) => (r.pathsRead === false ? " (files unread)" : "");
+  const below = rows.flatMap((r) => [
+    ...(r.reviewModel?.outcome === "below" ? [`#${r.number} review${mark(r)}`] : []),
+    ...(r.qaModel?.outcome === "below" ? [`#${r.number} qa${mark(r)}`] : []),
+  ]);
+  const unread = rows.filter((r) => r.pathsRead === false).map((r) => `#${r.number}`);
+  const eventsUnread = rows.filter((r) => r.eventsRead === false).map((r) => `#${r.number}`);
+  return { review: count("reviewModel"), qa: count("qaModel"), below, unread, eventsUnread };
 }
 
 const round = (n) => (n === null ? null : Math.round(n * 10) / 10);
@@ -119,6 +154,7 @@ export function summarize(rows) {
     },
     demoTasksWithMergedWork: demoWorkLabels(rows),
     prsWithoutDemoId: rows.filter((r) => !r.demoTasks.length).length,
+    modelCheck: modelSummary(rows),
   };
 }
 
@@ -140,6 +176,11 @@ export function renderMetrics(rows, summary, since) {
   lines.push(
     `all risks: n=${summary.all.prs} lead median ${f(summary.all.leadMedianH)} h, p90 ${f(summary.all.leadP90H)} h`,
     `demo tasks with merged work (parts as marked in PRs; completeness not judged): ${summary.demoTasksWithMergedWork.length} (${summary.demoTasksWithMergedWork.join(", ") || "-"}); PRs without a recognised plan id: ${summary.prsWithoutDemoId}`,
+  );
+  const m = summary.modelCheck;
+  const counts = (c) => OUTCOMES.map((o) => `${o} ${c[o]}`).join(", ");
+  lines.push(
+    `model check (declared Review-Model/QA-Model on the merged head vs ORKESTRATOR §7; report, not a gate): review ${counts(m.review)}; qa ${counts(m.qa)}; below: ${m.below.join(", ") || "-"}; files unread (expects Opus): ${m.unread.join(", ") || "-"}; base events unread (no PASS counted): ${m.eventsUnread.join(", ") || "-"}`,
   );
   return lines;
 }

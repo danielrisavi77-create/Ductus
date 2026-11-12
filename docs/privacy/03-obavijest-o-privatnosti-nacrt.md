@@ -5,7 +5,8 @@
 **Samo pravnik ili ustanova odlučuje:** tko je voditelj i kako se naziva; pravna osnova; rokovi; kontakt službenika za zaštitu podataka; je li korištenje obvezno i što je alternativa; jesu li navedeni podizvršitelji konačni; sadrži li obavijest sve što traže čl. 13. i 14. GDPR-a.
 
 **Napomene za uredništvo (nisu dio teksta za studente):**
-- Tekst poštuje rječnik sučelja iz PRODUCT §5 i njegove engleske ekvivalente (D-90). Alat `scripts/forbidden-terms/` nad tekstom obavijesti (od naslova "Obavijest o privatnosti") 11. 10. 2026. nije dao pogodaka; provjeru treba ponoviti pri svakoj izmjeni.
+- Tekst poštuje rječnik sučelja iz PRODUCT §5 i njegove engleske ekvivalente (D-90). Alat `scripts/forbidden-terms/` nad tekstom obavijesti (od naslova "Obavijest o privatnosti") 11. 11. 2026. nije dao pogodaka; provjeru treba ponoviti pri svakoj izmjeni.
+- Odjeljak 7 prati prijedlog rokova iz `07` i klase iz `06`; rokovi nisu odobreni (D-30 PRIJEDLOG, Q-16). Određeni su samo rokovi sesija i paketa za izvoz (D-273 MQ08); oznake klasa i odluka u uglatim zagradama brišu se pri objavi.
 - Izgrađeni su samo prijava, sesije, upis u kolegij i potvrda obavijesti. Ostalo u odjeljku 3 (rad, događaji u radu, predaje, komentari, tko je otvorio rad), reprodukcija, izvoz i brisanje opisani su kao ciljno stanje i ne smiju se objaviti kao postojeći dok nisu izgrađeni.
 - Obavijest o privatnosti ne zamjenjuje obavijest o praćenju koja je prvi ekran svakog zadatka (PRODUCT §5 pr. 6); ona je ugrađena u nju (PROGRAM, GO uvjeti). Potvrda koju student daje nije privola i ne smije se tako prikazivati (PRODUCT §6, student 3).
 - Dok potvrda ne veže otisak teksta ove obavijesti, ne može se tvrditi da je student potvrdio upravo ovaj tekst `[IZVEDBA]`.
@@ -52,20 +53,38 @@ Koju ste tipku pritisnuli i koliko dugo ste je držali. Brzinu tipkanja i stanke
 
 ### 7. Koliko dugo čuvamo podatke
 
+Svaka vrsta podataka ima svoj rok, a kad rok istekne, podaci se brišu. `[Ciljno stanje: brisanje po isteku roka nije izgrađeno (M10.0-S1, M10.2) i ne smije se objaviti kao postojeće dok ne bude.]` `[Rokove predlaže Ductus, a potvrđuju ustanova i službenik za zaštitu podataka (D-30 PRIJEDLOG, Q-16). Određeni su samo rokovi za sesije i paket za izvoz (D-273 MQ08); sve ostalo je otvoreno i ne objavljuje se dok ne bude potvrđeno. Prijedlozi su iz 07, broj klase iz 06.]`
+
 | Vrsta podataka | Rok |
 | --- | --- |
-| Radne verzije | `[do kraja akademske godine zadatka, prijedlog]` |
-| Predani rad, izjava, napomene | `[prema pravilniku ustanove]` |
-| Evidencija nastanka rada | `[kao predaja]` |
-| Revizijski trag pristupa | `[rok]` |
-| Sesije prijave | `[rok]` |
-| Sigurnosne kopije | `[rok po vrsti kopije; brisanje je potpuno kad istekne najdulji rok]` |
+| Račun, ime i prezime | `[otvoreno; klase 1 i 2]` |
+| Sesije prijave | 30 dana nakon kraja sesije `[određeno, D-273 MQ08; klasa 3; raspored brisanja nije izgrađen, M10.0-S2; rok za zapise odjave (jti) nije zasebno određen, 07 §5]` |
+| Kolegiji, uloge i obavijesti uz zadatak | `[otvoreno; klase 4 do 7]` |
+| Zadatak, pravila fakulteta, projekt i dokument | `[otvoreno; klase 9 do 11]` |
+| Radne verzije i kontrolne točke | `[otvoreno; prijedlog za revizije: do kraja akademske godine zadatka; klase 13 i 14]` |
+| Prikaz rada uživo | `[otvoreno; briše se pri kraju rada ili povlačenju (D-12); klasa 15]` |
+| Predani rad, komentari i zahtjevi za doradu | `[otvoreno; prijedlog: prema pravilniku ustanove, komentari i zahtjevi kao predani rad; klase 16, 18 i 19]` |
+| Izjava o pomoći AI-ja i priloženi ispisi razgovora | `[otvoreno, uz Q-10; klasa 17]` |
+| Evidencija nastanka rada | `[otvoreno; prijedlog: kao predani rad; klasa 21]` |
+| Vrijeme po promjeni | `[VARIJANTA, D-143: otvoreno, kraće od ostale evidencije; klasa 22]` |
+| Razgovori s AI pomoćnikom i zapis prijenosa | `[PLANIRANO, D-194: otvoreno, uz Q-10; klasa 24]` |
+| Zapis o tome tko je otvorio vaš rad | `[otvoreno; prijedlog: dulje od predanog rada; klasa 25]` |
+| Promjene ovlasti nastavnika i administratora | `[otvoreno; klasa 26]` |
+| Paket za izvoz | 24 sata, koliko vrijedi poveznica `[određeno, D-173, D-273 MQ08; klasa 20; izvoz nije izgrađen]` |
+| Odbačeni privremeni tehnički objekti | `[brisanje je odlučeno i izvršava se i prije potvrde ostalih rokova (D-273 MQ08), ali trajanje nije zapisano; klasa 23]` |
+| Tehnički otisci i potvrde predaje | `[otvoreno; prijedlog: rok predanog rada uz rok za prigovor, koji nije određen; klasa 27]` |
+| Zapis o brisanju | `[otvoreno; klasa 28]` |
+| Ankete i razgovori za evaluaciju pilota | `[otvoreno; prijedlog: do kraja evaluacije; klasa 8]` |
+| Zapisi na vašem uređaju | `[otvoreno; zapis živi do sinkronizacije, a nesinkronizirani zapis ostaje u pregledniku i nakon odjave (D-118); rok trajanja odlučuje se prije pilota (D-122); klasa 30]` |
+| Sigurnosne kopije | `[svaka vrsta kopije ima svoj rok (D-12), nijedan nije određen; klasa 29]` |
+
+Podatak obrisan iz Ductusa ostaje u sigurnosnim kopijama najdulje do isteka roka te kopije; brisanje je potpuno tek kad istekne najdulji rok. Ako se Ductus vraća iz kopije, prije ponovnog otvaranja provjerava se da se obrisani podaci nisu vratili `[planirano, D-272 MQ07]`.
 
 Neki tehnički otisci (hashevi) nastavljaju postojati nakon brisanja sadržaja da bi se mogla provjeriti cjelovitost zapisa; ne sadrže tekst rada. `[Pravnik potvrđuje je li ih potrebno opisati drukčije.]`
 
 ### 8. Kome se podaci prenose
 
-Podatke obrađuju podizvršitelji navedeni u `[prilogu, popis iz 04, tek kad bude potvrđen]`. `[Tvrdnja da tekst rada nije namijenjen prijenosu izvan Europskog gospodarskog prostora vrijedi za Ductusove dobavljače (04); za AI pružatelje ovisi o izboru pružatelja i ugovoru, pa je pravnik prepisuje tek kad pružatelj bude izabran (D-194).]` `[Pravnik potvrđuje za svakog podizvršitelja koji djeluje izvan EU-a ili pripada grupi izvan EU-a.]` `[PLANIRANO, D-194, tek kad pomoćnik postoji: Ductus šalje AI pružatelju samo odlomak koji sami pokrenete poslati pomoćniku, nikad bez vaše radnje; navode se imena pružatelja, zemlja obrade, čuvanje i činjenica da se tekst ne koristi za treniranje. Kineski pružatelji i modeli kineskih tvrtki ne koriste se.]`
+Podatke obrađuju podizvršitelji navedeni u `[prilogu, popis iz 04, tek kad bude potvrđen]`. `[Tvrdnja da tekst rada nije namijenjen prijenosu izvan Europskog gospodarskog prostora vrijedi za Ductusove dobavljače (04); za AI pružatelje ovisi o izboru pružatelja i ugovoru, pa je pravnik preformulira tek kad pružatelj bude izabran (D-194).]` `[Pravnik potvrđuje za svakog podizvršitelja koji djeluje izvan EU-a ili pripada grupi izvan EU-a.]` `[PLANIRANO, D-194, tek kad pomoćnik postoji: Ductus šalje AI pružatelju samo odlomak koji sami pokrenete poslati pomoćniku, nikad bez vaše radnje; navode se imena pružatelja, zemlja obrade, čuvanje i činjenica da se tekst ne koristi za treniranje. Kineski pružatelji i modeli kineskih tvrtki ne koriste se.]`
 
 ### 9. Vaša prava
 
