@@ -20,7 +20,7 @@ const row = (n: number, over: Row = {}): Row => ({
 });
 const page = (from: number, length: number) => Array.from({ length }, (_, i) => row(from + i));
 
-/** Answers the reads in turn; a string is an error with that SQLSTATE. */
+/** Answers the reads in turn; a string is an error with that SQLSTATE, "network" one without any. */
 function database(answers: (Row[] | string)[]) {
   const calls: (readonly unknown[] | undefined)[] = [];
   const withActor = vi.fn(async (_token: string | null | undefined, fn: (tx: ActorTransaction) => Promise<unknown>) =>
@@ -28,6 +28,7 @@ function database(answers: (Row[] | string)[]) {
       async query(_text: string, values?: readonly unknown[]) {
         const answer = answers[calls.length] ?? [];
         calls.push(values);
+        if (answer === "network") throw new Error(`connect ECONNRESET ${CANARY}`);
         if (typeof answer === "string") throw Object.assign(new Error(`do not leak ${CANARY}`), { code: answer });
         return { rows: answer, rowCount: answer.length };
       },
@@ -125,5 +126,61 @@ describe("DAN-294 access log pages: the read", () => {
     const { withActor, calls } = database([page(1, 1)]);
     expect(await readMyAccessLogPages(undefined, withActor, DOC, 2)).toEqual({ kind: "unauthorized" });
     expect(calls).toHaveLength(0);
+  });
+});
+
+// Contract #1836 c.6818467514 (a): every class of input to the paged read, one table.
+describe("DAN-294 access log pages: the classes of input", () => {
+  const malformed = [row(1, { opened_at: new Date(START - 7 * 60_000) })];
+  it.each([
+    ["an empty log", [[]], 3, { kind: "ok", more: false, truncated: false }, [], 1],
+    ["one page that is not full", [page(1, 2)], 3, { kind: "ok", more: false }, [1, 2], 1],
+    ["a next-page cursor", [page(1, ACCESS_LOG_PAGE), page(ACCESS_LOG_PAGE + 1, 1)], 2, { kind: "ok", more: false },
+      Array.from({ length: ACCESS_LOG_PAGE + 1 }, (_, i) => i + 1), 2],
+    ["an unavailable answer on the first page", ["57014"], 2, { kind: "unavailable" }, null, 1],
+    ["an unavailable answer on a later page", [page(1, ACCESS_LOG_PAGE), "57014"], 2, { kind: "unavailable" }, null, 2],
+    ["a malformed row from the reader", [malformed], 1, { kind: "unavailable" }, null, 1],
+    ["a network error on the first page", ["network"], 2, { kind: "unavailable" }, null, 1],
+    ["a network error on a later page", [page(1, ACCESS_LOG_PAGE), "network"], 3, { kind: "unavailable" }, null, 2],
+  ] as [string, (Row[] | string)[], number, Record<string, unknown>, number[] | null, number][])(
+    "%s", async (_, answers, pages, shape, rowsShown, reads) => {
+      const { withActor, calls } = database(answers);
+      const read = await readMyAccessLogPages(TOKEN, withActor, DOC, pages);
+      expect(calls).toHaveLength(reads);
+      expect(read).toMatchObject(shape);
+      expect(JSON.stringify(read)).not.toContain(CANARY);
+      if (rowsShown === null) expect(read).toEqual(shape);
+      else if (read.kind === "ok") expect(ids(read.days)).toEqual(rowsShown.map(id));
+    });
+});
+
+// Contract #1836 c.6818467514 (b): an opening written between two pages.
+describe("DAN-294 access log pages: concurrency across the cursor", () => {
+  it("a first page longer than the limit (one whole interval) and its continuation show every row once, none skipped", async () => {
+    // The RPC ends a page on a whole interval: rows 50..52 share the oldest interval of page one.
+    const tied = (n: number) => row(n, { opened_at: new Date(START - ACCESS_LOG_PAGE * 300_000) });
+    const first = [...page(1, ACCESS_LOG_PAGE - 1), tied(ACCESS_LOG_PAGE), tied(ACCESS_LOG_PAGE + 1), tied(ACCESS_LOG_PAGE + 2)];
+    const older = [row(ACCESS_LOG_PAGE + 3), row(ACCESS_LOG_PAGE + 4)];
+    const { withActor, calls } = database([first, older]);
+    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 2);
+    expect(calls[1]?.[2]).toBe(new Date(START - ACCESS_LOG_PAGE * 300_000).toISOString());
+    expect(read.kind).toBe("ok");
+    if (read.kind !== "ok") return;
+    const shown = ids(read.days);
+    expect(new Set(shown).size).toBe(shown.length);
+    expect([...shown].sort()).toEqual(page(1, ACCESS_LOG_PAGE + 4).map((r) => r.entry_id as string).sort());
+  });
+
+  it("negative: a continuation that repeats the cursor's interval, plus a row written into it meanwhile, adds neither", async () => {
+    const edge = new Date(START - ACCESS_LOG_PAGE * 300_000);
+    const lateInEdge = row(998, { opened_at: edge });
+    const { withActor } = database([page(1, ACCESS_LOG_PAGE), [row(ACCESS_LOG_PAGE), lateInEdge, row(ACCESS_LOG_PAGE + 1)]]);
+    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 2);
+    expect(read.kind).toBe("ok");
+    if (read.kind !== "ok") return;
+    const shown = ids(read.days);
+    expect(shown.filter((x) => x === id(ACCESS_LOG_PAGE))).toHaveLength(1);
+    expect(shown).not.toContain(id(998));
+    expect(shown).toContain(id(ACCESS_LOG_PAGE + 1));
   });
 });
