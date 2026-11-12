@@ -289,7 +289,46 @@ const KNOWN_GAPS = [
   "institution.course_holder", "institution.seminar_group_teacher",
 ];
 
-function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = PROVIDERS): string[] {
+// Tables created at run time by format(%I); the parser cannot read their names, so each head is listed by hand.
+// They are partitions of pgboss.job and pgboss.queue_stats, which the inventory covers.
+const DYNAMIC_TABLES = [
+  "20261108110100_pgboss_schema.sql: create table not recognised: CREATE TABLE pgboss.%I PARTITION OF pgbo",
+  "20261108110100_pgboss_schema.sql: create table not recognised: CREATE TABLE pgboss.%I (LIKE pgboss.job ",
+];
+
+const TABLE_HEAD = /\bcreate\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\b/gi;
+const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\s+(?:if\s+not\s+exists\s+)?(?:"([a-z_]+)"|([a-z_]+))\.(?:"([a-z0-9_]+)"|([a-z0-9_]+))(?=[\s(;])/iy;
+const FUNCTION_HEAD = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/gi;
+const FUNCTION_FULL = /create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+([a-z_]+\.[a-z0-9_]+)\s*\(/iy;
+
+/** Tables and functions a migration creates. Fail-closed: a CREATE TABLE/FUNCTION/PROCEDURE head that does not parse is an error, never skipped. Known limit: names built at run time are flagged, not read. */
+function sqlObjects(sql: string): { tables: string[]; functions: [string, string][]; errors: string[] } {
+  const bare = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "");
+  const errors: string[] = [];
+  const tables: string[] = [];
+  const functions: [string, string][] = [];
+  const seen = (m: RegExpMatchArray) => bare.slice(m.index, (m.index ?? 0) + 40).replace(/\s+/g, " ");
+  for (const m of bare.matchAll(TABLE_HEAD)) {
+    TABLE_FULL.lastIndex = m.index ?? 0;
+    const t = TABLE_FULL.exec(bare);
+    if (t) tables.push(`${t[1] ?? t[2]}.${t[3] ?? t[4]}`.toLowerCase());
+    else errors.push(`create table not recognised: ${seen(m)}`);
+  }
+  const heads = [...bare.matchAll(FUNCTION_HEAD)];
+  for (const [i, m] of heads.entries()) {
+    FUNCTION_FULL.lastIndex = m.index ?? 0;
+    const f = FUNCTION_FULL.exec(bare);
+    if (!f) {
+      errors.push(`function not recognised: ${seen(m)}`);
+      continue;
+    }
+    const part = bare.slice(FUNCTION_FULL.lastIndex, heads[i + 1]?.index ?? bare.length);
+    functions.push([f[1].toLowerCase(), part.toLowerCase().split(/\n\$\$;|\n\$[a-z_]*\$;/)[0]]);
+  }
+  return { tables, functions, errors };
+}
+
+function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = PROVIDERS, dynamic: string[] = []): string[] {
   const errors: string[] = [];
   const inv = s.inventory.toLowerCase();
   const flows = parseFlows(s.inventory);
@@ -301,13 +340,14 @@ function completenessErrors(s: Sources, gaps: string[], providers: Provider[] = 
   // Known limit: tables created dynamically (format(...%I)) are not seen; only literal CREATE [UNLOGGED] TABLE.
   const tables = new Set<string>();
   const functions: [string, string][] = [];
-  for (const sql of Object.values(s.migrations)) {
-    for (const m of sql.matchAll(/create\s+(?:unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?"?([a-z_]+)"?\."?([a-z0-9_]+)"?/gi)) tables.add(`${m[1]}.${m[2]}`.toLowerCase());
-    for (const part of sql.split(/create\s+(?:or\s+replace\s+)?function\s+/i).slice(1)) {
-      const name = part.match(/^([a-z_]+\.[a-z0-9_]+)\s*\(/i)?.[1]?.toLowerCase();
-      if (name) functions.push([name, part.toLowerCase().split(/\n\$\$;|\n\$[a-z_]*\$;/)[0]]);
-    }
+  for (const [file, sql] of Object.entries(s.migrations)) {
+    const found = sqlObjects(sql);
+    for (const e of found.errors) if (!dynamic.includes(`${file}: ${e}`)) errors.push(`${file}: ${e}`);
+    for (const t of found.tables) tables.add(t);
+    functions.push(...found.functions);
   }
+  const allErrors = Object.entries(s.migrations).flatMap(([file, sql]) => sqlObjects(sql).errors.map((e) => `${file}: ${e}`));
+  for (const d of dynamic) if (!allErrors.includes(d)) errors.push(`dynamic table entry no longer in the migrations, drop it: ${d}`);
   // A table is covered when the inventory or a cited file names it, or a cited
   // code file calls a database function whose body uses it.
   const called = functions.filter(([n]) => hasToken(code, n, (c) => /[a-z0-9_.]/.test(c), (c) => /[a-z0-9_]/.test(c)) || hasToken(code, `${n.split(".")[1]}(`, (c) => /[a-z0-9_.]/.test(c), () => false));
@@ -368,17 +408,27 @@ const FAKE: Sources = {
   exporters: ["src/dl.ts"],
 };
 
-// Top-level keys under `services:` of a compose file; names may hold `_`, a trailing comment is allowed.
-// Any other entry at that depth (inline map, quoted key, anchor) throws, so a service is never skipped silently.
+// Top-level keys under `services:` of a compose file. Fail-closed: a line at service level that is not a plain
+// `name:` (inline map, anchor, alias, quoted name, tab indent) throws instead of being skipped.
 function composeServices(compose: string): string[] {
-  const block = compose.match(/^services:[^\n]*\n((?:[ \t]+.*\n?|[ \t]*\n)*)/m)?.[1] ?? "";
+  const lines = compose.replace(/\r\n?/g, "\n").split("\n");
+  const start = lines.findIndex((l) => l.startsWith("services:"));
+  if (start === -1) throw new Error("compose: no services: key");
+  if (!/^services:[ \t]*(?:#.*)?$/.test(lines[start])) throw new Error(`compose: services: is not a block map: ${lines[start]}`);
   const names: string[] = [];
-  for (const line of block.split("\n")) {
-    if (!/^ {2}\S/.test(line) || /^ {2}#/.test(line)) continue;
-    const m = line.match(/^ {2}([a-z][a-z0-9_-]*):[ \t]*(?:#.*)?$/);
-    if (!m) throw new Error(`unsupported compose service syntax: ${line.trim()}`);
-    names.push(m[1]);
+  let indent = -1;
+  for (const line of lines.slice(start + 1)) {
+    if (/^[ \t]*(?:#.*)?$/.test(line)) continue;
+    if (!/^[ \t]/.test(line)) break;
+    if (/^ *\t/.test(line)) throw new Error(`compose: tab in indentation: ${line}`);
+    const width = line.length - line.trimStart().length;
+    if (indent === -1) indent = width;
+    if (width > indent) continue;
+    const name = width === indent ? /^ *([a-z][a-z0-9_-]*):[ \t]*(?:#.*)?$/.exec(line)?.[1] : undefined;
+    if (!name) throw new Error(`compose: unrecognised service line: ${line}`);
+    names.push(name);
   }
+  if (names.length === 0) throw new Error("compose: services: holds no service");
   return names;
 }
 
@@ -387,12 +437,99 @@ describe("composeServices", () => {
     const text = "name: x\nservices:\n  # note\n  postgres:\n    image: a\n  external_relay:\n    image: b\n  relay: # outside\n    image: c\nvolumes:\n  data:\n";
     expect(composeServices(text)).toEqual(["postgres", "external_relay", "relay"]);
   });
+
   it.each([
-    ["an inline map", '  relay: { image: "example/relay:1" }'],
-    ["a quoted key", '  "relay":\n    image: a'],
-    ["an anchor key", "  <<: *base"],
-  ])("rejects %s instead of skipping the service", (_n, entry) => {
-    expect(() => composeServices(`services:\n  postgres:\n    image: a\n${entry}\n`)).toThrow(/unsupported compose service syntax/);
+    ["a block service", "services:\n  a:\n    image: x\n", ["a"]],
+    ["a comment and a blank line", "services:\n\n  # c\n  a:\n\n    image: x\n  # d\n  b:\n", ["a", "b"]],
+    ["CRLF line ends", "services:\r\n  a:\r\n    image: x\r\n  b:\r\n", ["a", "b"]],
+    ["a nested key that looks like a map", "services:\n  a:\n    deploy: { x: 1 }\n", ["a"]],
+    ["four-space indentation", "services:\n    a:\n      image: x\n", ["a"]],
+  ])("accepts %s", (_n, text, expected) => {
+    expect(composeServices(text)).toEqual(expected);
+  });
+
+  it.each([
+    ["an inline map", '  a:\n    image: x\n  relay: { image: "example/relay:1" }\n'],
+    ["an inline map without a space", "  relay:{image: x}\n"],
+    ["an anchor on the name", "  a: &base\n    image: x\n"],
+    ["an anchored key", "  &r relay:\n    image: x\n"],
+    ["an alias key", "  *base\n"],
+    ["a merge key", "  <<: *base\n"],
+    ["a double-quoted name", '  "relay":\n    image: x\n'],
+    ["a single-quoted name", "  'relay':\n    image: x\n"],
+    ["an upper-case name", "  Relay:\n    image: x\n"],
+    ["a tab indent", "\ta:\n\t  image: x\n"],
+    ["a tab after spaces", "  a:\n  \tb:\n"],
+    ["a name with no colon", "  relay\n"],
+    ["an indent shallower than the first service", "    a:\n  b:\n"],
+    ["a value on the name line", "  a: x\n"],
+  ])("rejects %s", (_n, body) => {
+    expect(() => composeServices(`services:\n${body}`)).toThrow(/compose:/);
+  });
+
+  it.each([
+    ["no services key", "name: x\nvolumes:\n  d:\n"],
+    ["a flow map", "services: { a: { image: x } }\n"],
+    ["an empty services block", "services:\nvolumes:\n  d:\n"],
+    ["a services block holding only comments", "services:\n  # none\n"],
+  ])("rejects %s", (_n, text) => {
+    expect(() => composeServices(text)).toThrow(/compose:/);
+  });
+});
+
+describe("sqlObjects", () => {
+  it.each([
+    ["a plain table", "CREATE TABLE a.t (id int);", ["a.t"]],
+    ["if not exists and unlogged", "create unlogged table if not exists a.t (id int);", ["a.t"]],
+    ["a temporary table", "CREATE TEMP TABLE a.t (id int);", ["a.t"]],
+    ["quoted names", 'CREATE TABLE "a"."t2" (id int);', ["a.t2"]],
+    ["a break after TABLE", "CREATE TABLE\n  a.t (id int);", ["a.t"]],
+    ["a commented-out table", "-- CREATE TABLE a.old (id int);\n/* create table a.older (x int) */\nCREATE TABLE a.t (id int);", ["a.t"]],
+  ])("reads %s", (_n, sql, tables) => {
+    const r = sqlObjects(sql);
+    expect(r.errors).toEqual([]);
+    expect(r.tables).toEqual(tables);
+  });
+
+  it.each([
+    ["a table without a schema", "CREATE TABLE t (id int);"],
+    ["a dynamic name", "CREATE TABLE %I.%I (id int);"],
+    ["a name from a concatenation", "EXECUTE 'create table ' || name;"],
+    ["a partition of", "CREATE TABLE a.t PARTITION OF a.p FOR VALUES IN (1);\nCREATE TABLE t2 (id int);"],
+    ["a one-sided quote", 'CREATE TABLE "a.t (id int);'],
+  ])("flags %s", (_n, sql) => {
+    expect(sqlObjects(sql).errors.some((e) => e.includes("create table"))).toBe(true);
+  });
+
+  it("reads functions and procedures with their bodies", () => {
+    const sql = "CREATE OR REPLACE FUNCTION app.f(x int) RETURNS void AS $$\nINSERT INTO a.t VALUES (1);\n$$;\nCREATE PROCEDURE app.p() AS $$\nSELECT 1;\n$$;";
+    const r = sqlObjects(sql);
+    expect(r.errors).toEqual([]);
+    expect(r.functions.map(([n]) => n)).toEqual(["app.f", "app.p"]);
+    expect(r.functions[0][1]).toContain("insert into a.t");
+    expect(r.functions[0][1]).not.toContain("select 1");
+  });
+
+  it.each([
+    ["a function without a schema", "CREATE FUNCTION f() RETURNS void AS $$ $$;"],
+    ["a quoted function name", 'CREATE FUNCTION "app"."f"() RETURNS void AS $$ $$;'],
+    ["a name with no parenthesis", "CREATE FUNCTION app.f RETURNS void AS $$ $$;"],
+    ["a dynamic function name", "CREATE FUNCTION %I.%I() RETURNS void AS $$ $$;"],
+  ])("flags %s", (_n, sql) => {
+    expect(sqlObjects(sql).errors.some((e) => e.includes("function"))).toBe(true);
+  });
+
+  it("accepts a listed dynamic head and rejects a stale or unlisted one", () => {
+    const sql = { ...FAKE.migrations, "d.sql": "EXECUTE format('CREATE TABLE x.%I (id int)', n);" };
+    const head = "d.sql: create table not recognised: CREATE TABLE x.%I (id int)', n);";
+    expect(completenessErrors({ ...FAKE, migrations: sql }, [], PROVIDERS, [head])).toEqual([]);
+    expect(completenessErrors({ ...FAKE, migrations: sql }, [], PROVIDERS, []).length).toBe(1);
+    expect(completenessErrors(FAKE, [], PROVIDERS, [head])).toEqual([`dynamic table entry no longer in the migrations, drop it: ${head}`]);
+  });
+
+  it("surfaces the parse errors through completenessErrors", () => {
+    const bad = { ...FAKE, migrations: { ...FAKE.migrations, "b.sql": "CREATE TABLE orphan (id int);" } };
+    expect(completenessErrors(bad, []).some((e) => e.includes("b.sql") && e.includes("create table"))).toBe(true);
   });
 });
 
@@ -482,6 +619,6 @@ describe(`${INVENTORY} completeness`, () => {
     const sources: Sources = { inventory: readFileSync(join(ROOT, INVENTORY), "utf8"), migrations, read, deps: Object.keys(pkg.dependencies), services, exporters };
     expect(exporters.length).toBeGreaterThan(0);
     expect(Object.keys(migrations).length).toBeGreaterThan(50);
-    expect(completenessErrors(sources, KNOWN_GAPS)).toEqual([]);
+    expect(completenessErrors(sources, KNOWN_GAPS, PROVIDERS, DYNAMIC_TABLES)).toEqual([]);
   });
 });
