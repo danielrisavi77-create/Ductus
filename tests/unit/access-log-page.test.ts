@@ -209,7 +209,11 @@ describe("DAN-294 S-42 the owner reads the log without the right to write", () =
     ["the owner with an active membership", ready, OWN, OWN, true],
     ["the owner before acknowledging a new notice", { kind: "noticeFirst" }, { kind: "notAccepting" }, OWN, true],
     ["the owner after the membership ended", { kind: "none" }, { kind: "none" }, OWN, true],
-    ["another student's work", ready, { kind: "notOpened" }, NO_OWN, false],
+    // The address names an assignment, never another student's work: a
+    // classmate without an own work sees "not started", someone outside the
+    // course "not available", and neither reads a log.
+    ["a classmate without an own work", ready, { kind: "notOpened" }, NO_OWN, false],
+    ["a student outside the course", { kind: "none" }, { kind: "none" }, NO_OWN, false],
     ["an unknown assignment", { kind: "none" }, { kind: "none" }, NO_OWN, false],
   ] as [string, unknown, unknown, unknown, boolean][])("%s", async (_name, read, doc, own, shown) => {
     state.read = read;
