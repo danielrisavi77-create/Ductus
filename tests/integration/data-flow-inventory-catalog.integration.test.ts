@@ -34,6 +34,16 @@ requireLoopbackDatabaseUrl(ADMIN_URL, "The data-flow catalog test runs only agai
 // Schemas of the application. A schema outside this list fails, empty or not.
 const APP_SCHEMAS = ["app", "audit", "collaboration", "evidence", "identity", "institution", "pgboss", "public"];
 
+// Extensions the migrations may install. Their objects are counted like any
+// other, so a table moved into one with ALTER EXTENSION ... ADD still fails.
+const ALLOWED_EXTENSIONS = ["plpgsql"];
+
+// A relation and a function under one schema.name share their coverage, since
+// the inventory names both the same way; each such pair is listed with its reason.
+const SHARED_NAMES: Record<string, string> = {
+  "institution.work_accommodation": "the table and its read function for one work",
+};
+
 // Objects that carry no data flow, each with its reason.
 const NOT_A_FLOW: Record<string, string> = {
   "public.schema_migrations": "dbmate's ledger of applied migration versions",
@@ -110,8 +120,10 @@ const KNOWN_GAPS: string[] = [
 
 export type Catalog = {
   schemas: string[];
-  relations: { schema: string; name: string; kind: string }[];
-  routines: { schema: string; name: string; body: string }[];
+  extensions: string[];
+  // quoted: quote_ident(name) <> name, which also catches reserved words.
+  relations: { schema: string; name: string; kind: string; quoted?: boolean }[];
+  routines: { schema: string; name: string; body: string; quoted?: boolean }[];
   triggers: { table: string; fn: string }[];
 };
 export type Inventory = { text: string; cited: string[] };
@@ -129,16 +141,30 @@ export function names(text: string, name: string): boolean {
 }
 
 /** Every problem between the catalog and the inventory; empty when they agree. */
-export function catalogErrors(cat: Catalog, inv: Inventory, gaps: string[] = KNOWN_GAPS, notAFlow = NOT_A_FLOW): string[] {
+export function catalogErrors(
+  cat: Catalog,
+  inv: Inventory,
+  gaps: string[] = KNOWN_GAPS,
+  notAFlow = NOT_A_FLOW,
+  shared = SHARED_NAMES,
+): string[] {
   const errors: string[] = [];
   for (const s of cat.schemas) if (!APP_SCHEMAS.includes(s)) errors.push(`schema ${s}: not in the inventory's schemas`);
+  for (const e of cat.extensions) if (!ALLOWED_EXTENSIONS.includes(e)) errors.push(`extension ${e}: not allowed`);
 
   const objects = new Map<string, string>();
   for (const r of cat.relations) objects.set(qualified(r.schema, r.name), `relation (${r.kind})`);
-  for (const f of cat.routines) objects.set(qualified(f.schema, f.name), "function");
-  for (const [o, what] of objects) {
-    const [schema, ...rest] = o.split(".");
-    if (!IDENT.test(schema) || !IDENT.test(rest.join("."))) errors.push(`${what} ${JSON.stringify(o)}: quoted identifier`);
+  const sharing = new Set<string>();
+  for (const f of cat.routines) {
+    const o = qualified(f.schema, f.name);
+    if (objects.get(o)?.startsWith("relation")) sharing.add(o);
+    else objects.set(o, "function");
+  }
+  for (const o of sharing) if (!(o in shared)) errors.push(`relation and function share the name ${o}`);
+  for (const o of Object.keys(shared)) if (!sharing.has(o)) errors.push(`${o}: no longer shared, drop it from SHARED_NAMES`);
+  for (const x of [...cat.relations, ...cat.routines]) {
+    const o = qualified(x.schema, x.name);
+    if (x.quoted || !IDENT.test(x.schema) || !IDENT.test(x.name)) errors.push(`${objects.get(o)} ${JSON.stringify(o)}: quoted identifier`);
   }
 
   const sources = [inv.text, ...inv.cited];
@@ -176,6 +202,26 @@ export function catalogErrors(cat: Catalog, inv: Inventory, gaps: string[] = KNO
   return [...new Set(errors)];
 }
 
+/**
+ * The string literals of a JavaScript or TypeScript file, where its SQL lives;
+ * code such as `evidence.record()` on a variable named like a schema is left out.
+ */
+export function stringLiterals(code: string): string {
+  const out: string[] = [];
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    if (c === "/" && code[i + 1] === "/") i = code.indexOf("\n", i) < 0 ? code.length : code.indexOf("\n", i);
+    else if (c === "/" && code[i + 1] === "*") i = code.indexOf("*/", i + 2) < 0 ? code.length : code.indexOf("*/", i + 2) + 1;
+    else if (c === "'" || c === '"' || c === "`") {
+      let j = i + 1;
+      while (j < code.length && code[j] !== c && !(c !== "`" && code[j] === "\n")) j += code[j] === "\\" ? 2 : 1;
+      out.push(code.slice(i + 1, j));
+      i = j;
+    }
+  }
+  return out.join("\n");
+}
+
 /** The inventory text and the code files its flows cite; cited documents never count. */
 const CODE_FILE = /\.(?:sql|ts|tsx|mjs|js)$/;
 function readInventory(): Inventory {
@@ -187,31 +233,34 @@ function readInventory(): Inventory {
   const paths = [...new Set([...section.matchAll(/`([^`]+)`/g)].map((m) => m[1]))];
   const cited = paths
     .filter((p) => CODE_FILE.test(p) && existsSync(join(ROOT, p)) && statSync(join(ROOT, p)).isFile())
-    .map((p) => readFileSync(join(ROOT, p), "utf8"));
+    .map((p) => {
+      const code = readFileSync(join(ROOT, p), "utf8");
+      return p.endsWith(".sql") ? code : stringLiterals(code);
+    });
   if (at < 0 || cited.length < 50) throw new Error(`${INVENTORY}: no flows table or too few cited files (${cited.length})`);
   return { text, cited };
 }
 
 const SYSTEM = "n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'";
-const NOT_EXTENSION = (catalog: string, oid: string) =>
-  `NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = '${catalog}'::regclass AND d.objid = ${oid} AND d.deptype = 'e')`;
 
 /** Reads the catalog; every query runs on `client` inside the caller's transaction. */
 async function readCatalog(client: pg.ClientBase): Promise<Catalog> {
   const schemas = await client.query<{ schema: string }>(
-    `SELECT n.nspname AS schema FROM pg_namespace n WHERE ${SYSTEM} AND ${NOT_EXTENSION("pg_namespace", "n.oid")}`,
+    `SELECT n.nspname AS schema FROM pg_namespace n WHERE ${SYSTEM}`,
   );
+  const extensions = await client.query<{ name: string }>("SELECT extname AS name FROM pg_extension");
   // Partitions are counted under their parent table.
   const relations = await client.query<Catalog["relations"][number]>(
-    `SELECT n.nspname AS schema, c.relname AS name, c.relkind::text AS kind
+    `SELECT n.nspname AS schema, c.relname AS name, c.relkind::text AS kind,
+            quote_ident(n.nspname) <> n.nspname OR quote_ident(c.relname) <> c.relname AS quoted
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition AND ${SYSTEM}
-        AND ${NOT_EXTENSION("pg_class", "c.oid")}`,
+      WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition AND ${SYSTEM}`,
   );
   const routines = await client.query<Catalog["routines"][number]>(
-    `SELECT n.nspname AS schema, p.proname AS name, coalesce(p.prosrc, '') AS body
+    `SELECT n.nspname AS schema, p.proname AS name, coalesce(p.prosrc, '') AS body,
+            quote_ident(n.nspname) <> n.nspname OR quote_ident(p.proname) <> p.proname AS quoted
        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE ${SYSTEM} AND ${NOT_EXTENSION("pg_proc", "p.oid")}`,
+      WHERE ${SYSTEM}`,
   );
   const triggers = await client.query<Catalog["triggers"][number]>(
     `SELECT tn.nspname || '.' || c.relname AS table, fn.nspname || '.' || p.proname AS fn
@@ -222,6 +271,7 @@ async function readCatalog(client: pg.ClientBase): Promise<Catalog> {
   );
   return {
     schemas: schemas.rows.map((r) => r.schema),
+    extensions: extensions.rows.map((r) => r.name),
     relations: relations.rows,
     routines: routines.rows,
     triggers: triggers.rows,
@@ -233,6 +283,7 @@ const SNAPSHOT = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY";
 describe("catalogErrors", () => {
   const CAT: Catalog = {
     schemas: ["app", "institution"],
+    extensions: ["plpgsql"],
     relations: [
       { schema: "institution", name: "course", kind: "r" },
       { schema: "institution", name: "hidden", kind: "r" },
@@ -247,7 +298,7 @@ describe("catalogErrors", () => {
   const INV: Inventory = { text: "Tok: `institution.course`.", cited: ["await sql`select app.list_courses()`"] };
 
   it("accepts an inventory that reaches everything directly, through a body or a trigger", () => {
-    expect(catalogErrors(CAT, INV, [], {})).toEqual([]);
+    expect(catalogErrors(CAT, INV, [], {}, {})).toEqual([]);
   });
 
   it.each([
@@ -259,12 +310,26 @@ describe("catalogErrors", () => {
     ["a stale inventory name", CAT, { ...INV, text: `${INV.text} institution.gone` }, "inventory names institution.gone, not in the database"],
     ["a stale inventory name in public", CAT, { ...INV, text: `${INV.text} public.gone` }, "inventory names public.gone, not in the database"],
     ["a name with $, which quote_ident quotes", { ...CAT, relations: [...CAT.relations, { schema: "institution", name: "a$b", kind: "r" }] }, { ...INV, text: `${INV.text} institution.a$b` }, 'relation (r) "institution.a$b": quoted identifier'],
+    ["a reserved word as a name", { ...CAT, relations: [...CAT.relations, { schema: "institution", name: "user", kind: "r", quoted: true }] }, { ...INV, text: `${INV.text} institution.user` }, 'relation (r) "institution.user": quoted identifier'],
+    ["a table named like a covered function", { ...CAT, relations: [...CAT.relations, { schema: "app", name: "list_courses", kind: "r" }] }, INV, "relation and function share the name app.list_courses"],
+    ["an extension not allowed", { ...CAT, extensions: [...CAT.extensions, "tcn"] }, INV, "extension tcn: not allowed"],
   ])("fails on %s", (_case, cat, inv, error) => {
-    expect(catalogErrors(cat, inv, [], {})).toContain(error);
+    expect(catalogErrors(cat, inv, [], {}, {})).toContain(error);
+  });
+
+  it("fails on a stale SHARED_NAMES entry", () => {
+    expect(catalogErrors(CAT, INV, [], {}, { "app.list_courses": "x" })).toEqual([
+      "app.list_courses: no longer shared, drop it from SHARED_NAMES",
+    ]);
+  });
+
+  it("takes from code only its string literals, so a variable named like a schema covers nothing", () => {
+    const code = "evidence.record(x); // evidence.close\n/* identity.sid */ q(`select app.a()`, 'app.b', \"app.c\");";
+    expect(stringLiterals(code)).toBe("select app.a()\napp.b\napp.c");
   });
 
   it("fails on a known gap that is gone or covered, and on a stale NOT_A_FLOW entry", () => {
-    expect(catalogErrors(CAT, INV, ["institution.gone", "institution.course"], { "public.gone": "x" })).toEqual([
+    expect(catalogErrors(CAT, INV, ["institution.gone", "institution.course"], { "public.gone": "x" }, {})).toEqual([
       "known gap institution.gone: not in the database, drop it",
       "known gap institution.course: now covered, drop it",
       "public.gone: not in the database, drop it from NOT_A_FLOW",
@@ -324,6 +389,10 @@ describe(`${INVENTORY} against the migrated database`, () => {
     ["a new function", "CREATE FUNCTION app.dan709_probe() RETURNS int LANGUAGE sql AS 'SELECT 1'", "function app.dan709_probe: no flow in the inventory"],
     ["a new procedure", "CREATE PROCEDURE app.dan709_probe() LANGUAGE sql AS 'SELECT 1'", "function app.dan709_probe: no flow in the inventory"],
     ["a table built at run time by dynamic SQL", "DO $$ BEGIN EXECUTE format('CREATE TABLE institution.%I (x int)', 'dan709_' || 'probe'); END $$", "relation (r) institution.dan709_probe: no flow in the inventory"],
+    ["a table named like a covered function", "CREATE TABLE app.student_workspace (x int)", "relation and function share the name app.student_workspace"],
+    ["a table named like a schema-named variable in cited code", "CREATE TABLE evidence.record (x int)", "relation (r) evidence.record: no flow in the inventory"],
+    ["a reserved word as a table name", 'CREATE TABLE institution."user" (x int)', 'relation (r) "institution.user": quoted identifier'],
+    ["a table hidden as an extension member", "CREATE TABLE institution.dan709_probe (x int); ALTER EXTENSION plpgsql ADD TABLE institution.dan709_probe", "relation (r) institution.dan709_probe: no flow in the inventory"],
   ])("fails on %s", async (_case, ddl, error) => {
     expect(await errorsWith(ddl)).toContain(error);
   });
@@ -341,22 +410,24 @@ describe(`${INVENTORY} against the migrated database`, () => {
 
   // The committed probe lives in public: route tests in parallel compare
   // snapshots of every table in identity, institution, evidence and audit.
+  // The pid suffix keeps two concurrent runs of this file apart.
   it("reads one snapshot: a table committed during the read appears only in the next one", async () => {
+    const probe = `public.dan709_concurrent_${process.pid}`;
     const reader = await pool.connect();
     const writer = await pool.connect();
     try {
       await reader.query(SNAPSHOT);
       const before = catalogErrors(await readCatalog(reader), inventory);
-      await writer.query("CREATE TABLE public.dan709_concurrent (x int)");
+      await writer.query(`CREATE TABLE ${probe} (x int)`);
       expect(catalogErrors(await readCatalog(reader), inventory)).toEqual(before);
       await reader.query("ROLLBACK");
       await reader.query(SNAPSHOT);
       expect(catalogErrors(await readCatalog(reader), inventory)).toContain(
-        "relation (r) public.dan709_concurrent: no flow in the inventory",
+        `relation (r) ${probe}: no flow in the inventory`,
       );
     } finally {
       await reader.query("ROLLBACK");
-      await writer.query("DROP TABLE IF EXISTS public.dan709_concurrent");
+      await writer.query(`DROP TABLE IF EXISTS ${probe}`);
       reader.release();
       writer.release();
     }
