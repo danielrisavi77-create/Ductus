@@ -289,25 +289,75 @@ const KNOWN_GAPS = [
   "institution.course_holder", "institution.seminar_group_teacher",
 ];
 
-// Tables created at run time by format(%I); the parser cannot read their names, so each head is listed by hand.
+// Tables created at run time by format(%I); the parser cannot read their names, so each whole line is listed by hand.
 // They are partitions of pgboss.job and pgboss.queue_stats, which the inventory covers.
 const DYNAMIC_TABLES = [
-  "20261108110100_pgboss_schema.sql: create table not recognised: CREATE TABLE pgboss.%I PARTITION OF pgbo",
-  "20261108110100_pgboss_schema.sql: create table not recognised: CREATE TABLE pgboss.%I (LIKE pgboss.job ",
+  "20261108110100_pgboss_schema.sql: create table not recognised: CREATE TABLE pgboss.%I PARTITION OF pgboss.queue_stats FOR VALUES FROM (%L) TO (%L)',",
+  "20261108110100_pgboss_schema.sql: create table not recognised: CREATE TABLE pgboss.%I (LIKE pgboss.job INCLUDING DEFAULTS)', tablename);",
 ];
 
-const TABLE_HEAD = /\bcreate\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\b/gi;
+const TABLE_HEAD = /\bcreate\s+(?:\w+\s+)*?table\b/gi;
 const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\s+(?:if\s+not\s+exists\s+)?(?:"([a-z_]+)"|([a-z_]+))\.(?:"([a-z0-9_]+)"|([a-z0-9_]+))(?=[\s(;])/iy;
 const FUNCTION_HEAD = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/gi;
 const FUNCTION_FULL = /create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+([a-z_]+\.[a-z0-9_]+)\s*\(/iy;
+const DOLLAR_OPEN = /^\$(?:[a-z_][a-z0-9_]*)?\$/i;
 
-/** Tables and functions a migration creates. Fail-closed: a CREATE TABLE/FUNCTION/PROCEDURE head that does not parse is an error, never skipped. Known limit: names built at run time are flagged, not read. */
-function sqlObjects(sql: string): { tables: string[]; functions: [string, string][]; errors: string[] } {
-  const bare = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "");
+/** One pass over SQL: drops `--` and nested block comments, keeps quoted text and dollar-quoted bodies verbatim, records where the bodies are. An unterminated comment or literal is an error. */
+function lexSql(sql: string): { text: string; bodies: { start: number; end: number }[]; errors: string[] } {
+  let out = "";
+  const bodies: { start: number; end: number }[] = [];
   const errors: string[] = [];
+  let i = 0;
+  const copyTo = (end: number) => {
+    out += sql.slice(i, end);
+    i = end;
+  };
+  while (i < sql.length) {
+    const c = sql[i];
+    if (c === "-" && sql[i + 1] === "-") {
+      const nl = sql.indexOf("\n", i);
+      i = nl === -1 ? sql.length : nl;
+    } else if (c === "/" && sql[i + 1] === "*") {
+      let depth = 1;
+      let j = i + 2;
+      while (j < sql.length && depth > 0) {
+        if (sql[j] === "/" && sql[j + 1] === "*") (depth++, (j += 2));
+        else if (sql[j] === "*" && sql[j + 1] === "/") (depth--, (j += 2));
+        else j++;
+      }
+      if (depth > 0) errors.push("unterminated block comment");
+      out += " ";
+      i = j;
+    } else if (c === "'" || c === '"') {
+      let j = i + 1;
+      for (; j < sql.length; j++) {
+        if (sql[j] !== c) continue;
+        if (sql[j + 1] === c) j++;
+        else break;
+      }
+      if (j >= sql.length) errors.push(`unterminated ${c === "'" ? "string" : "identifier"}`);
+      copyTo(Math.min(j + 1, sql.length));
+    } else if (c === "$" && DOLLAR_OPEN.test(sql.slice(i, i + 40))) {
+      const tag = sql.slice(i).match(DOLLAR_OPEN)?.[0] ?? "$$";
+      const close = sql.indexOf(tag, i + tag.length);
+      if (close === -1) errors.push(`unterminated dollar quote ${tag}`);
+      const start = out.length;
+      copyTo(close === -1 ? sql.length : close + tag.length);
+      bodies.push({ start, end: out.length });
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return { text: out, bodies, errors };
+}
+
+/** Tables and functions a migration creates. Fail-closed: a CREATE TABLE/FUNCTION/PROCEDURE head that does not parse, a function without a dollar-quoted body, or an unterminated comment or literal is an error, never skipped. Known limit: names built at run time are flagged, not read. */
+function sqlObjects(sql: string): { tables: string[]; functions: [string, string][]; errors: string[] } {
+  const { text: bare, bodies, errors } = lexSql(sql);
   const tables: string[] = [];
   const functions: [string, string][] = [];
-  const seen = (m: RegExpMatchArray) => bare.slice(m.index, (m.index ?? 0) + 40).replace(/\s+/g, " ");
+  const seen = (m: RegExpMatchArray) => (bare.slice(m.index ?? 0).split("\n")[0] ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
   for (const m of bare.matchAll(TABLE_HEAD)) {
     TABLE_FULL.lastIndex = m.index ?? 0;
     const t = TABLE_FULL.exec(bare);
@@ -322,8 +372,10 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
       errors.push(`function not recognised: ${seen(m)}`);
       continue;
     }
-    const part = bare.slice(FUNCTION_FULL.lastIndex, heads[i + 1]?.index ?? bare.length);
-    functions.push([f[1].toLowerCase(), part.toLowerCase().split(/\n\$\$;|\n\$[a-z_]*\$;/)[0]]);
+    const limit = heads[i + 1]?.index ?? bare.length;
+    const body = bodies.find((d) => d.start >= FUNCTION_FULL.lastIndex && d.start < limit && /\bas\s*$/i.test(bare.slice(FUNCTION_FULL.lastIndex, d.start)));
+    if (!body) errors.push(`function ${f[1]}: no dollar-quoted body after AS`);
+    else functions.push([f[1].toLowerCase(), bare.slice(body.start, body.end).toLowerCase()]);
   }
   return { tables, functions, errors };
 }
@@ -484,6 +536,11 @@ describe("sqlObjects", () => {
     ["a temporary table", "CREATE TEMP TABLE a.t (id int);", ["a.t"]],
     ["quoted names", 'CREATE TABLE "a"."t2" (id int);', ["a.t2"]],
     ["a break after TABLE", "CREATE TABLE\n  a.t (id int);", ["a.t"]],
+    ["a partition of", "CREATE TABLE a.t PARTITION OF a.p FOR VALUES IN (1);", ["a.t"]],
+    ["a block-comment opener inside a line comment", "-- see app/api/*\nCREATE TABLE a.t (id int);\n-- db/tests/**/x.sql */\n", ["a.t"]],
+    ["a double dash inside a string", "SELECT 'a--b'; CREATE TABLE a.t (id int);", ["a.t"]],
+    ["a double dash inside a dollar quote", "SELECT $$--$$; CREATE TABLE a.t (id int);", ["a.t"]],
+    ["a nested block comment", "/* a /* b */ CREATE TABLE a.old (id int); */ CREATE TABLE a.t (id int);", ["a.t"]],
     ["a commented-out table", "-- CREATE TABLE a.old (id int);\n/* create table a.older (x int) */\nCREATE TABLE a.t (id int);", ["a.t"]],
   ])("reads %s", (_n, sql, tables) => {
     const r = sqlObjects(sql);
@@ -495,7 +552,8 @@ describe("sqlObjects", () => {
     ["a table without a schema", "CREATE TABLE t (id int);"],
     ["a dynamic name", "CREATE TABLE %I.%I (id int);"],
     ["a name from a concatenation", "EXECUTE 'create table ' || name;"],
-    ["a partition of", "CREATE TABLE a.t PARTITION OF a.p FOR VALUES IN (1);\nCREATE TABLE t2 (id int);"],
+    ["a dynamic partition", "EXECUTE format('CREATE TABLE a.%I PARTITION OF a.p FOR VALUES IN (1)', n);"],
+    ["a foreign table", "CREATE FOREIGN TABLE evidence.f (id int) SERVER s;"],
     ["a one-sided quote", 'CREATE TABLE "a.t (id int);'],
   ])("flags %s", (_n, sql) => {
     expect(sqlObjects(sql).errors.some((e) => e.includes("create table"))).toBe(true);
@@ -511,6 +569,28 @@ describe("sqlObjects", () => {
   });
 
   it.each([
+    ["a one-line body", "CREATE FUNCTION app.a() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;\nCREATE TABLE evidence.orphan (id int);", ["app.a"]],
+    ["a closing quote before LANGUAGE", "CREATE FUNCTION app.a() RETURNS int AS $$\nSELECT 1\n$$ LANGUAGE sql;\nCREATE TABLE evidence.orphan (id int);", ["app.a"]],
+    ["an indented closing quote", "CREATE FUNCTION app.a() RETURNS int AS $f$\n  SELECT 1\n  $f$;\nCREATE TABLE evidence.orphan (id int);", ["app.a"]],
+    ["a nested tag", "CREATE FUNCTION app.a() RETURNS void AS $$ EXECUTE $c$ x $c$; $$;\nCREATE TABLE evidence.orphan (id int);", ["app.a"]],
+  ])("keeps the table after %s out of the function body", (_n, sql, names) => {
+    const r = sqlObjects(sql);
+    expect(r.errors).toEqual([]);
+    expect(r.functions.map(([n]) => n)).toEqual(names);
+    expect(r.functions.every(([, b]) => !b.includes("orphan"))).toBe(true);
+    expect(r.tables).toEqual(["evidence.orphan"]);
+  });
+
+  it.each([
+    ["a function with no dollar body", "CREATE FUNCTION app.a() RETURNS int AS 'select 1' LANGUAGE sql;", "no dollar-quoted body"],
+    ["an unterminated block comment", "/* open\nCREATE TABLE a.t (id int);", "unterminated block comment"],
+    ["an unterminated string", "SELECT 'open;\nCREATE TABLE a.t (id int);", "unterminated string"],
+    ["an unterminated dollar quote", "CREATE FUNCTION app.a() RETURNS int AS $$ SELECT 1;", "unterminated dollar quote"],
+  ])("flags %s", (_n, sql, msg) => {
+    expect(sqlObjects(sql).errors.some((e) => e.includes(msg))).toBe(true);
+  });
+
+  it.each([
     ["a function without a schema", "CREATE FUNCTION f() RETURNS void AS $$ $$;"],
     ["a quoted function name", 'CREATE FUNCTION "app"."f"() RETURNS void AS $$ $$;'],
     ["a name with no parenthesis", "CREATE FUNCTION app.f RETURNS void AS $$ $$;"],
@@ -522,6 +602,9 @@ describe("sqlObjects", () => {
   it("accepts a listed dynamic head and rejects a stale or unlisted one", () => {
     const sql = { ...FAKE.migrations, "d.sql": "EXECUTE format('CREATE TABLE x.%I (id int)', n);" };
     const head = "d.sql: create table not recognised: CREATE TABLE x.%I (id int)', n);";
+    // Same prefix, different statement: a listed entry must not cover it.
+    const sibling = { ...FAKE.migrations, "d.sql": "EXECUTE format('CREATE TABLE x.%I (id int, other int)', n);" };
+    expect(completenessErrors({ ...FAKE, migrations: sibling }, [], PROVIDERS, [head]).length).toBe(2);
     expect(completenessErrors({ ...FAKE, migrations: sql }, [], PROVIDERS, [head])).toEqual([]);
     expect(completenessErrors({ ...FAKE, migrations: sql }, [], PROVIDERS, []).length).toBe(1);
     expect(completenessErrors(FAKE, [], PROVIDERS, [head])).toEqual([`dynamic table entry no longer in the migrations, drop it: ${head}`]);
