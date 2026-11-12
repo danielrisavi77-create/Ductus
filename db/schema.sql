@@ -4077,6 +4077,55 @@ $$;
 
 
 --
+-- Name: submit_problem_report(text, text, text, text, text, integer, text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.submit_problem_report(p_category text, p_description text, p_route text, p_app_version text, p_browser_family text, p_browser_major integer, p_sync_state text) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_reference text;
+  v_attempt integer;
+BEGIN
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+  -- The count below must see what a report that held the lock has committed.
+  IF pg_catalog.current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'READ COMMITTED required' USING ERRCODE = 'ZD500';
+  END IF;
+  PERFORM 1 FROM identity.user_account u WHERE u.id = v_user FOR NO KEY UPDATE;
+  IF (SELECT pg_catalog.count(*) FROM identity.problem_report r
+      WHERE r.user_id = v_user AND r.created_at > pg_catalog.statement_timestamp() - interval '1 hour') >= 5 THEN
+    RAISE EXCEPTION 'too many reports' USING ERRCODE = 'ZD429';
+  END IF;
+  -- 40 random bits; a reference already taken is drawn again.
+  FOR v_attempt IN 1..5 LOOP
+    v_reference := 'PR-' || pg_catalog.upper(pg_catalog.substr(
+      pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''), 1, 10));
+    BEGIN
+      INSERT INTO identity.problem_report (reference, institution_id, user_id, category, description, route,
+                                           app_version, browser_family, browser_major, sync_state)
+      VALUES (v_reference, v_institution, v_user, p_category, p_description, p_route,
+              p_app_version, p_browser_family, p_browser_major, p_sync_state);
+      RETURN v_reference;
+    EXCEPTION
+      WHEN unique_violation THEN
+        NULL;
+      WHEN check_violation OR not_null_violation OR string_data_right_truncation OR numeric_value_out_of_range THEN
+        RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+    END;
+  END LOOP;
+  RAISE EXCEPTION 'no free reference' USING ERRCODE = 'ZD503';
+END
+$$;
+
+
+--
 -- Name: touch_current_session(); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -7857,6 +7906,36 @@ ALTER TABLE ONLY identity.person_name FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: problem_report; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.problem_report (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    reference text NOT NULL,
+    institution_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    category text NOT NULL,
+    description text NOT NULL,
+    route text,
+    app_version text NOT NULL,
+    browser_family text NOT NULL,
+    browser_major integer,
+    sync_state text,
+    created_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
+    CONSTRAINT problem_report_app_version_check CHECK ((app_version ~ '^(?:(?:0|[1-9][0-9]{0,3})\.(?:0|[1-9][0-9]{0,3})\.(?:0|[1-9][0-9]{0,3})(?:\+[0-9a-f]{7,40})?|[0-9a-f]{7,40})$'::text)),
+    CONSTRAINT problem_report_browser_family_check CHECK ((browser_family = ANY (ARRAY['chromium'::text, 'firefox'::text, 'safari'::text, 'other'::text]))),
+    CONSTRAINT problem_report_browser_major_check CHECK (((browser_major >= 0) AND (browser_major <= 999))),
+    CONSTRAINT problem_report_category_check CHECK ((category = ANY (ARRAY['technical'::text, 'account'::text, 'course'::text]))),
+    CONSTRAINT problem_report_description_check CHECK ((((char_length(description) >= 1) AND (char_length(description) <= 1000)) AND (description !~ '[\u0001-\u0008\u000B-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]'::text) AND (description ~ '[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200D\u2028\u2029\u202F\u205F\u2060\u3000\uFEFF]'::text))),
+    CONSTRAINT problem_report_reference_check CHECK ((reference ~ '^PR-[0-9A-F]{10}$'::text)),
+    CONSTRAINT problem_report_route_check CHECK ((route = ANY (ARRAY['/'::text, '/nastavnik'::text, '/nastavnik/brz-put'::text, '/nastavnik/kolegiji'::text, '/nastavnik/mentorstva'::text, '/nastavnik/rad/[id]'::text, '/nastavnik/rad/[id]/reprodukcija'::text, '/nastavnik/zadatak/[assignmentId]/uredi'::text, '/nastavnik/zadatak/novi'::text, '/prijava'::text, '/rad'::text, '/rad/[assignmentId]/predaja'::text, '/rad/[assignmentId]/reprodukcija'::text, '/upis'::text, '/upis/kolegij/[courseId]'::text, '/ustanova'::text, '/ustanova/kolegiji'::text, '/ustanova/korisnici'::text, '/ustanova/pravila'::text, '/zadaci'::text, '/zadaci/kolegiji'::text, '/zadaci/radovi'::text, '/zadatak/[id]'::text]))),
+    CONSTRAINT problem_report_sync_state_check CHECK ((sync_state = ANY (ARRAY['EDITING'::text, 'SAVING_LOCAL'::text, 'LOCAL_DURABLE'::text, 'SYNCING'::text, 'SYNCED'::text, 'CONFLICT'::text, 'ERROR'::text, 'RECOVERY_REQUIRED'::text])))
+);
+
+ALTER TABLE ONLY identity.problem_report FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: session; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -9292,6 +9371,22 @@ ALTER TABLE ONLY identity.person_name
 
 
 --
+-- Name: problem_report problem_report_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.problem_report
+    ADD CONSTRAINT problem_report_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: problem_report problem_report_reference_key; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.problem_report
+    ADD CONSTRAINT problem_report_reference_key UNIQUE (reference);
+
+
+--
 -- Name: session session_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -9953,6 +10048,13 @@ CREATE INDEX evidence_submission_version_idx ON evidence.submission USING btree 
 --
 
 CREATE INDEX submission_receipt_issuance_submission_idx ON evidence.submission_receipt_issuance USING btree (submission_id);
+
+
+--
+-- Name: problem_report_user_created; Type: INDEX; Schema: identity; Owner: -
+--
+
+CREATE INDEX problem_report_user_created ON identity.problem_report USING btree (user_id, created_at);
 
 
 --
@@ -11260,6 +11362,14 @@ ALTER TABLE ONLY identity.person_name
 
 
 --
+-- Name: problem_report problem_report_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.problem_report
+    ADD CONSTRAINT problem_report_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: session session_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -12292,6 +12402,19 @@ CREATE POLICY person_name_owner ON identity.person_name TO ductus_identity USING
 
 
 --
+-- Name: problem_report; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.problem_report ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: problem_report problem_report_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY problem_report_owner ON identity.problem_report TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: session; Type: ROW SECURITY; Schema: identity; Owner: -
 --
 
@@ -13104,4 +13227,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261111180000'),
     ('20261111221500'),
     ('20261111230000'),
-    ('20261111233000');
+    ('20261111233000'),
+    ('20261112110000');
