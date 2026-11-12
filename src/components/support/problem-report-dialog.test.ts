@@ -9,7 +9,7 @@ import { PROBLEM_REPORT_DESCRIPTION_MAX, PROBLEM_REPORT_HOURLY_LIMIT } from "@/d
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
-import ProblemReport, { ProblemReportDialog, checkMessage, stepAfter } from "./ProblemReport";
+import ProblemReport, { ProblemReportDialog, checkMessage, endedAfter, endedFrom, endedMessage, stepAfter } from "./ProblemReport";
 import type { FailureReason } from "./problem-report-client";
 
 // DAN-431: what the dialog shows for each answer and each description class,
@@ -61,11 +61,39 @@ describe("failure messages", () => {
 
   // Codex, #1967: once the session ends, the dialog says so and keeps nothing.
   it("an ended session reads in plain words and keeps no description", () => {
-    expect(stepAfter({ kind: "ended" })).toEqual({ kind: "ended" });
+    expect(stepAfter({ kind: "ended" })).toEqual({ kind: "ended", delivery: "notSent" });
     expect(t.ended).toMatch(/nije poslan/);
     expect(t.ended).toMatch(/uklonjen/);
     expect(t.ended).not.toMatch(TECHNICAL);
     expect(findForbiddenTerms(t.ended)).toEqual([]);
+  });
+
+  // Grok review, #1967: a report that left before the session ended must not
+  // read as not sent, or the person sends it twice; a reference stays shown.
+  it("a session that ends after the report left does not say it was not sent", () => {
+    expect(endedAfter({ kind: "sent", reference: "PR-0123456789" })).toEqual({ kind: "ended", delivery: "received", reference: "PR-0123456789" });
+    expect(endedAfter({ kind: "failed", reason: "timeout" })).toEqual({ kind: "ended", delivery: "maybe" });
+    expect(endedAfter({ kind: "failed", reason: "unknown" })).toEqual({ kind: "ended", delivery: "maybe" });
+    expect(endedAfter({ kind: "failed", reason: "invalid" })).toEqual({ kind: "ended", delivery: "notSent" });
+    expect(endedAfter({ kind: "ended" })).toEqual({ kind: "ended", delivery: "notSent" });
+
+    expect(endedFrom({ kind: "sending" })).toEqual({ kind: "ended", delivery: "maybe" });
+    expect(endedFrom(stepAfter({ kind: "failed", reason: "timeout" }))).toEqual({ kind: "ended", delivery: "maybe" });
+    expect(endedFrom(stepAfter({ kind: "failed", reason: "tooMany" }))).toEqual({ kind: "ended", delivery: "notSent" });
+    expect(endedFrom({ kind: "editing" })).toEqual({ kind: "ended", delivery: "notSent" });
+    expect(endedFrom({ kind: "sent", reference: "PR-0123456789" })).toEqual({ kind: "sent", reference: "PR-0123456789" });
+
+    const maybe = endedMessage({ delivery: "maybe" });
+    const received = endedMessage({ delivery: "received", reference: "PR-0123456789" });
+    expect(endedMessage({ delivery: "notSent" })).toBe(t.ended);
+    expect(received).toContain("PR-0123456789");
+    for (const text of [maybe, received]) {
+      expect(text).not.toMatch(/nije poslan/);
+      expect(text).toMatch(/uklonjen/);
+      expect(text).not.toMatch(TECHNICAL);
+      expect(findForbiddenTerms(text)).toEqual([]);
+    }
+    expect(maybe).toMatch(/možda/);
   });
 
   it("shows the reference after a sent report", () => {
@@ -154,7 +182,9 @@ describe("the opener", () => {
     expect(dialog).toMatch(/const current = useCallback\(\(\) => !\(watchRef\.current\?\.ended\(\) \?\? false\), \[\]\)/);
     expect(dialog).toMatch(/void send\(body, current\)/);
     expect(dialog).toMatch(/sendProblemReport\(body, undefined, undefined, stillCurrent\)/);
-    expect(dialog).toMatch(/setStep\(stillCurrent\(\) \? stepAfter\(outcome\) : \{ kind: "ended" \}\)/);
+    expect(dialog).toMatch(/setStep\(stillCurrent\(\) \? stepAfter\(outcome\) : endedAfter\(outcome\)\)/);
+    expect(dialog).toMatch(/setDescription\(""\);\s*setStep\(endedFrom\);/);
+    expect(dialog).toMatch(/\{endedMessage\(step\)\}/);
   });
 
   it("opens the dialog in <body>, so a hidden side bar does not hide it", () => {

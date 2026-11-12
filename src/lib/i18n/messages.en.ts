@@ -1675,6 +1675,8 @@ const en = {
     failedLead: "The report was not sent. The description is still in the form.",
     keptLead: "The description is still in the form.",
     ended: "This browser is no longer signed in to your account: you signed out or someone else signed in. The description was not sent and has been removed from the form. Sign in again and describe the problem.",
+    endedMaybe: "This browser is no longer signed in to your account: you signed out or someone else signed in. The report left before that and may have been received, so do not send it again. The description has been removed from the form.",
+    endedReceived: "The report was received under number {reference} before this browser was signed out of your account. The description has been removed from the form.",
     retry: "Try again",
     check: {
       empty: "Enter a description of the problem.",

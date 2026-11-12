@@ -41,8 +41,15 @@ export type ProblemReportStep =
   | { kind: "editing" }
   | { kind: "sending" }
   | { kind: "sent"; reference: string }
-  | { kind: "failed"; lead: string; message: string }
-  | { kind: "ended" };
+  | { kind: "failed"; lead: string; message: string; maybeRecorded: boolean }
+  | { kind: "ended"; delivery: EndedDelivery; reference?: string };
+
+/**
+ * What became of the report when the session ended: not sent, may have been
+ * recorded (it left before the session ended), or received with a reference.
+ * Only the first may say it was not sent (Grok review, #1967).
+ */
+export type EndedDelivery = "notSent" | "maybe" | "received";
 
 /** The text under the field for a description that cannot be sent yet. */
 export function checkMessage(check: DescriptionCheck, length: number): string | null {
@@ -62,12 +69,35 @@ const MAYBE_RECORDED: ReadonlySet<FailureReason> = new Set(["timeout", "unknown"
 /** The step a finished send leads to. */
 export function stepAfter(outcome: SendOutcome): ProblemReportStep {
   if (outcome.kind === "sent") return { kind: "sent", reference: outcome.reference };
-  if (outcome.kind === "ended") return { kind: "ended" };
+  if (outcome.kind === "ended") return { kind: "ended", delivery: "notSent" };
+  const maybeRecorded = MAYBE_RECORDED.has(outcome.reason);
   return {
     kind: "failed",
-    lead: MAYBE_RECORDED.has(outcome.reason) ? t.keptLead : t.failedLead,
+    lead: maybeRecorded ? t.keptLead : t.failedLead,
     message: t.failure[outcome.reason],
+    maybeRecorded,
   };
+}
+
+/** The ended step for a send whose answer came after the session ended. */
+export function endedAfter(outcome: SendOutcome): ProblemReportStep {
+  if (outcome.kind === "sent") return { kind: "ended", delivery: "received", reference: outcome.reference };
+  if (outcome.kind === "failed" && MAYBE_RECORDED.has(outcome.reason)) return { kind: "ended", delivery: "maybe" };
+  return { kind: "ended", delivery: "notSent" };
+}
+
+/** The ended step when the session ends while the dialog is in `step`. */
+export function endedFrom(step: ProblemReportStep): ProblemReportStep {
+  if (step.kind === "ended" || step.kind === "sent") return step;
+  if (step.kind === "sending" || (step.kind === "failed" && step.maybeRecorded)) return { kind: "ended", delivery: "maybe" };
+  return { kind: "ended", delivery: "notSent" };
+}
+
+/** The text for an ended dialog, by what became of the report. */
+export function endedMessage(step: { delivery: EndedDelivery; reference?: string }): string {
+  if (step.delivery === "received") return t.endedReceived.replace("{reference}", step.reference ?? "");
+  if (step.delivery === "maybe") return t.endedMaybe;
+  return t.ended;
 }
 
 type ProblemReportProps = {
@@ -130,7 +160,7 @@ export function ProblemReportDialog({ session, onClose }: { session: SessionMark
   useLayoutEffect(() => {
     const watch = watchSessionEnd(tag === null ? null : { tag, at }, () => {
       setDescription("");
-      setStep({ kind: "ended" });
+      setStep(endedFrom);
     });
     watchRef.current = watch;
     return () => {
@@ -147,7 +177,7 @@ export function ProblemReportDialog({ session, onClose }: { session: SessionMark
     singleFlight(async (body: string, stillCurrent: () => boolean) => {
       setStep({ kind: "sending" });
       const outcome = await sendProblemReport(body, undefined, undefined, stillCurrent);
-      setStep(stillCurrent() ? stepAfter(outcome) : { kind: "ended" });
+      setStep(stillCurrent() ? stepAfter(outcome) : endedAfter(outcome));
       return outcome;
     }),
   );
@@ -210,7 +240,7 @@ export function ProblemReportDialog({ session, onClose }: { session: SessionMark
         {step.kind === "ended" ? (
           <>
             <p className={styles.text} role="alert">
-              {t.ended}
+              {endedMessage(step)}
             </p>
             <div className={styles.actions}>
               <button type="button" className={styles.secondary} onClick={onClose}>

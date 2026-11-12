@@ -186,6 +186,32 @@ test("a sign-out in another tab clears the open dialog", async ({ page }) => {
   await expect(dialog).toHaveCount(0);
 });
 
+// A sign-out while the report is on its way: it left, so the dialog keeps
+// the reference the answer brings and never says it was not sent (Grok
+// review, #1967).
+test("a sign-out while sending keeps the reference and does not say not sent", async ({ page }) => {
+  const held: Route[] = [];
+  await page.route(ENDPOINT, (route) => {
+    held.push(route);
+  });
+  const { dialog } = await openDialog(page);
+  await dialog.getByRole("textbox", { name: t.description }).fill(DESCRIPTION);
+  await dialog.getByRole("button", { name: t.send }).click();
+  await expect(dialog.getByText(t.sending)).toBeVisible();
+  await page.evaluate(({ key, channelName }) => {
+    const mark = JSON.parse(localStorage.getItem(key) ?? "null") as { tag: string } | null;
+    if (!mark) throw new Error("The signed-in page must record its session mark");
+    const channel = new BroadcastChannel(channelName);
+    channel.postMessage(mark.tag);
+    channel.close();
+  }, { key: CURRENT_KEY, channelName: SESSION_END_CHANNEL });
+  await expect(dialog.getByRole("alert")).toHaveText(t.endedMaybe);
+  await expect(page.getByText(DESCRIPTION)).toHaveCount(0);
+  expect(held).toHaveLength(1);
+  await held[0]!.fulfill({ status: 201, json: { reference: "PR-3FA9C01B2E" } });
+  await expect(dialog.getByRole("alert")).toHaveText(t.endedReceived.replace("{reference}", "PR-3FA9C01B2E"));
+});
+
 // Shots beside docs/design/ductura (§6.5, D-183): the form, a refusal and the
 // sent report, both themes, 1440 and 400 px, full page.
 test("shots of the dialog in each state", async ({ page }) => {
