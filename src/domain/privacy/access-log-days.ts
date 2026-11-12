@@ -60,18 +60,30 @@ function isName(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && [...value].length <= NAME_MAX;
 }
 
-const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.(\d{1,6}))?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
+const ZONED_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
+
+/** Days in a month of the proleptic Gregorian calendar, 1-based month. */
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
+  return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
+}
 
 /**
  * Milliseconds of an ISO instant that names its zone (Z or an offset), else
  * NaN. Date.parse would read a string without a zone in the host's zone, and
  * it drops the digits below the millisecond, so `.000001` would pass as `.000`
  * (#1968 QA c.6815947103, review c.6815958601): an instant that milliseconds
- * do not hold exactly is NaN, never rounded.
+ * do not hold exactly is NaN, never rounded. A date or time that is not on the
+ * calendar (30 February, month 13, hour 24, second 60) is NaN, never rolled over.
  */
 export function zonedInstantOf(value: string): number {
   const match = ZONED_INSTANT.exec(value);
-  if (match === null || /[1-9]/.test(match[1]?.slice(3) ?? "")) return Number.NaN;
+  if (match === null || /[1-9]/.test(match[7]?.slice(3) ?? "")) return Number.NaN;
+  // Date.parse rolls an impossible date over (2026-02-30 reads as 2026-03-02,
+  // hour 24 as the next day; #1968 QA c.6816961587), so the fields are checked first.
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map((part) => Number(part ?? "0"));
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return Number.NaN;
+  if (hour > 23 || minute > 59 || second > 59) return Number.NaN;
   return Date.parse(value);
 }
 
