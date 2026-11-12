@@ -177,6 +177,7 @@ export function catalogErrors(cat: Catalog, inv: Inventory, gaps: string[] = KNO
 }
 
 /** The inventory text and the code files its flows cite; cited documents never count. */
+const CODE_FILE = /\.(?:sql|ts|tsx|mjs|js)$/;
 function readInventory(): Inventory {
   const text = readFileSync(join(ROOT, INVENTORY), "utf8");
   const lines = text.split("\n");
@@ -185,7 +186,7 @@ function readInventory(): Inventory {
   const section = lines.slice(at + 1, end < 0 ? undefined : end).join("\n");
   const paths = [...new Set([...section.matchAll(/`([^`]+)`/g)].map((m) => m[1]))];
   const cited = paths
-    .filter((p) => !p.startsWith("docs/") && existsSync(join(ROOT, p)) && statSync(join(ROOT, p)).isFile())
+    .filter((p) => CODE_FILE.test(p) && existsSync(join(ROOT, p)) && statSync(join(ROOT, p)).isFile())
     .map((p) => readFileSync(join(ROOT, p), "utf8"));
   if (at < 0 || cited.length < 50) throw new Error(`${INVENTORY}: no flows table or too few cited files (${cited.length})`);
   return { text, cited };
