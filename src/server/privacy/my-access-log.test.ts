@@ -122,6 +122,8 @@ describe("DAN-294 my access log: refusals", () => {
     ["one microsecond past the grid", { beforeAt: "2026-11-10T08:00:00.000001Z", beforeId: id(1) }],
     ["999999 microseconds", { beforeAt: "2026-11-10T07:59:59.999999Z", beforeId: id(1) }],
     ["999 microseconds", { beforeAt: "2026-11-10T08:00:00.000999Z", beforeId: id(1) }],
+    ["100 microseconds as four digits", { beforeAt: "2026-11-10T08:00:00.0001Z", beforeId: id(1) }],
+    ["10 microseconds as five digits", { beforeAt: "2026-11-10T08:00:00.00001Z", beforeId: id(1) }],
     ["nonzero milliseconds", { beforeAt: "2026-11-10T08:00:00.001Z", beforeId: id(1) }],
   ])("a malformed cursor (%s) is unavailable without a query", async (_, cursor) => {
     const { withActor, calls } = database({ rows: [] });
