@@ -271,6 +271,8 @@ function indentOf(line) {
 const startsBlock = (rest, relative) =>
   relative < 4 && (BLOCK.test(rest) || THEMATIC.test(rest) || isFence(rest) !== null || MARKER.test(rest));
 
+const MAX_DEPTH = 16;
+
 function fenceTracker() {
   const items = []; // content column of each open list item, { width, empty }
   let fence = null; // { mark, depth, base }
@@ -326,6 +328,9 @@ function fenceTracker() {
         paragraph = !BLOCK.test(rest);
         return false;
       }
+      // Deeper nesting than any real STATE.md holds is handed over as it is,
+      // which also keeps a long line of markers from taking quadratic time.
+      if (items.length >= MAX_DEPTH) throw UNSURE;
       const after = rest.slice(marker[0].length);
       const content = after.replace(/^ +/, "");
       // Only an item with content, and an ordered one only from 1, interrupts a paragraph.

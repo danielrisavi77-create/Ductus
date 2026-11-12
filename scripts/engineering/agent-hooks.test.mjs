@@ -657,6 +657,8 @@ test("stateForRole: a fence in a list item closes with the item (cxcr1949 on 969
     `${QUEUED}> ~~~\n+\n  ~~~\n${KEEP}`,
     `${QUEUED}- a\n  > # N\n  - b\n    ~~~\n${KEEP}`,
     `${QUEUED}   > x\n${KEEP}`,
+    `${QUEUED}${"- ".repeat(50)}~~~\n${KEEP}`,
+    `${QUEUED}${"- ".repeat(32000)}x\n${KEEP}`,
   ];
   for (const input of unsure) {
     assert.equal(stateForRole(input, "worker"), input, JSON.stringify(input));
