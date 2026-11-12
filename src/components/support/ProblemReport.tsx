@@ -64,9 +64,11 @@ export function checkMessage(check: DescriptionCheck, length: number): string | 
  * Answers after which the report may still have been recorded: these must not
  * say it was not sent, or the person sends it twice (Grok review, #1967). A
  * lost connection is one of them: it may drop after the report was recorded
- * and before the answer arrived (Codex, #1967).
+ * and before the answer arrived (Codex, #1967). So may a 503: the route
+ * answers it also when the commit's confirmation was lost or the stored row
+ * did not read back (Codex QA, #1967).
  */
-const MAYBE_RECORDED: ReadonlySet<FailureReason> = new Set(["network", "timeout", "unknown"]);
+const MAYBE_RECORDED: ReadonlySet<FailureReason> = new Set(["network", "timeout", "unavailable", "unknown"]);
 
 /** The step a finished send leads to. */
 export function stepAfter(outcome: SendOutcome): ProblemReportStep {

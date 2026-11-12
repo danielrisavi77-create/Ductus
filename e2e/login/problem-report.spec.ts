@@ -105,17 +105,24 @@ for (const [status, reason] of [
   });
 }
 
-// A 201 without a reference may still be recorded: the alert keeps the
-// description and does not say the report was not sent (Grok review, #1967).
-test("an unconfirmed answer does not claim the report was not sent", async ({ page }) => {
-  await page.route(ENDPOINT, (route) => route.fulfill({ status: 201, json: {} }));
-  const { dialog } = await openDialog(page);
-  const field = dialog.getByRole("textbox", { name: t.description });
-  await field.fill(DESCRIPTION);
-  await dialog.getByRole("button", { name: t.send }).click();
-  await expect(dialog.getByRole("alert")).toHaveText(`${t.keptLead} ${t.failure.unknown}`);
-  await expect(field).toHaveValue(DESCRIPTION);
-});
+// A 201 without a reference, or a 503 (the route also answers it when the
+// commit's confirmation was lost), may still be recorded: the alert keeps the
+// description and does not say the report was not sent (Grok review and
+// Codex QA, #1967).
+for (const [status, json, reason] of [
+  [201, {}, "unknown"],
+  [503, { error: "unavailable" }, "unavailable"],
+] as const) {
+  test(`an unconfirmed ${status} answer does not claim the report was not sent`, async ({ page }) => {
+    await page.route(ENDPOINT, (route) => route.fulfill({ status, json }));
+    const { dialog } = await openDialog(page);
+    const field = dialog.getByRole("textbox", { name: t.description });
+    await field.fill(DESCRIPTION);
+    await dialog.getByRole("button", { name: t.send }).click();
+    await expect(dialog.getByRole("alert")).toHaveText(`${t.keptLead} ${t.failure[reason]}`);
+    await expect(field).toHaveValue(DESCRIPTION);
+  });
+}
 
 // A connection that drops may drop after the report was recorded: the alert
 // keeps the description and does not say it was not sent (Codex, #1967).

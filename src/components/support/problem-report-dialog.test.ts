@@ -34,14 +34,14 @@ describe("failure messages", () => {
   // A timeout, a lost connection or an unconfirmed answer may still have been
   // recorded, so the lead must not say the report was not sent (Grok review
   // and Codex, #1967).
-  it.each(["network", "timeout", "unknown"] as const)("%s does not claim the report was not sent", (reason) => {
+  it.each(["network", "timeout", "unavailable", "unknown"] as const)("%s does not claim the report was not sent", (reason) => {
     const step = stepAfter({ kind: "failed", reason });
     expect(step).toMatchObject({ kind: "failed", lead: t.keptLead });
     if (step.kind !== "failed") return;
     expect(`${step.lead} ${step.message}`).not.toMatch(/nije poslana/);
   });
 
-  it.each(["signedOut", "tooLarge", "invalid", "tooMany", "unavailable"] as const)(
+  it.each(["signedOut", "tooLarge", "invalid", "tooMany"] as const)(
     "%s says the report was not sent",
     (reason) => {
       expect(stepAfter({ kind: "failed", reason })).toMatchObject({ lead: t.failedLead });
@@ -76,11 +76,13 @@ describe("failure messages", () => {
     expect(endedAfter({ kind: "failed", reason: "timeout" })).toEqual({ kind: "ended", delivery: "maybe" });
     expect(endedAfter({ kind: "failed", reason: "unknown" })).toEqual({ kind: "ended", delivery: "maybe" });
     expect(endedAfter({ kind: "failed", reason: "network" })).toEqual({ kind: "ended", delivery: "maybe" });
+    expect(endedAfter({ kind: "failed", reason: "unavailable" })).toEqual({ kind: "ended", delivery: "maybe" });
     expect(endedAfter({ kind: "failed", reason: "invalid" })).toEqual({ kind: "ended", delivery: "notSent" });
     expect(endedAfter({ kind: "ended" })).toEqual({ kind: "ended", delivery: "notSent" });
 
     expect(endedFrom({ kind: "sending" })).toEqual({ kind: "ended", delivery: "maybe" });
     expect(endedFrom(stepAfter({ kind: "failed", reason: "timeout" }))).toEqual({ kind: "ended", delivery: "maybe" });
+    expect(endedFrom(stepAfter({ kind: "failed", reason: "unavailable" }))).toEqual({ kind: "ended", delivery: "maybe" });
     expect(endedFrom(stepAfter({ kind: "failed", reason: "tooMany" }))).toEqual({ kind: "ended", delivery: "notSent" });
     expect(endedFrom({ kind: "editing" })).toEqual({ kind: "ended", delivery: "notSent" });
     expect(endedFrom({ kind: "sent", reference: "PR-0123456789" })).toEqual({ kind: "sent", reference: "PR-0123456789" });

@@ -1700,7 +1700,7 @@ export const hr = {
       tooLarge: "Opis je prevelik za slanje. Skratite ga pa pokušajte ponovno.",
       invalid: "Ductura nije prihvatila opis. Provjerite tekst pa pokušajte ponovno.",
       tooMany: "Iz Vašeg računa u jednom satu može se poslati najviše pet prijava. Pokušajte ponovno kasnije.",
-      unavailable: "Ductura trenutačno ne prima prijave. Pokušajte ponovno za nekoliko minuta.",
+      unavailable: "Ductura nije potvrdila zapis prijave. Prijava je možda ipak primljena. Pokušajte ponovno za nekoliko minuta; ako je već stigla, bit će zabilježena dvaput.",
       unknown: "Ductura nije potvrdila primitak prijave. Pokušajte ponovno za nekoliko minuta.",
     },
   },

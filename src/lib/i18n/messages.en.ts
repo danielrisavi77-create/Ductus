@@ -1690,7 +1690,7 @@ const en = {
       tooLarge: "The description is too large to send. Shorten it, then try again.",
       invalid: "Ductura did not accept the description. Check the text, then try again.",
       tooMany: "Your account can send at most five reports in one hour. Try again later.",
-      unavailable: "Ductura is not taking reports right now. Try again in a few minutes.",
+      unavailable: "Ductura did not confirm that the report was recorded. The report may still have been received. Try again in a few minutes; if it already arrived, it will be recorded twice.",
       unknown: "Ductura did not confirm that it received the report. Try again in a few minutes.",
     },
   },
