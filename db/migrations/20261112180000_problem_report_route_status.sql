@@ -7,8 +7,9 @@
 -- 20261112150000_problem_report_access_log_route.sql (DAN-294, #1969) and
 -- 20261112160000_problem_report_route_how_it_works.sql (DAN-431, #1973) and
 -- carries their routes too, /rad/[assignmentId]/dnevnik-pristupa and
--- /kako-radi, so it must land after both: an older migration applied after
--- this one would set a narrower set without /stanje.
+-- /kako-radi, so it must land after both: dbmate up --strict (D-91) refuses a
+-- migration older than one already applied, so either PR landing later would
+-- need a new version above this one that also carries /stanje.
 -- Every existing row still holds: the CHECK is replaced by a wider one (the
 -- drop is deliberate) and validated in this migration's one transaction. No
 -- row is changed or removed.

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { parsePublicStatus } from "@/lib/status/public-status";
 
-import type { CapabilityReport, CapabilityStatus } from "./ready";
+import { type Capability, type CapabilityReport, type CapabilityStatus, checkCapabilities } from "./ready";
 import { PUBLIC_STATUS_TTL_MS, publicComponents, publicStatusCache, publicStatusResponse } from "./public-status";
 
 const report = (c: CapabilityReport["capabilities"]): CapabilityReport => ({ ready: c.database === "ok", capabilities: c, codes: {} });
@@ -112,5 +112,28 @@ describe("publicStatusResponse", () => {
     const response = await publicStatusResponse(() => Promise.reject(new Error("postgres://u:pw@db.internal.example")), true);
     expect(response.status).toBe(503);
     expect(await response.text()).toBe("");
+  });
+});
+
+// Orchestrator note 2 (c.6820602587): a probe that fails with a host and a
+// code, through the whole chain the route uses, answers only the closed body.
+describe("public status with a failing probe", () => {
+  it("carries no host, code, message or timing from the failed probe", async () => {
+    const leak = Object.assign(new Error("connect ECONNREFUSED postgres://u:pw@db.internal.example:5432"), { code: "ECONNREFUSED" });
+    const capabilities: Capability[] = [
+      { name: "database", required: true, timeoutMs: 1_000, probe: async () => { throw leak; } },
+      { name: "storage", required: false, timeoutMs: 1_000, probe: async () => "ok" },
+      { name: "signing", required: false, timeoutMs: 1_000, probe: () => new Promise(() => {}) },
+      { name: "queue", required: false, timeoutMs: 1_000, probe: async () => "nije_konfigurirano" },
+    ];
+    const get = publicStatusCache(() => checkCapabilities(capabilities, 20), () => Date.parse("2026-11-12T10:25:00.000Z"));
+    const response = await publicStatusResponse(get, true);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(JSON.parse(text)).toEqual({
+      checkedAt: "2026-11-12T10:25:00.000Z",
+      components: { writing: "ne_radi", submission: "ne_radi", mentorView: "ne_radi" },
+    });
+    expect(text).not.toMatch(/ECONNREFUSED|TIMEOUT|ERROR|postgres|internal|5432|codes|ready|ms/);
   });
 });

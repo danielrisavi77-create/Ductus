@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { isStale, parsePublicStatus, POLL_MS, type PublicStatus } from "@/lib/status/public-status";
+import { isStale, POLL_MS, type PublicStatus } from "@/lib/status/public-status";
 
+import { statusLoader } from "./status-loader";
 import StatusView, { type StatusPhase } from "./StatusView";
 
 const TICK_MS = 10_000;
@@ -18,48 +19,34 @@ export default function StatusBoard() {
   const [failed, setFailed] = useState(false);
   const [lastOk, setLastOk] = useState<number | null>(null);
   const [now, setNow] = useState(() => performance.now());
-  const inFlight = useRef(false);
-  const alive = useRef(new AbortController());
-
-  const load = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    try {
-      const response = await fetch("/api/status", { cache: "no-store", signal: alive.current.signal });
-      const parsed = response.ok ? parsePublicStatus(await response.json()) : null;
-      if (alive.current.signal.aborted) return;
-      if (parsed) {
-        setStatus(parsed);
-        setLastOk(performance.now());
-        setFailed(false);
-      } else {
-        setFailed(true);
-      }
-    } catch {
-      if (!alive.current.signal.aborted) setFailed(true);
-    } finally {
-      inFlight.current = false;
-      if (!alive.current.signal.aborted) setNow(performance.now());
-    }
-  }, []);
+  const load = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     const controller = new AbortController();
-    alive.current = controller;
-    void load();
-    const poll = setInterval(() => void load(), POLL_MS);
+    const mounted = statusLoader(controller.signal, {
+      ok: (parsed) => {
+        setStatus(parsed);
+        setLastOk(performance.now());
+        setFailed(false);
+      },
+      fail: () => setFailed(true),
+      settled: () => setNow(performance.now()),
+    });
+    load.current = mounted;
+    void mounted();
+    const poll = setInterval(() => void mounted(), POLL_MS);
     const tick = setInterval(() => setNow(performance.now()), TICK_MS);
     return () => {
       controller.abort();
       clearInterval(poll);
       clearInterval(tick);
     };
-  }, [load]);
+  }, []);
 
   const phase: StatusPhase = status
     ? { kind: "filled", status, stale: isStale(lastOk, now) }
     : failed
       ? { kind: "error" }
       : { kind: "loading" };
-  return <StatusView phase={phase} onRetry={() => void load()} />;
+  return <StatusView phase={phase} onRetry={() => void load.current()} />;
 }
