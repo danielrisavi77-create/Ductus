@@ -20,7 +20,9 @@ import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 // transaction, so schemas, relations, routines, bodies and triggers come from
 // one snapshot; DDL another session commits meanwhile is either wholly in it
 // or wholly out. The check speaks for the database as the migrations leave it
-// in CI, not for one that changes after the read.
+// in CI, not for one that changes after the read. The full check retries in
+// fresh snapshots so that scratch objects of parallel test files, which they
+// drop again, do not fail it; objects that stay fail every snapshot.
 
 const ROOT = join(__dirname, "../..");
 const INVENTORY = "docs/privacy/08-inventar-tokova-podataka.md";
@@ -285,19 +287,27 @@ describe(`${INVENTORY} against the migrated database`, () => {
     }
   }
 
+  // Other integration files run in parallel against the same database and
+  // create scratch objects for a few seconds (job-queue.integration.test.ts
+  // adds public.it_jobq_* trigger functions and drops them). Each attempt reads
+  // a fresh snapshot; the check passes only once one snapshot has no errors.
+  // Objects of the migrations persist, so a real gap fails every attempt.
   it("covers every schema, table and function after the migrations", async () => {
-    const client = await pool.connect();
-    try {
-      await client.query(SNAPSHOT);
-      const cat = await readCatalog(client);
-      expect(cat.relations.length).toBeGreaterThan(50);
-      expect(cat.routines.length).toBeGreaterThan(100);
-      expect(catalogErrors(cat, inventory)).toEqual([]);
-    } finally {
-      await client.query("ROLLBACK");
-      client.release();
-    }
-  });
+    const snapshotErrors = async () => {
+      const client = await pool.connect();
+      try {
+        await client.query(SNAPSHOT);
+        const cat = await readCatalog(client);
+        expect(cat.relations.length).toBeGreaterThan(50);
+        expect(cat.routines.length).toBeGreaterThan(100);
+        return catalogErrors(cat, inventory);
+      } finally {
+        await client.query("ROLLBACK");
+        client.release();
+      }
+    };
+    await expect.poll(snapshotErrors, { timeout: 50_000, interval: 1_000 }).toEqual([]);
+  }, 60_000);
 
   it.each([
     ["a new table in an existing schema", "CREATE TABLE institution.dan709_probe (x int)", "relation (r) institution.dan709_probe: no flow in the inventory"],
