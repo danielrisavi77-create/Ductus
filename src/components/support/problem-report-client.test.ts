@@ -152,7 +152,49 @@ describe("server answers", () => {
       headers: { "Content-Type": "application/json" },
       body,
       credentials: "same-origin",
+      signal: expect.any(AbortSignal),
     });
+  });
+});
+
+// A stalled send would hold the locked dialog shut (Codex, #1967).
+describe("a send that gets no answer in time", () => {
+  it("ends as a timeout and aborts the request when the connection stalls", async () => {
+    let signal: AbortSignal | undefined;
+    const fetcher = vi.fn((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise<Response>(() => {});
+    });
+    await expect(sendProblemReport("{}", fetcher, 10)).resolves.toEqual({ kind: "failed", reason: "timeout" });
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it("ends as a timeout when the answer starts but its body never finishes", async () => {
+    const stalled = new Response(new ReadableStream({ start() {} }), { status: 201 });
+    const fetcher = vi.fn().mockResolvedValue(stalled);
+    await expect(sendProblemReport("{}", fetcher, 10)).resolves.toEqual({ kind: "failed", reason: "timeout" });
+  });
+
+  it("leaves no timer behind once the answer has come", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn().mockResolvedValue(Response.json({ reference: "PR-ABCDEF0123" }, { status: 201 }));
+      await expect(sendProblemReport("{}", fetcher)).resolves.toEqual({ kind: "sent", reference: "PR-ABCDEF0123" });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("frees the single-flight slot after a timeout, so the next send is a new request", async () => {
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>(() => {}))
+      .mockResolvedValueOnce(Response.json({ reference: "PR-0000000003" }, { status: 201 }));
+    const send = singleFlight(() => sendProblemReport("{}", fetcher, 10));
+    await expect(send()).resolves.toEqual({ kind: "failed", reason: "timeout" });
+    await expect(send()).resolves.toEqual({ kind: "sent", reference: "PR-0000000003" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -1691,6 +1691,7 @@ export const hr = {
     },
     failure: {
       network: "Veza s Ducturom nije uspjela. Provjerite internetsku vezu pa pokušajte ponovno.",
+      timeout: "Ductura nije odgovorila na vrijeme. Prijava je možda ipak primljena. Pokušajte ponovno za nekoliko minuta; ako je već stigla, bit će zabilježena dvaput.",
       signedOut: "Sesija je završila. Zapišite opis izvan Ducture, prijavite se ponovno pa ga pošaljite.",
       tooLarge: "Opis je prevelik za slanje. Skratite ga pa pokušajte ponovno.",
       invalid: "Ductura nije prihvatila opis. Provjerite tekst pa pokušajte ponovno.",

@@ -80,7 +80,15 @@ export function buildProblemReportBody(input: ProblemReportInput): string | null
   });
 }
 
-export type FailureReason = "network" | "signedOut" | "tooLarge" | "invalid" | "tooMany" | "unavailable" | "unknown";
+export type FailureReason =
+  | "network"
+  | "timeout"
+  | "signedOut"
+  | "tooLarge"
+  | "invalid"
+  | "tooMany"
+  | "unavailable"
+  | "unknown";
 
 export type SendOutcome = { kind: "sent"; reference: string } | { kind: "failed"; reason: FailureReason };
 
@@ -108,21 +116,51 @@ export function outcomeFromResponse(status: number, json: unknown): SendOutcome 
 
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 
-/** Posts the bytes once; never throws, a lost connection is "network". */
-export async function sendProblemReport(body: string, fetcher: Fetcher = fetch): Promise<SendOutcome> {
-  let response: Response;
+/**
+ * How long a send may take, answer included. The dialog locks while sending,
+ * so a stalled connection must not hold it shut (Codex, #1967).
+ */
+export const SEND_TIMEOUT_MS = 20_000;
+
+/**
+ * Posts the bytes once; never throws. A lost connection is "network"; no
+ * complete answer within `timeoutMs` (reading the body included) is "timeout",
+ * and the request is aborted.
+ */
+export async function sendProblemReport(
+  body: string,
+  fetcher: Fetcher = fetch,
+  timeoutMs: number = SEND_TIMEOUT_MS,
+): Promise<SendOutcome> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<SendOutcome>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve({ kind: "failed", reason: "timeout" });
+    }, timeoutMs);
+  });
+  const answered = (async (): Promise<SendOutcome> => {
+    let response: Response;
+    try {
+      response = await fetcher(PROBLEM_REPORT_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+    } catch {
+      return { kind: "failed", reason: "network" };
+    }
+    const json: unknown = await response.json().catch(() => null);
+    return outcomeFromResponse(response.status, json);
+  })();
   try {
-    response = await fetcher(PROBLEM_REPORT_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      credentials: "same-origin",
-    });
-  } catch {
-    return { kind: "failed", reason: "network" };
+    return await Promise.race([answered, expired]);
+  } finally {
+    clearTimeout(timer);
   }
-  const json: unknown = await response.json().catch(() => null);
-  return outcomeFromResponse(response.status, json);
 }
 
 /**

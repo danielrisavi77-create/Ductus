@@ -18,7 +18,7 @@ import type { FailureReason } from "./problem-report-client";
 const t = messagesHr.support;
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
-const REASONS: FailureReason[] = ["network", "signedOut", "tooLarge", "invalid", "tooMany", "unavailable", "unknown"];
+const REASONS: FailureReason[] = ["network", "timeout", "signedOut", "tooLarge", "invalid", "tooMany", "unavailable", "unknown"];
 const TECHNICAL = /\b(?:HTTP|JSON|API|status|server|request|payload|\d{3})\b|poslužitelj|zahtjev|kod greške/i;
 
 describe("failure messages", () => {
