@@ -297,7 +297,8 @@ const DYNAMIC_TABLES = [
 ];
 
 const TABLE_HEAD = /\bcreate\s+(?:\w+\s+)*?table\b/gi;
-const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\s+(?:if\s+not\s+exists\s+)?(?:"([a-z_]+)"|([a-z_]+))\.(?:"([a-z0-9_]+)"|([a-z0-9_]+))(?=[\s(;])/iy;
+const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\s+(?:if\s+not\s+exists\s+)?([a-z_]+)\.([a-z0-9_]+)(?=[\s(;])/iy;
+/** Quoted identifiers are not supported: TABLE_FULL and FUNCTION_FULL accept bare names only, so a quoted schema, table or function never normalises to lower case, it is an error. */
 /** A rename or schema move would leave the tracked name stale, so it is an error instead of being ignored. */
 const ALTER_MOVE = /\balter\s+(?:foreign\s+)?(?:table|function|procedure)\b[^;]*?\b(?:rename\s+to|set\s+schema)\b/gi;
 const FUNCTION_HEAD = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/gi;
@@ -367,9 +368,7 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
   for (const m of bare.matchAll(TABLE_HEAD)) {
     TABLE_FULL.lastIndex = m.index ?? 0;
     const t = TABLE_FULL.exec(bare);
-    // A quoted identifier keeps its case in PostgreSQL ("Document" is not document), so it must not be folded onto another table.
-    if (t && [t[1], t[3]].some((q) => q !== undefined && q !== q.toLowerCase())) errors.push(`create table with a quoted upper-case identifier not supported: ${seen(m)}`);
-    else if (t) tables.push(`${t[1] ?? t[2]}.${t[3] ?? t[4]}`.toLowerCase());
+    if (t) tables.push(`${t[1]}.${t[2]}`.toLowerCase());
     else errors.push(`create table not recognised: ${seen(m)}`);
   }
   for (const m of bare.matchAll(ALTER_MOVE)) errors.push(`alter that renames or moves an object not supported: ${seen(m)}`);
@@ -550,10 +549,8 @@ describe("composeServices", () => {
 describe("sqlObjects", () => {
   it.each([
     ["a plain table", "CREATE TABLE a.t (id int);", ["a.t"]],
-    ["a quoted lower-case table", 'CREATE TABLE "a"."t" (id int);', ["a.t"]],
     ["if not exists and unlogged", "create unlogged table if not exists a.t (id int);", ["a.t"]],
     ["a temporary table", "CREATE TEMP TABLE a.t (id int);", ["a.t"]],
-    ["quoted names", 'CREATE TABLE "a"."t2" (id int);', ["a.t2"]],
     ["a break after TABLE", "CREATE TABLE\n  a.t (id int);", ["a.t"]],
     ["a partition of", "CREATE TABLE a.t PARTITION OF a.p FOR VALUES IN (1);", ["a.t"]],
     ["a block-comment opener inside a line comment", "-- see app/api/*\nCREATE TABLE a.t (id int);\n-- db/tests/**/x.sql */\n", ["a.t"]],
@@ -575,8 +572,10 @@ describe("sqlObjects", () => {
     ["a dynamic partition", "EXECUTE format('CREATE TABLE a.%I PARTITION OF a.p FOR VALUES IN (1)', n);"],
     ["a foreign table", "CREATE FOREIGN TABLE evidence.f (id int) SERVER s;"],
     ["a one-sided quote", 'CREATE TABLE "a.t (id int);'],
-    ["a quoted upper-case table (distinct from the lower-case one)", 'CREATE TABLE evidence."Document" (id uuid);'],
-    ["a quoted upper-case schema", 'CREATE TABLE "Evidence".document (id uuid);'],
+    ["a quoted table", 'CREATE TABLE evidence."Document" (id int);'],
+    ["a quoted schema", 'CREATE TABLE "Evidence".document (id int);'],
+    ["a quoted lower-case table", 'CREATE TABLE a."t" (id int);'],
+    ["a quoted schema and table", 'CREATE TABLE "a"."t2" (id int);'],
   ])("flags %s", (_n, sql) => {
     expect(sqlObjects(sql).errors.some((e) => e.includes("create table"))).toBe(true);
   });
@@ -615,6 +614,8 @@ describe("sqlObjects", () => {
   it.each([
     ["a function without a schema", "CREATE FUNCTION f() RETURNS void AS $$ $$;"],
     ["a quoted function name", 'CREATE FUNCTION "app"."f"() RETURNS void AS $$ $$;'],
+    ["a quoted function", 'CREATE FUNCTION app."F"() RETURNS void AS $$ $$;'],
+    ["a quoted function schema", 'CREATE OR REPLACE PROCEDURE "App".f() AS $$ $$;'],
     ["a name with no parenthesis", "CREATE FUNCTION app.f RETURNS void AS $$ $$;"],
     ["a dynamic function name", "CREATE FUNCTION %I.%I() RETURNS void AS $$ $$;"],
   ])("flags %s", (_n, sql) => {
@@ -637,6 +638,9 @@ describe("sqlObjects", () => {
     ["a table schema move", "alter table evidence.thing\n  set schema other;"],
     ["a function rename", "ALTER FUNCTION app.f(int) RENAME TO g;"],
     ["a foreign table rename", "ALTER FOREIGN TABLE a.t RENAME TO u;"],
+    ["a quoted table rename", 'ALTER TABLE evidence."Document" RENAME TO "Secret";'],
+    ["a quoted schema set schema", 'ALTER TABLE "Evidence".document SET SCHEMA "Other";'],
+    ["a quoted function rename", 'ALTER FUNCTION app."F"(int) RENAME TO g;'],
   ])("flags %s", (_n, sql) => {
     expect(sqlObjects(sql).errors).toHaveLength(1);
   });
