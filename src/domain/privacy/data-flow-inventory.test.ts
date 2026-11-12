@@ -367,7 +367,9 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
   for (const m of bare.matchAll(TABLE_HEAD)) {
     TABLE_FULL.lastIndex = m.index ?? 0;
     const t = TABLE_FULL.exec(bare);
-    if (t) tables.push(`${t[1] ?? t[2]}.${t[3] ?? t[4]}`.toLowerCase());
+    // A quoted identifier keeps its case in PostgreSQL ("Document" is not document), so it must not be folded onto another table.
+    if (t && [t[1], t[3]].some((q) => q !== undefined && q !== q.toLowerCase())) errors.push(`create table with a quoted upper-case identifier not supported: ${seen(m)}`);
+    else if (t) tables.push(`${t[1] ?? t[2]}.${t[3] ?? t[4]}`.toLowerCase());
     else errors.push(`create table not recognised: ${seen(m)}`);
   }
   for (const m of bare.matchAll(ALTER_MOVE)) errors.push(`alter that renames or moves an object not supported: ${seen(m)}`);
@@ -548,6 +550,7 @@ describe("composeServices", () => {
 describe("sqlObjects", () => {
   it.each([
     ["a plain table", "CREATE TABLE a.t (id int);", ["a.t"]],
+    ["a quoted lower-case table", 'CREATE TABLE "a"."t" (id int);', ["a.t"]],
     ["if not exists and unlogged", "create unlogged table if not exists a.t (id int);", ["a.t"]],
     ["a temporary table", "CREATE TEMP TABLE a.t (id int);", ["a.t"]],
     ["quoted names", 'CREATE TABLE "a"."t2" (id int);', ["a.t2"]],
@@ -572,6 +575,8 @@ describe("sqlObjects", () => {
     ["a dynamic partition", "EXECUTE format('CREATE TABLE a.%I PARTITION OF a.p FOR VALUES IN (1)', n);"],
     ["a foreign table", "CREATE FOREIGN TABLE evidence.f (id int) SERVER s;"],
     ["a one-sided quote", 'CREATE TABLE "a.t (id int);'],
+    ["a quoted upper-case table (distinct from the lower-case one)", 'CREATE TABLE evidence."Document" (id uuid);'],
+    ["a quoted upper-case schema", 'CREATE TABLE "Evidence".document (id uuid);'],
   ])("flags %s", (_n, sql) => {
     expect(sqlObjects(sql).errors.some((e) => e.includes("create table"))).toBe(true);
   });
