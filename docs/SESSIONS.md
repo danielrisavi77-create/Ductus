@@ -13,17 +13,17 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
   - Izvještaj (sesija → orkestrator): retci 105-124
   - Trag rada (autor → PR, nakon svakog pusha): retci 125-136
   - QA upit (orkestrator → QA sesija): retci 137-154
-- §4 Štednja tokena: retci 155-223
-  - §4a Tehnička provedba (DAN-93): retci 167-223
-- §5 Neovisni pregled: retci 224-255
-- §6 Dizajn: retci 256-341
-  - §6.1 Cilj i mjerodavna referenca: retci 264-275
-  - §6.2 Vizualni ugovor u zadatku: retci 276-294
-  - §6.3 Kratka priprema i jedan vizualni stil: retci 295-303
-  - §6.4 Izvedba, snimanje i ispravci: retci 304-315
-  - §6.5 Vizualni dokaz i predaja: retci 316-333
-  - §6.6 Prihvat i regresijske snimke: retci 334-341
-- §7 Okruženje i održavanje: retci 342-360
+- §4 Štednja tokena: retci 155-225
+  - §4a Tehnička provedba (DAN-93): retci 167-225
+- §5 Neovisni pregled: retci 226-257
+- §6 Dizajn: retci 258-343
+  - §6.1 Cilj i mjerodavna referenca: retci 266-277
+  - §6.2 Vizualni ugovor u zadatku: retci 278-296
+  - §6.3 Kratka priprema i jedan vizualni stil: retci 297-305
+  - §6.4 Izvedba, snimanje i ispravci: retci 306-317
+  - §6.5 Vizualni dokaz i predaja: retci 318-335
+  - §6.6 Prihvat i regresijske snimke: retci 336-343
+- §7 Okruženje i održavanje: retci 344-362
 <!-- toc:end -->
 
 ## 1. Uloge
@@ -216,6 +216,8 @@ Hook `budget` po ulozi. Ulogu određuje profil agenta s kojim je sesija pokrenut
 | Nepoznata | sesija bez profila ili s profilom izvan popisa | Ništa ne zabranjuje. Navodi iznimku za orkestratora, a ostalim ulogama savjetuje predaju i rotaciju. | Prema ulozi, po skillu |
 
 Ograničenja: sesija pokrenuta bez profila (samo skillom ili običnim razgovorom), starija inačica Claude Codea bez polja `agent_type` i svaki drugi runtime nemaju prepoznatljivu ulogu. Tada je poruka namjerno blaga, jer bi zabrana pogodila i orkestratora; worker bez profila zato dobiva savjet, a ne nalog. Orkestrator vlastiti podsjetnik dobiva samo kad je sesija pokrenuta s profilom `ductus-orchestrator`; bez profila dobiva blagu poruku za nepoznatu ulogu. Hook ne provjerava identitet: profil je postavka sesije, a ne dokaz ovlasti, i o gateu ništa ne odlučuje. Novi profil mora dobiti ulogu u `PROFILE_ROLES`; test pada dok je nema.
+
+Hook `start` po ulozi (DAN-695). Pisac (`worker`) i kontrolna uloga (`control`) dobivaju `STATE.md` bez tijela sekcije `## Owner queue`: ostaju naslov i jedan redak s rasponom izostavljenih redaka, jer je Owner queue za vlasnika i orkestratora. Orkestrator i nepoznata uloga, uključujući sesiju bez profila, dobivaju cijelu datoteku. Sekcija čije tijelo nije dulje od bilješke ostaje cijela, pa predani tekst nikad nije dulji od datoteke, a već izrezan tekst ostaje isti. Prepoznaju se ATX naslovi (`#`) i ograđeni blokovi koda po CommonMarku; setext naslovi i HTML blokovi ne, a `STATE.md` ih ne koristi. Prag `STATE_LIMIT` mjeri se na predanom tekstu. Rezanje samo štedi kontekst: datoteka u repou ostaje cijela, a sesija kojoj zadatak traži stavku iz Owner queuea čita je sama.
 
 Mjerenje: `pnpm tokens:report` ili `node scripts/engineering/token-report.mjs [--days N] [--budget N] [--json]` čita lokalne zapise sesija i ispisuje samo brojeve: ukupni ulaz, udio početnog konteksta, udio iznad budžeta i veličinu izlaza po alatu. `pnpm tokens:codeburn` daje drugi pogled (nekorišteni MCP poslužitelji, ponovljena čitanja), a `pnpm agents:lint` provjerava `CLAUDE.md`, `AGENTS.md`, skillove i hookove. Polazno stanje 1.–10. 10. 2026.: 198,7 M ulaznih tokena u 829 poziva; 42 % je kontekst iznad 150k po pozivu, 30 % početni kontekst od oko 72k ponovljen u svakom pozivu.
 
