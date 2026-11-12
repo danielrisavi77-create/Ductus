@@ -296,11 +296,13 @@ const DYNAMIC_TABLES = [
   "20261108110100_pgboss_schema.sql: create table not recognised: CREATE TABLE pgboss.%I (LIKE pgboss.job INCLUDING DEFAULTS)', tablename);",
 ];
 
+// Quoted identifiers are not supported: TABLE_FULL, FUNCTION_FULL and ALTER_QUOTED accept bare names only, so a quoted schema, table or function never normalises to lower case, it is an error.
 const TABLE_HEAD = /\bcreate\s+(?:\w+\s+)*?table\b/gi;
 const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\s+(?:if\s+not\s+exists\s+)?([a-z_]+)\.([a-z0-9_]+)(?=[\s(;])/iy;
-/** Quoted identifiers are not supported: TABLE_FULL and FUNCTION_FULL accept bare names only, so a quoted schema, table or function never normalises to lower case, it is an error. */
 /** A rename or schema move would leave the tracked name stale, so it is an error instead of being ignored. */
 const ALTER_MOVE = /\balter\s+(?:foreign\s+)?(?:table|function|procedure)\b[^;]*?\b(?:rename\s+to|set\s+schema)\b/gi;
+/** A quoted name in an ALTER head (also one holding a semicolon, which would end ALTER_MOVE early) is an error. */
+const ALTER_QUOTED = /\balter\s+(?:foreign\s+)?(?:table|function|procedure)\s+(?:if\s+exists\s+)?(?:only\s+)?[\w.]*"/gi;
 const FUNCTION_HEAD = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/gi;
 const FUNCTION_FULL = /create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+([a-z_]+\.[a-z0-9_]+)\s*\(/iy;
 const DOLLAR_OPEN = /^\$(?:[a-z_][a-z0-9_]*)?\$/i;
@@ -372,6 +374,7 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
     else errors.push(`create table not recognised: ${seen(m)}`);
   }
   for (const m of bare.matchAll(ALTER_MOVE)) errors.push(`alter that renames or moves an object not supported: ${seen(m)}`);
+  for (const m of bare.matchAll(ALTER_QUOTED)) errors.push(`alter with a quoted identifier not supported: ${seen(m)}`);
   const heads = [...bare.matchAll(FUNCTION_HEAD)];
   for (const [i, m] of heads.entries()) {
     FUNCTION_FULL.lastIndex = m.index ?? 0;
@@ -642,7 +645,16 @@ describe("sqlObjects", () => {
     ["a quoted schema set schema", 'ALTER TABLE "Evidence".document SET SCHEMA "Other";'],
     ["a quoted function rename", 'ALTER FUNCTION app."F"(int) RENAME TO g;'],
   ])("flags %s", (_n, sql) => {
-    expect(sqlObjects(sql).errors).toHaveLength(1);
+    expect(sqlObjects(sql).errors.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ["a semicolon in a quoted table", 'ALTER TABLE a."x;y" RENAME TO z;'],
+    ["a semicolon in a quoted schema", 'ALTER TABLE "a;b".t SET SCHEMA c;'],
+    ["a semicolon in a quoted function", 'ALTER FUNCTION a."f;"(int) RENAME TO g;'],
+    ["a quoted name without a move", 'ALTER TABLE IF EXISTS ONLY evidence."Document" ADD COLUMN z int;'],
+  ])("flags %s in ALTER", (_n, sql) => {
+    expect(sqlObjects(sql).errors.some((e) => e.includes("quoted identifier"))).toBe(true);
   });
 
   it("does not flag a column rename or an add column", () => {
