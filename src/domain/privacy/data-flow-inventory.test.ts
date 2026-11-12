@@ -545,6 +545,8 @@ describe("sqlObjects", () => {
     ["a double dash inside a string", "SELECT 'a--b'; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a double dash inside a dollar quote", "SELECT $$--$$; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a nested block comment", "/* a /* b */ CREATE TABLE a.old (id int); */ CREATE TABLE a.t (id int);", ["a.t"]],
+    ["a MIME pattern before a later comment", "CREATE TABLE a.t0 (m text DEFAULT 'image/*');\nCREATE TABLE a.t (id int); /* c */ SELECT '*/';", ["a.t0", "a.t"]],
+    ["a double dash inside a string", "SELECT 'a--b'; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a commented-out table", "-- CREATE TABLE a.old (id int);\n/* create table a.older (x int) */\nCREATE TABLE a.t (id int);", ["a.t"]],
   ])("reads %s", (_n, sql, tables) => {
     const r = sqlObjects(sql);
