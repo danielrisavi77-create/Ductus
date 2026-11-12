@@ -56,27 +56,54 @@ function checkSet(column: string): string[] {
   return [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1] ?? "");
 }
 
+/**
+ * A route the CHECK already allows ahead of its page, and the PR that adds the
+ * page (orchestrator, #1836 c.6820309956: the /kako-radi migration carries both
+ * routes, so either order of landing keeps both). Allowed only while that page
+ * is absent; once it is on the branch the route must be in the domain set.
+ */
+const ROUTES_AHEAD_OF_PAGE = ["/rad/[assignmentId]/dnevnik-pristupa"] as const; // DAN-294, #1969
+
+function pageFile(route: string): string {
+  return join(ROOT, route === "/" ? "app/page.tsx" : `app${route}/page.tsx`);
+}
+
 describe("DAN-431 problem report: migration and domain agree", () => {
   it("every closed set is the same in both", () => {
     const latest = ROUTE_MIGRATIONS.at(-1);
     expect(latest).toBeDefined();
-    expect(routeCheck(latest?.up ?? "")).toEqual([...PROBLEM_REPORT_ROUTES]);
+    const ahead = ROUTES_AHEAD_OF_PAGE.filter((route) => !existsSync(pageFile(route)));
+    expect(routeCheck(latest?.up ?? "")).toEqual([...PROBLEM_REPORT_ROUTES, ...ahead].sort());
+    expect([...PROBLEM_REPORT_ROUTES].sort()).toEqual([...PROBLEM_REPORT_ROUTES]);
+    for (const route of ahead) expect(PROBLEM_REPORT_ROUTES).not.toContain(route);
     expect(checkSet("category")).toEqual([...PROBLEM_REPORT_CATEGORIES]);
     expect(checkSet("browser_family")).toEqual([...BROWSER_FAMILIES]);
     expect(checkSet("sync_state")).toEqual([...SYNC_STATES]);
   });
 
-  it("each route CHECK keeps every earlier route, and its down restores the one before", () => {
+  it("each route CHECK keeps every earlier route, and its down removes only routes it added", () => {
     let before = checkSet("route");
     for (const { up, down } of ROUTE_MIGRATIONS) {
       const after = routeCheck(up);
+      const restored = routeCheck(down);
       expect(after.filter((route) => !before.includes(route))).not.toEqual([]);
       expect(before.filter((route) => !after.includes(route))).toEqual([]);
       expect([...after].sort()).toEqual(after);
-      expect(routeCheck(down)).toEqual(before);
+      // The down keeps every earlier route, stays inside the up, and removes at least one route.
+      expect(before.filter((route) => !restored.includes(route))).toEqual([]);
+      expect(restored.filter((route) => !after.includes(route))).toEqual([]);
+      expect(restored.length).toBeLessThan(after.length);
       before = after;
     }
     expect(before).toContain("/kako-radi");
+    expect(before).toContain("/rad/[assignmentId]/dnevnik-pristupa");
+  });
+
+  it("the /kako-radi down removes only /kako-radi", () => {
+    const own = ROUTE_MIGRATIONS.find(({ up }) => routeCheck(up).includes("/kako-radi"));
+    expect(own).toBeDefined();
+    const after = routeCheck(own?.up ?? "");
+    expect(routeCheck(own?.down ?? "")).toEqual(after.filter((route) => route !== "/kako-radi"));
   });
 
   it("the description length, the app version pattern and the character classes are the same", () => {
@@ -103,8 +130,7 @@ describe("DAN-431 problem report: migration and domain agree", () => {
 
 describe("DAN-431 problem report: route templates are real pages", () => {
   it.each(PROBLEM_REPORT_ROUTES)("%s has an app page", (route) => {
-    const page = route === "/" ? "app/page.tsx" : `app${route}/page.tsx`;
-    expect(existsSync(join(ROOT, page))).toBe(true);
+    expect(existsSync(pageFile(route))).toBe(true);
   });
 
   it("every app page has a route template, so a new page cannot be reported without one", () => {

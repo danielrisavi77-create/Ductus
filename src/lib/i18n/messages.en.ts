@@ -1712,7 +1712,7 @@ const en = {
       heading: "What is not recorded",
       keys: "Keys. Changes to the text are recorded, not key presses.",
       outside: "Nothing outside the editor: the screen, the camera and other browser tabs are not part of the work.",
-      rhythm: "Writing speed, pauses and rhythm.",
+      rhythm: "Measures from writing time: no speed, pauses or any other measure is calculated from the time of changes.",
       authorship: `A judgement about who wrote the text. ${APP_NAME} does not make one, by person or by machine.`,
     },
     seen: {

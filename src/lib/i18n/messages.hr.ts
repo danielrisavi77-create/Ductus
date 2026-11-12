@@ -1729,7 +1729,7 @@ export const hr = {
       heading: "Što se ne bilježi",
       keys: "Tipke. Bilježe se promjene teksta, ne pritisci tipki.",
       outside: "Ništa izvan editora: zaslon, kamera i druge kartice preglednika nisu dio rada.",
-      rhythm: "Brzina pisanja, stanke i ritam.",
+      rhythm: "Mjere iz vremena pisanja: iz vremena promjena ne računaju se brzina, stanke ni bilo kakva druga mjera.",
       authorship: `Ocjena o tome tko je napisao tekst. ${APP_NAME} je ne izvodi ni ljudski ni strojno.`,
     },
     seen: {
