@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import fc from "fast-check";
 
 import {
   HARD_AT,
@@ -28,6 +29,7 @@ import {
   runHook,
   sessionRole,
   stateContext,
+  stateForRole,
   withCheckedFile,
 } from "./agent-hooks.mjs";
 import { summarizeTranscript } from "./token-report.mjs";
@@ -455,6 +457,363 @@ test("start entry point checks the install only in a checkout with a lockfile an
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
+});
+
+// DAN-695 step 5: the Owner queue is for the owner and the orchestrator; a
+// writer or a control session gets STATE.md without its body (contract on #1836).
+const QUEUE = "## Owner queue (samo Daniel)";
+const NOTE = "> Owner queue left out for this session's role:";
+const note = (from, to) => `${NOTE} STATE.md lines ${from}-${to}. It is for the owner and the orchestrator.`;
+// A body is cut only when it is longer than the note with seven-digit line
+// numbers and the blank line on each side, newlines counted; an item this long
+// always is. With CRLF each of those three lines also carries a "\r".
+const ROOM = 1 + note(9_999_999, 9_999_999).length + 1 + 1;
+const ROOM_CRLF = ROOM + 3;
+const item = (n) => `- [ ] Q-${n} ${"x".repeat(140)}`;
+
+test("stateForRole: table of roles and STATE.md shapes", () => {
+  const middle = `# Stanje\n\n${QUEUE}\n\n${item(1)}\n### Sub\n- [ ] Q-2\n\n## Engineering\ntext\n`;
+  const cut = `# Stanje\n\n${QUEUE}\n\n${note(4, 8)}\n\n## Engineering\ntext\n`;
+  for (const role of ["worker", "control"]) assert.equal(stateForRole(middle, role), cut, role);
+  for (const role of ["orchestrator", "unknown", undefined, "writer"]) assert.equal(stateForRole(middle, role), middle, String(role));
+  const cases = [
+    // Owner queue as the last section runs to the end of the file; the final
+    // newline ends line 3 and is kept, it is not a line 4.
+    [`# S\n${QUEUE}\n${item(1)}\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n`],
+    [`# S\n${QUEUE}\n${item(1)}`, `# S\n${QUEUE}\n\n${note(3, 3)}`],
+    [`# S\n${QUEUE}\n`, `# S\n${QUEUE}\n`],
+    ["\n", "\n"],
+    // A body no longer than the note stays: the text never grows.
+    [`# S\n${QUEUE}\n- [ ] Q-1\n## A\nx\n`, `# S\n${QUEUE}\n- [ ] Q-1\n## A\nx\n`],
+    // No Owner queue, an empty section, an empty file: nothing to cut.
+    ["# S\n## A\nx\n", "# S\n## A\nx\n"],
+    [`# S\n${QUEUE}\n## A\nx\n`, `# S\n${QUEUE}\n## A\nx\n`],
+    ["", ""],
+    // A heading inside a fenced block is text, not a section.
+    [`# S\n\`\`\`\n## Owner queue\n${item(1)}\n\`\`\`\n## A\n`, `# S\n\`\`\`\n## Owner queue\n${item(1)}\n\`\`\`\n## A\n`],
+    // CommonMark fences: inline code is no fence, a fence closes only with the
+    // same character, four spaces of indent is no fence.
+    [`# S\n${QUEUE}\n\`\`\`x\`\`\`\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 4)}\n\n## A\n`],
+    [`# S\n${QUEUE}\n\`\`\`\n~~~\n## A\n${item(1)}\n\`\`\`\n## B\n`, `# S\n${QUEUE}\n\n${note(3, 7)}\n\n## B\n`],
+    [`# S\n${QUEUE}\n    \`\`\`\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 4)}\n\n## A\n`],
+    // Up to three spaces of indent is still a heading.
+    [`# S\n   ${QUEUE}\n${item(1)}\n  ## A\n`, `# S\n   ${QUEUE}\n\n${note(3, 3)}\n\n  ## A\n`],
+    // Another heading that only starts alike: "Owners" is not the queue,
+    // "Owner queue arhiva" is; letter case is ignored.
+    ["# S\n## Owners\nx\n", "# S\n## Owners\nx\n"],
+    [`# S\n## Owner queue arhiva\n${item(1)}\n## A\n`, `# S\n## Owner queue arhiva\n\n${note(3, 3)}\n\n## A\n`],
+    [`# S\n## owner QUEUE\n${item(1)}\n## A\n`, `# S\n## owner QUEUE\n\n${note(3, 3)}\n\n## A\n`],
+    // A level-1 heading also ends the section; CRLF stays CRLF.
+    [`# S\r\n${QUEUE}\r\n${item(1)}\r\n# T\r\n`, `# S\r\n${QUEUE}\r\n\r\n${note(3, 3)}\r\n\r\n# T\r\n`],
+    // Text that was already cut is handed over as it is.
+    [`# S\n${QUEUE}\n\n${note(3, 9)}\n\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 9)}\n\n## A\n`],
+    // The threshold: a body exactly as long as the note's room stays, one more
+    // character is cut; with CRLF the room is three characters larger.
+    [`# S\n${QUEUE}\n${"y".repeat(ROOM - 1)}\n## A\n`, `# S\n${QUEUE}\n${"y".repeat(ROOM - 1)}\n## A\n`],
+    [`# S\n${QUEUE}\n${"y".repeat(ROOM)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n\n## A\n`],
+    [`# S\r\n${QUEUE}\r\n${"y".repeat(ROOM_CRLF - 2)}\r\n## A\r\n`, `# S\r\n${QUEUE}\r\n${"y".repeat(ROOM_CRLF - 2)}\r\n## A\r\n`],
+    [`# S\r\n${QUEUE}\r\n${"y".repeat(ROOM_CRLF - 1)}\r\n## A\r\n`, `# S\r\n${QUEUE}\r\n\r\n${note(3, 3)}\r\n\r\n## A\r\n`],
+    // Two queue sections in a row: each heading stays and gets its own note.
+    [`# S\n${QUEUE}\n${item(1)}\n## Owner queue arhiva\n${item(2)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 3)}\n\n## Owner queue arhiva\n\n${note(5, 5)}\n\n## A\n`],
+    // Only spaces and tabs may follow a closing fence: a no-break space keeps
+    // the block open, so the heading inside it is still text.
+    [`# S\n~~~text\n~~~\u00a0\n${QUEUE}\n${"x".repeat(200)}\n~~~\n## Ne smije se izgubiti\n- B-8\n`, `# S\n~~~text\n~~~\u00a0\n${QUEUE}\n${"x".repeat(200)}\n~~~\n## Ne smije se izgubiti\n- B-8\n`],
+    [`# S\n~~~\n~~~ \t\n${QUEUE}\n${item(1)}\n## A\n`, `# S\n~~~\n~~~ \t\n${QUEUE}\n\n${note(5, 5)}\n\n## A\n`],
+    // An unclosed fence runs to the end of the file, as in CommonMark.
+    [`# S\n${QUEUE}\n${item(1)}\n\`\`\`\n## A\nx\n`, `# S\n${QUEUE}\n\n${note(3, 6)}\n`],
+  ];
+  for (const [input, expected] of cases) assert.equal(stateForRole(input, "worker"), expected, JSON.stringify(input));
+});
+
+// Review cxcr1949 and QA cxcq1949 on cfe2ed26: CommonMark counts only spaces
+// and tabs as blank after a closing fence, as indent before a fence or a
+// heading and after "##"; JavaScript trim(), \s and "." treat other characters
+// otherwise. Each class of such characters, in each of those places.
+const UNICODE_BLANKS = ["\u00A0", "\u2003", "\u3000", "\u1680", "\uFEFF", "\u200B", "\u0085", "\v", "\f", "\u2028", "\u2029"];
+// The scenario of both findings: when the second line does not close the
+// block, the Owner queue heading is inside it and the block ends at the third
+// fence. When it does close, there is no third fence (one would open a block
+// running to the end of the file).
+const fencedQueue = (open, close, closes = false) =>
+  `# S\n${open}\n${close}\n## Owner queue\n${"x".repeat(200)}\n${closes ? "" : `${open.slice(0, 3)}\n`}## Ne smije se izgubiti\n- B-8\n`;
+
+test("stateForRole: Unicode blanks around fences and headings follow CommonMark (cxcr1949, cxcq1949)", () => {
+  const unchanged = [];
+  const cut = [];
+  for (const fence of ["```", "~~~"]) {
+    // Only spaces and tabs after a closing fence close the block.
+    for (const blank of ["", " ", "\t", " \t \t"]) {
+      cut.push([fencedQueue(fence, fence + blank, true), `# S\n${fence}\n${fence + blank}\n## Owner queue\n\n${note(5, 5)}\n\n## Ne smije se izgubiti\n- B-8\n`]);
+    }
+    // Any other blank keeps the block open: the heading inside it is text and
+    // nothing after the block is lost.
+    for (const blank of UNICODE_BLANKS) {
+      unchanged.push(fencedQueue(fence, fence + blank), fencedQueue(`${fence}text`, fence + blank), fencedQueue(fence, `${fence} ${blank}\t`));
+      // An info string of any such character still opens a block, so the
+      // heading inside it does not end the Owner queue.
+      cut.push([`# S\n${QUEUE}\n${fence}${blank}\n## A\n${item(1)}\n${fence}\n## Z\n`, `# S\n${QUEUE}\n\n${note(3, 6)}\n\n## Z\n`]);
+      unchanged.push(`# S\n${fence}${blank}\n${QUEUE}\n${item(1)}\n${fence}\n## Ne smije se izgubiti\n- B-8\n`);
+    }
+  }
+  // Indent other than up to three spaces makes neither a fence nor a heading,
+  // and "##" needs a space or a tab after it.
+  for (const blank of [...UNICODE_BLANKS, "\t"]) {
+    cut.push([`# S\n${QUEUE}\n${blank}\`\`\`\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 4)}\n\n## A\n`]);
+    unchanged.push(`# S\n${blank}${QUEUE}\n${item(1)}\n## A\n`);
+  }
+  for (const blank of UNICODE_BLANKS) unchanged.push(`# S\n##${blank}Owner queue\n${item(1)}\n## A\n`);
+  // Nor does such a line end the Owner queue it stands in.
+  for (const line of [...UNICODE_BLANKS.flatMap((blank) => [`##${blank}X`, `${blank}## X`]), "\t## X"]) {
+    cut.push([`# S\n${QUEUE}\n${item(1)}\n${line}\n${item(2)}\n## A\n`, `# S\n${QUEUE}\n\n${note(3, 5)}\n\n## A\n`]);
+  }
+  cut.push([`# S\n##\tOwner queue\n${item(1)}\n##\tA\n`, `# S\n##\tOwner queue\n\n${note(3, 3)}\n\n##\tA\n`]);
+  // A lone CR ends a line in CommonMark; such a text is handed over as it is.
+  unchanged.push(`# S\n${QUEUE}\n${item(1)}\r## A\n`, `# S\n\`\`\`\r\`\`\`\n${QUEUE}\n${item(1)}\n## A\n`, `# S\n${QUEUE}\n${item(1)}\n## A\r`);
+  // A leading byte order mark is not read as indent: such a text is handed over
+  // as it is too, so a fence on the first line cannot be missed (QA on 444dd55f).
+  for (const start of ["# S", "```", "~~~", QUEUE]) unchanged.push(`\uFEFF${start}\n${QUEUE}\n${item(1)}\n${start.slice(0, 3)}\n## Ne smije se izgubiti\n- B-8\n`);
+  for (const input of unchanged) assert.equal(stateForRole(input, "worker"), input, JSON.stringify(input));
+  for (const [input, expected] of cut) assert.equal(stateForRole(input, "control"), expected, JSON.stringify(input));
+  assert.ok(unchanged.length > 100 && cut.length > 20);
+});
+
+test("property: a closing fence closes exactly when only spaces and tabs follow it", () => {
+  const blank = fc.constantFrom(" ", "\t", ...UNICODE_BLANKS);
+  fc.assert(
+    fc.property(fc.constantFrom("```", "~~~"), fc.integer({ min: 0, max: 3 }), fc.array(blank, { maxLength: 4 }), (fence, indent, tail) => {
+      const close = " ".repeat(indent) + fence + tail.join("");
+      // Independent of the code under test: CommonMark's rule for a closing fence.
+      const closes = /^[ \t]*$/.test(tail.join(""));
+      const text = fencedQueue(fence, close, closes);
+      const result = stateForRole(text, "worker");
+      if (closes) assert.match(result, /\n## Owner queue\n\n> Owner queue left out[^\n]*lines 5-5\./);
+      else assert.equal(result, text);
+      assert.match(result, /## Ne smije se izgubiti\n- B-8\n$/);
+    }),
+  );
+});
+
+// Review cxcr1949 on 96973234 (c.6815325061): a fence opened inside a list
+// item closes when the item ends (CommonMark 5.2 and 4.5), so a heading in
+// column 0 after it is a section again. Classes of the contract on #1836
+// (c.6815417587); each row also runs with CRLF line endings.
+const KEEP = "## Ne smije se izgubiti\n- B-8\n";
+const QUEUED = `# S\n${QUEUE}\n${item(1)}\n`;
+// The Owner queue body runs from line 3 to `to`; the lines after it stay.
+const queueTo = (to, rest = KEEP) => `# S\n${QUEUE}\n\n${note(3, to)}\n\n${rest}`;
+const LIST_FENCES = [
+  // 1. A fence in column 0: a heading inside it is text, as before.
+  ["column 0, closed", `${QUEUED}- a\n~~~\n## X\n~~~\n${KEEP}`, queueTo(7)],
+  ["column 0, unclosed runs to the end", `${QUEUED}- a\n~~~\n${KEEP}`, `# S\n${QUEUE}\n\n${note(3, 7)}\n`],
+  // 2. A fence in a list item closed inside the item: the text in it stays
+  // text, and the item goes on after it.
+  ["item, closed inside", `${QUEUED}- a\n  ~~~\n  ## X\n  ~~~\n${KEEP}`, queueTo(7)],
+  ["item, closed inside, heading after it ends the queue", `${QUEUED}- a\n  ~~~\n  x\n  ~~~\n  ## Y\n${KEEP}`, queueTo(7, `  ## Y\n${KEEP}`)],
+  ["item, closing fence indented four is text", `${QUEUED}- a\n  ~~~\n  x\n      ~~~\n  ## Y\n${KEEP}`, queueTo(8)],
+  ["item, other character does not close", `${QUEUED}- a\n  ~~~\n  x\n  \`\`\`\n  ## Y\n${KEEP}`, queueTo(8)],
+  ["item, shorter fence does not close", `${QUEUED}- a\n  \`\`\`\`\n  x\n  \`\`\`\n  ## Y\n${KEEP}`, queueTo(8)],
+  ["item, blank line inside the fence", `${QUEUED}- a\n  ~~~\n\n  ## X\n  ~~~\n${KEEP}`, queueTo(8)],
+  // 3. A fence in a list item closed by the end of the item (the finding).
+  ["finding, ~~~", `${QUEUED}- primjer\n  ~~~\n  kod\n\n${KEEP}`, queueTo(7)],
+  ["finding, backticks", `${QUEUED}- primjer\n  \`\`\`\n  kod\n\n${KEEP}`, queueTo(7)],
+  ["finding, no blank line", `${QUEUED}- primjer\n  ~~~\n  kod\n${KEEP}`, queueTo(6)],
+  ["fence on the marker line", `${QUEUED}- ~~~\n  kod\n${KEEP}`, queueTo(5)],
+  ["text in column 0 ends the item and its fence", `${QUEUED}- a\n  ~~~\nb\n${KEEP}`, queueTo(6)],
+  ["ordered item", `${QUEUED}1. a\n   ~~~\n   kod\n${KEEP}`, queueTo(6)],
+  ["ordered item, wide marker", `${QUEUED}10) ~~~\n    kod\n${KEEP}`, queueTo(5)],
+  ["empty first line of an item", `${QUEUED}-\n  ~~~\n${KEEP}`, queueTo(5)],
+  ["tab as indent counts to column 4", `${QUEUED}- a\n\t~~~\n\tkod\n${KEEP}`, queueTo(6)],
+  // 4. Nested lists.
+  ["nested, end of both items", `${QUEUED}- a\n  - b\n    ~~~\n    kod\n${KEEP}`, queueTo(7)],
+  ["nested, end of the inner item only", `${QUEUED}- a\n  - b\n    ~~~\n  ## X\n${KEEP}`, queueTo(6, `  ## X\n${KEEP}`)],
+  ["nested on one line", `${QUEUED}- - ~~~\n    kod\n${KEEP}`, queueTo(5)],
+  ["nested ordered in bullet", `${QUEUED}* a\n  1. ~~~\n     kod\n${KEEP}`, queueTo(6)],
+  // 7. Edges: a lazy line keeps the item open; an item that starts with a
+  // blank line ends at the second one; a thematic break is no list; an
+  // ordered list from 2 does not interrupt a paragraph, from 1 it does.
+  ["lazy continuation", `${QUEUED}- a\nb\n  ~~~\n${KEEP}`, queueTo(6)],
+  ["empty item ends at a blank line", `${QUEUED}-\n\n  ~~~\n## X\n~~~\n${KEEP}`, queueTo(8)],
+  ["thematic break", `${QUEUED}* * *\n  ~~~\n## X\n~~~\n${KEEP}`, queueTo(7)],
+  ["ordered from 2 does not interrupt a paragraph", `${QUEUED}\ntext\n2. a\n   ~~~\n## X\n~~~\n${KEEP}`, queueTo(9)],
+  ["ordered from 1 interrupts a paragraph", `${QUEUED}\ntext\n1. a\n   ~~~\n${KEEP}`, queueTo(7)],
+  ["indented code in an item is no fence", `${QUEUED}- a\n      ~~~\n${KEEP}`, queueTo(5)],
+];
+
+test("stateForRole: a fence in a list item closes with the item (cxcr1949 on 96973234)", () => {
+  for (const [name, input, expected] of LIST_FENCES) {
+    assert.equal(stateForRole(input, "worker"), expected, name);
+    const crlf = (text) => text.replaceAll("\n", "\r\n");
+    assert.equal(stateForRole(crlf(input), "control"), crlf(expected), `${name}, CRLF`);
+    assert.ok(stateForRole(input, "worker").endsWith(name.includes("unclosed") ? "\n" : KEEP), name);
+  }
+  // Where the parser cannot place the boundary (a tab right after a list
+  // marker, a block quote), the text is handed over as it is: nothing is cut.
+  // A block quote (Grok review c.6815619610 on 57a4d5ed) is not followed
+  // either: a list item right after it opens a fence that must not run on.
+  const unsure = [
+    `${QUEUED}-\t~~~\n  kod\n${KEEP}`,
+    `${QUEUED}- a\n  1.\t~~~\n${KEEP}`,
+    `${QUEUED}> napomena\n2. korak\n   ~~~\n   kod\n\n${KEEP}`,
+    `${QUEUED}> ~~~\n+\n  ~~~\n${KEEP}`,
+    `${QUEUED}- a\n  > # N\n  - b\n    ~~~\n${KEEP}`,
+    `${QUEUED}   > x\n${KEEP}`,
+    `${QUEUED}${"- ".repeat(50)}~~~\n${KEEP}`,
+    `${QUEUED}${"- ".repeat(32000)}x\n${KEEP}`,
+  ];
+  for (const input of unsure) {
+    assert.equal(stateForRole(input, "worker"), input, JSON.stringify(input));
+  }
+});
+
+test("property: a heading in column 0 after any list item fence ends the Owner queue", () => {
+  const level = fc.record({ marker: fc.constantFrom("-", "*", "+", "1.", "1)", "9."), gap: fc.integer({ min: 1, max: 4 }) });
+  const text = fc.stringMatching(/^[a-z ]{1,12}$/);
+  fc.assert(
+    fc.property(
+      fc.array(level, { minLength: 1, maxLength: 3 }),
+      fc.constantFrom("`", "~"),
+      fc.integer({ min: 3, max: 5 }),
+      fc.integer({ min: 0, max: 3 }),
+      fc.array(fc.oneof(text, fc.constant("## Owner queue"), fc.constant("")), { maxLength: 3 }),
+      fc.option(fc.record({ indent: fc.integer({ min: 0, max: 3 }), extra: fc.integer({ min: 0, max: 2 }), after: text }), { nil: undefined }),
+      fc.boolean(),
+      (levels, char, length, indent, body, close, crlf) => {
+        const lines = [];
+        let width = 0;
+        for (const { marker, gap } of levels) {
+          lines.push(`${" ".repeat(width)}${marker}${" ".repeat(gap)}item`);
+          width += marker.length + gap;
+        }
+        const fence = char.repeat(length);
+        lines.push(" ".repeat(width + indent) + fence);
+        // Fenced lines stay inside the innermost item.
+        for (const line of body) lines.push(line && " ".repeat(width) + line);
+        if (close) lines.push(" ".repeat(width + close.indent) + char.repeat(length + close.extra), " ".repeat(width) + close.after);
+        const input = `${QUEUED}${lines.join("\n")}\n${KEEP}`;
+        // Independent of the code under test: a line in column 0 that is not
+        // a lazy line ends every list item and so every fence opened in one.
+        const expected = queueTo(3 + lines.length);
+        const eol = (value) => (crlf ? value.replaceAll("\n", "\r\n") : value);
+        assert.equal(stateForRole(eol(input), "worker"), eol(expected));
+      },
+    ),
+  );
+});
+
+test("start entry point leaves the Owner queue out for writer and control profiles only", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-state-"));
+  try {
+    fs.writeFileSync(path.join(dir, "STATE.md"), `# Stanje rada\n${QUEUE}\n${item(7)}\n## Ne smije se izgubiti\n- B-8\n`);
+    for (const agent_type of ["ductus-platform-sre", "ductus-independent-reviewer", "ductus-adversarial-qa"]) {
+      const context = run("start", { cwd: dir, agent_type }, dir).additionalContext;
+      assert.doesNotMatch(context, /Q-7/, agent_type);
+      assert.match(context, /lines 3-3[\s\S]*## Ne smije se izgubiti\n- B-8/, agent_type);
+    }
+    for (const event of [{ cwd: dir, agent_type: "ductus-orchestrator" }, { cwd: dir }, { cwd: dir, agent_type: "ductus-scout" }, { cwd: dir, agent_type: 7 }]) {
+      assert.match(run("start", event, dir).additionalContext, /Q-7[\s\S]*B-8/, JSON.stringify(event));
+    }
+    // The limit is measured on what is handed over: a writer still gets a
+    // STATE.md whose Owner queue alone pushes it over the limit.
+    fs.writeFileSync(path.join(dir, "STATE.md"), `# Stanje rada\n${QUEUE}\n${"q".repeat(STATE_LIMIT)}\n## Ne smije se izgubiti\n`);
+    assert.match(run("start", { cwd: dir, agent_type: "ductus-backend-data" }, dir).additionalContext, /## Ne smije se izgubiti/);
+    assert.equal(run("start", { cwd: dir, agent_type: "ductus-orchestrator" }, dir), null);
+    assert.equal(run("start", { cwd: dir }, dir), null);
+    // A file exactly at the limit with a short queue still loads for a writer.
+    const head = `# Stanje rada\n${QUEUE}\n- [ ] Q-1\n## Ne smije se izgubiti\n`;
+    fs.writeFileSync(path.join(dir, "STATE.md"), head + "b".repeat(STATE_LIMIT - head.length));
+    assert.match(run("start", { cwd: dir, agent_type: "ductus-backend-data" }, dir).additionalContext, /Q-1/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A STATE.md built from sections, so the expected output follows from the
+// structure and not from the code under test.
+// A list item can open a fence or a block quote anywhere in its line, so no
+// line holds one; a block quote hands the text over unchanged (property below).
+const arbLine = fc
+  .string({ maxLength: 60 })
+  .filter((l) => !/[\r\n]/.test(l) && !/^\s*#/.test(l) && !/```|~~~/.test(l) && !l.includes(">"));
+const arbSection = fc.record({
+  heading: fc.constantFrom(QUEUE, "## Owner queue", "  ## Owner queue arhiva", "## Engineering", " ## Plan", "# Stanje", "### Sub"),
+  body: fc.array(fc.oneof(arbLine, fc.constant(item(9))), { maxLength: 4 }),
+});
+
+function expectedState(sections, role, crlf = false, final = true) {
+  const out = [];
+  let line = 0;
+  let open = null; // the Owner queue section being cut: { from, lines }
+  const close = (last = false) => {
+    if (!open) return;
+    // With CRLF every body line carries a "\r", except the file's last line
+    // when there is no final newline.
+    const returns = crlf ? open.lines.length - (last && !final && open.lines.length ? 1 : 0) : 0;
+    const size = open.lines.reduce((sum, text) => sum + text.length + 1, 0) + returns;
+    if (size > (crlf ? ROOM_CRLF : ROOM)) out.push("", note(open.from, open.from + open.lines.length - 1), ...(last ? [] : [""]));
+    else out.push(...open.lines);
+    open = null;
+  };
+  for (const { heading, body } of sections) {
+    const level = heading.trim().match(/^#+/)[0].length;
+    const queue = /^## Owner queue\b/.test(heading.trim());
+    line += 1;
+    if (open && level <= 2) close();
+    if (open) open.lines.push(heading);
+    else out.push(heading);
+    if (!open && queue && (role === "worker" || role === "control")) open = { from: line + 1, lines: [] };
+    for (const text of body) {
+      line += 1;
+      if (open) open.lines.push(text);
+      else out.push(text);
+    }
+  }
+  close(true);
+  return out.join(crlf ? "\r\n" : "\n");
+}
+
+const arbState = fc.tuple(fc.array(arbSection, { maxLength: 6 }), fc.boolean(), fc.boolean()).map(([sections, final, crlf]) => {
+  const text = sections.flatMap(({ heading, body }) => [heading, ...body]).join("\n") + (final ? "\n" : "");
+  return { sections, final, text: crlf ? text.replaceAll("\n", "\r\n") : text, crlf };
+});
+
+test("property: only Owner queue lines leave, the note names them, other roles get the text unchanged", () => {
+  fc.assert(
+    fc.property(arbState, fc.constantFrom("worker", "control", "orchestrator", "unknown"), ({ sections, final, text, crlf }, role) => {
+      // "a\n" is one line with a final newline, never "a" and an empty line: such a
+      // case is drawn with final = true instead.
+      fc.pre(final || !text.endsWith("\n"));
+      const result = stateForRole(text, role);
+      assert.equal(result, expectedState(sections, role, crlf, final) + (final ? (crlf ? "\r\n" : "\n") : ""));
+      if (role === "orchestrator" || role === "unknown") assert.equal(result, text);
+    }),
+  );
+});
+
+test("property: a block quote in column 0 hands the whole text over unchanged", () => {
+  fc.assert(
+    fc.property(arbState, fc.nat(), fc.stringMatching(/^[ a-z>]{0,12}$/), fc.constantFrom("worker", "control"), ({ text, crlf }, at, quote, role) => {
+      const eol = crlf ? "\r\n" : "\n";
+      const lines = text.split(eol);
+      lines.splice(at % (lines.length + 1), 0, `>${quote}`);
+      const input = lines.join(eol);
+      assert.equal(stateForRole(input, role), input);
+    }),
+  );
+});
+
+test("property: a second pass changes nothing and the text never grows, CRLF included", () => {
+  fc.assert(
+    fc.property(arbState, fc.constantFrom("worker", "control"), ({ text, crlf }, role) => {
+      const once = stateForRole(text, role);
+      assert.equal(stateForRole(once, role), once);
+      assert.ok(once.length <= text.length, `${once.length} > ${text.length}`);
+      if (crlf) assert.doesNotMatch(once, /(^|[^\r])\n/);
+    }),
+  );
+  const real = fs.readFileSync(path.join(repo, "STATE.md"), "utf8");
+  const once = stateForRole(real, "worker");
+  assert.equal(stateForRole(once, "worker"), once);
+  assert.ok(once.length <= real.length);
 });
 
 test("the longest STATE.md that is loaded still fits the hook context limit with the notice", () => {
