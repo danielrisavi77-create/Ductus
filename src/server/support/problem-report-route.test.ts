@@ -2,7 +2,13 @@ import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
-import { PROBLEM_REPORT_DESCRIPTION_MAX } from "@/domain/support/problem-report";
+import {
+  BROWSER_FAMILIES,
+  PROBLEM_REPORT_CATEGORIES,
+  PROBLEM_REPORT_DESCRIPTION_MAX,
+  PROBLEM_REPORT_ROUTES,
+} from "@/domain/support/problem-report";
+import { SYNC_STATES } from "@/domain/sync/states";
 import { withActor as appWithActor } from "@/server/db";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
@@ -282,4 +288,112 @@ describe("DAN-431: the real POST route wires the configured origin and the cooki
     expect((await POST(forged)).status).toBe(403);
     expect(forged.bodyUsed).toBe(false);
   });
+});
+
+describe("DAN-431: the 8 KiB body limit holds every valid report and nothing larger (#1836 c.6812033683)", () => {
+  const CALLBACK = `${ORIGIN}/api/auth/callback`;
+  const FOUR = "\u{1F600}"; // four UTF-8 bytes, one code point
+  const longest = <T extends string>(set: readonly T[]): T =>
+    set.reduce((a, b) => (b.length > a.length ? b : a));
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+
+  // The largest context every closed class allows.
+  const MAX_CONTEXT = {
+    appVersion: `9999.9999.9999+${"f".repeat(40)}`,
+    browser: { family: longest(BROWSER_FAMILIES), major: 999 },
+    category: longest(PROBLEM_REPORT_CATEGORIES),
+    route: longest(PROBLEM_REPORT_ROUTES),
+    syncState: longest(SYNC_STATES),
+  };
+  const EMPTY_CONTEXT = {
+    appVersion: "0a1b2c3",
+    browser: { family: "other", major: null },
+    category: "technical",
+    route: null,
+    syncState: null,
+  };
+  const LONGEST_DESCRIPTION = FOUR.repeat(PROBLEM_REPORT_DESCRIPTION_MAX);
+
+  /** A canonical body of exactly `size` bytes whose description ends in `tail`. */
+  function sized(size: number, tail: "four-byte" | "ascii"): string {
+    const base = utf8(canonicalizeJcs({ ...MAX_CONTEXT, description: "" })).byteLength;
+    const need = size - base;
+    const description = tail === "ascii" ? "x".repeat(need) : "x".repeat(need % 4) + FOUR.repeat(Math.floor(need / 4));
+    const text = canonicalizeJcs({ ...MAX_CONTEXT, description });
+    expect(utf8(text).byteLength).toBe(size);
+    return text;
+  }
+
+  // The decided limit as a literal, so the boundary cases do not move with the constant.
+  const MAX = 8192;
+  const CASES = [
+    ["the largest valid report: 1000 four-byte characters and the largest context",
+      () => canonicalizeJcs({ ...MAX_CONTEXT, description: LONGEST_DESCRIPTION }), 201, { reference: REFERENCE }],
+    ["the longest description with an empty context",
+      () => canonicalizeJcs({ ...EMPTY_CONTEXT, description: LONGEST_DESCRIPTION }), 201, { reference: REFERENCE }],
+    ["exactly 8 KiB ending in a four-byte character passes the limit, then fails the classes",
+      () => sized(MAX, "four-byte"), 422, { error: "invalid_input" }],
+    ["one byte over 8 KiB ending in a four-byte character",
+      () => sized(MAX + 1, "four-byte"), 413, { error: "body_too_large" }],
+    ["one byte over 8 KiB in ASCII",
+      () => sized(MAX + 1, "ascii"), 413, { error: "body_too_large" }],
+  ] as const;
+
+  /** The same bytes with a declared length, or streamed in chunks with none. */
+  function send(text: string, mode: "declared" | "streamed"): Request {
+    const bytes = utf8(text);
+    const headers: Record<string, string> = {
+      origin: ORIGIN,
+      "sec-fetch-site": "same-origin",
+      "content-type": "application/json",
+      cookie: `__Host-ductus_session=${TOKEN}`,
+    };
+    if (mode === "declared") {
+      return new Request(`${ORIGIN}/api/support/problem-report`, {
+        method: "POST",
+        headers: { ...headers, "content-length": String(bytes.byteLength) },
+        body: bytes,
+      });
+    }
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // Uneven chunks split four-byte characters across reads.
+        for (let i = 0; i < bytes.byteLength; i += 1023) controller.enqueue(bytes.slice(i, i + 1023));
+        controller.close();
+      },
+    });
+    return new Request(`${ORIGIN}/api/support/problem-report`, {
+      method: "POST", headers, body, duplex: "half",
+    } as RequestInit & { duplex: "half" });
+  }
+
+  it("8 KiB is needed: the largest valid report is over 4 KiB and within the limit", () => {
+    const bytes = utf8(canonicalizeJcs({ ...MAX_CONTEXT, description: LONGEST_DESCRIPTION })).byteLength;
+    expect(MAX_PROBLEM_REPORT_BODY_BYTES).toBe(MAX);
+    expect(bytes).toBeGreaterThan(4096);
+    expect(bytes).toBeLessThanOrEqual(MAX);
+  });
+
+  for (const mode of ["declared", "streamed"] as const) {
+    it.each(CASES)(`%s (${mode}, handler)`, async (_what, body, status, json) => {
+      const p = port();
+      const res = await handleProblemReport(send(body(), mode), p.deps);
+      expect(res.status).toBe(status);
+      expect(await res.json()).toEqual(json);
+      expect(p.withActor).toHaveBeenCalledTimes(status === 201 ? 1 : 0);
+    });
+
+    it.each(CASES)(`%s (${mode}, POST route)`, async (_what, body, status, json) => {
+      const p = port();
+      vi.mocked(appWithActor).mockReset().mockImplementation(p.withActor);
+      vi.stubEnv("OIDC_REDIRECT_URI", CALLBACK);
+      const res = await POST(new NextRequest(send(body(), mode)));
+      expect(res.status).toBe(status);
+      expect(await res.json()).toEqual(json);
+      // The activity touch is a second withActor; the report RPC runs only for a valid report.
+      const rpc = p.query.mock.calls.filter(([sql]) => sql === SQL);
+      expect(rpc).toHaveLength(status === 201 ? 1 : 0);
+      if (status === 201) expect(rpc[0]?.[1]?.[1]).toBe(LONGEST_DESCRIPTION);
+    });
+  }
 });
