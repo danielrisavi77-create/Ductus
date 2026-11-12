@@ -51,17 +51,20 @@ export default async function StudentAccessLogPage({
   const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
   const here = `/rad/${encodeURIComponent(raw)}/dnevnik-pristupa`;
 
+  const signIn = (
+    <>
+      <p role="status">{t.accessLog.signInFirst}</p>
+      {/* The login route answers with a redirect: a plain link, never a prefetched one. */}
+      <p><a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(here)}`}>{t.accessLog.signIn}</a></p>
+    </>
+  );
+  // The note explains the log, so it stands only above a log that was read.
+  let logShown = false;
   let body;
   if (assignmentId === null) {
     body = <p role="status">{t.accessLog.invalid}</p>;
   } else if (session === null) {
-    body = (
-      <>
-        <p role="status">{t.accessLog.signInFirst}</p>
-        {/* The login route answers with a redirect: a plain link, never a prefetched one. */}
-        <p><a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(here)}`}>{t.accessLog.signIn}</a></p>
-      </>
-    );
+    body = signIn;
   } else if (read.kind === "ready" && doc.kind === "notOpened") {
     body = <p role="status">{t.accessLog.notStarted}</p>;
   } else if (read.kind !== "ready" || doc.kind !== "document") {
@@ -69,11 +72,15 @@ export default async function StudentAccessLogPage({
   } else {
     const log = await readMyAccessLogPages(token, withActor, doc.documentId, pages);
     if (log.kind === "ok") {
-      body = <AccessLogDays days={log.days} olderHref={log.more ? `${here}?stranica=${pages + 1}` : null} />;
+      logShown = true;
+      // The next page opens at the last day already read, so keyboard and reader continue there.
+      const last = log.days.at(-1);
+      const older = log.more && last ? `${here}?stranica=${pages + 1}#dan-${last.key}` : null;
+      body = <AccessLogDays days={log.days} olderHref={older} truncated={log.truncated} />;
     } else if (log.kind === "unavailable") {
       body = <AccessLogUnavailable retryHref={pages > 1 ? `${here}?stranica=${pages}` : here} />;
     } else {
-      body = <p role="status">{log.kind === "unauthorized" ? t.accessLog.signInFirst : t.accessLog.notFound}</p>;
+      body = log.kind === "unauthorized" ? signIn : <p role="status">{t.accessLog.notFound}</p>;
     }
   }
 
@@ -84,7 +91,7 @@ export default async function StudentAccessLogPage({
         <h1>{t.accessLog.title}</h1>
         {work ? <p className="muted">{`${work.course} / ${work.notice.title}`}</p> : null}
         {assignmentId ? <p><Link href={`/rad?zadatak=${assignmentId}`}>{t.accessLog.backToWork}</Link></p> : null}
-        {work ? <p className="access-log__note">{t.accessLog.note}</p> : null}
+        {logShown ? <p className="access-log__note">{t.accessLog.note}</p> : null}
         {body}
       </div>
     </AppShell>

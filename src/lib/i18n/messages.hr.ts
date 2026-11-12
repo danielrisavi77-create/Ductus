@@ -1582,6 +1582,7 @@ export const hr = {
     unavailable: "Dnevnik trenutačno nije moguće učitati. To ne utječe na upisivanje pristupa.",
     retry: "Pokušaj ponovno",
     older: "Prikaži starije dane",
+    truncated: "Postoje i starija otvaranja, ali ih ova stranica ne može prikazati.",
     notFound: "Dnevnik pristupa nije dostupan ovom računu.",
     notStarted: "Rad još nije započet, pa ga nitko nije otvorio.",
     signInFirst: "Za dnevnik pristupa prijavite se.",

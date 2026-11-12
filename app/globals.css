@@ -1354,10 +1354,6 @@ main:focus {
 }
 
 /* S-42, the student's own access log (DAN-294): time, who, what; a column at narrow widths. */
-.access-log__lead {
-  color: var(--ink-3);
-}
-
 .access-log__note {
   color: var(--ink-2);
 }

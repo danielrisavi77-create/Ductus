@@ -23,7 +23,7 @@ describe("DAN-294 access log days: the classes of input", () => {
   it("2. one entry is one day with one row of five minutes", () => {
     expect(accessLogDaysOf([row()])).toEqual([{
       key: "2026-11-10", year: 2026, month: 11, day: 10, weekday: 2,
-      entries: [{ id: id(1), from: "14:10", to: "14:15", role: "mentor", surface: "live_view",
+      entries: [{ id: id(1), at: Date.parse("2026-11-10T13:10:00Z"), from: "14:10", to: "14:15", role: "mentor", surface: "live_view",
         reader: { givenName: "Nastavnik", familyName: "B" } }],
     }]);
   });

@@ -1571,6 +1571,7 @@ const en = {
     unavailable: "The log cannot be loaded right now. This does not affect how openings are recorded.",
     retry: "Try again",
     older: "Show older days",
+    truncated: "Older openings exist, but this page cannot show them.",
     notFound: "The access log is not available to this account.",
     notStarted: "The work has not been started yet, so no one has opened it.",
     signInFirst: "Sign in to see the access log.",

@@ -10,7 +10,9 @@ import { type AccessLogCursor, readMyAccessLog } from "./my-access-log";
  * appends each continuation through mergeAccessLogPages: an opening written
  * between two reads never enters the middle and no row is shown twice. Any
  * page that fails fails the whole read, so the student never sees part of a
- * log as if it were all of it. At most ACCESS_LOG_MAX_PAGES pages are read.
+ * log as if it were all of it. At most ACCESS_LOG_MAX_PAGES pages are read;
+ * when the last of them is still full, `truncated` says older openings exist
+ * that this page does not reach, and the screen says so.
  */
 
 export const ACCESS_LOG_MAX_PAGES = 20;
@@ -22,8 +24,11 @@ export function pagesParam(raw: string | string[] | undefined): number {
 }
 
 export type MyAccessLogPages =
-  /** `more` is true when an older page exists and another may be asked for. */
-  | { kind: "ok"; days: AccessLogDay[]; more: boolean }
+  /**
+   * `more` is true when an older page exists and another may be asked for;
+   * `truncated` when an older page exists beyond the last page allowed.
+   */
+  | { kind: "ok"; days: AccessLogDay[]; more: boolean; truncated: boolean }
   | { kind: "unauthorized" | "not_found" | "unavailable" };
 
 export async function readMyAccessLogPages(
@@ -48,5 +53,6 @@ export async function readMyAccessLogPages(
   }
   const days = accessLogDaysOf(rows);
   if (days === null) return { kind: "unavailable" };
-  return { kind: "ok", days, more: more && pages < ACCESS_LOG_MAX_PAGES };
+  const capped = pages >= ACCESS_LOG_MAX_PAGES;
+  return { kind: "ok", days, more: more && !capped, truncated: more && capped };
 }

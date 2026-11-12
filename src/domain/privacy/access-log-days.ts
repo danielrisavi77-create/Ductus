@@ -33,6 +33,8 @@ export interface AccessLogEntry {
 
 export interface AccessLogRow {
   id: string;
+  /** Epoch milliseconds of the window's start, for an unambiguous `datetime`. */
+  at: number;
   /** Zagreb wall clock of the window, `14:10` and `14:15`. */
   from: string;
   to: string;
@@ -138,7 +140,7 @@ export function accessLogDaysOf(rows: readonly Row[]): AccessLogDay[] | null {
         weekday: new Date(Date.UTC(wall.year, wall.month - 1, wall.day)).getUTCDay(), entries: [] };
       days.push(day);
     }
-    day.entries.push({ id: entry.id, from: clock(entry.at), to: clock(entry.at + WINDOW_MS),
+    day.entries.push({ id: entry.id, at: entry.at, from: clock(entry.at), to: clock(entry.at + WINDOW_MS),
       role: entry.role, surface: entry.surface, reader: entry.reader });
   }
   return days;

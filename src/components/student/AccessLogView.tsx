@@ -20,17 +20,22 @@ export function readerLabel(row: AccessLogRow): string {
   return `${row.reader.givenName} ${row.reader.familyName} · ${a.roles[row.role]}`;
 }
 
-function Row({ day, row }: { day: AccessLogDay; row: AccessLogRow }) {
+// `datetime` is the UTC instant: on the autumn change two windows share a Zagreb wall clock.
+function Row({ row }: { row: AccessLogRow }) {
   return (
     <li className="access-log__row">
-      <time className="access-log__time" dateTime={`${day.key}T${row.from}`}>{`${row.from}–${row.to}`}</time>
+      <time className="access-log__time" dateTime={new Date(row.at).toISOString()}>{`${row.from}–${row.to}`}</time>
       <span>{readerLabel(row)}</span>
       <span className="access-log__what">{a.surfaces[row.surface]}</span>
     </li>
   );
 }
 
-export function AccessLogDays({ days, olderHref }: { days: AccessLogDay[]; olderHref: string | null }) {
+/**
+ * `olderHref` is the next page when one may be asked for; `truncated` says older
+ * openings exist beyond the last page allowed, so a part never reads as the whole.
+ */
+export function AccessLogDays({ days, olderHref, truncated = false }: { days: AccessLogDay[]; olderHref: string | null; truncated?: boolean }) {
   if (days.length === 0) return <p className="access-log__note">{a.empty}</p>;
   return (
     <>
@@ -38,7 +43,7 @@ export function AccessLogDays({ days, olderHref }: { days: AccessLogDay[]; older
         <section key={day.key} className="access-log__day" aria-labelledby={`dan-${day.key}`}>
           <h2 id={`dan-${day.key}`}>{dayHeading(day)}</h2>
           <ul className="access-log__rows">
-            {day.entries.map((row) => <Row key={row.id} day={day} row={row} />)}
+            {day.entries.map((row) => <Row key={row.id} row={row} />)}
           </ul>
         </section>
       ))}
@@ -46,6 +51,7 @@ export function AccessLogDays({ days, olderHref }: { days: AccessLogDay[]; older
         // A plain link read on the server; the page re-reads every page up to it.
         <p><a className="access-log__more" href={olderHref}>{a.older}</a></p>
       )}
+      {truncated ? <p className="access-log__note" role="status">{a.truncated}</p> : null}
     </>
   );
 }

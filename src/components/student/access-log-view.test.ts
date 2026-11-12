@@ -40,7 +40,7 @@ describe("DAN-294 S-42 view", () => {
       row(2, "2026-11-10T13:10:00Z"),
     ]);
     expect(out.indexOf("Utorak, 10. 11. 2026.")).toBeLessThan(out.indexOf("Ponedjeljak, 9. 11. 2026."));
-    expect(out).toContain('<time class="access-log__time" dateTime="2026-11-10T14:10">14:10–14:15</time>');
+    expect(out).toContain('<time class="access-log__time" dateTime="2026-11-10T13:10:00.000Z">14:10–14:15</time>');
     expect(out).toContain(`Nastavnik B · ${a.roles.mentor}`);
     expect(out).toContain(`Nastavnik C · ${a.roles.teacher}`);
     expect(out).toContain(a.surfaces.process_summary);
@@ -69,6 +69,20 @@ describe("DAN-294 S-42 view", () => {
     expect(html([row(1, "2026-11-10T13:10:00Z")], "/rad/x/dnevnik-pristupa?stranica=2"))
       .toContain(`<a class="access-log__more" href="/rad/x/dnevnik-pristupa?stranica=2">${a.older}</a>`);
     expect(html([row(1, "2026-11-10T13:10:00Z")])).not.toContain(a.older);
+  });
+
+  it("on the autumn change two windows with one Zagreb wall clock keep distinct instants", () => {
+    const out = html([row(1, "2026-10-25T00:00:00Z"), row(2, "2026-10-25T01:00:00Z")]);
+    expect(out.match(/>02:00–02:05</g)).toHaveLength(2);
+    expect(out).toContain('dateTime="2026-10-25T00:00:00.000Z"');
+    expect(out).toContain('dateTime="2026-10-25T01:00:00.000Z"');
+  });
+
+  it("truncated: a status note that older openings exist, and only then", () => {
+    const one = [row(1, "2026-11-10T13:10:00Z")];
+    expect(renderToStaticMarkup(createElement(AccessLogDays, { days: days(one), olderHref: null, truncated: true })))
+      .toContain(`<p class="access-log__note" role="status">${a.truncated}</p>`);
+    expect(html(one)).not.toContain(a.truncated);
   });
 
   it("error: an alert and a retry link", () => {

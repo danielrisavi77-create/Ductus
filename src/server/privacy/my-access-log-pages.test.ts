@@ -101,12 +101,24 @@ describe("DAN-294 access log pages: the read", () => {
     expect(await readMyAccessLogPages(TOKEN, withActor, DOC, 2)).toEqual({ kind: "unavailable" });
   });
 
-  it("at the last page allowed no older page is offered, however full", async () => {
+  it("a full last page allowed is never shown as the whole log: no older link, but truncated", async () => {
     const answers = Array.from({ length: ACCESS_LOG_MAX_PAGES }, (_, p) => page(1 + p * ACCESS_LOG_PAGE, ACCESS_LOG_PAGE));
     const { withActor, calls } = database(answers);
     const read = await readMyAccessLogPages(TOKEN, withActor, DOC, ACCESS_LOG_MAX_PAGES);
     expect(calls).toHaveLength(ACCESS_LOG_MAX_PAGES);
-    expect(read).toMatchObject({ kind: "ok", more: false });
+    expect(read).toMatchObject({ kind: "ok", more: false, truncated: true });
+  });
+
+  it("a last page allowed that is not full is the whole log: not truncated", async () => {
+    const answers = Array.from({ length: ACCESS_LOG_MAX_PAGES }, (_, p) =>
+      page(1 + p * ACCESS_LOG_PAGE, p === ACCESS_LOG_MAX_PAGES - 1 ? 3 : ACCESS_LOG_PAGE));
+    const { withActor } = database(answers);
+    expect(await readMyAccessLogPages(TOKEN, withActor, DOC, ACCESS_LOG_MAX_PAGES)).toMatchObject({ kind: "ok", more: false, truncated: false });
+  });
+
+  it("below the last page allowed a full page offers the next one and is not truncated", async () => {
+    const { withActor } = database([page(1, ACCESS_LOG_PAGE)]);
+    expect(await readMyAccessLogPages(TOKEN, withActor, DOC, 1)).toMatchObject({ kind: "ok", more: true, truncated: false });
   });
 
   it("no session token never reaches the database", async () => {
