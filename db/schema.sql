@@ -3854,6 +3854,7 @@ END
 $$;
 
 
+--
 -- Name: interface_locale(); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -3873,7 +3874,6 @@ END
 $$;
 
 
---
 --
 -- Name: open_session(text, text, text, text, bytea); Type: FUNCTION; Schema: identity; Owner: -
 --
@@ -4096,6 +4096,7 @@ CREATE FUNCTION identity.purge_ended_sessions() RETURNS bigint
 $$;
 
 
+--
 -- Name: set_interface_locale(text); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -4127,7 +4128,6 @@ END
 $$;
 
 
---
 --
 -- Name: submit_problem_report(text, text, text, text, text, integer, text); Type: FUNCTION; Schema: identity; Owner: -
 --
@@ -8046,6 +8046,7 @@ CREATE TABLE identity.user_account (
 ALTER TABLE ONLY identity.user_account FORCE ROW LEVEL SECURITY;
 
 
+--
 -- Name: user_preference; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -8060,7 +8061,6 @@ CREATE TABLE identity.user_preference (
 ALTER TABLE ONLY identity.user_preference FORCE ROW LEVEL SECURITY;
 
 
---
 --
 -- Name: assignment; Type: TABLE; Schema: institution; Owner: -
 --
@@ -9509,6 +9509,7 @@ ALTER TABLE ONLY identity.user_account
     ADD CONSTRAINT user_account_pkey PRIMARY KEY (id);
 
 
+--
 -- Name: user_preference user_preference_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -9516,7 +9517,6 @@ ALTER TABLE ONLY identity.user_preference
     ADD CONSTRAINT user_preference_pkey PRIMARY KEY (user_id);
 
 
---
 --
 -- Name: assignment assignment_id_institution_key; Type: CONSTRAINT; Schema: institution; Owner: -
 --
@@ -11468,6 +11468,7 @@ ALTER TABLE ONLY identity.user_account
     ADD CONSTRAINT user_account_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES identity.institution(id);
 
 
+--
 -- Name: user_preference user_preference_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -11475,7 +11476,6 @@ ALTER TABLE ONLY identity.user_preference
     ADD CONSTRAINT user_preference_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
 
 
---
 --
 -- Name: assignment assignment_course_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
@@ -12536,6 +12536,7 @@ ALTER TABLE identity.user_account ENABLE ROW LEVEL SECURITY;
 CREATE POLICY user_account_owner ON identity.user_account TO ductus_identity USING (true) WITH CHECK (true);
 
 
+--
 -- Name: user_preference; Type: ROW SECURITY; Schema: identity; Owner: -
 --
 
@@ -12548,7 +12549,6 @@ ALTER TABLE identity.user_preference ENABLE ROW LEVEL SECURITY;
 CREATE POLICY user_preference_owner ON identity.user_preference TO ductus_identity USING (true) WITH CHECK (true);
 
 
---
 --
 -- Name: assignment; Type: ROW SECURITY; Schema: institution; Owner: -
 --
