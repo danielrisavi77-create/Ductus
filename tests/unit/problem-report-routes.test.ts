@@ -41,9 +41,25 @@ function checkSet(column: string): string[] {
   return [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1] ?? "");
 }
 
+/**
+ * The route set the migrations leave: the newest forward migration that
+ * replaces problem_report_route_check (append-only, so a new page adds one),
+ * else the table's own CHECK (DAN-294).
+ */
+function routeSet(): string[] {
+  const names = readdirSync(join(ROOT, "db/migrations")).filter((name) => name.endsWith(".sql")).sort().reverse();
+  for (const name of names) {
+    const text = readFileSync(join(ROOT, "db/migrations", name), "utf8");
+    const up = text.slice(0, text.indexOf("-- migrate:down"));
+    const match = /ADD CONSTRAINT problem_report_route_check CHECK \(route IN \(([^)]*)\)/s.exec(up);
+    if (match?.[1]) return [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1] ?? "");
+  }
+  return checkSet("route");
+}
+
 describe("DAN-431 problem report: migration and domain agree", () => {
   it("every closed set is the same in both", () => {
-    expect(checkSet("route")).toEqual([...PROBLEM_REPORT_ROUTES]);
+    expect(routeSet()).toEqual([...PROBLEM_REPORT_ROUTES]);
     expect(checkSet("category")).toEqual([...PROBLEM_REPORT_CATEGORIES]);
     expect(checkSet("browser_family")).toEqual([...BROWSER_FAMILIES]);
     expect(checkSet("sync_state")).toEqual([...SYNC_STATES]);
