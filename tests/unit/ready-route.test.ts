@@ -13,6 +13,9 @@ vi.mock("@/server/evidence/ingest-deps", () => ({ evidenceIngestDeps: () => deps
 const shutdownState = vi.hoisted(() => ({ value: "running" as "running" | "draining" | "stopped" }));
 vi.mock("@/server/shutdown", () => ({ processShutdown: () => ({ state: () => shutdownState.value }) }));
 
+const observe = vi.hoisted(() => vi.fn<(capabilities: unknown) => Promise<void>>(() => Promise.resolve()));
+vi.mock("@/server/alarms/readiness-store", () => ({ readinessAlarms: { observe } }));
+
 import { GET, dynamic, runtime } from "../../app/api/ready/route";
 
 const SECRET = "postgres://user:pw@db.internal.example/ductus";
@@ -34,6 +37,7 @@ afterEach(() => {
   shutdownState.value = "running";
   withActor.mockReset();
   deps.mockReset();
+  observe.mockClear();
   vi.restoreAllMocks();
 });
 
@@ -167,6 +171,33 @@ describe("GET /api/ready", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // DAN-184: the alarm channel sees each report and never shapes the answer.
+  it("hands the report to the alarms and answers the same when their write hangs", async () => {
+    database(answers("ok"));
+    observe.mockImplementation(() => new Promise(() => {}));
+    deps.mockReturnValue({ signer: productionSigner, payloads: {} });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(observe).toHaveBeenCalledTimes(1);
+    expect(observe.mock.calls[0]?.[0]).toEqual(body.capabilities);
+    expect(JSON.stringify(observe.mock.calls)).not.toContain("STORAGE");
+  });
+
+  it("does not wait for or rethrow a failed alarm write", async () => {
+    database(answers("ok"));
+    observe.mockImplementation(() => Promise.reject(new Error(SECRET)));
+    const response = await GET();
+    expect(response.status).toBe(200);
+  });
+
+  it("raises no alarm while draining", async () => {
+    shutdownState.value = "draining";
+    await GET();
+    expect(observe).not.toHaveBeenCalled();
   });
 
   it("refuses storage that is not the router rather than guessing", async () => {

@@ -4077,6 +4077,46 @@ $$;
 
 
 --
+-- Name: raise_ops_alarm(text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.raise_ops_alarm(p_kind text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  INSERT INTO identity.ops_alarm AS a (kind, category)
+  VALUES (p_kind, CASE WHEN p_kind = 'ready_signing' THEN 'security' ELSE 'operational' END)
+  ON CONFLICT (kind) WHERE resolved_at IS NULL DO UPDATE
+    SET raise_count = LEAST(a.raise_count, 2147483646) + 1,
+        last_raised_at = GREATEST(a.last_raised_at, pg_catalog.statement_timestamp());
+END
+$$;
+
+
+--
+-- Name: resolve_ops_alarm(text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.resolve_ops_alarm(p_kind text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN
+    RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  UPDATE identity.ops_alarm a
+     SET resolved_at = GREATEST(a.last_raised_at, pg_catalog.statement_timestamp())
+   WHERE a.kind = p_kind AND a.resolved_at IS NULL;
+END
+$$;
+
+
+--
 -- Name: submit_problem_report(text, text, text, text, text, integer, text); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -7889,6 +7929,29 @@ ALTER TABLE ONLY identity.logout_token_jti FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: ops_alarm; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.ops_alarm (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    kind text NOT NULL,
+    category text NOT NULL,
+    first_raised_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
+    last_raised_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
+    raise_count integer DEFAULT 1 NOT NULL,
+    resolved_at timestamp with time zone,
+    CONSTRAINT ops_alarm_category_check CHECK ((category = ANY (ARRAY['operational'::text, 'security'::text]))),
+    CONSTRAINT ops_alarm_check CHECK (((category = 'security'::text) = (kind = 'ready_signing'::text))),
+    CONSTRAINT ops_alarm_check1 CHECK ((last_raised_at >= first_raised_at)),
+    CONSTRAINT ops_alarm_check2 CHECK (((resolved_at IS NULL) OR (resolved_at >= first_raised_at))),
+    CONSTRAINT ops_alarm_kind_check CHECK ((kind = ANY (ARRAY['ready_database'::text, 'ready_storage'::text, 'ready_queue'::text, 'ready_signing'::text]))),
+    CONSTRAINT ops_alarm_raise_count_check CHECK ((raise_count >= 1))
+);
+
+ALTER TABLE ONLY identity.ops_alarm FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: person_name; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -9363,6 +9426,14 @@ ALTER TABLE ONLY identity.logout_token_jti
 
 
 --
+-- Name: ops_alarm ops_alarm_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.ops_alarm
+    ADD CONSTRAINT ops_alarm_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: person_name person_name_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -10048,6 +10119,13 @@ CREATE INDEX evidence_submission_version_idx ON evidence.submission USING btree 
 --
 
 CREATE INDEX submission_receipt_issuance_submission_idx ON evidence.submission_receipt_issuance USING btree (submission_id);
+
+
+--
+-- Name: ops_alarm_open_kind; Type: INDEX; Schema: identity; Owner: -
+--
+
+CREATE UNIQUE INDEX ops_alarm_open_kind ON identity.ops_alarm USING btree (kind) WHERE (resolved_at IS NULL);
 
 
 --
@@ -12389,6 +12467,19 @@ CREATE POLICY logout_token_jti_owner ON identity.logout_token_jti TO ductus_iden
 
 
 --
+-- Name: ops_alarm; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.ops_alarm ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ops_alarm ops_alarm_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY ops_alarm_owner ON identity.ops_alarm TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: person_name; Type: ROW SECURITY; Schema: identity; Owner: -
 --
 
@@ -13228,4 +13319,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261111221500'),
     ('20261111230000'),
     ('20261111233000'),
-    ('20261112110000');
+    ('20261112110000'),
+    ('20261112200000');

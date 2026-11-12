@@ -72,6 +72,7 @@ Svaka tablica koju `-- migrate:up` dijelovi u `db/migrations/` ostavljaju na `ma
 | `identity.person_name` | 2 | |
 | `identity.session` | 3 | |
 | `identity.problem_report` | 31 | Opis do 1000 znakova i kontekst iz zatvorenih skupova; podrška još nema pravo čitanja |
+| `identity.ops_alarm` | — | Operativni alarm spremnosti: samo vrsta iz zatvorenog skupa, kategorija i vremena; nijedan stupac ne nosi osobu, ustanovu, rad ni poruku greške (DAN-184) |
 | `identity.logout_token_jti` | 3 | Samo hash `jti` i istek, briše se pri sljedećem upisu |
 | `identity.institution` | — | Podaci ustanove, ne osobe |
 | `identity.institution_issuer` | — | Adresa OIDC izdavatelja ustanove |
