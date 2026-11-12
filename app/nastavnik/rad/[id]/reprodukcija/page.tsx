@@ -48,7 +48,7 @@ export default async function TeacherReplayPage({ params }: { params: Promise<{ 
   }
 
   return (
-    <AppShell session={{ tag, at }} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} crumbs={[t.replay.context]}>
+    <AppShell endsOnDevice session={{ tag, at }} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} crumbs={[t.replay.context]}>
       <div className="page">
         <h1>{t.replay.titleTeacher}</h1>
         {isDocumentId(id) ? <p><a href={work}>{t.replay.backToWork}</a></p> : null}

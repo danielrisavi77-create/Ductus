@@ -73,7 +73,7 @@ export default async function TeacherHomePage() {
   const role = screen === "allowed" ? "teacher" : null;
 
   return (
-    <AppShell session={shellSession(token)} role={role} scope={accessShellScope(screen, principal)} current="/nastavnik" crumbs={[t.title]}>
+    <AppShell endsOnDevice session={shellSession(token)} role={role} scope={accessShellScope(screen, principal)} current="/nastavnik" crumbs={[t.title]}>
       <div className={`page ${styles.page}`}>
         {card ? null : <div className={styles.head}>
           <div className={styles.heading}>

@@ -65,7 +65,7 @@ export default async function InstitutionPage() {
   }
 
   return (
-    <AppShell session={shellSession(token)} role={screen === "allowed" ? "admin" : null}
+    <AppShell endsOnDevice session={shellSession(token)} role={screen === "allowed" ? "admin" : null}
       scope={accessShellScope(screen, principal)} current="/ustanova" crumbs={[t.title]}>
       <div className={`page ${styles.page}`}>
         {card ? null : <div className={styles.heading}>

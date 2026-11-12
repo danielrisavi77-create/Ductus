@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { readLogoutHold, shellLogoutStep } from "@/client/logout-hold";
+import { browserSignOutDeps, followLogoutNatively, signOutHere } from "@/client/logout-request";
 import type { SessionMark } from "@/client/session-marks";
 import LogoutDialog from "@/components/editor/LogoutDialog";
 import type { LogoutPlan } from "@/components/editor/logout-plan";
@@ -13,6 +14,12 @@ export type ShellLogoutProps = {
   scope: string | null;
   /** The session this page was rendered under; null without a session cookie. */
   session: SessionMark | null;
+  /**
+   * The page reads the mark (`liveSessionToken`): the sign-out is the
+   * editor's request, and without the route's confirmation the dialog says
+   * so and offers it again (DAN-99, F-285). Elsewhere the form posts as before.
+   */
+  endsOnDevice?: boolean;
   className?: string;
   buttonClassName?: string;
   /** Before the button (who is signed in); `children` go before its label. */
@@ -20,21 +27,49 @@ export type ShellLogoutProps = {
   children?: ReactNode;
 };
 
+const NOTHING_HELD: LogoutPlan = { unsaved: false, pending: 0, copies: 0, kept: false };
+
 /**
  * Sign-out from a shell page without the editor (D-118): reads per click what
  * this person's journal holds; nothing posts at once, else the dialog names
- * it. The same POST either way; nothing is deleted here; without JS it posts (I5).
+ * it. Where the page reads the mark, the same request as the editor's
+ * (DAN-99): only the route's confirmation ends the session here and follows
+ * on to the provider. Without it nothing has ended (F-285): the dialog says
+ * the sign-out is unconfirmed and offers it again. Elsewhere the form posts.
+ * Nothing is deleted here; without JS the form posts (I5).
  */
-export default function ShellLogout({ scope, session, className, buttonClassName, lead, children }: ShellLogoutProps) {
+export default function ShellLogout({ scope, session, endsOnDevice = false, className, buttonClassName, lead, children }: ShellLogoutProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  // Only the latest attempt may change what the dialog shows.
+  const attempt = useRef(0);
 
-  // `submit()` fires no submit event, so this handler does not run again.
+  // No confirmation: nothing ended, the session stays signed in, and the
+  // dialog says so with the request offered again (F-285).
+  const unanswered = (mine: number) => {
+    if (mine !== attempt.current) return;
+    setPlan((open) => open ?? NOTHING_HELD);
+    setUnconfirmed(true);
+    setBusy(false);
+  };
   const post = () => {
     setBusy(true);
-    formRef.current?.submit();
+    // `submit()` fires no submit event, so onSubmit does not run again.
+    if (!endsOnDevice) {
+      formRef.current?.submit();
+      return;
+    }
+    const mine = ++attempt.current;
+    void signOutHere(session, browserSignOutDeps())
+      .then((reached) => (reached && mine === attempt.current ? followLogoutNatively() : unanswered(mine)), () => unanswered(mine));
+  };
+  const stay = () => {
+    attempt.current += 1;
+    setUnconfirmed(false);
+    setPlan(null);
   };
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -80,8 +115,9 @@ export default function ShellLogout({ scope, session, className, buttonClassName
           plan={plan}
           working={busy}
           signedOutHere={false}
+          unconfirmed={unconfirmed}
           onConfirm={post}
-          onStay={() => setPlan(null)}
+          onStay={stay}
           onExport={() => {}}
           copies={plan.copies}
         />
