@@ -192,7 +192,10 @@ export function catalogErrors(
     if (!objects.has(g)) errors.push(`known gap ${g}: not in the database, drop it`);
     else if (covered.has(g)) errors.push(`known gap ${g}: now covered, drop it`);
   }
-  for (const n of Object.keys(notAFlow)) if (!objects.has(n)) errors.push(`${n}: not in the database, drop it from NOT_A_FLOW`);
+  for (const n of Object.keys(notAFlow)) {
+    if (!objects.has(n)) errors.push(`${n}: not in the database, drop it from NOT_A_FLOW`);
+    else if (covered.has(n)) errors.push(`${n}: now covered, drop it from NOT_A_FLOW`);
+  }
 
   // Stale: the inventory names an object of an application schema that the database does not have.
   const schemas = APP_SCHEMAS.join("|");
@@ -328,11 +331,13 @@ describe("catalogErrors", () => {
     expect(stringLiterals(code)).toBe("select app.a()\napp.b\napp.c");
   });
 
-  it("fails on a known gap that is gone or covered, and on a stale NOT_A_FLOW entry", () => {
-    expect(catalogErrors(CAT, INV, ["institution.gone", "institution.course"], { "public.gone": "x" }, {})).toEqual([
+  it("fails on a known gap or NOT_A_FLOW entry that is gone or covered", () => {
+    const notAFlow = { "public.gone": "x", "institution.course": "x" };
+    expect(catalogErrors(CAT, INV, ["institution.gone", "institution.course"], notAFlow, {})).toEqual([
       "known gap institution.gone: not in the database, drop it",
       "known gap institution.course: now covered, drop it",
       "public.gone: not in the database, drop it from NOT_A_FLOW",
+      "institution.course: now covered, drop it from NOT_A_FLOW",
     ]);
   });
 });
