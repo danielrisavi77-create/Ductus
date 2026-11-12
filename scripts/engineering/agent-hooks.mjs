@@ -243,7 +243,9 @@ const noteRoom = (cr) => size(ownerQueueNote(9_999_999, 9_999_999, cr));
 // less than the item's content that is not a lazy paragraph line. The tracker
 // keeps the content column of each open item; a tab in indent counts to the
 // next multiple of four columns. A tab right after a list marker splits into
-// columns the tracker does not follow: it throws UNSURE and nothing is cut.
+// columns the tracker does not follow, and a block quote holds lists, fences
+// and lazy lines of its own: either throws UNSURE and nothing is cut. A text
+// already cut carries the note, itself a block quote, so it stays as it is.
 const UNSURE = Symbol("unsure");
 const MARKER = /^(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/;
 const THEMATIC = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
@@ -317,8 +319,11 @@ function fenceTracker() {
         return true;
       }
       const marker = MARKER.exec(rest);
+      // A block quote can hold its own lists, fences and lazy lines, which
+      // this tracker does not follow: hand the text over as it is.
+      if (rest[0] === ">") throw UNSURE;
       if (!marker) {
-        paragraph = !BLOCK.test(rest) || rest[0] === ">";
+        paragraph = !BLOCK.test(rest);
         return false;
       }
       const after = rest.slice(marker[0].length);

@@ -647,8 +647,18 @@ test("stateForRole: a fence in a list item closes with the item (cxcr1949 on 969
     assert.ok(stateForRole(input, "worker").endsWith(name.includes("unclosed") ? "\n" : KEEP), name);
   }
   // Where the parser cannot place the boundary (a tab right after a list
-  // marker), the text is handed over as it is: nothing is cut at all.
-  for (const input of [`${QUEUED}-\t~~~\n  kod\n${KEEP}`, `${QUEUED}- a\n  1.\t~~~\n${KEEP}`]) {
+  // marker, a block quote), the text is handed over as it is: nothing is cut.
+  // A block quote (Grok review c.6815619610 on 57a4d5ed) is not followed
+  // either: a list item right after it opens a fence that must not run on.
+  const unsure = [
+    `${QUEUED}-\t~~~\n  kod\n${KEEP}`,
+    `${QUEUED}- a\n  1.\t~~~\n${KEEP}`,
+    `${QUEUED}> napomena\n2. korak\n   ~~~\n   kod\n\n${KEEP}`,
+    `${QUEUED}> ~~~\n+\n  ~~~\n${KEEP}`,
+    `${QUEUED}- a\n  > # N\n  - b\n    ~~~\n${KEEP}`,
+    `${QUEUED}   > x\n${KEEP}`,
+  ];
+  for (const input of unsure) {
     assert.equal(stateForRole(input, "worker"), input, JSON.stringify(input));
   }
 });
@@ -717,8 +727,11 @@ test("start entry point leaves the Owner queue out for writer and control profil
 
 // A STATE.md built from sections, so the expected output follows from the
 // structure and not from the code under test.
-// A list item can open a fence anywhere in its line, so no line holds one.
-const arbLine = fc.string({ maxLength: 60 }).filter((l) => !/[\r\n]/.test(l) && !/^\s*#/.test(l) && !/```|~~~/.test(l));
+// A list item can open a fence or a block quote anywhere in its line, so no
+// line holds one; a block quote hands the text over unchanged (property below).
+const arbLine = fc
+  .string({ maxLength: 60 })
+  .filter((l) => !/[\r\n]/.test(l) && !/^\s*#/.test(l) && !/```|~~~/.test(l) && !l.includes(">"));
 const arbSection = fc.record({
   heading: fc.constantFrom(QUEUE, "## Owner queue", "  ## Owner queue arhiva", "## Engineering", " ## Plan", "# Stanje", "### Sub"),
   body: fc.array(fc.oneof(arbLine, fc.constant(item(9))), { maxLength: 4 }),
@@ -770,6 +783,18 @@ test("property: only Owner queue lines leave, the note names them, other roles g
       const result = stateForRole(text, role);
       assert.equal(result, expectedState(sections, role, crlf, final) + (final ? (crlf ? "\r\n" : "\n") : ""));
       if (role === "orchestrator" || role === "unknown") assert.equal(result, text);
+    }),
+  );
+});
+
+test("property: a block quote in column 0 hands the whole text over unchanged", () => {
+  fc.assert(
+    fc.property(arbState, fc.nat(), fc.stringMatching(/^[ a-z>]{0,12}$/), fc.constantFrom("worker", "control"), ({ text, crlf }, at, quote, role) => {
+      const eol = crlf ? "\r\n" : "\n";
+      const lines = text.split(eol);
+      lines.splice(at % (lines.length + 1), 0, `>${quote}`);
+      const input = lines.join(eol);
+      assert.equal(stateForRole(input, role), input);
     }),
   );
 });
