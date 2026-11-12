@@ -72,8 +72,9 @@ export type AppShellProps = {
   scope: string | null;
   /**
    * The page reads the session through `liveSessionToken`, so it shows the
-   * sign-in card once the mark has ended the session: the sign-out may end it
-   * on this device without the route's answer (DAN-99).
+   * sign-in card once the mark has ended the session: the sign-out is the
+   * editor's request, and it ends the session here only once the route
+   * confirmed it (DAN-99, F-285).
    */
   endsOnDevice?: boolean;
   /** The href of the navigation item this page belongs to, if any. */

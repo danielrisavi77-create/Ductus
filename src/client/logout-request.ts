@@ -1,8 +1,8 @@
 /**
  * The sign-out request itself (F-5, D-118), shared by the editor and the
- * shell: one POST to the logout route, and the end of the session on this
- * device whatever the route answers, so a lost network or a failing server
- * never holds a sign-out back (DAN-99, #1444).
+ * shell: one POST to the logout route. The shell ends the session on this
+ * device only once the route confirmed it (F-285); without that answer it
+ * changes nothing and the person can try again (DAN-99, #1444).
  */
 
 import { LOGOUT_TIMEOUT_MS } from "./logout-hold";
@@ -14,7 +14,9 @@ import {
 /**
  * POST to the logout route; true only for its redirect, which comes after
  * the session was closed and the cookie cleared. A lost request, an error
- * status and no answer within the time limit are false.
+ * status and no answer within the time limit are false, and so is an answer
+ * that comes after the limit: by then the page may have said it is
+ * unconfirmed (F-285).
  */
 export async function postLogout(fetchImpl: typeof fetch = fetch, timeoutMs = LOGOUT_TIMEOUT_MS): Promise<boolean> {
   const abort = new AbortController();
@@ -23,7 +25,7 @@ export async function postLogout(fetchImpl: typeof fetch = fetch, timeoutMs = LO
     const response = await fetchImpl("/api/auth/logout", {
       method: "POST", redirect: "manual", cache: "no-store", signal: abort.signal,
     });
-    return response.type === "opaqueredirect";
+    return !abort.signal.aborted && response.type === "opaqueredirect";
   } catch {
     return false;
   } finally {
@@ -69,12 +71,14 @@ export function browserSignOutDeps(): SignOutDeps {
 /**
  * Sign-out from a page rendered under `session` (null: the session the
  * browser records at the click). The tag is taken before the POST, so a
- * session that becomes current meanwhile stays (#1444). Ended here either
- * way; true only when the route answered. Nothing calls the route again.
+ * session that becomes current meanwhile stays (#1444). Ended here only when
+ * the route confirmed it, and then true; without that nothing changes and
+ * the result is false (F-285).
  */
 export async function signOutHere(session: SessionMark | null, deps: SignOutDeps): Promise<boolean> {
   const own = (session ?? currentSession(deps.store))?.tag ?? null;
   const reached = await deps.post().catch(() => false);
+  if (!reached) return false;
   for (const tag of endAfterLogout(deps.store, own, deps.jar)) {
     try {
       deps.announce(tag);

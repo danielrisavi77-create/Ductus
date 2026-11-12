@@ -1389,6 +1389,8 @@ const en = {
     // #1330, #1444: ended here; nothing calls the server again.
     logoutDevice:
       "Sign-out on this device is complete. The server is not responding right now, so the sign-in there ends at the next sign-in or when it expires.",
+    logoutUnconfirmed:
+      "The server has not confirmed the sign-out, so the sign-in on this device is still valid. Please try again.",
     logoutClose: "Close",
     signedOutElsewhere:
       "Your sign-in is no longer valid, so this tab no longer shows the work. You continue the work when you sign in again.",

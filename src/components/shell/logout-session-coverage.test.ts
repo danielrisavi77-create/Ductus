@@ -65,17 +65,21 @@ describe("the sign-outs read with the session", () => {
     expect(source).toMatch(/step\.kind === "leave"\)\s*\{\s*window\.location\.assign\("\/"\);\s*return;/);
   });
 
-  it("ShellLogout sends the editor's request and says when it was not answered (DAN-99)", () => {
+  it("ShellLogout sends the editor's request and calls nothing ended without the route's confirmation (DAN-99, F-285)", () => {
     const source = readFileSync(join(ROOT, "src/components/shell/ShellLogout.tsx"), "utf8");
     expect(source).toContain("signOutHere(session, browserSignOutDeps())");
-    expect(source).toContain("reached ? followLogoutNatively() : unanswered()");
-    expect(source).toContain("signedOutHere={signedOutHere}");
+    // Only the latest attempt's confirmation follows on; anything else is unconfirmed.
+    expect(source).toContain("reached && mine === attempt.current ? followLogoutNatively() : unanswered(mine)");
+    expect(source).toContain("() => unanswered(mine)");
+    expect(source).toMatch(/const unanswered = \(mine: number\) => \{\s*if \(mine !== attempt\.current\) return;/);
+    // The device message is never shown from the shell: nothing sets it.
+    expect(source).toContain("signedOutHere={false}");
+    expect(source).not.toMatch(/setSignedOutHere|signedOutHere=\{(?!false\})/);
+    expect(source).toContain("unconfirmed={unconfirmed}");
+    // "Ostani" retires the attempt that may still be running.
+    expect(source).toMatch(/const stay = \(\) => \{\s*attempt\.current \+= 1;/);
     // Only where the page reads the mark; elsewhere the form posts as before.
-    expect(source).toMatch(/if \(!endsOnDevice\) \{\s*formRef\.current\?\.submit\(\);\s*return;\s*\}\s*void signOutHere/);
-    // Closing the device message reloads: the server shows the card.
-    expect(source).toContain("signedOutHere ? window.location.replace(window.location.href) : setPlan(null)");
-    // A click before the reload leaves without posting again.
-    expect(source).toMatch(/if \(signedOutHere\) \{\s*window\.location\.assign\("\/"\);\s*return;/);
+    expect(source).toMatch(/if \(!endsOnDevice\) \{\s*formRef\.current\?\.submit\(\);\s*return;\s*\}\s*const mine = \+\+attempt\.current;\s*void signOutHere/);
     // Without JS the form still posts (I5).
     expect(source).toContain('<form ref={formRef} method="post" action="/api/auth/logout"');
     const shell = readFileSync(join(ROOT, "src/components/shell/AppShell.tsx"), "utf8");
