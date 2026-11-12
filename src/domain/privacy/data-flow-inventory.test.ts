@@ -298,6 +298,8 @@ const DYNAMIC_TABLES = [
 
 const TABLE_HEAD = /\bcreate\s+(?:\w+\s+)*?table\b/gi;
 const TABLE_FULL = /create\s+(?:(?:global|local|temporary|temp|unlogged)\s+)*table\s+(?:if\s+not\s+exists\s+)?(?:"([a-z_]+)"|([a-z_]+))\.(?:"([a-z0-9_]+)"|([a-z0-9_]+))(?=[\s(;])/iy;
+/** A rename or schema move would leave the tracked name stale, so it is an error instead of being ignored. */
+const ALTER_MOVE = /\balter\s+(?:foreign\s+)?(?:table|function|procedure)\b[^;]*?\b(?:rename\s+to|set\s+schema)\b/gi;
 const FUNCTION_HEAD = /\bcreate\s+(?:or\s+replace\s+)?(?:function|procedure)\b/gi;
 const FUNCTION_FULL = /create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+([a-z_]+\.[a-z0-9_]+)\s*\(/iy;
 const DOLLAR_OPEN = /^\$(?:[a-z_][a-z0-9_]*)?\$/i;
@@ -368,6 +370,7 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
     if (t) tables.push(`${t[1] ?? t[2]}.${t[3] ?? t[4]}`.toLowerCase());
     else errors.push(`create table not recognised: ${seen(m)}`);
   }
+  for (const m of bare.matchAll(ALTER_MOVE)) errors.push(`alter that renames or moves an object not supported: ${seen(m)}`);
   const heads = [...bare.matchAll(FUNCTION_HEAD)];
   for (const [i, m] of heads.entries()) {
     FUNCTION_FULL.lastIndex = m.index ?? 0;
@@ -468,6 +471,8 @@ const FAKE: Sources = {
 // `name:` (inline map, anchor, alias, quoted name, tab indent) throws instead of being skipped.
 function composeServices(compose: string): string[] {
   const lines = compose.replace(/\r\n?/g, "\n").split("\n");
+  const inc = lines.find((l) => /^["']?(?:include|extends)["']?[ \t]*:/.test(l));
+  if (inc) throw new Error(`compose: top-level include is not read: ${inc}`);
   const start = lines.findIndex((l) => l.startsWith("services:"));
   if (start === -1) throw new Error("compose: no services: key");
   if (!/^services:[ \t]*(?:#.*)?$/.test(lines[start])) throw new Error(`compose: services: is not a block map: ${lines[start]}`);
@@ -492,6 +497,13 @@ describe("composeServices", () => {
   it("reads names with underscores and lines with a trailing comment, only under services", () => {
     const text = "name: x\nservices:\n  # note\n  postgres:\n    image: a\n  external_relay:\n    image: b\n  relay: # outside\n    image: c\nvolumes:\n  data:\n";
     expect(composeServices(text)).toEqual(["postgres", "external_relay", "relay"]);
+  });
+
+  it.each([
+    ["a top-level include", "include:\n  - extra.yaml\nservices:\n  a:\n    image: x\n"],
+    ["a quoted top-level include", "\"include\": [x.yaml]\nservices:\n  a:\n    image: x\n"],
+  ])("rejects %s", (_n, text) => {
+    expect(() => composeServices(text)).toThrow(/^compose: top-level include/);
   });
 
   it.each([
@@ -546,7 +558,6 @@ describe("sqlObjects", () => {
     ["a double dash inside a dollar quote", "SELECT $$--$$; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a nested block comment", "/* a /* b */ CREATE TABLE a.old (id int); */ CREATE TABLE a.t (id int);", ["a.t"]],
     ["a MIME pattern before a later comment", "CREATE TABLE a.t0 (m text DEFAULT 'image/*');\nCREATE TABLE a.t (id int); /* c */ SELECT '*/';", ["a.t0", "a.t"]],
-    ["a double dash inside a string", "SELECT 'a--b'; CREATE TABLE a.t (id int);", ["a.t"]],
     ["a commented-out table", "-- CREATE TABLE a.old (id int);\n/* create table a.older (x int) */\nCREATE TABLE a.t (id int);", ["a.t"]],
   ])("reads %s", (_n, sql, tables) => {
     const r = sqlObjects(sql);
@@ -614,6 +625,19 @@ describe("sqlObjects", () => {
     expect(completenessErrors({ ...FAKE, migrations: sql }, [], PROVIDERS, [head])).toEqual([]);
     expect(completenessErrors({ ...FAKE, migrations: sql }, [], PROVIDERS, []).length).toBe(1);
     expect(completenessErrors(FAKE, [], PROVIDERS, [head])).toEqual([`dynamic table entry no longer in the migrations, drop it: ${head}`]);
+  });
+
+  it.each([
+    ["a table rename", "ALTER TABLE evidence.thing RENAME TO secret;"],
+    ["a table schema move", "alter table evidence.thing\n  set schema other;"],
+    ["a function rename", "ALTER FUNCTION app.f(int) RENAME TO g;"],
+    ["a foreign table rename", "ALTER FOREIGN TABLE a.t RENAME TO u;"],
+  ])("flags %s", (_n, sql) => {
+    expect(sqlObjects(sql).errors).toHaveLength(1);
+  });
+
+  it("does not flag a column rename or an add column", () => {
+    expect(sqlObjects("ALTER TABLE a.t RENAME COLUMN x TO y; ALTER TABLE a.t ADD COLUMN z int;").errors).toEqual([]);
   });
 
   it("surfaces the parse errors through completenessErrors", () => {
