@@ -10,7 +10,7 @@ Snimka: 11. 11. 2026. Izvor: REST popis otvorenih issuea (bez PR-ova), povezani 
   - **Vrijedi, ima Linear vezu** (DAN-xxx iz naslova ili tijela): UX M4 do M8 (DAN-501, 502, 509, 599, 602), planovi napada za buduće korake i aktivni zadaci platforme.
   - **Vrijedi, nema Linear vezu**: nekoliko issuea (npr. #1880, #1894, #1503, #1345, #449); za njih je predložen novi DAN tiket ili spajanje u postojeći.
   - **Trajni pokazivači, ne zatvarati**: #87, #271, #152, #835, #1836, #1873.
-- Najveći klaster: **51 UX issue** za M4 do M8 (naslovi „UX M4” do „UX M8”). Svi vrijede dok se pripadni milestone ne gradi; predlažem da ostanu otvoreni pod jednim nadređenim DAN tiketom po milestoneu (509, 502, 501, 599, 602) i da se ne otvaraju pojedinačni tiketi.
+- Najveći klaster: **51 UX issue** za M4 do M8 (naslovi „UX M4” do „UX M8”). Većina vrijedi dok se pripadni milestone ne gradi (#1793, #1796, #1799 i #1800 označeni su N jer su dijelom već spojeni); predlažem da ostanu otvoreni pod jednim nadređenim DAN tiketom po milestoneu (509, 502, 501, 599, 602) i da se ne otvaraju pojedinačni tiketi.
 - Provjera „na mainu” je ograničena: gdje nisam mogao potvrditi stanje u kodu, piše **nejasno** umjesto pogađanja. Redak „riješeno” temelji se na spojenom PR-u koji je naveden u retku; gdje taj PR nosi drugu DAN oznaku ili je veza posredna, redak je označen N.
 
 Oznake stanja: **R** riješeno na mainu, **Z** zastarjelo (zamijenjeno novijim issueom ili odlukom), **V** vrijedi, **N** nejasno (treba pogled vlasnika zadatka).
@@ -106,7 +106,7 @@ Oznake stanja: **R** riješeno na mainu, **Z** zastarjelo (zamijenjeno novijim i
 
 ## 5. UX klasteri (M4 do M8)
 
-Svi vrijede dok se pripadni milestone ne gradi; stanje svakog nije posebno provjeravano u kodu, jer pripadni ekrani još nisu na mainu (provjera `app/` i `docs/design/EKRANI.md`).
+Osim četiriju M8 issuea označenih N, svi vrijede dok se pripadni milestone ne gradi; stanje svakog nije posebno provjeravano u kodu, jer pripadni ekrani još nisu na mainu (provjera `app/` i `docs/design/EKRANI.md`).
 
 | Issue | Klaster | Stanje | Linear |
 |---|---|---|---|
@@ -114,9 +114,8 @@ Svi vrijede dok se pripadni milestone ne gradi; stanje svakog nije posebno provj
 | #1382, #1384, #1386, #1388, #1390, #1392, #1393, #1394, #1395 | M5 stanja kartica, fokus, vodič | V | DAN-502 |
 | #1419 do #1430 | M6 komentari, prijedlozi, obavijesti, reproduktor | V | DAN-509 (#1429 i DAN-422) |
 | #1779 do #1790 | M7 predaja i pregled | V | DAN-599 (#1784 DAN-312, #1786 DAN-384) |
-| #1792 do #1802 | M8 uvoz i izvoz | V | DAN-602 (#1793 DAN-242/396, #1795 DAN-438/440, #1796/1799/1800 DAN-316/341/398/399, #1801 DAN-441) |
-
-Napomena: #1793, #1796, #1799, #1800 imaju spojen PR (#1851, #1863, #1867, #1892) pod istom DAN oznakom, pa vjerojatno dio nalaza već vrijedi kao riješen (N). #1798, #1801 su odlučeni (D-281 do D-287, Owner queue) i čekaju samo gradnju.
+| #1792, #1794, #1795, #1797, #1798, #1801, #1802 | M8 uvoz i izvoz | V | DAN-602 (#1795 DAN-438/440, #1801 DAN-441). #1798 i #1801 su odlučeni (D-281 do D-287, Owner queue) i čekaju samo gradnju. |
+| #1793, #1796, #1799, #1800 | M8 uvoz i izvoz, dijelom već spojeno | N | DAN-602 (#1793 DAN-242/396, #1796/1799/1800 DAN-316/341/398/399). Spojeni PR-ovi #1851, #1863, #1867, #1892 pod istom DAN oznakom: dio nalaza vjerojatno već vrijedi kao riješen. Ne zatvarati dok vlasnik zadatka ne potvrdi što ostaje. |
 
 ## 6. Stari planski issuei (listopad)
 
