@@ -1,4 +1,4 @@
-import { type AccessLogDay, accessLogDaysOf, accessLogEntryOf } from "@/domain/privacy/access-log-days";
+import { type AccessLogDay, accessLogDaysOf, accessLogEntryOf, zonedInstantOf } from "@/domain/privacy/access-log-days";
 import type { WithActor } from "@/server/db/with-actor";
 
 /**
@@ -41,7 +41,7 @@ function isDocumentId(value: string): boolean {
 
 /** The cursor as an ISO instant on the five-minute grid and a lower-case uuid, or null. */
 function cursorOf(cursor: AccessLogCursor): [string, string] | null {
-  const ms = Date.parse(cursor.beforeAt);
+  const ms = zonedInstantOf(cursor.beforeAt);
   if (!Number.isFinite(ms) || ms % WINDOW_MS !== 0 || !UUID.test(cursor.beforeId)) return null;
   return [new Date(ms).toISOString(), cursor.beforeId];
 }

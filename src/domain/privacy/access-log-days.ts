@@ -60,8 +60,18 @@ function isName(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && [...value].length <= NAME_MAX;
 }
 
+const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
+
+/**
+ * Milliseconds of an ISO instant that names its zone (Z or an offset), else
+ * NaN. Date.parse would read a string without a zone in the host's zone.
+ */
+export function zonedInstantOf(value: string): number {
+  return ZONED_INSTANT.test(value) ? Date.parse(value) : Number.NaN;
+}
+
 function epochOf(value: unknown): number | null {
-  const ms = value instanceof Date ? value.getTime() : typeof value === "string" ? Date.parse(value) : Number.NaN;
+  const ms = value instanceof Date ? value.getTime() : typeof value === "string" ? zonedInstantOf(value) : Number.NaN;
   // The writer bins to five minutes (date_bin from 2000-01-01 UTC, a multiple of five minutes since the epoch).
   return Number.isFinite(ms) && ms % WINDOW_MS === 0 ? ms : null;
 }
@@ -97,7 +107,9 @@ export function accessLogEntryOf(row: Row): AccessLogEntry | null {
  */
 export function mergeAccessLogPages(shown: readonly Row[], next: readonly Row[]): Row[] {
   const ids = new Set(shown.map((r) => r.entry_id));
-  const oldest = Math.min(...shown.map((r) => epochOf(r.opened_at) ?? Number.POSITIVE_INFINITY));
+  // A loop, not Math.min(...): a spread of a long page overflows the stack.
+  let oldest = Number.POSITIVE_INFINITY;
+  for (const r of shown) oldest = Math.min(oldest, epochOf(r.opened_at) ?? Number.POSITIVE_INFINITY);
   return [...shown, ...next.filter((r) => !ids.has(r.entry_id) && (epochOf(r.opened_at) ?? Number.NEGATIVE_INFINITY) < oldest)];
 }
 
