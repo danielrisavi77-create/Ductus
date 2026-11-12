@@ -188,10 +188,14 @@ test("Odjava from the dialog without an answer says it is unconfirmed and tries 
     await dialog.getByRole("button", { name: t.auth.logoutConfirm }).click();
     await expectUnconfirmed(page, context, session);
     expect(logouts).toEqual(["POST fetch"]);
+    // A second unanswered try says the same and gives "Ostani" the focus again.
+    await dialog.getByRole("button", { name: t.auth.retry }).click();
+    await expect.poll(() => logouts).toEqual(["POST fetch", "POST fetch"]);
+    await expectUnconfirmed(page, context, session);
     await page.unroute("**/api/auth/logout");
     await dialog.getByRole("button", { name: t.auth.retry }).click();
     await page.waitForURL(`${APP_ORIGIN}/`);
-    expect(logouts).toEqual(["POST fetch", "POST fetch", "POST document"]);
+    expect(logouts).toEqual(["POST fetch", "POST fetch", "POST fetch", "POST document"]);
     expect(await sessionRow(session)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   } finally {
     await operator(session, "revoke");

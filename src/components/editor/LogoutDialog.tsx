@@ -16,8 +16,10 @@
  * After a submission the server confirmed, what this device holds of the
  * work is offered for deletion the same way, with two clicks (F-154, owner
  * decision 1.3). "Odjavi se" still leaves it on this device (D-118).
- * Without the server's answer the sign-out has still ended here (#1330): the
- * dialog only says so and offers "Zatvori", no second try (#1444).
+ * In the editor, without the server's answer the sign-out has still ended
+ * here (#1330): the dialog only says so and offers "Zatvori", no second try
+ * (#1444). The shell passes `unconfirmed` instead (F-285): nothing ended, the
+ * dialog says the sign-out is unconfirmed and offers it again.
  */
 
 import { useEffect, useId, useRef, useState, type MouseEvent, type RefObject, type SyntheticEvent } from "react";
@@ -142,9 +144,11 @@ export default function LogoutDialog({
 
   // Its buttons are gone, so "Zatvori" takes the focus. Unconfirmed: the
   // buttons were disabled while the request ran, so "Ostani" takes it back.
+  // A repeated unconfirmed answer leaves `unconfirmed` as it was, so the end
+  // of `working` brings the focus back as well.
   useEffect(() => {
-    if (signedOutHere || unconfirmed) stayRef.current?.focus();
-  }, [signedOutHere, unconfirmed]);
+    if ((signedOutHere || unconfirmed) && !working) stayRef.current?.focus();
+  }, [signedOutHere, unconfirmed, working]);
 
   const askDiscard = () => {
     withdrawn.current = false;

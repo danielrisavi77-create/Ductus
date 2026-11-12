@@ -129,9 +129,9 @@ describe("signOutHere: only the route's confirmation ends the session of the cli
 
   // Istodobnost (contract (b)): the route's redirect arriving after the limit
   // does not turn the attempt the page already showed as unconfirmed into an end.
-  it("a confirmation that arrives after the limit ends nothing", async () => {
+  it.each(["works", "refusesSetItem", "none"] as const)("a confirmation that arrives after the limit ends nothing, storage %s", async (kind) => {
     vi.useFakeTimers();
-    const store = storeOf("works");
+    const store = storeOf(kind);
     const jar = cookieJar();
     const announce = vi.fn();
     // A fetch that ignores the abort and answers late.
@@ -162,8 +162,8 @@ describe("signOutHere: only the route's confirmation ends the session of the cli
     expect(announce).not.toHaveBeenCalled();
   });
 
-  it("a post that rejects ends nothing", async () => {
-    const store = storeOf("works")!;
+  it.each(["works", "refusesSetItem", "none"] as const)("a post that rejects ends nothing, storage %s", async (kind) => {
+    const store = storeOf(kind);
     const jar = cookieJar();
     const announce = vi.fn();
     await expect(signOutHere(A, { post: () => Promise.reject(new Error("lost")), store, jar, announce }))
