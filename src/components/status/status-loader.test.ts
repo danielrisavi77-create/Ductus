@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { statusLoader } from "./status-loader";
+import { REQUEST_TIMEOUT_MS, statusLoader } from "./status-loader";
 
 const body = { checkedAt: "2026-11-12T10:25:00.000Z", components: { writing: "radi", submission: "radi", mentorView: "radi" } };
 
@@ -78,5 +78,24 @@ describe("statusLoader", () => {
     const request = vi.fn();
     await statusLoader(c.signal, events(), request)();
     expect(request).not.toHaveBeenCalled();
+  });
+
+  // Pre-QA of #1975: a request that never answers must not freeze polling and retry.
+  it("gives up on a request that hangs, reports a failure and asks again", async () => {
+    vi.useFakeTimers();
+    try {
+      const e = events();
+      const req = pending();
+      const load = statusLoader(new AbortController().signal, e, req.request);
+      const run = load();
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+      await run;
+      expect(e.fail).toHaveBeenCalledTimes(1);
+      expect(e.settled).toHaveBeenCalledTimes(1);
+      void load();
+      expect(req.request).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
