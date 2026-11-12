@@ -13,7 +13,7 @@ import { INTERFACE_LOCALES } from "@/lib/i18n/locale";
 // locales are one contract; a value one accepts and another refuses is a
 // setting lost or a language the screen cannot show.
 const ROOT = join(import.meta.dirname, "..", "..");
-const MIGRATION = readFileSync(join(ROOT, "db/migrations/20261112170000_interface_locale.sql"), "utf8");
+const MIGRATION = readFileSync(join(ROOT, "db/migrations/20261112184500_interface_locale.sql"), "utf8");
 const UP = MIGRATION.slice(0, MIGRATION.indexOf("-- migrate:down"));
 // The statements without their comments, which may name what is left out.
 const CODE = UP.replace(/--[^\n]*/g, "");
