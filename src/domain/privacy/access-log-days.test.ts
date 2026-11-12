@@ -1,7 +1,7 @@
 import { fc, test as fcTest } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 
-import { accessLogDaysOf, accessLogEntryOf, mergeAccessLogPages } from "./access-log-days";
+import { accessLogDaysOf, accessLogEntryOf, mergeAccessLogPages, zonedInstantOf } from "./access-log-days";
 
 // DAN-294 (M10.4, contract on #1836, c.6814737263): the classes of input of
 // the grouping, written before the code. Invented ids and names only.
@@ -100,6 +100,16 @@ describe("DAN-294 access log days: the classes of input", () => {
     const first = [at("2026-11-10T13:10:00Z", 1)];
     const second = [at("2026-11-10T13:10:00Z", 1), at("2026-11-09T13:10:00Z", 2)];
     expect(mergeAccessLogPages(first, second).map((r) => r.entry_id)).toEqual([id(1), id(2)]);
+  });
+
+  it("9a. a time given as text must name its zone; a long first page does not overflow the stack", () => {
+    expect(accessLogEntryOf(row({ opened_at: "2026-11-10T13:10:00Z" }))?.at).toBe(Date.UTC(2026, 10, 10, 13, 10));
+    expect(accessLogEntryOf(row({ opened_at: "2026-11-10T14:10:00+01:00" }))?.at).toBe(Date.UTC(2026, 10, 10, 13, 10));
+    expect(accessLogEntryOf(row({ opened_at: "2026-11-10T13:10:00" }))).toBeNull();
+    expect(accessLogEntryOf(row({ opened_at: "2026-11-10" }))).toBeNull();
+    expect(zonedInstantOf("Tue, 10 Nov 2026 13:10:00")).toBeNaN();
+    const long = Array.from({ length: 200_000 }, (_, i) => at("2026-11-10T13:10:00Z", i + 10));
+    expect(mergeAccessLogPages(long, [at("2026-11-09T13:10:00Z", 1)])).toHaveLength(200_001);
   });
 
   it("10. unordered input comes out newest day and row first", () => {

@@ -105,6 +105,8 @@ describe("DAN-294 my access log: refusals", () => {
     ["a time that is no instant", { beforeAt: "jučer", beforeId: id(1) }],
     ["a time off the five-minute grid", { beforeAt: "2026-11-10T08:01:00.000Z", beforeId: id(1) }],
     ["an id that is no uuid", { beforeAt: "2026-11-10T08:00:00.000Z", beforeId: "x" }],
+    ["a time without a zone, read in the host's zone", { beforeAt: "2026-11-10T08:00:00", beforeId: id(1) }],
+    ["a date alone", { beforeAt: "2026-11-10", beforeId: id(1) }],
   ])("a malformed cursor (%s) is unavailable without a query", async (_, cursor) => {
     const { withActor, calls } = database({ rows: [] });
     expect(await readMyAccessLog(TOKEN, withActor, DOC, cursor)).toEqual({ kind: "unavailable" });
