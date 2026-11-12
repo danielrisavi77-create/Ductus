@@ -116,7 +116,7 @@ export type Catalog = {
 };
 export type Inventory = { text: string; cited: string[] };
 
-const IDENT = /^[a-z_][a-z0-9_$]*$/;
+const IDENT = /^[a-z_][a-z0-9_]*$/;
 const qualified = (schema: string, name: string) => `${schema}.${name}`;
 const inner = (c: string | undefined) => c !== undefined && /[A-Za-z0-9_$."]/.test(c);
 
@@ -169,7 +169,7 @@ export function catalogErrors(cat: Catalog, inv: Inventory, gaps: string[] = KNO
   for (const n of Object.keys(notAFlow)) if (!objects.has(n)) errors.push(`${n}: not in the database, drop it from NOT_A_FLOW`);
 
   // Stale: the inventory names an object of an application schema that the database does not have.
-  const schemas = APP_SCHEMAS.filter((s) => s !== "public").join("|");
+  const schemas = APP_SCHEMAS.join("|");
   for (const m of inv.text.matchAll(new RegExp(`(?<![A-Za-z0-9_$./-])(?:${schemas})\\.[a-z_][a-z0-9_]*(?![A-Za-z0-9_$/])`, "g"))) {
     if (!objects.has(m[0])) errors.push(`inventory names ${m[0]}, not in the database`);
   }
@@ -257,6 +257,8 @@ describe("catalogErrors", () => {
     ["a name only as a prefix", CAT, { ...INV, text: "Tok: `institution.course_x`." }, "relation (r) institution.course: no flow in the inventory"],
     ["a new function", { ...CAT, routines: [...CAT.routines, { schema: "app", name: "f", body: "" }] }, INV, "function app.f: no flow in the inventory"],
     ["a stale inventory name", CAT, { ...INV, text: `${INV.text} institution.gone` }, "inventory names institution.gone, not in the database"],
+    ["a stale inventory name in public", CAT, { ...INV, text: `${INV.text} public.gone` }, "inventory names public.gone, not in the database"],
+    ["a name with $, which quote_ident quotes", { ...CAT, relations: [...CAT.relations, { schema: "institution", name: "a$b", kind: "r" }] }, { ...INV, text: `${INV.text} institution.a$b` }, 'relation (r) "institution.a$b": quoted identifier'],
   ])("fails on %s", (_case, cat, inv, error) => {
     expect(catalogErrors(cat, inv, [], {})).toContain(error);
   });
