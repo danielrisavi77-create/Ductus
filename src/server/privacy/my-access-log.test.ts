@@ -63,6 +63,17 @@ describe("DAN-294 my access log: the read", () => {
     expect(calls[1]?.values).toEqual([DOC, ACCESS_LOG_PAGE, "2026-11-10T08:00:00.000Z", id(7)]);
   });
 
+  it.each([
+    ["no fraction", "2026-11-10T08:00:00Z"],
+    ["a zero fraction", "2026-11-10T08:00:00.0Z"],
+    ["exactly milliseconds", "2026-11-10T08:00:00.000Z"],
+    ["six zero digits", "2026-11-10T08:00:00.000000Z"],
+  ])("a cursor on the grid with %s goes to the RPC as the same instant", async (_, beforeAt) => {
+    const { withActor, calls } = database({ rows: [] });
+    expect((await readMyAccessLog(TOKEN, withActor, DOC, { beforeAt, beforeId: id(7) })).kind).toBe("ok");
+    expect(calls[0]?.values).toEqual([DOC, ACCESS_LOG_PAGE, "2026-11-10T08:00:00.000Z", id(7)]);
+  });
+
   it("contract b: a continuation that brings a newer or an already shown row is the RPC's answer, and the page shows each id once", async () => {
     const { withActor } = database({ rows: [row(1, "2026-11-10T13:10:00Z"), row(1, "2026-11-10T13:10:00Z")] });
     const read = await readMyAccessLog(TOKEN, withActor, DOC);
@@ -107,6 +118,11 @@ describe("DAN-294 my access log: refusals", () => {
     ["an id that is no uuid", { beforeAt: "2026-11-10T08:00:00.000Z", beforeId: "x" }],
     ["a time without a zone, read in the host's zone", { beforeAt: "2026-11-10T08:00:00", beforeId: id(1) }],
     ["a date alone", { beforeAt: "2026-11-10", beforeId: id(1) }],
+    // #1968 QA c.6815947103: digits below the millisecond are read, not dropped by Date.parse.
+    ["one microsecond past the grid", { beforeAt: "2026-11-10T08:00:00.000001Z", beforeId: id(1) }],
+    ["999999 microseconds", { beforeAt: "2026-11-10T07:59:59.999999Z", beforeId: id(1) }],
+    ["999 microseconds", { beforeAt: "2026-11-10T08:00:00.000999Z", beforeId: id(1) }],
+    ["nonzero milliseconds", { beforeAt: "2026-11-10T08:00:00.001Z", beforeId: id(1) }],
   ])("a malformed cursor (%s) is unavailable without a query", async (_, cursor) => {
     const { withActor, calls } = database({ rows: [] });
     expect(await readMyAccessLog(TOKEN, withActor, DOC, cursor)).toEqual({ kind: "unavailable" });

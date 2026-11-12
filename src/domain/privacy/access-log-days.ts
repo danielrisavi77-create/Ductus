@@ -60,14 +60,19 @@ function isName(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && [...value].length <= NAME_MAX;
 }
 
-const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
+const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.(\d{1,6}))?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
 
 /**
  * Milliseconds of an ISO instant that names its zone (Z or an offset), else
- * NaN. Date.parse would read a string without a zone in the host's zone.
+ * NaN. Date.parse would read a string without a zone in the host's zone, and
+ * it drops the digits below the millisecond, so `.000001` would pass as `.000`
+ * (#1968 QA c.6815947103, review c.6815958601): an instant that milliseconds
+ * do not hold exactly is NaN, never rounded.
  */
 export function zonedInstantOf(value: string): number {
-  return ZONED_INSTANT.test(value) ? Date.parse(value) : Number.NaN;
+  const match = ZONED_INSTANT.exec(value);
+  if (match === null || /[1-9]/.test(match[1]?.slice(3) ?? "")) return Number.NaN;
+  return Date.parse(value);
 }
 
 function epochOf(value: unknown): number | null {
