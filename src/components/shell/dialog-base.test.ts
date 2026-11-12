@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import LogoutDialog from "@/components/editor/LogoutDialog";
 import type { LogoutPlan } from "@/components/editor/logout-plan";
+import { messagesEn } from "@/lib/i18n/messages.en";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 // Z-08 (#923): one dialog base on the design tokens, and the sign-out
@@ -123,6 +124,31 @@ describe("the sign-out dialog on the base (Z-08)", () => {
     expect([...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([t.logoutClose]);
     expect(html).not.toContain(t.logoutConfirm);
     expect(html).not.toContain(messagesHr.editor.exportText);
+  });
+
+  // F-285: only a sign-out the server confirmed may read as ended. Without
+  // that the dialog says it is unconfirmed and offers the request again.
+  const NOTHING: LogoutPlan = { unsaved: false, pending: 0, copies: 0, kept: false };
+  const shown = (state: "asking" | "unconfirmed" | "device") => renderToStaticMarkup(createElement(LogoutDialog, {
+    plan: NOTHING, working: false, signedOutHere: state === "device", unconfirmed: state === "unconfirmed",
+    onConfirm: noop, onStay: noop, onExport: noop,
+  }));
+  const buttons = (html: string) => [...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
+  it.each([
+    ["asking", false, null, [t.logoutConfirm, t.logoutStay]],
+    ["unconfirmed", false, t.logoutUnconfirmed, [t.retry, t.logoutStay]],
+    ["device", true, t.logoutDevice, [t.logoutClose]],
+  ] as const)("%s: the end is named only when it happened (%s)", (state, ended, alertText, labels) => {
+    const html = shown(state);
+    const alert = html.slice(html.indexOf('<div role="alert">'));
+    expect(html.includes(t.logoutDevice)).toBe(ended);
+    expect(alertText === null ? alert.startsWith('<div role="alert"></div>') : alert.includes(`>${alertText}</p>`)).toBe(true);
+    expect(buttons(html)).toEqual(labels);
+  });
+
+  it("the unconfirmed text claims no end", () => {
+    expect(t.logoutUnconfirmed).not.toMatch(/gotova|završen|odjavljen/i);
+    expect(messagesEn.auth.logoutUnconfirmed).not.toMatch(/complete|ended|signed out/i);
   });
 
   it("names nothing kept when nothing stays on this device", () => {

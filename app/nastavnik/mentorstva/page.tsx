@@ -51,7 +51,7 @@ export default async function MentoredWorksPage() {
   }
 
   return (
-    <AppShell session={shellSession(token)} role={screen === "allowed" ? "teacher" : null} scope={accessShellScope(screen, principal)} current={HREF} crumbs={[t.title]}>
+    <AppShell endsOnDevice session={shellSession(token)} role={screen === "allowed" ? "teacher" : null} scope={accessShellScope(screen, principal)} current={HREF} crumbs={[t.title]}>
       <div className={`page ${styles.page}`}>
         {card ? null : <div className={styles.head}>
           <div className={styles.heading}>

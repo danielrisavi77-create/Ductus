@@ -36,7 +36,7 @@ export default async function FastPathPage({ searchParams }: { searchParams: Pro
   const signInHref = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
   const screen = teacherPageAccess(access, principal.kind, token);
   return (
-    <AppShell session={{ tag, at }} role={screen === "allowed" ? "teacher" : null} scope={accessShellScope(screen, principal)} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
+    <AppShell endsOnDevice session={{ tag, at }} role={screen === "allowed" ? "teacher" : null} scope={accessShellScope(screen, principal)} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
       <div className={`page ${styles.page}`}>
         {screen === "allowed" ? (
           <>

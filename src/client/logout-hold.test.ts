@@ -221,9 +221,13 @@ describe("unsavedAfterSettle (#1542)", () => {
   // The orchestrator's contract (#1091 c.6662249586): one limit, the logout route's.
   it("waits as long as the logout route may take, with the same constant", () => {
     expect(LOGOUT_TIMEOUT_MS).toBe(8_000);
-    const code = readFileSync(join(process.cwd(), "src/components/editor/LocalDocument.tsx"), "utf8");
-    expect(code).not.toMatch(/const LOGOUT_TIMEOUT_MS\b/);
-    expect(code).toContain("setTimeout(() => abort.abort(), LOGOUT_TIMEOUT_MS)");
+    // The request moved to logout-request.ts (DAN-99); the editor imports it.
+    const editor = readFileSync(join(process.cwd(), "src/components/editor/LocalDocument.tsx"), "utf8");
+    const request = readFileSync(join(process.cwd(), "src/client/logout-request.ts"), "utf8");
+    for (const code of [editor, request]) expect(code).not.toMatch(/const LOGOUT_TIMEOUT_MS\b/);
+    expect(editor).toMatch(/import \{[^}]*\bpostLogout\b[^}]*\} from "@\/client\/logout-request";/);
+    expect(request).toContain("setTimeout(() => abort.abort(), timeoutMs)");
+    expect(request).toContain("timeoutMs = LOGOUT_TIMEOUT_MS");
   });
 });
 

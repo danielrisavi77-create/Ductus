@@ -70,6 +70,13 @@ export type AppShellProps = {
    * null: no sign-out unless the page brings its own `account`.
    */
   scope: string | null;
+  /**
+   * The page reads the session through `liveSessionToken`, so it shows the
+   * sign-in card once the mark has ended the session: the sign-out is the
+   * editor's request, and it ends the session here only once the route
+   * confirmed it (DAN-99, F-285).
+   */
+  endsOnDevice?: boolean;
   /** The href of the navigation item this page belongs to, if any. */
   current?: string;
   /** Breadcrumb, first to last; the last is the page itself. */
@@ -97,7 +104,7 @@ export type AppShellProps = {
  * (I2); signing out is the same POST as everywhere and works without
  * JavaScript (I5). Below 800 px the side bar is a drawer behind ☰.
  */
-export default function AppShell({ role, session, scope, current, crumbs, account, ownMain = false, drawer = false, children }: AppShellProps) {
+export default function AppShell({ role, session, scope, endsOnDevice = false, current, crumbs, account, ownMain = false, drawer = false, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -149,6 +156,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
     <ShellLogout
       scope={scope}
       session={session.tag === null ? null : { tag: session.tag, at: session.at }}
+      endsOnDevice={endsOnDevice}
       className={styles.account}
       buttonClassName={styles.signOut}
       lead={role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}

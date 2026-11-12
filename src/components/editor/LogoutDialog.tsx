@@ -16,8 +16,10 @@
  * After a submission the server confirmed, what this device holds of the
  * work is offered for deletion the same way, with two clicks (F-154, owner
  * decision 1.3). "Odjavi se" still leaves it on this device (D-118).
- * Without the server's answer the sign-out has still ended here (#1330): the
- * dialog only says so and offers "Zatvori", no second try (#1444).
+ * In the editor, without the server's answer the sign-out has still ended
+ * here (#1330): the dialog only says so and offers "Zatvori", no second try
+ * (#1444). The shell passes `unconfirmed` instead (F-285): nothing ended, the
+ * dialog says the sign-out is unconfirmed and offers it again.
  */
 
 import { useEffect, useId, useRef, useState, type MouseEvent, type RefObject, type SyntheticEvent } from "react";
@@ -47,6 +49,11 @@ export type LogoutDialogProps = {
   working: boolean;
   /** The sign-out ended on this device without the server's answer (#1330). */
   signedOutHere: boolean;
+  /**
+   * The last sign-out got no confirmation from the server, so nothing has
+   * ended (F-285): the dialog says so and the confirm button tries again.
+   */
+  unconfirmed?: boolean;
   onConfirm: () => void;
   onStay: () => void;
   onExport: () => void;
@@ -68,6 +75,7 @@ export default function LogoutDialog({
   plan,
   working,
   signedOutHere,
+  unconfirmed = false,
   onConfirm,
   onStay,
   onExport,
@@ -134,10 +142,13 @@ export default function LogoutDialog({
     }
   }, [afterDiscard]);
 
-  // Its buttons are gone, so "Zatvori" takes the focus.
+  // Its buttons are gone, so "Zatvori" takes the focus. Unconfirmed: the
+  // buttons were disabled while the request ran, so "Ostani" takes it back.
+  // A repeated unconfirmed answer leaves `unconfirmed` as it was, so the end
+  // of `working` brings the focus back as well.
   useEffect(() => {
-    if (signedOutHere) stayRef.current?.focus();
-  }, [signedOutHere]);
+    if ((signedOutHere || unconfirmed) && !working) stayRef.current?.focus();
+  }, [signedOutHere, unconfirmed, working]);
 
   const askDiscard = () => {
     withdrawn.current = false;
@@ -267,12 +278,12 @@ export default function LogoutDialog({
             onConfirm={confirmAfter}
           />
         ) : null}
-        <Alert signedOutHere={signedOutHere} kept={!nothingHeld(plan)} textId={textId} discardFailed={discard === "failed"} />
+        <Alert signedOutHere={signedOutHere} unconfirmed={unconfirmed && !signedOutHere && !working} kept={!nothingHeld(plan)} textId={textId} discardFailed={discard === "failed"} />
         {signedOutHere ? <CloseAction stayRef={stayRef} onClose={onStay} /> : <MainActions
           exportFirst={exportFirst}
           offerExport={offerExport}
           working={working}
-          confirmLabel={confirmLabel}
+          confirmLabel={unconfirmed ? t.retry : confirmLabel}
           disabled={busy || asking}
           stayRef={stayRef}
           onConfirm={onConfirm}
@@ -295,11 +306,12 @@ function Intro({ textId, text, note }: { textId: string; text: string; note: str
 }
 
 /** The live region, there before its text so it is announced. Its own element for the term scan. */
-function Alert({ signedOutHere, kept, textId, discardFailed }: {
-  signedOutHere: boolean; kept: boolean; textId: string; discardFailed: boolean;
+function Alert({ signedOutHere, unconfirmed, kept, textId, discardFailed }: {
+  signedOutHere: boolean; unconfirmed: boolean; kept: boolean; textId: string; discardFailed: boolean;
 }) {
   return (
     <div role="alert">
+      {unconfirmed ? <p className={styles.error}>{t.logoutUnconfirmed}</p> : null}
       {signedOutHere ? <p id={textId} className={styles.text}>{t.logoutDevice}</p> : null}
       {signedOutHere && kept ? <p className={styles.note}>{t.logoutKept}</p> : null}
       {discardFailed ? <p className={styles.error}>{t.copyDiscardFailed}</p> : null}
