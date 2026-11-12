@@ -1684,7 +1684,7 @@ const en = {
       invalid: "The description contains invisible characters for text direction or formatting. Type it again without pasting.",
     },
     failure: {
-      network: "The connection to Ductura failed. Check your internet connection, then try again.",
+      network: "The connection to Ductura dropped before an answer arrived. The report may still have been received. Check your internet connection, then try again; if it already arrived, it will be recorded twice.",
       timeout: "Ductura did not answer in time. The report may still have been received. Try again in a few minutes; if it already arrived, it will be recorded twice.",
       signedOut: "Your session has ended. Note the description outside Ductura, sign in again, then send it.",
       tooLarge: "The description is too large to send. Shorten it, then try again.",

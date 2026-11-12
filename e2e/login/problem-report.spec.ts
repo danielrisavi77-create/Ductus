@@ -117,6 +117,18 @@ test("an unconfirmed answer does not claim the report was not sent", async ({ pa
   await expect(field).toHaveValue(DESCRIPTION);
 });
 
+// A connection that drops may drop after the report was recorded: the alert
+// keeps the description and does not say it was not sent (Codex, #1967).
+test("a lost connection does not claim the report was not sent", async ({ page }) => {
+  await page.route(ENDPOINT, (route) => route.abort("connectionreset"));
+  const { dialog } = await openDialog(page);
+  const field = dialog.getByRole("textbox", { name: t.description });
+  await field.fill(DESCRIPTION);
+  await dialog.getByRole("button", { name: t.send }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(`${t.keptLead} ${t.failure.network}`);
+  await expect(field).toHaveValue(DESCRIPTION);
+});
+
 test("a double click and a resend while sending make one request, then the reference shows", async ({ page }) => {
   const held: Route[] = [];
   const bodies: string[] = [];

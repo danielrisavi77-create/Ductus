@@ -1694,7 +1694,7 @@ export const hr = {
       invalid: "Opis sadrži nevidljive znakove za smjer ili oblikovanje teksta. Upišite opis ponovno, bez lijepljenja.",
     },
     failure: {
-      network: "Veza s Ducturom nije uspjela. Provjerite internetsku vezu pa pokušajte ponovno.",
+      network: "Veza s Ducturom prekinuta je prije odgovora. Prijava je možda ipak primljena. Provjerite internetsku vezu pa pokušajte ponovno; ako je već stigla, bit će zabilježena dvaput.",
       timeout: "Ductura nije odgovorila na vrijeme. Prijava je možda ipak primljena. Pokušajte ponovno za nekoliko minuta; ako je već stigla, bit će zabilježena dvaput.",
       signedOut: "Sesija je završila. Zapišite opis izvan Ducture, prijavite se ponovno pa ga pošaljite.",
       tooLarge: "Opis je prevelik za slanje. Skratite ga pa pokušajte ponovno.",
