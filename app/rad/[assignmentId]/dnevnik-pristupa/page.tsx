@@ -13,7 +13,7 @@ import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { readWorkDocument } from "@/server/evidence/work-document-read";
-import { pagesParam, readMyAccessLogPages } from "@/server/privacy/my-access-log-pages";
+import { type AccessLogQuery, olderHref, readMyAccessLogPage } from "@/server/privacy/my-access-log-pages";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,10 +32,10 @@ export default async function StudentAccessLogPage({
   searchParams,
 }: {
   params: Promise<{ assignmentId: string }>;
-  searchParams: Promise<{ stranica?: string | string[] }>;
+  searchParams: Promise<AccessLogQuery>;
 }) {
   const { assignmentId: raw } = await params;
-  const pages = pagesParam((await searchParams).stranica);
+  const query = await searchParams;
   const assignmentId = assignmentParam(raw);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   pageActivity(token);
@@ -70,15 +70,16 @@ export default async function StudentAccessLogPage({
   } else if (read.kind !== "ready" || doc.kind !== "document") {
     body = <p role="status">{t.accessLog.notFound}</p>;
   } else {
-    const log = await readMyAccessLogPages(token, withActor, doc.documentId, pages);
+    // One read per request, from the cursor of the address when it is valid (review FAIL c.6819070024).
+    const log = await readMyAccessLogPage(token, withActor, doc.documentId, query);
     if (log.kind === "ok") {
       logShown = true;
-      // The next page opens at the last day already read, so keyboard and reader continue there.
-      const last = log.days.at(-1);
-      const older = log.more && last ? `${here}?stranica=${pages + 1}#dan-${last.key}` : null;
-      body = <AccessLogDays days={log.days} olderHref={older} truncated={log.truncated} />;
+      const older = log.next === null ? null : olderHref(here, log.next);
+      body = <AccessLogDays days={log.days} olderHref={older} newestHref={log.continued ? here : null} />;
     } else if (log.kind === "unavailable") {
-      body = <AccessLogUnavailable retryHref={pages > 1 ? `${here}?stranica=${pages}` : here} />;
+      const { prije, zapis } = query;
+      const again = typeof prije === "string" && typeof zapis === "string" ? olderHref(here, { beforeAt: prije, beforeId: zapis }) : here;
+      body = <AccessLogUnavailable retryHref={again} />;
     } else {
       body = log.kind === "unauthorized" ? signIn : <p role="status">{t.accessLog.notFound}</p>;
     }

@@ -78,11 +78,20 @@ describe("DAN-294 S-42 view", () => {
     expect(out).toContain('dateTime="2026-10-25T01:00:00.000Z"');
   });
 
-  it("truncated: a status note that older openings exist, and only then", () => {
+  it("continuation: the newest link only when given, after the older link", () => {
     const one = [row(1, "2026-11-10T13:10:00Z")];
-    expect(renderToStaticMarkup(createElement(AccessLogDays, { days: days(one), olderHref: null, truncated: true })))
-      .toContain(`<p class="access-log__note" role="status">${a.truncated}</p>`);
-    expect(html(one)).not.toContain(a.truncated);
+    const out = renderToStaticMarkup(createElement(AccessLogDays, { days: days(one), olderHref: "/x?prije=a&zapis=b", newestHref: "/x" }));
+    expect(out).toContain(`<a class="access-log__more" href="/x">${a.newest}</a>`);
+    expect(out.indexOf(a.older)).toBeLessThan(out.indexOf(a.newest));
+    expect(html(one)).not.toContain(a.newest);
+  });
+
+  it("an empty continuation says no older openings, never that the log is empty", () => {
+    const out = renderToStaticMarkup(createElement(AccessLogDays, { days: [], olderHref: null, newestHref: "/x" }));
+    expect(out).toContain(a.noOlder);
+    expect(out).not.toContain(a.empty);
+    expect(out).toContain(`href="/x">${a.newest}</a>`);
+    expect(html([])).not.toContain(a.noOlder);
   });
 
   it("error: an alert and a retry link", () => {

@@ -32,11 +32,15 @@ function Row({ row }: { row: AccessLogRow }) {
 }
 
 /**
- * `olderHref` is the next page when one may be asked for; `truncated` says older
- * openings exist beyond the last page allowed, so a part never reads as the whole.
+ * `olderHref` is the next older page when there is one; `newestHref` is set on
+ * a continuation, which leads back to the newest days and, when empty, says no
+ * older openings exist rather than that the log is empty.
  */
-export function AccessLogDays({ days, olderHref, truncated = false }: { days: AccessLogDay[]; olderHref: string | null; truncated?: boolean }) {
-  if (days.length === 0) return <p className="access-log__note">{a.empty}</p>;
+export function AccessLogDays({ days, olderHref, newestHref = null }: { days: AccessLogDay[]; olderHref: string | null; newestHref?: string | null }) {
+  const newest = newestHref === null ? null : <p><a className="access-log__more" href={newestHref}>{a.newest}</a></p>;
+  if (days.length === 0) {
+    return newest === null ? <p className="access-log__note">{a.empty}</p> : <><p className="access-log__note">{a.noOlder}</p>{newest}</>;
+  }
   return (
     <>
       {days.map((day) => (
@@ -48,10 +52,10 @@ export function AccessLogDays({ days, olderHref, truncated = false }: { days: Ac
         </section>
       ))}
       {olderHref === null ? null : (
-        // A plain link read on the server; the page re-reads every page up to it.
+        // A plain link read on the server; it carries the cursor of the oldest row shown.
         <p><a className="access-log__more" href={olderHref}>{a.older}</a></p>
       )}
-      {truncated ? <p className="access-log__note" role="status">{a.truncated}</p> : null}
+      {newest}
     </>
   );
 }

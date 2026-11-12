@@ -3,22 +3,26 @@ import { describe, expect, it, vi } from "vitest";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
 import { ACCESS_LOG_PAGE } from "./my-access-log";
-import { ACCESS_LOG_MAX_PAGES, pagesParam, readMyAccessLogPages } from "./my-access-log-pages";
+import { type AccessLogQuery, olderHref, readMyAccessLogPage } from "./my-access-log-pages";
 
-// DAN-294 (S-42, contract on #1836, c.6814737263): "Prikaži starije dane" as
-// a page count read on the server. Invented ids and names only.
+// DAN-294 (S-42; narrowed round after review FAIL c.6819070024, contract on
+// #1836 c.6819193865): "Prikaži starije dane" as a cursor in the address, one
+// read per request, so every opening is reachable. Invented ids and names only.
 const TOKEN = "T".repeat(43);
 const DOC = "rad-izmisljeni-1";
 const CANARY = "kanarinac-stranice-7a1d";
 const id = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
 type Row = Record<string, unknown>;
+const WINDOW = 300_000;
 const START = Date.UTC(2026, 10, 10, 12);
-/** Row n of the log, n minutes·5 older than START. */
+const NOW = START + 60_000;
+/** Row n of the log, n·5 minutes older than START. */
 const row = (n: number, over: Row = {}): Row => ({
-  entry_id: id(n), opened_at: new Date(START - n * 300_000), surface: "live_view", reader_role: "mentor",
+  entry_id: id(n), opened_at: new Date(START - n * WINDOW), surface: "live_view", reader_role: "mentor",
   reader_given_name: "Nastavnik", reader_family_name: "B", ...over,
 });
 const page = (from: number, length: number) => Array.from({ length }, (_, i) => row(from + i));
+const ids = (days: { entries: { id: string }[] }[]) => days.flatMap((d) => d.entries.map((e) => e.id));
 
 /** Answers the reads in turn; a string is an error with that SQLSTATE, "network" one without any. */
 function database(answers: (Row[] | string)[]) {
@@ -37,150 +41,142 @@ function database(answers: (Row[] | string)[]) {
   return { withActor, calls };
 }
 
-const ids = (days: { entries: { id: string }[] }[]) => days.flatMap((d) => d.entries.map((e) => e.id));
+/**
+ * app.read_my_access_log as the migration states it (20261107180000): rows
+ * older than p_before_at, the whole interval of the p_limit-th row, newest
+ * first. `log` may grow between two requests.
+ */
+function rpc(log: Row[]) {
+  const withActor = vi.fn(async (_token: string | null | undefined, fn: (tx: ActorTransaction) => Promise<unknown>) =>
+    fn({
+      async query(_text: string, values?: readonly unknown[]) {
+        const [, limit, beforeAt] = values as [string, number, string | null, string | null];
+        const at = (r: Row) => (r.opened_at as Date).getTime();
+        const mine = log.filter((r) => beforeAt === null || at(r) < Date.parse(beforeAt));
+        const top = mine.map(at).sort((a, b) => b - a).slice(0, limit);
+        const edge = top.length === 0 ? Number.POSITIVE_INFINITY : top[top.length - 1];
+        const rows = mine.filter((r) => at(r) >= edge)
+          .sort((a, b) => at(b) - at(a) || ((a.entry_id as string) < (b.entry_id as string) ? 1 : -1));
+        return { rows, rowCount: rows.length };
+      },
+    } as unknown as ActorTransaction),
+  ) as unknown as WithActor;
+  return withActor;
+}
 
-describe("DAN-294 access log pages: ?stranica=", () => {
+/** The query a link carries, as Next.js hands it to the page. */
+function queryOf(href: string): AccessLogQuery {
+  const params = new URL(href, "http://x").searchParams;
+  return { prije: params.get("prije") ?? undefined, zapis: params.get("zapis") ?? undefined };
+}
+
+const HERE = "/rad/z/dnevnik-pristupa";
+const AT = new Date(START - 3 * WINDOW).toISOString();
+
+// Contract (a): every class of the cursor in the address, one table. A cursor
+// that is not valid reads the first page: the query never carries it.
+describe("DAN-294 access log cursor: the classes of input", () => {
   it.each([
-    [undefined, 1], ["1", 1], ["2", 2], ["20", 20], ["21", ACCESS_LOG_MAX_PAGES], ["99", ACCESS_LOG_MAX_PAGES],
-    ["0", 1], ["-1", 1], ["01", 1], ["1.5", 1], ["100", 1], ["", 1], [" 2", 1], ["2abc", 1], [["2", "3"], 1],
-  ] as [string | string[] | undefined, number][])("%j is %d page(s)", (raw, pages) => {
-    expect(pagesParam(raw)).toBe(pages);
+    ["no cursor", {}, null],
+    ["a valid cursor", { prije: AT, zapis: id(3) }, [AT, id(3)]],
+    ["a valid cursor in another zone", { prije: "2026-11-10T12:45:00+01:00", zapis: id(3) }, [AT, id(3)]],
+    ["an unknown id (a position only: the read compares opened_at)", { prije: AT, zapis: id(4242) }, [AT, id(4242)]],
+    ["the current interval", { prije: new Date(START).toISOString(), zapis: id(1) }, [new Date(START).toISOString(), id(1)]],
+    ["half a pair: no id", { prije: AT }, null],
+    ["half a pair: no instant", { zapis: id(3) }, null],
+    ["a repeated parameter", { prije: [AT, AT], zapis: id(3) }, null],
+    ["an empty instant", { prije: "", zapis: id(3) }, null],
+    ["garbage", { prije: "jucer", zapis: "nesto" }, null],
+    ["an upper-case id", { prije: AT, zapis: id(0xabc).toUpperCase() }, null],
+    ["an id not a uuid", { prije: AT, zapis: "00000000-0000-4000-8000-00000000000g" }, null],
+    ["an impossible date", { prije: "2026-02-30T12:00:00Z", zapis: id(3) }, null],
+    ["hour 24", { prije: "2026-11-09T24:00:00Z", zapis: id(3) }, null],
+    ["microseconds", { prije: "2026-11-10T11:45:00.000001Z", zapis: id(3) }, null],
+    ["milliseconds off the grid", { prije: "2026-11-10T11:45:00.001Z", zapis: id(3) }, null],
+    ["off the five-minute grid", { prije: "2026-11-10T11:47:00Z", zapis: id(3) }, null],
+    ["no zone", { prije: "2026-11-10T11:45:00", zapis: id(3) }, null],
+    ["in the future", { prije: new Date(START + WINDOW).toISOString(), zapis: id(3) }, null],
+    ["far in the future", { prije: "9999-12-31T23:55:00Z", zapis: id(3) }, null],
+    ["the old page count", { stranica: "21" } as AccessLogQuery, null],
+  ] as [string, AccessLogQuery, [string, string] | null][])("%s", async (_, query, cursor) => {
+    const { withActor, calls } = database([page(1, 2)]);
+    const read = await readMyAccessLogPage(TOKEN, withActor, DOC, query, NOW);
+    expect(calls).toEqual([[DOC, ACCESS_LOG_PAGE, ...(cursor ?? [null, null])]]);
+    expect(read).toMatchObject({ kind: "ok", continued: cursor !== null, next: null });
   });
-});
 
-describe("DAN-294 access log pages: the read", () => {
-  it("one page that is not full: one read, no older page offered", async () => {
-    const { withActor, calls } = database([page(1, 3)]);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 3);
+  it("past the 1000th opening: following the links reaches opening 1001, every opening once", async () => {
+    const log = page(1, 1001);
+    const withActor = rpc(log);
+    const shown: string[] = [];
+    let query: AccessLogQuery = {};
+    for (let request = 0; request < 1001; request += 1) {
+      const read = await readMyAccessLogPage(TOKEN, withActor, DOC, query, NOW);
+      if (read.kind !== "ok") throw new Error(read.kind);
+      shown.push(...ids(read.days));
+      if (read.next === null) break;
+      query = queryOf(olderHref(HERE, read.next));
+    }
+    expect(withActor).toHaveBeenCalledTimes(Math.ceil(1001 / ACCESS_LOG_PAGE));
+    expect(shown).toContain(id(1001));
+    expect(shown).toEqual(log.map((r) => r.entry_id));
+  });
+
+  it("one read per request, however deep the cursor", async () => {
+    const { withActor, calls } = database([page(900, ACCESS_LOG_PAGE)]);
+    const deep = new Date(START - 899 * WINDOW).toISOString();
+    const read = await readMyAccessLogPage(TOKEN, withActor, DOC, { prije: deep, zapis: id(899) }, NOW);
     expect(calls).toHaveLength(1);
-    expect(read).toMatchObject({ kind: "ok", more: false });
-    if (read.kind === "ok") expect(ids(read.days)).toEqual([id(1), id(2), id(3)]);
+    expect(read).toMatchObject({ kind: "ok", continued: true, next: { beforeAt: new Date(START - 949 * WINDOW).toISOString(), beforeId: id(949) } });
   });
 
-  it("a full first page offers an older one and reads no further than asked", async () => {
-    const { withActor, calls } = database([page(1, ACCESS_LOG_PAGE), page(ACCESS_LOG_PAGE + 1, 2)]);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 1);
-    expect(calls).toHaveLength(1);
-    expect(read).toMatchObject({ kind: "ok", more: true });
-  });
-
-  it("the second page starts at the first page's oldest row and is appended after it", async () => {
-    const { withActor, calls } = database([page(1, ACCESS_LOG_PAGE), page(ACCESS_LOG_PAGE + 1, 2)]);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 2);
-    const oldest = row(ACCESS_LOG_PAGE);
-    expect(calls[1]).toEqual([DOC, ACCESS_LOG_PAGE, (oldest.opened_at as Date).toISOString(), oldest.entry_id]);
-    expect(read).toMatchObject({ kind: "ok", more: false });
-    if (read.kind === "ok") expect(ids(read.days)).toEqual(page(1, ACCESS_LOG_PAGE + 2).map((r) => r.entry_id));
-  });
-
-  it("concurrency: an opening written between the reads, or a repeated row, never enters the middle or shows twice", async () => {
-    const newer = row(999, { opened_at: new Date(START + 600_000) });
-    const { withActor } = database([page(1, ACCESS_LOG_PAGE), [row(ACCESS_LOG_PAGE), newer, row(ACCESS_LOG_PAGE + 1)]]);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 2);
-    expect(read.kind).toBe("ok");
-    if (read.kind !== "ok") return;
-    expect(ids(read.days)).toEqual(page(1, ACCESS_LOG_PAGE + 1).map((r) => r.entry_id));
-    expect(ids(read.days)).not.toContain(id(999));
+  it("the older link carries the oldest row shown, encoded", () => {
+    expect(olderHref(HERE, { beforeAt: AT, beforeId: id(3) }))
+      .toBe(`${HERE}?prije=${encodeURIComponent(AT)}&zapis=${id(3)}`);
   });
 
   it.each([
-    ["ZD401", "unauthorized"], ["ZD403", "not_found"], ["57014", "unavailable"],
-  ])("a later page failing with %s fails the whole read as %s, with no part of the log", async (code, kind) => {
-    const { withActor } = database([page(1, ACCESS_LOG_PAGE), code]);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 3);
+    ["ZD401", "unauthorized"], ["ZD403", "not_found"], ["57014", "unavailable"], ["network", "unavailable"],
+  ])("a continuation failing with %s is %s, with no part of the log", async (code, kind) => {
+    const { withActor } = database([code]);
+    const read = await readMyAccessLogPage(TOKEN, withActor, DOC, { prije: AT, zapis: id(3) }, NOW);
     expect(read).toEqual({ kind });
     expect(JSON.stringify(read)).not.toContain(CANARY);
   });
 
-  it("another student's work answers as an unknown one: not_found, no row", async () => {
-    const { withActor } = database(["ZD403"]);
-    expect(await readMyAccessLogPages(TOKEN, withActor, "rad-tudji-2", 1)).toEqual({ kind: "not_found" });
-  });
-
-  it("a malformed row anywhere makes the read unavailable rather than guessed", async () => {
-    const { withActor } = database([page(1, ACCESS_LOG_PAGE), [row(ACCESS_LOG_PAGE + 1, { opened_at: new Date(START - 7 * 60_000 - ACCESS_LOG_PAGE * 300_000) })]]);
-    expect(await readMyAccessLogPages(TOKEN, withActor, DOC, 2)).toEqual({ kind: "unavailable" });
-  });
-
-  it("a full last page allowed is never shown as the whole log: no older link, but truncated", async () => {
-    const answers = Array.from({ length: ACCESS_LOG_MAX_PAGES }, (_, p) => page(1 + p * ACCESS_LOG_PAGE, ACCESS_LOG_PAGE));
-    const { withActor, calls } = database(answers);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, ACCESS_LOG_MAX_PAGES);
-    expect(calls).toHaveLength(ACCESS_LOG_MAX_PAGES);
-    expect(read).toMatchObject({ kind: "ok", more: false, truncated: true });
-  });
-
-  it("a last page allowed that is not full is the whole log: not truncated", async () => {
-    const answers = Array.from({ length: ACCESS_LOG_MAX_PAGES }, (_, p) =>
-      page(1 + p * ACCESS_LOG_PAGE, p === ACCESS_LOG_MAX_PAGES - 1 ? 3 : ACCESS_LOG_PAGE));
-    const { withActor } = database(answers);
-    expect(await readMyAccessLogPages(TOKEN, withActor, DOC, ACCESS_LOG_MAX_PAGES)).toMatchObject({ kind: "ok", more: false, truncated: false });
-  });
-
-  it("below the last page allowed a full page offers the next one and is not truncated", async () => {
-    const { withActor } = database([page(1, ACCESS_LOG_PAGE)]);
-    expect(await readMyAccessLogPages(TOKEN, withActor, DOC, 1)).toMatchObject({ kind: "ok", more: true, truncated: false });
-  });
-
-  it("no session token never reaches the database", async () => {
+  it("no session token never reaches the database, cursor or not", async () => {
     const { withActor, calls } = database([page(1, 1)]);
-    expect(await readMyAccessLogPages(undefined, withActor, DOC, 2)).toEqual({ kind: "unauthorized" });
+    expect(await readMyAccessLogPage(undefined, withActor, DOC, { prije: AT, zapis: id(3) }, NOW)).toEqual({ kind: "unauthorized" });
     expect(calls).toHaveLength(0);
   });
 });
 
-// Contract #1836 c.6818467514 (a): every class of input to the paged read, one table.
-describe("DAN-294 access log pages: the classes of input", () => {
-  const malformed = [row(1, { opened_at: new Date(START - 7 * 60_000) })];
-  it.each([
-    ["an empty log", [[]], 3, { kind: "ok", more: false, truncated: false }, [], 1],
-    ["one page that is not full", [page(1, 2)], 3, { kind: "ok", more: false }, [1, 2], 1],
-    ["a next-page cursor", [page(1, ACCESS_LOG_PAGE), page(ACCESS_LOG_PAGE + 1, 1)], 2, { kind: "ok", more: false },
-      Array.from({ length: ACCESS_LOG_PAGE + 1 }, (_, i) => i + 1), 2],
-    ["an unavailable answer on the first page", ["57014"], 2, { kind: "unavailable" }, null, 1],
-    ["an unavailable answer on a later page", [page(1, ACCESS_LOG_PAGE), "57014"], 2, { kind: "unavailable" }, null, 2],
-    ["a malformed row from the reader", [malformed], 1, { kind: "unavailable" }, null, 1],
-    ["a network error on the first page", ["network"], 2, { kind: "unavailable" }, null, 1],
-    ["a network error on a later page", [page(1, ACCESS_LOG_PAGE), "network"], 3, { kind: "unavailable" }, null, 2],
-  ] as [string, (Row[] | string)[], number, Record<string, unknown>, number[] | null, number][])(
-    "%s", async (_, answers, pages, shape, rowsShown, reads) => {
-      const { withActor, calls } = database(answers);
-      const read = await readMyAccessLogPages(TOKEN, withActor, DOC, pages);
-      expect(calls).toHaveLength(reads);
-      expect(read).toMatchObject(shape);
-      expect(JSON.stringify(read)).not.toContain(CANARY);
-      if (rowsShown === null) expect(read).toEqual(shape);
-      else if (read.kind === "ok") expect(ids(read.days)).toEqual(rowsShown.map(id));
-    });
-});
-
-// Contract #1836 c.6818467514 (b): an opening written between two pages.
-describe("DAN-294 access log pages: concurrency across the cursor", () => {
-  it("a first page longer than the limit (one whole interval) and its continuation show every row once, none skipped", async () => {
-    // The RPC ends a page on a whole interval: rows 50..52 share the oldest interval of page one.
-    const tied = (n: number) => row(n, { opened_at: new Date(START - ACCESS_LOG_PAGE * 300_000) });
-    const first = [...page(1, ACCESS_LOG_PAGE - 1), tied(ACCESS_LOG_PAGE), tied(ACCESS_LOG_PAGE + 1), tied(ACCESS_LOG_PAGE + 2)];
-    const older = [row(ACCESS_LOG_PAGE + 3), row(ACCESS_LOG_PAGE + 4)];
-    const { withActor, calls } = database([first, older]);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 2);
-    expect(calls[1]?.[2]).toBe(new Date(START - ACCESS_LOG_PAGE * 300_000).toISOString());
-    expect(read.kind).toBe("ok");
-    if (read.kind !== "ok") return;
-    const shown = ids(read.days);
-    expect(new Set(shown).size).toBe(shown.length);
-    expect([...shown].sort()).toEqual(page(1, ACCESS_LOG_PAGE + 4).map((r) => r.entry_id as string).sort());
+// Contract (b): an opening written between two requests.
+describe("DAN-294 access log cursor: concurrency between requests", () => {
+  it("an opening written after the first request is neither a duplicate nor makes a row skipped in the continuation", async () => {
+    const log = page(1, ACCESS_LOG_PAGE + 5);
+    const withActor = rpc(log);
+    const first = await readMyAccessLogPage(TOKEN, withActor, DOC, {}, NOW);
+    if (first.kind !== "ok" || first.next === null) throw new Error("first page");
+    // Written meanwhile: one in the current interval, one into the cursor's own interval.
+    log.push(row(9001, { opened_at: new Date(START) }), row(9002, { opened_at: new Date(first.next.beforeAt) }));
+    const second = await readMyAccessLogPage(TOKEN, withActor, DOC, queryOf(olderHref(HERE, first.next)), NOW);
+    if (second.kind !== "ok") throw new Error("second page");
+    const both = [...ids(first.days), ...ids(second.days)];
+    expect(new Set(both).size).toBe(both.length);
+    expect(both).toEqual(page(1, ACCESS_LOG_PAGE + 5).map((r) => r.entry_id));
+    // The new openings are not lost: a fresh first page shows them.
+    const fresh = await readMyAccessLogPage(TOKEN, withActor, DOC, {}, NOW);
+    if (fresh.kind !== "ok") throw new Error("fresh page");
+    expect(ids(fresh.days)).toEqual(expect.arrayContaining([id(9001)]));
   });
 
-  it("negative: a continuation that repeats the cursor's interval, plus a row written into it meanwhile, adds neither", async () => {
-    const edge = new Date(START - ACCESS_LOG_PAGE * 300_000);
-    const lateInEdge = row(998, { opened_at: edge });
-    const { withActor } = database([page(1, ACCESS_LOG_PAGE), [row(ACCESS_LOG_PAGE), lateInEdge, row(ACCESS_LOG_PAGE + 1)]]);
-    const read = await readMyAccessLogPages(TOKEN, withActor, DOC, 2);
-    expect(read.kind).toBe("ok");
+  it("negative: a continuation that repeats rows of the cursor's interval, plus a newer one, is not shown twice", async () => {
+    const edge = new Date(START - ACCESS_LOG_PAGE * WINDOW);
+    const { withActor } = database([[row(ACCESS_LOG_PAGE), row(998, { opened_at: new Date(START) }), row(998, { opened_at: edge }), row(ACCESS_LOG_PAGE + 1)]]);
+    const read = await readMyAccessLogPage(TOKEN, withActor, DOC, { prije: edge.toISOString(), zapis: id(ACCESS_LOG_PAGE) }, NOW);
+    expect(read).toMatchObject({ kind: "ok" });
     if (read.kind !== "ok") return;
-    const shown = ids(read.days);
-    expect(shown.filter((x) => x === id(ACCESS_LOG_PAGE))).toHaveLength(1);
-    expect(shown).not.toContain(id(998));
-    expect(shown).toContain(id(ACCESS_LOG_PAGE + 1));
+    expect(ids(read.days)).toEqual([id(ACCESS_LOG_PAGE + 1)]);
   });
 });

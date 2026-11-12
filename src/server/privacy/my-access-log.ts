@@ -40,7 +40,7 @@ function isDocumentId(value: string): boolean {
 }
 
 /** The cursor as an ISO instant on the five-minute grid and a lower-case uuid, or null. */
-function cursorOf(cursor: AccessLogCursor): [string, string] | null {
+export function cursorOf(cursor: AccessLogCursor): [string, string] | null {
   const ms = zonedInstantOf(cursor.beforeAt);
   if (!Number.isFinite(ms) || ms % WINDOW_MS !== 0 || !UUID.test(cursor.beforeId)) return null;
   return [new Date(ms).toISOString(), cursor.beforeId];

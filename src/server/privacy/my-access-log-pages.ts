@@ -1,58 +1,63 @@
-import { type AccessLogDay, accessLogDaysOf, mergeAccessLogPages } from "@/domain/privacy/access-log-days";
+import { type AccessLogDay, accessLogDaysOf, accessLogEntryOf } from "@/domain/privacy/access-log-days";
 import type { WithActor } from "@/server/db/with-actor";
 
-import { type AccessLogCursor, readMyAccessLog } from "./my-access-log";
+import { type AccessLogCursor, cursorOf, readMyAccessLog } from "./my-access-log";
 
 /**
- * DAN-294 (S-42, contract on #1836, c.6814737263): "Prikaži starije dane"
- * without client code. The page asks for `?stranica=n` and the server reads
- * the first n pages in turn, each with the cursor the one before gave, and
- * appends each continuation through mergeAccessLogPages: an opening written
- * between two reads never enters the middle and no row is shown twice. Any
- * page that fails fails the whole read, so the student never sees part of a
- * log as if it were all of it. At most ACCESS_LOG_MAX_PAGES pages are read;
- * when the last of them is still full, `truncated` says older openings exist
- * that this page does not reach, and the screen says so.
+ * DAN-294 (S-42; review FAIL c.6819070024, contract on #1836 c.6819193865):
+ * "Prikaži starije dane" without client code and without a last page. The
+ * address carries the cursor of the oldest row shown (`?prije=<opened_at>&
+ * zapis=<id>`) and each request makes exactly one read from it, so every
+ * opening is reachable by following the links (PRODUCT §5 rule 17).
+ *
+ * The cursor is the student's input: it passes the reader's own check
+ * (calendar, microseconds, five-minute grid, a lower-case uuid) and may not
+ * lie in the future; anything else reads the first page, never a query with
+ * that cursor. The read takes only intervals strictly older than the cursor,
+ * and an opening is written only into the current interval, so one written
+ * between two requests shows on a fresh first page, never inside a
+ * continuation; a row not older than the cursor is left out all the same.
  */
 
-export const ACCESS_LOG_MAX_PAGES = 20;
-
-/** `?stranica=` as a page count, 1 when absent or not a whole number in range. */
-export function pagesParam(raw: string | string[] | undefined): number {
-  if (typeof raw !== "string" || !/^[1-9][0-9]?$/.test(raw)) return 1;
-  return Math.min(Number(raw), ACCESS_LOG_MAX_PAGES);
+/** The query of the page as Next.js hands it; any other parameter, `stranica` too, is ignored. */
+export interface AccessLogQuery {
+  prije?: string | string[];
+  zapis?: string | string[];
 }
 
-export type MyAccessLogPages =
-  /**
-   * `more` is true when an older page exists and another may be asked for;
-   * `truncated` when an older page exists beyond the last page allowed.
-   */
-  | { kind: "ok"; days: AccessLogDay[]; more: boolean; truncated: boolean }
+export type MyAccessLogPage =
+  /** `next` is the cursor of an older page, null when there is none; `continued` when read from a cursor. */
+  | { kind: "ok"; days: AccessLogDay[]; next: AccessLogCursor | null; continued: boolean }
   | { kind: "unauthorized" | "not_found" | "unavailable" };
 
-export async function readMyAccessLogPages(
+/** The cursor of the address, or null for the first page. */
+function cursorParam(query: AccessLogQuery, now: number): AccessLogCursor | null {
+  const { prije, zapis } = query;
+  if (typeof prije !== "string" || typeof zapis !== "string") return null;
+  const checked = cursorOf({ beforeAt: prije, beforeId: zapis });
+  if (checked === null || Date.parse(checked[0]) > now) return null;
+  return { beforeAt: checked[0], beforeId: checked[1] };
+}
+
+/** The address of the next older page. */
+export function olderHref(here: string, next: AccessLogCursor): string {
+  return `${here}?prije=${encodeURIComponent(next.beforeAt)}&zapis=${encodeURIComponent(next.beforeId)}`;
+}
+
+export async function readMyAccessLogPage(
   sessionToken: string | undefined,
   withActor: WithActor,
   documentId: string,
-  pages: number,
-): Promise<MyAccessLogPages> {
-  let rows: Record<string, unknown>[] = [];
-  let cursor: AccessLogCursor | undefined;
-  let more = false;
-  for (let page = 0; page < pages; page += 1) {
-    const read = await readMyAccessLog(sessionToken, withActor, documentId, cursor);
-    if (read.kind !== "ok") return { kind: read.kind };
-    rows = page === 0 ? read.rows : mergeAccessLogPages(rows, read.rows);
-    if (read.next === null) {
-      more = false;
-      break;
-    }
-    cursor = read.next;
-    more = true;
-  }
-  const days = accessLogDaysOf(rows);
+  query: AccessLogQuery,
+  now: number = Date.now(),
+): Promise<MyAccessLogPage> {
+  const cursor = cursorParam(query, now);
+  const read = await readMyAccessLog(sessionToken, withActor, documentId, cursor ?? undefined);
+  if (read.kind !== "ok") return { kind: read.kind };
+  if (cursor === null) return { kind: "ok", days: read.days, next: read.next, continued: false };
+  const edge = Date.parse(cursor.beforeAt);
+  const older = read.rows.filter((r) => (accessLogEntryOf(r)?.at ?? Number.NEGATIVE_INFINITY) < edge);
+  const days = accessLogDaysOf(older);
   if (days === null) return { kind: "unavailable" };
-  const capped = pages >= ACCESS_LOG_MAX_PAGES;
-  return { kind: "ok", days, more: more && !capped, truncated: more && capped };
+  return { kind: "ok", days, next: read.next, continued: true };
 }
