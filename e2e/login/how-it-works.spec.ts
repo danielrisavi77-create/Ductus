@@ -1,4 +1,7 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
@@ -19,6 +22,28 @@ import { SESSION_COOKIE, appCookie, signIn } from "./support";
 const HREF = "/kako-radi";
 const REQUEST = "Zahtjev e2e J-02/2026";
 const h = t.howItWorks;
+const run = promisify(execFile);
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const TEACHER_ID = "demo-teacher@demo.ductus.test";
+const ACTIVE_TEACHER = `FROM institution.institution_role r JOIN identity.user_account u ON u.id = r.user_id
+  WHERE u.hr_edu_person_unique_id = $1 AND r.role = 'teacher' AND r.revoked_at IS NULL`;
+
+async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
+  const client = new pg.Client({ connectionString: localAdminUrl() });
+  await client.connect();
+  try {
+    return await work(client);
+  } finally {
+    await client.end();
+  }
+}
+
+/** The side bar's space line: which shell the server read for this page. */
+async function expectSpace(page: Page, role: "teacher" | "student"): Promise<void> {
+  await expect(page.getByText(t.shell.space[role], { exact: true })).toBeVisible();
+  const other = role === "teacher" ? "student" : "teacher";
+  await expect(page.getByText(t.shell.space[other], { exact: true })).toHaveCount(0);
+}
 
 async function shoot(page: Page, name: string): Promise<void> {
   for (const theme of ["light", "dark"] as const) {
@@ -56,18 +81,14 @@ async function expectPage(page: Page): Promise<void> {
 }
 
 async function operator(token: string, procedure: "appoint" | "revoke"): Promise<void> {
-  const client = new pg.Client({ connectionString: localAdminUrl() });
-  await client.connect();
-  try {
+  await withAdmin(async (client) => {
     const { rows } = await client.query<{ id: string }>(
       `SELECT s.user_id AS id FROM identity.session s WHERE s.token_hash = $1`,
       [createHash("sha256").update(token, "utf8").digest()],
     );
     expect(rows).toHaveLength(1);
     await client.query(`SELECT institution.${procedure}_institution_admin($1, $2)`, [rows[0]!.id, REQUEST]);
-  } finally {
-    await client.end();
-  }
+  });
 }
 
 test("signed out: the page, with no navigation and no sign-out", async ({ page }) => {
@@ -82,19 +103,36 @@ test("a student: the same page in the student shell", async ({ page }) => {
   await expectPage(page);
   const nav = page.getByRole("navigation", { name: t.shell.workNav });
   await expect(nav.getByRole("link", { name: t.shell.nav.assignments })).toBeVisible();
+  await expectSpace(page, "student");
   await shoot(page, "kako-radi-student");
 });
 
+// "Demo nastavnik" holds the teacher role only once the local operator grants
+// it (K-3), as in teacher-home.spec.ts; a role this test granted is revoked.
 test("a teacher: the same page in the teacher shell, reached from the side bar", async ({ page }) => {
-  await signIn(page, "/nastavnik", "Demo nastavnik");
-  await page.getByRole("link", { name: t.shell.howItWorks }).click();
-  await expect(page).toHaveURL(new RegExp(`${HREF}$`));
-  await expectPage(page);
-  const nav = page.getByRole("navigation", { name: t.shell.workNav });
-  await expect(nav.getByRole("link", { name: t.shell.nav.courses })).toBeVisible();
-  await shoot(page, "kako-radi-nastavnik");
+  await signIn(page, "/", "Demo nastavnik");
+  const granted = (await withAdmin((client) => client.query(`SELECT 1 ${ACTIVE_TEACHER}`, [TEACHER_ID]))).rowCount === 0;
+  await run("node", ["scripts/local/provision-teacher.mjs"], { cwd: ROOT });
+  try {
+    await page.goto("/nastavnik");
+    await page.getByRole("link", { name: t.shell.howItWorks }).click();
+    await expect(page).toHaveURL(new RegExp(`${HREF}$`));
+    await expectPage(page);
+    const nav = page.getByRole("navigation", { name: t.shell.workNav });
+    await expect(nav.getByRole("link", { name: t.shell.nav.newCourse, exact: true })).toBeVisible();
+    await expectSpace(page, "teacher");
+    await shoot(page, "kako-radi-nastavnik");
+  } finally {
+    if (granted) {
+      await withAdmin((client) => client.query(
+        `UPDATE institution.institution_role SET revoked_at = now() WHERE id IN (SELECT r.id ${ACTIVE_TEACHER} AND r.confirmed_by IS NULL)`,
+        [TEACHER_ID]));
+    }
+  }
 });
 
+// The administrator holds no teacher role on the local stack, so the base
+// role the shell reads is the student's; the admin shell stays on /ustanova.
 test("an administrator: the same page, in the shell of the base role", async ({ page }) => {
   await signIn(page, "/zadaci", "Ustanova B: nastavnica");
   const token = (await appCookie(page.context(), SESSION_COOKIE))?.value;
@@ -103,6 +141,8 @@ test("an administrator: the same page, in the shell of the base role", async ({ 
   try {
     await expectPage(page);
     await expect(page.getByRole("link", { name: t.shell.nav.institution })).toHaveCount(0);
+    await expect(page.getByText(t.shell.space.admin, { exact: true })).toHaveCount(0);
+    await expectSpace(page, "student");
     await shoot(page, "kako-radi-administrator");
   } finally {
     await operator(token!, "revoke");
