@@ -379,6 +379,8 @@ function sqlObjects(sql: string): { tables: string[]; functions: [string, string
   for (const m of bare.matchAll(ALTER_QUOTED)) errors.push(`alter with a quoted identifier not supported: ${seen(m)}`);
   let outside = bare;
   for (const d of bodies) outside = outside.slice(0, d.start) + " ".repeat(d.end - d.start) + outside.slice(d.end);
+  // A `;` inside a string or quoted name must not end the SELECT_INTO scan early; lexSql already errored on unbalanced quotes.
+  outside = outside.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, (q) => " ".repeat(q.length));
   for (const m of outside.matchAll(SELECT_INTO)) errors.push(`select into creates a table, not supported: ${seen(m)}`);
   const heads = [...bare.matchAll(FUNCTION_HEAD)];
   for (const [i, m] of heads.entries()) {
@@ -664,6 +666,8 @@ describe("sqlObjects", () => {
 
   it.each([
     ["a select into a new table", "SELECT 1 AS id INTO evidence.unlisted;"],
+    ["a semicolon in a string before into", "SELECT ';' AS sep, 1 AS id INTO evidence.unlisted;"],
+    ["a semicolon in a quoted name before into", 'SELECT 1 AS "a;b" INTO evidence.unlisted;'],
     ["a multi-line select into", "select a,\n  b\ninto temp x\nfrom y;"],
   ])("flags %s", (_n, sql) => {
     expect(sqlObjects(sql).errors.some((e) => e.includes("select into"))).toBe(true);
