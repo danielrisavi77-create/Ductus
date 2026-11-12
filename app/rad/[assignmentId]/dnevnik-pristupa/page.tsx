@@ -12,7 +12,7 @@ import { pageActivity } from "@/server/auth/activity";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
-import { readWorkDocument } from "@/server/evidence/work-document-read";
+import { readOwnWorkDocument, readWorkDocument } from "@/server/evidence/work-document-read";
 import { type AccessLogQuery, olderHref, readMyAccessLogPage } from "@/server/privacy/my-access-log-pages";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,10 @@ export const metadata = { title: `${t.accessLog.context} · ${t.app.name}` };
  * `/rad/<id>/reprodukcija`; loading this page never starts a work. The log is
  * read on the server through app.read_my_access_log, which answers only for
  * the owner of the session; another student's work, an unknown one and a
- * failed read never show a row.
+ * failed read never show a row. The owner's own work is found apart from the
+ * right to write, so the log stays readable after the membership ends and
+ * before a new notice is acknowledged (PRODUCT §5 rule 17, review FAIL
+ * c.6820050088).
  */
 export default async function StudentAccessLogPage({
   params,
@@ -41,13 +44,15 @@ export default async function StudentAccessLogPage({
   pageActivity(token);
   // The cookie digest and the server time of this render (D-118).
   const { tag, at } = shellSession(token);
-  const [principal, read, role, doc] = await Promise.all([
+  const [principal, read, role, doc, own] = await Promise.all([
     sessionPrincipal(token, withActor),
     readWorkContext(token, assignmentId, withActor),
     readShellRole(token, withActor),
     readWorkDocument(token, assignmentId, withActor),
+    readOwnWorkDocument(token, assignmentId, withActor),
   ]);
-  if (read.kind === "noticeFirst" && assignmentId) redirect(`/zadatak/${assignmentId}`);
+  // Only a student without an own work goes to the notice first; the owner reads the log regardless.
+  if (read.kind === "noticeFirst" && assignmentId && own.kind !== "document") redirect(`/zadatak/${assignmentId}`);
   const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
   const here = `/rad/${encodeURIComponent(raw)}/dnevnik-pristupa`;
 
@@ -65,13 +70,11 @@ export default async function StudentAccessLogPage({
     body = <p role="status">{t.accessLog.invalid}</p>;
   } else if (session === null) {
     body = signIn;
-  } else if (read.kind === "ready" && doc.kind === "notOpened") {
-    body = <p role="status">{t.accessLog.notStarted}</p>;
-  } else if (read.kind !== "ready" || doc.kind !== "document") {
-    body = <p role="status">{t.accessLog.notFound}</p>;
+  } else if (own.kind !== "document") {
+    body = <p role="status">{read.kind === "ready" && doc.kind === "notOpened" ? t.accessLog.notStarted : t.accessLog.notFound}</p>;
   } else {
     // One read per request, from the cursor of the address when it is valid (review FAIL c.6819070024).
-    const log = await readMyAccessLogPage(token, withActor, doc.documentId, query);
+    const log = await readMyAccessLogPage(token, withActor, own.documentId, query);
     if (log.kind === "ok") {
       logShown = true;
       const older = log.next === null ? null : olderHref(here, log.next);

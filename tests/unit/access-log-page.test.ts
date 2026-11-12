@@ -11,9 +11,10 @@ const state: {
   token?: string;
   read: unknown;
   doc: unknown;
+  own: unknown;
   log: unknown;
   logCalls: { documentId: string; query: Record<string, unknown> }[];
-} = { read: null, doc: null, log: null, logCalls: [] };
+} = { read: null, doc: null, own: null, log: null, logCalls: [] };
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => (state.token ? { value: state.token } : undefined) }),
@@ -44,7 +45,10 @@ vi.mock("@/components/student/work-context-read", async (actual) => ({
   ...(await actual<object>()),
   readWorkContext: async () => state.read,
 }));
-vi.mock("@/server/evidence/work-document-read", () => ({ readWorkDocument: async () => state.doc }));
+vi.mock("@/server/evidence/work-document-read", () => ({
+  readWorkDocument: async () => state.doc,
+  readOwnWorkDocument: async () => state.own,
+}));
 vi.mock("@/server/privacy/my-access-log-pages", async (actual) => ({
   ...(await actual<object>()),
   readMyAccessLogPage: async (_token: unknown, _withActor: unknown, documentId: string, query: Record<string, unknown>) => {
@@ -75,6 +79,7 @@ beforeEach(() => {
   state.token = "T".repeat(43);
   state.read = ready;
   state.doc = { kind: "document", documentId: "dokument-1" };
+  state.own = { kind: "document", documentId: "dokument-1" };
   state.log = { kind: "ok", days, next: null, continued: false };
   state.logCalls = [];
 });
@@ -94,13 +99,15 @@ describe("DAN-294 S-42 page states", () => {
     expect(state.logCalls).toEqual([]);
   });
 
-  it("an unacknowledged notice goes to the assignment first", async () => {
+  it("an unacknowledged notice and no own work: the assignment first", async () => {
     state.read = { kind: "noticeFirst" };
+    state.own = { kind: "none" };
     await expect(render(WORK)).rejects.toThrow(`REDIRECT /zadatak/${WORK}`);
   });
 
   it("a work not started says so and reads no log", async () => {
     state.doc = { kind: "notOpened" };
+    state.own = { kind: "none" };
     const out = await render(WORK);
     expect(out).toContain(a.notStarted);
     expect(out).not.toContain(a.note);
@@ -110,10 +117,11 @@ describe("DAN-294 S-42 page states", () => {
   it.each([
     ["another student's or an unknown work", { kind: "none" }, ready],
     ["a work not accepting", { kind: "notAccepting" }, ready],
-    ["no work context", { kind: "document", documentId: "dokument-1" }, { kind: "none" }],
-  ])("%s: not available, no row, no note, no log read", async (_name, doc, read) => {
+    ["no work context", { kind: "none" }, { kind: "none" }],
+  ])("%s, no own work: not available, no row, no note, no log read", async (_name, doc, read) => {
     state.doc = doc;
     state.read = read;
+    state.own = { kind: "none" };
     const out = await render(WORK);
     expect(out).toContain(a.notFound);
     expect(out).not.toContain(a.note);
@@ -188,5 +196,59 @@ describe("DAN-294 S-42 page states", () => {
     const out = await render(WORK);
     expect(out).toContain(a.notFound);
     expect(out).not.toContain("<li");
+  });
+});
+
+// Review FAIL c.6820050088, contract on #1836 c.6820374064 (PRODUCT §5 rule
+// 17): reading one's own log depends only on owning the work, never on an
+// active membership, an acknowledged current notice or the right to write.
+const OWN = { kind: "document", documentId: "dokument-1" };
+const NO_OWN = { kind: "none" };
+describe("DAN-294 S-42 the owner reads the log without the right to write", () => {
+  it.each([
+    ["the owner with an active membership", ready, OWN, OWN, true],
+    ["the owner before acknowledging a new notice", { kind: "noticeFirst" }, { kind: "notAccepting" }, OWN, true],
+    ["the owner after the membership ended", { kind: "none" }, { kind: "none" }, OWN, true],
+    ["another student's work", ready, { kind: "notOpened" }, NO_OWN, false],
+    ["an unknown assignment", { kind: "none" }, { kind: "none" }, NO_OWN, false],
+  ] as [string, unknown, unknown, unknown, boolean][])("%s", async (_name, read, doc, own, shown) => {
+    state.read = read;
+    state.doc = doc;
+    state.own = own;
+    const out = await render(WORK);
+    if (shown) {
+      expect(state.logCalls).toEqual([{ documentId: "dokument-1", query: {} }]);
+      expect(out).toContain(a.note);
+      expect(out.match(/<li /g)).toHaveLength(2);
+    } else {
+      expect(state.logCalls).toEqual([]);
+      expect(out).not.toContain(a.note);
+      expect(out).not.toContain("<li");
+    }
+  });
+
+  it("concurrency: the membership ends between the first page and its continuation, the owner still continues", async () => {
+    const AT = "2026-11-09T10:40:00.000Z";
+    const ID = "00000000-0000-4000-8000-000000000001";
+    state.log = { kind: "ok", days, next: { beforeAt: AT, beforeId: ID }, continued: false };
+    await render(WORK);
+    state.read = { kind: "none" };
+    state.doc = { kind: "none" };
+    state.log = { kind: "ok", days, next: null, continued: true };
+    const out = await render(WORK, { prije: AT, zapis: ID });
+    expect(state.logCalls).toEqual([
+      { documentId: "dokument-1", query: {} },
+      { documentId: "dokument-1", query: { prije: AT, zapis: ID } },
+    ]);
+    expect(out.match(/<li /g)).toHaveLength(2);
+  });
+
+  it("negative: the same ended membership does not make another student's work readable", async () => {
+    state.read = { kind: "none" };
+    state.doc = { kind: "none" };
+    state.own = NO_OWN;
+    const out = await render(WORK, { prije: "2026-11-09T10:40:00.000Z", zapis: "00000000-0000-4000-8000-000000000001" });
+    expect(out).toContain(a.notFound);
+    expect(state.logCalls).toEqual([]);
   });
 });

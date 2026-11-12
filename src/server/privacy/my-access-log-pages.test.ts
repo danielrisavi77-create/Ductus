@@ -125,6 +125,28 @@ describe("DAN-294 access log cursor: the classes of input", () => {
     expect(shown).toEqual(log.map((r) => r.entry_id));
   });
 
+  // QA FAIL c.6820006557 (contract b on #1836 c.6818467514): a first page
+  // longer than 50 rows because it holds the whole boundary interval.
+  it("49 newer rows and 3 of the boundary interval: the RPC returns 52, the continuation skips and repeats nothing", async () => {
+    const boundary = new Date(START - ACCESS_LOG_PAGE * WINDOW);
+    const edgeRows = [7003, 7001, 7002].map((n) => row(n, { opened_at: boundary }));
+    const older = page(ACCESS_LOG_PAGE + 3, 5);
+    const log = [...page(1, ACCESS_LOG_PAGE - 1), ...edgeRows, ...older];
+    const withActor = rpc(log);
+    const first = await readMyAccessLogPage(TOKEN, withActor, DOC, {}, NOW);
+    if (first.kind !== "ok" || first.next === null) throw new Error("first page");
+    expect(ids(first.days)).toHaveLength(52);
+    expect(ids(first.days).slice(-3).sort()).toEqual([id(7001), id(7002), id(7003)]);
+    expect(first.next).toEqual({ beforeAt: boundary.toISOString(), beforeId: id(7001) });
+    const second = await readMyAccessLogPage(TOKEN, withActor, DOC, queryOf(olderHref(HERE, first.next)), NOW);
+    if (second.kind !== "ok") throw new Error("second page");
+    expect(second.next).toBeNull();
+    expect(ids(second.days)).toEqual(older.map((r) => r.entry_id));
+    const both = [...ids(first.days), ...ids(second.days)];
+    expect(new Set(both).size).toBe(both.length);
+    expect([...both].sort()).toEqual(log.map((r) => r.entry_id as string).sort());
+  });
+
   it("one read per request, however deep the cursor", async () => {
     const { withActor, calls } = database([page(900, ACCESS_LOG_PAGE)]);
     const deep = new Date(START - 899 * WINDOW).toISOString();
