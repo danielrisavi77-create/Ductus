@@ -7,7 +7,7 @@ import ProblemReport from "@/components/support/ProblemReport";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import styles from "./AppShell.module.css";
-import { accountPlace, homeHref, navFor, type ShellRole } from "./nav";
+import { accountPlace, homeHref, navFor, offersProblemReport, type ShellRole } from "./nav";
 import SessionObserver from "./SessionObserver";
 import ShellLogout from "./ShellLogout";
 import type { ShellSession } from "./shell-session";
@@ -190,7 +190,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
         ) : null}
         <div className={styles.bottom}>
           {/* "Prijavi problem" (Z-10) for a signed-in person, wherever the side bar is. */}
-          {place === "signOut" ? <ProblemReport buttonClassName={styles.report} /> : null}
+          {offersProblemReport(scope) ? <ProblemReport buttonClassName={styles.report} /> : null}
           <p className={styles.note}>
             <strong>{t.shell.demoBadge}</strong>
             {t.shell.demoNote}

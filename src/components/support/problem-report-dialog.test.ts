@@ -107,8 +107,9 @@ describe("the opener", () => {
     expect(html).toBe(`<button type="button" class="x" aria-haspopup="dialog">${t.open}</button>`);
   });
 
-  it("is in the shell only for a signed-in person", () => {
+  it("is in the shell for every signed-in person, also beside a page's own sign-out", () => {
     const shell = read("src/components/shell/AppShell.tsx");
-    expect(shell).toMatch(/place === "signOut" \? <ProblemReport /);
+    expect(shell).toMatch(/offersProblemReport\(scope\) \? <ProblemReport /);
+    expect(shell).not.toMatch(/place === "signOut" \? <ProblemReport /);
   });
 });

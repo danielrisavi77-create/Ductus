@@ -43,6 +43,21 @@ test("the dialog is reachable by keyboard, passes axe and gives focus back", asy
   await expect(opener).toBeFocused();
 });
 
+// The workspace brings its own sign-out (LocalLogout, D-118); the report is
+// still in its drawer, so a student need not leave the editor (Codex, #1967).
+test("in the workspace the drawer offers the report beside its own sign-out", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, "/rad");
+  await expect(page.getByRole("banner").getByRole("button", { name: messagesHr.auth.logout, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: messagesHr.shell.openNav }).click();
+  const side = page.getByRole("complementary", { name: messagesHr.shell.sideNav });
+  await side.getByRole("button", { name: t.open }).click();
+  const dialog = page.getByRole("dialog", { name: t.title });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: t.close }).click();
+  await expect(dialog).toHaveCount(0);
+});
+
 test("an empty description is named at the field and nothing is sent", async ({ page }) => {
   let requests = 0;
   await page.route(ENDPOINT, (route) => {
