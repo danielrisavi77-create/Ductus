@@ -16,9 +16,10 @@
 -- At most five reports per account in a sliding hour. The count runs after a
 -- lock on the caller's user_account row, under READ COMMITTED, so two reports
 -- at once are put in a row and the second counts the first
--- (tests/integration/problem-report-rate-limit.integration.test.ts). No other
--- lock is taken first, and no session path locks user_account (see
--- 20261109200000_session_limit.sql), so there is no lock order to invert.
+-- (tests/integration/problem-report-rate-limit.integration.test.ts). Login
+-- also locks user_account, after inserting its session
+-- (20261109200000_session_limit.sql). This path takes no lock before
+-- user_account, so there is no lock order to invert.
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 

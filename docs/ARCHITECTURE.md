@@ -172,13 +172,13 @@ Tablice za ugrađeni AI pomoćnik (`ai_transfer`, `ai_conversation`, i, ovisno o
 | `assistance_declaration` | predaja ili poslana verzija, obrazac (koristio, nije koristio), stavke (alat, model, svrha, faza; uvijek izjavljeno), priloženi ispisi razgovora iz vanjskih alata (poveznica, izvoz ili zalijepljen tekst, D-77), refleksija, vrijeme (D-40) | Kao predaja |
 | `student_note` | predaja ili odsječak, tekst, vrijeme, zamjenjuje (prethodna napomena). Samo dodavanje | Kao predaja |
 | `access_log` | tko, što, kada, razlog (uključujući break-glass) | Administrator ustanove |
-| `data_class` | šifra klase (jedna od 30 klasa DATA-CLASS), kategorija (jedna od 8 iz C-21, vidi niže), svrha, rok čuvanja, osnova, rokovi kopija. Tablica još ne postoji na mainu; nastaje u M10.2 (D-271 MQ03) | Administrator ustanove |
+| `data_class` | šifra klase (jedna od klasa DATA-CLASS iz `docs/privacy/06-klase-podataka.md`), kategorija (jedna od 8 iz C-21, vidi niže), svrha, rok čuvanja, osnova, rokovi kopija. Tablica još ne postoji na mainu; nastaje u M10.2 (D-271 MQ03) | Administrator ustanove |
 
 Sadržaj odsječaka živi u privatnom bucketu, adresiran svojim hashom, odvojeno od metapodataka. Brisanje po roku briše sadržaj i njegove verzije, a lanac hasheva i čvorovi Merkle stabla ostaju provjerljivi uz zapis da je sadržaj obrisan. Brisanje je potpuno tek kad istekne i najdulji rok kopija (BACKEND §4.7).
 
 ### Klase podataka (C-21)
 
-Tablica niže navodi 8 kategorija iz C-21. DATA-CLASS ima 30 klasa i svaka pripada točno jednoj od tih kategorija; rok čuvanja se potvrđuje po klasi, ne po kategoriji (D-271 MQ03, D-30). Popis od 30 klasa nastaje u M10.1-P01 nad mainom u tom trenutku i NEPROVJERENO je da u repou već postoji. Brisanje tablica samo za dodavanje ide uskim funkcijama za `ductus_retention` uz nadgrobni zapis u tablici `erasure` (D-272 MQ04, MQ05); ni ta tablica ni funkcije još ne postoje na mainu.
+Tablica niže navodi 8 kategorija iz C-21. DATA-CLASS je nastao s 30 klasa i svaka pripada točno jednoj od tih kategorija; rok čuvanja se potvrđuje po klasi, ne po kategoriji (D-271 MQ03, D-30). Popis je `docs/privacy/06-klase-podataka.md` (M10.1-P01); klasa 31 (prijave problema, DAN-431) dodana je poslije. Brisanje tablica samo za dodavanje ide uskim funkcijama za `ductus_retention` uz nadgrobni zapis u tablici `erasure` (D-272 MQ04, MQ05); ni ta tablica ni funkcije još ne postoje na mainu.
 
 | Klasa | Primjeri | Prijedlog roka (potvrđuje FPZG, D-30) |
 | --- | --- | --- |

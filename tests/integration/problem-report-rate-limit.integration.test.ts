@@ -22,7 +22,7 @@ requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The problem report race test runs on
 const suffix = randomBytes(5).toString("hex");
 const applicationName = `it_problem_report_${suffix}`;
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 2 });
-const app = new pg.Pool({ connectionString: process.env.APP_DATABASE_URL, max: 4, application_name: applicationName });
+const app = new pg.Pool({ connectionString: process.env.APP_DATABASE_URL, max: 6, application_name: applicationName });
 const withActor = createWithActor(app);
 
 const institutionId = randomUUID();
