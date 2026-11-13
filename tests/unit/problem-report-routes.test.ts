@@ -58,14 +58,14 @@ function checkSet(column: string): string[] {
 
 /**
  * Routes the CHECK already allows ahead of their pages, and the PRs that add
- * the pages (orchestrator, #1836 c.6820309956, c.6820715294: the /stanje
- * migration carries all three new routes and lands after #1969 and #1973).
+ * the pages (orchestrator, #1836 c.6820309956, c.6820715294, c.6821821996: the
+ * /stanje migration carries the new routes and lands after #1969 and #1973).
  * Allowed only while that page is absent; once it is on the branch the route
  * must be in the domain set.
  */
 const ROUTES_AHEAD_OF_PAGE = [
   "/kako-radi", // DAN-431, #1973
-  "/rad/[assignmentId]/dnevnik-pristupa", // DAN-294, #1969
+  "/stanje", // DAN-429, the page and API land in the follow-up PR (#1836 c.6821821996)
 ] as const;
 
 function pageFile(route: string): string {
