@@ -119,6 +119,28 @@
   color: var(--ink);
 }
 
+/* "Kako Ductura radi" (DAN-431): a quiet link in the same row style as "Prijavi problem". */
+.infoLink {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.infoLink:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.infoLink[aria-current="page"] {
+  color: var(--ink);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .note {
   display: flex;
   flex-direction: column;
@@ -368,7 +390,8 @@
   .crumbs,
   .who,
   .signOut,
-  .report {
+  .report,
+  .infoLink {
     font-size: 13px;
   }
 }
