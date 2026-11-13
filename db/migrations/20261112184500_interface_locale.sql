@@ -32,6 +32,15 @@ CREATE POLICY user_preference_owner ON identity.user_preference TO ductus_identi
 
 -- Sets the caller's interface language and returns it. ZD401 without a live
 -- session, ZD422 for a value outside the set.
+--
+-- A save and a logout of the same session are ordered on the session row
+-- (contract (b), #1836): every logout path closes it with UPDATE, so the save
+-- first takes it FOR SHARE and only then, in a new statement with a new
+-- snapshot, asks app.current_actor(). A logout that committed before the lock
+-- is seen and gives ZD401 with nothing written; a logout that comes after
+-- waits until the save ends, so a write never follows a confirmed logout,
+-- even when the save then waits on the preference row. Locks are always taken
+-- session first, preference second.
 CREATE FUNCTION identity.set_interface_locale(p_locale text) RETURNS text
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -40,6 +49,9 @@ DECLARE
   v_institution uuid;
   v_locale text;
 BEGIN
+  PERFORM 1 FROM identity.session s
+   WHERE s.token_hash = pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.current_setting('app.session_token', true), 'UTF8'))
+     FOR SHARE;
   SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';

@@ -4109,6 +4109,9 @@ DECLARE
   v_institution uuid;
   v_locale text;
 BEGIN
+  PERFORM 1 FROM identity.session s
+   WHERE s.token_hash = pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.current_setting('app.session_token', true), 'UTF8'))
+     FOR SHARE;
   SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
