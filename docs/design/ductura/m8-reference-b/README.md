@@ -36,7 +36,7 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
   - „Predana datoteka” i „Novi izvoz” su odvojeni, s rečenicama iz #1799. Bajtovi predane datoteke se čuvaju, pa njezin otisak uvijek odgovara potvrdi (D-285).
   - Predana datoteka ima dva otiska, PDF-a i .docx-a, svaki uz svoju oznaku, jer potvrda nosi otisak izvezenog DOCX-a i PDF-a (D-80 t. 11). Otisak stoji kao 64 znamenke bez razmaka, kao u `../m7-reference-c`.
   - Studentov paket sadrži PDF teksta, potpisanu potvrdu predaje, popis otisaka (D-173), odjeljak „Što ovaj paket ne dokazuje” (`docs/contracts/export-recipient-v1.md` §7 D2) i studentov redak tablice s istim stupcima (D-286; isti ugovor §7 D5).
-  - Poveznica vrijedi 24 sata. Nakon toga briše se samo novi izvoz, a predani rad ostaje (D-173, D-273, D-285). Tekstovi poveznice i istekle poveznice su iz #1800.
+  - Poveznica vrijedi 24 sata. Datoteka novog izvoza briše se 24 sata nakon pripreme, po svom roku koji je odvojen od isteka poveznice (`docs/contracts/export-recipient-v1.md` §6 C7 i C8). Stanje „paket spreman” zato ima dvije rečenice: do kada vrijedi poveznica i kada se briše datoteka. Predani rad ostaje (D-173, D-273, D-285). Tekstovi poveznice i istekle poveznice su iz #1800.
   - Broj preuzimanja studentove poveznice nije odlučen: `docs/contracts/export-recipient-v1.md` §5 poveznicu zasad tretira kao jednokratnu samo dok je O-4 otvoren, pa slika piše `{broj preuzimanja}`.
   - Stranica poveznice koja više ne vrijedi ima isti tekst za isteklu, iskorištenu, nepostojeću i tuđu poveznicu i ne navodi uzrok (`docs/contracts/export-recipient-v1.md` §5 C6). Zato je iz teksta iz #1800 izostavljen dio „(vrijedila je 24 sata)”.
 - **Povijest dokumenta.**
