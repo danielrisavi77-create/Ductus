@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B-08 — STOP poruka (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 19 · DAN-605 · prijedlog slike · M12.UX-R</div>
+  <h1>B-08 — STOP poruka</h1>
+  <p>Potvrda zaustavljanja kod operatera i poruka koju nakon zaustavljanja vide student i nastavnik. Prototipa nema; složena je po odjeljku „Pilot (M12)” iz <code>docs/OPERATIONS.md</code> (STOP postupak t. 1 do 4). Zamjenski postupak predaje određuje FPZG (D-69) i ovdje je otvoren ulaz. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="s1" class="variant" data-state="potvrda">
+    <div class="ref-tag">Stanje 1 · operater, potvrda zaustavljanja</div>
+    <div class="dialog" role="dialog" aria-labelledby="s1" aria-describedby="s1d">
+      <h2 id="s1">Zaustaviti pilot?</h2>
+      <p class="note" id="s1d">Studenti i nastavnici odmah vide poruku o zaustavljanju i upute za zamjenski postupak. Pri zaustavljanju se ne brišu podaci ni zapisi.</p>
+      <fieldset class="choice">
+        <legend>Okidač</legend>
+        <label><input type="radio" name="okidac" checked>Kritičan neovlašten pristup</label>
+        <label><input type="radio" name="okidac">Gubitak rada</label>
+        <label><input type="radio" name="okidac">Lažan status</label>
+      </fieldset>
+      <div class="field"><label for="inc">ID zapisa incidenta</label><input class="input" id="inc" type="text" value="INC-0003" aria-describedby="inc-h"></div>
+      <p class="meta" id="inc-h">Upišite samo ID. Pojedinosti idu u zapis incidenta, ne ovdje.</p>
+      <p class="kv"><span>Izdanje</span><span class="sha">7d4e2a91c0b3</span></p>
+      <p class="meta">Vrijeme zaustavljanja bilježi se automatski, u UTC-u.</p>
+      <div class="acts"><button class="btn danger" type="button">Zaustavi pilot</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s2" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 2 · operater, učitavanje</div>
+    <div class="dialog" role="dialog" aria-labelledby="s2" aria-busy="true">
+      <h2 id="s2">Zaustaviti pilot?</h2>
+      <p class="note" role="status">Zaustavljam pilot.</p>
+      <div class="skel w60"></div>
+      <div class="acts"><button class="btn danger" type="button" aria-disabled="true">Zaustavi pilot</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s3" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 3 · operater, greška</div>
+    <div class="dialog" role="dialog" aria-labelledby="s3">
+      <h2 id="s3">Zaustaviti pilot?</h2>
+      <p class="note" role="alert">Zaustavljanje nije uspjelo. Pilot i dalje radi.</p>
+      <p class="meta">Odabrani okidač i ID zapisa incidenta su zadržani. Ako ni drugi pokušaj ne uspije, javite se održavatelju Ducture.</p>
+      <div class="acts"><button class="btn danger" type="button">Pokušaj ponovno</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s4" class="variant" data-state="student">
+    <div class="ref-tag">Stanje 4 · student, poruka nakon zaustavljanja</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="s4">Ductura</h2></div>
+      <div class="panel-body">
+        <div class="pause" role="alert">
+          <strong>Ductura je privremeno zaustavljena.</strong>
+          <p>Zaustavljanje nema posljedica za vas. Pri zaustavljanju ništa se ne briše.</p>
+        </div>
+        <h3 class="sub">Kako sada predati rad</h3>
+        <p class="note"><span class="open-mark">{zamjenski postupak FPZG-a, D-69}, otvoreno</span></p>
+        <p class="meta">Što je dostupno do ponovnog pokretanja: <span class="open-mark">{čitanje vlastitog rada ili ništa}, otvoreno</span></p>
+        <p class="meta">Zaustavljeno 3. 3. 2027. u 14:32.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s5" class="variant" data-state="nastavnik">
+    <div class="ref-tag">Stanje 5 · nastavnik, poruka nakon zaustavljanja</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="s5">Ductura</h2></div>
+      <div class="panel-body">
+        <div class="pause" role="alert">
+          <strong>Ductura je privremeno zaustavljena.</strong>
+          <p>Zaustavljanje nema posljedica za studente. Pri zaustavljanju ništa se ne briše.</p>
+        </div>
+        <h3 class="sub">Predaja i rokovi</h3>
+        <p class="note">Studenti predaju po zamjenskom postupku FPZG-a: <span class="open-mark">{postupak, D-69}, otvoreno</span></p>
+        <p class="meta">O produljenju roka odlučuje <span class="open-mark">{uloga na FPZG-u}, otvoreno</span>.</p>
+        <p class="meta">Obavijest studentima šalje FPZG, kanalom koji odredi: <span class="open-mark">{kanal}, otvoreno</span></p>
+        <p class="meta">Zaustavljeno 3. 3. 2027. u 14:32.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Poruka studentu ne govori o stanju rada ni predaje: kod okidača „gubitak rada” takva bi tvrdnja bila lažan status. Tvrdi samo ono što STOP postupak jamči: ništa se ne briše (D-12) i zaustavljanje nema posljedica za studenta.</p>
+<p class="meta">Okidač i ID incidenta vidi samo operater. Student i nastavnik ne vide okidač, izdanje ni ID incidenta.</p>
+<p class="meta">Mobitel: ista stanja na 400 px (snimke); gumbi dijaloga idu jedan ispod drugog, svaki 44 px visine.</p>
+<p class="meta">Tipkovnica (EQ6): operater 1. naslov Zaustaviti pilot?, 2. okidač (strelice unutar skupine), 3. ID zapisa incidenta, 4. Zaustavi pilot, 5. Odustani; Esc zatvara dijalog i ništa ne zaustavlja. Student i nastavnik: 1. poruka o zaustavljanju (čita se odmah), 2. upute za predaju.</p>
+</main>
+</body>
+</html>

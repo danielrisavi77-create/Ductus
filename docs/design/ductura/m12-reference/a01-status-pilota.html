@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-01 — Operaterski status pilota (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 19 · DAN-605 · prijedlog slike · M12.UX-R</div>
+  <h1>A-01 — Operaterski status pilota</h1>
+  <p>Stranica operatera Ducture u pilotu. Prototipa nema; složena je po retku A-01 iz <code>docs/design/EKRANI.md</code> i odjeljku „Pilot (M12)” iz <code>docs/OPERATIONS.md</code>: faza, zamrznuto izdanje, spremnost iz <code>/api/ready</code>, pokazatelji dnevnog zapisa i STOP. Tko smije zaustaviti pilot nije imenovano (Q-13). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="p1" class="variant wide" data-state="popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno, pilot radi</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="p1">Status pilota</h2><span class="tag">Faza A · tehnička proba</span></div>
+      <div class="panel-body">
+        <p class="note">Faza A od 22. 2. 2027., tjedan 2 od 4. Radovi su sintetički.</p>
+        <div class="cols">
+          <div class="stack">
+            <h3 class="sub">Zamrznuto izdanje</h3>
+            <p class="kv"><span>Oznaka</span><span class="open-mark">{oznaka izdanja}, otvoreno</span></p>
+            <p class="sha">7d4e2a91c0b35f68e1a2d9c4b7f03e5a6c8d1b29</p>
+            <p class="meta">Zamrznuto od 22. 2. 2027. Promjene tog dana: nema.</p>
+            <h3 class="sub">Spremnost</h3>
+            <p class="kv"><span>Baza podataka</span><span class="state ok">Radi</span></p>
+            <p class="kv"><span>Pohrana</span><span class="state ok">Radi</span></p>
+            <p class="kv"><span>Potpisivanje</span><span class="state ok">Radi</span></p>
+            <p class="kv"><span>Red poslova</span><span class="state off">Nije uključeno</span></p>
+            <p class="meta" role="status">Zadnja provjera: 09:14.</p>
+          </div>
+          <div class="stack">
+            <h3 class="sub">Pokazatelji, utorak 2. 3. 2027.</h3>
+            <p class="kv"><span>Rekonstrukcija</span><span><b>12 od 12</b><span class="thr">prag 100 %</span></span></p>
+            <p class="kv"><span>Izgubljen rad</span><span><b>0</b><span class="thr">prag 0</span></span></p>
+            <p class="kv"><span>Neovlašten pristup</span><span><b>0</b><span class="thr">prag 0</span></span></p>
+            <p class="kv"><span>Lažan status</span><span><b>0</b><span class="thr">prag 0</span></span></p>
+            <p class="kv"><span>Prijave problema</span><span><b>2</b></span></p>
+            <p class="meta">Izvor brojeva: <span class="open-mark">{dnevni zapis ili mjerenje u aplikaciji}, otvoreno</span></p>
+            <h3 class="sub">Zaustavljanje</h3>
+            <p class="note">Okidači: kritičan neovlašten pristup, gubitak rada, lažan status. Okidač ne čeka dnevni zapis.</p>
+            <p class="meta">Zaustaviti smije: <span class="open-mark">{uloga}, otvoreno (Q-13)</span></p>
+            <button class="btn danger" type="button">Zaustavi pilot</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="p2" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 2 · prazno, prije faze A</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="p2">Status pilota</h2></div>
+      <div class="panel-body">
+        <p class="note">Pilot još nije počeo. Faza A počinje 22. 2. 2027.</p>
+        <p class="meta">Izdanje još nije zamrznuto. Pokazatelji se pojavljuju od prvog dana faze A.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="p3" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 3 · učitavanje</div>
+    <div class="panel" aria-busy="true">
+      <div class="panel-top"><h2 id="p3">Status pilota</h2></div>
+      <div class="panel-body"><p class="note" role="status">Učitavam status pilota.</p><div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="p4" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 4 · greška</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="p4">Status pilota</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Status pilota trenutačno nije moguće učitati. To ne znači da pilot ne radi.</p>
+        <div class="acts"><button class="btn secondary" type="button">Pokušaj ponovno</button></div>
+        <p class="meta">Zaustavljanje je i dalje moguće.</p>
+        <button class="btn danger" type="button">Zaustavi pilot</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="p5" class="variant wide" data-state="stop">
+    <div class="ref-tag">Stanje 5 · STOP, pilot zaustavljen</div>
+    <div class="panel">
+      <div class="panel-top"><h2 id="p5">Status pilota</h2><span class="tag">Zaustavljeno</span></div>
+      <div class="panel-body">
+        <div class="stop" role="status">
+          <strong>Pilot je zaustavljen.</strong>
+          <p>Srijeda 3. 3. 2027. u 14:32 (13:32 UTC). Okidač: lažan status. Zapis incidenta: INC-0003.</p>
+        </div>
+        <div class="cols">
+          <div class="stack">
+            <p class="note">Studenti i nastavnici vide poruku o zaustavljanju i upute za zamjenski postupak predaje. Pri zaustavljanju se ne brišu podaci ni zapisi.</p>
+            <p class="kv"><span>Izdanje okidača</span><span class="sha">7d4e2a91c0b3</span></p>
+            <p class="meta">Pojedinosti incidenta su samo u zapisu incidenta.</p>
+          </div>
+          <div class="stack">
+            <h3 class="sub">Ponovno pokretanje</h3>
+            <ul class="steps">
+              <li class="done">Zapis incidenta INC-0003 postoji.</li>
+              <li>Izdanje s potvrđenim ispravkom: još nije.</li>
+              <li>Odobrava: <span class="open-mark">{uloge}, otvoreno (O05 prijedlog)</span></li>
+            </ul>
+            <button class="btn" type="button" aria-disabled="true" aria-describedby="r5">Ponovno pokreni pilot</button>
+            <p class="meta" id="r5">Moguće kad su ispunjeni svi uvjeti.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Stanje dijela nosi riječ i oblik oznake (puna točka radi, prsten ne radi, crtica nije uključeno), ne samo boju. Riječi su iste kao na stranici <code>/stanje</code> (DAN-429).</p>
+<p class="meta">Od incidenta se prikazuje samo ID. Okidači, prag 0 i 100 % te uvjeti ponovnog pokretanja su iz <code>docs/OPERATIONS.md</code>; postupak je PRIJEDLOG.</p>
+<p class="meta">Mobitel: ista stanja na 400 px (snimke); dva stupca idu jedan ispod drugog, gumb Zaustavi pilot ostaje u cijelosti vidljiv.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov Status pilota, 2. Zaustavi pilot, 3. Pokušaj ponovno kad se pojavi, 4. u STOP stanju Ponovno pokreni pilot (onemogućeno, čita razlog).</p>
+</main>
+</body>
+</html>
