@@ -59,6 +59,7 @@ const en = {
     theme: "Switch between light and dark theme",
     breadcrumb: "Path",
     homeCrumb: "Home",
+    howItWorks: `How ${APP_NAME} works`,
   },
   home: {
     openWorkspace: "Open workspace",
@@ -1734,6 +1735,52 @@ const en = {
       tooMany: "Your account can send at most five reports in one hour. Try again later.",
       unavailable: "Ductura did not confirm that the report was recorded. The report may still have been received. Try again in a few minutes; if it already arrived, it will be recorded twice.",
       unknown: "Ductura did not confirm that it received the report. Try again in a few minutes.",
+    },
+  },
+  howItWorks: {
+    title: `How ${APP_NAME} works`,
+    lead: `What ${APP_NAME} records while you write, what it does not record, who sees what and where your work is kept.`,
+    recorded: {
+      heading: "What is recorded",
+      changes: "Changes to the text of the document, so that it shows how the work came about.",
+      changesConditional: "Letter-by-letter view: conditional, legal opinion before the pilot",
+      sources: "The source of every change: writing, pasting from another document or a suggestion from the AI assistant.",
+      versions: "Versions you sent to your mentor or submitted.",
+      access: "Who opened your work and when.",
+    },
+    notRecorded: {
+      heading: "What is not recorded",
+      keys: "Keys. Changes to the text are recorded, not key presses.",
+      outside: "Nothing outside the editor: the screen, the camera and other browser tabs are not part of the work.",
+      rhythm: "Measures from writing time: no speed, pauses or any other measure is calculated from the time of changes.",
+      authorship: `A judgement about who wrote the text. ${APP_NAME} does not make one, by person or by machine.`,
+    },
+    seen: {
+      heading: "Who sees what",
+      columns: { view: "View", you: "You", mentor: "Mentor or assignment teacher", others: "Others" },
+      rows: {
+        live: "Live text",
+        replay: "Replay of how it came about",
+        compare: "Comparison of two sent versions",
+      },
+      yes: "Yes",
+      no: "No",
+      othersNote: "“Others” are other students and teachers without the assignment.",
+    },
+    saving: {
+      heading: "Where your work is kept",
+      device: "Saved on this device: the text is stored in this browser. This label does not say whether the server has received it yet.",
+      server: "Saved on the server: the server confirmed that it received the text.",
+      offline: "Without a network you keep writing and the text is saved on the device. What was written without a network stays marked that way in the record after the connection returns.",
+      submitted: "Submitted: the work was submitted to the assignment. Submission is possible only when the submitted text can be rebuilt exactly from the record.",
+    },
+    check: {
+      heading: "Checking a submitted work",
+      body: "A passed check means the record of the work was not changed after submission. It does not prove who wrote the text.",
+    },
+    rules: {
+      heading: "Faculty rules",
+      body: "The faculty sets the starting rule for the AI assistant. A teacher may tighten or relax it for a course; you see the rule for your assignment in the assignment notice before the first sentence.",
     },
   },
   errorPage: {
