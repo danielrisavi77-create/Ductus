@@ -1741,31 +1741,6 @@ const en = {
     errorTitle: "The page could not be shown",
     errorBody: "An unexpected error occurred. Try again; if it happens again, go back to the home page.",
   },
-  statusPage: {
-    pageTitle: "System status",
-    title: "System status",
-    partsTitle: "Parts of the system",
-    intro: "This page shows the results of checks Ductura runs itself, without any data about people or their work.",
-    loading: "Loading check results.",
-    error: "Check results cannot be loaded right now. This does not mean the system is down.",
-    retry: "Try again",
-    allWorking: "All parts are working.",
-    someNotWorking: "Some parts are not working right now.",
-    someNotEnabled: "The parts that are on work normally; some are not enabled yet.",
-    stale: "These results are out of date: no new check has succeeded for more than two minutes. The status shown may no longer hold.",
-    lastCheck: "Last check: {time}.",
-    scope: "The status shows the results of checks Ductura runs itself.",
-    components: {
-      writing: "Writing and sending to the server",
-      submission: "Submitting work",
-      mentorView: "Mentor view",
-    },
-    states: {
-      radi: "Working",
-      ne_radi: "Not working",
-      nije_ukljuceno: "Not enabled",
-    },
-  },
 } as const satisfies Messages;
 
 export const messagesEn: Messages = en;
