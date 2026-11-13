@@ -45,7 +45,7 @@ test.describe("editor top bar and status bar (FE-D6)", () => {
     await expect(page.getByRole("banner").getByText("Demo · izmišljeni podaci")).toBeVisible();
     await test.info().attach("rad-gornja-traka-bez-zadatka", { body: await page.screenshot(), contentType: "image/png" });
     await page.getByRole("banner").getByRole("button", { name: "Otvori navigaciju" }).click();
-    await expect(page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: "Ductura, početna" })).toBeVisible();
   });
 
   test("status bar: words without a range, pages, a selection, never the server", async ({ page }) => {
