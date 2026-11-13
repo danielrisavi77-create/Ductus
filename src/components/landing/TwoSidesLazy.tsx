@@ -12,6 +12,14 @@ const TwoSides = dynamic(() => import("./TwoSides"), {
   loading: () => <p className={styles.small}>{t.landing.wow.loading}</p>,
 });
 
+/**
+ * The "#isprobaj" target is server-rendered around the lazy block, so a link
+ * or a shared "/#isprobaj" lands on it before the editor has loaded (DAN-354).
+ */
 export default function TwoSidesLazy() {
-  return <TwoSides />;
+  return (
+    <div id="isprobaj">
+      <TwoSides />
+    </div>
+  );
 }

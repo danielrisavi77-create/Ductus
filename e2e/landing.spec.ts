@@ -64,9 +64,13 @@ test.describe("public home page", () => {
     await page.waitForLoadState("networkidle");
     const before = await page.evaluate(() => Object.keys(localStorage).sort());
     const sent: string[] = [];
+    // Only static resources may load: no POST, no /api/, no page or data
+    // request with the visitor's text in it.
     page.on("request", (request) => {
       const url = new URL(request.url());
-      if (request.method() !== "GET" || url.pathname.startsWith("/api/")) sent.push(`${request.method()} ${url.pathname}`);
+      const isStatic = request.method() === "GET" && url.search === "" &&
+        (url.pathname.startsWith("/_next/static/") || /\.(?:woff2?|png|svg|ico|webp)$/.test(url.pathname));
+      if (!isStatic) sent.push(`${request.method()} ${url.pathname}${url.search}`);
     });
     await student.click();
     await page.keyboard.press("End");
@@ -87,6 +91,9 @@ test.describe("public home page", () => {
   });
 
   test("the top of the page offers the try-out at once, without signing in (DAN-354)", async ({ page }) => {
+    // The target is in the server-rendered page, so a shared link works too.
+    await page.goto("/#isprobaj");
+    await expect(page.locator("#isprobaj")).toBeInViewport();
     await page.goto("/");
     const hero = page.locator("main#sadrzaj").getByRole("link", { name: t.landing.tryEditorLink });
     await expect(hero).toHaveAttribute("href", "#isprobaj");
@@ -170,6 +177,8 @@ test.describe("public home page", () => {
   for (const sheet of ["dark", "light"] as const) {
     test(`axe: no WCAG 2.1 AA violations (sheet: ${sheet})`, async ({ page }) => {
       await page.goto("/");
+      // The try-out (and its toolbar) loads on the client; axe checks it too.
+      await expect(page.getByRole("toolbar", { name: t.toolbar.label })).toBeVisible();
       await page.getByRole("button", { name: sheet === "light" ? t.workspace.sheetThemeLight : t.workspace.sheetThemeDark }).click();
       await expect(page.locator("article.sheet").first()).toHaveAttribute("data-sheet-theme", sheet);
       const results = await new AxeBuilder({ page })
@@ -182,6 +191,7 @@ test.describe("public home page", () => {
   test("at 390 px nothing scrolls sideways", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
+    await expect(page.getByRole("toolbar", { name: t.toolbar.label })).toBeVisible();
     const widths = await page.evaluate(() => ({
       scroll: document.documentElement.scrollWidth,
       client: document.documentElement.clientWidth,

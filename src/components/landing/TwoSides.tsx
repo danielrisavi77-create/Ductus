@@ -56,7 +56,7 @@ export default function TwoSides() {
   });
 
   return (
-    <section id="isprobaj" className={styles.block} aria-labelledby="dvije-strane-naslov">
+    <section className={styles.block} aria-labelledby="dvije-strane-naslov">
       <p className={styles.eyebrow}>{l.sidesEyebrow}</p>
       <h2 id="dvije-strane-naslov" className={styles.blockTitle}>
         {l.sidesTitle}
