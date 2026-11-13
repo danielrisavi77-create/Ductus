@@ -4,8 +4,9 @@
 -- is a page in the shell, so a problem can be reported from it. Its route
 -- template joins the closed set in src/domain/support/problem-report.ts
 -- (PROBLEM_REPORT_ROUTES). This migration runs after
--- 20261112160000_problem_report_route_how_it_works.sql (DAN-431), which added
--- /kako-radi; it keeps that set and adds the new template only.
+-- 20261112190000_problem_report_route_status.sql (DAN-429), which added
+-- /stanje and carries /kako-radi and the access log route; it keeps that set
+-- and adds the new template only.
 -- Every existing row still holds: the CHECK is replaced by a wider one (the
 -- drop is deliberate) and validated in this migration's one transaction. No
 -- row is changed or removed.
@@ -20,8 +21,8 @@ ALTER TABLE identity.problem_report ADD CONSTRAINT problem_report_route_check
     '/nastavnik/rad/[id]', '/nastavnik/rad/[id]/reprodukcija',
     '/nastavnik/zadatak/[assignmentId]/rad/[documentId]/jezik', '/nastavnik/zadatak/[assignmentId]/uredi',
     '/nastavnik/zadatak/novi', '/prijava', '/rad', '/rad/[assignmentId]/dnevnik-pristupa',
-    '/rad/[assignmentId]/predaja', '/rad/[assignmentId]/reprodukcija', '/upis', '/upis/kolegij/[courseId]',
-    '/ustanova', '/ustanova/kolegiji', '/ustanova/korisnici', '/ustanova/pravila',
+    '/rad/[assignmentId]/predaja', '/rad/[assignmentId]/reprodukcija', '/stanje', '/upis',
+    '/upis/kolegij/[courseId]', '/ustanova', '/ustanova/kolegiji', '/ustanova/korisnici', '/ustanova/pravila',
     '/zadaci', '/zadaci/kolegiji', '/zadaci/radovi', '/zadatak/[id]'
   )) NOT VALID;
 -- squawk-ignore constraint-missing-not-valid
@@ -33,9 +34,9 @@ REVOKE CREATE ON SCHEMA identity FROM ductus_identity;
 
 -- migrate:down
 -- Local only: staging and production migrate forward (docs/BACKEND.md 6).
--- Removes the work language template only and leaves the set 20261112160000
--- sets. Refused while a report names that template; nothing is deleted to
--- make room.
+-- Removes the work language template only and leaves the set 20261112190000
+-- sets (with /stanje). Refused while a report names that template; nothing is
+-- deleted to make room.
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
@@ -46,8 +47,8 @@ ALTER TABLE identity.problem_report ADD CONSTRAINT problem_report_route_check
     '/', '/kako-radi', '/nastavnik', '/nastavnik/brz-put', '/nastavnik/kolegiji', '/nastavnik/mentorstva',
     '/nastavnik/rad/[id]', '/nastavnik/rad/[id]/reprodukcija', '/nastavnik/zadatak/[assignmentId]/uredi',
     '/nastavnik/zadatak/novi', '/prijava', '/rad', '/rad/[assignmentId]/dnevnik-pristupa',
-    '/rad/[assignmentId]/predaja', '/rad/[assignmentId]/reprodukcija', '/upis', '/upis/kolegij/[courseId]',
-    '/ustanova', '/ustanova/kolegiji', '/ustanova/korisnici', '/ustanova/pravila',
+    '/rad/[assignmentId]/predaja', '/rad/[assignmentId]/reprodukcija', '/stanje', '/upis',
+    '/upis/kolegij/[courseId]', '/ustanova', '/ustanova/kolegiji', '/ustanova/korisnici', '/ustanova/pravila',
     '/zadaci', '/zadaci/kolegiji', '/zadaci/radovi', '/zadatak/[id]'
   )) NOT VALID;
 -- squawk-ignore constraint-missing-not-valid
@@ -55,4 +56,3 @@ ALTER TABLE identity.problem_report VALIDATE CONSTRAINT problem_report_route_che
 
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA identity FROM ductus_identity;
-
