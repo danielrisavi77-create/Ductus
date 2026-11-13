@@ -25,7 +25,7 @@ Snimke su u `snimke/<stranica>-<tamna|svijetla>-<1440|400>.png`:
 - `n18-tamna-1440.png`, `n18-tamna-400.png`, `n18-svijetla-1440.png`, `n18-svijetla-400.png`
 - `povijest-tamna-1440.png`, `povijest-tamna-400.png`, `povijest-svijetla-1440.png`, `povijest-svijetla-400.png`
 
-Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.fonts.ready`, bez vodoravnog pomicanja stranice na obje širine. Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SHA256SUMS`. `reference.css` uvozi `../m5-reference-c/reference.css` i dodaje samo dva stupca, oznaku otvorenog ulaza, tablicu i otisak.
+Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.fonts.ready`, bez vodoravnog pomicanja stranice na obje širine. Svijetla ljuska je `data-theme="light"` na `<html>`. Kontrolni zbrojevi su u `SHA256SUMS`. `reference.css` uvozi `../m5-reference-c/reference.css` i dodaje samo dva stupca, oznaku otvorenog ulaza, tablicu, otisak, razmak radnji u ploči i pojedinosti za podršku.
 
 ## Odluke u slici
 
@@ -34,8 +34,11 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
   - Retci su poredani po prezimenu (D-80 t. 2). Stanje predaje nema boju.
   - Student vidi svoj redak s istim stupcima (D-286).
   - „Predana datoteka” i „Novi izvoz” su odvojeni, s rečenicama iz #1799. Bajtovi predane datoteke se čuvaju, pa njezin otisak uvijek odgovara potvrdi (D-285).
-  - Studentov paket sadrži PDF teksta, potpisanu potvrdu predaje i popis otisaka (D-173).
+  - Predana datoteka ima dva otiska, PDF-a i .docx-a, svaki uz svoju oznaku, jer potvrda nosi otisak izvezenog DOCX-a i PDF-a (D-80 t. 11). Otisak stoji kao 64 znamenke bez razmaka, kao u `../m7-reference-c`.
+  - Studentov paket sadrži PDF teksta, potpisanu potvrdu predaje, popis otisaka (D-173) i studentov redak tablice s istim stupcima (D-286; `docs/contracts/export-recipient-v1.md` §7 D5).
   - Poveznica vrijedi 24 sata. Nakon toga briše se samo novi izvoz, a predani rad ostaje (D-173, D-273, D-285). Tekstovi poveznice i istekle poveznice su iz #1800.
+  - Studentova poveznica vrijedi za jedno preuzimanje: `docs/contracts/export-recipient-v1.md` §5 zasad je tako tretira dok je O-4 otvoren.
+  - Stranica poveznice koja više ne vrijedi ima isti tekst za isteklu, iskorištenu, nepostojeću i tuđu poveznicu i ne navodi uzrok (`docs/contracts/export-recipient-v1.md` §5 C6). Zato je iz teksta iz #1800 izostavljen dio „(vrijedila je 24 sata)”.
 - **Povijest dokumenta.**
   - Naslov, podnaslov, redak verzije, rečenica o drugim verzijama, rečenica o usporedbi i tekst dijaloga pristupa su iz #1795.
   - Prikaz je samo popis s oznakom „uvezeno, tvrdnja iz datoteke”, bez vremenske crte pisanja. Student i mentor vide isti prikaz (D-198 t. 6).
@@ -50,6 +53,8 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 Ulazi koji nisu odlučeni stoje u slici kao `{…}, otvoreno` s isprekidanim rubom. Ne izmišljam ih:
 
 - oblik naziva datoteke u zipu (D-286 daje stupac, ne oblik naziva);
+- kako se dva otiska (PDF i .docx) zapisuju u potvrdu. `docs/contracts/submission-receipt-v2.md` ima jedno polje `artifactSha256`, a D-80 t. 11 traži otisak DOCX-a i PDF-a;
+- vrijedi li poveznica paketa za Merlin za jedno ili više preuzimanja. `docs/contracts/export-recipient-v1.md` ne pokriva mentorov paket;
 - naziv pružatelja u rečenici za D-283 (`{pružatelj}`). Rečenicu D-283 ne daje; ova je prijedlog;
 - tehnički kod u „Pojedinosti za podršku”.
 

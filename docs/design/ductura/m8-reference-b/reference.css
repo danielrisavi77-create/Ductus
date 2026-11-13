@@ -3,7 +3,6 @@
 
 .wide { grid-column: 1 / -1; }
 .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-.stack { display: grid; gap: 8px; align-content: start; min-width: 0; }
 .title { font-weight: 600; }
 /* Ulaz koji još nije odlučen: crtkani okvir i riječ „otvoreno”, ne izmišljeni tekst. */
 .open-mark { font-size: 12.5px; color: var(--ink-2); border: 1px dashed var(--rule); border-radius: 4px; padding: 1px 6px; }
