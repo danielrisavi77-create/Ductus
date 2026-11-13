@@ -207,6 +207,18 @@ describe("K11 the sources attribute", () => {
     ]);
   });
 
+  it("a value JSON cannot hold is refused with a known code, never thrown", () => {
+    const withFunction = { ...BOOK, title: () => "Naslov" };
+    const withSymbol = { ...BOOK, title: Symbol("naslov") };
+    for (const sources of [[withFunction], [withSymbol]]) {
+      expect(codes(tiptapToCanonicalV2(doc([para([text("a")])], { sources }), mint))).toEqual(["SOURCE_FIELD_INVALID"]);
+    }
+    // A property of the list itself is no record: it is left out, never cloned.
+    const extra = Object.assign([structuredClone(BOOK)], { onLoad: () => undefined });
+    const outcome = tiptapToCanonicalV2(doc([para([text("a")])], { sources: extra }), mint);
+    expect(outcome.ok && outcome.doc.sources).toEqual([BOOK]);
+  });
+
   it("the input list is not shared with the result", () => {
     const sources = [structuredClone(BOOK)];
     const outcome = tiptapToCanonicalV2(doc([para([text("a")])], { sources }), mint);

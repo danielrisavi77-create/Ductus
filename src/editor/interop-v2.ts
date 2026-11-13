@@ -22,7 +22,9 @@ import {
   type DocumentNodeV2,
   type InlineNodeV2,
   type SourceId,
+  type ValidationError,
 } from "../domain/document";
+import { validateSources } from "../domain/document/validate-sources";
 import { isPlainObject } from "../domain/json";
 import {
   defaultIdFactory,
@@ -108,7 +110,8 @@ function projectInlineV2(raw: unknown, path: string, errors: InteropError[]): In
 /**
  * Projects Tiptap JSON of the v2 editor back onto a v2 document: projection,
  * then `normalizeDocument`, then `validateVersionedDocument`. A document node
- * without `sources` holds none; one with anything but an array is refused.
+ * without `sources` holds none; one with anything but an array, or with an
+ * invalid record, is refused before the list is cloned.
  */
 export function tiptapToCanonicalV2(
   json: unknown,
@@ -125,8 +128,15 @@ export function tiptapToCanonicalV2(
     if (!isPlainObject(root.attrs)) {
       errors.push({ path: "$.attrs", code: "TIPTAP_ATTRS_NOT_OBJECT" });
     } else if (root.attrs.sources !== undefined) {
-      sources = root.attrs.sources;
-      if (!Array.isArray(sources)) errors.push({ path: "$.attrs.sources", code: "SOURCES_NOT_ARRAY" });
+      // Checked here, before `normalizeDocument` clones the list: a value JSON
+      // cannot hold (a function, a symbol) would throw there, not be refused.
+      if (Array.isArray(root.attrs.sources)) {
+        const sourceErrors: ValidationError[] = [];
+        sources = validateSources(root.attrs.sources, sourceErrors);
+        errors.push(...sourceErrors);
+      } else {
+        errors.push({ path: "$.attrs.sources", code: "SOURCES_NOT_ARRAY" });
+      }
     }
   }
   if (errors.length > 0) return { ok: false, errors };
