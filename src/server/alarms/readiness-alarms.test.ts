@@ -157,6 +157,43 @@ describe("createAlarmTracker", () => {
     ]);
   });
 
+  it("stops the writes of a run in progress once a report says the store is unreachable", async () => {
+    let release: (() => void) | undefined;
+    const calls: Call[] = [];
+    const record = (op: "raise" | "resolve") => (kind: OpsAlarmKind) => {
+      calls.push([op, kind]);
+      // The first write hangs until released; every later one settles at once.
+      if (calls.length > 1) return Promise.resolve();
+      return new Promise<void>((resolve) => (release = resolve));
+    };
+    const tracker = createAlarmTracker(
+      { raise: record("raise"), resolve: record("resolve") },
+      undefined,
+      (r) => (r as Record<string, unknown>).database === "ok",
+    );
+    const fault = { database: "ok", storage: "nedostupno", queue: "nedostupno", signing: "nedostupno" };
+    const first = tracker.observe(fault);
+    await Promise.resolve();
+    expect(calls).toEqual([["resolve", "ready_database"]]);
+    const outage = tracker.observe({ ...fault, database: "nedostupno" });
+    release!();
+    await Promise.all([first, outage]);
+    // The write already in the store finishes; none after it starts.
+    expect(calls).toEqual([["resolve", "ready_database"]]);
+    // The rest stays owed and goes out once the store answers.
+    await tracker.observe({ database: "ok", storage: "ok", queue: "ok", signing: "ok" });
+    expect(calls.slice(1)).toEqual([
+      ["raise", "ready_database"],
+      ["resolve", "ready_database"],
+      ["raise", "ready_storage"],
+      ["resolve", "ready_storage"],
+      ["raise", "ready_queue"],
+      ["resolve", "ready_queue"],
+      ["raise", "ready_signing"],
+      ["resolve", "ready_signing"],
+    ]);
+  });
+
   // Orchestrator note 2 (#1836, c.6821821693): flapping against a hanging
   // store holds one write and a fixed state, however many reports arrive.
   it("bounds what is pending under endless flapping against a hanging store", async () => {
