@@ -3859,6 +3859,26 @@ $$;
 
 
 --
+-- Name: interface_locale(); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.interface_locale() RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+BEGIN
+  SELECT a.user_id INTO v_user FROM app.current_actor() a;
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+  RETURN (SELECT p.interface_locale FROM identity.user_preference p WHERE p.user_id = v_user);
+END
+$$;
+
+
+--
 -- Name: open_session(text, text, text, text, bytea); Type: FUNCTION; Schema: identity; Owner: -
 --
 
@@ -4077,6 +4097,41 @@ CREATE FUNCTION identity.purge_ended_sessions() RETURNS bigint
     RETURNING 1
   )
   SELECT pg_catalog.count(*) FROM gone
+$$;
+
+
+--
+-- Name: set_interface_locale(text); Type: FUNCTION; Schema: identity; Owner: -
+--
+
+CREATE FUNCTION identity.set_interface_locale(p_locale text) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_user uuid;
+  v_institution uuid;
+  v_locale text;
+BEGIN
+  PERFORM 1 FROM identity.session s
+   WHERE s.token_hash = pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.current_setting('app.session_token', true), 'UTF8'))
+     FOR SHARE;
+  SELECT a.user_id, a.institution_id INTO v_user, v_institution FROM app.current_actor() a;
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'not authenticated' USING ERRCODE = 'ZD401';
+  END IF;
+  BEGIN
+    INSERT INTO identity.user_preference AS p (user_id, institution_id, interface_locale)
+    VALUES (v_user, v_institution, p_locale)
+    ON CONFLICT (user_id) DO UPDATE
+      SET interface_locale = EXCLUDED.interface_locale, updated_at = pg_catalog.statement_timestamp()
+    RETURNING p.interface_locale INTO v_locale;
+  EXCEPTION
+    WHEN check_violation OR not_null_violation THEN
+      RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END;
+  RETURN v_locale;
+END
 $$;
 
 
@@ -8022,6 +8077,21 @@ ALTER TABLE ONLY identity.user_account FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: user_preference; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.user_preference (
+    user_id uuid NOT NULL,
+    institution_id uuid NOT NULL,
+    interface_locale text NOT NULL,
+    updated_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
+    CONSTRAINT user_preference_interface_locale_check CHECK ((interface_locale = ANY (ARRAY['hr'::text, 'en'::text])))
+);
+
+ALTER TABLE ONLY identity.user_preference FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: assignment; Type: TABLE; Schema: institution; Owner: -
 --
 
@@ -9467,6 +9537,14 @@ ALTER TABLE ONLY identity.user_account
 
 ALTER TABLE ONLY identity.user_account
     ADD CONSTRAINT user_account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_preference user_preference_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.user_preference
+    ADD CONSTRAINT user_preference_pkey PRIMARY KEY (user_id);
 
 
 --
@@ -11421,6 +11499,14 @@ ALTER TABLE ONLY identity.user_account
 
 
 --
+-- Name: user_preference user_preference_user_id_institution_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.user_preference
+    ADD CONSTRAINT user_preference_user_id_institution_id_fkey FOREIGN KEY (user_id, institution_id) REFERENCES identity.user_account(id, institution_id);
+
+
+--
 -- Name: assignment assignment_course_institution_fkey; Type: FK CONSTRAINT; Schema: institution; Owner: -
 --
 
@@ -12481,6 +12567,19 @@ CREATE POLICY user_account_owner ON identity.user_account TO ductus_identity USI
 
 
 --
+-- Name: user_preference; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.user_preference ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_preference user_preference_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY user_preference_owner ON identity.user_preference TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: assignment; Type: ROW SECURITY; Schema: institution; Owner: -
 --
 
@@ -13258,4 +13357,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261112110000'),
     ('20261112150000'),
     ('20261112160000'),
+    ('20261112184500'),
     ('20261113090000');
