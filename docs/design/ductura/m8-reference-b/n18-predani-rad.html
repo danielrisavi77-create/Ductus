@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N-18 — Izvoz predanog rada i paket za Merlin (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 12b · DAN-603 · prijedlog slike · M8.UX-R</div>
+  <h1>N-18 — Izvoz predanog rada i paket za Merlin</h1>
+  <p>Mentor preuzima predane radove zadatka kao paket za Merlin, a student svoj predani rad i potvrdu (D-173, #1799, #1800). Tablica nema ništa iz sažetka procesa i ima iste stupce za mentora i studenta (D-286). Poveznica vrijedi 24 sata; predana datoteka se ne briše (D-285). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="n1" class="variant wide" data-state="mentor-popunjeno">
+    <div class="ref-tag">Stanje 1 · popunjeno, mentor: paket za Merlin</div>
+    <div class="panel"><div class="panel-top"><h2 id="n1">Predani radovi · Primjer kolegija, seminarski rad</h2></div>
+      <div class="panel-body">
+        <p class="note">Paket sadrži predane radove (PDF) i tablicu s imenom, vremenom predaje i stanjem predaje. Isti podaci za svakog studenta vidljivi su i njemu.</p>
+        <div class="scroll" tabindex="0" role="region" aria-labelledby="c1">
+          <table><caption id="c1">Tablica u paketu (CSV), poredana po prezimenu</caption>
+            <thead><tr><th>Prezime</th><th>Ime</th><th>Predano</th><th>Vrijeme predaje</th><th>Nakon roka</th><th>Naziv datoteke u zipu</th></tr></thead>
+            <tbody>
+              <tr><td>Prezime A</td><td>Ime A</td><td>da</td><td class="m">12. 11. 2026. 21:14</td><td>ne</td><td><span class="open-mark">{naziv}</span></td></tr>
+              <tr><td>Prezime B</td><td>Ime B</td><td>da</td><td class="m">14. 11. 2026. 09:05</td><td>ne</td><td><span class="open-mark">{naziv}</span></td></tr>
+              <tr><td>Prezime C</td><td>Ime C</td><td>da</td><td class="m">14. 11. 2026. 08:40</td><td>da</td><td><span class="open-mark">{naziv}</span></td></tr>
+              <tr><td>Prezime D</td><td>Ime D</td><td>ne</td><td></td><td></td><td></td></tr>
+            </tbody></table>
+        </div>
+        <p class="meta">Rok predaje: 13. 11. 2026. u 23:59. „Nakon roka” uzima u obzir odobreno produljenje: Prezime B ima produljenje do 15. 11. 2026.</p>
+        <p class="meta">Oblik naziva datoteke u zipu: <span class="open-mark">{oblik naziva}, otvoreno</span></p>
+        <div class="acts"><button class="btn" type="button">Pripremi paket za Merlin</button></div>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="n2" class="variant wide" data-state="student-popunjeno">
+    <div class="ref-tag">Stanje 2 · popunjeno, student: moj predani rad</div>
+    <div class="panel"><div class="panel-top"><h2 id="n2">Moja predaja · Primjer kolegija, seminarski rad</h2></div>
+      <div class="panel-body">
+        <div class="scroll" tabindex="0" role="region" aria-labelledby="c2">
+          <table><caption id="c2">Moj redak u tablici za Merlin, isti stupci kao kod mentora</caption>
+            <thead><tr><th>Prezime</th><th>Ime</th><th>Predano</th><th>Vrijeme predaje</th><th>Nakon roka</th><th>Naziv datoteke u zipu</th></tr></thead>
+            <tbody><tr><td>Prezime A</td><td>Ime A</td><td>da</td><td class="m">12. 11. 2026. 21:14</td><td>ne</td><td><span class="open-mark">{naziv}</span></td></tr></tbody></table>
+        </div>
+        <div class="cols">
+          <div class="item">
+            <h3 class="title">Predana datoteka</h3>
+            <p>Ovo je datoteka čiji je otisak u potvrdi predaje. Otisak pokazuje da datoteka nije mijenjana od predaje; ne govori ništa o autorstvu.</p>
+            <p class="hash">Otisak (SHA-256): 3f9a 61c2 0be4 7d18 a5c3 9e02 6b7f 44d1 c8e0 2a93 51f6 0d7b e214 98ac 6c35 b0f1</p>
+            <div class="acts"><button class="btn" type="button">Preuzmi predani PDF</button><button class="btn secondary" type="button">Preuzmi predani .docx</button></div>
+          </div>
+          <div class="item">
+            <h3 class="title">Novi izvoz</h3>
+            <p>Novi izvoz istog teksta. Njegov otisak se ne podudara s potvrdom predaje jer se naslovnica složi iznova.</p>
+            <div class="acts"><button class="btn secondary" type="button">Novi izvoz</button></div>
+          </div>
+        </div>
+        <div class="item">
+          <h3 class="title">Paket moje predaje</h3>
+          <p>Paket sadrži PDF teksta, potpisanu potvrdu predaje i popis otisaka datoteka.</p>
+          <div class="acts"><button class="btn" type="button">Pripremi paket</button></div>
+        </div>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="n3" class="variant" data-state="priprema">
+    <div class="ref-tag">Stanje 3 · učitavanje, priprema paketa</div>
+    <div class="panel"><div class="panel-top"><h2 id="n3">Paket za Merlin</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Pripremamo paket: 3 predana rada i tablica.</p>
+        <div class="skel w80"></div><div class="skel w60"></div>
+        <p class="meta">Možete zatvoriti ovu stranicu. Kad paket bude spreman, poveznica će biti ovdje.</p>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="n4" class="variant" data-state="spremno">
+    <div class="ref-tag">Stanje 4 · paket spreman, poveznica 24 h</div>
+    <div class="panel"><div class="panel-top"><h2 id="n4">Paket za Merlin</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Paket je spreman.</p>
+        <div class="kv"><span>Datoteka</span><b>.zip, 3 PDF-a i tablica</b></div>
+        <div class="kv"><span>Veličina</span><b>2,4 MB</b></div>
+        <div class="acts"><button class="btn" type="button">Preuzmi paket</button></div>
+        <p class="meta">Poveznica vrijedi do 15. 11. 2026. u 10:12. Nakon toga datoteka se briše; novi izvoz možete pokrenuti ovdje.</p>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="n5" class="variant" data-state="isteklo">
+    <div class="ref-tag">Stanje 5 · poveznica više ne vrijedi</div>
+    <div class="panel"><div class="panel-top"><h2 id="n5">Preuzimanje paketa</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Ova poveznica više ne vrijedi (vrijedila je 24 sata). Prijavite se i pokrenite novi izvoz. Ako više nemate pristup Ducturi, zahtjev predajte referadi.</p>
+        <div class="acts"><button class="btn" type="button">Prijava</button></div>
+        <p class="meta">Predani rad i potvrda predaje ostaju u zapisu predaje; briše se samo ovaj izvoz.</p>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="n6" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 6 · prazno</div>
+    <div class="panel"><div class="panel-top"><h2 id="n6">Predani radovi</h2></div>
+      <div class="panel-body">
+        <p class="note">Za ovaj zadatak još nema predanih radova.</p>
+        <button class="btn" type="button" aria-disabled="true" aria-describedby="r6">Pripremi paket za Merlin</button>
+        <p class="meta" id="r6">Paket je moguć kad je predan barem jedan rad.</p>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="n7" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 7 · greška pripreme</div>
+    <div class="panel"><div class="panel-top"><h2 id="n7">Paket za Merlin</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Paket nije pripremljen. Predani radovi i potvrde nisu promijenjeni.</p>
+        <div class="acts"><button class="btn" type="button">Pokušaj ponovno</button></div>
+        <details><summary>Pojedinosti za podršku</summary><code><span class="open-mark">{kod}, otvoreno</span></code></details>
+      </div></div>
+  </section>
+
+</div>
+<p class="meta">Mobitel je snimka na 400 px; tablica se pomiče vodoravno unutar svog okvira, stranica ne. Tehnički kod nikad nije jedina poruka.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov, 2. okvir tablice (strelice pomiču), 3. Pripremi paket ili Preuzmi, 4. ostale radnje redom kojim se vide.</p>
+</main>
+</body>
+</html>
