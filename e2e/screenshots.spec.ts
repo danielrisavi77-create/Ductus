@@ -99,21 +99,37 @@ for (const locale of LOCALES) {
   }
 }
 
-// DAN-429: the public status page in each state, with an invented answer. The
-// theme is the one kept in this browser (theme.ts); light is the paper.
-const STATUS_STATES = {
-  filled: { status: 200, body: { checkedAt: "2026-11-12T10:25:00.000Z", components: { writing: "radi", submission: "ne_radi", mentorView: "nije_ukljuceno" } } },
-  error: { status: 503, body: {} },
-} as const;
-for (const [state, answer] of Object.entries(STATUS_STATES)) {
+// DAN-429: the public status page in each state of the visual contract
+// (c.6820482621): loading, error, filled and filled-but-stale, with an invented
+// answer. The theme is the one kept in this browser (theme.ts); light is the paper.
+const FILLED = { checkedAt: "2026-11-12T10:25:00.000Z", components: { writing: "radi", submission: "ne_radi", mentorView: "nije_ukljuceno" } };
+const STATUS_STATES = ["loading", "error", "filled", "stale"] as const;
+for (const state of STATUS_STATES) {
   for (const colorScheme of SCHEMES) {
     for (const width of [1440, 400] as const) {
       test(`screenshot: stanje ${state} at ${width} px (hr, ${colorScheme})`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width, height: 900 });
         if (colorScheme === "light") await page.addInitScript(() => localStorage.setItem("ductura.theme", "light"));
-        await page.route("**/api/status", (route) => route.fulfill({ status: answer.status, json: answer.body }));
+        // Stale: the page's own clocks move past the limit after one good answer,
+        // and every later check fails, so the last answer stays on the page.
+        if (state === "stale") await page.clock.install();
+        let answered = 0;
+        await page.route("**/api/status", async (route) => {
+          answered += 1;
+          if (state === "loading") return; // never answered: the page stays loading
+          if (state === "error" || (state === "stale" && answered > 1)) return route.fulfill({ status: 503, body: "" });
+          return route.fulfill({ status: 200, json: FILLED });
+        });
         await page.goto("/stanje");
-        await page.locator('[aria-busy="true"]').waitFor({ state: "detached" });
+        if (state === "loading") {
+          await expect(page.locator('[aria-busy="true"]')).toBeVisible();
+        } else {
+          await page.locator('[aria-busy="true"]').waitFor({ state: "detached" });
+        }
+        if (state === "stale") {
+          await page.clock.fastForward(125_000);
+          await expect(page.getByRole("alert").filter({ hasText: "zastarjeli" })).toBeVisible();
+        }
         await expect(page.locator("html")).toHaveJSProperty("scrollWidth", width);
         await testInfo.attach(`${testInfo.project.name}-hr-stanje-${state}-${width}-${colorScheme}.png`, {
           body: await page.screenshot({ fullPage: true }),

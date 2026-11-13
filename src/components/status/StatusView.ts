@@ -30,7 +30,7 @@ export function statusSummary(status: PublicStatus): string {
  * is told apart by its mark's shape as well as its colour.
  */
 export default function StatusView({ phase, onRetry }: { phase: StatusPhase; onRetry: () => void }) {
-  const retry = h("button", { type: "button", className: `btn ${styles.quiet}`, onClick: onRetry }, t.retry);
+  const retry = h("button", { type: "button", className: styles.retry, onClick: onRetry }, t.retry);
   const head = h("div", { className: styles.top }, h("h2", null, t.partsTitle));
   if (phase.kind === "loading") {
     return h(
