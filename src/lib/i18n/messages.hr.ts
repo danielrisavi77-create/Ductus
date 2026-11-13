@@ -82,6 +82,7 @@ export const hr = {
   landing: {
     sectionsNav: "Odjeljci početne stranice",
     howItWorksLink: "Kako radi",
+    tryEditorLink: "Isprobaj editor",
     forWhomLink: "Za koga",
     eyebrow: "Dnevnik pisanja · seminarski i završni radovi",
     title: "Rad se vidi",
