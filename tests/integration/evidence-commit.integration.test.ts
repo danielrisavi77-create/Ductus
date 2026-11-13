@@ -813,6 +813,20 @@ describe("a lost answer after the commit, client and route together (M3.10-P02)"
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(again)).toBeNull();
+    // Nor is the right row with the receipt's signature altered by one character.
+    const signed = (again as { receipt: { signedReceipt: { signature: { signatureBase64Url: string } } } }).receipt.signedReceipt;
+    const altered = signed.signature.signatureBase64Url;
+    const forged = {
+      ...again,
+      receipt: {
+        status: "signed" as const,
+        signedReceipt: { ...signed, signature: { ...signed.signature, signatureBase64Url: (altered[0] === "A" ? "B" : "A") + altered.slice(1) } },
+      },
+    } as typeof again;
+    expect(await outcomeToEvents(forged, verification(work, row, revision), { sent: row, pending: [row] })).toEqual([
+      { type: "SYNC_FAILED", retryable: false },
+    ]);
+    expect(ackedRevision(forged)).toBeNull();
     advance();
   });
 
