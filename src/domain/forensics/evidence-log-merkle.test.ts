@@ -91,6 +91,24 @@ async function referenceLeafHashes(): Promise<Uint8Array[]> {
 
 const bytes32 = (fill: number) => new Uint8Array(32).fill(fill);
 
+/**
+ * An object that borrows Uint8Array.prototype but is no byte array: it passes
+ * `instanceof` and yields up to 1000 values, counting each one read.
+ */
+function forgedHash() {
+  const forged = {
+    yielded: 0,
+    *[Symbol.iterator]() {
+      for (let i = 0; i < 1000; i += 1) {
+        forged.yielded += 1;
+        yield 0;
+      }
+    },
+  };
+  Object.setPrototypeOf(forged, Uint8Array.prototype);
+  return forged as unknown as Uint8Array & { yielded: number };
+}
+
 describe("leaf hash", () => {
   it("is SHA-256 over 0x00 and the 32 digest bytes", async () => {
     expect(hex(await evidenceLogLeafHash(new Uint8Array(32)))).toBe(
@@ -174,6 +192,19 @@ describe("tree root", () => {
     await expect(evidenceLogRoot([bytes32(1), short])).rejects.toThrow(
       /32 bytes/,
     );
+  });
+
+  it("refuses an object that only borrows the Uint8Array prototype, without reading it", async () => {
+    const forged = forgedHash();
+    expect(forged instanceof Uint8Array).toBe(true);
+    await expect(evidenceLogLeafHash(forged)).rejects.toThrow(/32 bytes/);
+    await expect(evidenceLogRoot([bytes32(1), forged])).rejects.toThrow(
+      /32 bytes/,
+    );
+    await expect(evidenceLogInclusionProof([forged], 0)).rejects.toThrow(
+      /32 bytes/,
+    );
+    expect(forged.yielded).toBe(0);
   });
 
   it("does not change the caller's leaf hashes", async () => {
@@ -379,6 +410,45 @@ describe("inclusion check refuses without throwing", () => {
     expect(yielded).toBe(0);
   });
 
+  it("a forged hash that only borrows the Uint8Array prototype, without reading it (V4)", async () => {
+    const input = await honest();
+    for (const key of ["leafHash", "root"] as const) {
+      const forged = forgedHash();
+      await expect(
+        verifyEvidenceLogInclusion({ ...input, [key]: forged }),
+      ).resolves.toBe(false);
+      expect(forged.yielded).toBe(0);
+    }
+    const forged = forgedHash();
+    await expect(
+      verifyEvidenceLogInclusion({
+        ...input,
+        proof: [input.proof[0]!, forged, input.proof[2]!],
+      }),
+    ).resolves.toBe(false);
+    expect(forged.yielded).toBe(0);
+  });
+
+  it("a proof whose length is not a number, without reading its elements (V5)", async () => {
+    const input = await honest();
+    let reads = 0;
+    let calls = 0;
+    const proof = new Proxy([...input.proof], {
+      get: (target, key) => {
+        if (key === "length") {
+          // Below the cap when compared with it, above it afterwards.
+          return { valueOf: () => (calls++ === 0 ? 1 : 100) };
+        }
+        if (typeof key === "string" && /^\d+$/.test(key)) reads += 1;
+        return Reflect.get(target, key);
+      },
+    });
+    await expect(verifyEvidenceLogInclusion({ ...input, proof })).resolves.toBe(
+      false,
+    );
+    expect(reads).toBe(0);
+  });
+
   it("checks the values as passed, even if the caller changes them meanwhile", async () => {
     const input = await honest();
     const proof = input.proof.map((element) => new Uint8Array(element));
@@ -482,10 +552,10 @@ describe("leaf order", () => {
   });
 
   it("orders equal times by the UTF-8 bytes of the receipt id, not UTF-16 (O4)", () => {
-    const bmp = { acceptedAt: T, receiptId: "￿" };
+    const bmp = { acceptedAt: T, receiptId: "\uFFFF" };
     const astral = { acceptedAt: T, receiptId: "\u{10000}" };
     // UTF-16 code units would put U+10000 (D800 DC00) before U+FFFF.
-    expect(["\u{10000}", "￿"].sort()).toEqual(["\u{10000}", "￿"]);
+    expect(["\u{10000}", "\uFFFF"].sort()).toEqual(["\u{10000}", "\uFFFF"]);
     expect(orderEvidenceLogEntries([astral, bmp])).toEqual([bmp, astral]);
     const b = { acceptedAt: T, receiptId: "b" };
     const a = { acceptedAt: T, receiptId: "a" };

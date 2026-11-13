@@ -33,14 +33,27 @@ export type EvidenceLogInclusion = {
 
 export type EvidenceLogEntryKey = { acceptedAt: string; receiptId: string };
 
+// The built-in %TypedArray% getters read an array's internal slots, so an
+// object that only borrows Uint8Array.prototype, a Proxy or an own `length`
+// property cannot pass for a 32-byte hash.
+const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+const typedArrayTag = Object.getOwnPropertyDescriptor(
+  typedArrayPrototype,
+  Symbol.toStringTag,
+)!.get!;
+const typedArrayLength = Object.getOwnPropertyDescriptor(
+  typedArrayPrototype,
+  "length",
+)!.get!;
+
 /**
- * A private 32-byte copy of a hash, or null. The length is read from the
- * copy, so an own `length` property that lies about the bytes is ignored.
+ * A private 32-byte copy of a hash, or null. Only a real Uint8Array of 32
+ * bytes is copied, and its length is read before the copy is made.
  */
 function hashCopy(value: unknown): Uint8Array | null {
-  if (!(value instanceof Uint8Array)) return null;
-  const copy = new Uint8Array(value);
-  return copy.length === EVIDENCE_LOG_HASH_BYTES ? copy : null;
+  if (typedArrayTag.call(value) !== "Uint8Array") return null;
+  if (typedArrayLength.call(value) !== EVIDENCE_LOG_HASH_BYTES) return null;
+  return new Uint8Array(value as Uint8Array);
 }
 
 async function sha256(
@@ -177,10 +190,10 @@ async function checkInclusion(input: unknown): Promise<boolean> {
   const expected = hashCopy(root);
   if (leaf === null || expected === null) return false;
   if (!Array.isArray(proof)) return false;
-  // An index loop over a length read once, not the list's own iterator, so
-  // no proof is read past MAX_PROOF_LENGTH elements.
-  const length = proof.length;
-  if (length > MAX_PROOF_LENGTH) return false;
+  // An index loop over a numeric length read once, not the list's own
+  // iterator, so no proof is read past MAX_PROOF_LENGTH elements.
+  const length: unknown = proof.length;
+  if (typeof length !== "number" || length > MAX_PROOF_LENGTH) return false;
   const path: (Uint8Array | null)[] = [];
   for (let i = 0; i < length; i += 1) path.push(hashCopy(proof[i]));
 
