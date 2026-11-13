@@ -40,19 +40,32 @@ for (const [name, args, status] of cases) {
   });
 }
 
-/** True when the Dockerfile's install step pins server, client and pgTAP and runs the check. */
+/**
+ * True when the Dockerfile's only package install pins server, client and pgTAP
+ * and runs the check on the installed versions as its last install command: no
+ * `||` that could swallow a failure and no later install that could upgrade
+ * PostgreSQL after the check.
+ */
 function pinsImageVersion(text) {
   const runs = text
     .replace(/\\\n/g, " ")
     .split("\n")
     .filter((line) => /^RUN\s/.test(line));
-  const install = runs.find((line) => line.includes("apt-get install")) ?? "";
+  const installs = runs.filter((line) =>
+    /\b(apt-get|apt|dpkg)\s+(-\S+\s+)*(install|-i)\b/.test(line),
+  );
+  const install = installs.length === 1 ? installs[0] : "";
+  const afterCheck = install.split(/assert-pg-version\.sh /).at(-1) ?? "";
   return (
     /^ARG PGTAP_VERSION=\S+$/m.test(text) &&
     install.includes('"postgresql-17-pgtap=${PGTAP_VERSION}"') &&
     install.includes('"postgresql-17=${PG_VERSION}"') &&
     install.includes('"postgresql-client-17=${PG_VERSION}"') &&
-    /assert-pg-version\.sh "\$PG_VERSION"/.test(install)
+    /assert-pg-version\.sh "\$PG_VERSION"/.test(install) &&
+    install.includes("dpkg-query -W -f='${Version}' postgresql-17)") &&
+    install.includes("dpkg-query -W -f='${Version}' postgresql-client-17)") &&
+    !install.includes("||") &&
+    /^[^&|;]*&&\s*rm -rf \/var\/lib\/apt\/lists\/\*\s*$/.test(afterCheck)
   );
 }
 
@@ -87,6 +100,35 @@ const variants = [
   [
     "check not run",
     dockerfile.replace(/assert-pg-version\.sh "\$PG_VERSION"/, "true"),
+    false,
+  ],
+  [
+    "check failure swallowed",
+    dockerfile.replace(
+      'postgresql-client-17)"',
+      'postgresql-client-17)" || true',
+    ),
+    false,
+  ],
+  [
+    "check compares PG_VERSION with itself",
+    dockerfile.replace(
+      /"\$\(dpkg-query -W -f='\$\{Version\}' postgresql-17\)"/,
+      '"$PG_VERSION"',
+    ),
+    false,
+  ],
+  [
+    "install after the check in the same RUN",
+    dockerfile.replace(
+      "&& rm -rf /var/lib/apt/lists/*",
+      "&& apt-get install -y postgresql-17-cron && rm -rf /var/lib/apt/lists/*",
+    ),
+    false,
+  ],
+  [
+    "install in a later RUN",
+    `${dockerfile}\nRUN apt-get update && apt-get install -y postgresql-17-cron\n`,
     false,
   ],
   [
