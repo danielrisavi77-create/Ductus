@@ -71,6 +71,7 @@ Svaka tablica koju `-- migrate:up` dijelovi u `db/migrations/` ostavljaju na `ma
 | `identity.user_account` | 1 | |
 | `identity.person_name` | 2 | |
 | `identity.session` | 3 | |
+| `identity.user_preference` | 1 | Samo jezik sučelja (`hr` ili `en`) i vrijeme promjene; jezik rada nije ovdje |
 | `identity.problem_report` | 31 | Opis do 1000 znakova i kontekst iz zatvorenih skupova; podrška još nema pravo čitanja |
 | `identity.logout_token_jti` | 3 | Samo hash `jti` i istek, briše se pri sljedećem upisu |
 | `identity.institution` | — | Podaci ustanove, ne osobe |

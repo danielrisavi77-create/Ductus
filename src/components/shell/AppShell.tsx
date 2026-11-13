@@ -7,7 +7,7 @@ import ProblemReport from "@/components/support/ProblemReport";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import styles from "./AppShell.module.css";
-import { accountPlace, homeHref, navFor, offersProblemReport, type ShellRole } from "./nav";
+import { accountPlace, HOW_IT_WORKS_HREF, homeHref, navFor, offersProblemReport, type ShellRole } from "./nav";
 import SessionObserver from "./SessionObserver";
 import ShellLogout from "./ShellLogout";
 import type { ShellSession } from "./shell-session";
@@ -197,6 +197,15 @@ export default function AppShell({ role, session, scope, endsOnDevice = false, c
           </>
         ) : null}
         <div className={styles.bottom}>
+          {/* "Kako Ductura radi" (DAN-431, J-02): for everyone, with or without a role. */}
+          <Link
+            className={styles.infoLink}
+            href={HOW_IT_WORKS_HREF}
+            aria-current={current === HOW_IT_WORKS_HREF ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            {t.shell.howItWorks}
+          </Link>
           {/* "Prijavi problem" (Z-10) for a signed-in person, wherever the side bar is. */}
           {offersProblemReport(scope) ? <ProblemReport buttonClassName={styles.report} session={session.tag === null ? null : { tag: session.tag, at: session.at }} /> : null}
           <p className={styles.note}>

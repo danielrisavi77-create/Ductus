@@ -100,6 +100,15 @@ describe("DAN-431 problem report: migration and domain agree", () => {
       before = after;
     }
     expect(before).toContain("/stanje");
+    expect(before).toContain("/kako-radi");
+    expect(before).toContain("/rad/[assignmentId]/dnevnik-pristupa");
+  });
+
+  it("the /kako-radi down removes only /kako-radi", () => {
+    const own = ROUTE_MIGRATIONS.find(({ up }) => routeCheck(up).includes("/kako-radi"));
+    expect(own).toBeDefined();
+    const after = routeCheck(own?.up ?? "");
+    expect(routeCheck(own?.down ?? "")).toEqual(after.filter((route) => route !== "/kako-radi"));
   });
 
   it("the /stanje down removes only /stanje", () => {

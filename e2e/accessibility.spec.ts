@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // Every page added later gets a row here; WCAG 2.1 AA is the pilot target.
 const PAGES = ["/", "/rad", "/nastavnik", "/nastavnik/zadatak/novi", "/nastavnik/brz-put", "/zadatak/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "/upis",
-  "/upis/kolegij/cccccccc-cccc-4ccc-8ccc-cccccccccccc", "/prijava"];
+  "/upis/kolegij/cccccccc-cccc-4ccc-8ccc-cccccccccccc", "/prijava", "/kako-radi"];
 
 // The shell is always dark (D-115); the sheet is the near-white paper by default
 // and has a dark theme with its own tokens (D-188, D-123), so each sheet theme is
