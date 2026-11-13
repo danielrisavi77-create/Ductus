@@ -97,6 +97,53 @@ describe("createAlarmTracker", () => {
     ]);
   });
 
+  // Review c.6854584001: the COMMIT can succeed and its reply be lost, so a
+  // write that rejects may still be in the store.
+  function lostReplyStore(lose: (call: Call) => boolean) {
+    const calls: Call[] = [];
+    const write = (op: Call[0]) => async (kind: OpsAlarmKind) => {
+      calls.push([op, kind]);
+      if (lose([op, kind])) throw new Error("connection lost after commit");
+    };
+    return { calls, store: { raise: write("raise"), resolve: write("resolve") } satisfies AlarmStore };
+  }
+
+  it("(9) a fault after an end whose reply was lost is raised again", async () => {
+    let lose = false;
+    const { calls, store } = lostReplyStore(([op]) => lose && op === "resolve");
+    const tracker = createAlarmTracker(store);
+    await tracker.observe({ database: "ok", storage: "nedostupno" });
+    lose = true;
+    await tracker.observe({ database: "ok", storage: "ok" });
+    lose = false;
+    await tracker.observe({ database: "ok", storage: "nedostupno" });
+    // The end is written again before the raise: whether or not the lost one
+    // was applied, the raise opens a new episode.
+    expect(calls.filter(([, kind]) => kind === "ready_storage")).toEqual([
+      ["raise", "ready_storage"],
+      ["resolve", "ready_storage"],
+      ["resolve", "ready_storage"],
+      ["raise", "ready_storage"],
+    ]);
+  });
+
+  it("(9) an end after a raise whose reply was lost is written", async () => {
+    let lose = false;
+    const { calls, store } = lostReplyStore(([op]) => lose && op === "raise");
+    const tracker = createAlarmTracker(store);
+    await tracker.observe({ queue: "ok" });
+    lose = true;
+    await tracker.observe({ queue: "nedostupno" });
+    lose = false;
+    await tracker.observe({ queue: "ok" });
+    expect(calls).toEqual([
+      ["resolve", "ready_queue"],
+      ["raise", "ready_queue"],
+      ["raise", "ready_queue"],
+      ["resolve", "ready_queue"],
+    ]);
+  });
+
   it("(9) a store that never settles holds no second write and loses no transition", async () => {
     let release!: () => void;
     const calls: Call[] = [];

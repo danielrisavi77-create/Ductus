@@ -32,6 +32,11 @@ type KindState = {
   // A resolve of this kind is in the store. A fault reported meanwhile is owed
   // too: the resolve was decided before the fault and will not cover it.
   resolving: boolean;
+  // A resolve failed, and the store may still have applied it: a COMMIT can
+  // succeed and its reply be lost. Until a resolve is confirmed, a raise is
+  // preceded by one, so it opens a new episode instead of landing on the old
+  // one or on nothing. Both writes are idempotent in the store.
+  endUnsure: boolean;
 };
 
 /**
@@ -51,7 +56,7 @@ export function createAlarmTracker(
   reachable: StoreReachable = () => true,
 ) {
   const state = new Map<OpsAlarmKind, KindState>(
-    OPS_ALARM_KINDS.map((kind) => [kind, { stored: undefined, wanted: undefined, owedRaise: false, resolving: false }]),
+    OPS_ALARM_KINDS.map((kind) => [kind, { stored: undefined, wanted: undefined, owedRaise: false, resolving: false, endUnsure: false }]),
   );
   const settled = Promise.resolve();
   let running: Promise<void> | null = null;
@@ -74,21 +79,28 @@ export function createAlarmTracker(
     }
   }
 
+  async function end(kind: OpsAlarmKind, s: KindState): Promise<boolean> {
+    s.resolving = true;
+    const resolved = await write("resolve", kind);
+    s.resolving = false;
+    s.endUnsure = !resolved;
+    s.stored = resolved ? "resolved" : undefined;
+    return resolved;
+  }
+
   async function flush(): Promise<void> {
     for (const [kind, s] of state) {
       if (!up) return;
       if (s.owedRaise || (s.wanted === "raised" && s.stored !== "raised")) {
+        if (s.endUnsure && !(await end(kind, s))) continue;
+        if (!up) return;
         if (!(await write("raise", kind))) continue;
         s.stored = "raised";
         s.owedRaise = false;
       }
       if (s.wanted === "resolved" && s.stored !== "resolved") {
         if (!up) return;
-        s.resolving = true;
-        const resolved = await write("resolve", kind);
-        s.resolving = false;
-        if (!resolved) continue;
-        s.stored = "resolved";
+        await end(kind, s);
       }
     }
   }
