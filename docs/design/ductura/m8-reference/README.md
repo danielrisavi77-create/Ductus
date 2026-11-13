@@ -42,7 +42,7 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 - **PDF izvor (uvoz PDF-a, M8.3).**
   - Isti dijalog i isti obvezni „Pregled uvoza” kao S-19. Uvezeni tekst nosi oznaku „uvezeno” i naziv datoteke, a mentor vidi naziv (D-282).
   - Pregled pokazuje broj stranica. PDF nema praćenih promjena, pa nema ni retka o njima (`docs/contracts/import-v1.md`: uz `pdf` nema `traces`).
-  - Poruka za PDF bez sloja teksta je iz #1792. Ductura ne prepoznaje tekst sa slike.
+  - Poruka za PDF bez sloja teksta je iz #1792, preoblikovana bez priloga nesigurnosti koji rječnik zabranjenih izraza ne dopušta (`docs/PRODUCT.md` §5, redak 117; skener ga zasad ne hvata). Ductura ne prepoznaje tekst sa slike.
 - **Izvoz (S-20).**
   - List je papir u obje ljuske (D-188). Naslovnica pokazuje samo podatke studija, nikad podatke iz zapisa procesa (PRODUCT §5 pravilo 2).
   - Izvoz radi i kad provjera oblika nije uključena (D-203 t. 2). Napomene o obliku nikad ne sprječavaju izvoz ni predaju (D-222).
