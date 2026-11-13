@@ -162,8 +162,10 @@ FROM (VALUES
 ) AS v (n, sql, want, what) ORDER BY v.n;
 SELECT is_empty($$ SELECT 1 FROM audit.access_log WHERE reader_id = pg_temp.id('marko') AND document_id = 'doc-ana-z1' $$,
   'K1: no refused read of Ana''s earlier work is logged');
-SELECT isnt_empty($$ SELECT 1 FROM audit.access_log WHERE reader_id = pg_temp.id('marko') AND document_id = 'doc-boris-z1' $$,
-  'K5: Marko''s reads of Boris''s work through G1 are logged');
+SELECT is((SELECT string_agg(DISTINCT reader_role, ',') FROM audit.access_log
+            WHERE reader_id = pg_temp.id('marko') AND document_id = 'doc-boris-z1'),
+  'seminar_teacher',
+  'K5: Marko''s reads of Boris''s work are logged as the G1 teacher''s, not the course team''s');
 
 -- K2 and K4: Dora starts her work at the instant of Marko's membership.
 SELECT pg_temp.add_work('dora');
@@ -199,6 +201,10 @@ INSERT INTO expect VALUES
   ('after', 1, 'K3 after', 'marko', 'dora-z1', 'teacher'),
   ('after', 2, 'K3 after', 'marko', NULL, 'ana,boris,dora|boris,dora|doc-boris-z1,doc-dora-z1');
 SELECT check_stage FROM pg_temp.check_stage('after') check_stage;
+SELECT is((SELECT string_agg(DISTINCT reader_role, ',') FROM audit.access_log
+            WHERE reader_id = pg_temp.id('marko') AND document_id = 'doc-dora-z1'),
+  'teacher',
+  'K2, K3, K5: Marko''s reads of Dora''s work open through the course are logged as the course team''s');
 
 -- K8: Marko's membership of K1 ends. Dora's work, open through the course,
 -- closes; Boris's stays open through G1.
