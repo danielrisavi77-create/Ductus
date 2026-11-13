@@ -285,9 +285,15 @@ test("M3.10-P02: an answer lost after the commit is retried with the same bytes 
   expect(retries.length).toBeGreaterThan(0);
   for (const retry of retries) expect(retry.body).toBe(dropped.body);
   const answered = retries.filter((retry) => retry.answer?.status !== undefined && retry.answer.status !== "upgrade_required");
-  expect(answered.map((retry) => retry.answer?.status)).toEqual(["duplicate"]);
-  // The lost answer itself, receipt and signature included; only the status differs.
-  expect({ ...answered[0]!.answer, status: "committed" }).toEqual(dropped.answer);
+  // A retry the tab gave up on may still reach the route, so there can be more
+  // than one; each is `duplicate` with the lost answer itself, receipt and
+  // signature included, and only the status differs. The revision check below
+  // still holds the server to one commit for the key.
+  expect(answered.length).toBeGreaterThan(0);
+  for (const retry of answered) {
+    expect(retry.answer?.status).toBe("duplicate");
+    expect({ ...retry.answer, status: "committed" }).toEqual(dropped.answer);
+  }
   // One revision per transaction the server committed; the retry adds none.
   const committed = new Set(exchanges.filter((exchange) => exchange.answer?.status === "committed").map((exchange) => exchange.txid));
   expect(committed.has(dropped.txid)).toBe(true);

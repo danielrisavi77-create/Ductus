@@ -792,6 +792,8 @@ describe("a lost answer after the commit, client and route together (M3.10-P02)"
       receipts: String(Number(before.receipts) + 1),
       signed: String(Number(before.signed) + 1),
     });
+    // The chain moves with the server now, so a failure below names its own case, not every later one.
+    advance();
 
     // The row was kept with its bytes; the retry (by itself, or by hand after L4) sends them again.
     const again = await transport(documentId, row.tx);
@@ -827,7 +829,6 @@ describe("a lost answer after the commit, client and route together (M3.10-P02)"
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(forged)).toBeNull();
-    advance();
   });
 
   // Istodobnost: the original request is still in the server, before its
@@ -866,7 +867,8 @@ describe("a lost answer after the commit, client and route together (M3.10-P02)"
     };
     const transport = createEvidenceTransport(dropping, { ...createCommitProtocol(), version: DUCTUS_PROTOCOL_VERSION });
     const { row, advance } = nextRow(`tx-${suffix}-lost-race`);
-    const revision = chain.revision + 1;
+    const base = chain.revision;
+    const revision = base + 1;
     const before = await stored();
 
     expect(await transport(documentId, row.tx)).toEqual({ status: "transport_error" });
@@ -876,17 +878,23 @@ describe("a lost answer after the commit, client and route together (M3.10-P02)"
       { type: "SYNC_ACK" },
     ]);
     const committed = tab.answers.at(-1)!;
+    advance();
 
     release();
     const late = await original!;
     expect(late.status).toBe(200);
     const lateText = await late.text();
     expect(lateText).toBe(committed.replace('"status":"committed"', '"status":"duplicate"'));
-    // The answer finds the row already gone from the queue: nothing to acknowledge again.
-    expect(await outcomeToEvents(commitOutcomeFrom(200, JSON.parse(lateText)), verification(work, row, revision), {
-      sent: row,
-      pending: [],
-    })).toEqual([]);
+    // The late answer is itself a valid receipt for the row: were the row still
+    // queued, it would acknowledge the one revision and nothing else.
+    const lateOutcome = commitOutcomeFrom(200, JSON.parse(lateText));
+    expect(lateOutcome).toMatchObject({ status: "duplicate", revision });
+    expect(await outcomeToEvents(lateOutcome, verification(work, row, revision), { sent: row, pending: [row] })).toEqual([
+      { type: "SYNC_ACK" },
+    ]);
+    expect(ackedRevision(lateOutcome)).toBe(revision);
+    // The row has already left the queue with the retry's ACK, so the answer adds no event.
+    expect(await outcomeToEvents(lateOutcome, verification(work, row, revision), { sent: row, pending: [] })).toEqual([]);
     // Two writes of the same immutable object, one revision, one receipt, one signature.
     expect(counts).toEqual({ puts: 2, signs: 1, attaches: 1 });
     expect(await stored()).toMatchObject({
@@ -896,10 +904,9 @@ describe("a lost answer after the commit, client and route together (M3.10-P02)"
     });
     const revisions = await admin.query("SELECT 1 FROM evidence.document_revision WHERE document_id = $1 AND revision > $2", [
       documentId,
-      chain.revision,
+      base,
     ]);
     expect(revisions.rowCount).toBe(1);
-    advance();
   });
 });
 
