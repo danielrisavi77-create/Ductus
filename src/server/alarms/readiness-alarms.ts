@@ -40,7 +40,10 @@ type KindState = {
  * on the next report. Writes run one at a time, and reports that arrive
  * meanwhile join the run in progress, so a store that hangs holds at most one
  * write. State is one fixed entry per kind, so no number of reports grows it.
- * observe() never rejects and never changes what the caller answers.
+ * observe() never rejects and never changes what the caller answers. Only the
+ * report that starts a run waits for it; one that joins a run, or comes while
+ * the store is unreachable, gets a settled promise, so however many reports
+ * arrive during a run that does not end, at most one caller waits on it.
  */
 export function createAlarmTracker(
   store: AlarmStore,
@@ -50,6 +53,7 @@ export function createAlarmTracker(
   const state = new Map<OpsAlarmKind, KindState>(
     OPS_ALARM_KINDS.map((kind) => [kind, { stored: undefined, wanted: undefined, owedRaise: false, resolving: false }]),
   );
+  const settled = Promise.resolve();
   let running: Promise<void> | null = null;
   let again = false;
   // What the latest report said of the store. A run in progress checks it
@@ -92,7 +96,7 @@ export function createAlarmTracker(
   function run(): Promise<void> {
     if (running) {
       again = true;
-      return running;
+      return settled;
     }
     running = (async () => {
       try {
@@ -117,7 +121,7 @@ export function createAlarmTracker(
         if (target === "raised" && (s.stored !== "raised" || s.resolving)) s.owedRaise = true;
       }
       up = reachable(capabilities);
-      if (!up) return running ?? Promise.resolve();
+      if (!up) return settled;
       return run();
     },
   };

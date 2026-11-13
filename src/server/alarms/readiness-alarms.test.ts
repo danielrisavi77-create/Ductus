@@ -234,16 +234,18 @@ describe("createAlarmTracker", () => {
       return new Promise<void>((resolve) => releases.push(resolve));
     };
     const tracker = createAlarmTracker({ raise: hang("raise"), resolve: hang("resolve") });
-    const pending = new Set<Promise<void>>();
+    const pending: Array<Promise<void>> = [];
     for (let i = 0; i < 10_000; i++) {
       const status = i % 2 === 0 ? "nedostupno" : "ok";
-      pending.add(tracker.observe({ database: status, storage: status, queue: status, signing: status }));
+      pending.push(tracker.observe({ database: status, storage: status, queue: status, signing: status }));
     }
     await Promise.resolve();
     expect(calls).toHaveLength(1);
     expect(releases).toHaveLength(1);
-    // Every report joined the one run in progress: one promise, not 10 000.
-    expect(pending.size).toBe(1);
+    // Every report joined the one run in progress, and only the report that
+    // started it waits on it: one pending promise, not 10 000 (review
+    // c.6853469400).
+    expect(await unsettled(pending)).toBe(1);
     for (let round = 0; round < 50 && releases.length > 0; round++) {
       releases.splice(0).forEach((release) => release());
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -256,3 +258,11 @@ describe("createAlarmTracker", () => {
     }
   });
 });
+
+/** How many of the promises have not settled once queued callbacks have run. */
+async function unsettled(promises: Array<Promise<unknown>>): Promise<number> {
+  let done = 0;
+  for (const promise of promises) void promise.then(() => (done += 1), () => (done += 1));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return promises.length - done;
+}
