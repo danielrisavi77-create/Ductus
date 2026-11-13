@@ -9,11 +9,18 @@ import type { CapabilityName, CapabilityReport } from "./ready";
 /** How long one check answers every caller. */
 export const PUBLIC_STATUS_TTL_MS = 15_000;
 
-// What each part needs. The queue runs only background work no part shown
-// here waits on, so it is not one of them.
-const NEEDS: Readonly<Record<ComponentName, readonly CapabilityName[]>> = Object.freeze({
+// What each part needs. With synchronous signing the queue runs only
+// background work no part shown here waits on. With asynchronous signing
+// (DAN-518, protocol 2) the worker signs every receipt, so writing and
+// submission also need it: without it nothing reaches a signed receipt.
+const SYNC_NEEDS: Readonly<Record<ComponentName, readonly CapabilityName[]>> = Object.freeze({
   writing: ["database", "storage", "signing"],
   submission: ["database", "storage", "signing"],
+  mentorView: ["database"],
+});
+const ASYNC_NEEDS: Readonly<Record<ComponentName, readonly CapabilityName[]>> = Object.freeze({
+  writing: ["database", "storage", "signing", "queue"],
+  submission: ["database", "storage", "signing", "queue"],
   mentorView: ["database"],
 });
 
@@ -26,11 +33,12 @@ function partState(report: CapabilityReport, needs: readonly CapabilityName[]): 
 }
 
 /** Each part is as good as the worst capability it needs. */
-export function publicComponents(report: CapabilityReport): PublicStatus["components"] {
+export function publicComponents(report: CapabilityReport, asyncSigning = false): PublicStatus["components"] {
+  const needs = asyncSigning ? ASYNC_NEEDS : SYNC_NEEDS;
   return {
-    writing: partState(report, NEEDS.writing),
-    submission: partState(report, NEEDS.submission),
-    mentorView: partState(report, NEEDS.mentorView),
+    writing: partState(report, needs.writing),
+    submission: partState(report, needs.submission),
+    mentorView: partState(report, needs.mentorView),
   };
 }
 
@@ -42,6 +50,7 @@ export function publicComponents(report: CapabilityReport): PublicStatus["compon
 export function publicStatusCache(
   check: () => Promise<CapabilityReport>,
   now: () => number = Date.now,
+  asyncSigning = false,
 ): () => Promise<PublicStatus> {
   let kept: { at: number; body: PublicStatus } | undefined;
   let pending: Promise<PublicStatus> | undefined;
@@ -51,7 +60,7 @@ export function publicStatusCache(
       .then(() => {
         const at = now();
         return check().then((report) => {
-          const body: PublicStatus = { checkedAt: new Date(at).toISOString(), components: publicComponents(report) };
+          const body: PublicStatus = { checkedAt: new Date(at).toISOString(), components: publicComponents(report, asyncSigning) };
           kept = { at, body };
           return body;
         });

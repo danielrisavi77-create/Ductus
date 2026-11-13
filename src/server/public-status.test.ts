@@ -36,6 +36,29 @@ describe("publicComponents", () => {
   });
 });
 
+// Codex P2 on #1979: with asynchronous signing (DAN-518) the worker signs every
+// receipt, so writing and submission are not "radi" without the queue.
+describe("publicComponents with asynchronous signing", () => {
+  it.each<[string, CapabilityReport, ReturnType<typeof publicComponents>]>([
+    ["every capability ok", all("ok"), { writing: "radi", submission: "radi", mentorView: "radi" }],
+    ["queue down", report({ database: "ok", storage: "ok", signing: "ok", queue: "nedostupno" }), { writing: "ne_radi", submission: "ne_radi", mentorView: "radi" }],
+    [
+      "queue not configured",
+      report({ database: "ok", storage: "ok", signing: "ok", queue: "nije_konfigurirano" }),
+      { writing: "nije_ukljuceno", submission: "nije_ukljuceno", mentorView: "radi" },
+    ],
+    ["queue not reported", report({ database: "ok", storage: "ok", signing: "ok" }), { writing: "ne_radi", submission: "ne_radi", mentorView: "radi" }],
+  ])("%s", (_name, input, expected) => {
+    expect(publicComponents(input, true)).toEqual(expected);
+  });
+
+  it("the cache maps with the mode it was given", async () => {
+    const queueDown = report({ database: "ok", storage: "ok", signing: "ok", queue: "nedostupno" });
+    await expect(publicStatusCache(async () => queueDown, () => 0, true)()).resolves.toMatchObject({ components: { writing: "ne_radi" } });
+    await expect(publicStatusCache(async () => queueDown, () => 0)()).resolves.toMatchObject({ components: { writing: "radi" } });
+  });
+});
+
 describe("publicStatusCache", () => {
   const clock = (start = 1_000_000) => {
     let t = start;
