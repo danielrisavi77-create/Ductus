@@ -34,13 +34,15 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 
 - **Uvoz teksta (S-19).**
   - Uvoz je samo iz datoteke, a dijalog se obraća studentu s „Vi” i kaže da mentor vidi naziv datoteke (D-282). Uvodna rečenica dijaloga je iz #1794 i ponavlja `docs/PRODUCT.md`: zapisuju se naziv, vrsta i veličina datoteke te vrijeme uvoza na minutu.
-  - „Pregled uvoza” je obvezan korak prije nego što tekst uđe u rad. Popis „Neće se prenijeti” pojavljuje se samo za ono čega u datoteci ima.
+  - Podržani oblici su .docx i .pdf, zatvoren skup `fileFormat` iz `docs/contracts/evidence-segment-v4.md` (manifest uvoza). Drugi oblik traži izmjenu ugovora, pa ga slika ne nudi.
+  - „Pregled uvoza” je obvezan korak prije nego što tekst uđe u rad. Popis „Neće se prenijeti” pojavljuje se samo za ono čega u datoteci ima. Stavke u slici su primjer iz izlaza čitača u #1792, ne odluka o opsegu čitača (`docs/ARCHITECTURE.md` §5: struktura se čuva gdje je moguće); stvarni popis daje čitač M8.2 i M8.3.
   - Praćene promjene uvoze se kao prihvaćene. Student i mentor vide isti tekst: broj promjena po vrsti, bez imena, datuma i obrisanog teksta (D-281, D-198 t. 5).
   - Poruke greške su iz #1792. Tehnički kod je samo u „Pojedinosti za podršku” i nikad nije jedina poruka.
   - Uvezeni tekst ostaje zabilježen kao uvoz i ako ga student kasnije obriše ili promijeni (rečenica iz #1794).
   - Kad zadatak isključi uvoz, stavka „Uvezi tekst iz datoteke” ostaje vidljiva, ali je onemogućena i navodi razlog (D-282).
 - **PDF izvor (uvoz PDF-a, M8.3).**
   - Isti dijalog i isti obvezni „Pregled uvoza” kao S-19. Uvezeni tekst nosi oznaku „uvezeno” i naziv datoteke, a mentor vidi naziv (D-282).
+  - Pregled kaže da PDF gubi oblik i da slova s kvačicama ovise o kvaliteti PDF-a, prije nego što student potvrdi uvoz (`docs/PRODUCT.md` §10, redak Uvoz). Tekst rečenice je prijedlog.
   - Pregled pokazuje broj stranica. PDF nema praćenih promjena, pa nema ni retka o njima (`docs/contracts/import-v1.md`: uz `pdf` nema `traces`).
   - Poruka za PDF bez sloja teksta je iz #1792, preoblikovana bez priloga nesigurnosti koji rječnik zabranjenih izraza ne dopušta (`docs/PRODUCT.md` §5, redak 117; skener ga zasad ne hvata). Ductura ne prepoznaje tekst sa slike.
 - **Izvoz (S-20).**
@@ -54,13 +56,13 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 
 - **„PDF izvor” je M8.3 (DAN-397, uvoz PDF-a)**, kako je potvrđeno na #1836 (c.6860746528). Redak paketa 12 u `docs/design/EKRANI.md` navodi i S-09 (PDF izvori u bilježnici, M8.7, A-03). S-09 nije u ovom paketu; nacrt je sačuvan na grani `claude/w603-s09-nacrt` za zaseban paket ako ga orkestrator dodijeli.
 - Ulazi koji nisu odlučeni stoje u slici kao `{…}, otvoreno` s isprekidanim rubom. Ne izmišljam ih:
-  - granice veličine datoteke i broja stranica PDF-a (D-291);
+  - granice veličine datoteke i broja stranica PDF-a (D-291). `docs/contracts/import-v1.md` §4 bilježi 2 MiB prema B-8, a broj potvrđuje review (D-291), pa slika ne piše broj;
   - popis stavki „Neće se prenijeti” za PDF i poruka za PDF koji se ne može pročitati (#1792 ih nema; čitač PDF-a dolazi s M8.3);
   - opis oblika iz profila fakulteta (Lekta, Q-11);
   - kome se student javlja kad su podaci naslovnice netočni (#1797).
 - Traži li FPZG PDF/A, pitanje je u paketu Q-3; dodatna rečenica za taj slučaj nije nacrtana.
 - Nazivi stavki „Preuzmi” su prijedlog iz #1796, ne vlasnička odluka.
-- Kod naziva uvezene datoteke odlučena je samo vidljivost (D-292). Gdje se naziv čuva, otvoreno je do ugovora M8.0-S1, pa slika o tome ništa ne kaže.
+- Kod naziva uvezene datoteke slika pokazuje samo vidljivost (D-292). Gdje se naziv čuva određuje `docs/contracts/import-v1.md` §3 (samo `import_event.file_name`, izvan svakog hasha); to nije tekst sučelja.
 
 ## Granice
 
