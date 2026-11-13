@@ -34,6 +34,7 @@ export default function Landing() {
             <span className="demo-badge">{t.shell.demoBadge}</span>
           </div>
           <nav className={styles.nav} aria-label={l.sectionsNav}>
+            <a href="#isprobaj">{l.tryEditorLink}</a>
             <a href="#kako-radi">{l.howItWorksLink}</a>
             <a href="#za-koga">{l.forWhomLink}</a>
             <a href="#tijek-rada">{l.flow.link}</a>
@@ -58,6 +59,10 @@ export default function Landing() {
                 {l.enter}
               </a>
               <p className={styles.small}>{l.aaiOnly}</p>
+              {/* No sign-in: the sandbox below keeps the text in this page only. */}
+              <a className={styles.ghost} href="#isprobaj">
+                {l.tryEditorLink}
+              </a>
               <a className={styles.ghost} href="#kako-radi">
                 {l.howItWorksLink}
               </a>
