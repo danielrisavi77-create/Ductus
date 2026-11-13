@@ -449,6 +449,30 @@ describe("inclusion check refuses without throwing", () => {
     expect(reads).toBe(0);
   });
 
+  it("a proof length that is not a whole number from 0 to 53 (V5)", async () => {
+    const withLength = (elements: Uint8Array[], length: number) =>
+      new Proxy(elements, {
+        get: (target, key) =>
+          key === "length" ? length : Reflect.get(target, key),
+      });
+    // One leaf: an empty path proves it, so a skipped element must not.
+    const single = await honest(1, 0);
+    for (const length of [Number.NaN, -1, -Infinity]) {
+      const proof = withLength([new Uint8Array(31)], length);
+      await expect(
+        verifyEvidenceLogInclusion({ ...single, proof }),
+      ).resolves.toBe(false);
+    }
+    // A fractional length must not read one element more than it states.
+    const input = await honest();
+    for (const length of [2.5, 2.000001]) {
+      const proof = withLength([...input.proof], length);
+      await expect(
+        verifyEvidenceLogInclusion({ ...input, proof }),
+      ).resolves.toBe(false);
+    }
+  });
+
   it("checks the values as passed, even if the caller changes them meanwhile", async () => {
     const input = await honest();
     const proof = input.proof.map((element) => new Uint8Array(element));

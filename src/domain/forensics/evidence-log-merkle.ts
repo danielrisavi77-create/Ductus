@@ -190,12 +190,19 @@ async function checkInclusion(input: unknown): Promise<boolean> {
   const expected = hashCopy(root);
   if (leaf === null || expected === null) return false;
   if (!Array.isArray(proof)) return false;
-  // An index loop over a numeric length read once, not the list's own
-  // iterator, so no proof is read past MAX_PROOF_LENGTH elements.
+  // An index loop over a whole length from 0 to MAX_PROOF_LENGTH, read once,
+  // not the list's own iterator: NaN, negative or fractional lengths would
+  // skip or add elements.
   const length: unknown = proof.length;
-  if (typeof length !== "number" || length > MAX_PROOF_LENGTH) return false;
+  if (
+    !Number.isSafeInteger(length) ||
+    (length as number) < 0 ||
+    (length as number) > MAX_PROOF_LENGTH
+  ) {
+    return false;
+  }
   const path: (Uint8Array | null)[] = [];
-  for (let i = 0; i < length; i += 1) path.push(hashCopy(proof[i]));
+  for (let i = 0; i < (length as number); i += 1) path.push(hashCopy(proof[i]));
 
   let fn = index as number;
   let sn = (treeSize as number) - 1;
