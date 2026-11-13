@@ -35,14 +35,15 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
   - Student vidi svoj redak s istim stupcima (D-286).
   - „Predana datoteka” i „Novi izvoz” su odvojeni, s rečenicama iz #1799. Bajtovi predane datoteke se čuvaju, pa njezin otisak uvijek odgovara potvrdi (D-285).
   - Predana datoteka ima dva otiska, PDF-a i .docx-a, svaki uz svoju oznaku, jer potvrda nosi otisak izvezenog DOCX-a i PDF-a (D-80 t. 11). Otisak stoji kao 64 znamenke bez razmaka, kao u `../m7-reference-c`.
-  - Studentov paket sadrži PDF teksta, potpisanu potvrdu predaje, popis otisaka (D-173) i studentov redak tablice s istim stupcima (D-286; `docs/contracts/export-recipient-v1.md` §7 D5).
+  - Studentov paket sadrži PDF teksta, potpisanu potvrdu predaje, popis otisaka (D-173), odjeljak „Što ovaj paket ne dokazuje” (`docs/contracts/export-recipient-v1.md` §7 D2) i studentov redak tablice s istim stupcima (D-286; isti ugovor §7 D5).
   - Poveznica vrijedi 24 sata. Nakon toga briše se samo novi izvoz, a predani rad ostaje (D-173, D-273, D-285). Tekstovi poveznice i istekle poveznice su iz #1800.
-  - Studentova poveznica vrijedi za jedno preuzimanje: `docs/contracts/export-recipient-v1.md` §5 zasad je tako tretira dok je O-4 otvoren.
+  - Broj preuzimanja studentove poveznice nije odlučen: `docs/contracts/export-recipient-v1.md` §5 poveznicu zasad tretira kao jednokratnu samo dok je O-4 otvoren, pa slika piše `{broj preuzimanja}`.
   - Stranica poveznice koja više ne vrijedi ima isti tekst za isteklu, iskorištenu, nepostojeću i tuđu poveznicu i ne navodi uzrok (`docs/contracts/export-recipient-v1.md` §5 C6). Zato je iz teksta iz #1800 izostavljen dio „(vrijedila je 24 sata)”.
 - **Povijest dokumenta.**
   - Naslov, podnaslov, redak verzije, rečenica o drugim verzijama, rečenica o usporedbi i tekst dijaloga pristupa su iz #1795.
   - Prikaz je samo popis s oznakom „uvezeno, tvrdnja iz datoteke”, bez vremenske crte pisanja. Student i mentor vide isti prikaz (D-198 t. 6).
   - Po verziji iz oblaka stoje samo vrijeme na minutu i veličina, nikad osoba koja je verziju napravila (D-198 t. 5, D-24).
+  - Sadržaj verzije koju je napravila druga osoba ne čuva se (D-198 t. 5), pa takva verzija nema „Usporedi”. Rečenica ne navodi razlog, da se o trećoj osobi ništa ne pokaže; tekst rečenice je prijedlog.
   - Rečenica „Ductura ne zna jesu li postojale i druge” stoji uvijek kad je izvor oblak (D-198 t. 1).
   - Praćene promjene iz uvezene datoteke prikazane su kao broj po vrsti, istim tekstom kao u S-19, bez boje (D-281).
   - „Ukloni pristup” je na istom ekranu kao popis verzija iz oblaka.
@@ -54,7 +55,8 @@ Ulazi koji nisu odlučeni stoje u slici kao `{…}, otvoreno` s isprekidanim rub
 
 - oblik naziva datoteke u zipu (D-286 daje stupac, ne oblik naziva);
 - kako se dva otiska (PDF i .docx) zapisuju u potvrdu. `docs/contracts/submission-receipt-v2.md` ima jedno polje `artifactSha256`, a D-80 t. 11 traži otisak DOCX-a i PDF-a;
-- vrijedi li poveznica paketa za Merlin za jedno ili više preuzimanja. `docs/contracts/export-recipient-v1.md` ne pokriva mentorov paket;
+- vrijedi li poveznica za jedno ili više preuzimanja: za paket za Merlin jer ga `docs/contracts/export-recipient-v1.md` ne pokriva, a za studentov paket dok je O-4 otvoren;
+- broj stranica uvezenog PDF-a. `import_event` ga nema (`docs/contracts/import-v1.md` §1), a §4 ga ostavlja otvorenim do M8.3 (D-291), pa ga Povijest dokumenta ne pokazuje;
 - naziv pružatelja u rečenici za D-283 (`{pružatelj}`). Rečenicu D-283 ne daje; ova je prijedlog;
 - tehnički kod u „Pojedinosti za podršku”.
 
