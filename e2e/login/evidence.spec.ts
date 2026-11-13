@@ -231,6 +231,76 @@ test("3d-2c2: a 503 is retried with the same key and bytes", async ({ page }) =>
   expect(new Set(bodies.slice(0, 3)).size).toBe(1);
 });
 
+// M3.10-P02 (DAN-320, D-211): the server commits and the answer never reaches
+// the tab. The request reaches the real route, which commits and signs; the
+// tab gets a reset connection. Server-saved shows only after the retry, which
+// sends the same bytes under the same key and gets `duplicate` with the lost
+// receipt, and the server's revision moves once per transaction, never for
+// the retry.
+test("M3.10-P02: an answer lost after the commit is retried with the same bytes and moves the revision once", async ({ page }) => {
+  const { documentId } = await openSheet(page);
+  const before = (await serverOf(documentId))?.revision ?? 0;
+  type Exchange = { body: string; txid: string; answer: { status?: string } | null };
+  const exchanges: Exchange[] = [];
+  let lost: Exchange | null = null;
+  await page.route(COMMIT, async (route) => {
+    const body = route.request().postData() ?? "";
+    const exchange: Exchange = { body, txid: (JSON.parse(body) as { clientTransactionId: string }).clientTransactionId, answer: null };
+    exchanges.push(exchange);
+    const response = await route.fetch();
+    const text = await response.text();
+    try {
+      exchange.answer = JSON.parse(text) as Exchange["answer"];
+    } catch {
+      exchange.answer = null;
+    }
+    if (lost === null && response.status() === 200 && exchange.answer?.status === "committed") {
+      lost = exchange;
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.fulfill({ response, body: text });
+  });
+  await type(page, "Izmišljeni odlomak čiji se odgovor izgubi.");
+  await expect.poll(() => lost !== null, { timeout: OPEN }).toBe(true);
+  const dropped = lost as unknown as Exchange;
+  // The server holds the commit; the tab does not know it.
+  await expect.poll(async () => (await serverOf(documentId))?.revision ?? 0, { timeout: OPEN }).toBeGreaterThan(before);
+  // Until a retry of the row goes out, nothing shows server-saved. A retry is
+  // recorded before its request leaves, so a state read before it was seen
+  // cannot come from its answer; a new edit may start the drain sooner.
+  // Only what goes out after the lost answer; the probe under "2" that a 426
+  // turned back before it carries the same key too.
+  const retriesOf = () => exchanges.slice(exchanges.indexOf(dropped) + 1).filter((exchange) => exchange.txid === dropped.txid);
+  for (const end = Date.now() + 1500; Date.now() < end;) {
+    const state = await chipOf(page).getAttribute("data-state");
+    if (retriesOf().length > 0) break;
+    expect(state).not.toBe("SYNCED");
+    await page.waitForTimeout(200);
+  }
+
+  await networkBack(page);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+  const retries = retriesOf();
+  expect(retries.length).toBeGreaterThan(0);
+  for (const retry of retries) expect(retry.body).toBe(dropped.body);
+  const answered = retries.filter((retry) => retry.answer?.status !== undefined && retry.answer.status !== "upgrade_required");
+  // A retry the tab gave up on may still reach the route, so there can be more
+  // than one; each is `duplicate` with the lost answer itself, receipt and
+  // signature included, and only the status differs. The revision check below
+  // still holds the server to one commit for the key.
+  expect(answered.length).toBeGreaterThan(0);
+  for (const retry of answered) {
+    expect(retry.answer?.status).toBe("duplicate");
+    expect({ ...retry.answer, status: "committed" }).toEqual(dropped.answer);
+  }
+  // One revision per transaction the server committed; the retry adds none.
+  const committed = new Set(exchanges.filter((exchange) => exchange.answer?.status === "committed").map((exchange) => exchange.txid));
+  expect(committed.has(dropped.txid)).toBe(true);
+  expect((await serverOf(documentId))?.revision).toBe(before + committed.size);
+  await sameOnServer(page, documentId);
+});
+
 test("3d-2c2: a 409 conflict stops sending and makes the sheet read-only", async ({ page }) => {
   await openSheet(page);
   const requests = recordRequests(page);
