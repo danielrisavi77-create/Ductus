@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-09 — PDF izvor u bilježnici (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 12 · DAN-603 · prijedlog slike · M8.UX-R</div>
+  <h1>S-09 — PDF izvor u bilježnici</h1>
+  <p>PDF učitan uz izvor u bilježnici izvora: isticanje, navod sa stranicom i „A-03 Provjera doslovnog citata” (M8.7, #1801). Rezultat provjere vidi samo student i ne ulazi u sažetak, izvoz ni predaju (D-287). Provjera je usporedba teksta, ne AI analiza. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="p1" class="variant" data-state="prazno">
+    <div class="ref-tag">Stanje 1 · prazno</div>
+    <div class="panel"><div class="panel-top"><h2 id="p1">Horvat, A. (2019)</h2></div>
+      <div class="panel-body">
+        <p class="note">Uz ovaj izvor još nema PDF-a.</p>
+        <p class="meta">Podržan je PDF do <span class="open-mark">{granica} stranica, otvoreno</span>.</p>
+        <div class="acts"><button class="btn" type="button">Učitaj PDF</button></div>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="p2" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 2 · učitavanje</div>
+    <div class="panel" aria-busy="true"><div class="panel-top"><h2 id="p2">Horvat, A. (2019)</h2></div>
+      <div class="panel-body">
+        <p class="note" role="status">Učitavamo primjer-knjige.pdf.</p>
+        <div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="p3" class="variant" data-state="popunjeno">
+    <div class="ref-tag">Stanje 3 · popunjeno, isticanje i navod</div>
+    <div class="panel"><div class="panel-top"><h2 id="p3">Horvat, A. (2019)</h2><span class="meta">str. 12 od 48</span></div>
+      <div class="panel-body">
+        <div class="sheet"><p>Pisanje je postupak u kojem se misao oblikuje tijekom rada. <span class="mark">Prva verzija rijetko je i posljednja, a izmjene su dio razmišljanja.</span> Zato se nacrt čuva.</p></div>
+        <div class="kv"><span>Bilješka</span><b>Za drugo poglavlje, uz primjer nacrta.</b></div>
+        <div class="acts"><button class="btn" type="button">Citiraj sa stranicom</button><button class="btn secondary" type="button">Dodaj bilješku</button></div>
+        <div class="toast" role="status"><span>Navod je umetnut u rad: (Horvat, 2019, str. 12).</span></div>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="p4" class="variant" data-state="citat-pronaden">
+    <div class="ref-tag">Stanje 4 · A-03, citat pronađen</div>
+    <div class="panel"><div class="panel-top"><h2 id="p4">A-03 Provjera doslovnog citata</h2></div>
+      <div class="panel-body">
+        <div class="sheet"><p>„Prva verzija rijetko je i posljednja” (Horvat, 2019, str. 12).</p></div>
+        <p class="note" role="status"><span class="tag">pronađen</span> Isti tekst pronađen je u izvoru na str. 12.</p>
+        <p class="meta">Rezultat vidite samo Vi. Ne ulazi u sažetak, izvoz ni predaju.</p>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="p5" class="variant" data-state="citat-nije-pronaden">
+    <div class="ref-tag">Stanje 5 · A-03, citat nije pronađen</div>
+    <div class="panel"><div class="panel-top"><h2 id="p5">A-03 Provjera doslovnog citata</h2></div>
+      <div class="panel-body">
+        <div class="sheet"><p>„Izmjene su dio mišljenja” (Horvat, 2019, str. 12).</p></div>
+        <p class="note" role="status"><span class="tag">nije pronađen</span> Ovaj tekst nije pronađen u učitanom PDF-u. To se događa kad je PDF skeniran, kad su riječi rastavljene na kraju retka ili kad je riječ o drugom izdanju. Provjerite stranicu ručno.</p>
+        <div class="acts"><button class="btn secondary" type="button">Otvori str. 12</button></div>
+        <p class="meta">Rezultat vidite samo Vi. Ne ulazi u sažetak, izvoz ni predaju.</p>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="p6" class="variant" data-state="bez-teksta">
+    <div class="ref-tag">Stanje 6 · PDF bez sloja teksta</div>
+    <div class="panel"><div class="panel-top"><h2 id="p6">Kovač, B. (2020)</h2><span class="meta">str. 3 od 20</span></div>
+      <div class="panel-body">
+        <div class="imgbox" aria-label="Skenirana stranica">skenirana stranica</div>
+        <p class="note">U ovom PDF-u nema teksta koji se može pretražiti. Provjera citata nije moguća.</p>
+        <div class="acts"><button class="btn" type="button">Citiraj sa stranicom</button></div>
+        <p class="meta">Navod sa stranicom i dalje se može umetnuti.</p>
+      </div></div>
+  </section>
+
+  <section aria-labelledby="p7" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 7 · greška</div>
+    <div class="panel"><div class="panel-top"><h2 id="p7">Horvat, A. (2019)</h2></div>
+      <div class="panel-body">
+        <p class="note" role="alert">Ovaj PDF se ne može otvoriti. Spremite ga ponovno kao PDF i pokušajte još jednom.</p>
+        <div class="row"><p class="obs">PDF ima više od <span class="open-mark">{granica} stranica, otvoreno</span>. Učitajte samo poglavlje koje citirate.</p></div>
+        <div class="acts"><button class="btn" type="button">Odaberi drugu datoteku</button></div>
+      </div></div>
+  </section>
+
+</div>
+<p class="meta">Oznake „pronađen” i „nije pronađen” su neutralne, bez boje upozorenja (D-128, pravilo 2). „Nije pronađen” ne znači da je citat netočan.</p>
+<p class="meta">Mobitel: ista stanja na 400 px (snimke).</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov izvora, 2. stranica PDF-a, 3. Citiraj sa stranicom, 4. Dodaj bilješku; poruka o navodu čita se kao status, bez pomicanja fokusa.</p>
+</main>
+</body>
+</html>
