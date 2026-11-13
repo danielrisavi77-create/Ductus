@@ -24,14 +24,14 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 
 - **A-01, status pilota.**
   - Stranica pokazuje ono što dnevni zapis iz `docs/OPERATIONS.md` traži: fazu, zamrznuto izdanje (SHA), spremnost četiri dijela (`database`, `storage`, `signing`, `queue` iz `/api/ready`) i pokazatelje s pragovima (rekonstrukcija 100 %, izgubljen rad, neovlašten pristup i lažan status 0).
-  - Stanje dijela ima riječ i oblik oznake: puna točka „Radi”, prsten „Ne radi”, crtica „Nije uključeno”. Riječi su iste kao na `/stanje` (DAN-429), boja nije jedini nositelj.
+  - Stanje dijela ima riječ i oblik oznake: puna točka „Radi”, kvadrat „Ne radi”, prsten „Nije uključeno”. Riječi i oblici su isti kao na `/stanje` (DAN-429, `src/components/status/Status.module.css`), boja nije jedini nositelj. „Ne radi” se vidi u STOP stanju.
   - Greška učitavanja kaže da ne znači da pilot ne radi, i ostavlja gumb „Zaustavi pilot”: zaustavljanje ne smije ovisiti o tome je li se status učitao.
   - U STOP stanju vidi se vrijeme (lokalno i UTC), okidač, ID incidenta i izdanje okidača, kako traži STOP postupak t. 1. Pojedinosti incidenta su samo u zapisu incidenta.
   - Ponovno pokretanje je onemogućeno dok nema zapisa incidenta i izdanja s potvrđenim ispravkom; razlog se čita uz gumb.
 - **STOP poruka.**
-  - Operater bira okidač iz zatvorenog skupa (tri okidača iz `docs/OPERATIONS.md`) i upisuje samo ID zapisa incidenta. Izdanje i vrijeme bilježe se sami.
-  - Greška kaže da pilot i dalje radi i zadržava upisano.
-  - Student vidi tri tvrdnje koje STOP postupak jamči: Ductura je privremeno zaustavljena, zaustavljanje nema posljedica za studenta (t. 2), ništa se ne briše (t. 4, D-12). Poruka ne govori o stanju rada ni predaje, jer bi kod okidača „gubitak rada” takva tvrdnja bila lažan status.
+  - Operater bira okidač iz zatvorenog skupa (tri okidača iz `docs/OPERATIONS.md`) i upisuje samo ID zapisa incidenta. Okidač nije unaprijed odabran, a gumb je dostupan tek kad je odabran. Izdanje i vrijeme bilježe se sami.
+  - Greška kaže da zaustavljanje nije potvrđeno i traži provjeru statusa prije novog pokušaja. Ne tvrdi da pilot i dalje radi, jer kod prekida veze ishod na poslužitelju nije poznat. Upisano ostaje.
+  - Student vidi tri tvrdnje: Ductura je zaustavljena, zaustavljanje nema posljedica za studenta (t. 2), ništa se ne briše (t. 4, D-12). Poruka ne obećava ponovno pokretanje, jer ono ovisi o uvjetima (O05 prijedlog). Poruka ne govori o stanju rada ni predaje, jer bi kod okidača „gubitak rada” takva tvrdnja bila lažan status.
   - Nastavnik vidi istu poruku i upute za predaju i rokove; obavijest studentima šalje FPZG (t. 3).
   - Okidač, izdanje i ID incidenta vidi samo operater.
 
@@ -50,7 +50,7 @@ Izrađene su Playwrightovim Chromiumom: cijela stranica, DPR 1, nakon `document.
 ## Granice
 
 - Ikone nisu dio slike; gumbi nose tekst.
-- Oznake u velikim slovima („Stanje 1 · …”) i sitne bilješke ispod okvira opisuju referencu i nisu tekst sučelja. Brojevi odluka stoje samo u bilješkama.
+- Oznake u velikim slovima („Stanje 1 · …”) i sitne bilješke ispod okvira opisuju referencu i nisu tekst sučelja. Brojevi odluka stoje samo u bilješkama i u oznakama `{…}, otvoreno`; te oznake nisu tekst sučelja, nego mjesto za tekst koji čeka odluku.
 - Tipkovnički redoslijed (EQ6) je bilješka na dnu svake stranice.
 - Svi su podaci izmišljeni (datumi, vremena, SHA izdanja, INC-0003, brojevi pokazatelja).
 

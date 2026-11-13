@@ -21,7 +21,7 @@
       <p class="note" id="s1d">Studenti i nastavnici odmah vide poruku o zaustavljanju i upute za zamjenski postupak. Pri zaustavljanju se ne brišu podaci ni zapisi.</p>
       <fieldset class="choice">
         <legend>Okidač</legend>
-        <label><input type="radio" name="okidac" checked>Kritičan neovlašten pristup</label>
+        <label><input type="radio" name="okidac">Kritičan neovlašten pristup</label>
         <label><input type="radio" name="okidac">Gubitak rada</label>
         <label><input type="radio" name="okidac">Lažan status</label>
       </fieldset>
@@ -29,7 +29,8 @@
       <p class="meta" id="inc-h">Upišite samo ID. Pojedinosti idu u zapis incidenta, ne ovdje.</p>
       <p class="kv"><span>Izdanje</span><span class="sha">7d4e2a91c0b3</span></p>
       <p class="meta">Vrijeme zaustavljanja bilježi se automatski, u UTC-u.</p>
-      <div class="acts"><button class="btn danger" type="button">Zaustavi pilot</button><button class="btn secondary" type="button">Odustani</button></div>
+      <div class="acts"><button class="btn danger" type="button" aria-disabled="true" aria-describedby="s1o">Zaustavi pilot</button><button class="btn secondary" type="button">Odustani</button></div>
+      <p class="meta" id="s1o">Okidač nije unaprijed odabran. Zaustavi pilot postaje dostupno kad odaberete okidač.</p>
     </div>
   </section>
 
@@ -47,8 +48,8 @@
     <div class="ref-tag">Stanje 3 · operater, greška</div>
     <div class="dialog" role="dialog" aria-labelledby="s3">
       <h2 id="s3">Zaustaviti pilot?</h2>
-      <p class="note" role="alert">Zaustavljanje nije uspjelo. Pilot i dalje radi.</p>
-      <p class="meta">Odabrani okidač i ID zapisa incidenta su zadržani. Ako ni drugi pokušaj ne uspije, javite se održavatelju Ducture.</p>
+      <p class="note" role="alert">Zaustavljanje nije potvrđeno. Provjerite status pilota prije novog pokušaja.</p>
+      <p class="meta">Odabrani okidač i ID zapisa incidenta su zadržani; novi pokušaj koristi isti ID. Ako ni drugi pokušaj ne uspije, javite se održavatelju Ducture.</p>
       <div class="acts"><button class="btn danger" type="button">Pokušaj ponovno</button><button class="btn secondary" type="button">Odustani</button></div>
     </div>
   </section>
@@ -59,7 +60,7 @@
       <div class="panel-top"><h2 id="s4">Ductura</h2></div>
       <div class="panel-body">
         <div class="pause" role="alert">
-          <strong>Ductura je privremeno zaustavljena.</strong>
+          <strong>Ductura je zaustavljena.</strong>
           <p>Zaustavljanje nema posljedica za vas. Pri zaustavljanju ništa se ne briše.</p>
         </div>
         <h3 class="sub">Kako sada predati rad</h3>
@@ -76,7 +77,7 @@
       <div class="panel-top"><h2 id="s5">Ductura</h2></div>
       <div class="panel-body">
         <div class="pause" role="alert">
-          <strong>Ductura je privremeno zaustavljena.</strong>
+          <strong>Ductura je zaustavljena.</strong>
           <p>Zaustavljanje nema posljedica za studente. Pri zaustavljanju ništa se ne briše.</p>
         </div>
         <h3 class="sub">Predaja i rokovi</h3>
@@ -89,7 +90,8 @@
   </section>
 
 </div>
-<p class="meta">Poruka studentu ne govori o stanju rada ni predaje: kod okidača „gubitak rada” takva bi tvrdnja bila lažan status. Tvrdi samo ono što STOP postupak jamči: ništa se ne briše (D-12) i zaustavljanje nema posljedica za studenta.</p>
+<p class="meta">Poruka studentu ne govori o stanju rada ni predaje: kod okidača „gubitak rada” takva bi tvrdnja bila lažan status. Tvrdi samo ono što STOP postupak jamči: ništa se ne briše (D-12) i zaustavljanje nema posljedica za studenta. Ne obećava ponovno pokretanje, jer ono ovisi o uvjetima (O05 prijedlog).</p>
+<p class="meta">Greška operateru ne tvrdi da pilot i dalje radi: kod prekida veze ili isteka vremena ishod na poslužitelju nije poznat.</p>
 <p class="meta">Okidač i ID incidenta vidi samo operater. Student i nastavnik ne vide okidač, izdanje ni ID incidenta.</p>
 <p class="meta">Mobitel: ista stanja na 400 px (snimke); gumbi dijaloga idu jedan ispod drugog, svaki 44 px visine.</p>
 <p class="meta">Tipkovnica (EQ6): operater 1. naslov Zaustaviti pilot?, 2. okidač (strelice unutar skupine), 3. ID zapisa incidenta, 4. Zaustavi pilot, 5. Odustani; Esc zatvara dijalog i ništa ne zaustavlja. Student i nastavnik: 1. poruka o zaustavljanju (čita se odmah), 2. upute za predaju.</p>
