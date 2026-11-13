@@ -58,14 +58,12 @@ function checkSet(column: string): string[] {
 
 /**
  * Routes the CHECK already allows ahead of their pages, and the PRs that add
- * the pages (orchestrator, #1836 c.6820309956, c.6820715294, c.6821821996: the
- * /stanje migration carries the new routes and lands after #1969 and #1973).
- * Allowed only while that page is absent; once it is on the branch the route
- * must be in the domain set.
+ * the page (orchestrator, #1836 c.6820309956, c.6820715294, c.6821821996). None
+ * is left: /kako-radi is on main (#1973) and /stanje has its page in this PR.
+ * A route allowed here only while its page is absent; once the page is on the
+ * branch the route must be in the domain set.
  */
-const ROUTES_AHEAD_OF_PAGE = [
-  "/kako-radi", // DAN-431, #1973
-] as const;
+const ROUTES_AHEAD_OF_PAGE: readonly string[] = [];
 
 function pageFile(route: string): string {
   return join(ROOT, route === "/" ? "app/page.tsx" : `app${route}/page.tsx`);
@@ -99,6 +97,15 @@ describe("DAN-431 problem report: migration and domain agree", () => {
       before = after;
     }
     expect(before).toContain("/stanje");
+    expect(before).toContain("/kako-radi");
+    expect(before).toContain("/rad/[assignmentId]/dnevnik-pristupa");
+  });
+
+  it("the /kako-radi down removes only /kako-radi", () => {
+    const own = ROUTE_MIGRATIONS.find(({ up }) => routeCheck(up).includes("/kako-radi"));
+    expect(own).toBeDefined();
+    const after = routeCheck(own?.up ?? "");
+    expect(routeCheck(own?.down ?? "")).toEqual(after.filter((route) => route !== "/kako-radi"));
   });
 
   it("the /stanje down removes only /stanje", () => {

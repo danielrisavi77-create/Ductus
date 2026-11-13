@@ -32,6 +32,7 @@ export type BrowserFamily = (typeof BROWSER_FAMILIES)[number];
  */
 export const PROBLEM_REPORT_ROUTES = [
   "/",
+  "/kako-radi",
   "/nastavnik",
   "/nastavnik/brz-put",
   "/nastavnik/kolegiji",

@@ -2,8 +2,10 @@
 -- DAN-429, M11.7-P01 (contract on #1836, c.6820482621; orchestrator
 -- c.6820602587, scope c.6820715294): the public status page at /stanje is a
 -- page in the shell, so a problem can be reported from it. Its route template
--- joins the closed set in src/domain/support/problem-report.ts
--- (PROBLEM_REPORT_ROUTES). This migration runs after
+-- is allowed by the CHECK from this migration on. It joins the closed set in
+-- src/domain/support/problem-report.ts (PROBLEM_REPORT_ROUTES) only with the
+-- page PR (PR B); until then the route test keeps it in ROUTES_AHEAD_OF_PAGE.
+-- This migration runs after
 -- 20261112150000_problem_report_access_log_route.sql (DAN-294, #1969) and
 -- 20261112160000_problem_report_route_how_it_works.sql (DAN-431, #1973) and
 -- carries their routes too, /rad/[assignmentId]/dnevnik-pristupa and
