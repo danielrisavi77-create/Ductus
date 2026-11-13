@@ -35,8 +35,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 ## Head i invalidacija
 
-- Novi push poništava review, QA i Owner Override (§6, §9).
-- Iznimka D-101: čisto spajanje osnovne grane bez promjene diffa prenosi verdikt i override, i Codex par (D-161; §6, §15).
+- Novi push poništava review, QA i Owner Override, osim čistog spajanja maina bez promjene diffa (D-101, D-161) i, bez overridea, samo regenerirane sheme uz zeleni D-91 (D-293; §6, §9).
 - Prije reviewa provjeri overlap; ažurnost provjerava izvorni head ili Mergify carrier (DAN-263; §9, §10).
 
 ## Owner Override
