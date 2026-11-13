@@ -6,7 +6,16 @@
 // shared budget (CARRY_BUDGET_MS). Running out of either means nothing carries;
 // the gate itself is still computed from verdicts on the current head.
 
-import { MAX_MERGE_STEPS, carriedByCompare, carriedHeadCandidates, foundCarryHeads, namedCarryHeads } from "./review-gate-core.mjs";
+import {
+  MAX_MERGE_STEPS,
+  SCHEMA_CHECK_RUNS,
+  carriedByCompare,
+  carriedHeadCandidates,
+  foundCarryHeads,
+  namedCarryHeads,
+  regenOnlyCommit,
+  schemaChecksGreen,
+} from "./review-gate-core.mjs";
 
 const SHA_RE = /^[0-9a-f]{40}$/;
 
@@ -143,6 +152,9 @@ async function inBase(api, owner, repo, baseRef, sha, signal) {
 // one of them (F-148): nothing named lies further back. A name may be a prefix
 // (F-027): the first walked SHA that starts with it ends the wait for it.
 // With `path`, the steps walked so far stay readable after an error.
+// D-293: a single-parent commit that only regenerated db/schema.sql and
+// db/migrations.sum (`regenOnlyCommit`, from the commit's `files`) is walked
+// past like a merge; any other single-parent commit ends the walk.
 export async function firstParentPath(api, owner, repo, head, signal, baseRef, stopAt, path = []) {
   const pending = stopAt ? new Set(stopAt) : null;
   let sha = head;
@@ -153,14 +165,14 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
     // p06f: a reached commit is in `path` before its own second parent is
     // checked, so an error on that check keeps it readable; it stays
     // `mergesBase: false` until GitHub confirms, so nothing behind it carries.
-    const reached = { sha: commit.sha, parents, mergesBase: false };
+    const reached = { sha: commit.sha, parents, files: commit.files, mergesBase: false };
     path.push(reached);
     const walked = String(commit.sha).toLowerCase();
     for (const name of pending ?? []) if (walked.startsWith(name)) pending.delete(name);
     if (parents.length === 2 && typeof baseRef === "string" && baseRef !== "" && typeof parents[1]?.sha === "string") {
       reached.mergesBase = await inBase(api, owner, repo, baseRef, parents[1].sha, signal);
     }
-    if (parents.length < 2) break;
+    if (parents.length < 2 && !regenOnlyCommit(reached)) break;
     sha = parents[0]?.sha;
   }
   return path;
@@ -169,7 +181,13 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef, s
 // F-027: heads the walk found behind base merges only, kept when the check
 // could not finish, so a FAIL or BLOCK on them still blocks. They never carry a
 // PASS, an override or a command: only `negativeHead` reads them.
-const holdNegatives = (carried, heads) => Object.defineProperty(carried, "heldNegatives", { value: new Set(heads) });
+// Heads already held (a D-293 head whose checks are not green) stay held.
+const holdNegatives = (carried, heads) =>
+  Object.defineProperty(carried, "heldNegatives", {
+    value: new Set([...(carried.heldNegatives ?? []), ...heads]),
+    configurable: true,
+    enumerable: false,
+  });
 
 const wholeEntry = (item) => ["path", "mode", "type"].every((key) => typeof item?.[key] === "string" && item[key] !== "");
 
@@ -251,6 +269,23 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
     failed = true;
     throw error;
   });
-  const carried = await carriedByCompare(candidates, current, compareHead, log);
+  // D-293: the D-91 checks are read on the current head only, per job name
+  // with every run (`filter=all`), so a later failed re-run counts.
+  const schemaGreen = async () => {
+    const runs = [];
+    for (const name of SCHEMA_CHECK_RUNS) {
+      const result = await api(
+        `/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?check_name=${encodeURIComponent(name)}&filter=all&per_page=100`,
+        { signal },
+      );
+      // One page only: more runs than it holds would hide the newest, so that is not green.
+      if (!Array.isArray(result?.check_runs) || result.total_count > result.check_runs.length) {
+        throw new Error(`the check runs named ${name} could not be read in full`);
+      }
+      runs.push(...result.check_runs);
+    }
+    return schemaChecksGreen(runs, pr.head.sha);
+  };
+  const carried = await carriedByCompare(candidates, current, compareHead, log, { path, schemaGreen });
   return failed ? holdNegatives(carried, found()) : carried;
 }
