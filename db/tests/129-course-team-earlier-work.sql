@@ -138,6 +138,18 @@ INSERT INTO expect VALUES
   ('late', 10, 'K6 creator', 'vesna', 'mark:ana', 'false'),
   ('late', 11, 'K6 creator', 'vesna', NULL, 'ana,boris,dora|ana,boris,dora|doc-ana-z1,doc-boris-z1');
 SELECT check_stage FROM pg_temp.check_stage('late') check_stage;
+-- The rows of app.teacher_assignment_students for Z1 as the actor reaches it
+-- (through the identity role, as its definer callers do): "<all>/<distinct>",
+-- and "<rows of p_student>" after a colon. K5 asks for exactly one row of a
+-- student whom both the course and the group reach.
+CREATE FUNCTION pg_temp.rows_of(p_actor text, p_student text) RETURNS text
+LANGUAGE sql AS $$
+  SELECT pg_temp.ask_as('ductus_identity', p_actor, format(
+    $q$ SELECT count(*) || '/' || count(DISTINCT student_id) || ':' || count(*) FILTER (WHERE student_id = %L)
+          FROM app.teacher_assignment_students({z1}) $q$, pg_temp.id(p_student)))
+$$;
+SELECT is(pg_temp.rows_of('marko', 'boris'), '2/2:1',
+  'K5 rows: Boris, closed through the course and open through G1, is one row of two (with Dora)');
 -- The read paths of K1, each asked on its own, and nothing logged for them.
 SELECT is(pg_temp.ask('marko', v.sql), v.want, v.what)
 FROM (VALUES
@@ -160,6 +172,19 @@ INSERT INTO expect VALUES
   ('equal', 2, 'K2, K4', 'marko', NULL, 'ana,boris,dora|boris,dora|doc-boris-z1,doc-dora-z1'),
   ('equal', 3, 'K2 accommodation', 'marko', 'mark:dora', 'false');
 SELECT check_stage FROM pg_temp.check_stage('equal') check_stage;
+-- K5 with both paths open: Dora joins G1 at the instant her work starts (as
+-- the group's own boundary allows), so the course and the group reach her;
+-- she is still one row, and one entry in each list. She leaves G1 again.
+SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.assign_group_student({g1}, {dora}) $$), 'ok',
+  'Dora joins G1');
+SELECT is(pg_temp.rows_of('marko', 'dora'), '2/2:1',
+  'K5 rows: Dora, open through the course and through G1, is one row of two (with Boris)');
+INSERT INTO expect VALUES
+  ('both', 1, 'K5 both paths', 'marko', 'dora-z1', 'teacher'),
+  ('both', 2, 'K5 both paths', 'marko', NULL, 'ana,boris,dora|boris,dora|doc-boris-z1,doc-dora-z1');
+SELECT check_stage FROM pg_temp.check_stage('both') check_stage;
+SELECT is(pg_temp.ask('vesna', $$ SELECT 'ok' FROM institution.end_group_assignment({g1}, {dora}) $$), 'ok',
+  'Dora leaves G1 again');
 -- One microsecond earlier it is closed; one second later open (K3).
 UPDATE evidence.project SET created_at = created_at - interval '1 microsecond' WHERE id = 'project-doc-dora-z1';
 INSERT INTO expect VALUES
