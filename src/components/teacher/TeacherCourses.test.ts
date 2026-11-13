@@ -11,6 +11,8 @@ import TeacherCourses from "./TeacherCourses";
 
 // Invented courses and assignments only.
 const t = messagesHr.teacherCourses;
+// DAN-386: every listed work ends with a link to its own language.
+const L = ` · ${messagesHr.teacher.workLanguageException.link}`;
 const assignment = (id: string, title: string, dueAt: string, enrolledStudents: number) => ({
   id, title, workType: "seminar_paper", opensAt: "2026-10-01T07:00:00.000Z", dueAt, currentVersion: 1, enrolledStudents,
 });
@@ -76,7 +78,7 @@ describe("TeacherCourses (Z3 A)", () => {
     expect(html).toContain('href="/nastavnik/rad/izmisljeni-rad-b"');
     expect(html).toContain('href="/nastavnik/rad/izmisljeni%20rad%2Fa"');
     expect(html.indexOf("izmisljeni-rad-b")).toBeLessThan(html.indexOf("izmisljeni%20rad"));
-    expect(text(html)).toContain(`${t.work} 1 · ${t.submission.none} ${t.work} 2 · ${t.submission.none}`);
+    expect(text(html)).toContain(`${t.work} 1 · ${t.submission.none}${L} ${t.work} 2 · ${t.submission.none}${L}`);
     expect(text(html)).toContain(t.noWorks);
     expect(html).not.toContain(STUDENT);
   });
@@ -103,9 +105,9 @@ describe("TeacherCourses (Z3 A)", () => {
     it("A1: says on time, after the deadline or not submitted beside each work, in the order read", () => {
       const html = render(COURSES, { [A2]: [row(E(1), "rad-1", false), row(E(2), "rad-2", true), row(E(3), "rad-3")] });
       expect(items(html)).toEqual([
-        `${t.work} 1 · ${t.submission.onTime}`,
-        `${t.work} 2 · ${t.submission.afterDeadline}`,
-        `${t.work} 3 · ${t.submission.none}`,
+        `${t.work} 1 · ${t.submission.onTime}${L}`,
+        `${t.work} 2 · ${t.submission.afterDeadline}${L}`,
+        `${t.work} 3 · ${t.submission.none}${L}`,
       ]);
       expect(html.indexOf("rad-1")).toBeLessThan(html.indexOf("rad-2"));
       expect(html.indexOf("rad-2")).toBeLessThan(html.indexOf("rad-3"));
@@ -123,14 +125,14 @@ describe("TeacherCourses (Z3 A)", () => {
       expect(text(render(COURSES, { [A2]: [row(E(1), null), row(E(2), null, false)], [A1]: [] })))
         .toContain(`${t.noWorks} `);
       expect(items(render(COURSES, { [A2]: [row(E(1), "rad-1"), row(E(2), null), row(E(3), "rad-3", true)] }))).toEqual([
-        `${t.work} 1 · ${t.submission.none}`,
-        `${t.work} 2 · ${t.submission.afterDeadline}`,
+        `${t.work} 1 · ${t.submission.none}${L}`,
+        `${t.work} 2 · ${t.submission.afterDeadline}${L}`,
       ]);
     });
 
     it("A5: after the deadline is said only of a submitted work", () => {
       const odd = { ...row(E(1), "rad-1"), afterDeadline: true };
-      expect(items(render(COURSES, { [A2]: [odd] }))).toEqual([`${t.work} 1 · ${t.submission.none}`]);
+      expect(items(render(COURSES, { [A2]: [odd] }))).toEqual([`${t.work} 1 · ${t.submission.none}${L}`]);
     });
 
     it("A6: shows no student id, revision, minute, tone or colour beside the state", () => {
@@ -143,7 +145,7 @@ describe("TeacherCourses (Z3 A)", () => {
 
     it("A7: the state of one assignment never moves to another", () => {
       const html = render(COURSES, { [A2]: [row(E(1), "rad-a2", true)], [A1]: [row(E(1), "rad-a1")] });
-      expect(items(html)).toEqual([`${t.work} 1 · ${t.submission.afterDeadline}`, `${t.work} 1 · ${t.submission.none}`]);
+      expect(items(html)).toEqual([`${t.work} 1 · ${t.submission.afterDeadline}${L}`, `${t.work} 1 · ${t.submission.none}${L}`]);
       expect(html.indexOf("rad-a2")).toBeLessThan(html.indexOf("rad-a1"));
     });
 
@@ -161,9 +163,9 @@ describe("TeacherCourses (Z3 A)", () => {
 
     it("M1: says beside a marked work that it is marked, after its state, and nothing beside the others", () => {
       expect(items(render(COURSES, works, { [A2]: [E(2)] }))).toEqual([
-        `${t.work} 1 · ${t.submission.onTime}`,
-        `${t.work} 2 · ${t.submission.none} · ${t.accommodation}`,
-        `${t.work} 3 · ${t.submission.afterDeadline}`,
+        `${t.work} 1 · ${t.submission.onTime}${L}`,
+        `${t.work} 2 · ${t.submission.none} · ${t.accommodation}${L}`,
+        `${t.work} 3 · ${t.submission.afterDeadline}${L}`,
       ]);
     });
 
@@ -190,13 +192,48 @@ describe("TeacherCourses (Z3 A)", () => {
     it("M4: a mark never moves to another assignment or to a student without a work", () => {
       const html = render(COURSES, { [A2]: [row(E(1), "rad-a2"), row(E(2), null)], [A1]: [row(E(1), "rad-a1")] },
         { [A1]: [E(1), E(2)], [A2]: [] });
-      expect(items(html)).toEqual([`${t.work} 1 · ${t.submission.none}`, `${t.work} 1 · ${t.submission.none} · ${t.accommodation}`]);
+      expect(items(html)).toEqual([`${t.work} 1 · ${t.submission.none}${L}`, `${t.work} 1 · ${t.submission.none} · ${t.accommodation}${L}`]);
     });
 
     it("M5: shows only that the work is marked: no student id, reason, tone or colour", () => {
       const html = render(COURSES, works, { [A2]: [E(1), E(2), E(3)] });
       for (const hidden of [E(1), E(2), E(3), "data-tone", "style=", "color", "razlog"]) expect(html).not.toContain(hidden);
       expect(html.split(t.accommodation).length - 1).toBe(3);
+    });
+  });
+
+  describe("the language of one work (DAN-386 M2.10-P02d, #1836 c.6858305983)", () => {
+    const A1 = "00000000-0000-4000-8000-0000000000a1";
+    const A2 = "00000000-0000-4000-8000-0000000000a2";
+    const E = (n: number) => `00000000-0000-4000-8000-0000000000e${n}`;
+    const label = messagesHr.teacher.workLanguageException.link;
+
+    it("L1: links each listed work to its language by assignment and document id, never by student id", () => {
+      const html = render(COURSES, { [A2]: [row(E(1), "rad-1"), row(E(2), null), row(E(3), "rad x/3", true)], [A1]: [row(E(1), "rad-a1")] });
+      expect(html).toContain(`href="/nastavnik/zadatak/${A2}/rad/rad-1/jezik"`);
+      expect(html).toContain(`href="/nastavnik/zadatak/${A2}/rad/rad%20x%2F3/jezik"`);
+      expect(html).toContain(`href="/nastavnik/zadatak/${A1}/rad/rad-a1/jezik"`);
+      expect(html.split("/jezik\"").length - 1).toBe(3);
+      for (const hidden of [E(1), E(2), E(3)]) expect(html).not.toContain(hidden);
+    });
+
+    it("L2: each link names its work for a screen reader, in the order read", () => {
+      const html = render(COURSES, { [A2]: [row(E(1), "rad-1"), row(E(2), "rad-2")] });
+      expect(html).toContain(`aria-label="${t.work} 1: ${label}"`);
+      expect(html).toContain(`aria-label="${t.work} 2: ${label}"`);
+      expect(html.indexOf("rad/rad-1/jezik")).toBeLessThan(html.indexOf("rad/rad-2/jezik"));
+    });
+
+    it("L3: no list, a failed read or no works: no language link", () => {
+      for (const html of [render(COURSES), render(COURSES, { [A2]: null, [A1]: [] }), render(COURSES, { [A2]: [row(E(1), null)] })]) {
+        expect(html).not.toContain("/jezik");
+      }
+    });
+
+    it("L4: a document id the page could not take gives no link, but the work is still listed", () => {
+      const html = render(COURSES, { [A2]: [row(E(1), " rad-1")] });
+      expect(html).not.toContain("/jezik");
+      expect(html).toContain('href="/nastavnik/rad/%20rad-1"');
     });
   });
 

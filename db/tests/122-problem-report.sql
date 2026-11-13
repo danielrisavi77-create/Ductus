@@ -173,13 +173,18 @@ SELECT is(pg_temp.submit('vesna', 'technical', 'Dnevnik se ne prikazuje.', '/rad
   'a report from the access log route is accepted');
 SELECT is(pg_temp.owner($$ SELECT count(*)::text FROM identity.problem_report WHERE route = '/rad/[assignmentId]/dnevnik-pristupa' AND user_id = {vesna} $$), '1',
   'the access log route is stored as sent');
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '5', 'only the accepted calls wrote a row');
+-- DAN-386 (#1836 c.6858305983): the page for one work's language is in the same set.
+SELECT is(pg_temp.submit('vesna', 'technical', 'Jezik se ne sprema.', '/nastavnik/zadatak/[assignmentId]/rad/[documentId]/jezik', '1.0.0', 'chromium', 1, NULL) ~ '^PR-[0-9A-F]{10}$', true,
+  'a report from the work language route is accepted');
+SELECT is(pg_temp.owner($$ SELECT count(*)::text FROM identity.problem_report WHERE route = '/nastavnik/zadatak/[assignmentId]/rad/[documentId]/jezik' AND user_id = {vesna} $$), '1',
+  'the work language route is stored as sent');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '6', 'only the accepted calls wrote a row');
 
 -- 4. No live session: ZD401, nothing written.
 SELECT is(pg_temp.submit(t.name, 'technical', 'Opis.', '/', '1.0.0', 'chromium', 1, NULL), 'ZD401: not authenticated',
   format('ZD401 for %s', t.name))
 FROM unnest(ARRAY['anon', 'expired', 'closed', 'unknown']) AS t (name);
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '5', 'no call without a session wrote a row');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '6', 'no call without a session wrote a row');
 
 -- 5. At most five in a sliding hour, per account. Ana has sent two; older
 -- reports of Dora's do not count.

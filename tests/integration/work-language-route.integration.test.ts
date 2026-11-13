@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { POST as ASSIGNMENT_POST } from "../../app/api/institution/assignments/[assignmentId]/work-language/route";
 import { POST as WORK_POST } from "../../app/api/institution/assignments/[assignmentId]/students/[studentId]/work-language/route";
+import { readWorkLanguageException } from "@/components/teacher/work-language-exception-read";
 import { createWithActor } from "@/server/db/with-actor";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
@@ -29,6 +30,8 @@ type Name = typeof names[number];
 const people = Object.fromEntries(names.map((name) => [name, { id: randomUUID(), token: token() }])) as Record<Name, { id: string; token: string }>;
 const ids = Object.values(people).map((person) => person.id);
 let assignment: string;
+// The student's one work, for the page read of its language (P02d).
+let documentId: string;
 
 const send = (url: string, session: string, body: unknown) => new NextRequest(url, {
   method: "POST",
@@ -89,6 +92,35 @@ beforeAll(async () => {
     [course, "Izmišljeni esej", "Upute za izmišljeni zadatak.", "essay", "2026-11-01T08:00:00Z", "2026-11-30T22:00:00Z",
       "partially_allowed", ["proofreading"], "basic", false, null, 3000],
   )).rows[0].id);
+  documentId = `izmisljeni-rad-${suffix}`;
+  const project = `project-${documentId}`, hash = (n: string) => n.repeat(64);
+  // The document and its revisions name each other; the deferred keys need one transaction.
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id) VALUES ($1, 1, $2, $3)",
+      [assignment, people.student.id, faculties[0]],
+    );
+    await client.query(
+      "INSERT INTO evidence.project (id, institution_id, assignment_id, principal_id) VALUES ($1, $2, $3, $4)",
+      [project, faculties[0], assignment, people.student.id],
+    );
+    await client.query(
+      `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_revision, current_content_hash)
+       VALUES ($1, $2, $3, $4, 1, $5)`, [documentId, faculties[0], project, people.student.id, hash("d")],
+    );
+    await client.query(
+      `INSERT INTO evidence.document_revision (document_id, institution_id, revision, base_revision, principal_id, content_hash)
+       VALUES ($1, $2, 0, NULL, $3, $4), ($1, $2, 1, 0, $3, $5)`, [documentId, faculties[0], people.student.id, hash("a"), hash("d")],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 afterAll(async () => {
@@ -101,6 +133,9 @@ afterAll(async () => {
   try {
     await cleaner.query("BEGIN");
     await cleaner.query("SET LOCAL session_replication_role = replica");
+    for (const table of ["evidence.document_revision", "evidence.document", "evidence.project", "institution.notice_acknowledgment"]) {
+      await cleaner.query(`DELETE FROM ${table} WHERE institution_id = ANY ($1)`, [faculties]);
+    }
     await cleaner.query(`DELETE FROM institution.assignment_version WHERE assignment_id IN (${inFaculties})`, [faculties]);
     await cleaner.query("COMMIT");
   } finally {
@@ -171,5 +206,37 @@ describe("work language routes: real POST, session and database (DAN-386)", () =
     expect(bodies).toContainEqual({ version: 3 });
     expect(bodies).toContainEqual({ error: "conflict" });
     expect(await state()).toEqual({ current_version: 3, rows: 3, language: "hr", overrides: [] });
+  });
+});
+
+describe("the page read of one work's language: real session and database (DAN-386, P02d)", () => {
+  const read = (session: string | undefined, target: string, document: string) =>
+    readWorkLanguageException(session, target, document, withActor);
+
+  it("gives a teacher of the work its student, the assignment's language and the exception", async () => {
+    const base = {
+      kind: "available", assignmentId: assignment, documentId, studentId: people.student.id,
+      title: "Izmišljeni esej", assignmentLanguage: "hr",
+    };
+    expect(await read(people.teacher.token, assignment, documentId)).toEqual({ ...base, exception: null });
+    expect((await setWork(people.teacher.token, people.student.id, "en")).status).toBe(200);
+    expect(await read(people.teacher.token, assignment.toUpperCase(), documentId)).toEqual({ ...base, exception: "en" });
+    expect((await setWork(people.teacher.token, people.student.id, null)).status).toBe(200);
+    expect(await read(people.teacher.token, assignment, documentId)).toEqual({ ...base, exception: null });
+  });
+
+  it("reads a missing, someone else's and a malformed id alike, as not found (#1836 c.6858862817)", async () => {
+    // Not a teacher of the work: the student, a colleague, a stranger, another faculty's teacher.
+    for (const name of ["student", "colleague", "stranger", "outsider"] as const) {
+      expect(await read(people[name].token, assignment, documentId)).toEqual({ kind: "notFound" });
+    }
+    // The teacher, with an assignment or a work that does not exist, or ids that are not ids.
+    for (const [target, document] of [[randomUUID(), documentId], [assignment, `${documentId}-x`], [assignment, people.student.id],
+      ["1; DROP", documentId], [assignment, ""], [assignment, ` ${documentId}`]] as const) {
+      expect(await read(people.teacher.token, target, document)).toEqual({ kind: "notFound" });
+    }
+    expect(await read(token(), assignment, documentId)).toEqual({ kind: "signedOut" });
+    expect(await read(undefined, assignment, documentId)).toEqual({ kind: "signedOut" });
+    expect((await state()).overrides).toEqual([]);
   });
 });
