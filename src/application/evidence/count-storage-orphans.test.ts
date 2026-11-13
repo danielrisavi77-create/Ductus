@@ -119,6 +119,20 @@ describe("countStorageOrphans: input classes", () => {
     ["references", "a repeated reference", onePage<StoredObjectEntry>([]), onePage([ref(key(1)), ref(key(1))])],
     ["storage", "an entry that is not an object entry", onePage([{ key: 7 } as unknown as StoredObjectEntry]), onePage<StorageReferenceEntry>([])],
     ["storage", "more entries than the page size", onePage([obj(key(1)), obj(key(2))]), onePage<StorageReferenceEntry>([])],
+    ["references", "an entry that is not a reference entry", onePage<StoredObjectEntry>([]), onePage([42 as unknown as StorageReferenceEntry])],
+    ["references", "an empty cursor", onePage<StoredObjectEntry>([]), () => ({ status: "ok", entries: [], next: "" }) as ScanPage<StorageReferenceEntry>],
+    [
+      "references",
+      "a page without a cursor",
+      onePage<StoredObjectEntry>([]),
+      () => ({ status: "ok", entries: [] }) as unknown as ScanPage<StorageReferenceEntry>,
+    ],
+    [
+      "references",
+      "a reference longer than 2048 characters",
+      onePage<StoredObjectEntry>([]),
+      onePage([{ storageRef: `${DOMAIN}:${"a".repeat(2048)}`, acceptedAt: OLD }]),
+    ],
   ] as const)("stops as malformed without counts on %s %s", async (side, _what, objects, references) => {
     const { result, records } = await run(objects, references, { pageSize: 1 });
     expect(result.summary).toMatchObject({ status: "malformed", stoppedAt: side, counts: null });
@@ -134,6 +148,27 @@ describe("countStorageOrphans: input classes", () => {
     });
     expect(thrown.result.summary).toMatchObject({ status: "unavailable", stoppedAt: "references", counts: null });
     expect(thrown.records).toHaveLength(1);
+  });
+
+  it("is unavailable, without the counts so far, when a later page fails", async () => {
+    const pages = fromPages([[obj(key(1))], [obj(key(2))]]);
+    const down = await run((c) => (c === null ? pages(c) : { status: "unavailable", reason: "x" }), onePage([]), { pageSize: 1 });
+    expect(down.result.summary).toMatchObject({ status: "unavailable", stoppedAt: "storage", counts: null });
+    expect(down.result.summary.pages.storage).toBe(2);
+    const refs = fromPages([[ref(key(1))], [ref(key(2))]]);
+    const thrown = await run(onePage([]), (c) => {
+      if (c !== null) throw new Error("down");
+      return refs(c);
+    }, { pageSize: 1 });
+    expect(thrown.result.summary).toMatchObject({ status: "unavailable", stoppedAt: "references", counts: null });
+    expect(thrown.records).toHaveLength(1);
+  });
+
+  it("counts a reference by its characters, as the database does, not by UTF-16 units", async () => {
+    // 1 + 11 + 1100 characters, which the database accepts; 2212 UTF-16 units.
+    const { result } = await run(onePage([]), onePage([{ storageRef: `${DOMAIN}:${"\u{1F600}".repeat(1100)}`, acceptedAt: OLD }]));
+    expect(result.summary.status).toBe("completed");
+    expect(result.summary.counts).toEqual(counts({ referencesOutsidePrefix: 1 }));
   });
 
   it("stops at the page limit when a store never ends its listing", async () => {
@@ -264,5 +299,56 @@ describe("countStorageOrphans: concurrency with commit+reserve (B-8)", () => {
   it("counts an entry whose time cannot be read as young, never as an orphan", async () => {
     const { result } = await run(onePage([obj(key(1), "yesterday")]), onePage([ref(key(2), "2026-02-30T00:00:00Z")]));
     expect(result.summary.counts).toEqual(counts({ youngObjectsWithoutReference: 1, youngReferencesWithoutObject: 1 }));
+  });
+});
+
+describe("countStorageOrphans: threshold and clock", () => {
+  const cutoff = T0 - 24 * HOUR;
+  it.each([
+    ["one millisecond before the cutoff", cutoff - 1, false],
+    ["exactly at the cutoff", cutoff, false],
+    ["one millisecond after the cutoff", cutoff + 1, true],
+    ["one hour younger than the threshold", cutoff + HOUR, true],
+  ] as const)("an unpaired entry stamped %s", async (_name, t, young) => {
+    const at = new Date(t).toISOString();
+    const { result } = await run(onePage([obj(key(1), at)]), onePage([ref(key(2), at)]));
+    expect(result.summary.counts).toEqual(
+      young
+        ? counts({ youngObjectsWithoutReference: 1, youngReferencesWithoutObject: 1 })
+        : counts({ objectsWithoutReference: 1, referencesWithoutObject: 1 }),
+    );
+  });
+
+  it("takes the cutoff before the first read, however long the pass runs", async () => {
+    let t = T0;
+    const late = new Date(T0 + 1000).toISOString();
+    const { result } = await run(
+      () => {
+        t += 48 * HOUR;
+        return { status: "ok", entries: [obj(key(1), late)], next: null };
+      },
+      () => {
+        t += 48 * HOUR;
+        return { status: "ok", entries: [ref(key(2), late)], next: null };
+      },
+      { now: () => t },
+    );
+    expect(result.summary.counts).toEqual(counts({ youngObjectsWithoutReference: 1, youngReferencesWithoutObject: 1 }));
+    expect(result.summary.startedAt).toBe(new Date(T0).toISOString());
+  });
+
+  it("counts an entry with no time at all as young", async () => {
+    const { result } = await run(
+      onePage([{ key: key(1) } as unknown as StoredObjectEntry]),
+      onePage([{ storageRef: `${DOMAIN}:${key(2)}`, acceptedAt: null } as unknown as StorageReferenceEntry]),
+    );
+    expect(result.summary.status).toBe("completed");
+    expect(result.summary.counts).toEqual(counts({ youngObjectsWithoutReference: 1, youngReferencesWithoutObject: 1 }));
+  });
+
+  it("never records an end before the start when the clock steps back", async () => {
+    const times = [T0, T0 - HOUR];
+    const { result } = await run(onePage([]), onePage([]), { now: () => times.shift() ?? T0 });
+    expect(result.summary.finishedAt).toBe(result.summary.startedAt);
   });
 });

@@ -5,8 +5,7 @@
 // worker yet: the store listing, the database reader and the audit table come
 // with the adapters.
 
-import { isEvidencePackageId, isSha256Hex } from "@/application/ports/evidence-ingest";
-import { isInstitutionId, isStorageDomainLabel } from "@/application/ports/evidence-object-key";
+import { evidenceObjectKey, isStorageDomainLabel } from "@/application/ports/evidence-object-key";
 import type {
   ScanPage,
   ScanPageRequest,
@@ -23,7 +22,8 @@ const HOUR_MS = 3_600_000;
 export const MIN_ORPHAN_THRESHOLD_MS = HOUR_MS;
 export const MAX_ORPHAN_THRESHOLD_MS = 30 * 24 * HOUR_MS;
 export const MAX_SCAN_PAGE_SIZE = 1000;
-// S3 keys are at most 1024 bytes; `storage_ref` is at most 2048 characters.
+// S3 keys are at most 1024 bytes (never fewer UTF-16 units); `storage_ref` is
+// at most 2048 characters, counted as the database counts them.
 const MAX_KEY_LENGTH = 1024;
 const MAX_REF_LENGTH = 2048;
 const MAX_CURSOR_LENGTH = 4096;
@@ -47,7 +47,7 @@ export type CountStorageOrphansResult = {
 
 type Side = "storage" | "references";
 type Counts = NonNullable<StorageOrphanScanSummary["counts"]>;
-type Entry = { key: string | null; at: string };
+type Entry = { key: string | null; at: unknown };
 
 class Halt {
   constructor(
@@ -66,21 +66,28 @@ function byteOrder(a: string, b: string): number {
   return x.length - y.length;
 }
 
-/** The key if it is `v2/<institution>/<package>/<hash>.json` exactly, else `null`. */
+/** The key if `evidenceObjectKey` builds exactly this key, else `null`. */
 export function evidenceKeyInPrefix(key: string): string | null {
   const parts = key.split("/");
-  if (parts.length !== 4 || parts[0] !== "v2") return null;
-  const [, institution, pkg, file] = parts as [string, string, string, string];
-  if (!isInstitutionId(institution) || !isEvidencePackageId(pkg)) return null;
-  if (!file.endsWith(".json") || !isSha256Hex(file.slice(0, -".json".length))) return null;
-  return key;
+  if (parts.length !== 4 || !parts[3]!.endsWith(".json")) return null;
+  const built = evidenceObjectKey({
+    institutionId: parts[1],
+    evidencePackageId: parts[2],
+    segmentHash: parts[3]!.slice(0, -".json".length),
+  });
+  return built !== null && built.join("/") === key ? key : null;
 }
 
 function isBoundedString(value: unknown, max: number): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= max;
 }
 
-type Parsed = { raw: string; key: string | null; at: string };
+/** At most `max` code points, as PostgreSQL `length()` counts them. */
+function isBoundedText(value: unknown, max: number): value is string {
+  return isBoundedString(value, 2 * max) && Array.from(value).length <= max;
+}
+
+type Parsed = { raw: string; key: string | null; at: unknown };
 
 /** One page, checked whole before any entry is counted; throws `Halt` (side set by the caller). */
 function checkPage(
@@ -152,15 +159,14 @@ async function* scan(
 
 function parseObject(entry: unknown) {
   if (!isPlainObject(entry) || !isBoundedString(entry.key, MAX_KEY_LENGTH)) return null;
-  if (typeof entry.lastModified !== "string") return null;
+  // A time that is missing or cannot be read makes the entry young, never malformed.
   return { raw: entry.key, key: evidenceKeyInPrefix(entry.key), at: entry.lastModified };
 }
 
 function parseReference(domain: string) {
   const prefix = `${domain}:`;
   return (entry: unknown) => {
-    if (!isPlainObject(entry) || !isBoundedString(entry.storageRef, MAX_REF_LENGTH)) return null;
-    if (typeof entry.acceptedAt !== "string") return null;
+    if (!isPlainObject(entry) || !isBoundedText(entry.storageRef, MAX_REF_LENGTH)) return null;
     const ref = entry.storageRef;
     const key = ref.startsWith(prefix) ? evidenceKeyInPrefix(ref.slice(prefix.length)) : null;
     return { raw: ref, key, at: entry.acceptedAt };
@@ -199,7 +205,7 @@ function checkInput(input: CountStorageOrphansInput): number {
 export async function countStorageOrphans(input: CountStorageOrphansInput): Promise<CountStorageOrphansResult> {
   const startedAt = checkInput(input);
   const cutoff = startedAt - input.thresholdMs;
-  const isYoung = (at: string) => {
+  const isYoung = (at: unknown) => {
     const t = parseInstant(at);
     return Number.isNaN(t) || t > cutoff;
   };
@@ -257,7 +263,8 @@ export async function countStorageOrphans(input: CountStorageOrphansInput): Prom
   let finishedAt = startedAt;
   try {
     const end = input.now();
-    if (isClockTime(end)) finishedAt = end;
+    // A clock that stepped back never gives an end before the start.
+    if (isClockTime(end) && end > startedAt) finishedAt = end;
   } catch {
     // The start time stands in for an end time the clock could not give.
   }

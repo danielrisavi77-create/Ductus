@@ -5,14 +5,14 @@
 export type StoredObjectEntry = {
   /** Object key inside the bucket of one storage domain, as the store lists it. */
   key: string;
-  /** When the store last wrote the object (ISO 8601 with a zone). */
+  /** When the store last wrote the object (ISO 8601 with a zone); a time that cannot be read makes it young. */
   lastModified: string;
 };
 
 export type StorageReferenceEntry = {
   /** `evidence.acceptances.storage_ref`: `<storage domain>:<object key>`. */
   storageRef: string;
-  /** The earliest `accepted_at` of the rows that name this reference (ISO 8601 with a zone). */
+  /** The earliest `accepted_at` of the rows that name this reference (ISO 8601 with a zone); unreadable is young. */
   acceptedAt: string;
 };
 

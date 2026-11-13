@@ -19,7 +19,9 @@ const THRESHOLD = 24 * HOUR;
 const T0 = Date.parse("2026-11-01T12:00:00.000Z");
 const OLD = new Date(T0 - 48 * HOUR).toISOString();
 const FRESH = new Date(T0 - HOUR).toISOString();
-const TIMES = [OLD, FRESH, "not a time"] as const;
+// Just inside the threshold: young, though far older than a payload of this pass.
+const NEAR = new Date(T0 - THRESHOLD + 1000).toISOString();
+const TIMES = [OLD, FRESH, NEAR, "not a time"] as const;
 const isOld = (t: string) => t === OLD;
 
 // The oracle of the form, written apart from the code under test.
