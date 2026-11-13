@@ -65,7 +65,6 @@ function checkSet(column: string): string[] {
  */
 const ROUTES_AHEAD_OF_PAGE = [
   "/kako-radi", // DAN-431, #1973
-  "/stanje", // DAN-429, the page and API land in the follow-up PR (#1836 c.6821821996)
 ] as const;
 
 function pageFile(route: string): string {

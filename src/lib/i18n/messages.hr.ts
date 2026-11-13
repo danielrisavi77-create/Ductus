@@ -1754,6 +1754,31 @@ export const hr = {
     errorTitle: "Stranicu nije bilo moguće prikazati",
     errorBody: "Dogodila se neočekivana greška. Pokušajte ponovno; ako se ponovi, vratite se na početnu.",
   },
+  statusPage: {
+    pageTitle: "Stanje sustava",
+    title: "Stanje sustava",
+    partsTitle: "Dijelovi sustava",
+    intro: "Ova stranica prikazuje rezultate provjera koje Ductura sama izvodi, bez podataka o osobama i radovima.",
+    loading: "Učitavam rezultate provjera.",
+    error: "Rezultate provjera trenutačno nije moguće učitati. To ne znači da sustav ne radi.",
+    retry: "Pokušaj ponovno",
+    allWorking: "Svi dijelovi rade.",
+    someNotWorking: "Neki dijelovi trenutačno ne rade.",
+    someNotEnabled: "Dijelovi koji rade nemaju smetnji; neki još nisu uključeni.",
+    stale: "Rezultati su zastarjeli: nova provjera nije uspjela više od dvije minute. Prikazano stanje možda više ne vrijedi.",
+    lastCheck: "Zadnja provjera: {time}.",
+    scope: "Stanje prikazuje rezultate provjera koje Ductura sama izvodi.",
+    components: {
+      writing: "Pisanje i slanje na poslužitelj",
+      submission: "Predaja rada",
+      mentorView: "Prikaz za mentora",
+    },
+    states: {
+      radi: "Radi",
+      ne_radi: "Ne radi",
+      nije_ukljuceno: "Nije uključeno",
+    },
+  },
 } as const;
 
 type Widen<T> = { readonly [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };

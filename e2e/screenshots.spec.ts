@@ -1,4 +1,4 @@
-import { test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 // docs/SESSIONS.md 6: every frontend PR shows each screen wide and mobile, in
 // hr and en. Each project (desktop, mobile) runs this once and the images go
@@ -96,5 +96,30 @@ for (const locale of LOCALES) {
         },
       );
     });
+  }
+}
+
+// DAN-429: the public status page in each state, with an invented answer. The
+// theme is the one kept in this browser (theme.ts); light is the paper.
+const STATUS_STATES = {
+  filled: { status: 200, body: { checkedAt: "2026-11-12T10:25:00.000Z", components: { writing: "radi", submission: "ne_radi", mentorView: "nije_ukljuceno" } } },
+  error: { status: 503, body: {} },
+} as const;
+for (const [state, answer] of Object.entries(STATUS_STATES)) {
+  for (const colorScheme of SCHEMES) {
+    for (const width of [1440, 400] as const) {
+      test(`screenshot: stanje ${state} at ${width} px (hr, ${colorScheme})`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height: 900 });
+        if (colorScheme === "light") await page.addInitScript(() => localStorage.setItem("ductura.theme", "light"));
+        await page.route("**/api/status", (route) => route.fulfill({ status: answer.status, json: answer.body }));
+        await page.goto("/stanje");
+        await page.locator('[aria-busy="true"]').waitFor({ state: "detached" });
+        await expect(page.locator("html")).toHaveJSProperty("scrollWidth", width);
+        await testInfo.attach(`${testInfo.project.name}-hr-stanje-${state}-${width}-${colorScheme}.png`, {
+          body: await page.screenshot({ fullPage: true }),
+          contentType: "image/png",
+        });
+      });
+    }
   }
 }
