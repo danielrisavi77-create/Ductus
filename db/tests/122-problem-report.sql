@@ -198,5 +198,12 @@ SELECT is(pg_temp.owner($$
 SELECT is(pg_temp.submit('ana', 'technical', 'Opet.', '/', '1.0.0', 'chromium', 1, NULL) ~ '^PR-', true,
   'a report older than an hour no longer counts');
 
+-- DAN-429 pre-QA: the route list is added NOT VALID and then validated; a
+-- migration that dropped the VALIDATE would leave rows from before unchecked.
+SELECT is(
+  (SELECT convalidated FROM pg_constraint
+    WHERE conrelid = 'identity.problem_report'::regclass AND conname = 'problem_report_route_check'),
+  true, 'the route list is validated for every row');
+
 SELECT * FROM finish();
 ROLLBACK;
