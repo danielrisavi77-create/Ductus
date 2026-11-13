@@ -1,8 +1,9 @@
 import { parseWorkLanguage, type WorkLanguage } from "@/domain/assignment/work-language";
+import { isDocumentId } from "@/domain/collaboration";
 import type { WithActor } from "@/server/db/with-actor";
 import { readJsonMutation, respond } from "./mutation-route";
 import {
-  setAssignmentWorkLanguage, setWorkLanguage, type WorkLanguageRefusal,
+  setAssignmentWorkLanguage, setWorkLanguage, setWorkLanguageForWork, type WorkLanguageRefusal,
 } from "./work-language";
 
 export const MAX_WORK_LANGUAGE_BODY_BYTES = 128;
@@ -57,6 +58,14 @@ export async function handleAssignmentWorkLanguageRequest(
   return result.kind === "ok" ? respond(200, { version: result.version }) : refuse(result.kind);
 }
 
+/** The body of a work's exception: exactly {language}, a work language or null; undefined when it is not. */
+function exceptionLanguage(value: unknown): WorkLanguage | null | undefined {
+  const body = closedBody(value, ["language"]);
+  if (!body) return undefined;
+  if (body.language === null) return null;
+  return parseWorkLanguage(body.language) ?? undefined;
+}
+
 // One work's exception from the language of its assignment; null removes it.
 // The assignment and the student come only from the path. The RPC refuses a
 // student who is not in the assignment exactly as another teacher's work
@@ -66,15 +75,29 @@ export async function handleWorkLanguageRequest(
 ): Promise<Response> {
   const input = await readJsonMutation(request, [assignmentId, studentId], deps, MAX_WORK_LANGUAGE_BODY_BYTES);
   if (!input.ok) return input.response;
-  const body = closedBody(input.value, ["language"]);
-  if (!body) return invalidInput();
-  let language: WorkLanguage | null = null;
-  if (body.language !== null) {
-    language = parseWorkLanguage(body.language);
-    if (language === null) return invalidInput();
-  }
+  const language = exceptionLanguage(input.value);
+  if (language === undefined) return invalidInput();
   const result = await setWorkLanguage(
     input.sessionToken, deps.withActor, assignmentId as string, studentId as string, language,
+  );
+  return result.kind === "ok" ? respond(200, { language: result.language }) : refuse(result.kind);
+}
+
+// DAN-386 (#1986, QA c.6861733018): the same change keyed by the work's
+// document id, as the page for one work links it, so the page never holds the
+// student's id. The server names the student from the document for a teacher
+// of the assignment; someone else's or a missing work is refused as forbidden.
+// "." and ".." are refused: a browser would resolve them as path steps.
+export async function handleWorkLanguageByDocumentRequest(
+  request: Request, assignmentId: unknown, documentId: unknown, deps: WorkLanguageRouteDeps,
+): Promise<Response> {
+  const input = await readJsonMutation(request, [assignmentId], deps, MAX_WORK_LANGUAGE_BODY_BYTES);
+  if (!input.ok) return input.response;
+  if (!isDocumentId(documentId) || documentId === "." || documentId === "..") return invalidInput();
+  const language = exceptionLanguage(input.value);
+  if (language === undefined) return invalidInput();
+  const result = await setWorkLanguageForWork(
+    input.sessionToken, deps.withActor, assignmentId as string, documentId, language,
   );
   return result.kind === "ok" ? respond(200, { language: result.language }) : refuse(result.kind);
 }

@@ -5,8 +5,10 @@ import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 import { withActor as appWithActor } from "@/server/db";
 import { POST as ASSIGNMENT_POST } from "../../../app/api/institution/assignments/[assignmentId]/work-language/route";
 import { POST as WORK_POST } from "../../../app/api/institution/assignments/[assignmentId]/students/[studentId]/work-language/route";
+import { POST as WORK_BY_DOCUMENT_POST } from "../../../app/api/institution/assignments/[assignmentId]/works/[documentId]/work-language/route";
 import {
-  handleAssignmentWorkLanguageRequest, handleWorkLanguageRequest, MAX_WORK_LANGUAGE_BODY_BYTES,
+  handleAssignmentWorkLanguageRequest, handleWorkLanguageByDocumentRequest, handleWorkLanguageRequest,
+  MAX_WORK_LANGUAGE_BODY_BYTES,
   type WorkLanguageRouteDeps,
 } from "./work-language-route";
 
@@ -171,14 +173,104 @@ describe("work language of one work (DAN-386)", () => {
   });
 });
 
+// #1986, QA c.6861733018: the page for one work posts by document id, so the
+// student's id never reaches the browser; the server names the student.
+const DOC = "izmisljeni-rad-1";
+const BY_DOCUMENT_URL = `${ORIGIN}/api/institution/assignments/${ASSIGNMENT}/works/${DOC}/work-language`;
+/** The first query names the work's students, the second sets the language. */
+function documentPort(students: unknown[], row: Row = { language: "en" }) {
+  const query = vi.fn()
+    .mockResolvedValueOnce({ rows: students.map((student_id) => ({ student_id })), rowCount: students.length })
+    .mockResolvedValueOnce({ rows: [row], rowCount: 1 });
+  const withActor = vi.fn(async (_token: unknown, fn: (tx: ActorTransaction) => Promise<unknown>) =>
+    fn({ query } as ActorTransaction)) as unknown as WithActor;
+  const deps: WorkLanguageRouteDeps = { withActor, expectedOrigin: ORIGIN, sessionToken: TOKEN };
+  return { query, withActor, deps };
+}
+const byDocument = (body: unknown, deps: WorkLanguageRouteDeps, documentId: unknown = DOC, assignmentId: unknown = ASSIGNMENT) =>
+  handleWorkLanguageByDocumentRequest(request(BY_DOCUMENT_URL, body), assignmentId, documentId, deps);
+
+describe("work language of one work by document id (DAN-386, #1986)", () => {
+  it.each([["en", "en"], [null, "hr"]] as const)(
+    "names the student from the document in the same transaction and sets %s without a student id from the caller",
+    async (language, after) => {
+      const { query, withActor, deps } = documentPort([STUDENT], { language: after });
+      const response = await byDocument({ language }, deps);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({ language: after });
+      expect(withActor).toHaveBeenCalledExactlyOnceWith(TOKEN, expect.any(Function));
+      expect(query).toHaveBeenCalledTimes(2);
+      expect(query.mock.calls[0]![0]).toContain("app.assignment_works($1::uuid)");
+      expect(query.mock.calls[0]![1]).toEqual([ASSIGNMENT, DOC]);
+      expect(query.mock.calls[1]![0]).toContain("institution.set_work_language(");
+      expect(query.mock.calls[1]![1]).toEqual([ASSIGNMENT, STUDENT, language]);
+    });
+
+  it("refuses a work the caller may not see, or no work, as forbidden and writes nothing", async () => {
+    const { query, deps } = documentPort([]);
+    const response = await byDocument({ language: "en" }, deps);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "forbidden" });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers 503 and writes nothing when the document names more than one student or no valid one", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const students of [[STUDENT, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"], ["not-a-uuid"], [null], [7]]) {
+      const { query, deps } = documentPort(students);
+      expect((await byDocument({ language: "en" }, deps)).status, JSON.stringify(students)).toBe(503);
+      expect(query).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("refuses a document id that is not one, a dot segment or a student id in the body before the database", async () => {
+    const { withActor, deps } = documentPort([STUDENT]);
+    for (const documentId of ["", " doc", "a\nb", "d".repeat(257), ".", "..", null, 7]) {
+      const response = await byDocument({ language: "en" }, deps, documentId);
+      expect(response.status, JSON.stringify(documentId)).toBe(422);
+      expect(await response.json()).toEqual({ error: "invalid_input" });
+    }
+    for (const assignmentId of ["not-an-id", "", null, `${ASSIGNMENT}x`]) {
+      expect((await byDocument({ language: "en" }, deps, DOC, assignmentId)).status).toBe(422);
+    }
+    for (const body of [{}, { language: "de" }, { language: "en", studentId: STUDENT }, { language: "en", documentId: DOC }, "null", "[]"]) {
+      expect((await byDocument(body, deps)).status, JSON.stringify(body)).toBe(422);
+    }
+    expect((await byDocument({ language: "en" }, { ...deps, sessionToken: undefined })).status).toBe(401);
+    expect(withActor).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["ZD401", 401, "unauthorized"], ["ZD403", 403, "forbidden"], ["ZD409", 409, "conflict"],
+    ["ZD422", 422, "invalid_input"], ["XX000", 503, "unavailable"],
+  ] as const)("maps %s from either statement to %i without its text", async (code, status, error) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const at of [0, 1]) {
+      const { query, deps } = documentPort([STUDENT]);
+      if (at === 0) query.mockReset().mockRejectedValue({ code, message: `SQL private ${STUDENT}` });
+      else query.mockReset()
+        .mockResolvedValueOnce({ rows: [{ student_id: STUDENT }], rowCount: 1 })
+        .mockRejectedValueOnce({ code, message: `SQL private ${STUDENT}` });
+      const response = await byDocument({ language: "en" }, deps);
+      expect(response.status).toBe(status);
+      const text = await response.text();
+      expect(JSON.parse(text)).toEqual({ error });
+      expect(text).not.toContain(STUDENT);
+    }
+  });
+});
+
 describe("work language route adapters (DAN-386)", () => {
   it.each([
     ["assignment", ASSIGNMENT_URL, { expectedVersion: 1, language: "en" }, { version: 2 },
       () => ASSIGNMENT_POST, { assignmentId: ASSIGNMENT }],
     ["one work", WORK_URL, { language: "en" }, { language: "en" },
       () => WORK_POST, { assignmentId: ASSIGNMENT, studentId: STUDENT }],
+    ["one work by document id", BY_DOCUMENT_URL, { language: "en" }, { language: "en" },
+      () => WORK_BY_DOCUMENT_POST, { assignmentId: ASSIGNMENT, documentId: DOC }],
   ] as const)("wires the real POST of %s to the path, the cookie and the configured origin", async (_name, url, body, row, post, params) => {
-    const { withActor, query } = port(row);
+    const { withActor, query } = url === BY_DOCUMENT_URL ? documentPort([STUDENT], row) : port(row);
     vi.mocked(appWithActor).mockImplementation(withActor);
     const context = { params: Promise.resolve(params) } as never;
     const req = () => new NextRequest(request(url, body, { cookie: `__Host-ductus_session=${TOKEN}`, host: "evil.example" }));

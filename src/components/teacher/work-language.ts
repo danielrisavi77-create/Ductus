@@ -54,16 +54,18 @@ export type WorkLanguageExceptionSave =
 // from the language of its assignment; null removes it. The route answers the
 // language the work has afterwards: the one sent, or after a removal the
 // assignment's. Anything else is unconfirmed and never shown as saved.
+// Keyed by the work's document id (#1986, QA c.6861733018): the server names
+// the student, so the browser never holds the student's id.
 export async function saveWorkLanguageException(
-  assignmentId: string, studentId: string, language: WorkLanguage | null, send: typeof fetch = fetch,
+  assignmentId: string, documentId: string, language: WorkLanguage | null, send: typeof fetch = fetch,
 ): Promise<WorkLanguageExceptionSave> {
-  if (!UUID.test(assignmentId) || !UUID.test(studentId)
+  if (!UUID.test(assignmentId) || !isDocumentId(documentId) || documentId === "." || documentId === ".."
     || (language !== null && parseWorkLanguage(language) === null)) {
     return { kind: "invalid" };
   }
   try {
     const response = await send(
-      `/api/institution/assignments/${assignmentId.toLowerCase()}/students/${studentId.toLowerCase()}/work-language`, {
+      `/api/institution/assignments/${assignmentId.toLowerCase()}/works/${encodeURIComponent(documentId)}/work-language`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",

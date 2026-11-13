@@ -1,4 +1,5 @@
 import { parseWorkLanguage, type WorkLanguage } from "@/domain/assignment/work-language";
+import { isDocumentId } from "@/domain/collaboration";
 import type { WithActor } from "@/server/db/with-actor";
 
 /**
@@ -57,6 +58,43 @@ export async function setWorkLanguage(
     return { kind: "ok", language: after };
   } catch (error) {
     return refusalOf(error, "work language change");
+  }
+}
+
+/**
+ * DAN-386 (#1986, QA c.6861733018; contract on #1836): as setWorkLanguage,
+ * keyed by the work's document id, so the student's id never reaches the
+ * browser. In one transaction app.assignment_works() names the student of
+ * that document to a teacher of the assignment (nothing to anyone else), and
+ * set_work_language() then decides again under its row locks. No work, a
+ * malformed id and someone else's work refuse alike (forbidden).
+ */
+export async function setWorkLanguageForWork(
+  token: string | null, withActor: WithActor, assignmentId: string, documentId: string, language: WorkLanguage | null,
+): Promise<WorkLanguageWrite> {
+  if (!UUID.test(assignmentId) || !isDocumentId(documentId)) return { kind: "forbidden" };
+  if (language !== null && parseWorkLanguage(language) === null) return { kind: "invalidInput" };
+  try {
+    const value = await withActor(token, async (tx) => {
+      const works = (await tx.query<{ student_id: unknown }>(
+        "SELECT DISTINCT x.student_id::text AS student_id FROM app.assignment_works($1::uuid) x WHERE x.document_id = $2",
+        [assignmentId, documentId])).rows;
+      if (works.length === 0) return { refused: true as const };
+      const studentId = works[0]?.student_id;
+      // A document id names one work; anything else is not explained.
+      if (works.length > 1 || typeof studentId !== "string" || !UUID.test(studentId)) {
+        throw new Error("invalid assignment work");
+      }
+      return { refused: false as const, language: (await tx.query<{ language: unknown }>(
+        "SELECT institution.set_work_language($1, $2, $3) AS language",
+        [assignmentId, studentId, language])).rows[0]?.language };
+    });
+    if (value.refused) return { kind: "forbidden" };
+    const after = parseWorkLanguage(value.language);
+    if (after === null) throw new Error("invalid work language");
+    return { kind: "ok", language: after };
+  } catch (error) {
+    return refusalOf(error, "work language change by document");
   }
 }
 

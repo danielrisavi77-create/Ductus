@@ -13,10 +13,8 @@ const names = t.workspace.upute.workLanguages;
 
 export interface WorkLanguageExceptionCardProps {
   assignmentId: string;
-  /** The work's document id, for the page link only. */
+  /** The work's document id: the save and the page link are keyed by it, never by the student. */
   documentId: string;
-  /** For the POST only; never shown. */
-  studentId: string;
   assignmentLanguage: WorkLanguage;
   /** The exception as read; null means the work follows its assignment. */
   exception: WorkLanguage | null;
@@ -29,7 +27,7 @@ export interface WorkLanguageExceptionCardProps {
 // a confirmed save the card stays usable; a conflict, a refusal or an
 // unconfirmed reply locks it and offers a fresh read, never a resend.
 export default function WorkLanguageExceptionCard({
-  assignmentId, documentId, studentId, assignmentLanguage, exception, initial = null,
+  assignmentId, documentId, assignmentLanguage, exception, initial = null,
 }: WorkLanguageExceptionCardProps) {
   const [chosen, setChosen] = useState<WorkLanguage | null>(exception);
   const [result, setResult] = useState<WorkLanguageExceptionSave | null>(initial);
@@ -60,7 +58,7 @@ export default function WorkLanguageExceptionCard({
     inFlight.current = true;
     setPending(true);
     const language = chosen;
-    void saveWorkLanguageException(assignmentId, studentId, language).then((reply) => {
+    void saveWorkLanguageException(assignmentId, documentId, language).then((reply) => {
       inFlight.current = false;
       if (!alive.current) return;
       setPending(false);

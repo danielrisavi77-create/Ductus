@@ -19,8 +19,6 @@ export type WorkLanguageExceptionRead =
     kind: "available";
     assignmentId: string;
     documentId: string;
-    /** For the POST only; the course list never shows or links it. */
-    studentId: string;
     title: string;
     assignmentLanguage: WorkLanguage;
     /** The work's own language, or null when it follows the assignment. */
@@ -43,7 +41,7 @@ interface Row {
 const ME = "SELECT app.current_user_id() AS user_id";
 
 // app.assignment_works() gives a teacher of the assignment the student of each
-// work; the student id never leaves the server on the way to this page.
+// work; the student id is checked here and never leaves the server.
 const QUERY = `WITH w AS (SELECT x.student_id FROM app.assignment_works($1::uuid) x WHERE x.document_id = $2)
 SELECT w.student_id::text AS student_id, institution.work_language($1::uuid, w.student_id) AS language,
   v.work_language AS assignment_language, v.title,
@@ -84,5 +82,5 @@ export async function readWorkLanguageException(
     || (exception ?? assignmentLanguage) !== language || typeof row.title !== "string") {
     return { kind: "unavailable" };
   }
-  return { kind: "available", assignmentId: a, documentId, studentId, title: row.title, assignmentLanguage, exception };
+  return { kind: "available", assignmentId: a, documentId, title: row.title, assignmentLanguage, exception };
 }

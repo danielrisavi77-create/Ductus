@@ -9,18 +9,35 @@ import { admin, closeWork, seedWork, STUDENT } from "./work-seed";
 // DAN-386 (M2.10-P02d, contract on #1836 c.6858305983): the teacher sets one
 // work's language apart from its assignment's, on a page keyed by the
 // assignment and the work's document id. One click sends one POST; the card
-// then names the language in force. Every course, assignment and text is invented.
+// then names the language in force. The student's id never reaches the browser:
+// the card posts by document id (#1986, QA c.6861733018). Every course,
+// assignment and text is invented.
 test.afterEach(closeWork);
 
 const w = t.teacher.workLanguageException;
 const names = t.workspace.upute.workLanguages;
-const SAVE = /^\/api\/institution\/assignments\/[0-9a-f-]{36}\/students\/([0-9a-f-]{36})\/work-language$/;
+const SAVE = /^\/api\/institution\/assignments\/[0-9a-f-]{36}\/works\/[^/]+\/work-language$/;
 const isSave = (request: Request) => request.method() === "POST" && SAVE.test(new URL(request.url()).pathname);
 
 async function overrideOf(assignment: string): Promise<string[]> {
   return admin(async (client) => (await client.query<{ language: string }>(
     "SELECT work_language AS language FROM institution.work_language_override WHERE assignment_id = $1", [assignment])).rows
     .map((row) => row.language));
+}
+
+async function studentIdOf(): Promise<string> {
+  return admin(async (client) => (await client.query<{ id: string }>(
+    "SELECT id::text AS id FROM identity.user_account WHERE hr_edu_person_unique_id = $1", [STUDENT])).rows[0]!.id);
+}
+
+/** The page as the server sends it: the HTML with its inline RSC data, and the RSC payload of a client navigation. */
+async function rawPage(page: Page, path: string): Promise<{ html: string; rsc: string }> {
+  const html = await page.request.get(path);
+  const rsc = await page.request.get(path, { headers: { RSC: "1" } });
+  expect(html.status()).toBe(200);
+  expect(rsc.status()).toBe(200);
+  expect(rsc.headers()["content-type"]).toContain("text/x-component");
+  return { html: await html.text(), rsc: await rsc.text() };
 }
 
 /** The student's work of the assignment, seeded by the admin login: the opening is not this spec's subject. */
@@ -70,7 +87,16 @@ test("the teacher sets one work's language; one request, the exception stored an
   const posts: Request[] = [];
   page.on("request", (request) => { if (isSave(request)) posts.push(request); });
 
-  await page.goto(`/nastavnik/zadatak/${assignment}/rad/${encodeURIComponent(documentId)}/jezik`);
+  const path = `/nastavnik/zadatak/${assignment}/rad/${encodeURIComponent(documentId)}/jezik`;
+  const studentId = await studentIdOf();
+  // Neither the HTML nor the RSC payload holds the student's id, in any case
+  // (#1986, QA c.6861733018); the work is there, so the check is not vacuous.
+  const before = await rawPage(page, path);
+  for (const text of [before.html, before.rsc]) {
+    expect(text).toContain(documentId);
+    expect(text.toLowerCase()).not.toContain(studentId.toLowerCase());
+  }
+  await page.goto(path);
   const card = page.getByRole("form", { name: w.link });
   await expect(card.getByText(w.current.replace("{language}", names.hr))).toBeVisible();
   await expect(card.getByRole("button", { name: w.save })).toBeDisabled();
@@ -83,9 +109,14 @@ test("the teacher sets one work's language; one request, the exception stored an
   await expect(card.getByText(w.current.replace("{language}", names.en))).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0]!.postDataJSON()).toEqual({ language: "en" });
-  // The student id goes only into the POST path; the page never shows it as text.
-  const studentId = SAVE.exec(new URL(posts[0]!.url()).pathname)![1]!;
-  expect(await page.locator("body").innerText()).not.toContain(studentId);
+  // The POST names the work by its document id; the student's id is in neither its path nor its body,
+  // nor in the page the browser holds, nor in the page the server sends after the change.
+  expect(new URL(posts[0]!.url()).pathname).toBe(
+    `/api/institution/assignments/${assignment}/works/${encodeURIComponent(documentId)}/work-language`);
+  expect(`${posts[0]!.url()} ${posts[0]!.postData()}`.toLowerCase()).not.toContain(studentId.toLowerCase());
+  expect((await page.content()).toLowerCase()).not.toContain(studentId.toLowerCase());
+  const after = await rawPage(page, path);
+  for (const text of [after.html, after.rsc]) expect(text.toLowerCase()).not.toContain(studentId.toLowerCase());
   expect(await overrideOf(assignment)).toEqual(["en"]);
   await shoot(page, "jezik-rada-studenta-spremljeno");
   await student.context().close();

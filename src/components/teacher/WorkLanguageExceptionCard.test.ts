@@ -10,16 +10,15 @@ import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 import type { WorkLanguageExceptionSave } from "./work-language";
 import WorkLanguageExceptionCard from "./WorkLanguageExceptionCard";
 
-// Invented assignment and student only. Contract: #1836 c.6858305983.
+// Invented assignment and work only. Contract: #1836 c.6858305983.
 const ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const STUDENT = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const DOC = "izmisljeni rad/a";
 const w = messagesHr.teacher.workLanguageException;
 const PAGE = `/nastavnik/zadatak/${ID}/rad/izmisljeni%20rad%2Fa/jezik`;
 const card = (
   exception: "hr" | "en" | null, initial: WorkLanguageExceptionSave | null = null, assignmentLanguage: "hr" | "en" = "hr",
 ) => renderToStaticMarkup(createElement(WorkLanguageExceptionCard, {
-  assignmentId: ID, documentId: DOC, studentId: STUDENT, assignmentLanguage, exception, initial,
+  assignmentId: ID, documentId: DOC, assignmentLanguage, exception, initial,
 }));
 const decode = (html: string) => html.replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, "&");
 
@@ -101,13 +100,14 @@ describe("DAN-386 one work's language exception card (P02d)", () => {
     expect(html).not.toContain(w.reload);
   });
 
-  it("the reload link names the work by its document id, never by the student id", () => {
+  it("the reload link names the work by its document id; the card takes no student id (#1986, QA c.6861733018)", () => {
     const html = renderToStaticMarkup(createElement(WorkLanguageExceptionCard, {
-      assignmentId: ID.toUpperCase(), documentId: DOC, studentId: STUDENT.toUpperCase(), assignmentLanguage: "hr", exception: null,
+      assignmentId: ID.toUpperCase(), documentId: DOC, assignmentLanguage: "hr", exception: null,
       initial: { kind: "unavailable" },
     }));
     expect(html).toContain(`href="${PAGE}"`);
-    expect(html.toLowerCase()).not.toContain(STUDENT);
+    // @ts-expect-error a student id is not a prop of the card
+    void createElement(WorkLanguageExceptionCard, { assignmentId: ID, documentId: DOC, studentId: ID, assignmentLanguage: "hr", exception: null });
   });
 
   it("has the same keys in both catalogues and no forbidden term (PRODUCT §5)", () => {

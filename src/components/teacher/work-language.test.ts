@@ -83,17 +83,18 @@ describe("DAN-386 assignment work language save (P02c)", () => {
   });
 });
 
-// Invented student only. Contract: #1836 c.6858305983, classes 1 to 3.
-const STUDENT = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+// Invented work only. Contract: #1836 c.6858305983, classes 1 to 3; the work
+// is named by its document id, never by its student (#1986, QA c.6861733018).
+const DOC = "izmisljeni-rad-1";
 
 describe("DAN-386 one work's language exception save (P02d)", () => {
-  it("posts only the language to the pair's route, same origin, no cache, no redirect", async () => {
+  it("posts only the language to the work's route by document id, same origin, no cache, no redirect", async () => {
     const send = reply(200, { language: "en" });
-    expect(await saveWorkLanguageException(ID.toUpperCase(), STUDENT.toUpperCase(), "en", send))
+    expect(await saveWorkLanguageException(ID.toUpperCase(), DOC, "en", send))
       .toEqual({ kind: "saved", language: "en" });
     expect(send).toHaveBeenCalledTimes(1);
     const [url, init] = (send as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
-    expect(url).toBe(`/api/institution/assignments/${ID}/students/${STUDENT}/work-language`);
+    expect(url).toBe(`/api/institution/assignments/${ID}/works/${DOC}/work-language`);
     expect(init).toMatchObject({
       method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
       headers: { "content-type": "application/json" },
@@ -101,9 +102,16 @@ describe("DAN-386 one work's language exception save (P02d)", () => {
     expect(JSON.parse(init.body as string)).toEqual({ language: "en" });
   });
 
+  it("encodes the document id as one path segment", async () => {
+    const send = reply(200, { language: "en" });
+    await saveWorkLanguageException(ID, "izmisljeni rad/a?b#c", "en", send);
+    const [url] = (send as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
+    expect(url).toBe(`/api/institution/assignments/${ID}/works/izmisljeni%20rad%2Fa%3Fb%23c/work-language`);
+  });
+
   it("removes the exception with null and saves the assignment's language it answers", async () => {
     const send = reply(200, { language: "hr" });
-    expect(await saveWorkLanguageException(ID, STUDENT, null, send)).toEqual({ kind: "saved", language: "hr" });
+    expect(await saveWorkLanguageException(ID, DOC, null, send)).toEqual({ kind: "saved", language: "hr" });
     const [, init] = (send as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
     expect(JSON.parse(init.body as string)).toEqual({ language: null });
   });
@@ -114,7 +122,7 @@ describe("DAN-386 one work's language exception save (P02d)", () => {
     [201, "unavailable"], [204, "unavailable"], [302, "unavailable"], [404, "unavailable"],
     [500, "unavailable"], [503, "unavailable"],
   ])("maps status %i to %s", async (status, kind) => {
-    expect(await saveWorkLanguageException(ID, STUDENT, "en", reply(status, { language: "en" }))).toEqual({ kind });
+    expect(await saveWorkLanguageException(ID, DOC, "en", reply(status, { language: "en" }))).toEqual({ kind });
   });
 
   it.each([
@@ -129,27 +137,31 @@ describe("DAN-386 one work's language exception save (P02d)", () => {
     ["a null language after removal", null, { language: null }],
     ["an unknown language after removal", null, { language: "de" }],
   ])("never reports saved for 200 with %s", async (_name, sent, body) => {
-    expect(await saveWorkLanguageException(ID, STUDENT, sent as "en" | null, reply(200, body)))
+    expect(await saveWorkLanguageException(ID, DOC, sent as "en" | null, reply(200, body)))
       .toEqual({ kind: "unavailable" });
   });
 
   it("is unavailable on malformed JSON and on a network failure", async () => {
-    expect(await saveWorkLanguageException(ID, STUDENT, "en", reply(200, undefined, "{"))).toEqual({ kind: "unavailable" });
+    expect(await saveWorkLanguageException(ID, DOC, "en", reply(200, undefined, "{"))).toEqual({ kind: "unavailable" });
     const down = vi.fn(async () => { throw new TypeError("offline"); }) as unknown as typeof fetch;
-    expect(await saveWorkLanguageException(ID, STUDENT, null, down)).toEqual({ kind: "unavailable" });
+    expect(await saveWorkLanguageException(ID, DOC, null, down)).toEqual({ kind: "unavailable" });
   });
 
   it.each([
-    ["an assignment id that is not a UUID", "1; DROP", STUDENT, "hr"],
-    ["a student id that is not a UUID", ID, "../x", "hr"],
-    ["an empty student id", ID, "", "hr"],
-    ["an unknown language", ID, STUDENT, "de"],
-    ["an upper-case language", ID, STUDENT, "HR"],
-    ["an empty language", ID, STUDENT, ""],
-    ["undefined in place of null", ID, STUDENT, undefined],
-  ])("refuses %s without a request", async (_name, a, s, language) => {
+    ["an assignment id that is not a UUID", "1; DROP", DOC, "hr"],
+    ["an empty document id", ID, "", "hr"],
+    ["a padded document id", ID, " doc", "hr"],
+    ["a document id with a control character", ID, "a\nb", "hr"],
+    ["an overlong document id", ID, "d".repeat(257), "hr"],
+    ["a dot segment", ID, ".", "hr"],
+    ["a parent segment", ID, "..", "hr"],
+    ["an unknown language", ID, DOC, "de"],
+    ["an upper-case language", ID, DOC, "HR"],
+    ["an empty language", ID, DOC, ""],
+    ["undefined in place of null", ID, DOC, undefined],
+  ])("refuses %s without a request", async (_name, a, d, language) => {
     const send = reply(200, { language: "hr" });
-    expect(await saveWorkLanguageException(a, s, language as "hr", send)).toEqual({ kind: "invalid" });
+    expect(await saveWorkLanguageException(a, d, language as "hr", send)).toEqual({ kind: "invalid" });
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -159,7 +171,7 @@ describe("DAN-386 one work's language exception save (P02d)", () => {
         fc.anything(), fc.record({ language: fc.constantFrom("hr", "en", "de", null) }),
       ),
       async (sent, body) => {
-        const result = await saveWorkLanguageException(ID, STUDENT, sent, reply(200, body));
+        const result = await saveWorkLanguageException(ID, DOC, sent, reply(200, body));
         const plain = typeof body === "object" && body !== null && !Array.isArray(body)
           && Object.keys(body).length === 1 && Object.hasOwn(body, "language");
         const answered = plain ? (body as { language: unknown }).language : undefined;
