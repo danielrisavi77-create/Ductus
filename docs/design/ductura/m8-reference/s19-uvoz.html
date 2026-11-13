@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-19 — Uvoz teksta (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 12 · DAN-603 · prijedlog slike · M8.UX-R</div>
+  <h1>S-19 — Uvoz teksta</h1>
+  <p>Dijalog uvoza iz datoteke (M8.2, D-282) s obveznim korakom „Pregled uvoza” prije nego što tekst uđe u rad (#1792). Praćene promjene su prihvaćene, a student vidi samo njihovu vrstu i broj (D-281). Prototip <code>editor-v11.dc.html</code> nema korak pregleda. Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="t1" class="variant" data-state="odabir">
+    <div class="ref-tag">Stanje 1 · prazno, odabir datoteke</div>
+    <div class="dialog" role="dialog" aria-labelledby="t1">
+      <h2 id="t1">Uvoz teksta iz datoteke</h2>
+      <p class="note">Uvezeni tekst u radu ima oznaku „uvezeno”. Zapisuju se naziv, vrsta i veličina datoteke te vrijeme uvoza na minutu. Mentor vidi iste podatke kao Vi.</p>
+      <p class="note">Uvezeni tekst ostaje zabilježen kao uvoz i ako ga kasnije obrišete ili promijenite.</p>
+      <p class="meta">Podržani oblici: .docx, .pdf.</p>
+      <div class="acts"><button class="btn" type="button">Odaberi datoteku</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t2" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 2 · učitavanje</div>
+    <div class="dialog" role="dialog" aria-labelledby="t2">
+      <h2 id="t2">Uvoz teksta iz datoteke</h2>
+      <p class="note" role="status">Čitamo datoteku seminar-samouprava.docx.</p>
+      <div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div>
+      <p class="meta">U rad još ništa nije uvezeno.</p>
+      <div class="acts"><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t3" class="variant" data-state="pregled">
+    <div class="ref-tag">Stanje 3 · popunjeno, pregled uvoza</div>
+    <div class="dialog" role="dialog" aria-labelledby="t3">
+      <h2 id="t3">Pregled uvoza</h2>
+      <div class="kv"><span>Datoteka</span><b>seminar-samouprava.docx</b></div>
+      <p class="meta">Naziv datoteke vidi i mentor.</p>
+      <p class="note">U rad ulazi 42 odlomka, 6.180 riječi.</p>
+      <div class="sheet"><p>Lokalna samouprava u Hrvatskoj razvijala se u nekoliko razdoblja, a svako je promijenilo odnos između općina i države.</p></div>
+      <fieldset class="choice"><legend class="meta">Mjesto umetanja</legend>
+        <label><input type="radio" name="m" checked>Na mjesto kursora</label>
+        <label><input type="radio" name="m">Na kraj rada</label></fieldset>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odustani</button></div>
+      <p class="meta">Ako odustanete, uvoz se ne zapisuje.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="t4" class="variant" data-state="djelomican-uvoz">
+    <div class="ref-tag">Stanje 4 · djelomičan uvoz</div>
+    <div class="dialog" role="dialog" aria-labelledby="t4">
+      <h2 id="t4">Pregled uvoza</h2>
+      <p class="note">U rad ulazi 42 odlomka, 6.180 riječi.</p>
+      <h3 class="title">Neće se prenijeti</h3>
+      <ul class="lost">
+        <li><span>Tablice</span><span>3</span></li><li><span>Slike</span><span>2</span></li>
+        <li><span>Fusnote</span><span>14</span></li><li><span>Komentari</span><span>5</span></li>
+        <li><span>Zaglavlja i podnožja</span><span></span></li>
+        <li><span>Oblikovanje (podebljano, kurziv, razine naslova)</span><span></span></li>
+      </ul>
+      <p class="meta">Primjeri stavki; stvarni popis daje čitanje datoteke.</p>
+      <p class="note">Datoteka sadrži praćene promjene: 12 umetanja i 7 brisanja. Uvozi se tekst s prihvaćenim promjenama.</p>
+      <p class="meta">Zapisuje se samo vrsta i broj tih promjena. Imena, datumi i obrisani tekst se ne zapisuju. Mentor vidi isti podatak kao Vi.</p>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t5" class="variant" data-state="nepodrzan-format">
+    <div class="ref-tag">Stanje 5 · nepodržan format</div>
+    <div class="dialog" role="dialog" aria-labelledby="t5">
+      <h2 id="t5">Uvoz teksta iz datoteke</h2>
+      <p class="note" role="alert">Ovaj oblik datoteke nije podržan. Podržani su: .docx, .pdf.</p>
+      <p class="meta">Odabrana datoteka: biljeske.pages</p>
+      <div class="acts"><button class="btn" type="button">Odaberi drugu datoteku</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t6" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 6 · greška čitanja (poruke iz #1792; nepodržan oblik je stanje 5)</div>
+    <div class="dialog" role="dialog" aria-labelledby="t6">
+      <h2 id="t6">Uvoz teksta iz datoteke</h2>
+      <p class="note" role="alert">Ova datoteka se ne može pročitati kao Word dokument. Otvorite je u Wordu ili LibreOfficeu, spremite kao .docx i pokušajte ponovno.</p>
+      <details><summary>Pojedinosti za podršku</summary><code>DOCX_NO_DOCUMENT</code></details>
+      <div class="row"><p class="obs">Datoteka je u obliku Strict Open XML. Otvorite je u Wordu, odaberite Spremi kao i obični Word dokument (.docx), pa pokušajte ponovno.</p></div>
+      <div class="row"><p class="obs">U ovom PDF-u nema teksta koji se može označiti, na primjer kad je PDF skeniran. Ductura ne prepoznaje tekst sa slike.</p></div>
+      <div class="row"><p class="obs">Datoteka je prevelika ili presložena za uvoz (najviše <span class="open-mark">{granica} MB, otvoreno</span>). Uvezite rad u dijelovima ili uklonite slike.</p></div>
+      <div class="acts"><button class="btn" type="button">Odaberi drugu datoteku</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t7" class="variant" data-state="nije-dopusteno">
+    <div class="ref-tag">Stanje 7 · zadatak ne dopušta uvoz</div>
+    <div class="menu" role="menu" aria-labelledby="t7">
+      <h2 id="t7" class="meta">Izbornik Rad</h2>
+      <button role="menuitem" type="button" aria-disabled="true" aria-describedby="r7">Uvezi tekst iz datoteke</button>
+      <p class="meta" id="r7">Ovaj zadatak ne dopušta uvoz teksta. Uvoz je isključen u postavkama zadatka.</p>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Pregled uvoza je obvezan korak; stavka „Neće se prenijeti” pojavljuje se samo za ono čega u datoteci ima. Tehnički kod nikad nije jedina poruka.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov dijaloga, 2. Odaberi datoteku, 3. mjesto umetanja, 4. Uvezi, 5. Odustani; Esc zatvara dijalog bez zapisa.</p>
+</main>
+</body>
+</html>

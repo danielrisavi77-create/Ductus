@@ -30,6 +30,7 @@ import {
   type InlineNode,
   type Mark,
   type NodeId,
+  type PlainBlockType,
   type ValidationErrorCode,
 } from "../domain/document";
 import { isPlainObject } from "../domain/json";
@@ -80,6 +81,10 @@ export const INTEROP_ERROR_CODES = [
   "TIPTAP_MARKS_NOT_ARRAY",
   "TIPTAP_MARK_NOT_OBJECT",
   "TIPTAP_UNKNOWN_MARK",
+  // Document v2 (`interop-v2.ts`). A v1 document holds no citation, so the v1
+  // projection never reports these.
+  "TIPTAP_CITATION_INVALID",
+  "TIPTAP_CITATION_MARKED",
 ] as const;
 
 export type InteropErrorCode = (typeof INTEROP_ERROR_CODES)[number];
@@ -105,7 +110,7 @@ export type CanonicalCandidate =
  */
 export type IdFactory = (index: number) => NodeId;
 
-const defaultIdFactory: IdFactory = () => newNodeId();
+export const defaultIdFactory: IdFactory = () => newNodeId();
 
 /* ------------------------------------------------------- canonical → tiptap */
 
@@ -116,7 +121,7 @@ function marksToTiptap(marks: readonly Mark[]): TiptapMarkJSON[] | undefined {
   return canonicalMarks(marks).map((mark) => ({ type: mark }));
 }
 
-function inlineToTiptap(child: InlineNode): TiptapNodeJSON {
+export function inlineToTiptap(child: InlineNode): TiptapNodeJSON {
   const marks = marksToTiptap(child.marks);
   return marks ? { type: "text", text: child.text, marks } : { type: "text", text: child.text };
 }
@@ -242,7 +247,13 @@ function projectMarks(
   return ok ? canonicalMarks(marks) : null;
 }
 
-function projectInline(
+/**
+ * Projects one inline node. A v1 document holds text only; the v2 projector
+ * (`interop-v2.ts`) handles its citation and hands text back to this one.
+ */
+export type InlineProjector<I> = (raw: unknown, path: string, errors: InteropError[]) => I | null;
+
+export function projectInline(
   raw: unknown,
   path: string,
   errors: InteropError[],
@@ -270,13 +281,19 @@ function projectInline(
   return { type: "text", text: raw.text, marks };
 }
 
-function projectBlock(
+/** A projected block whose children are of the projector's inline type. */
+export type ProjectedBlock<I> =
+  | { type: "heading"; id: NodeId; level: HeadingLevel; children: I[] }
+  | { type: PlainBlockType; id: NodeId; children: I[] };
+
+function projectBlock<I>(
   raw: unknown,
   index: number,
   seen: Set<string>,
   idFor: IdFactory,
   errors: InteropError[],
-): DocumentNode | null {
+  inline: InlineProjector<I>,
+): ProjectedBlock<I> | null {
   const path = `$.content[${index}]`;
 
   if (!isPlainObject(raw)) {
@@ -312,14 +329,14 @@ function projectBlock(
     }
   }
 
-  const children: InlineNode[] = [];
+  const children: I[] = [];
   if (raw.content !== undefined) {
     if (!Array.isArray(raw.content)) {
       errors.push({ path: `${path}.content`, code: "TIPTAP_CONTENT_NOT_ARRAY" });
       return null;
     }
     raw.content.forEach((rawChild, childIndex) => {
-      const child = projectInline(rawChild, `${path}.content[${childIndex}]`, errors);
+      const child = inline(rawChild, `${path}.content[${childIndex}]`, errors);
       if (child) {
         children.push(child);
       }
@@ -335,7 +352,15 @@ function projectBlock(
     : { type, id, children };
 }
 
-function project(json: unknown, idFor: IdFactory): Projection | InteropError[] {
+/**
+ * Projects the blocks of a Tiptap document. `inline` decides what a block
+ * may hold: text in v1, text and citations in v2.
+ */
+export function projectTiptapBlocks<I>(
+  json: unknown,
+  idFor: IdFactory,
+  inline: InlineProjector<I>,
+): { nodes: ProjectedBlock<I>[]; errors: InteropError[] } | InteropError[] {
   if (!isPlainObject(json)) {
     return [{ path: "$", code: "TIPTAP_NOT_OBJECT" }];
   }
@@ -348,10 +373,10 @@ function project(json: unknown, idFor: IdFactory): Projection | InteropError[] {
 
   const errors: InteropError[] = [];
   const seen = new Set<string>();
-  const nodes: DocumentNode[] = [];
+  const nodes: ProjectedBlock<I>[] = [];
 
   json.content.forEach((rawNode, index) => {
-    const node = projectBlock(rawNode, index, seen, idFor, errors);
+    const node = projectBlock(rawNode, index, seen, idFor, errors, inline);
     if (node) {
       nodes.push(node);
     }
@@ -378,7 +403,7 @@ export function tiptapToCanonical(
   idFor: IdFactory = defaultIdFactory,
   uuidFn?: () => string,
 ): CanonicalCandidate {
-  const projected = project(json, idFor);
+  const projected: Projection | InteropError[] = projectTiptapBlocks(json, idFor, projectInline);
 
   if (Array.isArray(projected)) {
     return { ok: false, errors: projected };

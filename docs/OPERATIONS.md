@@ -119,7 +119,8 @@ Dnevni zapis je jedan unos za svaki radni dan u fazama A i B. Pokazuje da su pil
 | --- | --- | --- | --- |
 | Datum i faza | npr. `2027-02-23`, faza A | | |
 | Izdanje | oznaka i puni commit SHA zamrznutog izdanja (vidi „Zamrznuto izdanje”) | zapis o izdanju | `planirano` |
-| Spremnost | stanje po sposobnosti: `database`, `storage`, `signing`, `queue` | `/api/ready` (`app/api/ready/route.ts`, `src/server/ready.ts`, DAN-585) | `izgrađeno` |
+| Spremnost | stanje po sposobnosti: `database`, `storage`, `signing`, `queue` | `/api/ready` (`app/api/ready/route.ts`, `src/server/ready.ts`, probe u `src/server/ready-capabilities.ts`, DAN-585) | `izgrađeno` |
+| Javno stanje | stanje po dijelu (pisanje, predaja, prikaz za mentora): `radi`, `ne_radi`, `nije_ukljuceno`, s vremenom provjere; jedna provjera vrijedi 15 s za sve pozivatelje, pri gašenju ili neuspjeloj provjeri 503 bez tijela | `/api/status` i stranica `/stanje` (`app/api/status/route.ts`, `src/server/public-status.ts`, DAN-429) | `izgrađeno` |
 | Rekonstrukcija | broj predanih radova i broj podudarnih; prag je 100 %, a svako odstupanje blokira izdanje | `docs/PRODUCT.md` §12 | provjera po izdanju `[DOKAZ]` |
 | Izgubljen rad | broj slučajeva; prag je 0 | `docs/PRODUCT.md` §12 | `[DOKAZ]` |
 | Neovlašten pristup | broj slučajeva; prag je 0 | `docs/PRODUCT.md` §12 | `[DOKAZ]` |
