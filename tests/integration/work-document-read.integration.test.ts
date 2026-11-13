@@ -4,7 +4,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
-import { readWorkDocument } from "@/server/evidence/work-document-read";
+import { readOwnWorkDocument, readWorkDocument } from "@/server/evidence/work-document-read";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 
@@ -34,6 +34,7 @@ let withActor: WithActor;
 let ready = false;
 
 const read = (who: keyof typeof people, assignment: string) => readWorkDocument(tokens[who], assignment, withActor);
+const own = (who: keyof typeof people, assignment: string) => readOwnWorkDocument(tokens[who], assignment, withActor);
 const open = (who: keyof typeof people, assignment: string) => withActor(tokens[who], async (tx) =>
   (await tx.query<{ outcome: string; document_id: string }>(
     "SELECT outcome, document_id FROM app.open_student_work($1)", [assignment])).rows[0]!);
@@ -98,7 +99,7 @@ async function removeFixture() {
   await admin.query("BEGIN");
   try {
     await admin.query("SET LOCAL session_replication_role = replica");
-    for (const table of ["evidence.package", "evidence.document_checkpoint", "evidence.document_revision", "evidence.document",
+    for (const table of ["institution.notification", "evidence.package", "evidence.document_checkpoint", "evidence.document_revision", "evidence.document",
       "evidence.project", "evidence.domain", "institution.notice_acknowledgment", "institution.assignment_version"]) {
       const column = table.endsWith("assignment_version") ? "assignment_id IN (SELECT id FROM institution.assignment WHERE institution_id = ANY($1))"
         : "institution_id = ANY($1)";
@@ -188,5 +189,26 @@ describe("document of an assignment for the session, on the database (#711 B1)",
     await admin.query("UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND user_id = $2",
       [course, people.leaver]);
     expect(await read("leaver", a.open)).toEqual({ kind: "none" });
+    // DAN-294 (PRODUCT §5 rule 17): the owner still finds the work to read its log.
+    expect(await own("leaver", a.open)).toEqual({ kind: "document", documentId: opened.document_id });
+    // Negative: the ended membership opens nobody else's work.
+    expect(await own("classmate", a.open)).toEqual({ kind: "none" });
+    expect(await own("teacher", a.open)).toEqual({ kind: "none" });
+  });
+
+  it("finds the own work apart from the right to write: a new notice not acknowledged yet (DAN-294)", async () => {
+    const opened = await open("student", a.second);
+    expect(await own("student", a.second)).toEqual({ kind: "document", documentId: opened.document_id });
+    await admin.query(
+      `INSERT INTO institution.assignment_version (assignment_id, version_no, title, instructions, work_type, opens_at, due_at,
+         ai_policy, ai_purposes, evidence_profile, import_allowed, created_by)
+       VALUES ($1, 2, 'Izmišljeni zadatak', 'Izmišljene nove upute.', 'essay', now() - interval '1 day', now() + interval '30 days',
+         'partially_allowed', ARRAY[]::text[], 'basic', false, $2)`, [a.second, people.teacher]);
+    await admin.query("UPDATE institution.assignment SET current_version = 2 WHERE id = $1", [a.second]);
+    expect(await read("student", a.second)).toEqual({ kind: "notAccepting" });
+    expect(await own("student", a.second)).toEqual({ kind: "document", documentId: opened.document_id });
+    const nobody = await Promise.all([a.otherCourse, a.foreign, randomUUID()].map((id) => own("student", id)));
+    expect(nobody).toEqual([{ kind: "none" }, { kind: "none" }, { kind: "none" }]);
+    expect(await own("classmate", a.second)).toEqual({ kind: "none" });
   });
 });
