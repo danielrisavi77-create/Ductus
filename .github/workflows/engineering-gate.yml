@@ -27,6 +27,8 @@ on: # zizmor: ignore[dangerous-triggers] trusted default-branch metadata gate; P
     types: [completed]
 
 permissions:
+  # D-293: reads the D-91 schema check runs on the PR head for carry-over.
+  checks: read
   contents: read
   issues: read
   pull-requests: read
