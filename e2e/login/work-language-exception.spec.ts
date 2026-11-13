@@ -96,6 +96,7 @@ test("someone else's or a made-up work reads as not found", async ({ browser }) 
   await signIn(page, "/", "Demo nastavnik");
   const assignment = await seedWork({ teacher: true });
   await page.goto(`/nastavnik/zadatak/${assignment}/rad/izmisljeni-rad-koji-ne-postoji/jezik`);
-  await expect(page.getByRole("alert")).toHaveText(w.notFound);
+  // Next's route announcer is also role=alert (empty); the page's own alert is the other one.
+  await expect(page.getByRole("alert").and(page.locator(":not(#__next-route-announcer__)"))).toHaveText(w.notFound);
   await expect(page.getByRole("form", { name: w.link })).toHaveCount(0);
 });
