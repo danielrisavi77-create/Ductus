@@ -25,9 +25,10 @@ export type BrowserFamily = (typeof BROWSER_FAMILIES)[number];
 
 /**
  * The page a report was sent from, as its route template: never the path
- * itself, whose segments are ids, and never a query or a hash. The same list
- * is the route CHECK of the newest migration that sets it
- * (problem-report-routes.test.ts).
+ * itself, whose segments are ids, and never a query or a hash. The route
+ * CHECK of the newest migration that sets it holds this list plus only the
+ * routes whose page has not landed yet (ROUTES_AHEAD_OF_PAGE in
+ * problem-report-routes.test.ts).
  */
 export const PROBLEM_REPORT_ROUTES = [
   "/",
