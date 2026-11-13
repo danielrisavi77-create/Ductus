@@ -27,7 +27,7 @@ function routeCheck(sql: string): string[] {
   return [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1] ?? "");
 }
 
-/** Later migrations that replace the route CHECK, oldest first (DAN-431, /kako-radi). */
+/** Later migrations that replace the route CHECK, oldest first (DAN-429, /stanje). */
 const ROUTE_MIGRATIONS = readdirSync(join(ROOT, "db/migrations"))
   .filter((name) => name > "20261112110000_problem_report.sql" && name.endsWith(".sql"))
   .sort()
@@ -56,6 +56,17 @@ function checkSet(column: string): string[] {
   return [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1] ?? "");
 }
 
+/**
+ * Routes the CHECK already allows ahead of their pages, and the PRs that add
+ * the page (orchestrator, #1836 c.6820309956, c.6820715294, c.6821821996). Only
+ * /stanje is left: /kako-radi is on main (#1973). /stanje joins
+ * PROBLEM_REPORT_ROUTES with the page PR; until then it is allowed here, and
+ * once the page is on the branch the route must be in the domain set.
+ */
+const ROUTES_AHEAD_OF_PAGE = [
+  "/stanje", // DAN-429, the page and API land in the follow-up PR (#1836 c.6821821996)
+] as const;
+
 function pageFile(route: string): string {
   return join(ROOT, route === "/" ? "app/page.tsx" : `app${route}/page.tsx`);
 }
@@ -64,7 +75,10 @@ describe("DAN-431 problem report: migration and domain agree", () => {
   it("every closed set is the same in both", () => {
     const latest = ROUTE_MIGRATIONS.at(-1);
     expect(latest).toBeDefined();
-    expect(routeCheck(latest?.up ?? "")).toEqual([...PROBLEM_REPORT_ROUTES]);
+    const ahead = ROUTES_AHEAD_OF_PAGE.filter((route) => !existsSync(pageFile(route)));
+    expect(routeCheck(latest?.up ?? "")).toEqual([...PROBLEM_REPORT_ROUTES, ...ahead].sort());
+    expect([...PROBLEM_REPORT_ROUTES].sort()).toEqual([...PROBLEM_REPORT_ROUTES]);
+    for (const route of ahead) expect(PROBLEM_REPORT_ROUTES).not.toContain(route);
     expect(checkSet("category")).toEqual([...PROBLEM_REPORT_CATEGORIES]);
     expect(checkSet("browser_family")).toEqual([...BROWSER_FAMILIES]);
     expect(checkSet("sync_state")).toEqual([...SYNC_STATES]);
@@ -84,6 +98,7 @@ describe("DAN-431 problem report: migration and domain agree", () => {
       expect(restored.length).toBeLessThan(after.length);
       before = after;
     }
+    expect(before).toContain("/stanje");
     expect(before).toContain("/kako-radi");
     expect(before).toContain("/rad/[assignmentId]/dnevnik-pristupa");
   });
@@ -93,6 +108,13 @@ describe("DAN-431 problem report: migration and domain agree", () => {
     expect(own).toBeDefined();
     const after = routeCheck(own?.up ?? "");
     expect(routeCheck(own?.down ?? "")).toEqual(after.filter((route) => route !== "/kako-radi"));
+  });
+
+  it("the /stanje down removes only /stanje", () => {
+    const own = ROUTE_MIGRATIONS.find(({ up }) => routeCheck(up).includes("/stanje"));
+    expect(own).toBeDefined();
+    const after = routeCheck(own?.up ?? "");
+    expect(routeCheck(own?.down ?? "")).toEqual(after.filter((route) => route !== "/stanje"));
   });
 
   it("the description length, the app version pattern and the character classes are the same", () => {

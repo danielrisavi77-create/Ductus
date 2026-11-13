@@ -163,23 +163,22 @@ SELECT is(pg_temp.submit('ana', 'technical', 'Opis.', '/', '1.0.0', 'chromium', 
           '22003: value "3000000000" is out of range for type integer', 'a browser major beyond integer is refused before the call');
 SELECT is(pg_temp.submit('ana', 'account', repeat('ž', 1000), '/', '1.0.0', 'safari', 0, NULL) ~ '^PR-[0-9A-F]{10}$', true,
   '1000 characters, not bytes, is the limit');
--- DAN-431: "Kako Ductura radi" is a page in the shell, so its route is in the set.
-SELECT is(pg_temp.submit('vesna', 'technical', 'Stranica se ne učitava.', '/kako-radi', '1.0.0', 'chromium', 1, NULL) ~ '^PR-[0-9A-F]{10}$', true,
-  'a report from /kako-radi is accepted');
-SELECT is(pg_temp.owner($$ SELECT count(*)::text FROM identity.problem_report WHERE route = '/kako-radi' AND user_id = {vesna} $$), '1',
-  'the /kako-radi route is stored as sent');
--- DAN-294 (#1969): the access log page's route is in the same set (#1836 c.6820309956).
-SELECT is(pg_temp.submit('vesna', 'technical', 'Dnevnik se ne prikazuje.', '/rad/[assignmentId]/dnevnik-pristupa', '1.0.0', 'chromium', 1, NULL) ~ '^PR-[0-9A-F]{10}$', true,
-  'a report from the access log route is accepted');
-SELECT is(pg_temp.owner($$ SELECT count(*)::text FROM identity.problem_report WHERE route = '/rad/[assignmentId]/dnevnik-pristupa' AND user_id = {vesna} $$), '1',
-  'the access log route is stored as sent');
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '5', 'only the accepted calls wrote a row');
+-- DAN-429: the public status page /stanje is a page in the shell, so its
+-- route is in the set; the same migration carries /kako-radi (DAN-431, #1973)
+-- and the access log route (DAN-294, #1969).
+SELECT is(pg_temp.submit('vesna', 'technical', 'Stanje se ne osvježava.', t.route, '1.0.0', 'chromium', 1, NULL) ~ '^PR-[0-9A-F]{10}$', true,
+  format('a report from %s is accepted', t.route))
+FROM unnest(ARRAY['/stanje', '/kako-radi', '/rad/[assignmentId]/dnevnik-pristupa']) AS t (route);
+SELECT is(pg_temp.owner($$ SELECT string_agg(route, ' | ' ORDER BY route) FROM identity.problem_report
+                           WHERE user_id = {vesna} AND route IS NOT NULL $$),
+  '/kako-radi | /rad/[assignmentId]/dnevnik-pristupa | /stanje', 'the new routes are stored as sent');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '6', 'only the accepted calls wrote a row');
 
 -- 4. No live session: ZD401, nothing written.
 SELECT is(pg_temp.submit(t.name, 'technical', 'Opis.', '/', '1.0.0', 'chromium', 1, NULL), 'ZD401: not authenticated',
   format('ZD401 for %s', t.name))
 FROM unnest(ARRAY['anon', 'expired', 'closed', 'unknown']) AS t (name);
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '5', 'no call without a session wrote a row');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '6', 'no call without a session wrote a row');
 
 -- 5. At most five in a sliding hour, per account. Ana has sent two; older
 -- reports of Dora's do not count.
@@ -198,6 +197,13 @@ SELECT is(pg_temp.owner($$
   SELECT count(*)::text FROM x $$), '3', 'three of Ana''s reports age past the hour');
 SELECT is(pg_temp.submit('ana', 'technical', 'Opet.', '/', '1.0.0', 'chromium', 1, NULL) ~ '^PR-', true,
   'a report older than an hour no longer counts');
+
+-- DAN-429 pre-QA: the route list is added NOT VALID and then validated; a
+-- migration that dropped the VALIDATE would leave rows from before unchecked.
+SELECT is(
+  (SELECT convalidated FROM pg_constraint
+    WHERE conrelid = 'identity.problem_report'::regclass AND conname = 'problem_report_route_check'),
+  true, 'the route list is validated for every row');
 
 SELECT * FROM finish();
 ROLLBACK;
