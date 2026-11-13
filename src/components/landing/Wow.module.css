@@ -218,3 +218,13 @@
   font-size: 13px;
   color: var(--ink-3);
 }
+
+/* DAN-354: the writing page's toolbar above the visitor's sheet (editor-v11),
+   framed as on /rad (`.workspace__main > .editor-toolbar`). */
+.pane :global(.editor-toolbar) {
+  margin: 0 0 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--chrome);
+}

@@ -3,6 +3,7 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useLayoutEffect, useRef } from "react";
 
+import { EditorToolbarFor } from "@/components/editor/EditorToolbar";
 import { useSheetTheme } from "@/components/shell/useSheetTheme";
 import { createEditorExtensions } from "@/editor/schema";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -24,7 +25,9 @@ const attributes = (label: string, readOnly: boolean) => ({
  * read-only editor on the right shows the same document at once (PRODUCT §5
  * rule 5: same text, same function). Nothing is saved or sent: no journal, no
  * session, no publisher. The text lives in this page only. There is no clock,
- * speed or rhythm anywhere (PRODUCT §5 rule 4).
+ * speed or rhythm anywhere (PRODUCT §5 rule 4). Above the visitor's sheet is
+ * the writing page's own toolbar (editor-v11, DAN-354): it only runs this
+ * editor's commands, and its "Prikaz" keeps just the sheet theme, as on /rad.
  */
 export default function TwoSides() {
   const theme = useSheetTheme();
@@ -53,7 +56,7 @@ export default function TwoSides() {
   });
 
   return (
-    <section className={styles.block} aria-labelledby="dvije-strane-naslov">
+    <section id="isprobaj" className={styles.block} aria-labelledby="dvije-strane-naslov">
       <p className={styles.eyebrow}>{l.sidesEyebrow}</p>
       <h2 id="dvije-strane-naslov" className={styles.blockTitle}>
         {l.sidesTitle}
@@ -62,6 +65,7 @@ export default function TwoSides() {
       <div className={styles.panes}>
         <div className={styles.pane}>
           <p className={styles.paneLabel}>{l.studentPane}</p>
+          <EditorToolbarFor editor={student} />
           <article className={`sheet ${styles.editorSheet}`} data-sheet-theme={theme}>
             <EditorContent editor={student} />
           </article>

@@ -81,6 +81,7 @@ const en = {
   landing: {
     sectionsNav: "Home page sections",
     howItWorksLink: "How it works",
+    tryEditorLink: "Try the editor",
     forWhomLink: "Who it is for",
     eyebrow: "Writing log · seminar papers and theses",
     title: "The work is visible",

@@ -1,7 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+import { BULLET_ITEM_HTML_ATTRIBUTE, BULLET_ITEM_HTML_VALUE } from "../src/editor/bullet-item";
 import { messagesHr as t } from "../src/lib/i18n/messages.hr";
+import { SHEET_THEME_KEY } from "../src/lib/ui/sheet-theme";
 
 // Public home page for a visitor without a session (FE-H1, #476).
 
@@ -26,6 +28,73 @@ test.describe("public home page", () => {
     await page.keyboard.press("End");
     await page.keyboard.type(" Dodana rečenica.");
     await expect(mentor).toContainText("Dodana rečenica.");
+  });
+
+  test("the try-out editor has the writing page's toolbar, and the mentor's view follows it (DAN-354)", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    const toolbar = page.getByRole("toolbar", { name: t.toolbar.label });
+    const student = page.getByRole("textbox", { name: t.landing.wow.editorLabel });
+    const mentor = page.getByRole("textbox", { name: t.landing.wow.mentorLabel });
+    // A tool that does not fit is in "Više", with the same command.
+    const use = async (label: string) => {
+      const button = toolbar.getByRole("button", { name: label, exact: true });
+      if (await button.isVisible()) return button.click();
+      await toolbar.getByRole("button", { name: t.toolbar.more }).click();
+      await page.getByRole("menuitemcheckbox", { name: label }).click();
+    };
+    await student.click();
+    await page.keyboard.press("End");
+    await use(t.toolbar.heading1);
+    await expect(student.locator("h1")).toHaveCount(1);
+    await expect(mentor.locator("h1")).toHaveCount(1);
+    await toolbar.getByRole("button", { name: t.toolbar.undo, exact: true }).click();
+    await expect(student.locator("h1")).toHaveCount(0);
+    await expect(mentor.locator("h1")).toHaveCount(0);
+    await use(t.toolbar.bulletItem);
+    const bullet = `p[${BULLET_ITEM_HTML_ATTRIBUTE}="${BULLET_ITEM_HTML_VALUE}"]`;
+    await expect(student.locator(bullet)).toHaveCount(1);
+    await expect(mentor.locator(bullet)).toHaveCount(1);
+  });
+
+  test("the try-out sends nothing and keeps nothing but the sheet theme (DAN-354)", async ({ page }) => {
+    await page.goto("/");
+    const student = page.getByRole("textbox", { name: t.landing.wow.editorLabel });
+    await expect(student).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    const before = await page.evaluate(() => Object.keys(localStorage).sort());
+    const sent: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() !== "GET" || url.pathname.startsWith("/api/")) sent.push(`${request.method()} ${url.pathname}`);
+    });
+    await student.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" Probna rečenica.");
+    const toolbar = page.getByRole("toolbar", { name: t.toolbar.label });
+    await toolbar.getByRole("button", { name: t.toolbar.bold, exact: true }).click();
+    await page.keyboard.type(" Masno.");
+    await toolbar.getByRole("button", { name: t.toolbar.undo, exact: true }).click();
+    await toolbar.getByRole("button", { name: t.toolbar.view }).click();
+    await page.getByRole("menuitemradio", { name: t.workspace.sheetThemeLight }).click();
+    await page.waitForLoadState("networkidle");
+    expect(sent).toEqual([]);
+    const after = await page.evaluate(() => Object.keys(localStorage).sort());
+    const added = after.filter((key) => !before.includes(key));
+    expect(added.filter((key) => key !== SHEET_THEME_KEY)).toEqual([]);
+    const stored = await page.evaluate(() => JSON.stringify(localStorage) + JSON.stringify(sessionStorage));
+    expect(stored).not.toContain("Probna");
+  });
+
+  test("the top of the page offers the try-out at once, without signing in (DAN-354)", async ({ page }) => {
+    await page.goto("/");
+    const hero = page.locator("main#sadrzaj").getByRole("link", { name: t.landing.tryEditorLink });
+    await expect(hero).toHaveAttribute("href", "#isprobaj");
+    const nav = page.getByRole("navigation", { name: t.landing.sectionsNav });
+    await expect(nav.getByRole("link", { name: t.landing.tryEditorLink })).toHaveAttribute("href", "#isprobaj");
+    await hero.click();
+    await expect(page).toHaveURL(/#isprobaj$/);
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.wow.sidesTitle })).toBeInViewport();
   });
 
   test("the replay block scrubs an invented paragraph step by step", async ({ page }) => {

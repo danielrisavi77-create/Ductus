@@ -136,8 +136,16 @@ const THEMES: readonly { key: SheetTheme; label: string }[] = [
   { key: "light", label: t.workspace.sheetThemeLight },
 ];
 
+/** The writing page's toolbar, bound to its local document. */
 export default function EditorToolbar() {
-  const editor = useLocalEditor();
+  return <EditorToolbarFor editor={useLocalEditor()} />;
+}
+
+/**
+ * The same toolbar for any editor, e.g. the public sandbox (DAN-354), which
+ * has no local document: it only runs that editor's own commands.
+ */
+export function EditorToolbarFor({ editor }: { editor: Editor | null }) {
   const state = useEditorState({ editor, selector: ({ editor: e }) => stateOf(e) }) ?? IDLE;
   const theme = useSheetTheme();
   const listRef = useRef<HTMLDivElement>(null);
