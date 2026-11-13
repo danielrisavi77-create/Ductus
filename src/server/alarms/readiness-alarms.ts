@@ -29,6 +29,9 @@ type KindState = {
   // that comes before the store works again, so an outage that is over by
   // the time the database answers is still written, then resolved.
   owedRaise: boolean;
+  // A resolve of this kind is in the store. A fault reported meanwhile is owed
+  // too: the resolve was decided before the fault and will not cover it.
+  resolving: boolean;
 };
 
 /**
@@ -45,7 +48,7 @@ export function createAlarmTracker(
   reachable: StoreReachable = () => true,
 ) {
   const state = new Map<OpsAlarmKind, KindState>(
-    OPS_ALARM_KINDS.map((kind) => [kind, { stored: undefined, wanted: undefined, owedRaise: false }]),
+    OPS_ALARM_KINDS.map((kind) => [kind, { stored: undefined, wanted: undefined, owedRaise: false, resolving: false }]),
   );
   let running: Promise<void> | null = null;
   let again = false;
@@ -77,7 +80,10 @@ export function createAlarmTracker(
       }
       if (s.wanted === "resolved" && s.stored !== "resolved") {
         if (!up) return;
-        if (!(await write("resolve", kind))) continue;
+        s.resolving = true;
+        const resolved = await write("resolve", kind);
+        s.resolving = false;
+        if (!resolved) continue;
         s.stored = "resolved";
       }
     }
@@ -108,7 +114,7 @@ export function createAlarmTracker(
       >) {
         const s = state.get(kind)!;
         s.wanted = target;
-        if (target === "raised" && s.stored !== "raised") s.owedRaise = true;
+        if (target === "raised" && (s.stored !== "raised" || s.resolving)) s.owedRaise = true;
       }
       up = reachable(capabilities);
       if (!up) return running ?? Promise.resolve();

@@ -194,6 +194,36 @@ describe("createAlarmTracker", () => {
     ]);
   });
 
+  it("keeps a fault that comes and goes while its kind is being resolved", async () => {
+    let release: (() => void) | undefined;
+    const calls: Call[] = [];
+    const tracker = createAlarmTracker({
+      raise: async (kind) => void calls.push(["raise", kind]),
+      resolve: (kind) => {
+        calls.push(["resolve", kind]);
+        // The first resolve hangs until released; later ones settle at once.
+        if (calls.filter(([op]) => op === "resolve").length > 1) return Promise.resolve();
+        return new Promise<void>((resolve) => (release = resolve));
+      },
+    });
+    await tracker.observe({ database: "nedostupno" });
+    const closing = tracker.observe({ database: "ok" });
+    await Promise.resolve();
+    expect(calls).toEqual([
+      ["raise", "ready_database"],
+      ["resolve", "ready_database"],
+    ]);
+    const fault = tracker.observe({ database: "nedostupno" });
+    const recovery = tracker.observe({ database: "ok" });
+    release!();
+    await Promise.all([closing, fault, recovery]);
+    // The short fault is its own episode: written, then closed.
+    expect(calls.slice(2)).toEqual([
+      ["raise", "ready_database"],
+      ["resolve", "ready_database"],
+    ]);
+  });
+
   // Orchestrator note 2 (#1836, c.6821821693): flapping against a hanging
   // store holds one write and a fixed state, however many reports arrive.
   it("bounds what is pending under endless flapping against a hanging store", async () => {
