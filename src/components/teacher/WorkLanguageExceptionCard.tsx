@@ -40,6 +40,10 @@ export default function WorkLanguageExceptionCard({
   // removal the server answers the assignment's language now, which may differ from the one read.
   const [effective, setEffective] = useState<WorkLanguage>(
     initial?.kind === "saved" ? initial.language : exception ?? assignmentLanguage);
+  // The assignment's language: as read, or as a confirmed removal answered it, so the card
+  // never names an assignment language beside a current language that contradicts it.
+  const [assignmentNow, setAssignmentNow] = useState<WorkLanguage>(
+    initial?.kind === "saved" && exception === null ? initial.language : assignmentLanguage);
   const inFlight = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
@@ -64,6 +68,7 @@ export default function WorkLanguageExceptionCard({
       if (reply.kind === "saved") {
         setInForce(language);
         setEffective(reply.language);
+        if (language === null) setAssignmentNow(reply.language);
       }
       setResult(reply);
     });
@@ -76,7 +81,7 @@ export default function WorkLanguageExceptionCard({
     <form className={styles.card} onSubmit={submit} aria-labelledby="jezik-rada-studenta">
       <h2 id="jezik-rada-studenta">{w.link}</h2>
       <p className={styles.hint}>{w.lead}</p>
-      <p className={styles.hint}>{w.assignmentLanguage.replace("{language}", names[assignmentLanguage])}</p>
+      <p className={styles.hint}>{w.assignmentLanguage.replace("{language}", names[assignmentNow])}</p>
       <p className={styles.hint}>{w.current.replace("{language}", names[effective])}</p>
       <fieldset className={styles.tools} disabled={locked}>
         <legend className="visually-hidden">{w.link}</legend>
@@ -84,7 +89,7 @@ export default function WorkLanguageExceptionCard({
           <label key={language ?? "zadatak"} className={styles.check}>
             <input type="radio" name="jezik-rada-studenta" value={language ?? ""} checked={chosen === language}
               onChange={() => { setChosen(language); setResult(null); }} />
-            <span>{language === null ? w.asAssignment.replace("{language}", names[assignmentLanguage]) : names[language]}</span>
+            <span>{language === null ? w.asAssignment.replace("{language}", names[assignmentNow]) : names[language]}</span>
           </label>
         ))}
       </fieldset>

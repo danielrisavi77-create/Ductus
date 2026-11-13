@@ -68,6 +68,20 @@ describe("DAN-386 one work's language exception card (P02d)", () => {
     expect(html).not.toContain(w.current.replace("{language}", "hrvatski"));
   });
 
+  it("after a confirmed removal names the assignment's language as answered, beside the current one (#1986 review)", () => {
+    const html = decode(card(null, { kind: "saved", language: "en" }, "hr"));
+    expect(html).toContain(w.assignmentLanguage.replace("{language}", "engleski"));
+    expect(html).toContain(w.asAssignment.replace("{language}", "engleski"));
+    expect(html).not.toContain(w.assignmentLanguage.replace("{language}", "hrvatski"));
+    expect(html).not.toContain(w.asAssignment.replace("{language}", "hrvatski"));
+  });
+
+  it("after a confirmed exception keeps the assignment's language as read", () => {
+    const html = decode(card("en", { kind: "saved", language: "en" }, "hr"));
+    expect(html).toContain(w.assignmentLanguage.replace("{language}", "hrvatski"));
+    expect(html).toContain(w.asAssignment.replace("{language}", "hrvatski"));
+  });
+
   it.each(["conflict", "forbidden", "unauthorized", "unavailable"] as const)(
     "a %s locks the card and offers only a fresh read (negative: never resent)", (kind) => {
       const html = card(null, { kind });
