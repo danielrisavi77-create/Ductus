@@ -1,0 +1,20 @@
+name: ductus-invariant-hunter-nightly
+agent: ./agent.md
+environment_id: ./environment.yaml
+vault_ids: []
+schedule: {type: cron, expression: "17 2 * * 1-5", timezone: Europe/Zagreb}
+initial_events:
+  - type: user.define_outcome
+    description: Noćni lov na prekršene invarijante B-8, F-3/F-8 i B-12 nad trenutačnim mainom, s izvještajem i nacrtima issuea u /mnt/session/outputs/.
+    max_iterations: 3
+    rubric:
+      type: text
+      content: |
+        # Rubrika: noćni lov na invarijante (početna, za doradu)
+        1. `report.md` postoji i navodi SHA maina, pokrenute naredbe i ishod osnovice (unit, property).
+        2. Napadnute su sve tri skupine: B-8, F-3/F-8 i B-12; za svaku je naveden barem jedan novi test i broj izvođenja i sjemena.
+        3. Svaki nalaz ima vlastiti `issue-<n>.md` s datotekom i retkom, minimalnim primjerom, naredbom i sjemenom za ponavljanje te retkom „Dohvatljivo kroz:”.
+        4. Svaki nalaz je ponovljen barem tri puta i izvještaj tvrdi da nije artefakt testa, s obrazloženjem.
+        5. Nijedan nalaz se ne temelji na stvarnim osobnim podacima ili studentskim radovima.
+        6. Nema promjena na GitHubu i nema redaka `Agent-Review:`, `Review-*`, `QA-*`, `Owner-*`, `Command-Head`.
+        7. Ako nema nalaza, izvještaj to izričito kaže i navodi što je pokriveno.

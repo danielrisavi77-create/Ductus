@@ -1,0 +1,15 @@
+events:
+  - type: user.define_outcome
+    description: Usporedba pružatelja AI pomoćnika na izmišljenim hrvatskim akademskim zadacima, kao podloga za Q-10 t. 7; isporuka u /mnt/session/outputs/.
+    max_iterations: 4
+    rubric:
+      type: text
+      content: |
+        # Rubrika: evaluacija pružatelja na hrvatskom (početna, za doradu)
+        1. `eval-set.jsonl` ima 30 do 50 zadataka; svaki ima tekst, vrstu pogreške, očekivano ponašanje i kriterije, zapisane prije pokretanja.
+        2. Svi tekstovi su izmišljeni; nema stvarnih imena, radova ni osobnih podataka.
+        3. Nijedan zadatak ne traži pisanje rada umjesto studenta; granice pomoći odgovaraju D-194 i `docs/PRODUCT.md` §5.
+        4. `results.jsonl` ima odgovor i ocjenu po kriteriju za svaki par zadatak-pružatelj koji je pokrenut; nepokrenuti parovi su navedeni s razlogom.
+        5. `report.md` ima tablicu po pružatelju (točnost, granice, korisnost, latencija, cijena) i barem dva citirana primjera po pružatelju.
+        6. `report.md` navodi ograničenja mjerenja i ne donosi odluku umjesto vlasnika.
+        7. Nijedan ključ ni token se ne pojavljuje u isporuci.

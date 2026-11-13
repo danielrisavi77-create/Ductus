@@ -1,0 +1,20 @@
+name: ductus-doc-consistency-auditor-weekly
+agent: ./agent.md
+environment_id: ./environment.yaml
+vault_ids: []
+schedule: {type: cron, expression: "43 20 * * 0", timezone: Europe/Zagreb}
+initial_events:
+  - type: user.define_outcome
+    description: Tjedni izvještaj o proturječjima među kanonskim dokumentima Ducture u /mnt/session/outputs/audit.md.
+    max_iterations: 3
+    rubric:
+      type: text
+      content: |
+        # Rubrika: audit dosljednosti (početna, za doradu)
+        1. `audit.md` počinje SHA-om maina i sažetkom od najviše deset redaka.
+        2. Svaki nalaz navodi obje strane proturječja kao `putanja:redak` s kratkim citatom.
+        3. Svaki nalaz navodi kanonski izvor prema redoslijedu iz `CLAUDE.md` i što bi prema njemu vrijedilo, a nesklad ostaje otvoren.
+        4. Gradnja na odluci PRIJEDLOG označena je posebno, s procjenom zašto bi promjena bila skupa.
+        5. Neskladi već upisani u `STATE.md` (Q-19) nisu prijavljeni kao novi.
+        6. Nalazi su poredani po težini; nema nalaza bez dokaza u repou.
+        7. Nema pisanja izvan sandboxa i nema redaka `Agent-Review:`, `Review-*`, `QA-*`, `Owner-*`, `Command-Head`.

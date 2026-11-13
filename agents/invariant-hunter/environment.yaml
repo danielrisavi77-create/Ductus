@@ -1,0 +1,10 @@
+name: ductus-invariant-hunter
+config:
+  type: cloud
+  networking:
+    type: limited
+    allow_mcp_servers: false
+    allowed_hosts:
+      - github.com
+      - codeload.github.com
+      - registry.npmjs.org
