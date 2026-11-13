@@ -73,7 +73,6 @@ describe("mentorView needs storage", () => {
   });
 });
 
-
 describe("publicStatusCache", () => {
   const clock = (start = 1_000_000) => {
     let t = start;
