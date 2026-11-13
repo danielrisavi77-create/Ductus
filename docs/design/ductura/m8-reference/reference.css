@@ -1,0 +1,27 @@
+/* Paket 12 (DAN-603): tokeni i dijelovi iz m5-reference i m5-reference-c; ovdje samo dodaci za uvoz i izvoz. */
+@import url("../m5-reference-c/reference.css");
+
+.wide { grid-column: 1 / -1; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.stack { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.title { font-weight: 600; }
+/* Ulaz koji još nije odlučen: crtkani okvir i riječ „otvoreno”, ne izmišljeni tekst. */
+.open-mark { font-size: 12.5px; color: var(--ink-2); border: 1px dashed var(--rule); border-radius: 4px; padding: 1px 6px; }
+/* Pregled uvoza: što ulazi i što se neće prenijeti, bez boje za gubitak (D-281). */
+.lost { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.lost li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--rule-2); padding: 4px 0; }
+.lost li span:last-child { font: 500 13px/1.5 var(--ff-mono); color: var(--ink-2); }
+.choice { display: grid; gap: 2px; }
+.choice label { display: flex; align-items: center; min-height: 44px; }
+.choice input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0 8px 0 0; }
+/* A4 pregled: list u omjeru A4, sitnije pismo; list je papir u obje ljuske (D-188). */
+.a4 { aspect-ratio: 210 / 297; max-width: 340px; width: 100%; font-size: 12px; line-height: 1.5; padding: 28px 24px; align-content: start; }
+.a4 .cover-t { font-size: 15px; font-weight: 600; text-align: center; margin: 24px 0 8px; }
+.a4 .c { text-align: center; }
+.menu button[aria-disabled="true"] { color: var(--ink-3); cursor: not-allowed; }
+/* Radnje u ploči: razmak kao u .item i .dialog iz m5-reference. */
+.panel-body .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+details { font-size: 12.5px; color: var(--ink-3); }
+details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+
+@media (max-width: 1050px) { .cols { grid-template-columns: 1fr; } }
