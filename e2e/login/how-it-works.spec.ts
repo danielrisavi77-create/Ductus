@@ -51,11 +51,12 @@ async function shoot(page: Page, name: string): Promise<void> {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
-    expect(axe.violations).toEqual([]);
     for (const width of [1440, 400]) {
       await page.setViewportSize({ width, height: 900 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      // Contract (a): axe at each width, so a fault of the 400 px layout alone fails too.
+      const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+      expect(axe.violations, `${name}-${theme}-${width}`).toEqual([]);
       await test.info().attach(`${name}-${theme}-${width}`, {
         body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png",
       });

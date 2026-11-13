@@ -1786,7 +1786,7 @@ export const hr = {
     },
     saving: {
       heading: "Kako se rad sprema",
-      device: "Spremljeno na uređaju: tekst je zapisan u ovom pregledniku, a poslužitelj ga još nije primio.",
+      device: "Spremljeno na uređaju: tekst je zapisan u ovom pregledniku. Ova oznaka ne govori je li ga poslužitelj već primio.",
       server: "Spremljeno na poslužitelju: poslužitelj je potvrdio da je tekst primio.",
       offline: "Bez mreže pisanje se nastavlja i tekst se sprema na uređaju. Ono što je napisano bez mreže ostaje tako označeno u zapisu i nakon što se veza vrati.",
       submitted: "Predano: rad je predan na zadatak. Predaja je moguća samo kad se predani tekst može točno složiti iz zapisa.",

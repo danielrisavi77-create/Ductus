@@ -1768,7 +1768,7 @@ const en = {
     },
     saving: {
       heading: "Where your work is kept",
-      device: "Saved on this device: the text is stored in this browser and the server has not received it yet.",
+      device: "Saved on this device: the text is stored in this browser. This label does not say whether the server has received it yet.",
       server: "Saved on the server: the server confirmed that it received the text.",
       offline: "Without a network you keep writing and the text is saved on the device. What was written without a network stays marked that way in the record after the connection returns.",
       submitted: "Submitted: the work was submitted to the assignment. Submission is possible only when the submitted text can be rebuilt exactly from the record.",

@@ -51,4 +51,16 @@ describe("Kako Ductura radi: forbidden terms", () => {
     expect(messagesHr.howItWorks.saving.device.startsWith("Spremljeno na uređaju")).toBe(true);
     expect(messagesHr.howItWorks.saving.server.startsWith("Spremljeno na poslužitelju")).toBe(true);
   });
+
+  // Review c.6821148088 on #1973: a work that reached SYNCED and is opened
+  // again shows LOCAL_DURABLE (evidence-session.test.ts G3) while the server
+  // holds the text, so "saved on this device" must not say the server lacks it.
+  it("does not say the server lacks a text saved on this device", () => {
+    const hr = messagesHr.howItWorks.saving.device;
+    const en = messagesEn.howItWorks.saving.device;
+    expect(hr).not.toMatch(/nije primio|nema tekst|nije stigao/);
+    expect(en).not.toMatch(/server has not received|server does not have|not reached the server/);
+    expect(hr).toMatch(/je li ga poslužitelj već primio/);
+    expect(en).toMatch(/whether the server has received it/);
+  });
 });
