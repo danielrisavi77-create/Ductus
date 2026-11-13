@@ -40,7 +40,7 @@ for (const [name, args, status] of cases) {
   });
 }
 
-/** True when the Dockerfile's install step pins server and client to the image and runs the check. */
+/** True when the Dockerfile's install step pins server, client and pgTAP and runs the check. */
 function pinsImageVersion(text) {
   const runs = text
     .replace(/\\\n/g, " ")
@@ -48,6 +48,8 @@ function pinsImageVersion(text) {
     .filter((line) => /^RUN\s/.test(line));
   const install = runs.find((line) => line.includes("apt-get install")) ?? "";
   return (
+    /^ARG PGTAP_VERSION=\S+$/m.test(text) &&
+    install.includes('"postgresql-17-pgtap=${PGTAP_VERSION}"') &&
     install.includes('"postgresql-17=${PG_VERSION}"') &&
     install.includes('"postgresql-client-17=${PG_VERSION}"') &&
     /assert-pg-version\.sh "\$PG_VERSION"/.test(install)
@@ -67,6 +69,19 @@ const variants = [
       '"postgresql-client-17=${PG_VERSION}"',
       "postgresql-client-17",
     ),
+    false,
+  ],
+  [
+    "pgTAP not pinned",
+    dockerfile.replace(
+      '"postgresql-17-pgtap=${PGTAP_VERSION}"',
+      "postgresql-17-pgtap",
+    ),
+    false,
+  ],
+  [
+    "pgTAP version empty",
+    dockerfile.replace(/^ARG PGTAP_VERSION=\S+$/m, "ARG PGTAP_VERSION="),
     false,
   ],
   [
