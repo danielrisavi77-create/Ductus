@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "origin": {
+    "base_url": "https://api.anthropic.com",
+    "organization_id": "e524ea9d-771a-451e-880f-fa08993e273d",
+    "workspace_id": "wrkspc_0118tmzq7QJRLQWhHgVKzvFV"
+  },
+  "resources": {
+    "./agents/doc-consistency-auditor/agent.md": {
+      "kind": "agent",
+      "id": "agent_013rTbkmsLnXaiBYSRLhtKPV",
+      "version": "1",
+      "hash": "f8aca782e9ba488d420512cb02457b10",
+      "remote_hash": "1d634863d1c052f3cd80500fecca8ea0",
+      "stamp": "1"
+    },
+    "./agents/doc-consistency-auditor/deployment-weekly.yaml": {
+      "kind": "deployment",
+      "id": "depl_01CzTH7RLcsf1orP5yCrFYid",
+      "hash": "c4e68f1c11536ec104b3bf91a8315083",
+      "remote_hash": "3dd6d054cfcf3da43b21930a0332c488",
+      "stamp": "2026-11-13T11:06:31.396731Z"
+    },
+    "./agents/doc-consistency-auditor/environment.yaml": {
+      "kind": "environment",
+      "id": "env_01EJAm8MirSaXdNGnHKG7m9i",
+      "hash": "0cd6d9170b484cbd6fc850a6e388a005",
+      "remote_hash": "64987a3f198e81b0aebb66fc2ff1a348",
+      "stamp": "2026-11-13T11:06:30.204565Z"
+    }
+  }
+}
