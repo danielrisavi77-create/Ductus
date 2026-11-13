@@ -118,9 +118,10 @@ describe("leaf hash", () => {
   it("separates a leaf from an inner node over the same bytes", async () => {
     const digest = Uint8Array.from({ length: 32 }, (_, i) => i);
     const leaf = hex(await evidenceLogLeafHash(digest));
-    expect(leaf).not.toBe(
-      "491176b0f443c65a7c7d72df47d6cbc0d04e111fb5a619f60d3e77677ab6f919",
-    );
+    // The same 32 bytes hashed under the inner-node prefix and with no prefix.
+    const asNode = hex(await sha256(Uint8Array.of(0x01, ...digest)));
+    expect(leaf).toBe(hex(await sha256(Uint8Array.of(0x00, ...digest))));
+    expect(leaf).not.toBe(asNode);
     expect(leaf).not.toBe(hex(await sha256(digest)));
   });
 });
@@ -158,6 +159,21 @@ describe("tree root", () => {
     await expect(
       evidenceLogRoot([good, new Uint8Array(length)]),
     ).rejects.toThrow(/32 bytes/);
+  });
+
+  it("refuses a hole in a sparse list and a hash whose length lies", async () => {
+    const sparse: Uint8Array[] = [];
+    sparse[1] = bytes32(1);
+    await expect(evidenceLogRoot(sparse)).rejects.toThrow(/32 bytes/);
+    await expect(evidenceLogInclusionProof(sparse, 1)).rejects.toThrow(
+      /32 bytes/,
+    );
+    const short = new Uint8Array(31);
+    Object.defineProperty(short, "length", { value: 32 });
+    await expect(evidenceLogLeafHash(short)).rejects.toThrow(/32 bytes/);
+    await expect(evidenceLogRoot([bytes32(1), short])).rejects.toThrow(
+      /32 bytes/,
+    );
   });
 
   it("does not change the caller's leaf hashes", async () => {
@@ -478,6 +494,12 @@ describe("leaf order", () => {
 
   it("refuses a value that is not a list", () => {
     expect(() => orderEvidenceLogEntries("entries" as never)).toThrow(/list/);
+  });
+
+  it("refuses a hole in a sparse list", () => {
+    const sparse: { acceptedAt: string; receiptId: string }[] = [];
+    sparse[1] = { acceptedAt: T, receiptId: "r-1" };
+    expect(() => orderEvidenceLogEntries(sparse)).toThrow(/acceptedAt/);
   });
 
   it("returns a new list and keeps the caller's", () => {

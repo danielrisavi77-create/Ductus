@@ -33,10 +33,14 @@ export type EvidenceLogInclusion = {
 
 export type EvidenceLogEntryKey = { acceptedAt: string; receiptId: string };
 
-function isHash(value: unknown): value is Uint8Array {
-  return (
-    value instanceof Uint8Array && value.length === EVIDENCE_LOG_HASH_BYTES
-  );
+/**
+ * A private 32-byte copy of a hash, or null. The length is read from the
+ * copy, so an own `length` property that lies about the bytes is ignored.
+ */
+function hashCopy(value: unknown): Uint8Array | null {
+  if (!(value instanceof Uint8Array)) return null;
+  const copy = new Uint8Array(value);
+  return copy.length === EVIDENCE_LOG_HASH_BYTES ? copy : null;
 }
 
 async function sha256(
@@ -68,16 +72,25 @@ const hashNode = (left: Uint8Array, right: Uint8Array) =>
 export async function evidenceLogLeafHash(
   digest: Uint8Array,
 ): Promise<Uint8Array> {
-  if (!isHash(digest)) {
+  const copy = hashCopy(digest);
+  if (copy === null) {
     throw new Error("evidence-log: a receipt digest must be 32 bytes");
   }
-  return sha256(LEAF_PREFIX, digest);
+  return sha256(LEAF_PREFIX, copy);
 }
 
-function checkLeafHashes(leafHashes: readonly Uint8Array[]): void {
-  if (!Array.isArray(leafHashes) || !leafHashes.every(isHash)) {
-    throw new Error("evidence-log: every leaf hash must be 32 bytes");
+/** Copies of the leaf hashes; a hole in a sparse list is a missing hash. */
+function leafCopies(leafHashes: readonly Uint8Array[]): Uint8Array[] {
+  if (!Array.isArray(leafHashes)) {
+    throw new Error("evidence-log: leaf hashes must be a list");
   }
+  return Array.from(leafHashes as readonly unknown[], (value) => {
+    const copy = hashCopy(value);
+    if (copy === null) {
+      throw new Error("evidence-log: every leaf hash must be 32 bytes");
+    }
+    return copy;
+  });
 }
 
 /** The largest power of two strictly below n (n ≥ 2). */
@@ -92,7 +105,7 @@ async function subtreeRoot(
   start: number,
   end: number,
 ): Promise<Uint8Array> {
-  if (end - start === 1) return new Uint8Array(leaves[start]!);
+  if (end - start === 1) return leaves[start]!;
   const middle = start + splitPoint(end - start);
   return hashNode(
     await subtreeRoot(leaves, start, middle),
@@ -104,9 +117,9 @@ async function subtreeRoot(
 export async function evidenceLogRoot(
   leafHashes: readonly Uint8Array[],
 ): Promise<Uint8Array> {
-  checkLeafHashes(leafHashes);
-  if (leafHashes.length === 0) return sha256(null);
-  return subtreeRoot(leafHashes, 0, leafHashes.length);
+  const leaves = leafCopies(leafHashes);
+  if (leaves.length === 0) return sha256(null);
+  return subtreeRoot(leaves, 0, leaves.length);
 }
 
 async function collectPath(
@@ -132,12 +145,12 @@ export async function evidenceLogInclusionProof(
   leafHashes: readonly Uint8Array[],
   index: number,
 ): Promise<Uint8Array[]> {
-  checkLeafHashes(leafHashes);
-  if (!Number.isSafeInteger(index) || index < 0 || index >= leafHashes.length) {
+  const leaves = leafCopies(leafHashes);
+  if (!Number.isSafeInteger(index) || index < 0 || index >= leaves.length) {
     throw new Error("evidence-log: the leaf index is outside the tree");
   }
   const proof: Uint8Array[] = [];
-  await collectPath(leafHashes, index, 0, leafHashes.length, proof);
+  await collectPath(leaves, index, 0, leaves.length, proof);
   return proof;
 }
 
@@ -146,13 +159,6 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   let difference = 0;
   for (let i = 0; i < left.length; i += 1) difference |= left[i]! ^ right[i]!;
   return difference === 0;
-}
-
-/** A private 32-byte copy of a hash, or null; the copy keeps its real length. */
-function hashCopy(value: unknown): Uint8Array | null {
-  if (!(value instanceof Uint8Array)) return null;
-  const copy = new Uint8Array(value);
-  return copy.length === EVIDENCE_LOG_HASH_BYTES ? copy : null;
 }
 
 async function checkInclusion(input: unknown): Promise<boolean> {
@@ -240,7 +246,8 @@ export function orderEvidenceLogEntries<T extends EvidenceLogEntryKey>(
   }
   const encoder = new TextEncoder();
   const seen = new Set<string>();
-  const keyed = entries.map((entry: T) => {
+  // Array.from, not map: a hole in a sparse list is an entry to reject.
+  const keyed = Array.from(entries, (entry: T) => {
     const { acceptedAt, receiptId } = (entry ?? {}) as Partial<
       Record<keyof EvidenceLogEntryKey, unknown>
     >;
