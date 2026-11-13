@@ -339,9 +339,13 @@ describe("inclusion check refuses without throwing", () => {
       Object.defineProperty(hostile, key, { get: boom });
       await expect(verifyEvidenceLogInclusion(hostile)).resolves.toBe(false);
     }
+    // Throws on reading any element, through the iterator or by index.
     const throwingList = new Proxy([...input.proof], {
       get: (target, key) =>
-        key === Symbol.iterator ? boom() : Reflect.get(target, key),
+        key === Symbol.iterator ||
+        (typeof key === "string" && /^\d+$/.test(key))
+          ? boom()
+          : Reflect.get(target, key),
     });
     await expect(
       verifyEvidenceLogInclusion({ ...input, proof: throwingList }),
@@ -355,6 +359,24 @@ describe("inclusion check refuses without throwing", () => {
     await expect(
       verifyEvidenceLogInclusion({ ...input, leafHash: short }),
     ).resolves.toBe(false);
+  });
+
+  it("reads a proof by index up to its length, never through its own iterator (V5)", async () => {
+    const input = await honest();
+    let yielded = 0;
+    const proof = [...input.proof];
+    Object.defineProperty(proof, Symbol.iterator, {
+      value: function* () {
+        for (let i = 0; i < 1000; i += 1) {
+          yielded += 1;
+          yield input.proof[0]!;
+        }
+      },
+    });
+    await expect(verifyEvidenceLogInclusion({ ...input, proof })).resolves.toBe(
+      true,
+    );
+    expect(yielded).toBe(0);
   });
 
   it("checks the values as passed, even if the caller changes them meanwhile", async () => {
@@ -406,6 +428,24 @@ describe("inclusion check refuses without throwing", () => {
         verifyEvidenceLogInclusion({ ...input, treeSize }),
       ).resolves.toBe(true);
     }
+  });
+
+  it("takes an inner node for a leaf under a free size; the caller's own leaf hash and the checkpoint size prevent it", async () => {
+    // Four leaves: R = H(1 || N01 || N23). Under size 2, N01 looks like leaf 0.
+    const leaves = (await referenceLeafHashes()).slice(0, 4);
+    const n01 = await sha256(Uint8Array.of(1, ...leaves[0]!, ...leaves[1]!));
+    const n23 = await sha256(Uint8Array.of(1, ...leaves[2]!, ...leaves[3]!));
+    const input = {
+      leafHash: n01,
+      index: 0,
+      treeSize: 2,
+      proof: [n23],
+      root: await evidenceLogRoot(leaves),
+    };
+    await expect(verifyEvidenceLogInclusion(input)).resolves.toBe(true);
+    await expect(
+      verifyEvidenceLogInclusion({ ...input, treeSize: 4 }),
+    ).resolves.toBe(false);
   });
 
   it("does not shift with 32-bit arithmetic for a tree beyond 2^32 leaves", async () => {

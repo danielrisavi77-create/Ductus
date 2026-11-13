@@ -176,8 +176,13 @@ async function checkInclusion(input: unknown): Promise<boolean> {
   const leaf = hashCopy(leafHash);
   const expected = hashCopy(root);
   if (leaf === null || expected === null) return false;
-  if (!Array.isArray(proof) || proof.length > MAX_PROOF_LENGTH) return false;
-  const path = Array.from(proof as readonly unknown[], hashCopy);
+  if (!Array.isArray(proof)) return false;
+  // An index loop over a length read once, not the list's own iterator, so
+  // no proof is read past MAX_PROOF_LENGTH elements.
+  const length = proof.length;
+  if (length > MAX_PROOF_LENGTH) return false;
+  const path: (Uint8Array | null)[] = [];
+  for (let i = 0; i < length; i += 1) path.push(hashCopy(proof[i]));
 
   let fn = index as number;
   let sn = (treeSize as number) - 1;
@@ -200,7 +205,14 @@ async function checkInclusion(input: unknown): Promise<boolean> {
 }
 
 /**
- * Checks an inclusion proof (§2.1.3.2). A malformed input of any kind,
+ * Checks an inclusion proof (§2.1.3.2). The result means "this leaf is in
+ * the tree with this root" only when the caller supplies two things itself:
+ * `treeSize` from the signed checkpoint, never from the proof's sender, and
+ * `leafHash` computed with `evidenceLogLeafHash(D)` from the record D. With
+ * a free size, the same proof also fits other indexes and sizes with the
+ * same left/right path, and an inner node can pass as a leaf.
+ *
+ * A malformed input of any kind,
  * including a getter or list that throws, is a failed check, never an
  * exception; only missing Web Crypto throws. The hashes are copied once at
  * the start, so a caller changing them while the check runs changes nothing.
