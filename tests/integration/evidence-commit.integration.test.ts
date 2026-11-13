@@ -23,6 +23,18 @@ import { digestEvidenceReceiptPayloadV2 } from "@/domain/forensics/evidence-rece
 import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request";
 import { handleEvidenceCommitRequest } from "@/server/evidence/commit-route";
 import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
+import {
+  commitOutcomeFrom,
+  createCommitProtocol,
+  openWork,
+  type CommitProtocol,
+  type FetchLike,
+  type OpenedWork,
+} from "@/client/evidence-ingest";
+import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
+import { ackedRevision, isRetryable, outcomeToEvents, type QueuedRow } from "@/domain/sync/drain";
+import type { EvidenceSegmentTransaction, PendingTransaction } from "@/domain/sync/journal-types";
+import { createEvidenceTransport, evidenceVerifierFor } from "@/lib/sync/evidence-transport";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 
@@ -658,6 +670,243 @@ describe("deferred signing against the database (DAN-518)", () => {
     expect(after).toMatchObject({ receipts: before.receipts, signed: String(Number(before.signed) + 1) });
     const kept = await admin.query<{ signature: unknown }>("SELECT signature FROM evidence.receipt WHERE id = $1", [rows[0].id]);
     expect(kept.rows[0].signature).toEqual(first);
+  });
+});
+
+// DAN-320 (M3.10-P02, D-211, contract on #1836): the answer to a commit is
+// lost after the server has committed it, with the real client sender and
+// receipt check (`createEvidenceTransport`, `evidenceVerifierFor`, keys from
+// the real open route) against the real route and database. No Toxiproxy:
+// the loss is made in the client's `fetch`, after the route has answered.
+describe("a lost answer after the commit, client and route together (M3.10-P02)", () => {
+  /** Every way the committed answer can fail to arrive (input classes L1 to L4 of the contract). */
+  const LOSSES: readonly { name: string; lose: (answer: string) => Promise<Response>; first: "transport_error" | "invalid" }[] = [
+    { name: "L1 connection dropped", lose: () => Promise.reject(new TypeError("Failed to fetch")), first: "transport_error" },
+    {
+      name: "L2 gateway 502 with a page",
+      lose: async () => new Response("<html>Bad Gateway</html>", { status: 502, headers: { "content-type": "text/html" } }),
+      first: "transport_error",
+    },
+    { name: "L3 gateway 504 with no body", lose: async () => new Response(null, { status: 504 }), first: "transport_error" },
+    {
+      name: "L4 200 cut off mid body",
+      lose: async (answer) =>
+        new Response(answer.slice(0, Math.floor(answer.length / 2)), { status: 200, headers: { "content-type": "application/json" } }),
+      // The commit may have landed: the row is held, nothing is retried by itself.
+      first: "invalid",
+    },
+  ];
+  const PROTOCOLS: readonly { name: string; make: () => CommitProtocol; headers: string[] }[] = [
+    // The tab probes "2", the route without deferred signing answers 426, the same body goes under "1".
+    { name: "tab still on 2", make: createCommitProtocol, headers: ["2", "1", "1"] },
+    { name: "tab already on 1", make: () => ({ ...createCommitProtocol(), version: DUCTUS_PROTOCOL_VERSION }), headers: ["1", "1"] },
+  ];
+
+  /** The browser's fetch in process: it adds what the browser adds, and can lose the next committed answer. */
+  function browser(deps: ReturnType<typeof countedDeps>["deps"]) {
+    const sent: { protocol: string | null; body: string }[] = [];
+    const answers: string[] = [];
+    const state: { lose: ((answer: string) => Promise<Response>) | null } = { lose: null };
+    const fetchImpl: FetchLike = async (path, init) => {
+      const headers = new Headers(init.headers);
+      headers.set("origin", ORIGIN);
+      headers.set("sec-fetch-site", "same-origin");
+      const request = new Request(`${ORIGIN}${path}`, { method: init.method, headers, body: init.body });
+      if (path === "/api/evidence/open") {
+        return handleEvidenceOpenRequest(request, { withActor, expectedOrigin: ORIGIN, sessionToken: token });
+      }
+      sent.push({ protocol: headers.get("ductus-protocol"), body: String(init.body) });
+      const response = await handleEvidenceCommitRequest(request, deps);
+      const text = await response.text();
+      answers.push(text);
+      const lose = state.lose;
+      if (lose && response.status === 200) {
+        state.lose = null;
+        return lose(text);
+      }
+      return new Response(text, { status: response.status, headers: response.headers });
+    };
+    return { fetchImpl, sent, answers, state };
+  }
+
+  async function openedWork(fetchImpl: FetchLike) {
+    const opened = await openWork(assignmentId, fetchImpl);
+    if (opened.status !== "opened") throw new Error(`not opened: ${opened.status}`);
+    expect(opened.work.currentRevision).toBe(chain.revision);
+    return opened.work;
+  }
+
+  /** The queued row the journal would hold for the next segment, with the hash stored beside it. */
+  function nextRow(clientTransactionId: string) {
+    const { body, advance } = nextEnvelope(clientTransactionId);
+    const segment = new Uint8Array(Buffer.from(body.segments[0], "base64"));
+    const row: PendingTransaction<EvidenceSegmentTransaction> = {
+      documentId,
+      localSeq: chain.sequence + 1,
+      queuedAt: "2026-11-13T08:00:00.000Z",
+      tx: {
+        kind: "EVIDENCE_SEGMENT",
+        clientTransactionId,
+        baseRevision: body.baseRevision,
+        segment,
+        segmentHash: createHash("sha256").update(segment).digest("hex"),
+        document: new Uint8Array(Buffer.from(body.document, "base64")),
+        sequenceFrom: chain.sequence + 1,
+        sequenceTo: chain.sequence + 1,
+        createdAt: "2026-11-13T08:00:00.000Z",
+      },
+    };
+    return { row, advance };
+  }
+
+  const verification = (work: OpenedWork, row: QueuedRow, revision: number) => ({
+    expected: { documentId, clientTransactionId: row.tx.clientTransactionId, revision },
+    verify: evidenceVerifierFor(work)(row),
+  });
+
+  const cases = PROTOCOLS.flatMap((protocol) => LOSSES.map((loss) => ({ protocol, loss })));
+  it.each(cases)("$loss.name, $protocol.name: no ACK for the lost answer, the same bytes again get the same receipt", async ({ protocol, loss }) => {
+    const { deps, counts } = countedDeps();
+    const tab = browser(deps);
+    const work = await openedWork(tab.fetchImpl);
+    const transport = createEvidenceTransport(tab.fetchImpl, protocol.make());
+    const { row, advance } = nextRow(`tx-${suffix}-lost-${protocol.headers.length}-${loss.name.slice(0, 2)}`);
+    const revision = chain.revision + 1;
+    const before = await stored();
+
+    tab.state.lose = loss.lose;
+    const first = await transport(documentId, row.tx);
+    expect(first.status).toBe(loss.first);
+    expect(isRetryable(first)).toBe(loss.first === "transport_error");
+    expect(await outcomeToEvents(first, verification(work, row, revision), { sent: row, pending: [row] })).toEqual([
+      { type: "SYNC_FAILED", retryable: loss.first === "transport_error" },
+    ]);
+    expect(ackedRevision(first)).toBeNull();
+    // The server did commit before the answer was lost.
+    const lost = tab.answers.at(-1)!;
+    expect(JSON.parse(lost)).toMatchObject({ status: "committed", revision, receipt: { status: "signed" } });
+    expect(counts).toEqual({ puts: 1, signs: 1, attaches: 1 });
+    const after = await stored();
+    expect(after).toMatchObject({
+      revision: String(revision),
+      receipts: String(Number(before.receipts) + 1),
+      signed: String(Number(before.signed) + 1),
+    });
+    // The chain moves with the server now, so a failure below names its own case, not every later one.
+    advance();
+
+    // The row was kept with its bytes; the retry (by itself, or by hand after L4) sends them again.
+    const again = await transport(documentId, row.tx);
+    expect(again).toMatchObject({ status: "duplicate", revision });
+    expect(tab.answers.at(-1)).toBe(lost.replace('"status":"committed"', '"status":"duplicate"'));
+    expect(tab.sent.map((s) => s.protocol)).toEqual(protocol.headers);
+    expect(new Set(tab.sent.map((s) => s.body)).size).toBe(1);
+    expect(await outcomeToEvents(again, verification(work, row, revision), { sent: row, pending: [row] })).toEqual([
+      { type: "SYNC_ACK" },
+    ]);
+    expect(ackedRevision(again)).toBe(revision);
+    // No second object, revision, receipt or signature.
+    expect(counts).toEqual({ puts: 1, signs: 1, attaches: 1 });
+    expect(await stored()).toEqual(after);
+
+    // The same receipt checked against a row whose stored hash is another segment's is never SYNCED.
+    const other: PendingTransaction<EvidenceSegmentTransaction> = { ...row, tx: { ...row.tx, segmentHash: sha256(`other ${suffix}`) } };
+    expect(await outcomeToEvents(again, verification(work, other, revision), { sent: other, pending: [other] })).toEqual([
+      { type: "SYNC_FAILED", retryable: false },
+    ]);
+    expect(ackedRevision(again)).toBeNull();
+    // Nor is the right row with the receipt's signature altered by one character.
+    const signed = (again as { receipt: { signedReceipt: { signature: { signatureBase64Url: string } } } }).receipt.signedReceipt;
+    const altered = signed.signature.signatureBase64Url;
+    const forged = {
+      ...again,
+      receipt: {
+        status: "signed" as const,
+        signedReceipt: { ...signed, signature: { ...signed.signature, signatureBase64Url: (altered[0] === "A" ? "B" : "A") + altered.slice(1) } },
+      },
+    } as typeof again;
+    expect(await outcomeToEvents(forged, verification(work, row, revision), { sent: row, pending: [row] })).toEqual([
+      { type: "SYNC_FAILED", retryable: false },
+    ]);
+    expect(ackedRevision(forged)).toBeNull();
+  });
+
+  // Istodobnost: the original request is still in the server, before its
+  // transaction, when the client has given up on it and its retry commits.
+  // The late original must then find the key and answer the same receipt,
+  // never a second revision; its answer reaches nobody and acknowledges nothing.
+  it("keeps one revision when the original lands after the client's retry has committed", async () => {
+    const { deps, counts } = countedDeps();
+    let entered!: () => void;
+    const inside = new Promise<void>((resolve) => { entered = resolve; });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    const holding = {
+      ...deps,
+      payloads: {
+        ...deps.payloads,
+        putImmutable: async (input: Parameters<typeof deps.payloads.putImmutable>[0]) => {
+          calls += 1;
+          if (calls === 1) {
+            entered();
+            await held;
+          }
+          return deps.payloads.putImmutable(input);
+        },
+      },
+    };
+    const tab = browser(holding);
+    const work = await openedWork(tab.fetchImpl);
+    let original: Promise<Response> | undefined;
+    const dropping: FetchLike = (path, init) => {
+      if (original || path !== "/api/evidence/commit") return tab.fetchImpl(path, init);
+      // The request reaches the server; the connection breaks before any answer.
+      original = tab.fetchImpl(path, init);
+      return inside.then(() => Promise.reject(new TypeError("Failed to fetch")));
+    };
+    const transport = createEvidenceTransport(dropping, { ...createCommitProtocol(), version: DUCTUS_PROTOCOL_VERSION });
+    const { row, advance } = nextRow(`tx-${suffix}-lost-race`);
+    const base = chain.revision;
+    const revision = base + 1;
+    const before = await stored();
+
+    expect(await transport(documentId, row.tx)).toEqual({ status: "transport_error" });
+    const retried = await transport(documentId, row.tx);
+    expect(retried).toMatchObject({ status: "committed", revision });
+    expect(await outcomeToEvents(retried, verification(work, row, revision), { sent: row, pending: [row] })).toEqual([
+      { type: "SYNC_ACK" },
+    ]);
+    const committed = tab.answers.at(-1)!;
+    advance();
+
+    release();
+    const late = await original!;
+    expect(late.status).toBe(200);
+    const lateText = await late.text();
+    expect(lateText).toBe(committed.replace('"status":"committed"', '"status":"duplicate"'));
+    // The late answer is itself a valid receipt for the row: were the row still
+    // queued, it would acknowledge the one revision and nothing else.
+    const lateOutcome = commitOutcomeFrom(200, JSON.parse(lateText));
+    expect(lateOutcome).toMatchObject({ status: "duplicate", revision });
+    expect(await outcomeToEvents(lateOutcome, verification(work, row, revision), { sent: row, pending: [row] })).toEqual([
+      { type: "SYNC_ACK" },
+    ]);
+    expect(ackedRevision(lateOutcome)).toBe(revision);
+    // The row has already left the queue with the retry's ACK, so the answer adds no event.
+    expect(await outcomeToEvents(lateOutcome, verification(work, row, revision), { sent: row, pending: [] })).toEqual([]);
+    // Two writes of the same immutable object, one revision, one receipt, one signature.
+    expect(counts).toEqual({ puts: 2, signs: 1, attaches: 1 });
+    expect(await stored()).toMatchObject({
+      revision: String(revision),
+      receipts: String(Number(before.receipts) + 1),
+      signed: String(Number(before.signed) + 1),
+    });
+    const revisions = await admin.query("SELECT 1 FROM evidence.document_revision WHERE document_id = $1 AND revision > $2", [
+      documentId,
+      base,
+    ]);
+    expect(revisions.rowCount).toBe(1);
   });
 });
 
