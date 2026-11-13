@@ -1,13 +1,14 @@
 import { randomBytes } from "node:crypto";
 
 import pg from "pg";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { withActor } from "@/server/db";
 import { readinessAlarms } from "@/server/alarms/readiness-store";
 import { createAlarmTracker } from "@/server/alarms/readiness-alarms";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+import { holdWorkerPresence } from "./worker-presence";
 
 // DAN-184 (contract on #1836, c.6821517800): pgTAP runs in one transaction and
 // cannot race two alarms. Here real connections raise and resolve the same
@@ -80,6 +81,15 @@ async function rollback(...clients: pg.PoolClient[]) {
 }
 
 const started = new Date(0);
+let releasePresence: (() => Promise<void>) | undefined;
+// ready-queue calls the real /api/ready, whose tracker writes these kinds and
+// leaves ready_queue open. Wait until that file is done, as it waits for the
+// job queue test, and start from no open alarm of either kind.
+beforeAll(async () => {
+  releasePresence = await holdWorkerPresence(ADMIN_URL);
+  for (const kind of [KIND, QUEUE]) await admin.query("SELECT identity.resolve_ops_alarm($1)", [kind]);
+  started.setTime((await now()).getTime());
+}, 180_000);
 afterAll(async () => {
   try {
     // The closed episodes this file committed; an open one is left to resolve.
@@ -89,12 +99,12 @@ afterAll(async () => {
     }
   } finally {
     await admin.end();
+    await releasePresence?.();
   }
 });
 
 describe("ops alarm deduplication under concurrency (DAN-184)", () => {
   it("makes a second raise wait on the first and count on its alarm", async () => {
-    started.setTime((await now()).getTime());
     const since = await now();
     const first = await begin();
     const second = await begin();

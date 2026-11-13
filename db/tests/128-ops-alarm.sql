@@ -42,7 +42,7 @@ SELECT is(
           || CASE WHEN has_function_privilege('public', p.oid, 'EXECUTE') THEN ' public' ELSE '' END, ' | ' ORDER BY p.proname)
    FROM pg_proc p
    WHERE p.proname LIKE '%ops\_alarm%'),
-  'raise_ops_alarm(p_kind text) void v definer search_path="" app | resolve_ops_alarm(p_kind text) void v definer search_path="" app',
+  'raise_ops_alarm(p_kind text) void v definer search_path="",lock_timeout=2000ms app | resolve_ops_alarm(p_kind text) void v definer search_path="",lock_timeout=2000ms app',
   'two calls for ductus_app, each taking only a kind, and PUBLIC calls neither'
 );
 SELECT ok(

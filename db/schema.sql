@@ -4083,6 +4083,7 @@ $$;
 CREATE FUNCTION identity.raise_ops_alarm(p_kind text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
+    SET lock_timeout TO '2000ms'
     AS $$
 BEGIN
   IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN
@@ -4104,6 +4105,7 @@ $$;
 CREATE FUNCTION identity.resolve_ops_alarm(p_kind text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
+    SET lock_timeout TO '2000ms'
     AS $$
 BEGIN
   IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN

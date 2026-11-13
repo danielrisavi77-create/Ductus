@@ -3,13 +3,11 @@ import { logEvent } from "@/server/log/logger";
 
 import { createAlarmTracker } from "./readiness-alarms";
 
-// Same bound as the readiness probes: the database cancels a write past it, so
-// a hanging write hands its connection back to the pool (DAN-585).
-const STATEMENT_LIMIT_SQL = "SELECT pg_catalog.set_config('statement_timeout', '2000ms', true)";
-
+// One statement per write. The functions carry their own lock_timeout, so a
+// write that waits on another replica's open alarm gives its connection back
+// to the pool; the write sends no session setting of its own (DAN-585).
 function call(sql: string, kind: string): Promise<void> {
   return withActor(null, async (tx) => {
-    await tx.query(STATEMENT_LIMIT_SQL);
     await tx.query(sql, [kind]);
   });
 }

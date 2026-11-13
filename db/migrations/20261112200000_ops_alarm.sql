@@ -41,7 +41,7 @@ CREATE POLICY ops_alarm_owner ON identity.ops_alarm TO ductus_identity
 -- Opens the alarm of this kind, or counts one more raise on the open one.
 -- ZD422 for a kind outside the set.
 CREATE FUNCTION identity.raise_ops_alarm(p_kind text) RETURNS void
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' SET lock_timeout = '2000ms'
 AS $$
 BEGIN
   IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN
@@ -58,7 +58,7 @@ $$;
 -- Closes the open alarm of this kind; nothing when none is open.
 -- ZD422 for a kind outside the set.
 CREATE FUNCTION identity.resolve_ops_alarm(p_kind text) RETURNS void
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' SET lock_timeout = '2000ms'
 AS $$
 BEGIN
   IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN

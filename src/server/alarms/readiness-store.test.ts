@@ -20,13 +20,12 @@ describe("readinessAlarms", () => {
     await readinessAlarms.observe({ database: "unknown" });
     expect(withActor).not.toHaveBeenCalled();
     await readinessAlarms.observe({ database: "ok", storage: "nije_konfigurirano" });
-    const calls = seen.filter(([sql]) => !sql.includes("statement_timeout"));
-    expect(calls).toEqual([
+    // One statement per write and no session setting of its own: the alarm
+    // shares withActor with /api/ready and must not add to its probes' queries.
+    expect(seen).toEqual([
       ["SELECT identity.raise_ops_alarm($1)", ["ready_database"]],
       ["SELECT identity.resolve_ops_alarm($1)", ["ready_database"]],
       ["SELECT identity.resolve_ops_alarm($1)", ["ready_storage"]],
     ]);
-    // Every write is bounded by a statement limit in its own transaction.
-    expect(seen.filter(([sql]) => sql.includes("statement_timeout"))).toHaveLength(3);
   });
 });
