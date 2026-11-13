@@ -35,7 +35,8 @@ type KindState = {
   // A resolve failed, and the store may still have applied it: a COMMIT can
   // succeed and its reply be lost. Until a resolve is confirmed, a raise is
   // preceded by one, so it opens a new episode instead of landing on the old
-  // one or on nothing. Both writes are idempotent in the store.
+  // one or on nothing. A repeated resolve changes nothing in the store; a
+  // repeated raise lands on the open episode and only counts it again.
   endUnsure: boolean;
 };
 
