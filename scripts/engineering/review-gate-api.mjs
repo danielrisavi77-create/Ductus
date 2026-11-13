@@ -278,7 +278,10 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
         `/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?check_name=${encodeURIComponent(name)}&filter=all&per_page=100`,
         { signal },
       );
-      if (!Array.isArray(result?.check_runs)) throw new Error(`the check runs named ${name} could not be read`);
+      // One page only: more runs than it holds would hide the newest, so that is not green.
+      if (!Array.isArray(result?.check_runs) || result.total_count > result.check_runs.length) {
+        throw new Error(`the check runs named ${name} could not be read in full`);
+      }
       runs.push(...result.check_runs);
     }
     return schemaChecksGreen(runs, pr.head.sha);

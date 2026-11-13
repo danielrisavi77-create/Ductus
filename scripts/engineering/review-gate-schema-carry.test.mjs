@@ -94,6 +94,10 @@ test("compare classes: only the two regenerated files may differ", () => {
   // Nothing left once the two files are set aside: there is no PR diff to vouch for.
   assert.equal(sameChangeOutsideSchema({ files: [regenerated(SCHEMA), SUM] }, { files: [SCHEMA, SUM] }), false);
   assert.equal(sameChangeOutsideSchema({ files: [] }, { files: [] }), false);
+  // A compare at the 300-file cap may be truncated, even when the two files are set aside.
+  const capped = (diff) => [...diff, ...Array.from({ length: 300 - diff.length }, (_, i) => file(`src/f${i}.ts`))];
+  assert.equal(sameChangeOutsideSchema({ files: capped([APP, MIGRATION, regenerated(SCHEMA), SUM]) }, { files: capped(earlierDiff.files) }), false);
+  assert.equal(sameChangeOutsideSchema({ files: capped([APP, MIGRATION, regenerated(SCHEMA), SUM]).slice(1) }, { files: capped(earlierDiff.files).slice(1) }), true);
   assert.equal(sameChangeOutsideSchema(undefined, earlierDiff), false);
 });
 
@@ -218,7 +222,7 @@ test("the runner reads the D-91 checks on the current head and carries the PASS"
   const [base, mainParent] = ["e".repeat(40), "f".repeat(40)];
   const tree = (paths) => ({ truncated: false, tree: paths.map((path) => ({ path, mode: "100644", type: "blob" })) });
   const asCompare = (files) => ({ merge_base_commit: { sha: base }, files: files.map(({ entry, baseEntry, ...rest }) => rest) });
-  const runs = { value: greenRuns() };
+  const runs = { value: greenRuns(), hidden: 0 };
   const calls = [];
   const routes = (path) => {
     if (path === "/repos/o/r/branches/main") return { commit: { sha: base } };
@@ -231,7 +235,7 @@ test("the runner reads the D-91 checks on the current head and carries the PASS"
     if (path.includes(`/compare/${base}...${earlier}`)) return asCompare(earlierDiff.files);
     const named = /\/commits\/([0-9a-f]{40})\/check-runs\?check_name=([^&]+)&filter=all/.exec(path);
     const list = named && runs.value.filter((item) => item.name === decodeURIComponent(named[2]) && named[1] === head);
-    if (list) return { total_count: list.length, check_runs: list };
+    if (list) return { total_count: list.length + runs.hidden, check_runs: list };
     throw new Error(`unexpected ${path}`);
   };
   const fetchImpl = async (url) => {
@@ -252,4 +256,7 @@ test("the runner reads the D-91 checks on the current head and carries the PASS"
   assert.equal(red.verdictOnly.size, 0);
   assert.deepEqual([...red.heldNegatives], [earlier]);
   assert.equal(evaluate(comments, red).state, "pending");
+  // More runs than one page holds: the newest may be unseen, so nothing carries.
+  Object.assign(runs, { value: greenRuns(), hidden: 1 });
+  assert.equal((await carriedHeads(api, "o", "r", pr, comments, { log: () => {} })).verdictOnly?.size ?? 0, 0);
 });

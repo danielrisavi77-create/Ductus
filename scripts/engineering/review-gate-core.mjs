@@ -991,7 +991,8 @@ export function sameChange(current, earlier) {
 export function sameChangeOutsideSchema(current, earlier) {
   const a = current?.files;
   const b = earlier?.files;
-  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  // The cap counts the compare as GitHub listed it: a truncated list stays untrusted.
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length >= COMPARE_FILE_CAP || b.length >= COMPARE_FILE_CAP) return false;
   const regenerated = (file) => SCHEMA_REGEN_FILES.includes(file?.filename);
   const inPlace = (file) =>
     file?.status === "modified" && file?.previous_filename == null && file?.entry === REGULAR_FILE && file?.baseEntry === REGULAR_FILE;
