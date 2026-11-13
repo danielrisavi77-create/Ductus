@@ -184,16 +184,19 @@ describe("DAN-386 the page of one work's language (P02d)", () => {
     ["a document id with a control character", ID, "a\nb"],
     ["an overlong document id", ID, "d".repeat(257)],
     ["a document id that is not text", ID, null],
+    ["a document id that is a dot segment", ID, "."],
+    ["a document id that is a parent segment", ID, ".."],
   ])("gives no page for %s", (_name, a, d) => {
     expect(workLanguageExceptionHref(a, d)).toBeNull();
   });
 
   it("always stays one path segment under the work, whatever the document id", () => {
-    fc.assert(fc.property(fc.string({ minLength: 1, maxLength: 256 }), (d) => {
+    fc.assert(fc.property(fc.oneof(fc.constantFrom(".", ".."), fc.string({ minLength: 1, maxLength: 256 })), (d) => {
       const href = workLanguageExceptionHref(ID, d);
       if (href === null) return;
       const rest = href.slice(`/nastavnik/zadatak/${ID}/rad/`.length, -"/jezik".length);
       expect(rest).not.toMatch(/[/?#]/);
+      expect(new URL(href, "https://ductus.invalid").pathname).toBe(href.split("?")[0]);
       expect(decodeURIComponent(rest)).toBe(d);
     }), { numRuns: 300 });
   });

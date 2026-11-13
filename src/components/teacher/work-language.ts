@@ -92,9 +92,11 @@ export async function saveWorkLanguageException(
 /**
  * DAN-386 (M2.10-P02d): the page for one work's language, keyed by the
  * assignment and the work's document id, never the student's id; null for
- * ids the page could not read anyway.
+ * ids the page could not read anyway. "." and ".." are refused too: the
+ * browser would resolve them as path steps, not as the work's segment.
  */
 export function workLanguageExceptionHref(assignmentId: unknown, documentId: unknown): string | null {
-  if (typeof assignmentId !== "string" || !UUID.test(assignmentId) || !isDocumentId(documentId)) return null;
+  if (typeof assignmentId !== "string" || !UUID.test(assignmentId) || !isDocumentId(documentId)
+    || documentId === "." || documentId === "..") return null;
   return `/nastavnik/zadatak/${assignmentId.toLowerCase()}/rad/${encodeURIComponent(documentId)}/jezik`;
 }
