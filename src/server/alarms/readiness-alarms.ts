@@ -14,6 +14,14 @@ export type AlarmStore = {
 /** Told the kind and the write that failed, never why: the error stays here. */
 export type AlarmStoreError = (op: "raise" | "resolve", kind: OpsAlarmKind) => void;
 
+/**
+ * Whether a report says the store can be reached. While it cannot, reports are
+ * still remembered but nothing is written, so an outage borrows no connection
+ * beyond the readiness probes' own; the owed writes go out on the first report
+ * that says the store answers again.
+ */
+export type StoreReachable = (capabilities: unknown) => boolean;
+
 type KindState = {
   stored: OpsAlarmTarget | undefined;
   wanted: OpsAlarmTarget | undefined;
@@ -28,9 +36,14 @@ type KindState = {
  * transitions are written; a write the store refuses or throws on is retried
  * on the next report. Writes run one at a time, and reports that arrive
  * meanwhile join the run in progress, so a store that hangs holds at most one
- * write. observe() never rejects and never changes what the caller answers.
+ * write. State is one fixed entry per kind, so no number of reports grows it.
+ * observe() never rejects and never changes what the caller answers.
  */
-export function createAlarmTracker(store: AlarmStore, onError: AlarmStoreError = () => {}) {
+export function createAlarmTracker(
+  store: AlarmStore,
+  onError: AlarmStoreError = () => {},
+  reachable: StoreReachable = () => true,
+) {
   const state = new Map<OpsAlarmKind, KindState>(
     OPS_ALARM_KINDS.map((kind) => [kind, { stored: undefined, wanted: undefined, owedRaise: false }]),
   );
@@ -92,6 +105,7 @@ export function createAlarmTracker(store: AlarmStore, onError: AlarmStoreError =
         s.wanted = target;
         if (target === "raised" && s.stored !== "raised") s.owedRaise = true;
       }
+      if (!reachable(capabilities)) return running ?? Promise.resolve();
       return run();
     },
   };

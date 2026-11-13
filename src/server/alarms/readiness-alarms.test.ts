@@ -141,4 +141,51 @@ describe("createAlarmTracker", () => {
     await tracker.observe({});
     expect(calls).toEqual([["raise", "ready_database"]]);
   });
+
+  it("writes nothing while the store is unreachable and owes the writes until it is", async () => {
+    const { calls, store } = recordingStore();
+    const tracker = createAlarmTracker(store, undefined, (r) => (r as Record<string, unknown>).database === "ok");
+    await tracker.observe({ database: "nedostupno", queue: "nedostupno" });
+    await tracker.observe({ database: "nedostupno", queue: "ok" });
+    expect(calls).toEqual([]);
+    await tracker.observe({ database: "ok", queue: "ok" });
+    expect(calls).toEqual([
+      ["raise", "ready_database"],
+      ["resolve", "ready_database"],
+      ["raise", "ready_queue"],
+      ["resolve", "ready_queue"],
+    ]);
+  });
+
+  // Orchestrator note 2 (#1836, c.6821821693): flapping against a hanging
+  // store holds one write and a fixed state, however many reports arrive.
+  it("bounds what is pending under endless flapping against a hanging store", async () => {
+    const releases: Array<() => void> = [];
+    const calls: Call[] = [];
+    const hang = (op: "raise" | "resolve") => (kind: OpsAlarmKind) => {
+      calls.push([op, kind]);
+      return new Promise<void>((resolve) => releases.push(resolve));
+    };
+    const tracker = createAlarmTracker({ raise: hang("raise"), resolve: hang("resolve") });
+    const pending = new Set<Promise<void>>();
+    for (let i = 0; i < 10_000; i++) {
+      const status = i % 2 === 0 ? "nedostupno" : "ok";
+      pending.add(tracker.observe({ database: status, storage: status, queue: status, signing: status }));
+    }
+    await Promise.resolve();
+    expect(calls).toHaveLength(1);
+    expect(releases).toHaveLength(1);
+    // Every report joined the one run in progress: one promise, not 10 000.
+    expect(pending.size).toBe(1);
+    for (let round = 0; round < 50 && releases.length > 0; round++) {
+      releases.splice(0).forEach((release) => release());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await Promise.all(pending);
+    // The last report was "ok": each kind's owed fault is written, then its end.
+    expect(calls).toHaveLength(8);
+    for (const [kind] of [["ready_database"], ["ready_storage"], ["ready_queue"], ["ready_signing"]]) {
+      expect(calls.filter(([, k]) => k === kind).map(([op]) => op)).toEqual(["raise", "resolve"]);
+    }
+  });
 });

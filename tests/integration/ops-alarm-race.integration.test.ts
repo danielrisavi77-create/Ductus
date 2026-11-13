@@ -24,6 +24,7 @@ const admin = new pg.Pool({ connectionString: ADMIN_URL, max: 4, application_nam
 // Only /api/ready of the database probe ever resolves this kind elsewhere; the
 // local stack never raises it.
 const KIND = "ready_database";
+const QUEUE = "ready_queue";
 
 type Episode = { raise_count: number; open: boolean };
 
@@ -37,18 +38,18 @@ const raise = (client: pg.ClientBase) => client.query("SELECT identity.raise_ops
 const resolve = (client: pg.ClientBase) => client.query("SELECT identity.resolve_ops_alarm($1)", [KIND]);
 
 /** The episodes of KIND since `since`, oldest first, as this connection sees them. */
-async function episodes(client: pg.ClientBase, since: Date): Promise<Episode[]> {
+async function episodes(client: pg.ClientBase, since: Date, kind: string = KIND): Promise<Episode[]> {
   await client.query("RESET ROLE");
   const result = await client.query<Episode>(
     `SELECT raise_count, resolved_at IS NULL AS open FROM identity.ops_alarm
-      WHERE kind = $1 AND first_raised_at >= $2 ORDER BY first_raised_at, resolved_at NULLS LAST`, [KIND, since]);
+      WHERE kind = $1 AND first_raised_at >= $2 ORDER BY first_raised_at, resolved_at NULLS LAST`, [kind, since]);
   return result.rows;
 }
 /** The same, as committed: a write of another test may have closed one meanwhile. */
-async function committed(since: Date): Promise<Episode[]> {
+async function committed(since: Date, kind: string = KIND): Promise<Episode[]> {
   const client = await admin.connect();
   try {
-    return await episodes(client, since);
+    return await episodes(client, since, kind);
   } finally {
     client.release();
   }
@@ -82,8 +83,10 @@ const started = new Date(0);
 afterAll(async () => {
   try {
     // The closed episodes this file committed; an open one is left to resolve.
-    await admin.query("SELECT identity.resolve_ops_alarm($1)", [KIND]);
-    await admin.query("DELETE FROM identity.ops_alarm WHERE kind = $1 AND first_raised_at >= $2", [KIND, started]);
+    for (const kind of [KIND, QUEUE]) {
+      await admin.query("SELECT identity.resolve_ops_alarm($1)", [kind]);
+      await admin.query("DELETE FROM identity.ops_alarm WHERE kind = $1 AND first_raised_at >= $2", [kind, started]);
+    }
   } finally {
     await admin.end();
   }
@@ -143,24 +146,43 @@ describe("ops alarm deduplication under concurrency (DAN-184)", () => {
 
   // Delivery: the process's tracker reaches the table through ductus_app, and
   // a second replica raising the same fault at once adds a count, not a row.
+  // The process writes only while its database probe is "ok", so the fault
+  // here is the queue's.
   it("delivers a readiness fault from two replicas as one alarm, and its recovery", async () => {
     const since = await now();
+    const down = { database: "ok", queue: "nedostupno" };
+    const up = { database: "ok", queue: "ok" };
     const replica = createAlarmTracker({
       raise: (kind) => withActor(null, async (tx) => { await tx.query("SELECT identity.raise_ops_alarm($1)", [kind]); }),
       resolve: (kind) => withActor(null, async (tx) => { await tx.query("SELECT identity.resolve_ops_alarm($1)", [kind]); }),
     });
-    await Promise.all([
-      readinessAlarms.observe({ database: "nedostupno" }),
-      replica.observe({ database: "nedostupno" }),
-      readinessAlarms.observe({ database: "nedostupno" }),
-    ]);
-    const raised = await committed(since);
+    await Promise.all([readinessAlarms.observe(down), replica.observe(down), readinessAlarms.observe(down)]);
+    const raised = await committed(since, QUEUE);
     expect(raised.filter((episode) => episode.open).length).toBeLessThanOrEqual(1);
     expect(raised.reduce((sum, episode) => sum + episode.raise_count, 0)).toBe(2);
 
-    await Promise.all([readinessAlarms.observe({ database: "ok" }), replica.observe({ database: "ok" })]);
-    const after = await committed(since);
+    await Promise.all([readinessAlarms.observe(up), replica.observe(up)]);
+    const after = await committed(since, QUEUE);
     expect(after.filter((episode) => episode.open)).toEqual([]);
     expect(after.reduce((sum, episode) => sum + episode.raise_count, 0)).toBe(2);
+  });
+
+  // A fault of the database itself is owed while it lasts and delivered, as
+  // one closed episode, by the first report in which the database answers.
+  it("delivers a database outage once the database answers again", async () => {
+    const since = await now();
+    const process = createAlarmTracker(
+      {
+        raise: (kind) => withActor(null, async (tx) => { await tx.query("SELECT identity.raise_ops_alarm($1)", [kind]); }),
+        resolve: (kind) => withActor(null, async (tx) => { await tx.query("SELECT identity.resolve_ops_alarm($1)", [kind]); }),
+      },
+      undefined,
+      (report) => (report as Record<string, unknown>).database === "ok",
+    );
+    await process.observe({ database: "nedostupno" });
+    await process.observe({ database: "nedostupno" });
+    expect(await committed(since)).toEqual([]);
+    await process.observe({ database: "ok" });
+    expect(await committed(since)).toEqual([{ raise_count: 1, open: false }]);
   });
 });

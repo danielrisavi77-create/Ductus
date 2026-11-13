@@ -112,8 +112,11 @@ export async function GET(): Promise<Response> {
     return Response.json({ status: "draining" }, { status: 503, headers: HEADERS });
   }
   const report = await checkCapabilities(capabilities());
-  // DAN-184: the alarm writes run after the answer and never change it.
-  void readinessAlarms.observe(report.capabilities);
+  // DAN-184: the alarm writes run after the answer and never change it, even
+  // if the channel throws, rejects or hangs.
+  void Promise.resolve()
+    .then(() => readinessAlarms.observe(report.capabilities))
+    .catch(() => {});
   const body = { status: report.ready ? "ready" : "unavailable", capabilities: report.capabilities };
   if (Object.keys(report.codes).length > 0) logEvent("error", "readiness", { codes: report.codes });
   return Response.json(body, { status: report.ready ? 200 : 503, headers: HEADERS });

@@ -17,7 +17,7 @@ function call(sql: string, kind: string): Promise<void> {
 /**
  * The process's readiness alarms (DAN-184), delivered to identity.ops_alarm.
  * A failed write is logged with its closed kind only and retried on the next
- * readiness check.
+ * readiness check; nothing is written while the database probe is not "ok".
  */
 export const readinessAlarms = createAlarmTracker(
   {
@@ -25,4 +25,10 @@ export const readinessAlarms = createAlarmTracker(
     resolve: (kind) => call("SELECT identity.resolve_ops_alarm($1)", kind),
   },
   (op, kind) => logEvent("error", "ops_alarm_write_failed", { op, kind }),
+  // The channel is a table: with the database probe not "ok" a write could
+  // only hang or fail and would take one more connection during the outage.
+  (capabilities) =>
+    typeof capabilities === "object" &&
+    capabilities !== null &&
+    (capabilities as Record<string, unknown>).database === "ok",
 );
