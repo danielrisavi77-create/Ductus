@@ -45,3 +45,23 @@ export function statusLoader(
     }
   };
 }
+
+/**
+ * Calls onWake when the page may have been away: it became visible again, was
+ * restored from the back-forward cache, or the network came back. Timers stop
+ * while a device sleeps, so the board asks at once instead of showing an old
+ * answer until the next poll. Returns the function that stops listening.
+ */
+export function onWake(win: EventTarget, doc: EventTarget & { visibilityState: string }, wake: () => void): () => void {
+  const visible = () => {
+    if (doc.visibilityState === "visible") wake();
+  };
+  win.addEventListener("pageshow", wake);
+  win.addEventListener("online", wake);
+  doc.addEventListener("visibilitychange", visible);
+  return () => {
+    win.removeEventListener("pageshow", wake);
+    win.removeEventListener("online", wake);
+    doc.removeEventListener("visibilitychange", visible);
+  };
+}

@@ -69,3 +69,16 @@ export function isStale(lastOkAt: number | null, now: number): boolean {
   const age = now - lastOkAt;
   return !(age >= 0 && age <= STALE_AFTER_MS);
 }
+
+/** A reading of both page clocks: performance.now() and Date.now(). */
+export type Moment = { mono: number; wall: number };
+
+/**
+ * isStale on both clocks: stale when either says so. The monotonic clock can
+ * stop while the device sleeps, so an hours-old answer would look seconds old
+ * on it; the wall clock moves on through sleep but can be set back. Asking
+ * both errs towards stale in both cases.
+ */
+export function isStaleAt(lastOk: Moment | null, now: Moment): boolean {
+  return isStale(lastOk?.mono ?? null, now.mono) || isStale(lastOk?.wall ?? null, now.wall);
+}

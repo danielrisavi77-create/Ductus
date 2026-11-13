@@ -1,6 +1,8 @@
 // The readiness probes of DAN-585, shared by /api/ready and the public status
-// (DAN-429), so both read the same capabilities through the same single-flight
-// database probes.
+// (DAN-429), so both read the same capabilities. Each database probe is
+// single-flight within its module instance; if the bundler gives each route its
+// own instance (see shutdown.ts), a hanging database holds at most one probe per
+// route, and public traffic still adds none (the 15 s cache in public-status.ts).
 
 import { withActor } from "@/server/db";
 import { evidenceIngestDeps } from "@/server/evidence/ingest-deps";

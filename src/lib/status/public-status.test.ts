@@ -1,7 +1,7 @@
 import { fc, test as prop } from "@fast-check/vitest";
 import { describe, expect, it } from "vitest";
 
-import { COMPONENT_STATES, STALE_AFTER_MS, isStale, parsePublicStatus } from "./public-status";
+import { COMPONENT_STATES, STALE_AFTER_MS, isStale, isStaleAt, parsePublicStatus } from "./public-status";
 
 const AT = "2027-03-06T13:10:00.000Z";
 const valid = { checkedAt: AT, components: { writing: "radi", submission: "ne_radi", mentorView: "nije_ukljuceno" } };
@@ -101,5 +101,20 @@ describe("isStale", () => {
     fc.pre(Number.isFinite(last) && Number.isFinite(now));
     const age = now - last;
     expect(isStale(last, now)).toBe(!(age >= 0 && age <= STALE_AFTER_MS));
+  });
+});
+
+describe("isStaleAt", () => {
+  const at = (mono: number, wall: number) => ({ mono, wall });
+  const T = Date.parse("2027-03-06T13:10:00.000Z");
+  it.each<[string, ReturnType<typeof at> | null, ReturnType<typeof at>, boolean]>([
+    ["never received", null, at(1_000, T), true],
+    ["fresh on both clocks", at(1_000, T), at(6_000, T + 5_000), false],
+    // The device slept 8 h: the monotonic clock stood still, the wall clock did not.
+    ["slept with the page open", at(1_000, T), at(6_000, T + 8 * 3_600_000), true],
+    ["wall clock set back", at(1_000, T), at(6_000, T - 60_000), true],
+    ["monotonic past the limit", at(1_000, T), at(1_000 + STALE_AFTER_MS + 1, T + 5_000), true],
+  ])("%s", (_name, last, now, stale) => {
+    expect(isStaleAt(last, now)).toBe(stale);
   });
 });

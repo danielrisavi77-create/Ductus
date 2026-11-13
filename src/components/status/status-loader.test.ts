@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { REQUEST_TIMEOUT_MS, statusLoader } from "./status-loader";
+import { onWake, REQUEST_TIMEOUT_MS, statusLoader } from "./status-loader";
 
 const body = { checkedAt: "2026-11-12T10:25:00.000Z", components: { writing: "radi", submission: "radi", mentorView: "radi" } };
 
@@ -97,5 +97,37 @@ describe("statusLoader", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// Pre-QA of #1979: after sleep the poll timer was paused, so the board must ask on waking.
+describe("onWake", () => {
+  const setup = () => {
+    const win = new EventTarget();
+    const doc = Object.assign(new EventTarget(), { visibilityState: "hidden" });
+    const wake = vi.fn();
+    const stop = onWake(win, doc, wake);
+    return { win, doc, wake, stop };
+  };
+
+  it("wakes on pageshow, online and becoming visible, not on becoming hidden", () => {
+    const { win, doc, wake } = setup();
+    doc.dispatchEvent(new Event("visibilitychange"));
+    expect(wake).not.toHaveBeenCalled();
+    doc.visibilityState = "visible";
+    doc.dispatchEvent(new Event("visibilitychange"));
+    win.dispatchEvent(new Event("pageshow"));
+    win.dispatchEvent(new Event("online"));
+    expect(wake).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops listening once stopped", () => {
+    const { win, doc, wake, stop } = setup();
+    stop();
+    doc.visibilityState = "visible";
+    doc.dispatchEvent(new Event("visibilitychange"));
+    win.dispatchEvent(new Event("pageshow"));
+    win.dispatchEvent(new Event("online"));
+    expect(wake).not.toHaveBeenCalled();
   });
 });

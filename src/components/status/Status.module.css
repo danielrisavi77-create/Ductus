@@ -95,6 +95,15 @@
   border: 2px solid var(--accent);
 }
 
+/* Forced colours drop backgrounds: keep the filled dot and square as shapes. */
+@media (forced-colors: active) {
+  .radi::before,
+  .ne_radi::before {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}
+
 .stale {
   border-left: 3px solid var(--warn);
   padding-left: 12px;
