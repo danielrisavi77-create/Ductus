@@ -60,6 +60,14 @@ describe("DAN-386 one work's language exception card (P02d)", () => {
     expect(html).not.toContain(w.reload);
   });
 
+  it("after a confirmed removal names the language the server answered, not the one read (Codex #1986)", () => {
+    // The assignment's language changed since the read: the removal answers English, the card read Croatian.
+    const html = decode(card(null, { kind: "saved", language: "en" }, "hr"));
+    expect(html).toContain(w.saved.replace("{language}", "engleski"));
+    expect(html).toContain(w.current.replace("{language}", "engleski"));
+    expect(html).not.toContain(w.current.replace("{language}", "hrvatski"));
+  });
+
   it.each(["conflict", "forbidden", "unauthorized", "unavailable"] as const)(
     "a %s locks the card and offers only a fresh read (negative: never resent)", (kind) => {
       const html = card(null, { kind });

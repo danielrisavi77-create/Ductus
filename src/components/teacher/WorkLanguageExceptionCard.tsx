@@ -36,6 +36,10 @@ export default function WorkLanguageExceptionCard({
   const [pending, setPending] = useState(false);
   // The exception in force: the one read, or the one a confirmed save returned.
   const [inForce, setInForce] = useState<WorkLanguage | null>(exception);
+  // The language the work has: as read, or as a confirmed save answered it. After a
+  // removal the server answers the assignment's language now, which may differ from the one read.
+  const [effective, setEffective] = useState<WorkLanguage>(
+    initial?.kind === "saved" ? initial.language : exception ?? assignmentLanguage);
   const inFlight = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
@@ -57,12 +61,14 @@ export default function WorkLanguageExceptionCard({
       if (!alive.current) return;
       setPending(false);
       // The server answers with the language after the change; with no exception that is the assignment's.
-      if (reply.kind === "saved") setInForce(language);
+      if (reply.kind === "saved") {
+        setInForce(language);
+        setEffective(reply.language);
+      }
       setResult(reply);
     });
   }
 
-  const effective = inForce ?? assignmentLanguage;
   const error = result && result.kind !== "saved" ? w.errors[result.kind] : null;
   const page = workLanguageExceptionHref(assignmentId, documentId) ?? "/nastavnik";
   const choices: readonly (WorkLanguage | null)[] = [null, ...WORK_LANGUAGES];
