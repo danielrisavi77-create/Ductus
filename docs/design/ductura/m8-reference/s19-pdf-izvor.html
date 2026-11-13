@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF izvor — uvoz PDF-a (referenca)</title>
+<link rel="stylesheet" href="reference.css">
+</head>
+<body>
+<header class="ref-head">
+  <div class="ref-tag">Referenca paketa 12 · DAN-603 · prijedlog slike · M8.UX-R</div>
+  <h1>PDF izvor — uvoz PDF-a</h1>
+  <p>Uvoz PDF-a kao događaj s izvorom (M8.3, DAN-397) u istom dijalogu kao S-19. Uvezeni tekst nosi oznaku „uvezeno” i naziv datoteke (D-282). PDF nema praćenih promjena, pa pregled nema retka o njima (<code>docs/contracts/import-v1.md</code>). Podaci su izmišljeni.</p>
+</header>
+<main class="page"><div class="variants">
+
+  <section aria-labelledby="f1" class="variant" data-state="ucitavanje">
+    <div class="ref-tag">Stanje 1 · učitavanje</div>
+    <div class="dialog" role="dialog" aria-labelledby="f1">
+      <h2 id="f1">Uvoz teksta iz datoteke</h2>
+      <p class="note" role="status">Čitamo datoteku nacrt-rada.pdf.</p>
+      <div class="skel w80"></div><div class="skel w60"></div><div class="skel w40"></div>
+      <p class="meta">U rad još ništa nije uvezeno.</p>
+      <div class="acts"><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="f2" class="variant" data-state="pregled">
+    <div class="ref-tag">Stanje 2 · popunjeno, pregled uvoza PDF-a</div>
+    <div class="dialog" role="dialog" aria-labelledby="f2">
+      <h2 id="f2">Pregled uvoza</h2>
+      <div class="kv"><span>Datoteka</span><b>nacrt-rada.pdf</b></div>
+      <div class="kv"><span>Stranice</span><b>14</b></div>
+      <p class="meta">Naziv datoteke vidi i mentor. Uvoz je moguć do <span class="open-mark">{granica} stranica, otvoreno</span>.</p>
+      <p class="note">U rad ulazi 31 odlomak, 4.870 riječi.</p>
+      <div class="sheet"><p>Javne politike u području obrazovanja mijenjale su se sporije od zakonskog okvira, pa se provedba često razlikovala od namjere.</p></div>
+      <h3 class="title">Neće se prenijeti</h3>
+      <ul class="lost">
+        <li><span>Slike</span><span>3</span></li>
+        <li><span>Zaglavlja i podnožja</span><span></span></li>
+        <li><span>Oblikovanje (podebljano, kurziv, razine naslova)</span><span></span></li>
+      </ul>
+      <p class="meta">Popis stavki za PDF <span class="open-mark">{popis, otvoreno do M8.3}</span>.</p>
+      <fieldset class="choice"><legend class="meta">Mjesto umetanja</legend>
+        <label><input type="radio" name="p" checked>Na mjesto kursora</label>
+        <label><input type="radio" name="p">Na kraj rada</label></fieldset>
+      <div class="acts"><button class="btn" type="button">Uvezi</button><button class="btn secondary" type="button">Odustani</button></div>
+      <p class="meta">Ako odustanete, uvoz se ne zapisuje.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="f3" class="variant" data-state="bez-sloja-teksta">
+    <div class="ref-tag">Stanje 3 · PDF bez sloja teksta (poruka iz #1792)</div>
+    <div class="dialog" role="dialog" aria-labelledby="f3">
+      <h2 id="f3">Uvoz teksta iz datoteke</h2>
+      <p class="note" role="alert">U ovom PDF-u nema teksta koji se može označiti, vjerojatno je skeniran. Ductura ne prepoznaje tekst sa slike.</p>
+      <p class="meta">Odabrana datoteka: skenirani-nacrt.pdf. U rad ništa nije uvezeno.</p>
+      <div class="acts"><button class="btn" type="button">Odaberi drugu datoteku</button><button class="btn secondary" type="button">Odustani</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="f4" class="variant" data-state="greska">
+    <div class="ref-tag">Stanje 4 · greška čitanja</div>
+    <div class="dialog" role="dialog" aria-labelledby="f4">
+      <h2 id="f4">Uvoz teksta iz datoteke</h2>
+      <p class="note" role="alert"><span class="open-mark">{poruka za PDF koji se ne može pročitati, otvoreno}</span></p>
+      <p class="meta">Odabrana datoteka: nacrt-rada.pdf. U rad ništa nije uvezeno.</p>
+      <details><summary>Pojedinosti za podršku</summary><code>{kod, otvoreno}</code></details>
+      <div class="row"><p class="obs">Datoteka je prevelika ili presložena za uvoz (najviše <span class="open-mark">{granica} MB, otvoreno</span>). Uvezite rad u dijelovima ili uklonite slike.</p></div>
+      <div class="acts"><button class="btn" type="button">Odaberi drugu datoteku</button></div>
+    </div>
+  </section>
+
+</div>
+<p class="meta">Odabir datoteke, nepodržan oblik i zadatak koji ne dopušta uvoz isti su kao u S-19 (<code>s19-uvoz.html</code>, stanja 1, 5 i 7). Tehnički kod nikad nije jedina poruka.</p>
+<p class="meta">Tipkovnica (EQ6): 1. naslov dijaloga, 2. mjesto umetanja, 3. Uvezi, 4. Odustani; Esc zatvara dijalog bez zapisa.</p>
+</main>
+</body>
+</html>
