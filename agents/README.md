@@ -41,3 +41,16 @@ Grana `claude/dazzling-ride-aq0p7q`, prethodni head `62963002`. Nema PR-a, issue
 - Ne provjereno: točan oblik polja `name` u deployment datotekama i prihvaća li `ant apply` ove datoteke; vidi se tek u `--dry-run`.
 
 Zamka: `ant apply` pri obilasku mape može ovu `README.md` u mapi `agents/` pokušati čitati kao resurs; zato primjenjuj imenovanjem datoteka, nikad `ant apply agents/` bez provjere u `--dry-run`.
+
+## Predaja 2 (13. 11. 2026., lokalna sesija)
+
+Worktree `D:\Temp\claude\0ddf40cd8b5155fa\d39b95fd-309e-4bd1-aa67-51c25645449a\scratchpad\wt-agents`, grana `claude/dazzling-ride-aq0p7q`. Lokalni commit `d8c7f09a` (`claude-lock.json`) i ovaj commit još nisu na GitHubu (udaljena grana je na `d6781530`).
+
+- Gotovo: `doc-consistency-auditor` primijenjen jednim pozivom `ant apply --yes agents/doc-consistency-auditor/deployment-weekly.yaml` (agent i okolinu povlači preko referenci): `env_01EJAm8MirSaXdNGnHKG7m9i`, `agent_013rTbkmsLnXaiBYSRLhtKPV` v1, `depl_01CzTH7RLcsf1orP5yCrFYid`. Deployment je pauziran (`ant beta:deployments pause`, `paused_reason: manual`); apply nema zastavicu za pauzu, pa je pauza zaseban korak odmah nakon applyja. Polje `name` i datoteke `ant apply` prihvaća bez izmjena.
+- Ručni run `drun_01TC6QC5FBiRJQDCPi2vPfXm` (sesija `sesn_01SCoC6hxNE4KHeMxKyDYVQk`): oko 17 min, `list_cost` 748 (centi, oko 7,48 USD), ocjenjivač `satisfied` u prvoj iteraciji, `audit.md` s 24 nalaza na mainu `8f5b421c`. Ishod se dohvaća s `ant beta:files list --scope-id <sesn> --beta managed-agents-2026-04-01` i `ant beta:files download`. Nalazi nisu objavljeni ni upisani nikamo; što s njima, odlučuje vlasnik.
+- Push zaustavljen: pre-push hook na `d8c7f09a` daje lint i typecheck zeleno, a 32 testa koji pokreću stvarne procese padaju (`tests/unit/shutdown-process.test.ts` K1/K5, „attempt fence”). Promjena je samo JSON. Hook nije preskočen; preskakanje traži vlasnikov izričiti pristanak.
+- Sljedeća radnja: vlasnikov odgovor na push; zatim `invariant-hunter` istim redom (`--dry-run` na `deployment-nightly.yaml`, potvrda, apply, pauza, jedan ručni run, cijena), pa commit `claude-lock.json`.
+- Čeka vlasnika: push; za `hr-provider-eval` i dalje pružatelji, ključevi u vaultu i ID vaulta; uključivanje rasporeda i strop troška.
+
+Zamka: `jq` instaliran wingetom nije na PATH-u Git Basha u ovoj sesiji; `ant` jest (`C:\Users\Daniel\bin`). Za čitanje JSON-a koristi `grep` ili PowerShell.
+Zamka: pre-push hook u svježem worktreeu pada bez `node_modules`; prije pusha `pnpm install --frozen-lockfile --prefer-offline`.
