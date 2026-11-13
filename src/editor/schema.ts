@@ -33,6 +33,7 @@ import { PluginKey } from "@tiptap/pm/state";
 
 import { blockMarkerRule, markerRemoval } from "./block-marker";
 import { BulletItem } from "./bullet-item";
+import { Citation } from "./citation";
 import { FindReplaceHistory } from "./find-replace";
 import { Quote } from "./quote";
 import { createNodeIdentityPlugin, mintMissingIds, repeatedNodeIds, type NodeIdMinter } from "./identity";
@@ -215,6 +216,48 @@ export function createEditorExtensions(
     Placeholder.configure({ placeholder }),
     NodeIdentity,
     // Last, so its closing transaction follows every other appended one.
+    FindReplaceHistory,
+  ];
+}
+
+/**
+ * The document of schema v2 keeps the list of sources (contract §2) as an
+ * attribute of the editor's document node, so it travels with the content and
+ * is never rendered. The replayer keeps the list beside its document instead.
+ */
+export const DocumentV2 = Document.extend({
+  addAttributes() {
+    return { sources: { default: Object.freeze([]), rendered: false } };
+  },
+});
+
+/** Every extension name registered by `createEditorExtensionsV2`. */
+export const V2_EXTENSION_NAMES = [...F1_EXTENSION_NAMES, "citation"] as const;
+
+/**
+ * The extensions of the v2 editor (DAN-620): the F1 set with the citation
+ * atom and the sources attribute. A heading holds text only (§3.1). Its
+ * schema gives the same JSON as `editStepsV2Schema()`, so its steps replay;
+ * `edit-steps-v2-editor-schema.test.ts` holds the two together. Nothing
+ * mounts it yet: the capture of v2 steps comes first (DAN-620 b).
+ */
+export function createEditorExtensionsV2(
+  placeholder: string = DEFAULT_PLACEHOLDER,
+): Extensions {
+  return [
+    DocumentV2,
+    Paragraph,
+    MarkedHeading.extend({ content: "text*" }).configure({ levels: [...F1_HEADING_LEVELS] }),
+    BulletItem,
+    Text,
+    Bold,
+    Italic,
+    Quote,
+    // Last of the nodes, as in the replayer's schema.
+    Citation,
+    History,
+    Placeholder.configure({ placeholder }),
+    NodeIdentity,
     FindReplaceHistory,
   ];
 }
