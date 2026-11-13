@@ -7,12 +7,14 @@ CREATE FUNCTION pg_temp.text_hash() RETURNS text
 LANGUAGE sql IMMUTABLE AS $$ SELECT encode(sha256(convert_to('Prvi odlomak.', 'UTF8')), 'hex') $$;
 
 -- now() is one instant for the whole test, so time passes by moving every
--- recorded start and end of a work, a group place and a teacher place one
--- minute back; the order of the history is kept, and what comes next is
--- later than all of it.
+-- recorded start and end of a work, a group place, a teacher place and a
+-- course membership one minute back; the order of the history is kept, and
+-- what comes next is later than all of it.
 CREATE FUNCTION pg_temp.tick() RETURNS void
 LANGUAGE sql AS $$
   UPDATE evidence.project SET created_at = created_at - interval '1 minute';
+  UPDATE institution.course_member
+     SET member_from = member_from - interval '1 minute', member_to = member_to - interval '1 minute';
   UPDATE institution.seminar_group_member
      SET valid_from = valid_from - interval '1 minute', valid_to = valid_to - interval '1 minute';
   UPDATE institution.seminar_group_teacher
