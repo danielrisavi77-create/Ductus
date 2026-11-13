@@ -56,14 +56,6 @@ function checkSet(column: string): string[] {
   return [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1] ?? "");
 }
 
-/**
- * A route the CHECK already allows ahead of its page, and the PR that adds the
- * page (orchestrator, #1836 c.6820309956: the /kako-radi migration carries both
- * routes, so either order of landing keeps both). Allowed only while that page
- * is absent; once it is on the branch the route must be in the domain set.
- */
-const ROUTES_AHEAD_OF_PAGE = ["/rad/[assignmentId]/dnevnik-pristupa"] as const; // DAN-294, #1969
-
 function pageFile(route: string): string {
   return join(ROOT, route === "/" ? "app/page.tsx" : `app${route}/page.tsx`);
 }
@@ -72,10 +64,7 @@ describe("DAN-431 problem report: migration and domain agree", () => {
   it("every closed set is the same in both", () => {
     const latest = ROUTE_MIGRATIONS.at(-1);
     expect(latest).toBeDefined();
-    const ahead = ROUTES_AHEAD_OF_PAGE.filter((route) => !existsSync(pageFile(route)));
-    expect(routeCheck(latest?.up ?? "")).toEqual([...PROBLEM_REPORT_ROUTES, ...ahead].sort());
-    expect([...PROBLEM_REPORT_ROUTES].sort()).toEqual([...PROBLEM_REPORT_ROUTES]);
-    for (const route of ahead) expect(PROBLEM_REPORT_ROUTES).not.toContain(route);
+    expect(routeCheck(latest?.up ?? "")).toEqual([...PROBLEM_REPORT_ROUTES]);
     expect(checkSet("category")).toEqual([...PROBLEM_REPORT_CATEGORIES]);
     expect(checkSet("browser_family")).toEqual([...BROWSER_FAMILIES]);
     expect(checkSet("sync_state")).toEqual([...SYNC_STATES]);

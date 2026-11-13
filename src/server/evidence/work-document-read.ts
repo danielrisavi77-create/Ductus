@@ -78,3 +78,41 @@ export async function readWorkDocument(
     return NONE;
   }
 }
+
+/**
+ * DAN-294 (review FAIL c.6820050088; PRODUCT §5 rule 17): the session's own
+ * work for the assignment, whatever its membership, notice acknowledgment or
+ * right to write. Only the own-rows RLS of the web role on projects, documents
+ * and packages answers (principal and institution of the session), so another
+ * person's work, an unknown or another institution's assignment and a failed
+ * read all get "none". The document is chosen as in WORK_DOCUMENT_SQL.
+ * Writes nothing; for reading what the owner may always read, never for writing.
+ */
+export const OWN_WORK_DOCUMENT_SQL = `SELECT d.id AS document_id FROM evidence.project p
+  JOIN evidence.document d
+    ON d.project_id = p.id AND d.institution_id = p.institution_id AND d.principal_id = p.principal_id
+  JOIN evidence.package k
+    ON k.document_id = d.id AND k.institution_id = d.institution_id AND k.principal_id = d.principal_id
+ WHERE p.assignment_id = $1 AND p.institution_id = app.current_institution_id() AND p.principal_id = app.current_user_id()
+ ORDER BY d.created_at, d.id, k.created_at, k.id
+ LIMIT 1`;
+
+export type OwnWorkDocumentRead = { kind: "document"; documentId: string } | { kind: "none" };
+
+export async function readOwnWorkDocument(
+  token: string | undefined,
+  assignmentId: string | null,
+  withActor: WithActor,
+): Promise<OwnWorkDocumentRead> {
+  if (!token || !TOKEN.test(token) || assignmentId === null || !UUID.test(assignmentId)) return NONE_OWN;
+  try {
+    const row = await withActor(token, async (tx) =>
+      (await tx.query<{ document_id: string | null }>(OWN_WORK_DOCUMENT_SQL, [assignmentId])).rows[0]);
+    const id = row?.document_id;
+    return typeof id === "string" && id !== "" ? { kind: "document", documentId: id } : NONE_OWN;
+  } catch {
+    return NONE_OWN;
+  }
+}
+
+const NONE_OWN: OwnWorkDocumentRead = { kind: "none" };

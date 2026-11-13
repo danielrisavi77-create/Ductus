@@ -4,8 +4,8 @@
 -- shell, so a problem can be reported from it. Its route template joins the
 -- closed set in src/domain/support/problem-report.ts (PROBLEM_REPORT_ROUTES).
 -- This migration runs after 20261112150000_problem_report_access_log_route.sql
--- (DAN-294, #1969, merged first) and carries both new routes, /kako-radi and
--- /rad/[assignmentId]/dnevnik-pristupa, so neither order of landing drops one.
+-- (DAN-294, #1969), which added /rad/[assignmentId]/dnevnik-pristupa; it keeps
+-- that set and adds /kako-radi only.
 -- Every existing row still holds: the CHECK is replaced by a wider one (the
 -- drop is deliberate) and validated in this migration's one transaction. No
 -- row is changed or removed.
