@@ -12,16 +12,18 @@ export const PUBLIC_STATUS_TTL_MS = 15_000;
 // What each part needs. With synchronous signing the queue runs only
 // background work no part shown here waits on. With asynchronous signing
 // (DAN-518, protocol 2) the worker signs every receipt, so writing and
-// submission also need it: without it nothing reaches a signed receipt.
+// submission also need it: without it nothing reaches a signed receipt. The
+// mentor view reads stored segments (readFastPath -> readProcessSummary ->
+// readImmutable), so it needs storage in both modes.
 const SYNC_NEEDS: Readonly<Record<ComponentName, readonly CapabilityName[]>> = Object.freeze({
   writing: ["database", "storage", "signing"],
   submission: ["database", "storage", "signing"],
-  mentorView: ["database"],
+  mentorView: ["database", "storage"],
 });
 const ASYNC_NEEDS: Readonly<Record<ComponentName, readonly CapabilityName[]>> = Object.freeze({
   writing: ["database", "storage", "signing", "queue"],
   submission: ["database", "storage", "signing", "queue"],
-  mentorView: ["database"],
+  mentorView: ["database", "storage"],
 });
 
 function partState(report: CapabilityReport, needs: readonly CapabilityName[]): ComponentState {

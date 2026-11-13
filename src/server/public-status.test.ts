@@ -14,17 +14,17 @@ describe("publicComponents", () => {
     [
       "database ok, the rest not configured",
       report({ database: "ok", storage: "nije_konfigurirano", signing: "nije_konfigurirano", queue: "nije_konfigurirano" }),
-      { writing: "nije_ukljuceno", submission: "nije_ukljuceno", mentorView: "radi" },
+      { writing: "nije_ukljuceno", submission: "nije_ukljuceno", mentorView: "nije_ukljuceno" },
     ],
     [
       "storage down",
       report({ database: "ok", storage: "nedostupno", signing: "ok", queue: "ok" }),
-      { writing: "ne_radi", submission: "ne_radi", mentorView: "radi" },
+      { writing: "ne_radi", submission: "ne_radi", mentorView: "ne_radi" },
     ],
     [
       "signing down, storage not configured: a failure outranks not configured",
       report({ database: "ok", storage: "nije_konfigurirano", signing: "nedostupno", queue: "ok" }),
-      { writing: "ne_radi", submission: "ne_radi", mentorView: "radi" },
+      { writing: "ne_radi", submission: "ne_radi", mentorView: "nije_ukljuceno" },
     ],
     ["database down", all("nedostupno"), { writing: "ne_radi", submission: "ne_radi", mentorView: "ne_radi" }],
     // Only the queue down: no part shown here depends on it alone.
@@ -58,6 +58,21 @@ describe("publicComponents with asynchronous signing", () => {
     await expect(publicStatusCache(async () => queueDown, () => 0)()).resolves.toMatchObject({ components: { writing: "radi" } });
   });
 });
+// QA FAIL on #1979 (c.6861487923): the mentor fast path reads stored segments
+// (readFastPath -> readProcessSummary -> readImmutable), so the mentor view is
+// not "radi" while storage is not. Every storage class, both signing modes.
+describe("mentorView needs storage", () => {
+  it.each<[string, CapabilityReport["capabilities"], ReturnType<typeof publicComponents>["mentorView"]]>([
+    ["storage ok", { database: "ok", storage: "ok", signing: "ok", queue: "ok" }, "radi"],
+    ["storage down", { database: "ok", storage: "nedostupno", signing: "ok", queue: "ok" }, "ne_radi"],
+    ["storage not configured", { database: "ok", storage: "nije_konfigurirano", signing: "ok", queue: "ok" }, "nije_ukljuceno"],
+    ["storage not reported", { database: "ok", signing: "ok", queue: "ok" }, "ne_radi"],
+  ])("%s", (_name, capabilities, expected) => {
+    expect(publicComponents(report(capabilities)).mentorView).toBe(expected);
+    expect(publicComponents(report(capabilities), true).mentorView).toBe(expected);
+  });
+});
+
 
 describe("publicStatusCache", () => {
   const clock = (start = 1_000_000) => {
