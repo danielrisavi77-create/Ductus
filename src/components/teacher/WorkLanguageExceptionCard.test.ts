@@ -19,7 +19,7 @@ const PAGE = `/nastavnik/zadatak/${ID}/rad/izmisljeni%20rad%2Fa/jezik`;
 const card = (
   exception: "hr" | "en" | null, initial: WorkLanguageExceptionSave | null = null, assignmentLanguage: "hr" | "en" = "hr",
 ) => renderToStaticMarkup(createElement(WorkLanguageExceptionCard, {
-  assignmentId: ID, documentId: DOC, studentId: STUDENT, assignmentLanguage, exception, initial,
+  assignmentId: ID, documentId: DOC, assignmentLanguage, exception, initial,
 }));
 const decode = (html: string) => html.replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, "&");
 
@@ -103,12 +103,13 @@ describe("DAN-386 one work's language exception card (P02d)", () => {
 
   it("the reload link names the work by its document id, never by the student id", () => {
     const html = renderToStaticMarkup(createElement(WorkLanguageExceptionCard, {
-      assignmentId: ID.toUpperCase(), documentId: DOC, studentId: STUDENT.toUpperCase(), assignmentLanguage: "hr", exception: null,
+      assignmentId: ID.toUpperCase(), documentId: DOC, assignmentLanguage: "hr", exception: null,
       initial: { kind: "unavailable" },
     }));
     expect(html).toContain(`href="${PAGE}"`);
     expect(html.toLowerCase()).not.toContain(STUDENT);
   });
+
 
   it("has the same keys in both catalogues and no forbidden term (PRODUCT §5)", () => {
     const keys = (o: object): string[] => Object.entries(o).flatMap(([k, v]) =>

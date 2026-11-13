@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { POST as ASSIGNMENT_POST } from "../../app/api/institution/assignments/[assignmentId]/work-language/route";
 import { POST as WORK_POST } from "../../app/api/institution/assignments/[assignmentId]/students/[studentId]/work-language/route";
+import { POST as DOCUMENT_POST } from "../../app/api/institution/assignments/[assignmentId]/works/[documentId]/work-language/route";
 import { readWorkLanguageException } from "@/components/teacher/work-language-exception-read";
 import { createWithActor } from "@/server/db/with-actor";
 
@@ -45,6 +46,11 @@ const setAssignment = (session: string, expectedVersion: number, language: strin
 const setWork = (session: string, student: string, language: string | null, target = assignment) => WORK_POST(
   send(`${ORIGIN}/api/institution/assignments/${target}/students/${student}/work-language`, session, { language }),
   { params: Promise.resolve({ assignmentId: target, studentId: student }) },
+);
+// P02d: the teacher's page names the work by its document id; the server finds the student.
+const setDocument = (session: string, document: string, language: string | null, target = assignment) => DOCUMENT_POST(
+  send(`${ORIGIN}/api/institution/assignments/${target}/works/${encodeURIComponent(document)}/work-language`, session, { language }),
+  { params: Promise.resolve({ assignmentId: target, documentId: document }) },
 );
 const state = async () => {
   const version = (await admin.query(
@@ -213,9 +219,9 @@ describe("the page read of one work's language: real session and database (DAN-3
   const read = (session: string | undefined, target: string, document: string) =>
     readWorkLanguageException(session, target, document, withActor);
 
-  it("gives a teacher of the work its student, the assignment's language and the exception", async () => {
+  it("gives a teacher of the work the assignment's language and the exception, never the student's id", async () => {
     const base = {
-      kind: "available", assignmentId: assignment, documentId, studentId: people.student.id,
+      kind: "available", assignmentId: assignment, documentId,
       title: "Izmišljeni esej", assignmentLanguage: "hr",
     };
     expect(await read(people.teacher.token, assignment, documentId)).toEqual({ ...base, exception: null });
@@ -237,6 +243,40 @@ describe("the page read of one work's language: real session and database (DAN-3
     }
     expect(await read(token(), assignment, documentId)).toEqual({ kind: "signedOut" });
     expect(await read(undefined, assignment, documentId)).toEqual({ kind: "signedOut" });
+    expect((await state()).overrides).toEqual([]);
+  });
+});
+
+describe("one work's language by its document id: real POST, session and database (DAN-386, QA #1986 c.6861733018)", () => {
+  it("lets a teacher of the work set and remove the exception; the answer never names the student", async () => {
+    const set = await setDocument(people.teacher.token, documentId, "en");
+    expect(set.status).toBe(200);
+    expect(set.headers.get("cache-control")).toBe("no-store");
+    const text = await set.text();
+    expect(JSON.parse(text)).toEqual({ language: "en" });
+    expect(text).not.toContain(people.student.id);
+    expect((await state()).overrides).toEqual([{ student_id: people.student.id, work_language: "en" }]);
+    const removed = await setDocument(people.teacher.token, documentId, null);
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ language: "hr" });
+    expect((await state()).overrides).toEqual([]);
+  });
+
+  it("refuses everyone else, another assignment and a missing work alike, and writes nothing", async () => {
+    expect((await setDocument(token(), documentId, "en")).status).toBe(401);
+    for (const [session, target, document] of [
+      [people.student.token, assignment, documentId], [people.colleague.token, assignment, documentId],
+      [people.stranger.token, assignment, documentId], [people.outsider.token, assignment, documentId],
+      [people.teacher.token, randomUUID(), documentId], [people.teacher.token, assignment, `${documentId}-x`],
+      [people.teacher.token, assignment, people.student.id],
+    ] as const) {
+      const response = await setDocument(session, document, "en", target);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "forbidden" });
+    }
+    for (const document of ["", ` ${documentId}`]) {
+      expect((await setDocument(people.teacher.token, document, "en")).status).toBe(422);
+    }
     expect((await state()).overrides).toEqual([]);
   });
 });

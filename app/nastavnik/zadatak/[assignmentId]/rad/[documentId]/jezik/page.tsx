@@ -22,8 +22,10 @@ export const metadata = { title: `${t.teacher.workLanguageException.title} · ${
 
 // DAN-386 (M2.10-P02d, contract on #1836 c.6858305983): the language of one
 // work, keyed by its assignment and the work's document id, as the course
-// list links it; the student id stays on the server until the card posts. The read is a UX boundary only;
-// the POST route and set_work_language() decide again who may change it.
+// list links it; the student id never leaves the server, and the card's POST
+// names the work by its document id too (QA on #1986 c.6861733018). The read
+// is a UX boundary only; the POST route and set_work_language() decide again
+// who may change it.
 // Someone else's work, a missing one and a malformed id read alike. No
 // student name is shown: the teacher reaches this page from the work's row.
 export default async function WorkLanguageExceptionPage(
@@ -58,7 +60,7 @@ export default async function WorkLanguageExceptionPage(
         {read?.kind === "notFound" || read?.kind === "signedOut" ? <p role="alert">{e.notFound}</p> : null}
         {read?.kind === "unavailable" ? <p role="status">{e.unavailable}</p> : null}
         {read?.kind === "available" ? (
-          <WorkLanguageExceptionCard assignmentId={read.assignmentId} documentId={read.documentId} studentId={read.studentId}
+          <WorkLanguageExceptionCard assignmentId={read.assignmentId} documentId={read.documentId}
             assignmentLanguage={read.assignmentLanguage} exception={read.exception} />
         ) : null}
         {screen === "unavailable" ? <p role="status">{t.teacher.unavailable}</p> : null}

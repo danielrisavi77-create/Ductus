@@ -14,8 +14,13 @@ test.afterEach(closeWork);
 
 const w = t.teacher.workLanguageException;
 const names = t.workspace.upute.workLanguages;
-const SAVE = /^\/api\/institution\/assignments\/[0-9a-f-]{36}\/students\/([0-9a-f-]{36})\/work-language$/;
+const SAVE = /^\/api\/institution\/assignments\/[0-9a-f-]{36}\/works\/([^/]+)\/work-language$/;
 const isSave = (request: Request) => request.method() === "POST" && SAVE.test(new URL(request.url()).pathname);
+
+async function studentIdOf(): Promise<string> {
+  return admin(async (client) => (await client.query<{ id: string }>(
+    "SELECT id FROM identity.user_account WHERE hr_edu_person_unique_id = $1", [STUDENT])).rows[0]!.id);
+}
 
 async function overrideOf(assignment: string): Promise<string[]> {
   return admin(async (client) => (await client.query<{ language: string }>(
@@ -70,7 +75,10 @@ test("the teacher sets one work's language; one request, the exception stored an
   const posts: Request[] = [];
   page.on("request", (request) => { if (isSave(request)) posts.push(request); });
 
-  await page.goto(`/nastavnik/zadatak/${assignment}/rad/${encodeURIComponent(documentId)}/jezik`);
+  const opened = await page.goto(`/nastavnik/zadatak/${assignment}/rad/${encodeURIComponent(documentId)}/jezik`);
+  // QA #1986 c.6861733018: the student id never reaches the browser, not in the HTML nor in the page payload.
+  const studentId = await studentIdOf();
+  expect(await opened!.text()).not.toContain(studentId);
   const card = page.getByRole("form", { name: w.link });
   await expect(card.getByText(w.current.replace("{language}", names.hr))).toBeVisible();
   await expect(card.getByRole("button", { name: w.save })).toBeDisabled();
@@ -83,9 +91,10 @@ test("the teacher sets one work's language; one request, the exception stored an
   await expect(card.getByText(w.current.replace("{language}", names.en))).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0]!.postDataJSON()).toEqual({ language: "en" });
-  // The student id goes only into the POST path; the page never shows it as text.
-  const studentId = SAVE.exec(new URL(posts[0]!.url()).pathname)![1]!;
-  expect(await page.locator("body").innerText()).not.toContain(studentId);
+  // The save names the work by its document id; the student id is in no request nor in the page.
+  expect(decodeURIComponent(SAVE.exec(new URL(posts[0]!.url()).pathname)![1]!)).toBe(documentId);
+  expect(posts[0]!.url()).not.toContain(studentId);
+  expect(await page.content()).not.toContain(studentId);
   expect(await overrideOf(assignment)).toEqual(["en"]);
   await shoot(page, "jezik-rada-studenta-spremljeno");
   await student.context().close();

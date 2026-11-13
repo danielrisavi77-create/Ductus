@@ -34,10 +34,13 @@ const read = (r: unknown[] | Error, me: unknown = ME) => readWorkLanguageExcepti
 describe("DAN-386 one work's language exception read (P02d)", () => {
   it("finds the work's student by document id and reads the languages in one statement", async () => {
     const { withActor, query } = actor([row]);
-    expect(await readWorkLanguageException(TOKEN, ID, DOC, withActor)).toEqual({
-      kind: "available", assignmentId: ID.toLowerCase(), documentId: DOC, studentId: STUDENT.toLowerCase(),
+    const result = await readWorkLanguageException(TOKEN, ID, DOC, withActor);
+    expect(result).toEqual({
+      kind: "available", assignmentId: ID.toLowerCase(), documentId: DOC,
       title: "Izmišljeni seminar", assignmentLanguage: "hr", exception: "en",
     });
+    // What the page receives goes into its HTML: the student's id must not (QA #1986 c.6861733018).
+    expect(JSON.stringify(result).toLowerCase()).not.toContain(STUDENT.toLowerCase());
     expect(query).toHaveBeenCalledTimes(2);
     const [sql, params] = query.mock.calls[1] as unknown as [string, unknown[]];
     expect(sql).toContain("app.assignment_works($1::uuid)");

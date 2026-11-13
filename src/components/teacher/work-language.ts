@@ -53,17 +53,18 @@ export type WorkLanguageExceptionSave =
 // DAN-386 (M2.10-P02d, contract on #1836 c.6858305983): one work's exception
 // from the language of its assignment; null removes it. The route answers the
 // language the work has afterwards: the one sent, or after a removal the
-// assignment's. Anything else is unconfirmed and never shown as saved.
+// assignment's. Anything else is unconfirmed and never shown as saved. The
+// work is named by its document id: the student's id never reaches the
+// browser (QA on #1986 c.6861733018); the server names the student.
 export async function saveWorkLanguageException(
-  assignmentId: string, studentId: string, language: WorkLanguage | null, send: typeof fetch = fetch,
+  assignmentId: string, documentId: string, language: WorkLanguage | null, send: typeof fetch = fetch,
 ): Promise<WorkLanguageExceptionSave> {
-  if (!UUID.test(assignmentId) || !UUID.test(studentId)
-    || (language !== null && parseWorkLanguage(language) === null)) {
+  const work = workSegments(assignmentId, documentId);
+  if (work === null || (language !== null && parseWorkLanguage(language) === null)) {
     return { kind: "invalid" };
   }
   try {
-    const response = await send(
-      `/api/institution/assignments/${assignmentId.toLowerCase()}/students/${studentId.toLowerCase()}/work-language`, {
+    const response = await send(`/api/institution/assignments/${work[0]}/works/${work[1]}/work-language`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
@@ -96,7 +97,13 @@ export async function saveWorkLanguageException(
  * browser would resolve them as path steps, not as the work's segment.
  */
 export function workLanguageExceptionHref(assignmentId: unknown, documentId: unknown): string | null {
+  const work = workSegments(assignmentId, documentId);
+  return work === null ? null : `/nastavnik/zadatak/${work[0]}/rad/${work[1]}/jezik`;
+}
+
+/** The assignment and the encoded document id as path segments, or null for ids no route could read. */
+function workSegments(assignmentId: unknown, documentId: unknown): [string, string] | null {
   if (typeof assignmentId !== "string" || !UUID.test(assignmentId) || !isDocumentId(documentId)
     || documentId === "." || documentId === "..") return null;
-  return `/nastavnik/zadatak/${assignmentId.toLowerCase()}/rad/${encodeURIComponent(documentId)}/jezik`;
+  return [assignmentId.toLowerCase(), encodeURIComponent(documentId)];
 }
