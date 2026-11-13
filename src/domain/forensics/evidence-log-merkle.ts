@@ -148,26 +148,36 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   return difference === 0;
 }
 
-/**
- * Checks an inclusion proof (§2.1.3.2). A malformed input of any kind is a
- * failed check, never an exception; only missing Web Crypto throws. Halving
- * uses division, not bit shifts, so sizes above 2^32 stay exact.
- */
-export async function verifyEvidenceLogInclusion(
-  input: EvidenceLogInclusion,
-): Promise<boolean> {
-  if (typeof input !== "object" || input === null) return false;
-  const { leafHash, index, treeSize, proof, root } = input;
-  if (!Number.isSafeInteger(index) || index < 0) return false;
-  if (!Number.isSafeInteger(treeSize) || treeSize <= index) return false;
-  if (!isHash(leafHash) || !isHash(root)) return false;
-  if (!Array.isArray(proof) || proof.length > MAX_PROOF_LENGTH) return false;
+/** A private 32-byte copy of a hash, or null; the copy keeps its real length. */
+function hashCopy(value: unknown): Uint8Array | null {
+  if (!(value instanceof Uint8Array)) return null;
+  const copy = new Uint8Array(value);
+  return copy.length === EVIDENCE_LOG_HASH_BYTES ? copy : null;
+}
 
-  let fn = index;
-  let sn = treeSize - 1;
-  let r: Uint8Array = new Uint8Array(leafHash);
-  for (const element of proof as readonly unknown[]) {
-    if (sn === 0 || !isHash(element)) return false;
+async function checkInclusion(input: unknown): Promise<boolean> {
+  if (typeof input !== "object" || input === null) return false;
+  const { leafHash, index, treeSize, proof, root } = input as Partial<
+    Record<keyof EvidenceLogInclusion, unknown>
+  >;
+  if (!Number.isSafeInteger(index) || (index as number) < 0) return false;
+  if (
+    !Number.isSafeInteger(treeSize) ||
+    (treeSize as number) <= (index as number)
+  ) {
+    return false;
+  }
+  const leaf = hashCopy(leafHash);
+  const expected = hashCopy(root);
+  if (leaf === null || expected === null) return false;
+  if (!Array.isArray(proof) || proof.length > MAX_PROOF_LENGTH) return false;
+  const path = Array.from(proof as readonly unknown[], hashCopy);
+
+  let fn = index as number;
+  let sn = (treeSize as number) - 1;
+  let r = leaf;
+  for (const element of path) {
+    if (sn === 0 || element === null) return false;
     if (fn % 2 === 1 || fn === sn) {
       r = await hashNode(element, r);
       while (fn % 2 === 0 && fn !== 0) {
@@ -180,7 +190,27 @@ export async function verifyEvidenceLogInclusion(
     fn = Math.floor(fn / 2);
     sn = Math.floor(sn / 2);
   }
-  return sn === 0 && sameBytes(r, root);
+  return sn === 0 && sameBytes(r, expected);
+}
+
+/**
+ * Checks an inclusion proof (§2.1.3.2). A malformed input of any kind,
+ * including a getter or list that throws, is a failed check, never an
+ * exception; only missing Web Crypto throws. The hashes are copied once at
+ * the start, so a caller changing them while the check runs changes nothing.
+ * Halving uses division, not bit shifts, so sizes above 2^32 stay exact.
+ */
+export async function verifyEvidenceLogInclusion(
+  input: EvidenceLogInclusion,
+): Promise<boolean> {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("evidence-log: Web Crypto unavailable");
+  }
+  try {
+    return await checkInclusion(input);
+  } catch {
+    return false;
+  }
 }
 
 /** A high surrogate without a low one after it, or a low one without a high one before it. */

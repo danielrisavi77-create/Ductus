@@ -313,6 +313,44 @@ describe("inclusion check refuses without throwing", () => {
     }
   });
 
+  it("an input whose getter or proof list throws (V4, V5)", async () => {
+    const input = await honest();
+    const boom = () => {
+      throw new Error("hostile getter");
+    };
+    for (const key of ["leafHash", "index", "treeSize", "proof", "root"]) {
+      const hostile = { ...input };
+      Object.defineProperty(hostile, key, { get: boom });
+      await expect(verifyEvidenceLogInclusion(hostile)).resolves.toBe(false);
+    }
+    const throwingList = new Proxy([...input.proof], {
+      get: (target, key) =>
+        key === Symbol.iterator ? boom() : Reflect.get(target, key),
+    });
+    await expect(
+      verifyEvidenceLogInclusion({ ...input, proof: throwingList }),
+    ).resolves.toBe(false);
+  });
+
+  it("a hash whose length property lies (V4)", async () => {
+    const input = await honest();
+    const short = new Uint8Array(input.leafHash.subarray(0, 31));
+    Object.defineProperty(short, "length", { value: 32 });
+    await expect(
+      verifyEvidenceLogInclusion({ ...input, leafHash: short }),
+    ).resolves.toBe(false);
+  });
+
+  it("checks the values as passed, even if the caller changes them meanwhile", async () => {
+    const input = await honest();
+    const proof = input.proof.map((element) => new Uint8Array(element));
+    const root = new Uint8Array(input.root);
+    const check = verifyEvidenceLogInclusion({ ...input, proof, root });
+    proof[1]![0]! ^= 1;
+    root.fill(0);
+    await expect(check).resolves.toBe(true);
+  });
+
   it("a changed leaf, a leaf from elsewhere, another root or another size (V6)", async () => {
     const input = await honest();
     const leaves = await referenceLeafHashes();
