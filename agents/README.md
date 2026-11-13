@@ -21,7 +21,7 @@ grep -rn YOUR_ agents/
 Za `hr-provider-eval` prvo napravi vault i u konzoli dodaj ključeve pružatelja (nikad u repo), pa upiši ID vaulta u `kickoff`-ov session. Zatim:
 
 ```bash
-ant apply agents/
+ant apply --dry-run agents/<agent>   # pa imenovanjem datoteka, vidi Predaja
 ```
 
 Deployment odmah pauziraj i pokreni jednom ručno; ponovno uključivanje rasporeda je vlasnikova odluka.
@@ -29,3 +29,15 @@ Deployment odmah pauziraj i pokreni jednom ručno; ponovno uključivanje raspore
 ## Zašto bez pisanja na GitHub
 
 Botovi pišu samo kao `ductus-botovi[bot]` i imaju stroga ograničenja (`CLAUDE.md`, „Vanjski botovi”). Automatsko otvaranje issuea iz ovih agenata tražilo bi token te aplikacije u vaultu i novu vlasnikovu odluku.
+
+## Predaja (13. 11. 2026.)
+
+Grana `claude/dazzling-ride-aq0p7q`, prethodni head `62963002`. Nema PR-a, issuea ni `DAN` tiketa; PR se otvara samo na vlasnikov zahtjev.
+
+- Gotovo: konfiguracije triju agenata s početnim rubrikama. Pre-push hook (unit testovi) prošao je na `62963002`.
+- Nije učinjeno: ništa nije primijenjeno na platform.claude.com; `claude-lock.json` ne postoji.
+- Sljedeća radnja (lokalna sesija): provjeriti `ant --version` (≥ 1.34.0), `jq` i `ant auth status` (prijavu radi vlasnik). Zatim samo `doc-consistency-auditor`: `--dry-run`, potvrda vlasnika, apply agenta i okoline, apply deploymenta i pauza u istoj naredbi, jedan ručni run. Pokazati cijenu runa i `audit.md`, pa tek onda `invariant-hunter` i `hr-provider-eval`. Nakon applyja commitati `claude-lock.json`.
+- Čeka vlasnika: (1) koje pružatelje testira `hr-provider-eval`, tj. host umjesto `YOUR_PROVIDER_API_HOST`; (2) ključeve u vault upisuje sam, u svom terminalu; (3) uključivanje rasporeda i strop troška (Q-20 P12). Nacrt pitanja za Owner queue nije objavljen; sadržaj je u gornjem odjeljku i u ovoj predaji.
+- Ne provjereno: točan oblik polja `name` u deployment datotekama i prihvaća li `ant apply` ove datoteke; vidi se tek u `--dry-run`.
+
+Zamka: `ant apply` pri obilasku mape može ovu `README.md` u mapi `agents/` pokušati čitati kao resurs; zato primjenjuj imenovanjem datoteka, nikad `ant apply agents/` bez provjere u `--dry-run`.
