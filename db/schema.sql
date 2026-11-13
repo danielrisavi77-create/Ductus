@@ -4097,18 +4097,27 @@ $$;
 
 
 --
--- Name: raise_ops_alarm(text); Type: FUNCTION; Schema: identity; Owner: -
+-- Name: raise_ops_alarm(text, uuid); Type: FUNCTION; Schema: identity; Owner: -
 --
 
-CREATE FUNCTION identity.raise_ops_alarm(p_kind text) RETURNS void
+CREATE FUNCTION identity.raise_ops_alarm(p_kind text, p_reporter uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     SET lock_timeout TO '2000ms'
     AS $$
 BEGIN
-  IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN
+  IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing')
+     OR p_reporter IS NULL THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
+  LOCK TABLE identity.ops_alarm_fault IN SHARE ROW EXCLUSIVE MODE;
+  DELETE FROM identity.ops_alarm_fault f
+   WHERE f.kind = p_kind
+     AND f.reported_at < pg_catalog.statement_timestamp() - interval '120 seconds';
+  INSERT INTO identity.ops_alarm_fault AS f (kind, reporter)
+  VALUES (p_kind, p_reporter)
+  ON CONFLICT (kind, reporter) DO UPDATE
+    SET reported_at = GREATEST(f.reported_at, pg_catalog.statement_timestamp());
   INSERT INTO identity.ops_alarm AS a (kind, category)
   VALUES (p_kind, CASE WHEN p_kind = 'ready_signing' THEN 'security' ELSE 'operational' END)
   ON CONFLICT (kind) WHERE resolved_at IS NULL DO UPDATE
@@ -4119,21 +4128,31 @@ $$;
 
 
 --
--- Name: resolve_ops_alarm(text); Type: FUNCTION; Schema: identity; Owner: -
+-- Name: resolve_ops_alarm(text, uuid); Type: FUNCTION; Schema: identity; Owner: -
 --
 
-CREATE FUNCTION identity.resolve_ops_alarm(p_kind text) RETURNS void
+CREATE FUNCTION identity.resolve_ops_alarm(p_kind text, p_reporter uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     SET lock_timeout TO '2000ms'
     AS $$
 BEGIN
-  IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing') THEN
+  IF p_kind IS NULL OR p_kind NOT IN ('ready_database', 'ready_storage', 'ready_queue', 'ready_signing')
+     OR p_reporter IS NULL THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
+  END IF;
+  LOCK TABLE identity.ops_alarm_fault IN SHARE ROW EXCLUSIVE MODE;
+  DELETE FROM identity.ops_alarm_fault f
+   WHERE f.kind = p_kind
+     AND (f.reporter = p_reporter
+          OR f.reported_at < pg_catalog.statement_timestamp() - interval '120 seconds');
+  IF EXISTS (SELECT 1 FROM identity.ops_alarm_fault f WHERE f.kind = p_kind) THEN
+    RETURN false;
   END IF;
   UPDATE identity.ops_alarm a
      SET resolved_at = GREATEST(a.last_raised_at, pg_catalog.statement_timestamp())
    WHERE a.kind = p_kind AND a.resolved_at IS NULL;
+  RETURN true;
 END
 $$;
 
@@ -8009,6 +8028,20 @@ ALTER TABLE ONLY identity.ops_alarm FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: ops_alarm_fault; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.ops_alarm_fault (
+    kind text NOT NULL,
+    reporter uuid NOT NULL,
+    reported_at timestamp with time zone DEFAULT statement_timestamp() NOT NULL,
+    CONSTRAINT ops_alarm_fault_kind_check CHECK ((kind = ANY (ARRAY['ready_database'::text, 'ready_storage'::text, 'ready_queue'::text, 'ready_signing'::text])))
+);
+
+ALTER TABLE ONLY identity.ops_alarm_fault FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: person_name; Type: TABLE; Schema: identity; Owner: -
 --
 
@@ -9495,6 +9528,14 @@ ALTER TABLE ONLY identity.institution
 
 ALTER TABLE ONLY identity.logout_token_jti
     ADD CONSTRAINT logout_token_jti_pkey PRIMARY KEY (oidc_issuer, jti_hash);
+
+
+--
+-- Name: ops_alarm_fault ops_alarm_fault_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.ops_alarm_fault
+    ADD CONSTRAINT ops_alarm_fault_pkey PRIMARY KEY (kind, reporter);
 
 
 --
@@ -12561,6 +12602,19 @@ CREATE POLICY logout_token_jti_owner ON identity.logout_token_jti TO ductus_iden
 ALTER TABLE identity.ops_alarm ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: ops_alarm_fault; Type: ROW SECURITY; Schema: identity; Owner: -
+--
+
+ALTER TABLE identity.ops_alarm_fault ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ops_alarm_fault ops_alarm_fault_owner; Type: POLICY; Schema: identity; Owner: -
+--
+
+CREATE POLICY ops_alarm_fault_owner ON identity.ops_alarm_fault TO ductus_identity USING (true) WITH CHECK (true);
+
+
+--
 -- Name: ops_alarm ops_alarm_owner; Type: POLICY; Schema: identity; Owner: -
 --
 
@@ -13425,4 +13479,4 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261112160000'),
     ('20261112184500'),
     ('20261112190000'),
-    ('20261112200000');
+    ('20261114100000');

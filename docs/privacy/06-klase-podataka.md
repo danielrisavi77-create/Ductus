@@ -74,6 +74,7 @@ Svaka tablica koju `-- migrate:up` dijelovi u `db/migrations/` ostavljaju na `ma
 | `identity.user_preference` | 1 | Samo jezik sučelja (`hr` ili `en`) i vrijeme promjene; jezik rada nije ovdje |
 | `identity.problem_report` | 31 | Opis do 1000 znakova i kontekst iz zatvorenih skupova; podrška još nema pravo čitanja |
 | `identity.ops_alarm` | — | Operativni alarm spremnosti: samo vrsta iz zatvorenog skupa, kategorija i vremena; nijedan stupac ne nosi osobu, ustanovu, rad ni poruku greške (DAN-184) |
+| `identity.ops_alarm_fault` | — | Svjež zapis kvara po izvještaču: vrsta iz zatvorenog skupa, `reporter` (slučajni UUID procesa, nastaje pri pokretanju; ne označava osobu ni stroj) i vrijeme; zapis stariji od 120 s briše se pri sljedećem pozivu iste vrste (DAN-184) |
 | `identity.logout_token_jti` | 3 | Samo hash `jti` i istek, briše se pri sljedećem upisu |
 | `identity.institution` | — | Podaci ustanove, ne osobe |
 | `identity.institution_issuer` | — | Adresa OIDC izdavatelja ustanove |

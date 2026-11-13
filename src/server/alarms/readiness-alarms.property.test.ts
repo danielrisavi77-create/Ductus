@@ -24,6 +24,7 @@ test.prop([fc.array(step, { maxLength: 40 })])("no transition is lost", async (s
     resolve: async (kind) => {
       if (!up) throw new Error("down");
       writes.push(["resolve", kind]);
+      return true;
     },
   };
   const tracker = createAlarmTracker(store);

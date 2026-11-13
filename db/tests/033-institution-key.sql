@@ -45,18 +45,19 @@ SELECT col_is_unique('evidence', 'signing_key', ARRAY['key_id', 'institution_id'
 
 -- 2. The catalogue guard. A new table without the key, a foreign key that
 -- leaves the institution out or a cascade changes one of these, so it cannot
--- arrive without a row here. The four tables listed carry no key: the
+-- arrive without a row here. The five tables listed carry no key: the
 -- institution itself; the record of enrollment attempts, which counts
 -- the attempts of one person and is read only by the function that limits
 -- them (DAN-442 left it so, PR description); and the record of used logout
 -- tokens, which belongs to an issuer, not an institution, and is read only
--- by identity.backchannel_logout (DAN-474); and the operational alarms,
--- which are about the platform, not an institution, and must name none
--- (DAN-184, PRODUCT 5).
+-- by identity.backchannel_logout (DAN-474); and the operational alarms
+-- and the replicas' fault records behind them, which are about the
+-- platform, not an institution, and must name none (DAN-184, PRODUCT 5).
 SELECT bag_eq(
   $$ SELECT name FROM app_class WHERE NOT pg_temp.has_key(oid) $$,
-  ARRAY['identity.institution', 'institution.enrollment_attempt', 'identity.logout_token_jti', 'identity.ops_alarm'],
-  'every application table carries institution_id, but for the four listed'
+  ARRAY['identity.institution', 'institution.enrollment_attempt', 'identity.logout_token_jti', 'identity.ops_alarm',
+        'identity.ops_alarm_fault'],
+  'every application table carries institution_id, but for the five listed'
 );
 SELECT is_empty(
   $$ SELECT f.conrelid::regclass || ' ' || f.conname

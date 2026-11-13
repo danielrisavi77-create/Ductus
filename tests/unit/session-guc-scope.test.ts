@@ -244,7 +244,7 @@ const SQL_EXCEPTIONS: Record<string, string> = {
   // SET clause of a function header (DAN-184), which PostgreSQL undoes when
   // the call returns, so it never stays on the pooled connection.
   "db/schema.sql: SET lock_timeout TO '2000ms'": FUNCTION_SET,
-  "db/migrations/20261112200000_ops_alarm.sql: SET lock_timeout = '2000ms'": FUNCTION_SET,
+  "db/migrations/20261114100000_ops_alarm.sql: SET lock_timeout = '2000ms'": FUNCTION_SET,
   "db/local/migrator.sql: SET ROLE ductus_migrator;":
     "local provisioning over its own psql session, ended with RESET ROLE; never the pool",
   "db/tests/010-roles-and-privileges.sql: SET on ductus_app for the local login is noticed'":
