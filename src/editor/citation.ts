@@ -17,7 +17,16 @@
  *     marks off again in a transaction of its own, outside the history and
  *     with `CITATION_UNMARK_META`. The replayer does the same on its side;
  *   - a transaction of mark steps that would mark nothing but citations is
- *     refused, so it leaves no empty undo step behind.
+ *     refused, so it leaves no empty undo step behind;
+ *   - a block change that would put a citation in a heading (setting a block
+ *     with a citation to a heading, joining it into one) is refused. A heading
+ *     holds text only, and ProseMirror would otherwise drop the citation
+ *     without a word; the replayer refuses such a step too (§5.2);
+ *   - the undo history passes: its steps undo what the guard already let
+ *     through, and refusing one would leave undo stuck on it;
+ *   - initial content is unmarked when the editor is created (`onCreate`),
+ *     which is no transaction. Content should come from `canonicalToTiptapV2`,
+ *     which never marks a citation.
  *
  * The capture of v2 steps (DAN-620 b) leaves out the guard's transaction.
  *
@@ -28,10 +37,12 @@
 
 import { mergeAttributes, Node } from "@tiptap/core";
 import { Fragment, type Node as PmNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import { isHistoryTransaction } from "@tiptap/pm/history";
+import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
 import {
   AddMarkStep,
   AddNodeMarkStep,
+  Mapping,
   RemoveMarkStep,
   RemoveNodeMarkStep,
   ReplaceAroundStep,
@@ -116,23 +127,76 @@ function marksOnlyCitations(tr: Transaction): boolean {
   return unmarked(tr.doc).eq(unmarked(tr.before));
 }
 
+const isStructuralReplace = (step: Step) =>
+  step instanceof ReplaceStep && (step.toJSON() as { structure?: boolean }).structure === true;
+
+/**
+ * The range of `doc` (the document before `step`) whose content `step` puts
+ * into a heading, or null: the content of a block whose type becomes a
+ * heading (`setBlockType`, `setNode`), or of the block joined into a heading
+ * before it (`joinBackward`, `tr.join`).
+ */
+function contentIntoHeading(step: Step, doc: PmNode): { from: number; to: number } | null {
+  if (step instanceof ReplaceAroundStep) {
+    return step.slice.content.firstChild?.type.name === "heading" ? { from: step.gapFrom, to: step.gapTo } : null;
+  }
+  if (!isStructuralReplace(step)) return null;
+  const { from, to, slice } = step as ReplaceStep;
+  if (slice.size !== 0 || to - from !== 2 || doc.resolve(from).parent.type.name !== "heading") return null;
+  const $joined = doc.resolve(to);
+  return { from: to, to: $joined.end() };
+}
+
+/**
+ * True when a step of `tr` puts into a heading content that held a citation
+ * before the transaction. ProseMirror clears what a heading cannot take
+ * (`clearIncompatible`) in steps of its own before that step, so the range is
+ * mapped back to `tr.before`, widened over what those steps deleted at its
+ * ends, and looked at there.
+ */
+function headingTakesCitation(tr: Transaction): boolean {
+  if (!tr.steps.some((step) => step instanceof ReplaceAroundStep || isStructuralReplace(step))) return false;
+  return tr.steps.some((step, i) => {
+    const range = contentIntoHeading(step, tr.docs[i]!);
+    if (!range) return false;
+    const back = new Mapping();
+    for (let j = i - 1; j >= 0; j--) back.appendMap(tr.mapping.maps[j]!.invert());
+    const size = tr.before.content.size;
+    const from = Math.max(0, Math.min(size, back.map(range.from, -1)));
+    const to = Math.max(from, Math.min(size, back.map(range.to, 1)));
+    let found = false;
+    tr.before.nodesBetween(from, to, (node) => {
+      found ||= node.type.name === CITATION;
+      return !found;
+    });
+    return found;
+  });
+}
+
+/** The guard's transaction that unmarks every citation of `state`, or null when none is marked. */
+export function unmarkCitations(state: EditorState): Transaction | null {
+  const positions = markedCitations(state.doc);
+  if (positions.length === 0) return null;
+  const tr = state.tr;
+  // A mark step keeps every position, so the positions found stay valid.
+  for (const pos of positions) tr.removeMark(pos, pos + 1);
+  return tr.setMeta(CITATION_UNMARK_META, true).setMeta("addToHistory", false);
+}
+
 const guardKey = new PluginKey<null>("citationGuard");
 
 export function createCitationGuard(): Plugin {
   return new Plugin({
     key: guardKey,
-    filterTransaction: (tr) => tr.getMeta(CITATION_UNMARK_META) === true || !marksOnlyCitations(tr),
+    filterTransaction: (tr) =>
+      tr.getMeta(CITATION_UNMARK_META) === true ||
+      isHistoryTransaction(tr) ||
+      !(marksOnlyCitations(tr) || headingTakesCitation(tr)),
     appendTransaction: (transactions, _old, state) => {
       const touched = transactions.some(
         (tr) => tr.getMeta(CITATION_UNMARK_META) !== true && tr.steps.some(canMarkCitation),
       );
-      if (!touched) return null;
-      const positions = markedCitations(state.doc);
-      if (positions.length === 0) return null;
-      const tr = state.tr;
-      // A mark step keeps every position, so the positions found stay valid.
-      for (const pos of positions) tr.removeMark(pos, pos + 1);
-      return tr.setMeta(CITATION_UNMARK_META, true).setMeta("addToHistory", false);
+      return touched ? unmarkCitations(state) : null;
     },
   });
 }
@@ -172,5 +236,10 @@ export const Citation = Node.create({
 
   addProseMirrorPlugins() {
     return [createCitationGuard()];
+  },
+
+  onCreate() {
+    const tr = unmarkCitations(this.editor.state);
+    if (tr && !this.editor.isDestroyed) this.editor.view.dispatch(tr.setMeta("preventUpdate", true));
   },
 });

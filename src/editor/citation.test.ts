@@ -2,9 +2,10 @@
 import { Editor } from "@tiptap/core";
 import { Fragment, Slice } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CITATION_UNMARK_META } from "./citation";
+import { CITATION_UNMARK_META, unmarkCitations } from "./citation";
 import { tiptapToCanonicalV2 } from "./interop-v2";
 import { createEditorExtensionsV2 } from "./schema";
 
@@ -16,6 +17,7 @@ import { createEditorExtensionsV2 } from "./schema";
  */
 
 const ID_A = "aaaaaaaa-0000-4000-8000-00000000000a";
+const ID_H = "aaaaaaaa-0000-4000-8000-00000000000b";
 const SRC_1 = "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 /** "Ab" + citation + "Cd": positions 1–2 text, 3 citation, 4–5 text. */
@@ -40,9 +42,25 @@ afterEach(() => {
   editor = null;
 });
 
-function setUp(): { editor: Editor; seen: Transaction[] } {
+/** "Hx" heading (positions 0–4), then a paragraph of a citation and "Cd" (from 4; text at 5, citation at 5). */
+const WITH_HEADING = {
+  type: "doc",
+  content: [
+    { type: "heading", attrs: { nodeId: ID_H, level: 1 }, content: [{ type: "text", text: "Hx" }] },
+    {
+      type: "paragraph",
+      attrs: { nodeId: ID_A },
+      content: [
+        { type: "citation", attrs: { sourceId: SRC_1, locator: null } },
+        { type: "text", text: "Cd" },
+      ],
+    },
+  ],
+};
+
+function setUp(content: object = CONTENT): { editor: Editor; seen: Transaction[] } {
   const seen: Transaction[] = [];
-  editor = new Editor({ element: null, extensions: createEditorExtensionsV2(), content: CONTENT });
+  editor = new Editor({ element: null, extensions: createEditorExtensionsV2(), content });
   // A headless editor is never mounted, so its plugins are put on the state here, as in history.test.ts.
   editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
   editor.on("transaction", ({ transaction, appendedTransactions }) => seen.push(transaction, ...appendedTransactions));
@@ -139,5 +157,101 @@ describe("citation guard", () => {
     e.view.dispatch(e.state.tr.insertText("ef", 6));
     expect(seen.some((tr) => tr.getMeta(CITATION_UNMARK_META) === true)).toBe(false);
     expect(inline(e)).toEqual(["Ab:", "citation:", "Cdef:"]);
+  });
+
+  it("lets undo through when its mark step is left over a citation alone", () => {
+    const { editor: e } = setUp();
+    e.chain().setTextSelection({ from: 3, to: 6 }).toggleBold().run();
+    // An edit outside the history (a remote step, say) removes the text after the citation.
+    e.view.dispatch(e.state.tr.delete(4, 6).setMeta("addToHistory", false));
+    expect(e.commands.undo()).toBe(true);
+    expect(e.can().undo()).toBe(false);
+    expect(inline(e)).toEqual(["Ab:", "citation:"]);
+  });
+
+  it("unmarks a marked citation of the initial content in the transaction it runs on create", () => {
+    const marked = structuredClone(CONTENT);
+    Object.assign(marked.content[0]!.content[1]!, { marks: [{ type: "italic" }] });
+    const { editor: e } = setUp(marked);
+    expect(inline(e)).toEqual(["Ab:", "citation:italic", "Cd:"]);
+    // What a mounted editor runs once (`onCreate`); a headless one never emits `create`.
+    e.view.dispatch(unmarkCitations(e.state)!);
+    expect(inline(e)).toEqual(["Ab:", "citation:", "Cd:"]);
+    expect(e.can().undo()).toBe(false);
+  });
+});
+
+describe("citation guard, headings", () => {
+  const blocks = (e: Editor) => e.state.doc.content.content.map((block) => `${block.type.name}:${block.childCount}`);
+
+  it("refuses setting a paragraph with a citation to a heading", () => {
+    const { editor: e } = setUp();
+    const before = e.state.doc;
+    e.chain().setTextSelection(2).setNode("heading", { level: 2 }).run();
+    expect(e.state.doc.eq(before)).toBe(true);
+    expect(e.can().undo()).toBe(false);
+  });
+
+  it("refuses toggleHeading on a paragraph with a citation", () => {
+    const { editor: e } = setUp();
+    const before = e.state.doc;
+    e.chain().setTextSelection(2).toggleHeading({ level: 1 }).run();
+    expect(e.state.doc.eq(before)).toBe(true);
+  });
+
+  it("refuses the typed heading marker in a paragraph with a citation", () => {
+    const { editor: e } = setUp({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          attrs: { nodeId: ID_A },
+          content: [
+            { type: "text", text: "#" },
+            { type: "citation", attrs: { sourceId: SRC_1, locator: null } },
+          ],
+        },
+      ],
+    });
+    e.commands.setTextSelection(2);
+    // As the view asks every input rules plugin, as in heading-marker.test.ts.
+    const handled = e.state.plugins
+      .filter((plugin) => (plugin.spec as { isInputRules?: boolean }).isInputRules)
+      .some((plugin) => (plugin.props.handleTextInput as (view: EditorView, from: number, to: number, text: string) => boolean)
+        .call(plugin, e.view, 2, 2, " "));
+    expect(handled).toBe(true);
+    expect(blocks(e)).toEqual(["paragraph:2"]);
+    expect(inline(e)).toEqual(["# :", "citation:"]);
+  });
+
+  it("refuses joining a paragraph that holds a citation into the heading before it", () => {
+    const { editor: e } = setUp(WITH_HEADING);
+    const before = e.state.doc;
+    e.chain().setTextSelection(5).joinBackward().run();
+    expect(e.state.doc.eq(before)).toBe(true);
+  });
+
+  it("still makes a heading of a paragraph without a citation, and joins text into a heading", () => {
+    const { editor: e } = setUp(WITH_HEADING);
+    e.view.dispatch(e.state.tr.delete(5, 6));
+    e.chain().setTextSelection(5).joinBackward().run();
+    expect(blocks(e)).toEqual(["heading:1"]);
+    expect(e.state.doc.textContent).toBe("HxCd");
+  });
+
+  it("still deletes a selected citation, and splits a block over a selection that holds one", () => {
+    const { editor: e } = setUp();
+    e.chain().setTextSelection({ from: 2, to: 5 }).splitBlock().run();
+    expect(blocks(e)).toEqual(["paragraph:1", "paragraph:1"]);
+    expect(e.state.doc.textContent).toBe("Ad");
+  });
+
+  it("still deletes from a heading into the paragraph before its citation, and keeps the citation", () => {
+    const { editor: e } = setUp(WITH_HEADING);
+    e.chain().setTextSelection({ from: 2, to: 5 }).deleteSelection().run();
+    expect(e.state.doc.textContent).toBe("HCd");
+    let citations = 0;
+    e.state.doc.descendants((node) => void (citations += node.type.name === "citation" ? 1 : 0));
+    expect(citations).toBe(1);
   });
 });

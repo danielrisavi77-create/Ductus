@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { Editor, getSchema } from "@tiptap/core";
-import { Node as PmNode, type NodeSpec, type Schema } from "@tiptap/pm/model";
+import { Node as PmNode, type MarkSpec, type NodeSpec, type Schema } from "@tiptap/pm/model";
 import { Step } from "@tiptap/pm/transform";
 import { describe, expect, it } from "vitest";
 
@@ -36,6 +36,17 @@ function shape(spec: NodeSpec, dropSources = false) {
   };
 }
 
+/** What decides a mark's JSON and where it may go: attributes, exclusion, inclusivity and spanning. */
+function markShape(spec: MarkSpec) {
+  const attrs = Object.entries(spec.attrs ?? {}).map(([name, attr]) => [name, Object.hasOwn(attr, "default") ? { default: attr.default } : {}]);
+  return {
+    attrs: Object.fromEntries(attrs),
+    excludes: spec.excludes,
+    inclusive: spec.inclusive,
+    spanning: spec.spanning,
+  };
+}
+
 const CONTENT = [
   {
     type: "paragraph",
@@ -64,8 +75,13 @@ describe("v2 editor schema and replayer schema", () => {
     expect(editStepsV2Schema().nodes.doc!.spec.attrs ?? {}).toEqual({});
   });
 
-  it("have the same marks in the same order", () => {
-    expect(Object.keys(editorSchema().marks)).toEqual(Object.keys(editStepsV2Schema().marks));
+  it("have the same marks in the same order, with the same shape", () => {
+    const editor = editorSchema();
+    const replayer = editStepsV2Schema();
+    expect(Object.keys(editor.marks)).toEqual(Object.keys(replayer.marks));
+    for (const name of Object.keys(replayer.marks)) {
+      expect([name, markShape(editor.marks[name]!.spec)]).toEqual([name, markShape(replayer.marks[name]!.spec)]);
+    }
   });
 
   it("read each other's JSON back to the same JSON", () => {

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   createEditorExtensions,
+  createEditorExtensionsV2,
   DEFAULT_PLACEHOLDER,
   F1_EXTENSION_NAMES,
   F1_HEADING_LEVELS,
   NODE_ID_ATTRIBUTE,
   NodeIdentity,
+  V2_EXTENSION_NAMES,
 } from "./schema";
 
 /**
@@ -15,6 +17,13 @@ import {
  * editor would start producing nodes the canonical model cannot hold — and
  * `tiptapToCanonical` would reject the author's document at save time.
  */
+describe("createEditorExtensionsV2", () => {
+  it("registers exactly the F1 extension set and the citation", () => {
+    const names = createEditorExtensionsV2().map((extension) => extension.name);
+    expect([...names].sort()).toEqual([...V2_EXTENSION_NAMES].sort());
+  });
+});
+
 describe("createEditorExtensions", () => {
   it("registers exactly the F1 extension set", () => {
     const names = createEditorExtensions().map((extension) => extension.name);
