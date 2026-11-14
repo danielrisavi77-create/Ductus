@@ -213,6 +213,7 @@ SELECT bag_eq(
     'can(p_action text, p_document_id text) definer app',
     'actor_group_student(p_course_id uuid, p_student_id uuid)',
     'actor_group_work(p_assignment_id uuid, p_student_id uuid)',
+    'actor_course_work(p_assignment_id uuid, p_student_id uuid)',
     'is_course_team_member(p_user_id uuid, p_course_id uuid)',
     'is_course_team_teacher(p_user_id uuid, p_course_id uuid)',
     'set_course_editor(p_course_id uuid, p_editor_id uuid) definer app',

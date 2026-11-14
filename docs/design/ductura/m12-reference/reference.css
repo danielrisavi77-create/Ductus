@@ -1,0 +1,43 @@
+/* Paket 19 (DAN-605): tokeni i dijelovi iz m5-reference i m5-reference-c; ovdje samo dodaci za status pilota i STOP poruku. */
+@import url("../m5-reference-c/reference.css");
+
+/* DESIGN-SYSTEM §3: tokeni upozorenja i greške; m5 ih ne definira. */
+:root { --warn: #e9c58b; --warn-soft: #3a2f22; --error: #f0a08f; --error-soft: #3e302b; --raised-rule: #b3aea3; }
+:root[data-theme="light"] { --warn: #7a5420; --warn-soft: #f3e6cf; --error: #9c3f33; --error-soft: #f7e4dd; --raised-rule: #85827a; }
+
+.wide { grid-column: 1 / -1; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.stack { display: grid; gap: 8px; align-content: start; min-width: 0; }
+h3.sub { font: 600 13.5px/1.4 var(--ff-ui); letter-spacing: 0; color: var(--ink-2); }
+/* Ulaz koji još nije odlučen: crtkani okvir i riječ „otvoreno”, ne izmišljeni tekst. */
+.open-mark { font-size: 12.5px; color: var(--ink-2); border: 1px dashed var(--rule); border-radius: 4px; padding: 1px 6px; }
+.sha { font: 500 12.5px/1.5 var(--ff-mono); overflow-wrap: anywhere; }
+
+/* Stanje dijela: riječ i oblik oznake kao na /stanje (puna točka, kvadrat, prsten), ne samo boja. */
+.state { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+.state::before { content: ""; width: 8px; height: 8px; box-sizing: border-box; }
+.state.ok::before { border-radius: 50%; background: var(--synced); }
+.state.down::before { background: var(--error); }
+.state.off::before { border-radius: 50%; border: 2px solid var(--accent); }
+.kv .thr { font: 400 12.5px/1.4 var(--ff-ui); color: var(--ink-3); margin-left: 6px; }
+
+/* STOP: rub i meka pozadina greške uz tekst; boja nije jedini nositelj (DESIGN-SYSTEM §3). */
+.stop { border-left: 3px solid var(--error); background: var(--error-soft); border-radius: 0 6px 6px 0; padding: 10px 14px; display: grid; gap: 6px; }
+.stop strong { font-size: 15px; }
+.pause { border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 6px 6px 0; padding: 10px 14px; display: grid; gap: 6px; }
+.btn.danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
+.btn.danger[aria-disabled="true"] { background: var(--well); color: var(--ink-3); border-color: var(--rule-2); cursor: not-allowed; }
+.dialog { border-color: var(--raised-rule); }
+.choice { display: grid; gap: 0; border: 0; margin: 0; padding: 0; }
+.choice legend { font-size: 12.5px; color: var(--ink-3); padding: 0 0 4px; }
+.choice label { display: flex; align-items: center; min-height: 44px; }
+.choice input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0 8px 0 0; }
+
+/* Uvjeti ponovnog pokretanja: puna točka ispunjeno, prsten čeka. */
+.steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: flex; gap: 8px; align-items: baseline; }
+.steps li::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--ink-3); }
+.steps li.done::before { background: var(--synced); border-color: var(--synced); }
+
+@media (max-width: 1050px) { .cols { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .kv { flex-wrap: wrap; } .kv .thr { margin-left: 0; } .dialog .acts { flex-direction: column; align-items: stretch; } .input { min-height: 44px; } }

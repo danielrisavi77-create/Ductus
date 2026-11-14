@@ -1858,6 +1858,7 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.course_member m ON m.course_id = s.course_id AND m.institution_id = s.institution_id
    WHERE m.role = 'student' AND m.member_to IS NULL
      AND institution.actor_assignment_role(p_assignment_id) = 'teacher'
+     AND institution.actor_course_work(p_assignment_id, m.user_id)
   UNION ALL
   SELECT t.student_id
     FROM app.current_actor() a
@@ -1871,7 +1872,8 @@ CREATE FUNCTION app.teacher_assignment_students(p_assignment_id uuid) RETURNS TA
     JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
     JOIN institution.seminar_group_member g ON g.course_id = s.course_id AND g.institution_id = s.institution_id
    WHERE g.valid_to IS NULL
-     AND institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+     AND (institution.actor_assignment_role(p_assignment_id) IS DISTINCT FROM 'teacher'
+          OR NOT institution.actor_course_work(p_assignment_id, g.user_id))
      AND institution.actor_group_work(p_assignment_id, g.user_id)
 $$;
 
@@ -2194,7 +2196,8 @@ CREATE FUNCTION audit.reader_role(p_institution_id uuid, p_assignment_id uuid, p
   SELECT CASE
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
     WHEN p_owner_id = a.user_id THEN NULL
-    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher'
+         AND institution.actor_course_work(p_assignment_id, p_owner_id) THEN
       CASE WHEN s.mentorship_id IS NOT NULL THEN 'mentor' ELSE 'teacher' END
     WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'seminar_teacher'
   END
@@ -2301,7 +2304,8 @@ CREATE FUNCTION collaboration.actor_role(p_institution_id uuid, p_assignment_id 
     AS $$
   SELECT CASE
     WHEN p_institution_id IS DISTINCT FROM a.institution_id THEN NULL
-    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher' THEN 'teacher'
+    WHEN institution.actor_assignment_role(p_assignment_id) = 'teacher'
+         AND institution.actor_course_work(p_assignment_id, p_owner_id) THEN 'teacher'
     WHEN institution.actor_assignment_role(p_assignment_id) = 'student' AND p_owner_id = a.user_id THEN 'student'
     WHEN institution.actor_group_work(p_assignment_id, p_owner_id) THEN 'teacher'
   END
@@ -4387,6 +4391,25 @@ $$;
 
 
 --
+-- Name: actor_course_work(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
+--
+
+CREATE FUNCTION institution.actor_course_work(p_assignment_id uuid, p_student_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  SELECT NOT EXISTS (
+    SELECT 1
+      FROM app.current_actor() a
+      JOIN institution.assignment s ON s.id = p_assignment_id AND s.institution_id = a.institution_id
+      JOIN institution.course_member m ON m.course_id = s.course_id AND m.institution_id = s.institution_id
+       AND m.user_id = a.user_id AND m.role = 'teacher' AND m.member_to IS NULL
+     WHERE coalesce(collaboration.work_started_at(s.institution_id, s.id, p_student_id) < m.member_from, false)
+  )
+$$;
+
+
+--
 -- Name: actor_group_student(uuid, uuid); Type: FUNCTION; Schema: institution; Owner: -
 --
 
@@ -4802,15 +4825,18 @@ BEGIN
 
   -- The actor's relation to the assignment of the work: through the course,
   -- or through the mentorship. An assignment has exactly one of the two.
-  -- Unless a teacher of the course, through a seminar group of it whose
-  -- teacher the actor is and whose member the owner is, also when the actor
-  -- is a student of the course; never for the actor's own work (as
+  -- A teacher of the course only for a work not started before her
+  -- membership (actor_course_work). Otherwise through a seminar group of it
+  -- whose teacher the actor is and whose member the owner is, also when the
+  -- actor is a student of the course; never for the actor's own work (as
   -- actor_role).
   SELECT CASE
            WHEN a.course_id IS NOT NULL THEN (
              SELECT CASE
-                      WHEN m.role = 'teacher' THEN 'teacher'
+                      WHEN m.role = 'teacher'
+                           AND institution.actor_course_work(a.id, v_scope.principal_id) THEN 'teacher'
                       WHEN institution.actor_group_work(a.id, v_scope.principal_id) THEN 'teacher'
+                      WHEN m.role = 'teacher' THEN NULL
                       ELSE m.role
                     END
              FROM (SELECT) one
@@ -6976,7 +7002,8 @@ BEGIN
   IF v_user IS NULL OR p_student_id IS NULL
      OR NOT coalesce((v_role = 'student' AND p_student_id = v_user)
                      OR (v_role = 'teacher'
-                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student')
+                         AND institution.work_relation(p_student_id, p_assignment_id) = 'student'
+                         AND institution.actor_course_work(p_assignment_id, p_student_id))
                      OR institution.actor_group_work(p_assignment_id, p_student_id), false) THEN
     RETURN NULL;
   END IF;
@@ -8081,7 +8108,7 @@ CREATE TABLE identity.problem_report (
     CONSTRAINT problem_report_category_check CHECK ((category = ANY (ARRAY['technical'::text, 'account'::text, 'course'::text]))),
     CONSTRAINT problem_report_description_check CHECK ((((char_length(description) >= 1) AND (char_length(description) <= 1000)) AND (description !~ '[\u0001-\u0008\u000B-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]'::text) AND (description ~ '[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200D\u2028\u2029\u202F\u205F\u2060\u3000\uFEFF]'::text))),
     CONSTRAINT problem_report_reference_check CHECK ((reference ~ '^PR-[0-9A-F]{10}$'::text)),
-    CONSTRAINT problem_report_route_check CHECK ((route = ANY (ARRAY['/'::text, '/kako-radi'::text, '/nastavnik'::text, '/nastavnik/brz-put'::text, '/nastavnik/kolegiji'::text, '/nastavnik/mentorstva'::text, '/nastavnik/rad/[id]'::text, '/nastavnik/rad/[id]/reprodukcija'::text, '/nastavnik/zadatak/[assignmentId]/uredi'::text, '/nastavnik/zadatak/novi'::text, '/prijava'::text, '/rad'::text, '/rad/[assignmentId]/dnevnik-pristupa'::text, '/rad/[assignmentId]/predaja'::text, '/rad/[assignmentId]/reprodukcija'::text, '/stanje'::text, '/upis'::text, '/upis/kolegij/[courseId]'::text, '/ustanova'::text, '/ustanova/kolegiji'::text, '/ustanova/korisnici'::text, '/ustanova/pravila'::text, '/zadaci'::text, '/zadaci/kolegiji'::text, '/zadaci/radovi'::text, '/zadatak/[id]'::text]))),
+    CONSTRAINT problem_report_route_check CHECK ((route = ANY (ARRAY['/'::text, '/kako-radi'::text, '/nastavnik'::text, '/nastavnik/brz-put'::text, '/nastavnik/kolegiji'::text, '/nastavnik/mentorstva'::text, '/nastavnik/rad/[id]'::text, '/nastavnik/rad/[id]/reprodukcija'::text, '/nastavnik/zadatak/[assignmentId]/rad/[documentId]/jezik'::text, '/nastavnik/zadatak/[assignmentId]/uredi'::text, '/nastavnik/zadatak/novi'::text, '/prijava'::text, '/rad'::text, '/rad/[assignmentId]/dnevnik-pristupa'::text, '/rad/[assignmentId]/predaja'::text, '/rad/[assignmentId]/reprodukcija'::text, '/stanje'::text, '/upis'::text, '/upis/kolegij/[courseId]'::text, '/ustanova'::text, '/ustanova/kolegiji'::text, '/ustanova/korisnici'::text, '/ustanova/pravila'::text, '/zadaci'::text, '/zadaci/kolegiji'::text, '/zadaci/radovi'::text, '/zadatak/[id]'::text]))),
     CONSTRAINT problem_report_sync_state_check CHECK ((sync_state = ANY (ARRAY['EDITING'::text, 'SAVING_LOCAL'::text, 'LOCAL_DURABLE'::text, 'SYNCING'::text, 'SYNCED'::text, 'CONFLICT'::text, 'ERROR'::text, 'RECOVERY_REQUIRED'::text])))
 );
 
@@ -13479,4 +13506,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261112160000'),
     ('20261112184500'),
     ('20261112190000'),
+    ('20261113090000'),
+    ('20261113120000'),
     ('20261114100000');

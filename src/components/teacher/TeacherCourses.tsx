@@ -8,6 +8,7 @@ import type { AssignmentSubmission } from "@/server/evidence/assignment-submissi
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 
 import { newAssignmentHref } from "./existing-course";
+import { workLanguageExceptionHref } from "./work-language";
 import styles from "./TeacherCourses.module.css";
 
 const t = messagesHr.teacherCourses;
@@ -50,8 +51,12 @@ function submissionHr(row: AssignmentSubmission): string {
  * list and nothing else (D-50, D-128): no reason, kind or note exists to show.
  * `marked` lists the students whose work is marked; `null` is a failed read,
  * said once below the list and never drawn as "not marked".
+ *
+ * DAN-386 (M2.10-P02d, #1836 c.6858305983): last, a link to the language of
+ * that one work, keyed by its document id, so the student id stays off the page.
  */
-function Works({ works, marked }: {
+function Works({ assignmentId, works, marked }: {
+  assignmentId: string;
   works: readonly AssignmentSubmission[] | null | undefined;
   marked: readonly string[] | null | undefined;
 }) {
@@ -66,10 +71,19 @@ function Works({ works, marked }: {
         h("span", { className: styles.submission }, ` · ${submissionHr(row)}`),
         marked?.includes(row.studentId) === true
           ? h("span", { className: styles.accommodation }, ` · ${t.accommodation}`)
-          : null)));
+          : null,
+        languageLink(assignmentId, documentId, i))));
   if (marked !== null) return list;
   return h("div", { className: styles.worksArea }, list,
     h("p", { className: styles.worksNote, role: "status" }, t.accommodationsUnavailable));
+}
+
+function languageLink(assignmentId: string, documentId: string, i: number) {
+  const href = workLanguageExceptionHref(assignmentId, documentId);
+  if (href === null) return null;
+  const label = messagesHr.teacher.workLanguageException.link;
+  return h("span", { className: styles.submission }, " · ",
+    h(Link, { href, prefetch: false, "aria-label": `${t.work} ${i + 1}: ${label}` }, label));
 }
 
 /**
@@ -118,6 +132,6 @@ export default function TeacherCourses({ courses, works = {}, accommodations = {
                 // DAN-310 (M2.4-P02): the next version of this assignment.
                 h(Link, { className: styles.version, href: `/nastavnik/zadatak/${encodeURIComponent(assignment.id)}/uredi`, prefetch: false },
                   messagesHr.teacher.newVersion.link),
-                h(Works, { works: works[assignment.id], marked: accommodations[assignment.id] })))))),
+                h(Works, { assignmentId: assignment.id, works: works[assignment.id], marked: accommodations[assignment.id] })))))),
     h("p", { className: styles.note }, t.countNote));
 }

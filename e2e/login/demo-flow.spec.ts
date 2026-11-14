@@ -1194,7 +1194,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await teacher.goto("/nastavnik");
       const k4Link = teacher.locator(`a[href="/nastavnik/rad/${encodeURIComponent(k4Document!)}"]`);
       await expect(teacher.getByRole("list", { name: t.teacherCourses.worksLabel }).getByRole("listitem").filter({ has: k4Link }))
-        .toHaveText(new RegExp(`^${t.teacherCourses.work} \\d+ · ${t.teacherCourses.submission.onTime}$`));
+        .toHaveText(new RegExp(`^${t.teacherCourses.work} \\d+ · ${t.teacherCourses.submission.onTime} · ${t.teacher.workLanguageException.link}$`));
       await teacher.goto(`/nastavnik/rad/${k4Document!}`);
       await expect(summaryOf(teacher).getByText(t.summary.sameForEveryone)).toBeVisible({ timeout: 30_000 });
       expect(await summaryOf(teacher).textContent()).toBe(studentSummary);

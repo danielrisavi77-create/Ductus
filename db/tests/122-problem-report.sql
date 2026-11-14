@@ -165,20 +165,23 @@ SELECT is(pg_temp.submit('ana', 'account', repeat('ž', 1000), '/', '1.0.0', 'sa
   '1000 characters, not bytes, is the limit');
 -- DAN-429: the public status page /stanje is a page in the shell, so its
 -- route is in the set; the same migration carries /kako-radi (DAN-431, #1973)
--- and the access log route (DAN-294, #1969).
+-- and the access log route (DAN-294, #1969). DAN-386 (#1836 c.6858305983):
+-- the page for one work's language is in the same set.
 SELECT is(pg_temp.submit('vesna', 'technical', 'Stanje se ne osvježava.', t.route, '1.0.0', 'chromium', 1, NULL) ~ '^PR-[0-9A-F]{10}$', true,
   format('a report from %s is accepted', t.route))
-FROM unnest(ARRAY['/stanje', '/kako-radi', '/rad/[assignmentId]/dnevnik-pristupa']) AS t (route);
+FROM unnest(ARRAY['/stanje', '/kako-radi', '/rad/[assignmentId]/dnevnik-pristupa',
+                  '/nastavnik/zadatak/[assignmentId]/rad/[documentId]/jezik']) AS t (route);
 SELECT is(pg_temp.owner($$ SELECT string_agg(route, ' | ' ORDER BY route) FROM identity.problem_report
                            WHERE user_id = {vesna} AND route IS NOT NULL $$),
-  '/kako-radi | /rad/[assignmentId]/dnevnik-pristupa | /stanje', 'the new routes are stored as sent');
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '6', 'only the accepted calls wrote a row');
+  '/kako-radi | /nastavnik/zadatak/[assignmentId]/rad/[documentId]/jezik | /rad/[assignmentId]/dnevnik-pristupa | /stanje',
+  'the new routes are stored as sent');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '7', 'only the accepted calls wrote a row');
 
 -- 4. No live session: ZD401, nothing written.
 SELECT is(pg_temp.submit(t.name, 'technical', 'Opis.', '/', '1.0.0', 'chromium', 1, NULL), 'ZD401: not authenticated',
   format('ZD401 for %s', t.name))
 FROM unnest(ARRAY['anon', 'expired', 'closed', 'unknown']) AS t (name);
-SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '6', 'no call without a session wrote a row');
+SELECT is(pg_temp.owner('SELECT count(*)::text FROM identity.problem_report'), '7', 'no call without a session wrote a row');
 
 -- 5. At most five in a sliding hour, per account. Ana has sent two; older
 -- reports of Dora's do not count.
