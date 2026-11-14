@@ -37,7 +37,7 @@ Pokrenuto kroz PGlite uz minimalnu emulaciju psql-a (ugradnja `\ir`, `\gset`, ra
 | podizanje + provisioning + 111 migracija | 4,8 s | oko 2 s |
 | pgTAP (`db/tests`) | 57 s (99 datoteka, 8099 testova, `pg_prove`) | oko 162 s (jedan proces, serijski; uključuje 39 s za `118`, koja pada; bez nje oko 123 s) |
 
-Zaključak: PGlite je **brži samo za početak** (oko 2 s naspram 5 s, bez servisa i Dockera), ali **cijeli pgTAP paket je u PGlite-u oko 2 do 3 puta sporiji (oko 2,2 puta bez datoteke `118` koja pada; PostgreSQL stupac je 99 uspješnih datoteka, pa omjer nije strogo usporediv)** od stvarnog PostgreSQL-a, jer je WASM s jednim backendom (obje usporedne vrijednosti su serijske, `pg_prove` je pokrenut bez `-j`, pa paralelizam ne objašnjava razliku). Ubrzanje se ne postiže; dobiva se samo prenosivost (nema servisa, radi svugdje gdje radi Node).
+Zaključak: PGlite je **brži samo za početak** (oko 2 s naspram 5 s, bez servisa i Dockera), ali **cijeli pgTAP paket je u PGlite-u oko 2 do 3 puta sporiji (oko 2,2 puta bez datoteke `118` koja pada; PostgreSQL stupac je 99 uspješnih datoteka, pa omjer nije strogo usporediv)** od stvarnog PostgreSQL-a (obje usporedne vrijednosti su serijske, `pg_prove` je pokrenut bez `-j`, pa paralelizam ne objašnjava razliku). Uzrok nije izoliran: WASM i jedan backend su PRETPOSTAVKA, ne mjerenje (usporedba mijenja i izvršno okruženje i našu psql emulaciju, pa dio razlike može potjecati iz emulacije). Zaključak vrijedi samo za izmjereni pgTAP paket; za druge skupove upita nije mjereno.
 
 ## 5. Što smije na PGlite, a što mora na pravi PostgreSQL
 
@@ -61,11 +61,11 @@ Preporuka plana §3 (prema DAN-715): PGlite za unit i brze integracijske testove
 **Preporuka se potvrđuje bez izmjene podjele.** Razlozi iz mjerenja:
 
 1. Migracije prolaze sve (111/111, §1), pa PGlite može dati migriranu shemu za unit i brze integracijske testove, bez Dockera i servisa, za oko 2 s naspram oko 5 s (§4).
-2. pgTAP nema razloga seliti: cijeli paket je u PGlite-u 2 do 3 puta sporiji (§4), a 2 od 99 datoteka ne prolaze (§3).
+2. pgTAP nema razloga seliti: izmjereni pgTAP paket je u PGlite-u 2 do 3 puta sporiji (§4; uzrok nije izoliran), a 2 od 99 datoteka ne prolaze (§3).
 3. Ovlasti, RLS i SECURITY DEFINER rade samo u jednoj sesiji, kao `template1`, bez prijave uloga (§1, §2); takav prolaz nije dokaz za produkciju.
 4. Utrke i pg-boss nisu pokušani u ovoj sondi (NEPROVJERENO). Pretpostavka da ih PGlite ne podržava temelji se na njegovoj dokumentaciji (jedan backend, jedan spoj), ne na našem mjerenju; do provjere ostaju na pravom PostgreSQL-u.
 
-Jedno pojašnjenje uz §3, ne izmjena podjele: „brzi” znači brz start i rad bez Dockera, ne brže izvođenje upita. Integracijski test s mnogo upita u PGlite-u neće biti brži nego na pravom PostgreSQL-u. Pravi PostgreSQL (CI: 17.11, D-08) ostaje jedini izvor istine za CI i završni gate; PGlite ga ne zamjenjuje ni u jednom CI koraku.
+Jedno pojašnjenje uz §3, ne izmjena podjele: „brzi” znači brz start i rad bez Dockera, ne brže izvođenje upita. Za integracijske testove nije mjereno; iz pgTAP rezultata se ne može zaključiti da bi bili brži ili sporiji, pa se ubrzanje ne smije pretpostavljati. Pravi PostgreSQL (CI: 17.11, D-08) ostaje jedini izvor istine za CI i završni gate; PGlite ga ne zamjenjuje ni u jednom CI koraku.
 
 ## Ograničenja probe
 
