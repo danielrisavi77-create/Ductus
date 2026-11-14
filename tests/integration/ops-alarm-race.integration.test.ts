@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { withActor } from "@/server/db";
 import { readinessAlarms } from "@/server/alarms/readiness-store";
-import { createAlarmTracker, type AlarmStore } from "@/server/alarms/readiness-alarms";
+import { createAlarmTracker, REFRESH_MS, type AlarmStore } from "@/server/alarms/readiness-alarms";
 
 import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 import { holdWorkerPresence } from "./worker-presence";
@@ -266,6 +266,27 @@ describe("ops alarm deduplication under concurrency (DAN-184)", () => {
     const after = await committed(since, QUEUE);
     expect(after.filter((episode) => episode.open)).toEqual([]);
     expect(after.reduce((sum, episode) => sum + episode.raise_count, 0)).toBe(2);
+  });
+
+  // A fault that lasts is refreshed every REFRESH_MS so the replica's fault
+  // record stays fresh; a refresh is not a raise and does not add to the count.
+  it("counts a lasting fault once however often it is refreshed", async () => {
+    const since = await now();
+    let clock = 0;
+    const replica = createAlarmTracker(store(randomUUID()), undefined, undefined, () => clock);
+    const down = { database: "ok", queue: "nedostupno" };
+    try {
+      await replica.observe(down);
+      clock += REFRESH_MS;
+      await replica.observe(down);
+      clock += REFRESH_MS;
+      await replica.observe(down);
+      expect(await committed(since, QUEUE)).toEqual([{ raise_count: 1, open: true }]);
+    } finally {
+      await replica.observe({ database: "ok", queue: "ok" });
+      await clear(QUEUE);
+    }
+    expect(await committed(since, QUEUE)).toEqual([{ raise_count: 1, open: false }]);
   });
 
   // A fault of the database itself is owed while it lasts and delivered, as

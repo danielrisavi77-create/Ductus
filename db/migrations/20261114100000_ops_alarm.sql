@@ -9,10 +9,13 @@
 -- free text (PRODUCT 5): the kind is all that is known about the fault.
 --
 -- Deduplication: at most one open alarm per kind (partial unique index). A
--- repeated raise, from this replica or another, adds to raise_count on the
--- open row instead of adding a row; raise and resolve at once leave either one
--- open row or a closed one and a new episode, never two open rows
--- (tests/integration/ops-alarm-race.integration.test.ts).
+-- raise from a reporter that holds no fresh fault row of the kind, this
+-- replica or another, adds to raise_count on the open row instead of adding a
+-- row. A raise from a reporter whose row is still fresh is only a refresh: it
+-- moves that row's reported_at and leaves raise_count and last_raised_at, so
+-- raise_count counts raises, not how long a fault lasts. Raise and resolve at
+-- once leave either one open row or a closed one and a new episode, never two
+-- open rows (tests/integration/ops-alarm-race.integration.test.ts).
 --
 -- Several replicas share the table. Each one reports with its own reporter, a
 -- random UUID made when the process starts (not a person and not a machine).
@@ -61,8 +64,11 @@ ALTER TABLE identity.ops_alarm_fault FORCE ROW LEVEL SECURITY;
 CREATE POLICY ops_alarm_fault_owner ON identity.ops_alarm_fault TO ductus_identity
   USING (true) WITH CHECK (true);
 
--- Records that this reporter sees the fault now, drops stale rows of the kind,
--- and opens the alarm of this kind or counts one more raise on the open one.
+-- Records that this reporter sees the fault now and drops stale rows of the
+-- kind. When the reporter had no fresh row, opens the alarm of this kind or
+-- counts one more raise on the open one. When it had one, the call is a
+-- refresh: only reported_at moves, and an alarm is opened only if none is
+-- open (a fresh row normally means one is).
 -- ZD422 for a kind outside the set or a NULL reporter.
 CREATE FUNCTION identity.raise_ops_alarm(p_kind text, p_reporter uuid) RETURNS void
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' SET lock_timeout = '2000ms'
@@ -76,10 +82,16 @@ BEGIN
   DELETE FROM identity.ops_alarm_fault f
    WHERE f.kind = p_kind
      AND f.reported_at < pg_catalog.statement_timestamp() - interval '120 seconds';
-  INSERT INTO identity.ops_alarm_fault AS f (kind, reporter)
-  VALUES (p_kind, p_reporter)
-  ON CONFLICT (kind, reporter) DO UPDATE
-    SET reported_at = GREATEST(f.reported_at, pg_catalog.statement_timestamp());
+  UPDATE identity.ops_alarm_fault f
+     SET reported_at = GREATEST(f.reported_at, pg_catalog.statement_timestamp())
+   WHERE f.kind = p_kind AND f.reporter = p_reporter;
+  IF FOUND THEN
+    INSERT INTO identity.ops_alarm (kind, category)
+    VALUES (p_kind, CASE WHEN p_kind = 'ready_signing' THEN 'security' ELSE 'operational' END)
+    ON CONFLICT (kind) WHERE resolved_at IS NULL DO NOTHING;
+    RETURN;
+  END IF;
+  INSERT INTO identity.ops_alarm_fault (kind, reporter) VALUES (p_kind, p_reporter);
   INSERT INTO identity.ops_alarm AS a (kind, category)
   VALUES (p_kind, CASE WHEN p_kind = 'ready_signing' THEN 'security' ELSE 'operational' END)
   ON CONFLICT (kind) WHERE resolved_at IS NULL DO UPDATE

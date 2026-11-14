@@ -226,8 +226,19 @@ SELECT is(pg_temp.owner(format($$ SELECT (reported_at > statement_timestamp() - 
   'true', 'a''s row is fresh again after the refresh');
 SELECT is(pg_temp.alarms(),
   'ready_queue operational 1 closed | ready_queue operational 2 closed | ready_queue operational 1 closed | '
-  'ready_queue operational 4 open | ready_signing security 1 closed',
-  'every raise in the episode counts, refreshes included');
+  'ready_queue operational 3 open | ready_signing security 1 closed',
+  'a raise counts when its reporter had no fresh row (new or stale); a refresh does not');
+SELECT is(pg_temp.owner(format($$ SELECT (a.last_raised_at < f.reported_at)::text
+                                  FROM identity.ops_alarm a JOIN identity.ops_alarm_fault f USING (kind)
+                                  WHERE a.kind = 'ready_queue' AND a.resolved_at IS NULL AND f.reporter = %L $$, pg_temp.a())),
+  'true', 'a refresh moves reported_at and leaves last_raised_at');
+SELECT is(pg_temp.call('raise_ops_alarm', 'ready_queue', pg_temp.b()), 'ok', 'b refreshes');
+SELECT is(pg_temp.call('raise_ops_alarm', 'ready_queue', pg_temp.b()), 'ok', 'and again');
+SELECT is(pg_temp.alarms(),
+  'ready_queue operational 1 closed | ready_queue operational 2 closed | ready_queue operational 1 closed | '
+  'ready_queue operational 3 open | ready_signing security 1 closed',
+  'a fault that lasts, refreshed by both reporters, is still three raises');
+SELECT is(pg_temp.faults(), 'ready_queue a | ready_queue b', 'both rows are kept');
 SELECT is(pg_temp.owner($$ SELECT bool_and(last_raised_at >= first_raised_at AND (resolved_at IS NULL OR resolved_at >= last_raised_at))::text
                            FROM identity.ops_alarm $$), 'true', 'the timestamps of every episode are in order');
 

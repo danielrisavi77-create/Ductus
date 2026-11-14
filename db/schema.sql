@@ -4118,10 +4118,16 @@ BEGIN
   DELETE FROM identity.ops_alarm_fault f
    WHERE f.kind = p_kind
      AND f.reported_at < pg_catalog.statement_timestamp() - interval '120 seconds';
-  INSERT INTO identity.ops_alarm_fault AS f (kind, reporter)
-  VALUES (p_kind, p_reporter)
-  ON CONFLICT (kind, reporter) DO UPDATE
-    SET reported_at = GREATEST(f.reported_at, pg_catalog.statement_timestamp());
+  UPDATE identity.ops_alarm_fault f
+     SET reported_at = GREATEST(f.reported_at, pg_catalog.statement_timestamp())
+   WHERE f.kind = p_kind AND f.reporter = p_reporter;
+  IF FOUND THEN
+    INSERT INTO identity.ops_alarm (kind, category)
+    VALUES (p_kind, CASE WHEN p_kind = 'ready_signing' THEN 'security' ELSE 'operational' END)
+    ON CONFLICT (kind) WHERE resolved_at IS NULL DO NOTHING;
+    RETURN;
+  END IF;
+  INSERT INTO identity.ops_alarm_fault (kind, reporter) VALUES (p_kind, p_reporter);
   INSERT INTO identity.ops_alarm AS a (kind, category)
   VALUES (p_kind, CASE WHEN p_kind = 'ready_signing' THEN 'security' ELSE 'operational' END)
   ON CONFLICT (kind) WHERE resolved_at IS NULL DO UPDATE
