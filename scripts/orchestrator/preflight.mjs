@@ -1,18 +1,20 @@
 // P1-1: preflight before the orchestrator starts review or QA on one PR.
 // Read-only: never merges, edits, comments or re-runs anything.
-// Usage: node preflight.mjs <number> [--head <sha>]
+// Usage: node preflight.mjs <number> [--head <sha>] [--repo <owner/name>]
+//   --repo reads only that tracked repository (tracked-repos.json) instead of the
+//   one of the working directory.
 //   exit 0 = every check PASS, 1 = at least one FAIL, 2 = usage or read error
 import "./help.mjs";
-import { checkRollup, ghJson, mainPathsSince, prPaths as readPrPaths, prView, repoId } from "./gh.mjs";
+import { checkRollup, ghJson, mainPathsSince, prPaths as readPrPaths, prView, repoArgs, repoId } from "./gh.mjs";
 import { evaluatePreflight, INFORMATIONAL_READS, preflightExitCode, requiredStatusChecks } from "./preflight-core.mjs";
 
-const args = process.argv.slice(2);
+const args = repoArgs(process.argv.slice(2));
 const n = Number(args[0]);
 const hi = args.indexOf("--head");
 const expectHead = hi === -1 ? null : args[hi + 1];
 const known = hi === -1 ? args.length === 1 : args.length === 3 && hi === 1;
 if (!Number.isInteger(n) || n <= 0 || !known || (hi !== -1 && !/^[0-9a-f]{40}$/i.test(expectHead ?? ""))) {
-  console.error("usage: orch:preflight <pr-number> [--head <40-char sha>]");
+  console.error("usage: orch:preflight <pr-number> [--head <40-char sha>] [--repo <owner/name>]");
   process.exit(2);
 }
 

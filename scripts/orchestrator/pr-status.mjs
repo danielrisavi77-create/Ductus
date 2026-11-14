@@ -1,12 +1,14 @@
-// Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
+// Table of all open PRs. Read-only. Usage: node pr-status.mjs [--repo <owner/name>] [--json]
+//   --repo reads only that tracked repository (tracked-repos.json) instead of the
+//   one of the working directory.
 import "./help.mjs";
-import { checkRollup, openPrsWithPaths, prComments, readGate, repoId } from "./gh.mjs";
+import { checkRollup, openPrsWithPaths, prComments, readGate, repoArgs, repoId } from "./gh.mjs";
 import {
   evaluateChecks, externalReason, formatStatusRow, formatVerdict, headOrigin, latestVerdict, originText, overlapPairs,
   overlapsOf, parseAgentRisk,
 } from "./orchestrator-core.mjs";
 
-const json = process.argv.includes("--json");
+const json = repoArgs(process.argv.slice(2)).includes("--json");
 // F-010 (plan #1671 N10): the gate reads no verdict on a head outside this repository.
 const HIDDEN = "not shown (VANJSKI)";
 

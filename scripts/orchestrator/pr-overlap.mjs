@@ -1,17 +1,21 @@
 // Overlap map of open PRs (drafts included): which pairs touch the same files,
 // or the same collision directory (db/migrations, db/tests). Read-only.
-// Usage: node pr-overlap.mjs [--json] [--plan [--contract <file>] [--independent A:B]...]
+// Usage: node pr-overlap.mjs [--repo <owner/name>] [--json] [--plan [--contract <file>] [--independent A:B]...]
+//   --repo reads only that tracked repository (tracked-repos.json) instead of the
+//   one of the working directory.
 //   --plan adds advice per PR (plan-core.mjs); the work contract defaults to
 //   $DUCTUS_WORK_CONTRACT; --independent records the orchestrator's own check that
 //   two writers' PRs share no contract. Exit 1 when some PR's files could not be read.
 import "./help.mjs";
-import { openPrsWithPaths, repoId } from "./gh.mjs";
+import { openPrsWithPaths, repoArgs, repoId } from "./gh.mjs";
 import { overlapPairs, renderOverlap } from "./orchestrator-core.mjs";
 import { parseArgs, planParallel, renderPlan } from "./plan-core.mjs";
 import { readContract } from "./work-guard.mjs";
 
+const argv = repoArgs(process.argv.slice(2));
+
 try {
-  const args = parseArgs(process.argv.slice(2), process.env);
+  const args = parseArgs(argv, process.env);
   const prs = await openPrsWithPaths();
   const pairs = overlapPairs(prs);
   // An unreadable contract is passed on as an invalid one: it never counts as "no checks needed".
