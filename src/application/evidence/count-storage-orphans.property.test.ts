@@ -164,4 +164,38 @@ describe("countStorageOrphans: property over all input classes", () => {
       { numRuns: 100 },
     );
   });
+
+  it("splits young from orphan at the cutoff to the microsecond", async () => {
+    const cutoff = T0 - THRESHOLD;
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: -1_000_000, max: 1_000_000 }), async (micros) => {
+        // The instant `micros` µs from the cutoff, written with six fraction digits.
+        const ms = Math.floor(micros / 1000);
+        const rest = String(micros - ms * 1000).padStart(3, "0");
+        const at = new Date(cutoff + ms).toISOString().replace("Z", `${rest}Z`);
+        const { summary } = await countStorageOrphans({
+          storageDomain: DOMAIN,
+          store: { listKeys: async () => ({ status: "ok", entries: [], next: null }) },
+          references: {
+            listReferences: async () => ({
+              status: "ok",
+              entries: [{ storageRef: `${DOMAIN}:v2/${INSTS[0]}/pkg-a/${"0".repeat(64)}.json`, acceptedAt: at }],
+              next: null,
+            }),
+          },
+          audit: { record: async () => ({ status: "recorded" }) },
+          now: () => T0,
+          thresholdMs: THRESHOLD,
+          pageSize: 10,
+          maxPages: 1,
+        });
+        expect(summary.counts).toMatchObject(
+          micros > 0
+            ? { youngReferencesWithoutObject: 1, referencesWithoutObject: 0 }
+            : { youngReferencesWithoutObject: 0, referencesWithoutObject: 1 },
+        );
+      }),
+      { numRuns: 300 },
+    );
+  });
 });
