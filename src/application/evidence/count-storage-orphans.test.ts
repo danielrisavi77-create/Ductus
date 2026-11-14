@@ -319,6 +319,20 @@ describe("countStorageOrphans: threshold and clock", () => {
     );
   });
 
+  it.each([
+    ["one microsecond after the cutoff", "2026-10-31T12:00:00.000001Z", true],
+    ["a fraction of a millisecond after the cutoff, with an offset", "2026-10-31T13:00:00.0009+01:00", true],
+    ["at the cutoff with trailing zero digits", "2026-10-31T12:00:00.000000Z", false],
+    ["one microsecond before the cutoff", "2026-10-31T11:59:59.999999Z", false],
+  ] as const)("an unpaired entry stamped %s keeps its sub-millisecond time", async (_name, at, young) => {
+    const { result } = await run(onePage([obj(key(1), at)]), onePage([ref(key(2), at)]));
+    expect(result.summary.counts).toEqual(
+      young
+        ? counts({ youngObjectsWithoutReference: 1, youngReferencesWithoutObject: 1 })
+        : counts({ objectsWithoutReference: 1, referencesWithoutObject: 1 }),
+    );
+  });
+
   it("takes the cutoff before the first read, however long the pass runs", async () => {
     let t = T0;
     const late = new Date(T0 + 1000).toISOString();

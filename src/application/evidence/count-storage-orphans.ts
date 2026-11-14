@@ -178,6 +178,9 @@ function isClockTime(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 8.64e15;
 }
 
+/** A nonzero fraction digit after the milliseconds; the instant is already strict ISO. */
+const SUB_MILLISECOND_REMAINDER = /\.\d{3}\d*[1-9]/;
+
 function checkInput(input: CountStorageOrphansInput): number {
   const inRange = (v: unknown, min: number, max: number) =>
     Number.isSafeInteger(v) && (v as number) >= min && (v as number) <= max;
@@ -207,7 +210,11 @@ export async function countStorageOrphans(input: CountStorageOrphansInput): Prom
   const cutoff = startedAt - input.thresholdMs;
   const isYoung = (at: unknown) => {
     const t = parseInstant(at);
-    return Number.isNaN(t) || t > cutoff;
+    if (Number.isNaN(t)) return true;
+    if (t !== cutoff) return t > cutoff;
+    // parseInstant keeps whole milliseconds; a stamp past the cutoff by less
+    // than one (a nonzero digit after the third fraction digit) is still young.
+    return SUB_MILLISECOND_REMAINDER.test(at as string);
   };
   const pages: Record<Side, number> = { storage: 0, references: 0 };
   const counts: Counts = {
