@@ -196,7 +196,7 @@ await probe("SECURITY DEFINER runs with the owner's rights (search_path pinning 
 await probe("INFO only, cannot fail: second connection / concurrency", async () => {
   // PGlite is one backend: there is no second session to hold a lock against.
   const r = await one("SELECT count(*)::int AS n FROM pg_stat_activity").catch((e) => ({ n: short(e) }));
-  return `pg_stat_activity rows: ${r.n} (single backend, no concurrent transactions possible)`;
+  return `pg_stat_activity rows: ${r.n} (UNVERIFIED: no second connection or pg-boss was attempted; single backend is taken from PGlite docs)`;
 });
 
 await db.exec("ROLLBACK");

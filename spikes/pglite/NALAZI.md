@@ -17,7 +17,7 @@ Pokretanje (bez lockfilea, jer CI-jev OSV popis lockfileova je D-97 putanja; ver
 
 ## 2. Uloge, SET ROLE, RLS, SECURITY DEFINER (sonda)
 
-Četiri ciljane provjere prolaze (peta stavka sonde je samo informativna i ne može pasti): migrator nije superuser ni BYPASSRLS; `SET ROLE`/`RESET ROLE` mijenjaju `current_user`; RLS filtrira retke, odbija tuđi INSERT i `FORCE` veže vlasnika; SECURITY DEFINER radi s pravima vlasnika (utvrđivanje `search_path`-a funkcije nije mjereno). Ograničenje: nema drugog spoja, pa `pg_stat_activity` je prazan i nema istodobnosti.
+Četiri ciljane provjere prolaze (peta stavka sonde je samo informativna i ne može pasti): migrator nije superuser ni BYPASSRLS; `SET ROLE`/`RESET ROLE` mijenjaju `current_user`; RLS filtrira retke, odbija tuđi INSERT i `FORCE` veže vlasnika; SECURITY DEFINER radi s pravima vlasnika (utvrđivanje `search_path`-a funkcije nije mjereno). Ograničenje (NEPROVJERENO sondom): PGlite je prema svojoj dokumentaciji jedan backend bez drugog spoja; sonda to ne dokazuje, samo ispisuje broj redaka `pg_stat_activity`, pa istodobnost nije mjerena.
 
 ## 3. pgTAP testovi iz `db/tests` (99 datoteka)
 
@@ -63,7 +63,7 @@ Preporuka plana §3 (prema DAN-715): PGlite za unit i brze integracijske testove
 1. Migracije prolaze sve (111/111, §1), pa PGlite može dati migriranu shemu za unit i brze integracijske testove, bez Dockera i servisa, za oko 2 s naspram oko 5 s (§4).
 2. pgTAP nema razloga seliti: cijeli paket je u PGlite-u 2 do 3 puta sporiji (§4), a 2 od 99 datoteka ne prolaze (§3).
 3. Ovlasti, RLS i SECURITY DEFINER rade samo u jednoj sesiji, kao `template1`, bez prijave uloga (§1, §2); takav prolaz nije dokaz za produkciju.
-4. Utrke i pg-boss se u PGlite-u ne mogu ni pokrenuti: jedan backend, nema drugog spoja (§2).
+4. Utrke i pg-boss nisu pokušani u ovoj sondi (NEPROVJERENO). Pretpostavka da ih PGlite ne podržava temelji se na njegovoj dokumentaciji (jedan backend, jedan spoj), ne na našem mjerenju; do provjere ostaju na pravom PostgreSQL-u.
 
 Jedno pojašnjenje uz §3, ne izmjena podjele: „brzi” znači brz start i rad bez Dockera, ne brže izvođenje upita. Integracijski test s mnogo upita u PGlite-u neće biti brži nego na pravom PostgreSQL-u. Pravi PostgreSQL (CI: 17.11, D-08) ostaje jedini izvor istine za CI i završni gate; PGlite ga ne zamjenjuje ni u jednom CI koraku.
 
