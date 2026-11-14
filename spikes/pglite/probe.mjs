@@ -193,7 +193,7 @@ await probe("SECURITY DEFINER runs with the owner's rights and fixed search_path
   if (direct !== 1 || viaDefiner !== 2) throw new Error(`direct=${direct} definer=${viaDefiner}`);
   return "caller sees 1 row, definer (owner, no FORCE) sees 2";
 });
-await probe("a second connection exists (concurrency)", async () => {
+await probe("INFO only, cannot fail: second connection / concurrency", async () => {
   // PGlite is one backend: there is no second session to hold a lock against.
   const r = await one("SELECT count(*)::int AS n FROM pg_stat_activity").catch((e) => ({ n: short(e) }));
   return `pg_stat_activity rows: ${r.n} (single backend, no concurrent transactions possible)`;
@@ -236,4 +236,4 @@ for (const p of report.probes) line(`${p.ok ? "PASS" : "FAIL"} probe: ${p.name} 
 for (const r of report.tests) line(`${r.ok ? "PASS" : "FAIL"} ${String(r.ms).padStart(5)} ms  db/tests/${r.file}  ${r.total - r.notOk}/${r.total}${r.error ? "  :: " + r.error : ""}${r.firstNotOk.length ? "  :: " + r.firstNotOk.join(" | ") : ""}`);
 line(`timings: ${JSON.stringify(report.timings)}`);
 if (jsonOut) writeFileSync(jsonOut, JSON.stringify(report, null, 2));
-process.exitCode = 0;
+process.exitCode = failed.length ? 1 : 0; // a failed migration fails the probe
