@@ -225,6 +225,7 @@ function sources(directory: string): string[] {
 // Session settings in SQL that never runs on the application's pool, each
 // with its reason. The key is the file and the text the check reports.
 const PG_DUMP = "pg_dump preamble: dbmate loads the snapshot over its own connection, never through the pool";
+const FUNCTION_SET = "a function's own SET clause, in force only while the function runs";
 const SQL_EXCEPTIONS: Record<string, string> = {
   "db/schema.sql: SET statement_timeout = 0;": PG_DUMP,
   "db/schema.sql: SET lock_timeout = 0;": PG_DUMP,
@@ -239,6 +240,11 @@ const SQL_EXCEPTIONS: Record<string, string> = {
   "db/schema.sql: SET row_security = off;": PG_DUMP,
   "db/schema.sql: SET default_tablespace = '';": PG_DUMP,
   "db/schema.sql: SET default_table_access_method = heap;": PG_DUMP,
+  // The check reads a SET after a quote as a statement; here it is the second
+  // SET clause of a function header (DAN-184), which PostgreSQL undoes when
+  // the call returns, so it never stays on the pooled connection.
+  "db/schema.sql: SET lock_timeout TO '2000ms'": FUNCTION_SET,
+  "db/migrations/20261114100000_ops_alarm.sql: SET lock_timeout = '2000ms'": FUNCTION_SET,
   "db/local/migrator.sql: SET ROLE ductus_migrator;":
     "local provisioning over its own psql session, ended with RESET ROLE; never the pool",
   "db/tests/010-roles-and-privileges.sql: SET on ductus_app for the local login is noticed'":
