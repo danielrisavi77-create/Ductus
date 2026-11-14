@@ -21,7 +21,7 @@ Pokretanje (bez lockfilea, jer CI-jev OSV popis lockfileova je D-97 putanja; ver
 
 ## 3. pgTAP testovi iz `db/tests` (99 datoteka)
 
-Pokrenuto kroz PGlite uz minimalnu emulaciju psql-a (ugradnja `\ir`, `\gset`, razdvajanje naredbi): **97 od 99 prolazi, 2 padaju**:
+Pokrenuto kroz PGlite uz minimalnu emulaciju psql-a (ugradnja `\ir`, `\gset`, razdvajanje naredbi): **97 od 99 prolazi, 2 padaju** (PASS traži da TAP plan `1..N` bude jednak broju izvršenih testova, bez `not ok` i bez dijagnostike `# Looks like`; provjereno izvođenjem na headu s tom provjerom, ista brojka):
 
 | Datoteka | Razlog | Vrsta |
 |---|---|---|

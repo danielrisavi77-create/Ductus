@@ -214,7 +214,13 @@ if (withTests) {
       row.total = lines.filter((l) => /^(not )?ok /.test(l)).length;
       row.notOk = lines.filter((l) => /^not ok /.test(l)).length;
       row.firstNotOk = lines.filter((l) => /^not ok /.test(l)).slice(0, 3);
-      row.ok = row.notOk === 0 && row.total > 0;
+      // PASS also requires the TAP plan (1..N) to equal the executed count and no
+      // "Looks like" diagnostics from finish(); a planned-but-unrun test is a FAIL.
+      const planLine = lines.map((l) => /^1\.\.(\d+)\s*$/.exec(l)).filter(Boolean).pop();
+      row.plan = planLine ? Number(planLine[1]) : null;
+      row.looksLike = lines.filter((l) => /^#\s*Looks like/.test(l)).slice(0, 3);
+      row.ok = row.notOk === 0 && row.total > 0 && row.plan === row.total && row.looksLike.length === 0;
+      if (row.notOk === 0 && !row.ok) row.firstNotOk = [`plan=${row.plan} executed=${row.total} ${row.looksLike.join(" ")}`];
     } catch (e) {
       row.error = short(e);
       await db.exec("ROLLBACK").catch(() => {});
