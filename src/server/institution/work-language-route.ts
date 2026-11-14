@@ -1,8 +1,9 @@
 import { parseWorkLanguage, type WorkLanguage } from "@/domain/assignment/work-language";
+import { isDocumentId } from "@/domain/collaboration";
 import type { WithActor } from "@/server/db/with-actor";
 import { readJsonMutation, respond } from "./mutation-route";
 import {
-  setAssignmentWorkLanguage, setWorkLanguage, type WorkLanguageRefusal,
+  setAssignmentWorkLanguage, setWorkLanguage, setWorkLanguageForDocument, type WorkLanguageRefusal,
 } from "./work-language";
 
 export const MAX_WORK_LANGUAGE_BODY_BYTES = 128;
@@ -66,15 +67,36 @@ export async function handleWorkLanguageRequest(
 ): Promise<Response> {
   const input = await readJsonMutation(request, [assignmentId, studentId], deps, MAX_WORK_LANGUAGE_BODY_BYTES);
   if (!input.ok) return input.response;
-  const body = closedBody(input.value, ["language"]);
-  if (!body) return invalidInput();
-  let language: WorkLanguage | null = null;
-  if (body.language !== null) {
-    language = parseWorkLanguage(body.language);
-    if (language === null) return invalidInput();
-  }
+  const language = exceptionLanguage(input.value);
+  if (language === undefined) return invalidInput();
   const result = await setWorkLanguage(
     input.sessionToken, deps.withActor, assignmentId as string, studentId as string, language,
+  );
+  return result.kind === "ok" ? respond(200, { language: result.language }) : refuse(result.kind);
+}
+
+/** The body `{language}` with a known language or null; undefined for anything else. */
+function exceptionLanguage(value: unknown): WorkLanguage | null | undefined {
+  const body = closedBody(value, ["language"]);
+  if (!body) return undefined;
+  if (body.language === null) return null;
+  return parseWorkLanguage(body.language) ?? undefined;
+}
+
+// DAN-386 (M2.10-P02d, QA on #1986 c.6861733018): the same exception keyed by
+// the work's document id, as the teacher's page is, so the student's id never
+// reaches the browser. The server names the student; a document id that is
+// not a work of this teacher's assignment is refused like another teacher's.
+export async function handleWorkLanguageByDocumentRequest(
+  request: Request, assignmentId: unknown, documentId: unknown, deps: WorkLanguageRouteDeps,
+): Promise<Response> {
+  const input = await readJsonMutation(request, [assignmentId], deps, MAX_WORK_LANGUAGE_BODY_BYTES);
+  if (!input.ok) return input.response;
+  if (!isDocumentId(documentId)) return invalidInput();
+  const language = exceptionLanguage(input.value);
+  if (language === undefined) return invalidInput();
+  const result = await setWorkLanguageForDocument(
+    input.sessionToken, deps.withActor, assignmentId as string, documentId, language,
   );
   return result.kind === "ok" ? respond(200, { language: result.language }) : refuse(result.kind);
 }

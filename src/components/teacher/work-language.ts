@@ -4,6 +4,7 @@
 // or a language locked by a submission request (409, both "conflict"); a
 // refused or unconfirmed save is never resent from here.
 import { parseWorkLanguage, type WorkLanguage } from "@/domain/assignment/work-language";
+import { isDocumentId } from "@/domain/collaboration";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_VERSION = 2_147_483_647;
@@ -43,4 +44,66 @@ export async function saveAssignmentWorkLanguage(
   } catch {
     return { kind: "unavailable" };
   }
+}
+
+export type WorkLanguageExceptionSave =
+  | { kind: "saved"; language: WorkLanguage }
+  | { kind: "conflict" | "forbidden" | "unauthorized" | "invalid" | "unavailable" };
+
+// DAN-386 (M2.10-P02d, contract on #1836 c.6858305983): one work's exception
+// from the language of its assignment; null removes it. The route answers the
+// language the work has afterwards: the one sent, or after a removal the
+// assignment's. Anything else is unconfirmed and never shown as saved. The
+// work is named by its document id: the student's id never reaches the
+// browser (QA on #1986 c.6861733018); the server names the student.
+export async function saveWorkLanguageException(
+  assignmentId: string, documentId: string, language: WorkLanguage | null, send: typeof fetch = fetch,
+): Promise<WorkLanguageExceptionSave> {
+  const work = workSegments(assignmentId, documentId);
+  if (work === null || (language !== null && parseWorkLanguage(language) === null)) {
+    return { kind: "invalid" };
+  }
+  try {
+    const response = await send(`/api/institution/assignments/${work[0]}/works/${work[1]}/work-language`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        body: JSON.stringify({ language }),
+      });
+    if (response.status === 401) return { kind: "unauthorized" };
+    if (response.status === 403) return { kind: "forbidden" };
+    if (response.status === 409) return { kind: "conflict" };
+    if ([400, 413, 415, 422].includes(response.status)) return { kind: "invalid" };
+    if (response.status !== 200) return { kind: "unavailable" };
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object" || Array.isArray(data)
+      || Object.keys(data).length !== 1 || !Object.hasOwn(data, "language")) {
+      return { kind: "unavailable" };
+    }
+    const answered = parseWorkLanguage((data as { language: unknown }).language);
+    if (answered === null || (language !== null && answered !== language)) return { kind: "unavailable" };
+    return { kind: "saved", language: answered };
+  } catch {
+    return { kind: "unavailable" };
+  }
+}
+
+/**
+ * DAN-386 (M2.10-P02d): the page for one work's language, keyed by the
+ * assignment and the work's document id, never the student's id; null for
+ * ids the page could not read anyway. "." and ".." are refused too: the
+ * browser would resolve them as path steps, not as the work's segment.
+ */
+export function workLanguageExceptionHref(assignmentId: unknown, documentId: unknown): string | null {
+  const work = workSegments(assignmentId, documentId);
+  return work === null ? null : `/nastavnik/zadatak/${work[0]}/rad/${work[1]}/jezik`;
+}
+
+/** The assignment and the encoded document id as path segments, or null for ids no route could read. */
+function workSegments(assignmentId: unknown, documentId: unknown): [string, string] | null {
+  if (typeof assignmentId !== "string" || !UUID.test(assignmentId) || !isDocumentId(documentId)
+    || documentId === "." || documentId === "..") return null;
+  return [assignmentId.toLowerCase(), encodeURIComponent(documentId)];
 }

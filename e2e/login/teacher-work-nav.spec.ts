@@ -67,7 +67,7 @@ test.describe("teacher reaches a work by navigation", () => {
     // DAN-332 PR 4 (#826): beside the link, the state of its submission from the same read.
     const courses = messagesHr.teacherCourses;
     await expect(teacher.getByRole("list", { name: courses.worksLabel }).getByRole("listitem").filter({ has: teacher.locator(`a[href="${href}"]`) }))
-      .toHaveText(new RegExp(`^${courses.work} \\d+ · ${courses.submission.none}$`));
+      .toHaveText(new RegExp(`^${courses.work} \\d+ · ${courses.submission.none} · ${messagesHr.teacher.workLanguageException.link}$`));
     await link.click();
     await expect(teacher).toHaveURL(href, { timeout: OPEN });
     await expect(teacher.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible({ timeout: OPEN });

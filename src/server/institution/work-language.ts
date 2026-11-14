@@ -1,4 +1,5 @@
 import { parseWorkLanguage, type WorkLanguage } from "@/domain/assignment/work-language";
+import { isDocumentId } from "@/domain/collaboration";
 import type { WithActor } from "@/server/db/with-actor";
 
 /**
@@ -55,6 +56,40 @@ export async function setWorkLanguage(
     const after = parseWorkLanguage(value);
     if (after === null) throw new Error("invalid work language");
     return { kind: "ok", language: after };
+  } catch (error) {
+    return refusalOf(error, "work language change");
+  }
+}
+
+/**
+ * DAN-386 (M2.10-P02d, QA on #1986 c.6861733018): the same change keyed by
+ * the work's document id, so the student's id never reaches the browser. In
+ * one transaction app.assignment_works() names the work's student for a
+ * teacher of the assignment; no work there is refused exactly as another
+ * teacher's (forbidden), and set_work_language() decides again who may.
+ */
+export async function setWorkLanguageForDocument(
+  token: string | null, withActor: WithActor, assignmentId: string, documentId: string, language: WorkLanguage | null,
+): Promise<WorkLanguageWrite> {
+  if (!UUID.test(assignmentId) || !isDocumentId(documentId)) return { kind: "forbidden" };
+  if (language !== null && parseWorkLanguage(language) === null) return { kind: "invalidInput" };
+  try {
+    return await withActor(token, async (tx): Promise<WorkLanguageWrite> => {
+      const works = (await tx.query<{ student_id: unknown }>(
+        "SELECT x.student_id::text AS student_id FROM app.assignment_works($1::uuid) x WHERE x.document_id = $2 LIMIT 2",
+        [assignmentId, documentId])).rows;
+      if (works.length === 0) return { kind: "forbidden" };
+      const studentId = works[0]?.student_id;
+      // A document id names one work; anything else is not explained here.
+      if (works.length > 1 || typeof studentId !== "string" || !UUID.test(studentId)) {
+        throw new Error("invalid work of document");
+      }
+      const value = (await tx.query<{ language: unknown }>(
+        "SELECT institution.set_work_language($1, $2, $3) AS language", [assignmentId, studentId, language])).rows[0]?.language;
+      const after = parseWorkLanguage(value);
+      if (after === null) throw new Error("invalid work language");
+      return { kind: "ok", language: after };
+    });
   } catch (error) {
     return refusalOf(error, "work language change");
   }
