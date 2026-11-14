@@ -25,7 +25,7 @@ Stupac „Ciljni zadatak” je oznaka obitelji u planu servera (PRIJEDLOG): `S-M
 | `app/api/auth/logout/route.ts` | POST | prijavljen korisnik, Origin | prazno tijelo | zatvara trenutnu sesiju | S-M-* |
 | `app/api/comments/[action]/route.ts` | POST | prijavljen korisnik; baza odlučuje (`collaboration.actor_role`, ZD403) | akcija `create, reply, resolve, reopen, delete, list`; JSON do 16 KiB | redak komentara ili popis | S-1D-* |
 | `app/api/evidence/commit/route.ts` | POST | student vlasnik rada | omotnica commita (base64 bajtovi, ključ idempotencije), zatvoren skup ključeva | potvrda revizije ili 409 `stale_base` ili drugi zatvoreni `status` | S-1E-* |
-| `app/api/evidence/open/route.ts` | POST | student vlasnik; nastavnik kroz bazu | JSON do 1 KiB (`documentId`) | stanje otvaranja rada | S-1E-* |
+| `app/api/evidence/open/route.ts` | POST | student vlasnik; nastavnik kroz bazu | JSON do 1 KiB, zatvoren oblik `{assignmentId}` ili `{assignmentId, start}` (`start` samo boolean; `true` stvara rad, inače se otvara postojeći; krivi oblik 422) | stanje otvaranja rada; 409 `not_started` ako rad ne postoji a `start` nije `true`, 409 `not_accepting` | S-1E-* |
 | `app/api/evidence/replay/route.ts` | POST | student vlasnik; nastavnik kroz bazu | JSON do 1 KiB (`documentId`) | kontrolne točke i izvor za rekonstrukciju | S-1E-* |
 | `app/api/health/route.ts` | GET | svatko (živost) | — | 200 `{status:ok}`, `no-store` | S-M-* |
 | `app/api/institution/assignments/[assignmentId]/acknowledgment/route.ts` | POST | student upisan na kolegij | JSON do 1 KiB | potvrda obavijesti (`acknowledge_notice`) | S-1D-* |
@@ -42,7 +42,7 @@ Stupac „Ciljni zadatak” je oznaka obitelji u planu servera (PRIJEDLOG): `S-M
 | `app/api/institution/enrollments/route.ts` | POST | student (prijavljen) | JSON do 1 KiB (`code`) | 200 `{courseId}`; 422 `refused`; 429 `too_many_attempts` | S-1D-* |
 | `app/api/institution/teachers/[teacherId]/role-confirmation/route.ts` | POST | administrator ustanove | JSON do 64 B | potvrda uloge nastavnika | S-1D-* |
 | `app/api/institution/teachers/[teacherId]/role-revocation/route.ts` | POST | administrator ustanove | JSON do 64 B | opoziv uloge nastavnika | S-1D-* |
-| `app/api/live/[documentId]/route.ts` | GET, PUT | PUT student vlasnik; GET vlasnik i nastavnik (isti bajtovi i ETag) | PUT točni JCS bajtovi valjanog dokumenta do `MAX_DOCUMENT_SNAPSHOT_BYTES` | zadnje stanje dokumenta, ETag | S-1D-* |
+| `app/api/live/[documentId]/route.ts` | GET, PUT | PUT student vlasnik; GET vlasnik i nastavnik (isti bajtovi i ETag) | PUT točni JCS bajtovi valjanog dokumenta do `MAX_DOCUMENT_SNAPSHOT_BYTES` uz obvezan uvjet: `If-None-Match: *` za prvi upis ili `If-Match: "<token>"` s zadnjim tokenom (inače 428 `precondition_required`) | GET: zadnje stanje dokumenta, ETag, 204 ako je prazno; PUT: JSON `{outcome, token}` (200 `accepted` ili `unchanged`, 409 `conflict` s trenutnim tokenom ili `null`) | S-1D-* |
 | `app/api/process-summary/route.ts` | POST | student vlasnik; nastavnik kroz bazu | JSON do 1 KiB (`documentId`) | sažetak procesa iz dokaza | S-1E-* |
 | `app/api/profile/interface-locale/route.ts` | GET, POST | prijavljen korisnik | POST JSON do 256 B | jezik sučelja | S-M-* |
 | `app/api/ready/route.ts` | GET | svatko (spremnost) | — | 200 ili 503 sa zatvorenim riječima po sposobnosti (capability) | S-M-* |
