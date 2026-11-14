@@ -30,7 +30,15 @@ const pull = {
   base: { ref: "main", repo: { full_name: "ductura/server" } }, created_at: "2026-10-01T00:00:00Z", auto_merge: null,
   user: { login: "ductura", type: "Organization" },
 };
-const ONE = { ...META, [PAGE]: [[pull]] };
+const C = `${R}/commits/${"d".repeat(40)}`;
+const ONE = {
+  ...META,
+  [PAGE]: [[pull]],
+  [`${R}/pulls/5/files?per_page=100&page=1`]: [[{ filename: "src/a.ts" }]],
+  [`${R}/issues/5/comments?per_page=100&page=1`]: [[]],
+  [`${C}/check-runs?per_page=100&page=1`]: [{ total_count: 1, check_runs: [{ name: "test", status: "completed", conclusion: "success" }] }],
+  [`${C}/statuses?per_page=100&page=1`]: [[{ context: "Engineering Gate", state: "pending", created_at: "2026-10-01T00:00:00Z" }]],
+};
 
 function run(script, args, routes) {
   const dir = mkdtempSync(join(tmpdir(), "repo-arg-cli-"));
@@ -104,6 +112,9 @@ test("a PR in the requested repository is listed, and only that repository is re
   assert.equal(r.status, 0, r.stderr);
   const rows = JSON.parse(r.stdout);
   assert.deepEqual(rows.map((x) => [x.number, x.head, x.base, x.external]), [[5, "dddddddd", "main", null]]);
+  // Every per-PR read (files, checks, gate status) answered from ductura/server.
+  assert.notEqual(rows[0].ci, "?");
+  assert.notEqual(rows[0].gate, "?");
 });
 
 test("without --repo the scripts still ask for the working directory's repository", () => {
@@ -115,6 +126,8 @@ test("without --repo the scripts still ask for the working directory's repositor
 test("a bad --repo is a usage error with exit 2, before any gh call", () => {
   const cases = [
     ["pr-status.mjs", ["--repo", "ductura/nepostojeci"]],
+    ["pr-status.mjs", ["--Repo", "ductura/server"]],
+    ["pr-status.mjs", ["\u2014repo", "ductura/server"]],
     ["pr-overlap.mjs", ["--repos", "ductura/server"]],
     ["preflight.mjs", ["1", "--repo"]],
     ["pr-ready.mjs", ["1", "--repo", "ductura/server", "--repo", "ductura/server"]],

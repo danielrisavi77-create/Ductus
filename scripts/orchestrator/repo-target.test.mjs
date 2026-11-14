@@ -7,7 +7,7 @@ import { test } from "node:test";
 
 import fc from "fast-check";
 
-import { parseTrackedRepos, takeRepoArg, TRACKED_REPOS } from "./repo-target.mjs";
+import { parseTrackedRepos, REPO_LOOKALIKE, takeRepoArg, TRACKED_REPOS } from "./repo-target.mjs";
 
 const EXPECTED = [
   "ductura/server", "ductura/preloader", "ductura/web-chrome", "ductura/web-mobile",
@@ -63,6 +63,11 @@ const BAD = [
   [["--repository", "ductura/server"], /unknown argument --repository/],
   [["--repo-x"], /unknown argument --repo-x/],
   [["--repository=ductura/server"], /unknown argument --repository/],
+  [["--Repo", "ductura/server"], /unknown argument --Repo/],
+  [["--REPO=ductura/server"], /unknown argument --REPO/],
+  [["-repo", "ductura/server"], /unknown argument -repo/],
+  [["\u2014repo", "ductura/server"], /unknown argument/],
+  [["\u2212\u2212repo=ductura/server"], /unknown argument/],
   [["--repo", "ductura/nepostojeci"], /not a tracked repository/],
   [["--repo", "other/Ductus"], /not a tracked repository/],
   [["--repo", "ductura"], /owner\/name/],
@@ -88,7 +93,7 @@ test("the list is injectable, and a name off that list is refused even when trac
 });
 
 const tracked = new Set(EXPECTED.map((r) => r.toLowerCase()));
-const otherArg = fc.string().filter((s) => !s.startsWith("--repo"));
+const otherArg = fc.string().filter((s) => !REPO_LOOKALIKE.test(s));
 
 test("property: any value that is not a tracked name is refused", () => {
   fc.assert(fc.property(fc.string(), fc.array(otherArg), (value, rest) => {
