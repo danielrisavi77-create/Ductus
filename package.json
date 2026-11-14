@@ -55,6 +55,7 @@
     "orch:override": "node scripts/orchestrator/override-block.mjs",
     "orch:preflight": "node scripts/orchestrator/preflight.mjs",
     "orch:brief": "node scripts/orchestrator/pr-brief.mjs",
+    "orch:sync": "node scripts/orchestrator/sync.mjs",
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
     "test:db:native": "node scripts/db/native-db.mjs test",
     "agents:lint": "pnpm dlx --allow-build=agnix agnix@0.57.0 .",
