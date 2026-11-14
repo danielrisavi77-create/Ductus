@@ -3,10 +3,9 @@
     "danielrisavi77-create/Ductus",
     "ductura/server",
     "ductura/preloader",
-    "ductura/web-chrome",
-    "ductura/web-mobile",
-    "ductura/web-other",
+    "ductura/web",
     "ductura/desktop-windows",
-    "ductura/desktop-macos"
+    "ductura/desktop-macos",
+    "ductura/.github"
   ]
 }

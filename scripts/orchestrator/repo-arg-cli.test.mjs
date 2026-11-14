@@ -73,11 +73,11 @@ test("with a target every placeholder names that repository, and repoId is read 
   try {
     setTargetRepo(null);
     assert.deepEqual(await repoId({ json }), { owner: "{owner}", repo: "{repo}" });
-    setTargetRepo("ductura/web-mobile");
-    assert.deepEqual(await repoId({ json }), { owner: "ductura", repo: "web-mobile" });
-    assert.deepEqual(seen, ["repos/{owner}/{repo}", "repos/ductura/web-mobile"]);
+    setTargetRepo("ductura/web");
+    assert.deepEqual(await repoId({ json }), { owner: "ductura", repo: "web" });
+    assert.deepEqual(seen, ["repos/{owner}/{repo}", "repos/ductura/web"]);
     assert.deepEqual(targetArgs(["api", "graphql", "-F", "owner={owner}", "-F", "repo={repo}", 7]),
-      ["api", "graphql", "-F", "owner=ductura", "-F", "repo=web-mobile", 7]);
+      ["api", "graphql", "-F", "owner=ductura", "-F", "repo=web", 7]);
   } finally {
     setTargetRepo(null);
   }

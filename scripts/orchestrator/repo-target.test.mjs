@@ -10,11 +10,11 @@ import fc from "fast-check";
 import { parseTrackedRepos, REPO_LOOKALIKE, takeRepoArg, TRACKED_REPOS } from "./repo-target.mjs";
 
 const EXPECTED = [
-  "ductura/server", "ductura/preloader", "ductura/web-chrome", "ductura/web-mobile",
-  "ductura/web-other", "ductura/desktop-windows", "ductura/desktop-macos", "danielrisavi77-create/Ductus",
+  "ductura/server", "ductura/preloader", "ductura/web", "ductura/desktop-windows",
+  "ductura/desktop-macos", "ductura/.github", "danielrisavi77-create/Ductus",
 ];
 
-test("the configuration lists exactly the eight tracked repositories and nothing else", () => {
+test("the configuration lists exactly the seven tracked repositories and nothing else", () => {
   const raw = JSON.parse(readFileSync(new URL("./tracked-repos.json", import.meta.url), "utf8"));
   assert.deepEqual(Object.keys(raw), ["repositories"]);
   assert.deepEqual([...raw.repositories].sort(), [...EXPECTED].sort());
@@ -38,7 +38,8 @@ const OK = [
   ok(["17", "--head", "a".repeat(40)], null, ["17", "--head", "a".repeat(40)]),
   ok(["--repo", "ductura/server"], "ductura/server", []),
   ok(["--json", "--repo", "ductura/server"], "ductura/server", ["--json"]),
-  ok(["--repo", "ductura/web-mobile", "--json"], "ductura/web-mobile", ["--json"]),
+  ok(["--repo", "ductura/web", "--json"], "ductura/web", ["--json"]),
+  ok(["--repo=ductura/.GitHub"], "ductura/.github", []),
   ok(["12", "--repo=ductura/preloader", "--head", "b".repeat(40)], "ductura/preloader", ["12", "--head", "b".repeat(40)]),
   ok(["--repo", "Ductura/Server"], "ductura/server", []),
   ok(["--repo=DUCTURA/DESKTOP-MACOS"], "ductura/desktop-macos", []),
@@ -70,6 +71,8 @@ const BAD = [
   [["\u2212\u2212repo=ductura/server"], /unknown argument/],
   [["--repo", "ductura/nepostojeci"], /not a tracked repository/],
   [["--repo", "other/Ductus"], /not a tracked repository/],
+  [["--repo", "ductura/web-mobile"], /not a tracked repository/],
+  [["--repo", "ductura/web-chrome"], /not a tracked repository/],
   [["--repo", "ductura"], /owner\/name/],
   [["--repo", "ductura/server/x"], /owner\/name/],
   [["--repo", "https://github.com/ductura/server"], /owner\/name/],
