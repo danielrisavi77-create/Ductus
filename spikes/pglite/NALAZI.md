@@ -3,7 +3,7 @@
 Izmjereno 14. 11. 2026. sondom `probe.mjs` (ručno, izvan CI-ja) i PostgreSQL-om 16 iz `pnpm db:up:native` / `pnpm test:db:native`.
 PGlite 0.3.14 (WASM Postgres, jedan backend, u memoriji). Nijedan produkcijski kod nije mijenjan.
 
-Pokretanje: `cd spikes/pglite && npm install && node probe.mjs [--tests] [--json izlaz.json]`.
+Pokretanje (bez lockfilea, jer CI-jev OSV popis lockfileova je D-97 putanja; verzija je pinana točno u `package.json`): `cd spikes/pglite && npm install --no-package-lock && node probe.mjs [--tests] [--json izlaz.json]`.
 
 ## 1. Migracije
 
