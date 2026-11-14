@@ -1,0 +1,9 @@
+{
+  "name": "ductus-spike-pglite",
+  "private": true,
+  "type": "module",
+  "description": "DAN-715 / S-0.3: manual probe, not part of CI",
+  "dependencies": {
+    "@electric-sql/pglite": "0.3.14"
+  }
+}
