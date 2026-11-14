@@ -20,8 +20,10 @@ export type AlarmStore = {
  * How often a write that holds in the store is repeated. While this replica
  * sees a fault, its raise is refreshed at most this often, so its fault record
  * (fresh for 120 s in the store) does not go stale and let a healthy replica
- * close the alarm. A resolve the store refused because another replica holds
- * the alarm is tried again at most this often.
+ * close the alarm. While this replica sees no fault, its resolve is repeated
+ * at most this often, both when the store refused it because another replica
+ * holds the alarm and when it was confirmed: another replica can open the
+ * alarm afterwards and then die, and only a repeated resolve closes it.
  */
 export const REFRESH_MS = 30_000;
 
@@ -60,8 +62,8 @@ type KindState = {
 
 /**
  * Turns readiness reports into alarm writes for one process (DAN-184). Only
- * transitions are written, plus a refresh of a held fault or a refused resolve
- * at most every REFRESH_MS; a write the store throws on is retried on the next
+ * transitions are written, plus a refresh of a held fault or of a resolve
+ * (refused or confirmed) at most every REFRESH_MS; a write the store throws on is retried on the next
  * report. Writes run one at a time, and reports that arrive
  * meanwhile join the run in progress, so a store that hangs holds at most one
  * write. State is one fixed entry per kind, so no number of reports grows it.
@@ -134,7 +136,7 @@ export function createAlarmTracker(
       }
       if (
         s.wanted === "resolved" &&
-        (s.stored === undefined || s.stored === "raised" || (s.stored === "held" && due))
+        (s.stored === undefined || s.stored === "raised" || due)
       ) {
         if (!up) return;
         await end(kind, s);

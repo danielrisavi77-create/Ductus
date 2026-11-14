@@ -405,6 +405,30 @@ describe("createAlarmTracker with replicas sharing the channel", () => {
     expect(channel.isOpen("ready_signing")).toBe(false);
   });
 
+  it("B's close is confirmed, then A opens the alarm and dies: B's repeated close ends it", async () => {
+    const channel = sharedChannel();
+    const a = channel.tracker("a");
+    const b = channel.tracker("b");
+    await b.observe({ signing: "ok" });
+    expect(channel.isOpen("ready_signing")).toBe(false);
+    channel.advance(1_000);
+    await a.observe({ signing: "nedostupno" });
+    const raisedAt = channel.now();
+    expect(channel.isOpen("ready_signing")).toBe(true);
+    // A is gone. B keeps reporting ok every 10 s for ten minutes.
+    let closedAt: number | undefined;
+    for (let i = 0; i < 60; i++) {
+      channel.advance(10_000);
+      await b.observe({ signing: "ok" });
+      if (closedAt === undefined && !channel.isOpen("ready_signing")) closedAt = channel.now();
+    }
+    expect(channel.isOpen("ready_signing")).toBe(false);
+    // Closed within one refresh of A's record going stale, in one episode.
+    expect(closedAt).toBeDefined();
+    expect(closedAt! - raisedAt).toBeLessThanOrEqual(FRESH_MS + REFRESH_MS + 10_000);
+    expect(channel.episodes("ready_signing")).toBe(1);
+  });
+
   it("both replicas see the fault: one recovering does not close it", async () => {
     const channel = sharedChannel();
     const a = channel.tracker("a");
@@ -460,7 +484,7 @@ describe("createAlarmTracker refresh and held resolve", () => {
     ["false", false],
     ["undefined", undefined],
     ["a truthy non-boolean", "yes"],
-  ])("a resolve answered %s is held and tried again only after REFRESH_MS", async (_label, answer) => {
+  ])("a resolve answered %s is held and tried again only after REFRESH_MS, and so is a confirmed one", async (_label, answer) => {
     let t = 5_000_000;
     let reply: unknown = answer;
     const { calls, store } = clockedStore(() => reply);
@@ -472,10 +496,18 @@ describe("createAlarmTracker refresh and held resolve", () => {
     t += 1;
     reply = true;
     await tracker.observe({ queue: "ok" });
-    t += REFRESH_MS;
+    t += REFRESH_MS - 1;
     await tracker.observe({ queue: "ok" });
-    // Closed: no further writes, however much time passes.
+    // Closed: not repeated before REFRESH_MS has passed since the close ...
     expect(calls).toEqual([
+      ["resolve", "ready_queue"],
+      ["resolve", "ready_queue"],
+    ]);
+    t += 1;
+    await tracker.observe({ queue: "ok" });
+    // ... and then repeated, since another replica may have opened it since.
+    expect(calls).toEqual([
+      ["resolve", "ready_queue"],
       ["resolve", "ready_queue"],
       ["resolve", "ready_queue"],
     ]);
