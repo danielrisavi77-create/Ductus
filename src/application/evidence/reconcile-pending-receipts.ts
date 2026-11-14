@@ -47,7 +47,7 @@ const ISO_INSTANT =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 /** A strict ISO instant with a zone and real calendar fields, or NaN. */
-function parseInstant(value: unknown): number {
+export function parseInstant(value: unknown): number {
   if (typeof value !== "string") return Number.NaN;
   const m = ISO_INSTANT.exec(value);
   if (!m) return Number.NaN;
