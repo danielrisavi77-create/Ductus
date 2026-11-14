@@ -66,7 +66,7 @@ async function main(n) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = repoArgs(process.argv.slice(2));
-  const n = argv.length === 1 ? Number(argv[0]) : NaN;
+  const n = Number(argv[0]);
   if (!Number.isInteger(n) || n <= 0) {
     console.error("usage: pr-ready <pr-number> [--repo <owner/name>]");
     process.exit(2);

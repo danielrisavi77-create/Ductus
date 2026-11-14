@@ -32,13 +32,17 @@ export function parseTrackedRepos(text) {
   return list;
 }
 
+// Any spelling that is not exactly --repo but could be read as it: other letter
+// case, one dash, a typographic dash (U+2010..U+2015, U+2212) or a longer name.
+export const REPO_LOOKALIKE = /^[-\u2010-\u2015\u2212]{1,2}repo/i;
+
 export const TRACKED_REPOS = Object.freeze(parseTrackedRepos(readFileSync(new URL("./tracked-repos.json", import.meta.url), "utf8")));
 
 /**
  * Takes `--repo X` or `--repo=X` out of argv. Returns {repo, rest}: repo is the
  * canonical tracked spelling (GitHub names ignore letter case) or null when
  * absent; rest keeps the other arguments in order. Throws on a missing or
- * flag-like value, a repeat, a look-alike flag (--repos, --repository, ...;
+ * flag-like value, a repeat, a look-alike flag (--repos, --Repo, -repo, ...;
  * the commands ignore unknown flags, which would silently read the default
  * repository) and any value that is malformed or not tracked.
  */
@@ -55,7 +59,7 @@ export function takeRepoArg(argv, tracked = TRACKED_REPOS) {
     } else if (arg.startsWith("--repo=")) {
       value = arg.slice("--repo=".length);
       if (value === "") throw new Error("--repo needs a value: --repo <owner/name>");
-    } else if (arg.startsWith("--repo")) {
+    } else if (REPO_LOOKALIKE.test(arg)) {
       throw new Error(`unknown argument ${arg.split("=")[0]} (did you mean --repo?)`);
     } else {
       rest.push(arg);
