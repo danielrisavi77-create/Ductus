@@ -58,14 +58,12 @@ function checkSet(column: string): string[] {
 
 /**
  * Routes the CHECK already allows ahead of their pages, and the PRs that add
- * the page (orchestrator, #1836 c.6820309956, c.6820715294, c.6821821996). Only
- * /stanje is left: /kako-radi is on main (#1973). /stanje joins
- * PROBLEM_REPORT_ROUTES with the page PR; until then it is allowed here, and
- * once the page is on the branch the route must be in the domain set.
+ * the page (orchestrator, #1836 c.6820309956, c.6820715294, c.6821821996). None
+ * is left: /kako-radi is on main (#1973) and /stanje has its page in this PR.
+ * A route allowed here only while its page is absent; once the page is on the
+ * branch the route must be in the domain set.
  */
-const ROUTES_AHEAD_OF_PAGE = [
-  "/stanje", // DAN-429, the page and API land in the follow-up PR (#1836 c.6821821996)
-] as const;
+const ROUTES_AHEAD_OF_PAGE: readonly string[] = [];
 
 function pageFile(route: string): string {
   return join(ROOT, route === "/" ? "app/page.tsx" : `app${route}/page.tsx`);
