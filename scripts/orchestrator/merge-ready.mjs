@@ -3,11 +3,12 @@
 // GitHub 502/503/504, and a read that still fails is UNREAD, never "fine".
 // Usage: node merge-ready.mjs <number>   one PR, every line, exit code by state
 //        node merge-ready.mjs --all      every open non-draft PR, one line each
+//   either with [--repo <owner/name>]: only that tracked repository (tracked-repos.json)
 // Exit (one PR): 0 READY, 1 BLOCKED, 2 UNREAD or usage, 3 WAITING, 4 WAITS_OWNER.
 // Exit (--all): 0 when every PR was read, 2 when any is UNREAD.
 import { pathToFileURL } from "node:url";
 
-import { checkRollup, ghJson, ghList, readOpenPrs, repoId, reviewThreads, toPr, withRetry } from "./gh.mjs";
+import { checkRollup, ghJson, ghList, readOpenPrs, repoArgs, repoId, reviewThreads, toPr, withRetry } from "./gh.mjs";
 import { AUTHORIZATION_CONTEXT, EXIT_CODES, evaluateMergeReady, pickStatus } from "./merge-ready-core.mjs";
 import { GATE_CONTEXT, summarizeThreads } from "./orchestrator-core.mjs";
 import { requiredStatusChecks } from "./preflight-core.mjs";
@@ -85,7 +86,7 @@ export function allLines(items) {
 
 async function main(args) {
   if (args.length !== 1 || !(args[0] === "--all" || /^[1-9]\d*$/.test(args[0]))) {
-    console.error("usage: node scripts/orchestrator/merge-ready.mjs <pr-number> | --all");
+    console.error("usage: node scripts/orchestrator/merge-ready.mjs <pr-number> | --all [--repo <owner/name>]");
     return 2;
   }
   const required = await requiredOfMain();
@@ -106,7 +107,7 @@ async function main(args) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main(process.argv.slice(2)).then(
+  main(repoArgs(process.argv.slice(2))).then(
     (code) => process.exit(code),
     (e) => {
       console.error(`merge-ready failed: ${why(e)}`);
