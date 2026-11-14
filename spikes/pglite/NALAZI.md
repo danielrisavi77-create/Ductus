@@ -41,23 +41,31 @@ Zaključak: PGlite je **brži samo za početak** (oko 2 s naspram 5 s, bez servi
 
 ## 5. Što smije na PGlite, a što mora na pravi PostgreSQL
 
-**Smije (brza lokalna provjera, nikad jedini dokaz):**
-- primjena svih migracija kao dbmate-ekvivalent (smoke: sintaksa, redoslijed, nema pada);
-- katalog i shema: tablice, RLS uključen, grantovi, ugovori o funkcijama;
-- jednosesijska logika RLS-a, `SET ROLE` i SECURITY DEFINER RPC-ova;
-- pgTAP tvrdnje koje ne ovise o vremenu, istodobnosti, imenu baze ni psql meta-naredbama.
+**Smije na PGlite (brza lokalna provjera, nikad jedini dokaz):**
+- unit testovi i brzi integracijski testovi koji trebaju migriranu shemu, a ne tvrde ništa o ovlastima ni istodobnosti;
+- primjena svih migracija kao dbmate-ekvivalent (smoke: sintaksa, redoslijed, nema pada).
 
 **Mora na pravi PostgreSQL (CI ostaje mjerodavan):**
+- ovlasti, RLS i SECURITY DEFINER: u jednoj sesiji tehnički rade (§2), ali bez prijave uloga, bez imena baze `ductus` i bez drugog spoja ne dokazuju ponašanje produkcije;
+- pgTAP (`db/tests`): u PGlite-u je 2 do 3 puta sporiji (§4) i 2 datoteke ne prolaze (§3);
 - istodobnost: zaključavanja, advisory lockovi, utrke, `pg_stat_activity`, više spojeva;
-- prijava uloga i lozinke (`ductus_*_local`, `\gset` iz okoline), socket naspram TCP-a;
-- testovi koji ovise o psql meta-naredbama koje emulacija ne pokriva (npr. `\gset <prefiks>`) ili o imenu baze `ductus`;
-- vremenska semantika unutar jedne transakcije/poruke;
 - pg_boss i sve što radi preko više spojeva;
+- prijava uloga i lozinke (`ductus_*_local`, `\gset` iz okoline), socket naspram TCP-a;
+- vremenska semantika unutar jedne transakcije/poruke;
 - svaka tvrdnja o paritetu s produkcijom (verzija, ekstenzije, planer, performanse) i završni gate.
 
 ## 6. Preporuka
 
-Plan §3 nije bio priložen ovom zadatku, pa preporuka stoji na izmjerenom: **PGlite ne zamjenjuje stvarni PostgreSQL u CI-ju ni za pgTAP.** Potvrđuje se (ili, ako §3 predviđa zamjenu, mijenja se na) ovo: PGlite se smije koristiti najviše kao opcionalna brza lokalna provjera (migracije + jednosesijska RLS/RPC logika, npr. za agente bez Dockera), dok pravi PostgreSQL (CI: 17.11, D-08) ostaje jedini izvor istine za CI i sve testove s istodobnošću, prijavom i vremenom. Gašenje stvarne baze u korist PGlitea ne isplati se: nema dobitka u brzini (2 do 3 puta sporije) i gubi se pokrivenost.
+Preporuka plana §3 (prema DAN-715): PGlite za unit i brze integracijske testove; ovlasti, RLS, SECURITY DEFINER, pgTAP, utrke i pg-boss na pravom PostgreSQL-u.
+
+**Preporuka se potvrđuje bez izmjene podjele.** Razlozi iz mjerenja:
+
+1. Migracije prolaze sve (111/111, §1), pa PGlite može dati migriranu shemu za unit i brze integracijske testove, bez Dockera i servisa, za oko 2 s naspram oko 5 s (§4).
+2. pgTAP nema razloga seliti: cijeli paket je u PGlite-u 2 do 3 puta sporiji (§4), a 2 od 99 datoteka ne prolaze (§3).
+3. Ovlasti, RLS i SECURITY DEFINER rade samo u jednoj sesiji, kao `template1`, bez prijave uloga (§1, §2); takav prolaz nije dokaz za produkciju.
+4. Utrke i pg-boss se u PGlite-u ne mogu ni pokrenuti: jedan backend, nema drugog spoja (§2).
+
+Jedno pojašnjenje uz §3, ne izmjena podjele: „brzi” znači brz start i rad bez Dockera, ne brže izvođenje upita. Integracijski test s mnogo upita u PGlite-u neće biti brži nego na pravom PostgreSQL-u. Pravi PostgreSQL (CI: 17.11, D-08) ostaje jedini izvor istine za CI i završni gate; PGlite ga ne zamjenjuje ni u jednom CI koraku.
 
 ## Ograničenja probe
 
