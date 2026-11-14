@@ -178,7 +178,7 @@ await probe("RLS: non-owner sees only its rows, cross-owner insert denied, FORCE
   if (n !== 1 || !denied || forced !== 0) throw new Error(`visible=${n} insertDenied=${denied} ownerForced=${forced}`);
   return "1 visible row, cross-owner insert denied, FORCE hides rows from the owner";
 });
-await probe("SECURITY DEFINER runs with the owner's rights and fixed search_path", async () => {
+await probe("SECURITY DEFINER runs with the owner's rights (search_path pinning is NOT tested)", async () => {
   await db.exec(`
     SET ROLE ductus_migrator;
     ALTER TABLE probe.t NO FORCE ROW LEVEL SECURITY;

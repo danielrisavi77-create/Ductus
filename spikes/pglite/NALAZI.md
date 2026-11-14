@@ -1,7 +1,7 @@
 # S-0.3: PGlite kao lažna baza (DAN-715, #1836)
 
-Izmjereno 14. 11. 2026. sondom `probe.mjs` (ručno, izvan CI-ja) i PostgreSQL-om 16 iz `pnpm db:up:native` / `pnpm test:db:native`.
-PGlite 0.3.14 (WASM Postgres, jedan backend, u memoriji). Nijedan produkcijski kod nije mijenjan.
+Izmjereno 14. 11. 2026. sondom `probe.mjs` (ručno, izvan CI-ja) i lokalnim PostgreSQL-om 16.15 iz `pnpm db:up:native` / `pnpm test:db:native`.
+PGlite 0.3.14 (WASM Postgres, prema `SELECT version()` PostgreSQL 17.5, 32-bit, jedan backend, u memoriji). CI i `compose.yaml` koriste PostgreSQL 17.11 (D-08), pa se usporedba brzine s lokalnim 16.15 odnosi na različite verzije. Nijedan produkcijski kod nije mijenjan.
 
 Pokretanje (bez lockfilea, jer CI-jev OSV popis lockfileova je D-97 putanja; verzija je pinana točno u `package.json`): `cd spikes/pglite && npm install --no-package-lock && node probe.mjs [--tests] [--json izlaz.json]`.
 
@@ -17,7 +17,7 @@ Pokretanje (bez lockfilea, jer CI-jev OSV popis lockfileova je D-97 putanja; ver
 
 ## 2. Uloge, SET ROLE, RLS, SECURITY DEFINER (sonda)
 
-Četiri ciljane provjere prolaze (peta stavka sonde je samo informativna i ne može pasti): migrator nije superuser ni BYPASSRLS; `SET ROLE`/`RESET ROLE` mijenjaju `current_user`; RLS filtrira retke, odbija tuđi INSERT i `FORCE` veže vlasnika; SECURITY DEFINER radi s pravima vlasnika i fiksnim `search_path`. Ograničenje: nema drugog spoja, pa `pg_stat_activity` je prazan i nema istodobnosti.
+Četiri ciljane provjere prolaze (peta stavka sonde je samo informativna i ne može pasti): migrator nije superuser ni BYPASSRLS; `SET ROLE`/`RESET ROLE` mijenjaju `current_user`; RLS filtrira retke, odbija tuđi INSERT i `FORCE` veže vlasnika; SECURITY DEFINER radi s pravima vlasnika (utvrđivanje `search_path`-a funkcije nije mjereno). Ograničenje: nema drugog spoja, pa `pg_stat_activity` je prazan i nema istodobnosti.
 
 ## 3. pgTAP testovi iz `db/tests` (99 datoteka)
 
@@ -26,9 +26,9 @@ Pokrenuto kroz PGlite uz minimalnu emulaciju psql-a (ugradnja `\ir`, `\gset`, ra
 | Datoteka | Razlog | Vrsta |
 |---|---|---|
 | `010-roles-and-privileges.sql` | očekuje bazu `ductus`; PGlite je uvijek `template1` | ograničenje PGlitea |
-| `118-actor-scope-initplan.sql` | psql interpolacija `:'var'` iz `\gset` unutar skripte nije potpuno emulirana (sintaksna greška na `:`) | ograničenje emulacije psql-a |
+| `118-actor-scope-initplan.sql` | `\gset <prefiks>` (118:408, `EXECUTE scope_cm \gset s1_`) nije emuliran: sonda odbacuje sve nakon `\gset`, pa varijabla nikad nije postavljena (sintaksna greška na `:`). Rupa u sondi, ne ograničenje PGlitea (061 i 063 koriste `\gset` + `:'var'` i prolaze) | rupa u emulaciji psql-a |
 
-(Prethodni međukorak: 102, 103 i 127 padaju ako se skripta pošalje kao jedna poruka, jer je `statement_timestamp()` tada konstantan; psql šalje svaku naredbu zasebno. Rješenje u sondi je razdvajanje naredbi, što je nužna zamjena ponašanja psql-a.)
+(Opažanje iz razvojne verzije sonde, nije ponovljivo predanom sondom: 102, 103 i 127 padaju ako se skripta pošalje kao jedna poruka, jer je `statement_timestamp()` tada konstantan; psql šalje svaku naredbu zasebno. Rješenje u sondi je razdvajanje naredbi, što je nužna zamjena ponašanja psql-a.)
 
 ## 4. Brzina
 
@@ -37,7 +37,7 @@ Pokrenuto kroz PGlite uz minimalnu emulaciju psql-a (ugradnja `\ir`, `\gset`, ra
 | podizanje + provisioning + 111 migracija | 4,8 s | oko 2 s |
 | pgTAP (`db/tests`) | 57 s (99 datoteka, 8099 testova, `pg_prove`) | oko 162 s (jedan proces, serijski; uključuje 39 s za `118`, koja pada; bez nje oko 123 s) |
 
-Zaključak: PGlite je **brži samo za početak** (oko 2 s naspram 5 s, bez servisa i Dockera), ali **cijeli pgTAP paket je u PGlite-u oko 2 do 3 puta sporiji (oko 2,2 puta bez datoteke `118` koja pada; PostgreSQL stupac je 99 uspješnih datoteka, pa omjer nije strogo usporediv)** od stvarnog PostgreSQL-a, jer je WASM, jedan backend i bez paralelizma. Ubrzanje se ne postiže; dobiva se samo prenosivost (nema servisa, radi svugdje gdje radi Node).
+Zaključak: PGlite je **brži samo za početak** (oko 2 s naspram 5 s, bez servisa i Dockera), ali **cijeli pgTAP paket je u PGlite-u oko 2 do 3 puta sporiji (oko 2,2 puta bez datoteke `118` koja pada; PostgreSQL stupac je 99 uspješnih datoteka, pa omjer nije strogo usporediv)** od stvarnog PostgreSQL-a, jer je WASM s jednim backendom (obje usporedne vrijednosti su serijske, `pg_prove` je pokrenut bez `-j`, pa paralelizam ne objašnjava razliku). Ubrzanje se ne postiže; dobiva se samo prenosivost (nema servisa, radi svugdje gdje radi Node).
 
 ## 5. Što smije na PGlite, a što mora na pravi PostgreSQL
 
@@ -50,14 +50,14 @@ Zaključak: PGlite je **brži samo za početak** (oko 2 s naspram 5 s, bez servi
 **Mora na pravi PostgreSQL (CI ostaje mjerodavan):**
 - istodobnost: zaključavanja, advisory lockovi, utrke, `pg_stat_activity`, više spojeva;
 - prijava uloga i lozinke (`ductus_*_local`, `\gset` iz okoline), socket naspram TCP-a;
-- testovi koji ovise o psql-u (meta-naredbe, `:'var'`) ili o imenu baze `ductus`;
+- testovi koji ovise o psql meta-naredbama koje emulacija ne pokriva (npr. `\gset <prefiks>`) ili o imenu baze `ductus`;
 - vremenska semantika unutar jedne transakcije/poruke;
 - pg_boss i sve što radi preko više spojeva;
 - svaka tvrdnja o paritetu s produkcijom (verzija, ekstenzije, planer, performanse) i završni gate.
 
 ## 6. Preporuka
 
-Plan §3 nije bio priložen ovom zadatku, pa preporuka stoji na izmjerenom: **PGlite ne zamjenjuje stvarni PostgreSQL u CI-ju ni za pgTAP.** Potvrđuje se (ili, ako §3 predviđa zamjenu, mijenja se na) ovo: PGlite se smije koristiti najviše kao opcionalna brza lokalna provjera (migracije + jednosesijska RLS/RPC logika, npr. za agente bez Dockera), dok pravi PostgreSQL 16 ostaje jedini izvor istine za CI i sve testove s istodobnošću, prijavom i vremenom. Gašenje stvarne baze u korist PGlitea ne isplati se: nema dobitka u brzini (2 do 3 puta sporije) i gubi se pokrivenost.
+Plan §3 nije bio priložen ovom zadatku, pa preporuka stoji na izmjerenom: **PGlite ne zamjenjuje stvarni PostgreSQL u CI-ju ni za pgTAP.** Potvrđuje se (ili, ako §3 predviđa zamjenu, mijenja se na) ovo: PGlite se smije koristiti najviše kao opcionalna brza lokalna provjera (migracije + jednosesijska RLS/RPC logika, npr. za agente bez Dockera), dok pravi PostgreSQL (CI: 17.11, D-08) ostaje jedini izvor istine za CI i sve testove s istodobnošću, prijavom i vremenom. Gašenje stvarne baze u korist PGlitea ne isplati se: nema dobitka u brzini (2 do 3 puta sporije) i gubi se pokrivenost.
 
 ## Ograničenja probe
 
