@@ -215,6 +215,8 @@ test("regenEffect keeps only added and removed lines", () => {
     ["only versions", { filename: "db/schema.sql", patch: lines(`@@ -1 +1,2 @@ ${MIGRATIONS_ROW}`, "-    ('20261114100000');", "+    ('20261114100000'),", "+    ('20261116000000');") }, []],
     ["versions in an earlier hunk kept", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@", "+    ('20261116000000'),", "@@ -9 +9 @@", "+x") }, ["+    ('20261116000000'),", "+x"]],
     ["only the last hunk's run dropped", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@", "+    ('20261101000000'),", `@@ -9 +9,2 @@ ${MIGRATIONS_ROW}`, "     ('20261113000000'),", "+    ('20261116000000');") }, ["+    ('20261101000000'),"]],
+    ["versions between context rows dropped", { filename: "db/schema.sql", patch: lines(`@@ -9,3 +9,4 @@ ${MIGRATIONS_ROW}`, "     ('20261101000000'),", "+    ('20261105000000'),", "     ('20261110000000'),", "-    ('20261113000000');", "+    ('20261113000000'),", "+    ('20261116000000');") }, []],
+    ["a changed statement line ends the run", { filename: "db/schema.sql", patch: lines(`@@ -9 +9,2 @@ ${MIGRATIONS_ROW}`, "+    ('20261116000000'),", "+    ('x');") }, ["+    ('20261116000000'),", "+    ('x');"]],
     ["the insert line as context", { filename: "db/schema.sql", patch: lines("@@ -1 +1,2 @@ CREATE TABLE z", ` ${MIGRATIONS_ROW}`, "+    ('20261116000000');") }, []],
     ["versions after another statement kept", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@ CREATE FUNCTION f()", "+    ('20261116000000');") }, ["+    ('20261116000000');"]],
     ["versions after a later statement kept", { filename: "db/schema.sql", patch: lines(`@@ -1 +1,3 @@ ${MIGRATIONS_ROW}`, " CREATE FUNCTION f()", "+    ('20261116000000');") }, ["+    ('20261116000000');"]],

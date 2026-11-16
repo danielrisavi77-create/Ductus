@@ -978,10 +978,12 @@ const MIGRATIONS_INSERT = "INSERT INTO public.schema_migrations (version) VALUES
 /**
  * F-299: the added and removed lines of a regenerated file's patch, in order,
  * without hunk headers, context or "\ No newline" markers. For db/schema.sql the
- * trailing run of schema_migrations version rows in the last hunk is dropped,
- * but only inside the INSERT INTO public.schema_migrations statement (named by
- * the hunk header or a context line of that hunk): it moves with every
- * migration the base adds. Null when there is no patch or it is empty.
+ * trailing run of changed schema_migrations version rows in the last hunk is
+ * dropped (context rows between them do not end it; any other changed line
+ * does), but only inside the INSERT INTO public.schema_migrations statement
+ * (named by the hunk header or a context line of that hunk): the version set
+ * follows the migration files, which D-91 checks on both heads, and moves with
+ * every migration the base adds. Null when there is no patch or it is empty.
  */
 export function regenEffect(file) {
   if (typeof file?.patch !== "string" || file.patch === "") return null;
