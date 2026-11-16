@@ -161,7 +161,8 @@ test("check classes: every D-91 check must be green on the current head", () => 
 // F-299: the regenerated files' own added and removed lines are compared. Hunk positions and context are not,
 // and in db/schema.sql neither is the trailing run of schema_migrations version rows.
 const lines = (...rows) => rows.join("\n");
-const schemaPatch = (body, tail) => lines("@@ -40,2 +40,3 @@ CREATE TABLE a", " CREATE TABLE a ();", ...body, " ", "@@ -900,2 +901,3 @@ INSERT", ...tail);
+const MIGRATIONS_ROW = "INSERT INTO public.schema_migrations (version) VALUES";
+const schemaPatch = (body, tail) => lines("@@ -40,2 +40,3 @@ CREATE TABLE a", " CREATE TABLE a ();", ...body, " ", "@@ -900,2 +901,3 @@ INSERT INTO public.schema_migrations (version) VALUES", ...tail);
 const tailAfter = (last, added = "20261116000000") => [`     ('20261113000000'),`, `-    ('${last}');`, `+    ('${last}'),`, `+    ('${added}');`];
 const EFFECT = ["+CREATE TABLE x ();"];
 const SCHEMA_EARLIER = file("db/schema.sql", schemaPatch(EFFECT, tailAfter("20261114100000")));
@@ -181,6 +182,7 @@ test("effect classes: the regenerated files must add and remove the same lines o
     ["the trailing run ends in another line", effectDiff(withSchema(`${SCHEMA_MOVED.patch}\n+-- end`)), false],
     ["no newline marker only", effectDiff(withSchema(`${SCHEMA_MOVED.patch}\n\\ No newline at end of file`)), true],
     ["patch missing on the current head", effectDiff({ ...SCHEMA_EARLIER, patch: undefined }), false],
+    ["patch empty on the current head", effectDiff({ ...SCHEMA_EARLIER, patch: "" }), false],
     ["schema unchanged on the current head", { files: [APP, MIGRATION, SUM] }, false],
     ["schema listed twice", { files: [APP, MIGRATION, SCHEMA_MOVED, SCHEMA_MOVED, SUM] }, false],
     ["ledger context moved", effectDiff(SCHEMA_MOVED, file("db/migrations.sum", "@@ -90,2 +90,3 @@\n a\n+x")), true],
@@ -196,6 +198,7 @@ test("effect classes: the regenerated files must add and remove the same lines o
   // Missing or one-sided on the earlier head as well.
   assert.equal(sameChangeOutsideSchema(effectDiff(SCHEMA_MOVED), effectDiff({ ...SCHEMA_EARLIER, patch: undefined })), false);
   assert.equal(sameChangeOutsideSchema(effectDiff({ ...SCHEMA_MOVED, patch: null }), effectDiff({ ...SCHEMA_EARLIER, patch: null })), false);
+  assert.equal(sameChangeOutsideSchema(effectDiff({ ...SCHEMA_MOVED, patch: "" }), effectDiff({ ...SCHEMA_EARLIER, patch: "" })), false);
   assert.equal(sameChangeOutsideSchema(effectDiff(SCHEMA_MOVED), { files: [APP, MIGRATION, SUM] }), false);
   // Neither head touches either file: the rest decides.
   assert.equal(sameChangeOutsideSchema({ files: [APP, MIGRATION] }, { files: [APP, MIGRATION] }), true);
@@ -206,12 +209,16 @@ test("regenEffect keeps only added and removed lines", () => {
     ["no file", null, null],
     ["no patch", { filename: "db/schema.sql" }, null],
     ["patch not a string", { filename: "db/schema.sql", patch: 1 }, null],
-    ["empty patch", { filename: "db/schema.sql", patch: "" }, []],
+    ["empty patch", { filename: "db/schema.sql", patch: "" }, null],
     ["context and positions dropped", { filename: "db/migrations.sum", patch: "@@ -1 +1,2 @@\n a\n+x\n-y" }, ["+x", "-y"]],
     ["schema trailing versions dropped", SCHEMA_MOVED, EFFECT],
-    ["only versions", { filename: "db/schema.sql", patch: lines("@@ -1 +1,2 @@", "-    ('20261114100000');", "+    ('20261114100000'),", "+    ('20261116000000');") }, []],
+    ["only versions", { filename: "db/schema.sql", patch: lines(`@@ -1 +1,2 @@ ${MIGRATIONS_ROW}`, "-    ('20261114100000');", "+    ('20261114100000'),", "+    ('20261116000000');") }, []],
     ["versions in an earlier hunk kept", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@", "+    ('20261116000000'),", "@@ -9 +9 @@", "+x") }, ["+    ('20261116000000'),", "+x"]],
-    ["only the last hunk's run dropped", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@", "+    ('20261101000000'),", "@@ -9 +9,2 @@", "     ('20261113000000'),", "+    ('20261116000000');") }, ["+    ('20261101000000'),"]],
+    ["only the last hunk's run dropped", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@", "+    ('20261101000000'),", `@@ -9 +9,2 @@ ${MIGRATIONS_ROW}`, "     ('20261113000000'),", "+    ('20261116000000');") }, ["+    ('20261101000000'),"]],
+    ["the insert line as context", { filename: "db/schema.sql", patch: lines("@@ -1 +1,2 @@ CREATE TABLE z", ` ${MIGRATIONS_ROW}`, "+    ('20261116000000');") }, []],
+    ["versions after another statement kept", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@ CREATE FUNCTION f()", "+    ('20261116000000');") }, ["+    ('20261116000000');"]],
+    ["versions after a later statement kept", { filename: "db/schema.sql", patch: lines(`@@ -1 +1,3 @@ ${MIGRATIONS_ROW}`, " CREATE FUNCTION f()", "+    ('20261116000000');") }, ["+    ('20261116000000');"]],
+    ["the insert line only added", { filename: "db/schema.sql", patch: lines("@@ -1 +1,2 @@", `+${MIGRATIONS_ROW}`, "+    ('20261116000000');") }, [`+${MIGRATIONS_ROW}`, "+    ('20261116000000');"]],
     ["ledger keeps version-shaped rows", { filename: "db/migrations.sum", patch: "@@ -1 +1 @@\n+    ('20261116000000');" }, ["+    ('20261116000000');"]],
     ["short version kept", { filename: "db/schema.sql", patch: "@@ -1 +1 @@\n+    ('2026111600000');" }, ["+    ('2026111600000');"]],
     ["version with a tail kept", { filename: "db/schema.sql", patch: "@@ -1 +1 @@\n+    ('20261116000000'); DROP" }, ["+    ('20261116000000'); DROP"]],
@@ -230,6 +237,10 @@ test("order classes: a regeneration commit must follow a base merge that brought
     ["merge brought no migration", [regen(head), merge(middle), plain(earlier)], false],
     ["merge files empty", [regen(head), { ...merge(middle), files: [] }, plain(earlier)], false],
     ["merge brought only the ledger", [regen(head), { ...merge(middle), files: [{ filename: "db/migrations.sum" }] }, plain(earlier)], false],
+    ["merge brought only a note", [regen(head), { ...merge(middle), files: [{ filename: "db/migrations/README.md", status: "added" }] }, plain(earlier)], false],
+    ["merge only removed a migration", [regen(head), { ...merge(middle), files: [{ ...migrationMerge(middle).files[0], status: "removed" }] }, plain(earlier)], false],
+    ["merge only edited a migration", [regen(head), { ...merge(middle), files: [{ ...migrationMerge(middle).files[0], status: "modified" }] }, plain(earlier)], false],
+    ["merge added a nested file", [regen(head), { ...merge(middle), files: [{ filename: "db/migrations/x/1.sql", status: "added" }] }, plain(earlier)], false],
     ["migration merge only after the regeneration", [migrationMerge(head), regen(middle), plain(earlier)], false],
     ["a later regeneration with nothing before it", [regen(head), migrationMerge(middle), regen(d), plain(earlier)], false],
     ["migration merge not from the base", [regen(head), { ...migrationMerge(middle), mergesBase: false }, plain(earlier)], false],
@@ -390,6 +401,13 @@ test("the runner reads the D-91 checks on both heads and carries the PASS", asyn
   const earlierRed = await carriedHeads(api, "o", "r", pr, comments, { log: () => {} });
   assert.equal(earlierRed.verdictOnly.size, 0);
   assert.deepEqual([...earlierRed.heldNegatives], [earlier]);
+  // Missing or still running on the earlier head: no PASS carries either.
+  for (const pending of [[], greenRuns(earlier).map((item, index) => (index === 0 ? run(item.name, null, { head_sha: earlier }) : item))]) {
+    runs.earlier = pending;
+    const notGreen = await carriedHeads(api, "o", "r", pr, comments, { log: () => {} });
+    assert.equal(notGreen.verdictOnly.size, 0);
+    assert.deepEqual([...notGreen.heldNegatives], [earlier]);
+  }
   runs.earlier = greenRuns(earlier);
   // A later failed re-run of one shard takes the PASS away; the FAIL path stays.
   runs.value = [...greenRuns(), run(SCHEMA_CHECK_RUNS[2], "failure")];

@@ -949,12 +949,14 @@ export function regenOnlyCommit(commit) {
   );
 }
 
+const MIGRATION_FILE = /^db\/migrations\/[^/]+\.sql$/;
+
 /**
  * F-300: every regeneration commit on `path` before `earlier` must have, between
  * itself and `earlier`, a base merge (two parents, `mergesBase`) whose `files`
- * (GET commits/{sha}, against its first parent) touch db/migrations/. A path
- * without regeneration commits passes; a path that does not reach `earlier`
- * does not.
+ * (GET commits/{sha}, against its first parent) add (status "added") a
+ * migration file db/migrations/*.sql. A path without regeneration commits
+ * passes; a path that does not reach `earlier` does not.
  */
 export function regenAfterMigrationMerge(path, earlier) {
   const steps = Array.isArray(path) ? path : [];
@@ -965,26 +967,38 @@ export function regenAfterMigrationMerge(path, earlier) {
     commit?.parents?.length === 2 &&
     commit?.mergesBase === true &&
     Array.isArray(commit?.files) &&
-    commit.files.some((item) => typeof item?.filename === "string" && item.filename.startsWith("db/migrations/"));
+    commit.files.some((item) => item?.status === "added" && MIGRATION_FILE.test(item?.filename ?? ""));
   return steps.slice(0, end).every((commit, index) => !regenOnlyCommit(commit) || steps.slice(index + 1, end).some(migrationMerge));
 }
 
 // One schema_migrations row as pg_dump writes it at the end of db/schema.sql.
 const VERSION_ROW = /^[+-] {4}\('\d{14}'\)[,;]$/;
+const MIGRATIONS_INSERT = "INSERT INTO public.schema_migrations (version) VALUES";
 
 /**
  * F-299: the added and removed lines of a regenerated file's patch, in order,
  * without hunk headers, context or "\ No newline" markers. For db/schema.sql the
- * trailing run of schema_migrations version rows in the last hunk is dropped:
- * it moves with every migration the base adds. Null when there is no patch.
+ * trailing run of schema_migrations version rows in the last hunk is dropped,
+ * but only inside the INSERT INTO public.schema_migrations statement (named by
+ * the hunk header or a context line of that hunk): it moves with every
+ * migration the base adds. Null when there is no patch or it is empty.
  */
 export function regenEffect(file) {
-  if (typeof file?.patch !== "string") return null;
+  if (typeof file?.patch !== "string" || file.patch === "") return null;
   const rows = file.patch.split("\n");
   const changed = (line) => line.startsWith("+") || line.startsWith("-");
   const lines = rows.filter(changed);
   if (file.filename !== "db/schema.sql") return lines;
-  const lastHunk = rows.slice(rows.findLastIndex((line) => line.startsWith("@@")) + 1).filter(changed);
+  const start = rows.findLastIndex((line) => line.startsWith("@@"));
+  const hunk = rows.slice(start + 1);
+  // Only inside the schema_migrations insert: the hunk header names it and no
+  // other context line follows, or it is itself a context line of the hunk.
+  const header = start >= 0 && rows[start].endsWith(`@@ ${MIGRATIONS_INSERT}`);
+  const opened = hunk.findLastIndex((line) => line === ` ${MIGRATIONS_INSERT}`);
+  const statement = hunk.findLastIndex((line) => line.startsWith(" ") && !line.startsWith("    "));
+  if (opened < 0 && (!header || statement >= 0)) return lines;
+  if (opened >= 0 && statement > opened) return lines;
+  const lastHunk = hunk.filter(changed);
   let run = 0;
   while (run < lastHunk.length && VERSION_ROW.test(lastHunk[lastHunk.length - 1 - run])) run += 1;
   return lines.slice(0, lines.length - run);
