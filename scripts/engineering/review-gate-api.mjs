@@ -269,13 +269,14 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
     failed = true;
     throw error;
   });
-  // D-293: the D-91 checks are read on the current head only, per job name
-  // with every run (`filter=all`), so a later failed re-run counts.
-  const schemaGreen = async () => {
+  // D-293: the D-91 checks are read per job name with every run (`filter=all`),
+  // so a later failed re-run counts; on the current head and, F-300, on the
+  // earlier head whose verdict would carry.
+  const schemaGreen = async (sha = pr.head.sha) => {
     const runs = [];
     for (const name of SCHEMA_CHECK_RUNS) {
       const result = await api(
-        `/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?check_name=${encodeURIComponent(name)}&filter=all&per_page=100`,
+        `/repos/${owner}/${repo}/commits/${sha}/check-runs?check_name=${encodeURIComponent(name)}&filter=all&per_page=100`,
         { signal },
       );
       // One page only: more runs than it holds would hide the newest, so that is not green.
@@ -284,7 +285,7 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
       }
       runs.push(...result.check_runs);
     }
-    return schemaChecksGreen(runs, pr.head.sha);
+    return schemaChecksGreen(runs, sha);
   };
   const carried = await carriedByCompare(candidates, current, compareHead, log, { path, schemaGreen });
   return failed ? holdNegatives(carried, found()) : carried;

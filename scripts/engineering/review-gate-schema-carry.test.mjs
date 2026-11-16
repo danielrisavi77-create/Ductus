@@ -1,6 +1,7 @@
 // D-293 (#87 c.6858156704 point 2): review and QA PASS carry over a base conflict resolution that changed only
 // db/schema.sql and db/migrations.sum when the rest of the diff is identical and the D-91 checks are green on the
 // new head; a FAIL carries as before. Every input class from the contract (#1836 c.6858312517) is a table row.
+// F-299/F-300 (DAN-865, contract #1836 c.6914873597): stricter carry-over through a regenerated schema.
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -11,6 +12,8 @@ import {
   evaluateGate,
   evaluateMergeAuthorization,
   onlyBaseMerges,
+  regenAfterMigrationMerge,
+  regenEffect,
   regenOnlyCommit,
   sameChange,
   sameChangeOutsideSchema,
@@ -53,10 +56,13 @@ const APP = file("src/a.ts");
 const MIGRATION = file("db/migrations/20261113000000_x.sql", "@@ -0,0 +1 @@\n+create table x ();", { status: "added", baseEntry: "absent" });
 const SCHEMA = file("db/schema.sql", "@@ -1 +1,2 @@\n a\n+x");
 const SUM = file("db/migrations.sum", "@@ -1 +1,2 @@\n a\n+x");
-const regenerated = (base) => ({ ...base, patch: `${base.patch}\n+main` });
+// A base merge moves the hunks and their context; the PR's own added and removed lines stay (F-299).
+const regenerated = (base) => ({ ...base, patch: `@@ -9,2 +9,3 @@ main\n main\n${base.patch.split("\n").slice(1).join("\n")}` });
 const earlierDiff = { files: [APP, MIGRATION, SCHEMA, SUM] };
 
 const merge = (sha) => ({ sha, parents: [{}, {}], mergesBase: true });
+// F-300: a base merge that brought in a migration, as GET commits/{sha} lists it against the first parent.
+const migrationMerge = (sha) => ({ ...merge(sha), files: [{ filename: "db/migrations/20261112000000_main.sql", status: "added" }] });
 const plain = (sha) => ({ sha, parents: [{}], files: [{ filename: "src/a.ts", status: "modified" }] });
 const regenFiles = [{ filename: "db/schema.sql", status: "modified" }, { filename: "db/migrations.sum", status: "modified" }];
 const regen = (sha, files = regenFiles) => ({ sha, parents: [{}], files });
@@ -65,13 +71,14 @@ const run = (name, conclusion = "success", extra = {}) => ({
   ...{ id: counter++, name, head_sha: head, status: conclusion ? "completed" : "in_progress", conclusion },
   ...{ app: { slug: "github-actions" }, ...extra },
 });
-const greenRuns = () => SCHEMA_CHECK_RUNS.map((name) => run(name));
+const greenRuns = (sha = head) => SCHEMA_CHECK_RUNS.map((name) => run(name, "success", { head_sha: sha }));
 
 test("compare classes: only the two regenerated files may differ", () => {
   const rows = [
     ["schema and ledger regenerated", [APP, MIGRATION, regenerated(SCHEMA), regenerated(SUM)], true],
     ["only the schema regenerated", [APP, MIGRATION, regenerated(SCHEMA), SUM], true],
-    ["regenerated file too large for a patch", [APP, MIGRATION, { ...SCHEMA, patch: undefined }, SUM], true],
+    // F-299: without a patch the regenerated content cannot be compared.
+    ["regenerated file too large for a patch", [APP, MIGRATION, { ...SCHEMA, patch: undefined }, SUM], false],
     ["identical diff", [APP, MIGRATION, SCHEMA, SUM], true],
     ["migration content changed", [APP, { ...MIGRATION, patch: `${MIGRATION.patch}\n+x` }, regenerated(SCHEMA), SUM], false],
     ["migration renumbered", [APP, { ...MIGRATION, filename: "db/migrations/20261114000000_x.sql" }, regenerated(SCHEMA), SUM], false],
@@ -151,6 +158,103 @@ test("check classes: every D-91 check must be green on the current head", () => 
   for (const [name, runs, expected] of rows) assert.equal(schemaChecksGreen(runs, head), expected, name);
 });
 
+// F-299: the regenerated files' own added and removed lines are compared. Hunk positions and context are not,
+// and in db/schema.sql neither is the trailing run of schema_migrations version rows.
+const lines = (...rows) => rows.join("\n");
+const MIGRATIONS_ROW = "INSERT INTO public.schema_migrations (version) VALUES";
+const schemaPatch = (body, tail) => lines("@@ -40,2 +40,3 @@ CREATE TABLE a", " CREATE TABLE a ();", ...body, " ", "@@ -900,2 +901,3 @@ INSERT INTO public.schema_migrations (version) VALUES", ...tail);
+const tailAfter = (last, added = "20261116000000") => [`     ('20261113000000'),`, `-    ('${last}');`, `+    ('${last}'),`, `+    ('${added}');`];
+const EFFECT = ["+CREATE TABLE x ();"];
+const SCHEMA_EARLIER = file("db/schema.sql", schemaPatch(EFFECT, tailAfter("20261114100000")));
+const SCHEMA_MOVED = file("db/schema.sql", schemaPatch(EFFECT, tailAfter("20261115000000")).replace("@@ -40,2 +40,3 @@", "@@ -52,2 +52,3 @@"));
+const effectDiff = (schema, sum = SUM) => ({ files: [APP, MIGRATION, schema, sum] });
+
+test("effect classes: the regenerated files must add and remove the same lines on both heads", () => {
+  const withSchema = (patch) => file("db/schema.sql", patch);
+  const rows = [
+    ["hunks and context moved", effectDiff(SCHEMA_MOVED), true],
+    ["only the trailing version rows differ", effectDiff(withSchema(schemaPatch(EFFECT, tailAfter("20261115000000")))), true],
+    ["an added line differs", effectDiff(withSchema(schemaPatch(["+CREATE TABLE x (id int);"], tailAfter("20261114100000")))), false],
+    ["an extra removed line", effectDiff(withSchema(schemaPatch([...EFFECT, "-CREATE TABLE b ();"], tailAfter("20261114100000")))), false],
+    ["a line dropped", effectDiff(withSchema(schemaPatch([], tailAfter("20261114100000")))), false],
+    ["the same lines in another order", effectDiff(withSchema(schemaPatch(["+CREATE TABLE y ();", ...EFFECT], tailAfter("20261114100000")))), false],
+    ["a version-shaped row outside the trailing run", effectDiff(withSchema(schemaPatch([...EFFECT, "+    ('20261101000000'),"], tailAfter("20261114100000")))), false],
+    ["the trailing run ends in another line", effectDiff(withSchema(`${SCHEMA_MOVED.patch}\n+-- end`)), false],
+    ["no newline marker only", effectDiff(withSchema(`${SCHEMA_MOVED.patch}\n\\ No newline at end of file`)), true],
+    ["patch missing on the current head", effectDiff({ ...SCHEMA_EARLIER, patch: undefined }), false],
+    ["patch empty on the current head", effectDiff({ ...SCHEMA_EARLIER, patch: "" }), false],
+    ["schema unchanged on the current head", { files: [APP, MIGRATION, SUM] }, false],
+    ["schema listed twice", { files: [APP, MIGRATION, SCHEMA_MOVED, SCHEMA_MOVED, SUM] }, false],
+    ["ledger context moved", effectDiff(SCHEMA_MOVED, file("db/migrations.sum", "@@ -90,2 +90,3 @@\n a\n+x")), true],
+    ["ledger line differs", effectDiff(SCHEMA_MOVED, file("db/migrations.sum", "@@ -1 +1,2 @@\n a\n+y")), false],
+    ["ledger version-shaped row is compared", effectDiff(SCHEMA_MOVED, file("db/migrations.sum", "@@ -1 +1,2 @@\n a\n+x\n+    ('20261116000000');")), false],
+    ["ledger patch missing", effectDiff(SCHEMA_MOVED, { ...SUM, patch: undefined }), false],
+  ];
+  for (const [name, current, expected] of rows) assert.equal(sameChangeOutsideSchema(current, effectDiff(SCHEMA_EARLIER)), expected, name);
+  // A run that does not end the patch is compared like any other line.
+  const ended = (schema) => effectDiff(file("db/schema.sql", `${schema.patch}\n+-- end`));
+  assert.equal(sameChangeOutsideSchema(ended(SCHEMA_EARLIER), ended(SCHEMA_EARLIER)), true);
+  assert.equal(sameChangeOutsideSchema(ended(SCHEMA_MOVED), ended(SCHEMA_EARLIER)), false);
+  // Missing or one-sided on the earlier head as well.
+  assert.equal(sameChangeOutsideSchema(effectDiff(SCHEMA_MOVED), effectDiff({ ...SCHEMA_EARLIER, patch: undefined })), false);
+  assert.equal(sameChangeOutsideSchema(effectDiff({ ...SCHEMA_MOVED, patch: null }), effectDiff({ ...SCHEMA_EARLIER, patch: null })), false);
+  assert.equal(sameChangeOutsideSchema(effectDiff({ ...SCHEMA_MOVED, patch: "" }), effectDiff({ ...SCHEMA_EARLIER, patch: "" })), false);
+  assert.equal(sameChangeOutsideSchema(effectDiff(SCHEMA_MOVED), { files: [APP, MIGRATION, SUM] }), false);
+  // Neither head touches either file: the rest decides.
+  assert.equal(sameChangeOutsideSchema({ files: [APP, MIGRATION] }, { files: [APP, MIGRATION] }), true);
+});
+
+test("regenEffect keeps only added and removed lines", () => {
+  const rows = [
+    ["no file", null, null],
+    ["no patch", { filename: "db/schema.sql" }, null],
+    ["patch not a string", { filename: "db/schema.sql", patch: 1 }, null],
+    ["empty patch", { filename: "db/schema.sql", patch: "" }, null],
+    ["context and positions dropped", { filename: "db/migrations.sum", patch: "@@ -1 +1,2 @@\n a\n+x\n-y" }, ["+x", "-y"]],
+    ["schema trailing versions dropped", SCHEMA_MOVED, EFFECT],
+    ["only versions", { filename: "db/schema.sql", patch: lines(`@@ -1 +1,2 @@ ${MIGRATIONS_ROW}`, "-    ('20261114100000');", "+    ('20261114100000'),", "+    ('20261116000000');") }, []],
+    ["versions in an earlier hunk kept", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@", "+    ('20261116000000'),", "@@ -9 +9 @@", "+x") }, ["+    ('20261116000000'),", "+x"]],
+    ["only the last hunk's run dropped", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@", "+    ('20261101000000'),", `@@ -9 +9,2 @@ ${MIGRATIONS_ROW}`, "     ('20261113000000'),", "+    ('20261116000000');") }, ["+    ('20261101000000'),"]],
+    ["versions between context rows dropped", { filename: "db/schema.sql", patch: lines(`@@ -9,3 +9,4 @@ ${MIGRATIONS_ROW}`, "     ('20261101000000'),", "+    ('20261105000000'),", "     ('20261110000000'),", "-    ('20261113000000');", "+    ('20261113000000'),", "+    ('20261116000000');") }, []],
+    ["a changed statement line ends the run", { filename: "db/schema.sql", patch: lines(`@@ -9 +9,2 @@ ${MIGRATIONS_ROW}`, "+    ('20261116000000'),", "+    ('x');") }, ["+    ('20261116000000'),", "+    ('x');"]],
+    ["the insert line as context", { filename: "db/schema.sql", patch: lines("@@ -1 +1,2 @@ CREATE TABLE z", ` ${MIGRATIONS_ROW}`, "+    ('20261116000000');") }, []],
+    ["versions after another statement kept", { filename: "db/schema.sql", patch: lines("@@ -1 +1 @@ CREATE FUNCTION f()", "+    ('20261116000000');") }, ["+    ('20261116000000');"]],
+    ["versions after a later statement kept", { filename: "db/schema.sql", patch: lines(`@@ -1 +1,3 @@ ${MIGRATIONS_ROW}`, " CREATE FUNCTION f()", "+    ('20261116000000');") }, ["+    ('20261116000000');"]],
+    ["the insert line only added", { filename: "db/schema.sql", patch: lines("@@ -1 +1,2 @@", `+${MIGRATIONS_ROW}`, "+    ('20261116000000');") }, [`+${MIGRATIONS_ROW}`, "+    ('20261116000000');"]],
+    ["ledger keeps version-shaped rows", { filename: "db/migrations.sum", patch: "@@ -1 +1 @@\n+    ('20261116000000');" }, ["+    ('20261116000000');"]],
+    ["short version kept", { filename: "db/schema.sql", patch: "@@ -1 +1 @@\n+    ('2026111600000');" }, ["+    ('2026111600000');"]],
+    ["version with a tail kept", { filename: "db/schema.sql", patch: "@@ -1 +1 @@\n+    ('20261116000000'); DROP" }, ["+    ('20261116000000'); DROP"]],
+  ];
+  for (const [name, input, expected] of rows) assert.deepEqual(regenEffect(input), expected, name);
+});
+
+// F-300: a regeneration commit carries only when a base merge that brought in db/migrations/ changes lies before it.
+test("order classes: a regeneration commit must follow a base merge that brought migrations", () => {
+  const d = "d".repeat(40);
+  const rows = [
+    ["migration merge before the regeneration", [regen(head), migrationMerge(middle), plain(earlier)], true],
+    ["two regenerations after one migration merge", [regen(head), regen(d), migrationMerge(middle), plain(earlier)], true],
+    ["no regeneration commit", [merge(head), plain(earlier)], true],
+    ["regeneration with no merge", [regen(head), plain(earlier)], false],
+    ["merge brought no migration", [regen(head), merge(middle), plain(earlier)], false],
+    ["merge files empty", [regen(head), { ...merge(middle), files: [] }, plain(earlier)], false],
+    ["merge brought only the ledger", [regen(head), { ...merge(middle), files: [{ filename: "db/migrations.sum" }] }, plain(earlier)], false],
+    ["merge brought only a note", [regen(head), { ...merge(middle), files: [{ filename: "db/migrations/README.md", status: "added" }] }, plain(earlier)], false],
+    ["merge only removed a migration", [regen(head), { ...merge(middle), files: [{ ...migrationMerge(middle).files[0], status: "removed" }] }, plain(earlier)], false],
+    ["merge only edited a migration", [regen(head), { ...merge(middle), files: [{ ...migrationMerge(middle).files[0], status: "modified" }] }, plain(earlier)], false],
+    ["merge added a nested file", [regen(head), { ...merge(middle), files: [{ filename: "db/migrations/x/1.sql", status: "added" }] }, plain(earlier)], false],
+    ["migration merge only after the regeneration", [migrationMerge(head), regen(middle), plain(earlier)], false],
+    ["a later regeneration with nothing before it", [regen(head), migrationMerge(middle), regen(d), plain(earlier)], false],
+    ["migration merge not from the base", [regen(head), { ...migrationMerge(middle), mergesBase: false }, plain(earlier)], false],
+    ["migration merge with three parents", [regen(head), { ...migrationMerge(middle), parents: [{}, {}, {}] }, plain(earlier)], false],
+    ["migration merge beyond the earlier head", [regen(head), plain(earlier), migrationMerge(middle)], false],
+    ["earlier head not reached", [regen(head), migrationMerge(middle)], false],
+    ["earlier head is the current head", [plain(earlier)], false],
+    ["no path", null, false],
+  ];
+  for (const [name, path, expected] of rows) assert.equal(regenAfterMigrationMerge(path, earlier), expected, name);
+});
+
 const evaluate = (comments, carried) => evaluateGate({ body: BODY, headSha: head, ownerLogin, comments, carriedHeads: carried });
 const changed = { files: [APP, MIGRATION, regenerated(SCHEMA), SUM] };
 const carryWith = (current, schemaGreen, path = [merge(head), plain(earlier)]) =>
@@ -163,7 +267,7 @@ test("green checks carry review and QA PASS through a regenerated schema", async
   assert.deepEqual([...carried.verdictOnly], [earlier]);
   assert.equal(evaluate([review(earlier), qa(earlier)], carried).state, "success");
   // Through a separate regeneration commit as well.
-  const separate = await schemaCarry(true, [regen(head), merge(middle), plain(earlier)]);
+  const separate = await schemaCarry(true, [regen(head), migrationMerge(middle), plain(earlier)]);
   assert.equal(evaluate([review(earlier), qa(earlier)], separate).state, "success");
 });
 
@@ -192,6 +296,85 @@ test("a diff that differs outside the two files carries nothing", async () => {
   assert.equal(asked, false);
 });
 
+test("an incomparable schema or ledger patch carries no PASS, but a FAIL still blocks (F-299)", async () => {
+  const pair = (current, earlierFiles) =>
+    carriedByCompare([earlier], { files: current }, async () => ({ files: earlierFiles }), () => {}, {
+      path: [merge(head), plain(earlier)],
+      schemaGreen: async () => true,
+    });
+  const both = [APP, MIGRATION, SCHEMA, SUM];
+  const rows = [];
+  for (const [name, base] of [["schema", SCHEMA], ["ledger", SUM]]) {
+    const swap = (files, replacement) => files.flatMap((item) => (item.filename === base.filename ? (replacement ? [replacement] : []) : [item]));
+    const moved = regenerated(base);
+    rows.push(
+      [`${name} patch missing on the current head`, swap(both, { ...moved, patch: undefined }), both],
+      [`${name} patch missing on the earlier head`, swap(both, moved), swap(both, { ...base, patch: undefined })],
+      [`${name} patch missing on both heads`, swap(both, { ...moved, patch: undefined }), swap(both, { ...base, patch: null })],
+      [`${name} patch empty`, swap(both, { ...moved, patch: "" }), both],
+      [`${name} adds another line`, swap(both, file(base.filename, "@@ -1 +1,2 @@\n a\n+y")), both],
+      [`${name} only on the earlier head`, swap(both, null), both],
+      [`${name} only on the current head`, both, swap(both, null)],
+      [`${name} renamed on the current head`, swap(both, { ...moved, status: "renamed", previous_filename: "db/old.sql" }), both],
+    );
+  }
+  for (const [name, current, earlierFiles] of rows) {
+    const carried = await pair(current, earlierFiles);
+    assert.equal(carried.size + carried.verdictOnly.size, 0, name);
+    assert.deepEqual([...carried.heldNegatives], [earlier], name);
+    assert.equal(evaluate([review(earlier), qa(earlier)], carried).state, "pending", name);
+    for (const failed of [evaluate([review(earlier, "FAIL"), qa(earlier)], carried), evaluate([review(earlier), qa(earlier, "BLOCK")], carried)]) {
+      assert.equal(failed.state, "pending", name);
+      assert.match(failed.description, /fail|block/i, name);
+    }
+  }
+  // Control: the same files comparable on both heads still carry the PASS.
+  const comparable = await pair([APP, MIGRATION, regenerated(SCHEMA), regenerated(SUM)], both);
+  assert.deepEqual([...comparable.verdictOnly], [earlier]);
+  assert.equal(comparable.heldNegatives.size, 0);
+});
+
+test("the D-91 checks must have been green on the earlier head too", async () => {
+  const asked = [];
+  const greenAt = (earlierGreen, currentGreen = true) => async (sha) => {
+    asked.push(sha);
+    if (sha === undefined) return currentGreen;
+    if (earlierGreen === "throws") throw new Error("check-runs 500");
+    return earlierGreen;
+  };
+  const both = await carryWith(changed, greenAt(true));
+  assert.deepEqual([...both.verdictOnly], [earlier]);
+  assert.ok(asked.includes(earlier));
+  for (const [name, earlierGreen, currentGreen] of [
+    ["earlier head red", false, true],
+    ["earlier head not read", "throws", true],
+    ["earlier head not a boolean", "yes", true],
+    ["current head red", true, false],
+  ]) {
+    const carried = await carryWith(changed, greenAt(earlierGreen, currentGreen));
+    assert.equal(carried.verdictOnly.size, 0, name);
+    assert.deepEqual([...carried.heldNegatives], [earlier], name);
+    assert.equal(evaluate([review(earlier), qa(earlier)], carried).state, "pending", name);
+    assert.match(evaluate([review(earlier, "FAIL"), qa(earlier)], carried).description, /fail/i, name);
+  }
+});
+
+test("a regeneration commit without a migration merge before it carries no PASS, but a FAIL still blocks", async () => {
+  for (const path of [
+    [regen(head), plain(earlier)],
+    [regen(head), merge(middle), plain(earlier)],
+    [migrationMerge(head), regen(middle), plain(earlier)],
+  ]) {
+    const carried = await schemaCarry(true, path);
+    assert.equal(carried.verdictOnly.size, 0);
+    assert.deepEqual([...carried.heldNegatives], [earlier]);
+    assert.equal(evaluate([review(earlier), qa(earlier)], carried).state, "pending");
+    assert.match(evaluate([review(earlier, "FAIL"), qa(earlier)], carried).description, /fail/i);
+  }
+  const ordered = await schemaCarry(true, [regen(head), migrationMerge(middle), plain(earlier)]);
+  assert.deepEqual([...ordered.verdictOnly], [earlier]);
+});
+
 test("a schema-path head carries no Owner-Override and no Owner-Command", async () => {
   const carried = await schemaCarry(true);
   assert.equal(evaluate([override(earlier)], carried).state, "pending");
@@ -217,24 +400,25 @@ test("the walk passes regeneration commits and still needs a real end", () => {
   assert.match(unfinished.reason ?? "", /did not reach/);
 });
 
-// The runner: walk, compares and check-runs are all anchored on pr.head.sha.
-test("the runner reads the D-91 checks on the current head and carries the PASS", async () => {
+// The runner: walk and compares are anchored on pr.head.sha; check-runs are read on it and on the earlier head.
+test("the runner reads the D-91 checks on both heads and carries the PASS", async () => {
   const [base, mainParent] = ["e".repeat(40), "f".repeat(40)];
   const tree = (paths) => ({ truncated: false, tree: paths.map((path) => ({ path, mode: "100644", type: "blob" })) });
   const asCompare = (files) => ({ merge_base_commit: { sha: base }, files: files.map(({ entry, baseEntry, ...rest }) => rest) });
-  const runs = { value: greenRuns(), hidden: 0 };
+  const runs = { value: greenRuns(), earlier: greenRuns(earlier), hidden: 0 };
   const calls = [];
   const routes = (path) => {
     if (path === "/repos/o/r/branches/main") return { commit: { sha: base } };
     if (path.includes("/git/trees/")) return tree(["src/a.ts", "db/schema.sql", "db/migrations.sum", MIGRATION.filename]);
     if (path.endsWith(`/commits/${head}`)) return { sha: head, parents: [{ sha: middle }], files: regen(head).files };
-    if (path.endsWith(`/commits/${middle}`)) return { sha: middle, parents: [{ sha: earlier }, { sha: mainParent }] };
+    if (path.endsWith(`/commits/${middle}`)) return { sha: middle, parents: [{ sha: earlier }, { sha: mainParent }], files: migrationMerge(middle).files };
     if (path.endsWith(`/commits/${earlier}`)) return { sha: earlier, parents: [{ sha: "0".repeat(40) }], files: [] };
     if (path.includes(`/compare/main...${mainParent}`)) return { status: "behind", files: [] };
     if (path.includes(`/compare/${base}...${head}`)) return asCompare(changed.files);
     if (path.includes(`/compare/${base}...${earlier}`)) return asCompare(earlierDiff.files);
     const named = /\/commits\/([0-9a-f]{40})\/check-runs\?check_name=([^&]+)&filter=all/.exec(path);
-    const list = named && runs.value.filter((item) => item.name === decodeURIComponent(named[2]) && named[1] === head);
+    const listed = named && { [head]: runs.value, [earlier]: runs.earlier }[named[1]];
+    const list = listed && listed.filter((item) => item.name === decodeURIComponent(named[2]));
     if (list) return { total_count: list.length + runs.hidden, check_runs: list };
     throw new Error(`unexpected ${path}`);
   };
@@ -249,7 +433,22 @@ test("the runner reads the D-91 checks on the current head and carries the PASS"
   const carried = await carriedHeads(api, "o", "r", pr, comments, { log: () => {} });
   assert.deepEqual([...carried.verdictOnly], [earlier]);
   assert.equal(evaluate(comments, carried).state, "success");
-  assert.ok(calls.every((path) => !path.includes("/check-runs") || path.includes(`/commits/${head}/check-runs`)));
+  const checked = calls.filter((path) => path.includes("/check-runs"));
+  assert.ok(checked.every((path) => path.includes(`/commits/${head}/check-runs`) || path.includes(`/commits/${earlier}/check-runs`)));
+  assert.ok(checked.some((path) => path.includes(`/commits/${earlier}/check-runs`)));
+  // Red on the earlier head: no PASS carries, the FAIL path stays.
+  runs.earlier = [...greenRuns(earlier), run(SCHEMA_CHECK_RUNS[1], "failure", { head_sha: earlier })];
+  const earlierRed = await carriedHeads(api, "o", "r", pr, comments, { log: () => {} });
+  assert.equal(earlierRed.verdictOnly.size, 0);
+  assert.deepEqual([...earlierRed.heldNegatives], [earlier]);
+  // Missing or still running on the earlier head: no PASS carries either.
+  for (const pending of [[], greenRuns(earlier).map((item, index) => (index === 0 ? run(item.name, null, { head_sha: earlier }) : item))]) {
+    runs.earlier = pending;
+    const notGreen = await carriedHeads(api, "o", "r", pr, comments, { log: () => {} });
+    assert.equal(notGreen.verdictOnly.size, 0);
+    assert.deepEqual([...notGreen.heldNegatives], [earlier]);
+  }
+  runs.earlier = greenRuns(earlier);
   // A later failed re-run of one shard takes the PASS away; the FAIL path stays.
   runs.value = [...greenRuns(), run(SCHEMA_CHECK_RUNS[2], "failure")];
   const red = await carriedHeads(api, "o", "r", pr, comments, { log: () => {} });
