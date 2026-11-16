@@ -296,6 +296,44 @@ test("a diff that differs outside the two files carries nothing", async () => {
   assert.equal(asked, false);
 });
 
+test("an incomparable schema or ledger patch carries no PASS, but a FAIL still blocks (F-299)", async () => {
+  const pair = (current, earlierFiles) =>
+    carriedByCompare([earlier], { files: current }, async () => ({ files: earlierFiles }), () => {}, {
+      path: [merge(head), plain(earlier)],
+      schemaGreen: async () => true,
+    });
+  const both = [APP, MIGRATION, SCHEMA, SUM];
+  const rows = [];
+  for (const [name, base] of [["schema", SCHEMA], ["ledger", SUM]]) {
+    const swap = (files, replacement) => files.flatMap((item) => (item.filename === base.filename ? (replacement ? [replacement] : []) : [item]));
+    const moved = regenerated(base);
+    rows.push(
+      [`${name} patch missing on the current head`, swap(both, { ...moved, patch: undefined }), both],
+      [`${name} patch missing on the earlier head`, swap(both, moved), swap(both, { ...base, patch: undefined })],
+      [`${name} patch missing on both heads`, swap(both, { ...moved, patch: undefined }), swap(both, { ...base, patch: null })],
+      [`${name} patch empty`, swap(both, { ...moved, patch: "" }), both],
+      [`${name} adds another line`, swap(both, file(base.filename, "@@ -1 +1,2 @@\n a\n+y")), both],
+      [`${name} only on the earlier head`, swap(both, null), both],
+      [`${name} only on the current head`, both, swap(both, null)],
+      [`${name} renamed on the current head`, swap(both, { ...moved, status: "renamed", previous_filename: "db/old.sql" }), both],
+    );
+  }
+  for (const [name, current, earlierFiles] of rows) {
+    const carried = await pair(current, earlierFiles);
+    assert.equal(carried.size + carried.verdictOnly.size, 0, name);
+    assert.deepEqual([...carried.heldNegatives], [earlier], name);
+    assert.equal(evaluate([review(earlier), qa(earlier)], carried).state, "pending", name);
+    for (const failed of [evaluate([review(earlier, "FAIL"), qa(earlier)], carried), evaluate([review(earlier), qa(earlier, "BLOCK")], carried)]) {
+      assert.equal(failed.state, "pending", name);
+      assert.match(failed.description, /fail|block/i, name);
+    }
+  }
+  // Control: the same files comparable on both heads still carry the PASS.
+  const comparable = await pair([APP, MIGRATION, regenerated(SCHEMA), regenerated(SUM)], both);
+  assert.deepEqual([...comparable.verdictOnly], [earlier]);
+  assert.equal(comparable.heldNegatives.size, 0);
+});
+
 test("the D-91 checks must have been green on the earlier head too", async () => {
   const asked = [];
   const greenAt = (earlierGreen, currentGreen = true) => async (sha) => {

@@ -1040,23 +1040,35 @@ export function sameChange(current, earlier) {
   return left.every((key, index) => key === right[index]);
 }
 
+const regeneratedFile = (file) => SCHEMA_REGEN_FILES.includes(file?.filename);
+
 /**
- * D-293: `sameChange` with db/schema.sql and db/migrations.sum set aside. On
- * either side each of them must be modified in place as a regular file
- * (`100644 blob` at both ends of its compare). F-299: each must be in both
- * compares or in neither, at most once, with a patch on both sides and the
- * same `regenEffect`. Every other file, migrations included, must be
- * identical as in `sameChange`, and at least one must remain.
+ * D-293: `sameChange` on every file except db/schema.sql and db/migrations.sum.
+ * Every other file, migrations included, must be identical as in
+ * `sameChange`, and at least one must remain. F-299: this alone decides
+ * whether a FAIL or BLOCK on the earlier head is held; it never carries a PASS.
  */
-export function sameChangeOutsideSchema(current, earlier) {
+export function sameChangeBesideSchema(current, earlier) {
   const a = current?.files;
   const b = earlier?.files;
   // The cap counts the compare as GitHub listed it: a truncated list stays untrusted.
   if (!Array.isArray(a) || !Array.isArray(b) || a.length >= COMPARE_FILE_CAP || b.length >= COMPARE_FILE_CAP) return false;
-  const regenerated = (file) => SCHEMA_REGEN_FILES.includes(file?.filename);
+  return sameChange({ files: a.filter((file) => !regeneratedFile(file)) }, { files: b.filter((file) => !regeneratedFile(file)) });
+}
+
+/**
+ * D-293: `sameChangeBesideSchema`, and the two files themselves comparable. On
+ * either side each of them must be modified in place as a regular file
+ * (`100644 blob` at both ends of its compare). F-299: each must be in both
+ * compares or in neither, at most once, with a patch on both sides and the
+ * same `regenEffect`.
+ */
+export function sameChangeOutsideSchema(current, earlier) {
+  if (!sameChangeBesideSchema(current, earlier)) return false;
+  const [a, b] = [current.files, earlier.files];
   const inPlace = (file) =>
     file?.status === "modified" && file?.previous_filename == null && file?.entry === REGULAR_FILE && file?.baseEntry === REGULAR_FILE;
-  if (![...a, ...b].filter(regenerated).every(inPlace)) return false;
+  if (![...a, ...b].filter(regeneratedFile).every(inPlace)) return false;
   for (const name of SCHEMA_REGEN_FILES) {
     const left = a.filter((file) => file?.filename === name);
     const right = b.filter((file) => file?.filename === name);
@@ -1065,7 +1077,7 @@ export function sameChangeOutsideSchema(current, earlier) {
     const [now, then] = [regenEffect(left[0]), regenEffect(right[0])];
     if (now == null || then == null || JSON.stringify(now) !== JSON.stringify(then)) return false;
   }
-  return sameChange({ files: a.filter((file) => !regenerated(file)) }, { files: b.filter((file) => !regenerated(file)) });
+  return true;
 }
 
 // Non-enumerable, so the carried Set itself stays the strict D-101 set.
@@ -1101,11 +1113,14 @@ export function schemaChecksGreen(runs, headSha) {
  * current head) and `schemaGreen(sha)` (that earlier head, F-300) both resolve
  * true and `regenAfterMigrationMerge` holds: it carries review and QA verdicts
  * only, never an Owner Override or Owner-Command. Otherwise it lands in
- * `heldNegatives`, so a FAIL or BLOCK on it still blocks.
+ * `heldNegatives`, so a FAIL or BLOCK on it still blocks. F-299: so does a head
+ * on such a path with `sameChangeBesideSchema` whose two files cannot be
+ * compared; no PASS carries from it.
  */
 export async function carriedByCompare(candidates, current, compareHead, log = () => {}, { path = null, schemaGreen = async () => false } = {}) {
   const carried = new Set();
   const schemaOnly = [];
+  const held = [];
   for (const sha of candidates) {
     let earlier;
     try {
@@ -1115,13 +1130,21 @@ export async function carriedByCompare(candidates, current, compareHead, log = (
       return attach(attach(new Set(), "verdictOnly", []), "heldNegatives", []);
     }
     const strict = (path == null || onlyBaseMerges(path, sha)) && sameChange(current, earlier);
-    const schema = !strict && path != null && onlyBaseMerges(path, sha, { schema: true }) && sameChangeOutsideSchema(current, earlier);
-    log(`Carry-over ${strict ? "accepted" : schema ? "accepted outside db/schema.sql and db/migrations.sum (D-293)" : "rejected"}: head ${sha}.`);
+    const beside = !strict && path != null && onlyBaseMerges(path, sha, { schema: true }) && sameChangeBesideSchema(current, earlier);
+    const schema = beside && sameChangeOutsideSchema(current, earlier);
+    const outcome = strict
+      ? "accepted"
+      : schema
+        ? "accepted outside db/schema.sql and db/migrations.sum (D-293)"
+        : beside
+          ? "held: db/schema.sql or db/migrations.sum not comparable, no PASS carries (F-299)"
+          : "rejected";
+    log(`Carry-over ${outcome}: head ${sha}.`);
     if (strict) carried.add(sha);
     else if (schema) schemaOnly.push(sha);
+    else if (beside) held.push(sha);
   }
   const verdictOnly = [];
-  const held = [];
   if (schemaOnly.length > 0) {
     const greenOn = async (sha) => {
       try {
