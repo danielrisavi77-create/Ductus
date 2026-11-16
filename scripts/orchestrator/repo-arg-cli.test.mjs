@@ -140,3 +140,46 @@ test("a bad --repo is a usage error with exit 2, before any gh call", () => {
     assert.doesNotMatch(r.stderr, /fake gh/, script);
   }
 });
+
+test("orch:metrics with --repo reads the merged PRs, comments, files and events of that repository only", () => {
+  const merged = { ...pull, state: "closed", merged_at: "2026-10-02T00:00:00Z" };
+  const routes = {
+    ...META,
+    [`${R}/pulls?state=closed&base=main&per_page=100&page=1`]: [[merged]],
+    [`${R}/issues/5/comments?per_page=100&page=1`]: [[]],
+    [`${R}/pulls/5/files?per_page=100&page=1`]: [[{ filename: "src/a.ts" }]],
+    [`${R}/issues/5/events?per_page=100&page=1`]: [[]],
+  };
+  const r = run("pr-metrics.mjs", ["--since", "2026-10-01", "--json", "--repo", "ductura/server"], routes);
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual(out.rows.map((x) => x.number), [5]);
+  // Without --repo the same script asks for the working directory's repository, as before.
+  const plain = run("pr-metrics.mjs", ["--since", "2026-10-01", "--json"], routes);
+  assert.equal(plain.status, 2);
+  assert.match(plain.stderr, /unexpected path repos\/\{owner\}\/\{repo\}\/pulls/);
+  const bad = run("pr-metrics.mjs", ["--since", "2026-10-01", "--repos", "ductura/server"], routes);
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /^usage error: /);
+  assert.doesNotMatch(bad.stderr, /fake gh/);
+});
+
+test("every other GitHub-reading orch:* script refuses --repo instead of silently reading the working directory", () => {
+  const cases = [
+    ["health.mjs", ["--repo", "ductura/server"]],
+    ["health.mjs", ["--Repo=ductura/server"]],
+    ["pr-brief.mjs", ["1", "--repo", "ductura/server"]],
+    ["evidence.mjs", ["--pr", "1", "--repo", "ductura/server"]],
+    ["failure-capsule.mjs", ["--run", "1", "--repo", "ductura/server"]],
+    ["ci-twin.mjs", ["--since", "2026-10-01", "--repo", "ductura/server"]],
+    ["override-block.mjs", ["1", "--repo", "ductura/server"]],
+    ["wait-verdict.mjs", ["1", "--repo", "ductura/server"]],
+    ["verdict.mjs", ["1", "--repo", "ductura/server"]],
+    ["push-verify.mjs", ["--repo", "ductura/server"]],
+  ];
+  for (const [script, args] of cases) {
+    const r = run(script, args, {});
+    assert.equal(r.status, 2, `${script} ${args.join(" ")}: ${r.stdout}${r.stderr}`);
+    assert.doesNotMatch(r.stderr + r.stdout, /fake gh/, `${script}: no gh call`);
+  }
+});
