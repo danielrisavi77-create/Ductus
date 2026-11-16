@@ -182,6 +182,7 @@ test("every other GitHub-reading orch:* script refuses --repo instead of silentl
     ["pr-status.mjs", ["--json", "--re\u200bpo", "ductura/server"]],
     ["health.mjs", ["--re\u200bpo", "ductura/server"]],
     ["session-worktree-clean.mjs", ["--rep\u00ado=ductura/server"]],
+    ["pr-overlap.mjs", ["--r\u2060epo", "ductura/server"]],
   ];
   for (const [script, args] of cases) {
     const r = run(script, args, {});
