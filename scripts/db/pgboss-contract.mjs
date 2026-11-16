@@ -15,7 +15,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const PIN = Object.freeze({ version: "12.38.0", schema: 46 });
+export const PIN = Object.freeze({ version: "12.38.1", schema: 46 });
 export const SCHEMA_NAME = "pgboss";
 export const MIGRATIONS = Object.freeze({
   owner: "20261108110000_pgboss_owner.sql",
