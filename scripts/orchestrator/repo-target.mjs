@@ -34,9 +34,9 @@ export function parseTrackedRepos(text) {
 
 // Any spelling that is not exactly --repo but could be read as it: other letter
 // case, one dash, any Unicode dash (\p{Pd}, incl. fullwidth and small hyphen-minus),
-// U+2212 or a soft hyphen, zero-width format characters (\p{Cf}) before or
-// between the dashes, or a longer name.
-export const REPO_LOOKALIKE = /^\p{Cf}*(?:[\p{Pd}\u2212\u00ad]\p{Cf}*){1,2}repo/iu;
+// U+2212 or a soft hyphen, zero-width format characters (\p{Cf}) before, between
+// or after the dashes and between the letters of "repo", or a longer name.
+export const REPO_LOOKALIKE = /^\p{Cf}*(?:[\p{Pd}\u2212\u00ad]\p{Cf}*){1,2}r\p{Cf}*e\p{Cf}*p\p{Cf}*o/iu;
 
 export const TRACKED_REPOS = Object.freeze(parseTrackedRepos(readFileSync(new URL("./tracked-repos.json", import.meta.url), "utf8")));
 
