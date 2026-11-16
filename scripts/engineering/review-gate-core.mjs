@@ -920,7 +920,8 @@ export function namedCarryHeads(comments, headSha) {
  * D-101 "spajanje osnovne grane"). The merged-in change is judged by
  * `sameChange`. With `schema` (D-293) a step may also be a regeneration
  * commit (`regenOnlyCommit`); such a path carries only through
- * `sameChangeOutsideSchema` and green D-91 checks.
+ * `sameChangeOutsideSchema`, `regenAfterMigrationMerge` (F-300) and green D-91
+ * checks on both heads.
  */
 export function onlyBaseMerges(path, earlier, { schema = false } = {}) {
   const target = earlier?.toLowerCase();
@@ -935,7 +936,8 @@ export function onlyBaseMerges(path, earlier, { schema = false } = {}) {
  * D-293: a single-parent commit (GET commits/{sha}) that only modifies
  * db/schema.sql, db/migrations.sum or both, each in place: no other file, no
  * rename, no add or remove, no mode-only change. Its content is vouched for by
- * the D-91 checks on the current head, never by this test.
+ * the D-91 checks on both heads and its place by `regenAfterMigrationMerge`,
+ * never by this test.
  */
 export function regenOnlyCommit(commit) {
   const files = commit?.files;
@@ -945,6 +947,47 @@ export function regenOnlyCommit(commit) {
     new Set(names).size === names.length &&
     files.every((item) => SCHEMA_REGEN_FILES.includes(item?.filename) && item?.status === "modified" && item?.previous_filename == null)
   );
+}
+
+/**
+ * F-300: every regeneration commit on `path` before `earlier` must have, between
+ * itself and `earlier`, a base merge (two parents, `mergesBase`) whose `files`
+ * (GET commits/{sha}, against its first parent) touch db/migrations/. A path
+ * without regeneration commits passes; a path that does not reach `earlier`
+ * does not.
+ */
+export function regenAfterMigrationMerge(path, earlier) {
+  const steps = Array.isArray(path) ? path : [];
+  const target = earlier?.toLowerCase();
+  const end = steps.findIndex((commit) => commit?.sha?.toLowerCase() === target);
+  if (end <= 0) return false;
+  const migrationMerge = (commit) =>
+    commit?.parents?.length === 2 &&
+    commit?.mergesBase === true &&
+    Array.isArray(commit?.files) &&
+    commit.files.some((item) => typeof item?.filename === "string" && item.filename.startsWith("db/migrations/"));
+  return steps.slice(0, end).every((commit, index) => !regenOnlyCommit(commit) || steps.slice(index + 1, end).some(migrationMerge));
+}
+
+// One schema_migrations row as pg_dump writes it at the end of db/schema.sql.
+const VERSION_ROW = /^[+-] {4}\('\d{14}'\)[,;]$/;
+
+/**
+ * F-299: the added and removed lines of a regenerated file's patch, in order,
+ * without hunk headers, context or "\ No newline" markers. For db/schema.sql the
+ * trailing run of schema_migrations version rows in the last hunk is dropped:
+ * it moves with every migration the base adds. Null when there is no patch.
+ */
+export function regenEffect(file) {
+  if (typeof file?.patch !== "string") return null;
+  const rows = file.patch.split("\n");
+  const changed = (line) => line.startsWith("+") || line.startsWith("-");
+  const lines = rows.filter(changed);
+  if (file.filename !== "db/schema.sql") return lines;
+  const lastHunk = rows.slice(rows.findLastIndex((line) => line.startsWith("@@")) + 1).filter(changed);
+  let run = 0;
+  while (run < lastHunk.length && VERSION_ROW.test(lastHunk[lastHunk.length - 1 - run])) run += 1;
+  return lines.slice(0, lines.length - run);
 }
 
 function changeKey(file) {
@@ -984,8 +1027,9 @@ export function sameChange(current, earlier) {
 /**
  * D-293: `sameChange` with db/schema.sql and db/migrations.sum set aside. On
  * either side each of them must be modified in place as a regular file
- * (`100644 blob` at both ends of its compare); its patch is not compared and
- * may be missing (too large). Every other file, migrations included, must be
+ * (`100644 blob` at both ends of its compare). F-299: each must be in both
+ * compares or in neither, at most once, with a patch on both sides and the
+ * same `regenEffect`. Every other file, migrations included, must be
  * identical as in `sameChange`, and at least one must remain.
  */
 export function sameChangeOutsideSchema(current, earlier) {
@@ -997,6 +1041,14 @@ export function sameChangeOutsideSchema(current, earlier) {
   const inPlace = (file) =>
     file?.status === "modified" && file?.previous_filename == null && file?.entry === REGULAR_FILE && file?.baseEntry === REGULAR_FILE;
   if (![...a, ...b].filter(regenerated).every(inPlace)) return false;
+  for (const name of SCHEMA_REGEN_FILES) {
+    const left = a.filter((file) => file?.filename === name);
+    const right = b.filter((file) => file?.filename === name);
+    if (left.length !== right.length || left.length > 1) return false;
+    if (left.length === 0) continue;
+    const [now, then] = [regenEffect(left[0]), regenEffect(right[0])];
+    if (now == null || then == null || JSON.stringify(now) !== JSON.stringify(then)) return false;
+  }
   return sameChange({ files: a.filter((file) => !regenerated(file)) }, { files: b.filter((file) => !regenerated(file)) });
 }
 
@@ -1029,10 +1081,11 @@ export function schemaChecksGreen(runs, headSha) {
  *
  * D-293: with `path` (the first-parent walk), a head that does not carry under
  * D-101 but is reached through base merges and regeneration commits, with
- * `sameChangeOutsideSchema`, lands in `verdictOnly` when `schemaGreen()`
- * resolves true: it carries review and QA verdicts only, never an Owner
- * Override or Owner-Command. Otherwise it lands in `heldNegatives`, so a FAIL
- * or BLOCK on it still blocks.
+ * `sameChangeOutsideSchema`, lands in `verdictOnly` when `schemaGreen()` (the
+ * current head) and `schemaGreen(sha)` (that earlier head, F-300) both resolve
+ * true and `regenAfterMigrationMerge` holds: it carries review and QA verdicts
+ * only, never an Owner Override or Owner-Command. Otherwise it lands in
+ * `heldNegatives`, so a FAIL or BLOCK on it still blocks.
  */
 export async function carriedByCompare(candidates, current, compareHead, log = () => {}, { path = null, schemaGreen = async () => false } = {}) {
   const carried = new Set();
@@ -1051,17 +1104,28 @@ export async function carriedByCompare(candidates, current, compareHead, log = (
     if (strict) carried.add(sha);
     else if (schema) schemaOnly.push(sha);
   }
-  let green = false;
+  const verdictOnly = [];
+  const held = [];
   if (schemaOnly.length > 0) {
-    try {
-      green = (await schemaGreen()) === true;
-    } catch (error) {
-      log(`D-91 schema checks could not be read, no PASS carries through the schema: ${error.message}`);
+    const greenOn = async (sha) => {
+      try {
+        return (await (sha === undefined ? schemaGreen() : schemaGreen(sha))) === true;
+      } catch (error) {
+        log(`D-91 schema checks on ${sha ?? "the current head"} could not be read, no PASS carries through the schema: ${error.message}`);
+        return false;
+      }
+    };
+    const green = await greenOn(undefined);
+    log(`D-91 schema checks on the current head ${green ? "green" : "not green: only a FAIL or BLOCK carries"} (D-293).`);
+    for (const sha of schemaOnly) {
+      const ordered = regenAfterMigrationMerge(path, sha);
+      const ok = green && ordered && (await greenOn(sha));
+      log(`Schema carry-over for ${sha} ${ok ? "accepted: review and QA verdicts carry" : ordered ? "held: D-91 not green on both heads" : "held: no migration merge before a regeneration commit"} (F-299, F-300).`);
+      (ok ? verdictOnly : held).push(sha);
     }
-    log(`D-91 schema checks on the current head ${green ? "green: review and QA verdicts carry" : "not green: only a FAIL or BLOCK carries"} (D-293).`);
   }
-  attach(carried, "verdictOnly", green ? schemaOnly : []);
-  return attach(carried, "heldNegatives", green ? [] : schemaOnly);
+  attach(carried, "verdictOnly", verdictOnly);
+  return attach(carried, "heldNegatives", held);
 }
 
 /**
