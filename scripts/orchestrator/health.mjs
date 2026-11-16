@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { ghList, toPr } from "./gh.mjs";
+import { REPO_LOOKALIKE } from "./repo-target.mjs";
 import {
   MANUAL, checkFailStalls, checkMainCi, checkQueue, checkSafetyNet, exitCode, hookTargets, joinPath,
   parseWorktrees, queueItems, render, watched,
@@ -138,6 +139,14 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
 const self = fileURLToPath(import.meta.url);
 const real = (p) => { try { return realpathSync(p); } catch { return p; } };
 if (process.argv[1] && real(process.argv[1]) === real(self)) {
+  // DAN-734: health checks this checkout's worktrees and issue #87, so it has no
+  // --repo; it ignores other arguments, and a silently ignored --repo would
+  // report on the wrong repository.
+  const bad = process.argv.slice(2).find((a) => REPO_LOOKALIKE.test(a));
+  if (bad) {
+    console.error(`usage error: orch:health has no ${bad.split("=")[0]}; it reads the repository of the working directory`);
+    process.exit(2);
+  }
   const { lines, code } = await health();
   for (const line of lines) console.log(line);
   process.exitCode = code;

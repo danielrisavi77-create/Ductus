@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 
 import { sameRepositoryHead } from "../engineering/review-gate-core.mjs";
 import { changedPaths, pickGate } from "./orchestrator-core.mjs";
+import { isSlug, takeRepoArg } from "./repo-target.mjs";
 
 const run = promisify(execFile);
 
@@ -12,8 +13,39 @@ export async function sh(cmd, args) {
   return stdout;
 }
 
+// DAN-734: the repository every read goes to; null = gh resolves {owner}/{repo}
+// from the working directory, as before.
+let target = null;
+let cachedRepo;
+
+/** Points every later gh read at `slug` (owner/name), or back at the working directory with null. */
+export function setTargetRepo(slug) {
+  if (slug !== null && !isSlug(slug)) throw new Error(`not owner/name: ${slug}`);
+  target = slug;
+  cachedRepo = undefined;
+}
+
+/** gh arguments with {owner} and {repo} filled from the target; unchanged without one. */
+export function targetArgs(args, slug = target) {
+  if (slug === null) return args;
+  const [owner, repo] = slug.split("/");
+  return args.map((a) => (typeof a === "string" ? a.replaceAll("{owner}", owner).replaceAll("{repo}", repo) : a));
+}
+
+/** CLI: takes --repo out of argv and points every read at it; exits 2 before any read on a bad --repo. */
+export function repoArgs(argv) {
+  try {
+    const { repo, rest } = takeRepoArg(argv);
+    if (repo) setTargetRepo(repo);
+    return rest;
+  } catch (e) {
+    console.error(`usage error: ${e.message}`);
+    process.exit(2);
+  }
+}
+
 export async function ghJson(args, exec = sh) {
-  const out = (await exec("gh", args)).trim();
+  const out = (await exec("gh", targetArgs(args))).trim();
   if (!out) throw new Error(`empty response from gh ${args.slice(0, 2).join(" ")}`);
   return JSON.parse(out);
 }
@@ -188,7 +220,6 @@ export async function readGate(sha, { read = gateStatus, tries = 2 } = {}) {
   return { error };
 }
 
-let cachedRepo;
 export function repoId({ json = ghJson } = {}) {
   // A failed read is not cached: the next call (a retry) asks GitHub again (Codex CLI #1197).
   cachedRepo ??= json(["api", "repos/{owner}/{repo}"]).then(

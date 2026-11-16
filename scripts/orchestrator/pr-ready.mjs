@@ -1,9 +1,10 @@
 // Merge-readiness checklist for one PR. Read-only: never merges or edits.
-// Usage: node pr-ready.mjs <number>   (exit 0 only if all required checks pass)
+// Usage: node pr-ready.mjs <number> [--repo <owner/name>]   (exit 0 only if all required checks pass)
+//   --repo reads only that tracked repository (tracked-repos.json).
 import "./help.mjs";
 import { pathToFileURL } from "node:url";
 
-import { checkRollup, ghJson, prPaths, prView, readGate, repoId, reviewThreads } from "./gh.mjs";
+import { checkRollup, ghJson, prPaths, prView, readGate, repoArgs, repoId, reviewThreads } from "./gh.mjs";
 import {
   allRequiredPass, evaluateReady, intersectFiles, parseAgentRisk, summarizeThreads,
 } from "./orchestrator-core.mjs";
@@ -64,9 +65,10 @@ async function main(n) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const n = Number(process.argv[2]);
+  const argv = repoArgs(process.argv.slice(2));
+  const n = Number(argv[0]);
   if (!Number.isInteger(n) || n <= 0) {
-    console.error("usage: pr-ready <pr-number>");
+    console.error("usage: pr-ready <pr-number> [--repo <owner/name>]");
     process.exit(2);
   }
   main(n).then(

@@ -1,0 +1,11 @@
+{
+  "repositories": [
+    "danielrisavi77-create/Ductus",
+    "ductura/server",
+    "ductura/preloader",
+    "ductura/web",
+    "ductura/desktop-windows",
+    "ductura/desktop-macos",
+    "ductura/.github"
+  ]
+}
