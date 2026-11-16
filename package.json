@@ -99,7 +99,7 @@
     "fake-indexeddb": "^6.2.8",
     "fast-check": "^4.10.2",
     "lefthook": "^2.2.2",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vite": "8.3.7",
     "vitest": "^5.1.0"
   },
