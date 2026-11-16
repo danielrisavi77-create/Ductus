@@ -6,13 +6,16 @@
 // REGENERABLE or operation in progress, its branch has commits of its own (not reachable from
 // origin/main), and a MERGED pull request for that branch has headRefOid equal to HEAD, merged at
 // least MIN_MERGED_AGE_MS ago, with no OPEN pull request on the same branch name. Anything unknown
-// (failed fetch, gh, git) means not listed. Usage: node session-worktree-clean.mjs [--hook]. Always exits 0.
+// (failed fetch, gh, git) means not listed. Usage: node session-worktree-clean.mjs [--hook]. Always exits 0,
+// except 2 for a --repo look-alike: the report is tied to this checkout's worktrees and origin (DAN-734).
 // #435: the whole run stops after TOTAL_BUDGET_MS (an async hook's `timeout` is not enforced), and with
 // --hook stdout is one JSON line with `additionalContext` (the only output an async hook delivers), or nothing.
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { REPO_LOOKALIKE } from "./repo-target.mjs";
 
 export const MIN_MERGED_AGE_MS = 2 * 60 * 60 * 1000;
 // Below the hook's declared `timeout: 180`; no single git or gh call outlives the remaining budget.
@@ -202,6 +205,11 @@ export function main(argv, { runFn = run, write = (s) => process.stdout.write(s)
 }
 
 if (process.argv[1] && samePath(real(process.argv[1]), fileURLToPath(import.meta.url))) {
+  const bad = process.argv.slice(2).find((a) => REPO_LOOKALIKE.test(a));
+  if (bad) {
+    console.error(`usage error: session-worktree-clean has no ${bad.split("=")[0]}; it reads this checkout and its origin`);
+    process.exit(2);
+  }
   main(process.argv.slice(2));
   process.exitCode = 0;
 }
