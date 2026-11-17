@@ -22,7 +22,7 @@ import {
 import { EvidenceContentNotSupportedV2 } from "@/domain/forensics/evidence-replay-v2";
 import type { EvidenceEventV3 } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
-import { createEditorExtensions } from "@/editor/schema";
+import { createEditorExtensions } from "@/editor";
 
 import { refuse, removedRangeCanonical, type RemovedRangeClaim } from "./edit-steps-v1-rules";
 

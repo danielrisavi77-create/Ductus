@@ -22,9 +22,7 @@ import type {
   EvidenceOpening, EvidenceSegmentTransaction, PendingTransaction, QueuedTransaction,
 } from "@/domain/sync/journal-types";
 import { syncReducer } from "@/domain/sync/states";
-import { changeOf, EvidenceRecorder, type BuiltSegment } from "@/editor/capture";
-import { tiptapToCanonical } from "@/editor/interop";
-import { createEditorExtensions } from "@/editor/schema";
+import { changeOf, EvidenceRecorder, type BuiltSegment, tiptapToCanonical, createEditorExtensions } from "@/editor";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 
 import { createDrainRunner } from "./drain-runner";

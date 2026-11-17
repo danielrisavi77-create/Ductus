@@ -1,4 +1,4 @@
-import { posix } from "node:path";
+import { posix, relative, resolve } from "node:path";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
@@ -146,6 +146,38 @@ const databaseBoundaryPlugin = {
   },
 };
 
+// DAN-927 (E-0.1): src/editor is the editor-core package and src/editor/index.ts
+// its only entry. A specifier is resolved against the importing file (@/ is
+// src/, a relative one from the file's directory), normalized and compared
+// without case, so case-insensitive file systems are covered too. Any other
+// specifier is tested as text for a src/editor/ segment.
+const EDITOR_DEEP_RE = /(?:^|\/)src\/editor\/(?!index(?:\.[cm]?[jt]sx?)?$)[^/]/u;
+function isEditorDeep(context, specifier) {
+  const file = relative(context.cwd, context.filename).replace(/\\/g, "/");
+  return [specifier.trim(), specifier.trim().replace(/[?#].*$/su, "")].some((raw) => {
+    const text = raw.replace(/\\/g, "/");
+    let target = text;
+    if (/^@\//u.test(text)) target = `src/${text.slice(2)}`;
+    else if (/^\.\.?(?:\/|$)/u.test(text)) target = relative(context.cwd, resolve(context.cwd, posix.dirname(file), text)).replace(/\\/g, "/");
+    return EDITOR_DEEP_RE.test(posix.normalize(target).replace(/\/+$/u, "").toLowerCase());
+  });
+}
+
+const editorBoundaryPlugin = {
+  rules: {
+    "entry-only": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: { deepEditor: "Outside src/editor, import the editor through its entry @/editor only." },
+      },
+      create(context) {
+        return specifierVisitors(context, (specifier) => isEditorDeep(context, specifier), "deepEditor");
+      },
+    },
+  },
+};
+
 const eslintConfig = [
   {
     ignores: [
@@ -205,6 +237,14 @@ const eslintConfig = [
       "no-restricted-imports": "off",
       "database-boundary/no-restricted-dynamic-imports": "off",
     },
+  },
+  {
+    // Everything outside src/editor reaches it through its entry (DAN-927).
+    // An inline directive cannot lift it unseen: tests/unit/editor-boundary
+    // lints the repository again with directives off.
+    ignores: ["src/editor/**"],
+    plugins: { "editor-boundary": editorBoundaryPlugin },
+    rules: { "editor-boundary/entry-only": "error" },
   },
 ];
 

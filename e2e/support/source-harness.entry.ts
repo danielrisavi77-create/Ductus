@@ -11,10 +11,7 @@
 import { Editor } from "@tiptap/core";
 
 import type { EvidenceSource } from "../../src/domain/forensics/evidence-segment-v2";
-import { ArrowCollapse } from "../../src/editor/arrow-collapse";
-import { createEditorExtensions } from "../../src/editor/schema";
-import { sourceOfChange, SourceObserver } from "../../src/editor/source";
-import { StorableInput } from "../../src/editor/storable-input";
+import { ArrowCollapse, createEditorExtensions, sourceOfChange, SourceObserver, StorableInput } from "../../src/editor";
 
 export type InputSignal = { inputType: string; isTrusted: boolean };
 

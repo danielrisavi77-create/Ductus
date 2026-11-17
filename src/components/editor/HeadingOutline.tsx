@@ -13,8 +13,7 @@
 import { useEditorState, type Editor } from "@tiptap/react";
 
 import { showInText } from "@/client/comments-bridge";
-import { blockPosition, numberedHeadings, type NumberedHeading } from "@/editor/chapter-numbers";
-import { currentHeading } from "@/editor/outline";
+import { blockPosition, numberedHeadings, type NumberedHeading, currentHeading } from "@/editor";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import { useLocalEditor } from "./LocalDocument";

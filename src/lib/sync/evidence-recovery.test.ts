@@ -5,7 +5,7 @@ import { emptyDocument } from "@/domain/document";
 import { jcsUtf8Bytes } from "@/domain/forensics/jcs";
 import { outcomeToEvents, type DrainOutcome } from "@/domain/sync/drain";
 import type { EvidenceOpening, EvidenceSegmentTransaction, PendingTransaction } from "@/domain/sync/journal-types";
-import type { BuiltSegment } from "@/editor/capture";
+import type { BuiltSegment } from "@/editor";
 import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 
 import {

@@ -14,9 +14,7 @@ import type { EvidenceDomainKey } from "../../src/domain/forensics/evidence-rece
 import { jcsUtf8Bytes } from "../../src/domain/forensics/jcs";
 import type { CanonicalDocument } from "../../src/domain/document/schema";
 import type { EvidenceOpening, QueuedTransaction, SyncMeta } from "../../src/domain/sync/journal-types";
-import { CaptureError, changeOf, EvidenceRecorder } from "../../src/editor/capture";
-import { canonicalToTiptap, tiptapToCanonical } from "../../src/editor/interop";
-import { createEditorExtensions } from "../../src/editor/schema";
+import { CaptureError, changeOf, EvidenceRecorder, canonicalToTiptap, tiptapToCanonical, createEditorExtensions } from "../../src/editor";
 import { AtomicDexieJournal, JournalError, type LogoutHold } from "../../src/lib/journal/atomic-dexie-journal";
 import { createDrainRunner, type DrainStepResult } from "../../src/lib/sync/drain-runner";
 import { createEvidenceTransport, evidenceVerifierFor } from "../../src/lib/sync/evidence-transport";

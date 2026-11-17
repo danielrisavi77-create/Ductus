@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef } from "react";
 
 import EditorToolbarFor from "@/components/editor/EditorToolbarFor";
 import { useSheetTheme } from "@/components/shell/useSheetTheme";
-import { createEditorExtensions } from "@/editor/schema";
+import { createEditorExtensions } from "@/editor";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import styles from "./Wow.module.css";

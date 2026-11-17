@@ -17,8 +17,7 @@
 import type { Node as PmNode, Schema } from "@tiptap/pm/model";
 
 import type { CanonicalDocument } from "@/domain/document";
-import type { CommentRange } from "@/editor/comment-anchor";
-import { canonicalToTiptap, NODE_ID_ATTRIBUTE } from "@/editor/interop";
+import { canonicalToTiptap, type CommentRange, NODE_ID_ATTRIBUTE } from "@/editor";
 
 /** The text of every paragraph of the submitted revision, by its id. */
 export type SubmittedTexts = ReadonlyMap<string, string>;
