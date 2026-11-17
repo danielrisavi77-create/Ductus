@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ductura Editor (prototip)</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<a class="skip" href="#ed">Preskoči na tekst rada</a>
+<div class="app" id="app" data-mode="write">
+  <header class="top">
+    <button class="ib only-narrow" data-act="rail" aria-label="Struktura rada" title="Struktura rada">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 4.5h12M3 9h8M3 13.5h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+    </button>
+    <span class="mark">Ductu<b>ra</b></span>
+    <span class="crumb">Kolegij A / Zadatak 1 <i>prototip</i></span>
+    <span class="grow"></span>
+    <div class="seg" role="group" aria-label="Prikaz">
+      <button data-act="mode" data-v="write" aria-pressed="true">Pisanje</button>
+      <button data-act="mode" data-v="teacher" aria-pressed="false"><span class="wide">Kako vidi nastavnik</span><span class="narrow">Nastavnik</span></button>
+    </div>
+    <button class="ib only-mid" data-act="panel" aria-label="Bočni panel" title="Bočni panel">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="3.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M11 3.5v11" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+  </header>
+
+  <div class="tools" id="tools" role="toolbar" aria-label="Alati za pisanje">
+    <button class="tb" data-act="undo" title="Poništi (Ctrl+Z)" aria-label="Poništi">↶</button>
+    <button class="tb" data-act="redo" title="Ponovi (Ctrl+Y)" aria-label="Ponovi">↷</button>
+    <span class="sep"></span>
+    <select id="blockStyle" class="sel" aria-label="Stil odlomka">
+      <option value="p">Odlomak</option>
+      <option value="h1">Naslov rada</option>
+      <option value="h2">Poglavlje</option>
+      <option value="h3">Potpoglavlje</option>
+    </select>
+    <button class="tb" data-act="bold" title="Podebljano (Ctrl+B)" aria-label="Podebljano"><b>B</b></button>
+    <button class="tb" data-act="italic" title="Kurziv (Ctrl+I)" aria-label="Kurziv"><i>I</i></button>
+    <button class="tb" data-act="list" title="Popis" aria-label="Popis">•</button>
+    <button class="tb" data-act="quote" title="Blok-citat" aria-label="Blok-citat">„ ”</button>
+    <span class="sep"></span>
+    <button class="tb txt" data-act="cite" title="Navod (ili upišite @)">Navod</button>
+    <button class="tb txt" data-act="quick" title="Dodajte izvor i odmah ga citirajte">Izvor +</button>
+    <button class="tb txt" data-act="menu-ins" aria-haspopup="true" title="Tablica, slika, fusnota, unakrsna referenca, inačica odlomka">Umetni ▾</button>
+    <button class="tb txt" data-act="menu-conv" aria-haspopup="true">Pretvori ▾</button>
+    <button class="tb txt" data-act="phrases" title="Akademske fraze (ili upišite /fraza)">Fraze</button>
+    <button class="tb txt" data-act="hole" title="Rupa: nastavite pisati, vratite se poslije">Rupa [?]</button>
+    <button class="tb txt" data-act="comment" data-t title="Komentar uz označeni tekst (Ctrl+Alt+M ili desni klik)">Komentar</button>
+    <button class="tb txt" data-act="menu-more" aria-haspopup="true">Više ▾</button>
+    <span class="grow"></span>
+    <button class="tb txt" data-act="findOpen" data-t data-l title="Traži (Ctrl+F)">Traži</button>
+    <button class="tb txt" data-act="menu-export" data-t data-l aria-haspopup="true">Izvezi ▾</button>
+    <button class="tb txt" data-act="menu-view" data-t data-l aria-haspopup="true" title="Pomoć u tekstu, izgled lista, stil citiranja">Prikaz ▾</button>
+    <button class="tb" data-act="focus" title="Mirni način (Ctrl+.)" aria-label="Mirni način">◎</button>
+  </div>
+  <div class="find" id="find" hidden>
+    <input class="in" id="findQ" placeholder="Traži…" aria-label="Traži">
+    <input class="in" id="findR" placeholder="Zamijeni…" aria-label="Zamijeni s">
+    <select class="sel" id="findScope" aria-label="Opseg traženja"><option value="all">cijeli rad</option><option value="chap">ovo poglavlje</option><option value="quote">samo u citatima „…”</option></select>
+    <button class="btn sm" data-act="findNext">Dalje</button><button class="btn sm" data-act="findRep">Zamijeni</button><button class="btn sm" data-act="findAll">Sve</button>
+    <span class="muted" id="findMsg"></span><span class="grow"></span>
+    <button class="ib" data-act="findClose" aria-label="Zatvori traženje">✕</button>
+  </div>
+
+  <div class="body">
+    <aside class="rail" id="rail" aria-label="Struktura rada"></aside>
+    <main class="stage" id="stage">
+      <div class="sheet" id="sheet" data-sheet-theme="light">
+        <div id="banner"></div>
+        <div id="toc"></div>
+        <div id="ed" lang="hr"></div>
+        <div id="fnlist"></div>
+        <section id="bib" aria-label="Literatura"></section>
+      </div>
+    </main>
+    <aside class="panel" id="panel" aria-label="Bočni panel">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="pbody" id="pbody"></div>
+    </aside>
+  </div>
+
+  <footer class="status" id="status"></footer>
+</div>
+<div id="drawerScrim" data-act="closeDrawers"></div>
+<div id="pop" hidden></div>
+<div id="dlg" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="vendor/tiptap.js"></script>
+<script src="app.js"></script>
+<script src="features.js"></script>
+<script src="rules.js"></script>
+<script src="rail.js"></script>
+<script src="advice.js"></script>
+<script src="plus.js"></script>
+<script src="right.js"></script>
+<script src="tools.js"></script>
+<script src="assist.js"></script>
+<script src="proofs.js"></script>
+<script src="sources2.js"></script>
+<script src="comments2.js"></script>
+<script src="review2.js"></script>
+<script src="mentor2.js"></script>
+<script src="assist2.js"></script>
+<script src="prune.js"></script>
+<script>DU.boot();</script>
+</body>
+</html>

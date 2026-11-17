@@ -17,6 +17,8 @@ Vlasnik, 5. 11. 2026. ([#87, komentar 6645197873](https://github.com/danielrisav
 - **DJELOMIČNO**: ili slika postoji bez svih stanja, ili postoji samo stari .dc.html prototip ili snimka aplikacije u staroj paleti. Prototip nije odobrena referenca (DESIGN-SYSTEM §1 t. 4).
 - **NEMA**: ništa.
 
+**Otvoren nesklad, odlučuje Daniel (17. 11. 2026., #2012 c.6956819971):** S-16, S31-AI i N-AI-ATT spojeni su u main (#1650, #1698, #1731), pa bi po Q-8 u `STATE.md` (reference se odobravaju po ekranu čim prođu gate) i po ovom odjeljku bili ODOBRENO. README-i `docs/design/ductura/m9-reference-a` i `m9-reference-b` kažu da su prijedlog do vlasnikove potvrde („Spoji n”, D-183). Dok Daniel ne odluči, redci tih ekrana nose oznaku „spojeno; status otvoren”. Isto pitanje vrijedi za A-AI-POL (#1652), čiji redak ovdje nije mijenjan. Prototip desnog panela v0.16 (`docs/design/ductura/desni-panel-v016/`) nije referenca nijednog ekrana (D-315).
+
 Zahtijevana stanja svakog ekrana: popunjeno, prazno, učitavanje, greška, mobitel (400 px), uz posebna stanja ekrana. Stupac „Nedostaje” navodi što još nije prikazano; to je procjena iz opisa ekrana, osim stanja doslovno navedenih u README-ima referenci. Stupac „Paket” upućuje na odjeljak 4 (— znači da ekran nema paket: gotov je ili izvan plana).
 
 ## 3. Odluke EQ1–EQ10
@@ -125,7 +127,7 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | N-17 | Zbirni pregled | M6 | NEMA | 9 | popunjeno, prazno, učitavanje, greška, mobitel |
 | P-01 | Povjerenstvo (zaključan rad, rubrika) | M6 | DJELOMIČNO | U | prazno, učitavanje, greška, mobitel, bez pristupa, ocjene ostalih skrivene |
 | N-15 | Etape, rubrika, izvješće, ocjena | M6 | DJELOMIČNO | U | prazno, učitavanje, greška, mobitel |
-| S-15 | Panel Rad | M7 | NEMA | 6 | popunjeno, prazno, učitavanje, greška, mobitel |
+| S-15 | Panel Rad | M7 | ODOBRENO (m7-reference, #1815; Q-8) | — | — |
 | S-30 | Pregled prije predaje | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel, bez mreže |
 | S-31 | Izjava | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel |
 | S-32 | Potvrda predaje | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel, potvrda čeka potpis |
@@ -142,9 +144,9 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | S-20 | Izvoz (A4 pregled) | M8 | DJELOMIČNO | 12 | popunjeno, prazno, učitavanje, greška, mobitel, izvoz .docx/PDF |
 | N-18 | Izvoz predanog rada i paket za Merlin | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel |
 | S-09 | PDF izvori u bilježnici (isticanje, citat) | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel, citat nije pronađen |
-| S-16 | Panel Asistent (12 stanja) | M9 | PRIJEDLOG (DAN-411, m9-reference-a) | 13 | 12 stanja, bez mreže, proračun (S16-BUD), mobitel |
-| S31-AI | Izjava o uporabi AI u predaji | M9 | PRIJEDLOG (DAN-411, m9-reference-b) | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
-| N-AI-ATT | Nastavnik: pregled AI-atribucije | M9 | PRIJEDLOG (DAN-411, m9-reference-b) | 14 | popunjeno, prazno, učitavanje, greška, mobitel |
+| S-16 | Panel Asistent (12 stanja) | M9 | spojeno; status otvoren (§2, nesklad Q-8) (DAN-411, m9-reference-a, #1650) | 13 | — |
+| S31-AI | Izjava o uporabi AI u predaji | M9 | spojeno; status otvoren (§2, nesklad Q-8) (DAN-411, m9-reference-b, #1698) | 14 | — |
+| N-AI-ATT | Nastavnik: pregled AI-atribucije | M9 | spojeno; status otvoren (§2, nesklad Q-8) (DAN-411, m9-reference-b, #1731) | 14 | — |
 | A-AI-POL | Administrator: pravilo o uporabi AI | M9 | PRIJEDLOG (DAN-411, m9-reference-b) | 14 | pregled, samo za čitanje, neispravan unos, trošak nije podešen, učitavanje, greška |
 | N-19 | AI pomoć nastavniku | M9 | NEMA | — | — |
 | S-18 | Vlastita povijest rada | M10 | NEMA | U | popunjeno, prazno, učitavanje, greška, mobitel |
