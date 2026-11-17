@@ -1,5 +1,5 @@
-import { dirname, posix, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, isAbsolute, posix, relative, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
@@ -94,18 +94,19 @@ function isLoaderCall(context, callee) {
 
 // Report every literal specifier that `test` matches, in the forms a file can
 // name a module with: static import and export, import(), and a loader call
-// (isLoaderCall) with the specifier as its first argument.
+// (isLoaderCall) with the specifier as its first argument. For a loader call,
+// `test` also gets the callee.
 function specifierVisitors(context, test, messageId, { skipStatic } = {}) {
-  const check = (node) => {
+  const check = (node, loader) => {
     const specifier = staticSpecifier(node);
-    if (typeof specifier === "string" && test(specifier)) context.report({ node, messageId });
+    if (typeof specifier === "string" && test(specifier, loader)) context.report({ node, messageId });
   };
   return {
     ImportExpression(node) {
       check(node.source);
     },
     CallExpression(node) {
-      if (isLoaderCall(context, node.callee)) check(node.arguments[0]);
+      if (isLoaderCall(context, node.callee)) check(node.arguments[0], node.callee);
     },
     "ImportDeclaration, ExportNamedDeclaration, ExportAllDeclaration"(node) {
       if (node.source && !skipStatic?.(node.source.value)) check(node.source);
@@ -149,21 +150,90 @@ const databaseBoundaryPlugin = {
 
 // DAN-927 (E-0.1): src/editor is the editor-core package and src/editor/index.ts
 // its only entry. A specifier is resolved against the importing file (@/ is
-// src/, a relative one from the file's directory) and made relative to the
-// repository root, where this file is, so ESLint's working directory does not
-// matter. It is normalized and compared without case, so case-insensitive file
-// systems are covered too. Any other specifier is tested as text for a
-// src/editor/ segment.
+// src/, a relative one from the file's directory, or from the base a
+// createRequire was given) and made relative to the repository root, where this
+// file is, so ESLint's working directory does not matter. It is normalized and
+// compared without case, so case-insensitive file systems are covered too. Any
+// other specifier is tested as text for a src/editor/ segment.
 const REPO_ROOT = dirname(fileURLToPath(import.meta.url));
 const EDITOR_DEEP_RE = /(?:^|\/)src\/editor\/(?!index(?:\.[cm]?[jt]sx?)?$)[^/]/u;
-function isEditorDeep(context, specifier) {
-  return [specifier.trim(), specifier.trim().replace(/[?#].*$/su, "")].some((raw) => {
+const EDITOR_ENTRY_RE = /^src\/editor(?:\/index(?:\.[cm]?[jt]sx?)?)?$/u;
+const repoPath = (path) => relative(REPO_ROOT, path).replace(/\\/g, "/");
+
+// The file a createRequire base names when it is static: import.meta.url,
+// import.meta.filename, __filename, import.meta.dirname, __dirname, a literal
+// absolute path or file URL, or new URL(literal, import.meta.url). Node reads
+// a base as a directory only when it ends in a slash, so a dirname without one
+// resolves from its parent. Otherwise undefined.
+function ownLocation(context, node) {
+  const file = context.filename;
+  if (node?.type === "MemberExpression" && !node.computed && node.object.type === "MetaProperty") {
+    if (node.property.name === "url" || node.property.name === "filename") return file;
+    if (node.property.name === "dirname") return dirname(file);
+  }
+  if (node?.type === "Identifier" && binding(context, node, node.name) === undefined) {
+    if (node.name === "__filename") return file;
+    if (node.name === "__dirname") return dirname(file);
+  }
+  return undefined;
+}
+function requireBase(context, node) {
+  const own = ownLocation(context, node);
+  if (own !== undefined) return own;
+  let text = staticSpecifier(node);
+  if (node?.type === "NewExpression" && node.callee.type === "Identifier" && node.callee.name === "URL" && node.arguments.length === 2) {
+    const input = staticSpecifier(node.arguments[0]);
+    const base = ownLocation(context, node.arguments[1]);
+    if (typeof input === "string" && base !== undefined) text = new URL(input, pathToFileURL(base)).href;
+  }
+  if (typeof text !== "string") return undefined;
+  try {
+    const path = text.startsWith("file:") ? fileURLToPath(text) : text;
+    return isAbsolute(path) ? path : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// The directory a loader call resolves a relative specifier from: the calling
+// file's for require, module.require and import.meta.resolve, the base's for a
+// createRequire, and null when that base is not static.
+function loaderDir(context, callee) {
+  let loader = callee;
+  if (loader?.type === "MemberExpression" && !loader.computed && loader.property.name === "resolve") {
+    if (loader.object.type === "MetaProperty") loader = undefined;
+    else loader = loader.object;
+  }
+  let call;
+  if (loader?.type === "CallExpression") call = loader;
+  else if (loader?.type === "Identifier") {
+    const def = binding(context, loader, loader.name);
+    if (def?.type === "Variable" && def.node.init?.type === "CallExpression") call = def.node.init;
+  }
+  if (call === undefined) return dirname(context.filename);
+  const base = requireBase(context, call.arguments[0]);
+  if (base === undefined) return null;
+  return /[\\/]$/u.test(base) ? base : dirname(base);
+}
+
+// A query or fragment suffix does not change the module, so the text before it
+// is tested as well; when that text is the entry, the import is the entry. A
+// relative specifier through a createRequire with an unknown base is rejected.
+function isEditorDeep(context, specifier, loader) {
+  const dir = loader === undefined ? dirname(context.filename) : loaderDir(context, loader);
+  const target = (raw) => {
     const text = raw.replace(/\\/g, "/");
-    let target = text;
-    if (/^@\//u.test(text)) target = `src/${text.slice(2)}`;
-    else if (/^\.\.?(?:\/|$)/u.test(text)) target = relative(REPO_ROOT, resolve(dirname(context.filename), text)).replace(/\\/g, "/");
-    return EDITOR_DEEP_RE.test(posix.normalize(target).replace(/\/+$/u, "").toLowerCase());
+    if (/^@\//u.test(text)) return `src/${text.slice(2)}`;
+    if (!/^\.\.?(?:\/|$)/u.test(text)) return text;
+    return dir === null ? null : repoPath(resolve(dir, text));
+  };
+  const forms = [specifier.trim(), specifier.trim().replace(/[?#].*$/su, "")].map((raw) => {
+    const path = target(raw);
+    return path === null ? null : posix.normalize(path).replace(/\/+$/u, "").toLowerCase();
   });
+  if (forms.includes(null)) return true;
+  if (EDITOR_ENTRY_RE.test(forms[1])) return false;
+  return forms.some((path) => EDITOR_DEEP_RE.test(path));
 }
 
 const editorBoundaryPlugin = {
@@ -175,7 +245,19 @@ const editorBoundaryPlugin = {
         messages: { deepEditor: "Outside src/editor, import the editor through its entry @/editor only." },
       },
       create(context) {
-        return specifierVisitors(context, (specifier) => isEditorDeep(context, specifier), "deepEditor");
+        // The package's own files, decided here from the repository root, not
+        // by a files pattern, which follows the working directory under --config.
+        if (/^src\/editor\//u.test(repoPath(context.filename).toLowerCase())) return {};
+        const test = (specifier, loader) => isEditorDeep(context, specifier, loader);
+        return {
+          ...specifierVisitors(context, test, "deepEditor"),
+          // A type that names a module: import(M).X and typeof import(M) (TSImportType).
+          TSImportType(node) {
+            const source = node.source ?? node.argument?.literal;
+            const specifier = staticSpecifier(source);
+            if (typeof specifier === "string" && test(specifier)) context.report({ node: source, messageId: "deepEditor" });
+          },
+        };
       },
     },
   },
@@ -242,10 +324,10 @@ const eslintConfig = [
     },
   },
   {
-    // Everything outside src/editor reaches it through its entry (DAN-927).
-    // An inline directive cannot lift it unseen: tests/unit/editor-boundary
-    // lints the repository again with directives off.
-    ignores: ["src/editor/**"],
+    // Everything outside src/editor reaches it through its entry (DAN-927);
+    // the rule itself exempts the package's files. An inline directive cannot
+    // lift it unseen: tests/unit/editor-boundary lints the repository again
+    // with directives off.
     plugins: { "editor-boundary": editorBoundaryPlugin },
     rules: { "editor-boundary/entry-only": "error" },
   },

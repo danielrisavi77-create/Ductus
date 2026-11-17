@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { ESLint } from "eslint";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -34,6 +34,8 @@ const FORMS = [
   'import { createRequire } from "node:module";\nexport const y = createRequire(import.meta.url)("M");\n',
   'export const y = import.meta.resolve("M");\n',
 ];
+// Type-only forms that TypeScript resolves like an import; only in TS files.
+const TYPE_FORMS = ['export type Y = import("M").X;\n', 'export type Y = typeof import("M");\n'];
 const OUTSIDE = ["src/lib/probe.ts", "app/probe/page.tsx", "tests/unit/probe.test.ts", "scripts/probe.mjs"];
 
 // Seen from src/lib/probe.ts, and from e2e/support/probe.ts for paths through src/.
@@ -70,6 +72,11 @@ const ENTRY = [
   ["src/lib/probe.ts", "@/editor/"],
   ["src/lib/probe.ts", "@/editor/index"],
   ["src/lib/probe.ts", "@/editor/index.ts"],
+  // A query or fragment after the entry still names the entry.
+  ["src/lib/probe.ts", "@/editor/index.ts?raw"],
+  ["src/lib/probe.ts", "@/editor/index#x"],
+  ["src/lib/probe.ts", "@/editor?x"],
+  ["src/lib/probe.ts", "@/editor#x"],
   ["src/lib/probe.ts", "../editor"],
   ["e2e/support/probe.ts", "../../src/editor"],
   ["e2e/probe.spec.ts", "../src/editor/"],
@@ -104,6 +111,20 @@ describe("code outside src/editor does not bypass its entry (DAN-927)", () => {
     },
   );
 
+  it.each(DEEP.flatMap(([file, specifier]) => TYPE_FORMS.map((code) => [file, form(code, specifier)] as const)))(
+    "rejects the type form %s: %s",
+    async (filePath, code) => {
+      expect(await hits(eslint, filePath, code)).toBe(1);
+    },
+  );
+
+  it.each(ENTRY.flatMap(([file, specifier]) => TYPE_FORMS.map((code) => [file, form(code, specifier)] as const)))(
+    "allows the type form %s: %s",
+    async (filePath, code) => {
+      expect(await hits(eslint, filePath, code)).toBe(0);
+    },
+  );
+
   it.each(DEEP.filter(([file]) => file === "src/lib/probe.ts").map(([, specifier]) => form(FORMS[0], specifier)))(
     "allows inside the package: %s",
     async (code) => {
@@ -127,7 +148,46 @@ describe("code outside src/editor does not bypass its entry (DAN-927)", () => {
     expect(await hits(fromSrc, join(REPO_ROOT, "src/lib/probe.ts"), 'import { x } from "../editor/schema";\nexport const y = x;\n')).toBe(1);
     expect(await hits(fromSrc, join(REPO_ROOT, "src/lib/journal/probe.ts"), 'import { x } from "../../editor/capture";\nexport const y = x;\n')).toBe(1);
     expect(await hits(fromSrc, join(REPO_ROOT, "src/lib/probe.ts"), 'import { x } from "../editor";\nexport const y = x;\n')).toBe(0);
+    // The package's own files stay exempt.
+    expect(await hits(fromSrc, join(REPO_ROOT, "src/editor/probe.ts"), 'import { x } from "./block-marker";\nexport const y = x;\n')).toBe(0);
+    expect(await hits(fromSrc, join(REPO_ROOT, "src/editor/probe.ts"), 'import { x } from "@/editor/schema";\nexport const y = x;\n')).toBe(0);
   }, 60_000);
+
+  // createRequire resolves a relative path from the base it was given, not
+  // from the calling file. A base that is not static is not known, so any
+  // relative path through it is rejected.
+  const INDEX = join(REPO_ROOT, "src/editor/index.ts");
+  const load = (base: string, call: string) => `import { createRequire } from "node:module";\nimport path from "node:path";\nconst root = process.cwd();\nconst req = createRequire(${base});\nexport const y = ${call};\n`;
+  it.each([
+    [JSON.stringify(INDEX), 'req.resolve("./schema.ts")'],
+    [JSON.stringify(INDEX), 'req("./schema")'],
+    [JSON.stringify(pathToFileURL(INDEX).href), 'req("./capture")'],
+    [JSON.stringify(join(REPO_ROOT, "src/editor") + "/"), 'req("./schema")'],
+    ['new URL("../src/editor/index.ts", import.meta.url)', 'req("./schema")'],
+    ['import.meta.url', 'req("../src/editor/schema")'],
+    ['path.join(root, "package.json")', 'req("./src/editor/schema")'],
+    ['path.join(root, "package.json")', 'req.resolve("../anything")'],
+  ])("rejects createRequire(%s) with %s", async (base, call) => {
+    expect(await hits(eslint, "scripts/probe.mjs", load(base, call))).toBe(1);
+  });
+
+  // Node reads a base without a trailing slash as a file: a dirname resolves
+  // from its parent.
+  it.each(["import.meta.dirname", "__dirname"])("resolves createRequire(%s) from the parent directory", async (base) => {
+    expect(await hits(eslint, "src/lib/probe.mjs", load(base, 'req("./editor/schema")'))).toBe(1);
+    expect(await hits(eslint, "src/lib/probe.mjs", load(base, 'req("./editor")'))).toBe(0);
+  });
+
+  it.each([
+    [JSON.stringify(INDEX), 'req("./index")'],
+    [JSON.stringify(INDEX), 'req(".")'],
+    ['new URL("../src/editor/index.ts", import.meta.url)', 'req("../lib/journal")'],
+    ['import.meta.url', 'req("../src/editor")'],
+    ['path.join(root, "package.json")', 'req("pg-boss")'],
+    ['path.join(root, "package.json")', 'req("@/editor")'],
+  ])("allows createRequire(%s) with %s", async (base, call) => {
+    expect(await hits(eslint, "scripts/probe.mjs", load(base, call))).toBe(0);
+  });
 
   it("does not read a computed specifier", async () => {
     expect(await hits(eslint, "src/lib/probe.ts", 'const m = "@/editor/schema";\nexport const y = () => import(m);\n')).toBe(0);
