@@ -5,9 +5,9 @@
 // Every tracked lockfile is scanned, and a negative control proves the scan can fail.
 // Run by osv-exceptions.test.mjs in the "Engineering system unit tests" CI step.
 
-export const ALLOWED_IDS = ["GHSA-g3hv-75wg-m249"];
+export const ALLOWED_IDS = ["GHSA-g3hv-75wg-m249", "GHSA-fc5q-39xc-vjpf"];
 export const IGNORE_UNTIL_WINDOW = { earliest: "2026-11-01", latest: "2027-01-03" };
-export const DEV_ONLY_PACKAGES = ["minimatch"];
+export const DEV_ONLY_PACKAGES = ["minimatch", "picomatch"];
 export const OSV_STEP_NAME = "OSV-Scanner (lockfiles)";
 export const OSV_SCAN_ARGS = [
   "scan", "source",

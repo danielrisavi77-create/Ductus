@@ -4,3 +4,8 @@
 id = "GHSA-g3hv-75wg-m249"
 ignoreUntil = 2027-01-03
 reason = "minimatch 10.2.6 (@typescript-eslint/typescript-estree) and 3.1.5 (eslint and its plugins), dev-only. Fixed only in 11.0.1: a major jump for 10.x (latest typescript-estree needs ^10.2.2), and 3.1.5 is the last 3.x, without the vulnerable firstPhasePreProcess. That code needs optimizationLevel >= 2, which only glob sets, and glob left the lockfile with Storybook; the patterns come from our own lint config, never user input. Re-check by ignoreUntil."
+
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2027-01-03
+reason = "picomatch 2.3.2 (via micromatch 4.0.8) and 4.0.7 (via tinyglobby and fdir), dev-only, reached through vite, vitest and eslint-config-next; neither appears in the production tree of pnpm-lock.yaml, infra/fake-oidc or the spikes, and src/ and app/ never import picomatch, micromatch or tinyglobby. The patterns come from our own tool configuration, never user input. No fixed version exists, and an override or upgrade is out of scope. Guarded by scripts/engineering/osv-exceptions.mjs (DEV_ONLY_PACKAGES). Decision: #2012, DAN-1009. Re-check by ignoreUntil."
