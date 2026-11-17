@@ -386,11 +386,12 @@ test("DAN-1009: dropping the picomatch entry fails, and a repeat fails", () => {
   const others = ALLOWED_IDS.filter((id) => id !== PICOMATCH_ID);
   assert.throws(() => checkIgnoredVulns(others.map((id) => entry(id)).join("\n")), new RegExp(`missing ${PICOMATCH_ID}`));
   assert.throws(() => checkIgnoredVulns(`${validToml}\n${entry(PICOMATCH_ID)}`), /listed twice/);
-  assert.throws(() => checkIgnoredVulns(validToml.replace(/ignoreUntil = 2027-01-03/g, "ignoreUntil = 2027-01-04")), /is outside/);
+  const late = ALLOWED_IDS.map((id) => entry(id, id === PICOMATCH_ID ? { ignoreUntil: "2027-01-04" } : {})).join("\n");
+  assert.throws(() => checkIgnoredVulns(late), new RegExp(`${PICOMATCH_ID}: ignoreUntil 2027-01-04 is outside`));
 });
 
 test("DAN-1009: picomatch in the production tree fails, directly, transitively or by alias", () => {
-  const extra = "\n  picomatch@2.3.2: {}\n\n  picomatch@4.0.7: {}\n\n  fdir@6.5.0(picomatch@4.0.7): {}\n";
+  const extra = "\n  picomatch@2.3.2: {}\n\n  picomatch@4.0.7: {}\n\n  fdir@6.5.0(picomatch@4.0.7):\n    optionalDependencies:\n      picomatch: 4.0.7\n";
   const withPicomatch = () => lock({ dev: "picomatch", snapshots: extra });
   const base = { fakeOidcLock: cleanOidc };
   const direct = lock({ prod: "picomatch", snapshots: "\n  picomatch@1.0.0: {}\n" });
@@ -399,7 +400,7 @@ test("DAN-1009: picomatch in the production tree fails, directly, transitively o
   assert.throws(() => checkDevOnlyPackages({ ...base, rootLock: deep }), /picomatch reached the production/);
   const aliased = withPicomatch().replace("      delta: 4.0.0\n", "      delta: 4.0.0\n      patterns: picomatch@4.0.7\n");
   assert.throws(() => checkDevOnlyPackages({ ...base, rootLock: aliased }), /picomatch reached the production/);
-  const peerSuffix = withPicomatch().replace("  delta@4.0.0: {}\n", "  delta@4.0.0:\n    dependencies:\n      fdir: 6.5.0(picomatch@4.0.7)\n      picomatch: 4.0.7\n");
+  const peerSuffix = withPicomatch().replace("  delta@4.0.0: {}\n", "  delta@4.0.0:\n    dependencies:\n      fdir: 6.5.0(picomatch@4.0.7)\n");
   assert.throws(() => checkDevOnlyPackages({ ...base, rootLock: peerSuffix }), /picomatch reached the production/);
 });
 
