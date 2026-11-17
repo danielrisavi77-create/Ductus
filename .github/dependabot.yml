@@ -1,6 +1,9 @@
 # Dependabot with a cooldown (ARCHITECTURE §10): a release is proposed only
 # after it has been public for a while, so a hijacked release is usually
 # pulled before it reaches us. Security updates are not delayed by cooldown.
+# Version-update PRs are off (open-pull-requests-limit: 0): owner decision
+# 16. 11. 2026. (#2012 c.6931960018) and 17. 11.; upgrades happen only in
+# ductura/*. The limit does not apply to security updates, which stay on.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,6 +14,7 @@ updates:
       timezone: Europe/Zagreb
     cooldown:
       default-days: 7
+    open-pull-requests-limit: 0
     groups:
       actions:
         patterns: ["*"]
@@ -26,7 +30,7 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 30
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       minor-and-patch:
         update-types: [minor, patch]
