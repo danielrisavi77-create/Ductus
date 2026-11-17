@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   ALLOWED_IDS,
+  DEV_ONLY_PACKAGES,
   IGNORE_UNTIL_WINDOW,
   allPackages,
   checkDevOnlyPackages,
@@ -363,4 +364,56 @@ test("O4: an unreadable npm lockfile never counts as clean", () => {
   }
   assert.throws(() => npmLockPackages("not json"), SyntaxError);
   assert.deepEqual([...npmLockPackages(read("spikes/docx-provenance/package-lock.json"))].sort(), ["fflate", "saxes", "xmlchars"]);
+});
+
+// DAN-1009: GHSA-fc5q-39xc-vjpf (picomatch 2.3.2 and 4.0.7, no fixed version) is waived for the dev tree only.
+const PICOMATCH_ID = "GHSA-fc5q-39xc-vjpf";
+
+test("DAN-1009: the picomatch advisory is allowed, dated within the window, and guarded as dev-only", () => {
+  assert.ok(ALLOWED_IDS.includes(PICOMATCH_ID));
+  assert.ok(ALLOWED_IDS.includes("GHSA-g3hv-75wg-m249"), "the minimatch entry stays");
+  assert.ok(DEV_ONLY_PACKAGES.includes("picomatch"));
+  assert.ok(DEV_ONLY_PACKAGES.includes("minimatch"), "minimatch stays guarded");
+  const entries = parseIgnoredVulns(read("osv-scanner.toml"));
+  const item = entries.find((candidate) => candidate.id === `"${PICOMATCH_ID}"`);
+  assert.ok(item, "osv-scanner.toml lists the picomatch advisory");
+  assert.ok(item.ignoreUntil <= "2027-01-03");
+  assert.match(item.reason, /picomatch/);
+  assert.equal(entries.length, ALLOWED_IDS.length);
+});
+
+test("DAN-1009: dropping the picomatch entry fails, and a repeat fails", () => {
+  const others = ALLOWED_IDS.filter((id) => id !== PICOMATCH_ID);
+  assert.throws(() => checkIgnoredVulns(others.map((id) => entry(id)).join("\n")), new RegExp(`missing ${PICOMATCH_ID}`));
+  assert.throws(() => checkIgnoredVulns(`${validToml}\n${entry(PICOMATCH_ID)}`), /listed twice/);
+  const late = ALLOWED_IDS.map((id) => entry(id, id === PICOMATCH_ID ? { ignoreUntil: "2027-01-04" } : {})).join("\n");
+  assert.throws(() => checkIgnoredVulns(late), new RegExp(`${PICOMATCH_ID}: ignoreUntil 2027-01-04 is outside`));
+});
+
+test("DAN-1009: picomatch in the production tree fails, directly, transitively or by alias", () => {
+  const extra = "\n  picomatch@2.3.2: {}\n\n  picomatch@4.0.7: {}\n\n  fdir@6.5.0(picomatch@4.0.7):\n    optionalDependencies:\n      picomatch: 4.0.7\n";
+  const withPicomatch = () => lock({ dev: "picomatch", snapshots: extra });
+  const base = { fakeOidcLock: cleanOidc };
+  const direct = lock({ prod: "picomatch", snapshots: "\n  picomatch@1.0.0: {}\n" });
+  assert.throws(() => checkDevOnlyPackages({ ...base, rootLock: direct }), /picomatch reached the production/);
+  const deep = withPicomatch().replace("  delta@4.0.0: {}\n", "  delta@4.0.0:\n    dependencies:\n      picomatch: 2.3.2\n");
+  assert.throws(() => checkDevOnlyPackages({ ...base, rootLock: deep }), /picomatch reached the production/);
+  const aliased = withPicomatch().replace("      delta: 4.0.0\n", "      delta: 4.0.0\n      patterns: picomatch@4.0.7\n");
+  assert.throws(() => checkDevOnlyPackages({ ...base, rootLock: aliased }), /picomatch reached the production/);
+  const peerSuffix = withPicomatch().replace("  delta@4.0.0: {}\n", "  delta@4.0.0:\n    dependencies:\n      fdir: 6.5.0(picomatch@4.0.7)\n");
+  assert.throws(() => checkDevOnlyPackages({ ...base, rootLock: peerSuffix }), /picomatch reached the production/);
+});
+
+test("DAN-1009: picomatch in fake-oidc or a spike lockfile fails", () => {
+  const base = { rootLock: lock() };
+  assert.throws(() => checkDevOnlyPackages({ ...base, fakeOidcLock: `${cleanOidc}\n  picomatch@4.0.7: {}\n` }), /picomatch appeared in infra/);
+  const npmLocks = { "spikes/y/package-lock.json": npmLock({ "node_modules/a/node_modules/picomatch": { version: "2.3.2" } }) };
+  assert.throws(() => checkDevOnlyPackages({ ...base, fakeOidcLock: cleanOidc, npmLocks }), /picomatch appeared in spikes\/y/);
+});
+
+test("DAN-1009: on the real lockfile picomatch is installed, but only for the dev tree", () => {
+  const rootLock = read("pnpm-lock.yaml");
+  assert.ok(allPackages(rootLock).has("picomatch"), "dev tree has picomatch");
+  assert.ok(!productionPackages(rootLock).has("picomatch"), "production tree has no picomatch");
+  assert.ok(!productionPackages(rootLock).has("micromatch") && !productionPackages(rootLock).has("tinyglobby"));
 });
