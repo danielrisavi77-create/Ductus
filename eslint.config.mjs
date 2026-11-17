@@ -1,4 +1,5 @@
-import { posix, relative, resolve } from "node:path";
+import { dirname, posix, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
@@ -148,17 +149,19 @@ const databaseBoundaryPlugin = {
 
 // DAN-927 (E-0.1): src/editor is the editor-core package and src/editor/index.ts
 // its only entry. A specifier is resolved against the importing file (@/ is
-// src/, a relative one from the file's directory), normalized and compared
-// without case, so case-insensitive file systems are covered too. Any other
-// specifier is tested as text for a src/editor/ segment.
+// src/, a relative one from the file's directory) and made relative to the
+// repository root, where this file is, so ESLint's working directory does not
+// matter. It is normalized and compared without case, so case-insensitive file
+// systems are covered too. Any other specifier is tested as text for a
+// src/editor/ segment.
+const REPO_ROOT = dirname(fileURLToPath(import.meta.url));
 const EDITOR_DEEP_RE = /(?:^|\/)src\/editor\/(?!index(?:\.[cm]?[jt]sx?)?$)[^/]/u;
 function isEditorDeep(context, specifier) {
-  const file = relative(context.cwd, context.filename).replace(/\\/g, "/");
   return [specifier.trim(), specifier.trim().replace(/[?#].*$/su, "")].some((raw) => {
     const text = raw.replace(/\\/g, "/");
     let target = text;
     if (/^@\//u.test(text)) target = `src/${text.slice(2)}`;
-    else if (/^\.\.?(?:\/|$)/u.test(text)) target = relative(context.cwd, resolve(context.cwd, posix.dirname(file), text)).replace(/\\/g, "/");
+    else if (/^\.\.?(?:\/|$)/u.test(text)) target = relative(REPO_ROOT, resolve(dirname(context.filename), text)).replace(/\\/g, "/");
     return EDITOR_DEEP_RE.test(posix.normalize(target).replace(/\/+$/u, "").toLowerCase());
   });
 }

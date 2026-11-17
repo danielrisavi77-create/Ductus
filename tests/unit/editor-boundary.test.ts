@@ -120,10 +120,23 @@ describe("code outside src/editor does not bypass its entry (DAN-927)", () => {
     expect(sources.filter((source) => /fixture|test/u.test(source))).toEqual([]);
   });
 
+  // ESLint may run from another directory, such as an editor's workspace
+  // folder: a relative path is still resolved from the repository root.
+  it("resolves a relative path when ESLint runs from src/", async () => {
+    const fromSrc = new ESLint({ cwd: join(REPO_ROOT, "src"), overrideConfigFile: join(REPO_ROOT, "eslint.config.mjs") });
+    expect(await hits(fromSrc, join(REPO_ROOT, "src/lib/probe.ts"), 'import { x } from "../editor/schema";\nexport const y = x;\n')).toBe(1);
+    expect(await hits(fromSrc, join(REPO_ROOT, "src/lib/journal/probe.ts"), 'import { x } from "../../editor/capture";\nexport const y = x;\n')).toBe(1);
+    expect(await hits(fromSrc, join(REPO_ROOT, "src/lib/probe.ts"), 'import { x } from "../editor";\nexport const y = x;\n')).toBe(0);
+  }, 60_000);
+
   it("does not read a computed specifier", async () => {
     expect(await hits(eslint, "src/lib/probe.ts", 'const m = "@/editor/schema";\nexport const y = () => import(m);\n')).toBe(0);
   });
 });
+
+function mayHideImport(source: string) {
+  return /eslint|editor/i.test(source);
+}
 
 const DIRECTIVES = [
   "// eslint-disable-next-line editor-boundary/entry-only\n",
@@ -138,15 +151,25 @@ describe("inline directives do not lift the editor boundary (DAN-927)", () => {
     expect(await hits(withoutInlineConfig, "src/lib/probe.ts", code)).toBe(1);
   });
 
-  // Every source file outside src/editor that names an editor directory, with
-  // directives off: the move to the entry is complete and nothing hides from it.
+  // A file can hide an import from pnpm lint only with an inline directive, and
+  // a directive needs the word "eslint" in a comment. The specifier itself may
+  // be escaped so that the file never names the editor (F-019).
+  it("the repository scan reads every file that could hide an import", () => {
+    expect(mayHideImport('/* eslint-disable */\nimport * as m from "@/\\u0065ditor/schema";\n')).toBe(true);
+    expect(mayHideImport('import { x } from "@/editor";\n')).toBe(true);
+    expect(mayHideImport("export const y = 1;\n")).toBe(false);
+  });
+
+  // Every source file outside src/editor that names the editor or carries a
+  // directive, with directives off: the move to the entry is complete and
+  // nothing hides from it.
   it("no file outside src/editor imports past the entry", async () => {
     const skipped = /(?:^|\/)node_modules\/|^(?:\.git|\.next|\.claude\/worktrees|playwright-report(?:-login)?|test-results(?:-login)?)\/|^src\/editor\//;
     const files = readdirSync(REPO_ROOT, { recursive: true, encoding: "utf8" })
       .map((file) => file.replaceAll("\\", "/"))
       .filter((file) => !skipped.test(file) && /\.(?:[cm]?[jt]sx?)$/.test(file))
       .map((file) => join(REPO_ROOT, file))
-      .filter((file) => /editor/i.test(readFileSync(file, "utf8")));
+      .filter((file) => mayHideImport(readFileSync(file, "utf8")));
     expect(files.length).toBeGreaterThan(10);
     const results = await withoutInlineConfig.lintFiles(files);
     expect(results.flatMap((result) => result.messages.map((message) => `${result.filePath}:${message.line} ${message.ruleId}`))).toEqual([]);
