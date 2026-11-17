@@ -10,22 +10,14 @@ Prototip je običan JavaScript nad Tiptapom koji HTML slaže iz teksta. U Ductur
 |---|---|
 | `PREDAJA-DESNI-PANEL.md` | predaja orkestratoru za desni panel, bez §7 (odluke vlasnika, sada D-311 do D-315) |
 | `PREDAJA-LIJEVI-PANEL.md` | predaja orkestratoru za lijevi panel, bez §8 (odluke i Lektina pravila, sada D-307 do D-310) |
-| `index.html`, `editor.css` | ljuska i stilovi prototipa (razlikuju se od `../lijevi-panel-v07/`) |
-| `app.js`, `features.js` | jezgra prototipa i opseg editora |
-| `rail.js` | lijevi panel; istovjetan `../lijevi-panel-v07/rail.js` |
-| `right.js` | desni panel: tri rasporeda, prilagodba dijelova (D-311) |
-| `sources2.js`, `proofs.js` | izvori i priložena potvrda (D-314, PRIJEDLOG) |
-| `comments2.js` | komentari i potvrda rješenja (D-312) |
-| `review2.js` | pregled |
-| `mentor2.js` | mentor i predaja |
-| `assist.js`, `assist2.js`, `tools.js` | asistent i alati |
-| `rules.js`, `advice.js`, `plus.js`, `prune.js` | profil pravila, zapažanja, dodaci, prorjeđivanje desne trake |
+| `index.html`, `editor.css` | ljuska i stilovi prototipa (razlikuju se od `../lijevi-panel-v07/`); `index.html` je doslovna kopija i učitava skripte kojih ovdje nema |
 | `SHA256SUMS` | kontrolni zbrojevi svih datoteka u mapi osim njega samog (`sha256sum -c SHA256SUMS`) |
 
 Tekst obiju predaja prenesen je doslovno, bez izbačenog odjeljka. Upute u tekstu na „§7” (desni panel) i „§8” (lijevi panel) odnose se na izbačene odjeljke; te su odluke sada D-307 do D-315. Tvrdnje o repou u predajama pisane su nad HEAD-om `c7f469ec` (7. 11. 2026.) i djelomično su zastarjele (vidi niže).
 
 ## Što nije u repou i zašto
 
+- Skripte prototipa (`app.js`, `features.js`, `rail.js`, `right.js`, `sources2.js`, `proofs.js`, `comments2.js`, `review2.js`, `mentor2.js`, `assist.js`, `assist2.js`, `tools.js`, `rules.js`, `advice.js`, `plus.js`, `prune.js`): ostaju u vlasnikovu paketu izvan repoa (vlasnik 17. 11. 2026., #2012). Prototip nije referenca i iz njega se uzima samo funkcija, koju opisuju predaje u ovoj mapi. Skripte HTML slažu iz teksta, pa ih sigurnosni skener repoa (Semgrep) s pravom odbija; u repo se ne stavljaju i skener se zbog njih ne utišava.
 - `vendor/` (`tiptap.js`, `pdf.js`) i izvori za pakiranje `src/vendor.js` i `src/pdf.js`: paketi treće strane, ne preuzimaju se (#2012 c.6956819971 t. 2).
 - `samples/diplomski.json`: stvaran studentski rad. Ne smije u repo (`CLAUDE.md`, tvrda pravila). `features.js` ga traži, ali datoteke nema.
 - `rules/unizg.json`: vrijednosti iz Lektina paketa izvan dozvole za FPZG (D-217, D-224). `rules.js` je samo učitač; vrijednosti nema.
