@@ -218,7 +218,9 @@ function loaderDir(context, callee) {
 
 // A query or fragment suffix does not change the module, so the text before it
 // is tested as well; when that text is the entry, the import is the entry. A
-// relative specifier through a createRequire with an unknown base is rejected.
+// suffix that holds a "/" is a path to TypeScript and require, so it is not
+// stripped. The percent-decoded text, as Node ESM reads a path, is tested too.
+// A relative specifier through a createRequire with an unknown base is rejected.
 function isEditorDeep(context, specifier, loader) {
   const dir = loader === undefined ? dirname(context.filename) : loaderDir(context, loader);
   const target = (raw) => {
@@ -227,7 +229,15 @@ function isEditorDeep(context, specifier, loader) {
     if (!/^\.\.?(?:\/|$)/u.test(text)) return text;
     return dir === null ? null : repoPath(resolve(dir, text));
   };
-  const forms = [specifier.trim(), specifier.trim().replace(/[?#].*$/su, "")].map((raw) => {
+  const text = specifier.trim();
+  const bare = text.replace(/[?#][^/]*$/su, "");
+  let decoded = text;
+  try {
+    decoded = decodeURIComponent(text);
+  } catch {
+    // Malformed escapes: Node rejects the specifier, so nothing more to test.
+  }
+  const forms = [text, bare, decoded].map((raw) => {
     const path = target(raw);
     return path === null ? null : posix.normalize(path).replace(/\/+$/u, "").toLowerCase();
   });
@@ -256,6 +266,11 @@ const editorBoundaryPlugin = {
             const source = node.source ?? node.argument?.literal;
             const specifier = staticSpecifier(source);
             if (typeof specifier === "string" && test(specifier)) context.report({ node: source, messageId: "deepEditor" });
+          },
+          // TypeScript's import x = require(M) (TSImportEqualsDeclaration).
+          TSExternalModuleReference(node) {
+            const specifier = staticSpecifier(node.expression);
+            if (typeof specifier === "string" && test(specifier)) context.report({ node: node.expression, messageId: "deepEditor" });
           },
         };
       },

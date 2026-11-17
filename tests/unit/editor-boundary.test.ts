@@ -35,7 +35,11 @@ const FORMS = [
   'export const y = import.meta.resolve("M");\n',
 ];
 // Type-only forms that TypeScript resolves like an import; only in TS files.
-const TYPE_FORMS = ['export type Y = import("M").X;\n', 'export type Y = typeof import("M");\n'];
+const TYPE_FORMS = [
+  'export type Y = import("M").X;\n',
+  'export type Y = typeof import("M");\n',
+  'import y = require("M");\nexport { y };\n',
+];
 const OUTSIDE = ["src/lib/probe.ts", "app/probe/page.tsx", "tests/unit/probe.test.ts", "scripts/probe.mjs"];
 
 // Seen from src/lib/probe.ts, and from e2e/support/probe.ts for paths through src/.
@@ -65,6 +69,14 @@ const DEEP = [
   ["spikes/a/b/probe.ts", "../../../src/editor/schema"],
   ["src/lib/probe.ts", "src/editor/schema"],
   ["src/lib/probe.ts", "/repo/src/editor/schema"],
+  // A suffix that holds a path is not a query to TypeScript or require.
+  ["src/lib/probe.ts", "@/editor?/../editor/schema"],
+  ["src/lib/probe.ts", "@/editor#/../editor/schema"],
+  ["src/lib/probe.ts", "@/editor/index?/../schema"],
+  ["src/lib/journal/probe.ts", "../../editor?/../editor/schema"],
+  // Node ESM decodes percent escapes in a path.
+  ["src/lib/probe.ts", "../%65ditor/schema.ts"],
+  ["src/lib/probe.ts", "@/%45ditor/schema"],
 ] as const;
 
 const ENTRY = [
