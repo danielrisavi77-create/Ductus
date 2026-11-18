@@ -6,7 +6,7 @@ import { evaluateChecks, GATE_CONTEXT, headOrigin, latestChecks } from "./orches
 
 export const AUTHORIZATION_CONTEXT = "Merge authorization";
 // Statuses the gate workflow posts itself; they are not CI.
-const GATE_STATUSES = new Set([GATE_CONTEXT, AUTHORIZATION_CONTEXT, "Auto-merge eligible"]);
+export const GATE_STATUSES = new Set([GATE_CONTEXT, AUTHORIZATION_CONTEXT, "Auto-merge eligible"]);
 // The merge queue's own check runs (Mergify Merge Queue, Merge Protections, Summary), by App
 // slug, not by name. They wait for the very conditions this tool reports, so counting them as
 // CI deadlocks: a "queue" posted before the owner's command leaves "Mergify Merge Queue" pending
