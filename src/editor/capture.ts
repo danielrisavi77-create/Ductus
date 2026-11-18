@@ -138,18 +138,32 @@ export async function removedSliceSha256(document: PmNode, from: number, to: num
 }
 
 /**
- * Whether `from..to` of `document` holds a character or a whole block: then
- * the step carries `removedSha256`, otherwise `structure` (BACKEND 4.1; the
- * same test as the replayer's `removesContent`).
+ * Whether `from..to` of `document` holds a character, an inline atom (the
+ * citation of schema v2) or a whole block: then the step carries
+ * `removedSha256`, otherwise `structure` (BACKEND 4.1; the same test as the
+ * replayers' `removesContent`). The v1 schema has no inline atom.
  */
 function removesContent(document: PmNode, from: number, to: number): boolean {
-  if (document.textBetween(from, to).length > 0) return true;
+  if (document.textBetween(from, to, undefined, "\ufffc").length > 0) return true;
   let wholeBlock = false;
   document.forEach((block, offset) => {
     wholeBlock ||= offset >= from && offset + block.nodeSize <= to;
   });
   return wholeBlock;
 }
+
+/**
+ * What differs between the formats: how a step is applied and written, and
+ * what the replayer does to the document after each step.
+ */
+export type CaptureRules = {
+  /** The step to apply to the capture's document, and the step to write. */
+  written(json: Record<string, unknown>): { apply: Record<string, unknown>; write: Record<string, unknown> };
+  /** The document as the replayer holds it after a step that changed it. */
+  settle(document: PmNode): PmNode;
+};
+
+const V1_RULES: CaptureRules = { written: (json) => ({ apply: json, write: json }), settle: (document) => document };
 
 /**
  * Every step of one change as the format writes it (`writtenSteps`), applied
@@ -166,13 +180,15 @@ function removesContent(document: PmNode, from: number, to: number): boolean {
  *   range whose hash cannot be computed (half of a surrogate pair) refuses
  *   the change.
  */
-async function changeSteps(change: CapturedChange): Promise<JcsJsonValue[]> {
+export async function changeSteps(change: CapturedChange, rules: CaptureRules = V1_RULES): Promise<JcsJsonValue[]> {
   const steps: JcsJsonValue[] = [];
-  let doc = change.docs[0]!;
+  // The replayer holds the document as it settled (in v2, with no citation marked).
+  let doc = rules.settle(change.docs[0]!);
   const apply = (json: Record<string, unknown>) => {
+    const { apply: applied, write } = rules.written(json);
     let next: PmNode | null;
     try {
-      next = Step.fromJSON(doc.type.schema, json).apply(doc).doc;
+      next = Step.fromJSON(doc.type.schema, applied).apply(doc).doc;
     } catch {
       throw new CaptureError("unsupported_step");
     }
@@ -180,9 +196,10 @@ async function changeSteps(change: CapturedChange): Promise<JcsJsonValue[]> {
     // A step that changes nothing (a selection replaced by the same content,
     // a block given the type it has) is refused by the replayer
     // (`step_changes_nothing`, `replace_around_unchanged`): not written.
+    // Judged before `settle`, as the v2 replayer judges it.
     if (next.eq(doc)) return;
-    doc = next;
-    steps.push(json as JcsJsonValue);
+    doc = rules.settle(next);
+    steps.push(write as JcsJsonValue);
   };
   for (const step of change.steps) {
     if (nodeIdFixesOf(step) !== null) continue;

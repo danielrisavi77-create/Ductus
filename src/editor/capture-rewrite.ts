@@ -23,7 +23,8 @@
  *     empty block is removed;
  *   - blocks put in at the start of a block (Undo of the second): written
  *     as the new blocks in front of it and the text of the last at its
- *     start (`attr_identity`);
+ *     start, the block first given the kind of the last when it differs
+ *     (`attr_identity`);
  *   - a selection of whole blocks from the start of the document, replaced
  *     (Ctrl+A, then Backspace, typing or pasting): written as the new blocks
  *     in front, then the removal of the old ones (not canonical otherwise).
@@ -38,6 +39,8 @@ import type { Node as PmNode, ResolvedPos } from "@tiptap/pm/model";
 type Json = Record<string, unknown>;
 type BlockJson = { type: string; attrs: Record<string, unknown>; content?: unknown[] };
 type SliceJson = { content: BlockJson[]; openStart?: number; openEnd?: number };
+
+const INLINE_TYPES = new Set(["text", "citation"]);
 
 /** Thrown when a step cannot be written; the caller refuses the change. */
 class UnwritableStep extends Error {}
@@ -55,8 +58,9 @@ const sameKind = (a: BlockJson, b: PmNode) => a.type === b.type.name && a.attrs.
 const isSplit = (slice: SliceJson) =>
   slice.openStart === 1 && slice.openEnd === 1 && slice.content.every((item) => !("content" in item));
 
+/** A slice of blocks: one whose first item is no inline node (text, or the citation of schema v2). */
 const isBlockSlice = (slice: SliceJson | undefined): slice is SliceJson =>
-  slice !== undefined && slice.content[0]?.type !== "text";
+  slice !== undefined && !INLINE_TYPES.has(slice.content[0]?.type ?? "");
 
 /** The steps that write `json`, a step the editor applied to the document `doc` holds. */
 export function writtenSteps(doc: PmNode, json: Json): Json[] {
@@ -71,7 +75,8 @@ export function writtenSteps(doc: PmNode, json: Json): Json[] {
     enterAtStart($from, to, slice) ??
     wholeBlocksFromStart(doc, from, $to, slice) ??
     fromBlockStart($from, $to, slice) ??
-    blocksAtBlockStart($from, $to, slice) ?? [withSliceIds(json, $from, $to, slice)]
+    blocksAtBlockStart($from, $to, slice) ??
+    toBlockEnd(json, $from, $to, slice) ?? [withSliceIds(json, $from, $to, slice)]
   );
 }
 
@@ -142,12 +147,24 @@ function blocksAtBlockStart($from: ResolvedPos, $to: ResolvedPos, slice: SliceJs
     return [insertBefore($from, items), { stepType: "replace", from: at, to: at + block.nodeSize }];
   }
   const last = items.pop()!;
-  if (!sameKind(last, block)) return null;
   const steps: Json[] = $to.pos > $from.pos ? [{ stepType: "replace", from: $from.pos, to: $to.pos }] : [];
   steps.push(insertBefore($from, items));
   const start = $from.pos + sizeOf(items);
+  // The last block is of another kind (in v2, a paragraph a citation was
+  // pasted in at the start of a heading): the block, which keeps its id,
+  // takes that kind before the new content goes in.
+  if (!sameKind(last, block)) steps.push(retype(start - 1, block.nodeSize - ($to.pos - $from.pos), { ...last, attrs: { ...last.attrs, nodeId: block.attrs.nodeId } }));
   if (last.content) steps.push({ stepType: "replace", from: start, to: start, slice: { content: last.content } });
   return steps;
+}
+
+/** The block at `pos`, of `size`, given the markup of `wrapper` (as `setBlockType` does). */
+function retype(pos: number, size: number, wrapper: BlockJson): Json {
+  const markupOnly = { type: wrapper.type, attrs: wrapper.attrs };
+  return {
+    stepType: "replaceAround", from: pos, to: pos + size, gapFrom: pos + 1, gapTo: pos + size - 1,
+    insert: 1, slice: { content: [markupOnly] }, structure: true,
+  };
 }
 
 /**
@@ -173,7 +190,8 @@ function wholeBlocksFromStart(doc: PmNode, from: number, $to: ResolvedPos, slice
  * identity plugin gives it the id of the last one, whose text is the only
  * old text left. Written as what happened to the text: the selected start of
  * the last block removed, then the whole blocks in front of it, then the new
- * text at its start. The last block keeps its id.
+ * text at its start. The last block keeps its id and takes the kind of the
+ * first.
  */
 function fromBlockStart($from: ResolvedPos, $to: ResolvedPos, slice: SliceJson | undefined): Json[] | null {
   const last = blockAt($to);
@@ -187,8 +205,38 @@ function fromBlockStart($from: ResolvedPos, $to: ResolvedPos, slice: SliceJson |
   const steps: Json[] = [];
   if ($to.parentOffset > 0) steps.push({ stepType: "replace", from: $to.start(), to: $to.pos });
   steps.push({ stepType: "replace", from: start, to: $to.before() });
+  // ProseMirror keeps the markup of the first block (in v2, undoing a
+  // citation pasted at the start of a heading): the last block takes it.
+  const kept: BlockJson = { type: $from.parent.type.name, attrs: { ...$from.parent.attrs, nodeId: last.attrs.nodeId } };
+  if (!sameKind(kept, last)) steps.push(retype(start, last.nodeSize - $to.parentOffset, kept));
   if (slice) steps.push({ stepType: "replace", from: start + 1, to: start + 1, slice });
   return steps;
+}
+
+/**
+ * Blocks pasted over a range from one block to the end of the text of a
+ * later one: none of the old text of that block is left, so the identity
+ * plugin gives the last pasted block a new id, which the format cannot write
+ * on an open end that continues a block. Written as the new blocks split off
+ * at the end of that block, then the range removed and the text of the first
+ * pasted block put in its place, as the first block keeps it.
+ */
+function toBlockEnd(json: Json, $from: ResolvedPos, $to: ResolvedPos, slice: SliceJson | undefined): Json[] | null {
+  const from = blockAt($from);
+  const end = blockAt($to);
+  if (
+    !isBlockSlice(slice) || slice.openStart !== 1 || slice.openEnd !== 1 || slice.content.length < 2 ||
+    !from || !end || $from.before() === $to.before() || $to.parentOffset !== end.content.size
+  ) {
+    return null;
+  }
+  const [first, ...rest] = slice.content;
+  const split = withSliceIds(
+    { stepType: "replace", from: $to.pos, to: $to.pos },
+    $to, $to, { content: [{ type: end.type.name, attrs: {} }, ...rest], openStart: 1, openEnd: 1 },
+  );
+  const text = first!.content ? { slice: { content: first!.content } } : {};
+  return [split, { stepType: "replace", from: json.from, to: json.to, ...text }];
 }
 
 /**

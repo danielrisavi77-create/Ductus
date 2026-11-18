@@ -110,7 +110,7 @@ function markedCitations(doc: PmNode): number[] {
  * are flat (a citation sits directly in a block), as in the replayer's
  * `unmarkCitations`.
  */
-function unmarked(doc: PmNode): PmNode {
+export function unmarked(doc: PmNode): PmNode {
   if (markedCitations(doc).length === 0) return doc;
   const blocks: PmNode[] = [];
   doc.forEach((block) => {
