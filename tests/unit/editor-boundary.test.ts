@@ -77,6 +77,11 @@ const DEEP = [
   // Node ESM decodes percent escapes in a path.
   ["src/lib/probe.ts", "../%65ditor/schema.ts"],
   ["src/lib/probe.ts", "@/%45ditor/schema"],
+  // Node ESM reads the URL path before its query or fragment, even when the
+  // suffix holds a "/".
+  ["scripts/probe.mjs", "../src/editor/schema.ts?cache=/../../v1"],
+  ["src/lib/probe.ts", "../editor/schema#/../../x"],
+  ["src/lib/probe.ts", "../%65ditor/schema.ts?a=/../.."],
 ] as const;
 
 const ENTRY = [
@@ -179,6 +184,8 @@ describe("code outside src/editor does not bypass its entry (DAN-927)", () => {
     ['import.meta.url', 'req("../src/editor/schema")'],
     ['path.join(root, "package.json")', 'req("./src/editor/schema")'],
     ['path.join(root, "package.json")', 'req.resolve("../anything")'],
+    // An invalid URL base is not known either, and must not stop ESLint.
+    ['new URL("file://[", import.meta.url)', 'req("./tool.cjs")'],
   ])("rejects createRequire(%s) with %s", async (base, call) => {
     expect(await hits(eslint, "scripts/probe.mjs", load(base, call))).toBe(1);
   });

@@ -157,7 +157,6 @@ const databaseBoundaryPlugin = {
 // other specifier is tested as text for a src/editor/ segment.
 const REPO_ROOT = dirname(fileURLToPath(import.meta.url));
 const EDITOR_DEEP_RE = /(?:^|\/)src\/editor\/(?!index(?:\.[cm]?[jt]sx?)?$)[^/]/u;
-const EDITOR_ENTRY_RE = /^src\/editor(?:\/index(?:\.[cm]?[jt]sx?)?)?$/u;
 const repoPath = (path) => relative(REPO_ROOT, path).replace(/\\/g, "/");
 
 // The file a createRequire base names when it is static: import.meta.url,
@@ -180,14 +179,15 @@ function ownLocation(context, node) {
 function requireBase(context, node) {
   const own = ownLocation(context, node);
   if (own !== undefined) return own;
-  let text = staticSpecifier(node);
-  if (node?.type === "NewExpression" && node.callee.type === "Identifier" && node.callee.name === "URL" && node.arguments.length === 2) {
-    const input = staticSpecifier(node.arguments[0]);
-    const base = ownLocation(context, node.arguments[1]);
-    if (typeof input === "string" && base !== undefined) text = new URL(input, pathToFileURL(base)).href;
-  }
-  if (typeof text !== "string") return undefined;
+  // An invalid URL or path throws here; the base is then not known.
   try {
+    let text = staticSpecifier(node);
+    if (node?.type === "NewExpression" && node.callee.type === "Identifier" && node.callee.name === "URL" && node.arguments.length === 2) {
+      const input = staticSpecifier(node.arguments[0]);
+      const base = ownLocation(context, node.arguments[1]);
+      if (typeof input === "string" && base !== undefined) text = new URL(input, pathToFileURL(base)).href;
+    }
+    if (typeof text !== "string") return undefined;
     const path = text.startsWith("file:") ? fileURLToPath(text) : text;
     return isAbsolute(path) ? path : undefined;
   } catch {
@@ -216,11 +216,12 @@ function loaderDir(context, callee) {
   return /[\\/]$/u.test(base) ? base : dirname(base);
 }
 
-// A query or fragment suffix does not change the module, so the text before it
-// is tested as well; when that text is the entry, the import is the entry. A
-// suffix that holds a "/" is a path to TypeScript and require, so it is not
-// stripped. The percent-decoded text, as Node ESM reads a path, is tested too.
-// A relative specifier through a createRequire with an unknown base is rejected.
+// A specifier is read the way each loader reads it, and is deep when any
+// reading is. TypeScript and require read it as a path: a "?" or "#" suffix
+// without a "/" is taken for a query (so "@/editor/index.ts?raw" is the entry),
+// one with a "/" is part of the path. Node ESM reads it as a URL: the path ends
+// at the first "?" or "#" and percent escapes are decoded. A relative specifier
+// through a createRequire with an unknown base is rejected.
 function isEditorDeep(context, specifier, loader) {
   const dir = loader === undefined ? dirname(context.filename) : loaderDir(context, loader);
   const target = (raw) => {
@@ -229,20 +230,20 @@ function isEditorDeep(context, specifier, loader) {
     if (!/^\.\.?(?:\/|$)/u.test(text)) return text;
     return dir === null ? null : repoPath(resolve(dir, text));
   };
+  const decode = (text) => {
+    try {
+      return decodeURIComponent(text);
+    } catch {
+      return text; // Malformed escapes: Node rejects the specifier.
+    }
+  };
   const text = specifier.trim();
-  const bare = text.replace(/[?#][^/]*$/su, "");
-  let decoded = text;
-  try {
-    decoded = decodeURIComponent(text);
-  } catch {
-    // Malformed escapes: Node rejects the specifier, so nothing more to test.
-  }
-  const forms = [text, bare, decoded].map((raw) => {
-    const path = target(raw);
+  const query = /[?#][^/]*$/su;
+  const forms = [text, decode(text), decode(text.replace(/[?#].*$/su, ""))].map((raw) => {
+    const path = target(raw.replace(query, ""));
     return path === null ? null : posix.normalize(path).replace(/\/+$/u, "").toLowerCase();
   });
   if (forms.includes(null)) return true;
-  if (EDITOR_ENTRY_RE.test(forms[1])) return false;
   return forms.some((path) => EDITOR_DEEP_RE.test(path));
 }
 
