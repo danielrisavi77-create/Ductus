@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -49,7 +49,9 @@ function reachable(entry: string): Set<string> {
 }
 
 describe("public try-out imports (DAN-354)", () => {
-  const files = [...reachable(ENTRY)].map((file) => relative(ROOT, file));
+  // Forward slashes on every platform: on Windows relative() gives backslashes,
+  // which neither the toolbar path nor any FORBIDDEN rule would ever match.
+  const files = [...reachable(ENTRY)].map((file) => relative(ROOT, file).split(sep).join("/"));
 
   it("reaches the shared toolbar", () => {
     expect(files).toContain("src/components/editor/EditorToolbarFor.tsx");

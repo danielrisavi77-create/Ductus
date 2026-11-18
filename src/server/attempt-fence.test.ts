@@ -15,6 +15,12 @@ afterAll(() => rmSync(work, { recursive: true, force: true }));
 const fenceModule = pathToFileURL(path.resolve(__dirname, "attempt-fence.ts")).href;
 let scripts = 0;
 
+// Every child writes this to stderr from an exit listener. A process that ends
+// on its own (return, throw or process.exit) runs its exit listeners; one the
+// fence kills does not, so the marker is what tells the two apart even where
+// the exit code cannot.
+const EXITED = "exit listeners ran\n";
+
 type Ending = { code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string; elapsed: number };
 
 async function run(body: string): Promise<Ending> {
@@ -22,7 +28,9 @@ async function run(body: string): Promise<Ending> {
   const file = path.join(work, `case-${scripts}.mjs`);
   writeFileSync(
     file,
-    `import { startAttemptFence } from ${JSON.stringify(fenceModule)};
+    `import { writeSync } from "node:fs";
+import { startAttemptFence } from ${JSON.stringify(fenceModule)};
+process.on("exit", () => writeSync(2, ${JSON.stringify(EXITED)}));
 const fence = startAttemptFence();
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 ${body}
@@ -39,8 +47,16 @@ ${body}
   });
 }
 
-const killed = { code: null, signal: "SIGKILL", stdout: "armed\n", stderr: "" };
-const survived = (stdout: string): object => ({ code: 0, signal: null, stdout, stderr: "" });
+// Windows has no signals: process.kill(pid, "SIGKILL") ends the process with
+// TerminateProcess, which a parent sees as exit code 1 and no signal, the same
+// code as process.exit(1). What tells the fence's kill apart there is the
+// stderr without EXITED (no exit listener ran), the output cut off after
+// "armed" and the time window below.
+const killed =
+  process.platform === "win32"
+    ? { code: 1, signal: null, stdout: "armed\n", stderr: "" }
+    : { code: null, signal: "SIGKILL", stdout: "armed\n", stderr: "" };
+const survived = (stdout: string): object => ({ code: 0, signal: null, stdout, stderr: EXITED });
 
 describe("attempt fence: an attempt still armed at its time ends the process", () => {
   it.each<[string, string]>([
@@ -56,6 +72,15 @@ describe("attempt fence: an attempt still armed at its time ends the process", (
     expect(ending).toMatchObject(killed);
     expect(ending.elapsed).toBeGreaterThanOrEqual(300);
     expect(ending.elapsed).toBeLessThan(3000);
+  });
+
+  it.each<[string, string]>([
+    ["exits with code 1 while armed", `fence.arm(3000); console.log("armed"); await later(400); process.exit(1);`],
+    ["throws while armed", `fence.arm(3000); console.log("armed"); await later(400); throw new Error("x");`],
+  ])("a process that %s is not taken for a fence kill", async (_label, body) => {
+    const ending = await run(body);
+    expect(ending.stderr).toContain(EXITED);
+    expect(ending).not.toMatchObject(killed);
   });
 
   it.each<[string, string, string]>([
