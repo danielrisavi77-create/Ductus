@@ -47,6 +47,7 @@ const DEEP = [
   "..\\editor\\schema", "..\\editor/schema", "@/editor\\schema", "@\\editor\\schema",
   // K6 percent-encoding
   "../editor/%73chema", "../%65ditor/schema", "%2e%2e/editor/schema", "@/editor/%73chema", "../editor%2fschema",
+  "..%5Ceditor%5Cschema", "@/editor%5Cschema",
   // K7 query and hash, a suffix carrying /..
   "../editor/schema?x", "../editor/schema#x", "../editor/schema?/../index", "../editor/index?/../schema",
   "@/editor/index#/../schema",
@@ -86,6 +87,7 @@ const FORMS = [
   "export type X = import(M).Y;\n",
   "export type X = typeof import(M);\n",
   "import x = require(M);\nexport { x };\n",
+  "declare module M {}\nexport {};\n",
 ];
 
 const code = (form: string, specifier: string) => form.replace("M", JSON.stringify(specifier));
@@ -125,6 +127,9 @@ describe("editor-core is imported through @/editor only (DAN-927)", () => {
     ["scripts/probe.mjs", 'export const x = await import("../src/editor/schema.ts");\n'],
     ["src/editorial/probe.ts", 'export * from "../editor/schema";\n'],
     ["src/Editor./probe.ts", 'export * from "../editor/schema";\n'],
+    [FILE, '/// <reference path="../editor/schema.ts" />\nexport {};\n'],
+    [FILE, "/// <reference types='@/editor/schema' />\nexport {};\n"],
+    [FILE, '/// <reference path="..\\editor\\schema.ts" />\nexport {};\n'],
   ])("off passes, on catches %s: %j", async (file, text) => {
     expect(await hits(off, file, text)).toBe(0);
     expect(await hits(on, file, text)).toBe(1);
@@ -137,6 +142,7 @@ describe("editor-core is imported through @/editor only (DAN-927)", () => {
     [FILE, 'import { createRequire } from "node:module";\nexport const x = createRequire(import.meta.dirname)("react");\n'],
     [FILE, 'export const x = require.resolve("react", { paths: ["/elsewhere"] });\n'],
     [FILE, 'export const x = new URL("postgres://127.0.0.1/x");\n'],
+    [FILE, '/// <reference types="node" />\n/// <reference path="../editor/index.ts" />\nexport {};\n'],
   ])("allows %s: %j", async (file, text) => {
     expect(await hits(on, file, text)).toBe(0);
   });

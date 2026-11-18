@@ -164,7 +164,8 @@ const repoNames = (path) =>
     .split(/[\\/]/u)
     .map((name) => name.replace(/:.*$/su, "").replace(/[. ]+$/u, ""));
 function isDeepEditor(path) {
-  const [top, pkg, ...rest] = repoNames(path);
+  // %5C decodes to a backslash, a separator on Windows.
+  const [top, pkg, ...rest] = repoNames(resolve(path.replace(/\\/gu, "/")));
   return top === "src" && pkg === "editor" && rest.length > 0 && !(rest.length === 1 && /^index(?:\.[cm]?[jt]sx?)?$/u.test(rest[0]));
 }
 // From directory dir: as a URL (ESM, bundlers: tab, CR and LF removed,
@@ -261,6 +262,17 @@ const editorBoundaryPlugin = {
           },
           TSExternalModuleReference(node) {
             check(node.expression);
+          },
+          // declare module "M" {}, which augments the module it names.
+          TSModuleDeclaration(node) {
+            if (node.id.type === "Literal") check(node.id);
+          },
+          // /// <reference path="M" /> and types="M" include a file.
+          Program() {
+            for (const comment of context.sourceCode.getAllComments()) {
+              const ref = /^\/\s*<reference\s+(?:path|types)\s*=\s*(["'])(.*?)\1/su.exec(comment.value);
+              if (comment.type === "Line" && ref && test(ref[2])) context.report({ loc: comment.loc, messageId: "deepEditor" });
+            }
           },
           // new URL("M", import.meta.url), which bundlers follow.
           NewExpression(node) {
