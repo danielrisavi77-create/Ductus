@@ -5,6 +5,7 @@ Ovaj dokument bilježi odluke koje je vlasnik donio 18. 11. 2026. za deset stude
 - „IDE” uz naslov znači da ekran ulazi u opseg.
 - Za ekran 6 vlasnik je izbor prepustio sesiji („odgovori kako je najbolje i najlogičnije”); odabrane su preporuke.
 - Ništa se ne gradi na D-194 t. 6 i 7 (PRIJEDLOG): Izjava zato pokriva samo vanjske alate i ljudsku pomoć.
+- Dva mjesta odstupaju od postojećih pravila i otvorena su za vlasnikovu odluku: vidi „Otvoreni neskladi” na kraju. Do te odluke vrijede `docs/PRODUCT.md` §5 pravilo 11, D-11 (potvrđeno D-81) i D-129.
 - Prototip i kartice ekrana prijedlog su funkcija, ne izgleda; vizualni smjer ostaje „papir i grafit” (D-188).
 
 
@@ -85,7 +86,7 @@ Posljedica za server: nova ruta koja za kod vraća naziv kolegija i nastavnika p
 
 ## 7. Izjava — IDE (paket D, 1/4)
 1. Opseg sada: samo vanjski alati i ljudska pomoć; prikaz prijenosa iz Ducturina AI pomoćnika čeka D-194 (t. 6 i 7 PRIJEDLOG). Ne graditi na D-194.
-2. Obvezna za svaku predaju; ispuniti ili „Nisam koristio/la vanjske alate”.
+2. Vlasnikova odluka: obvezna za svaku predaju; ispuniti ili „Nisam koristio/la vanjske alate”. Ne gradi se kao blokada predaje: D-129 dopušta da nepotvrđena izjava blokira predaju samo kao postavka zadatka, nakon pisane potvrde FPZG-a i upisa C-42. Do tada je Izjava korak koji student vidi i može ispuniti, a predaja prolazi i bez nje (otvoreni nesklad N-2).
 3. Oblik: kratki izbori (alat, svrha, faza rada) uz slobodnu napomenu.
 4. Ljudska pomoć (lektor, kolega, mentor) zasebno pitanje.
 5. Pravila zadatka (dopušteni alati iz Obavijesti) stoje iznad forme.
@@ -93,13 +94,13 @@ Posljedica za server: nova ruta koja za kod vraća naziv kolegija i nastavnika p
 7. Ductura ne uspoređuje izjavu i zapis i ništa ne označava; nastavnik ih vidi jedno uz drugo.
 8. Nacrt izjave čuva se dok se student vraća u uređivač.
 9. Nakon predaje izjava je zaključana; student može samo dodati napomenu.
-10. Kućica „Potvrđujem da je izjava točna” prije nastavka.
+10. Kućica „Potvrđujem da je izjava točna” uz izjavu; dok vrijedi N-2, neoznačena kućica ne sprječava predaju.
 
 ## 8. Prije predaje — IDE (paket D, 2/4; sve po preporuci)
 1. Svaki korak predaje je svoj zaslon, s oznakom „Korak n od 4”.
 2. Student vidi isti sažetak procesa koji vidi nastavnik.
-3. Popis provjera samo obavještava; ništa ne blokira.
-4. Jedina blokada: promjene na uređaju koje poslužitelj nema; gumb „Provjeri ponovno”.
+3. Popis provjera samo obavještava; ništa s tog popisa ne blokira.
+4. Blokade predaje: (a) promjene na uređaju koje poslužitelj nema, uz gumb „Provjeri ponovno”; (b) predani dokument koji se ne može točno rekonstruirati iz zapisa (`docs/PRODUCT.md` §5 pravilo 11; D-11, potvrđeno D-81), što poslužitelj provjerava pri predaji. Praznina u zapisu nije nepodudarna rekonstrukcija i ne blokira. Vlasnikova odluka glasila je „jedina blokada” i odnosila se na (a); (b) je postojeće pravilo koje ova odluka ne mijenja (otvoreni nesklad N-1).
 5. Mjesta bez izvora: klik otvara mjesto u uređivaču, povratak na isti korak.
 6. Zalijepljeni tekst dulji od 200 znakova: oznaka porijekla po želji.
 7. Vrijeme aktivnog uređivanja prikazano uz rečenicu da nije mjera truda.
@@ -116,7 +117,7 @@ Posljedica za server: nova ruta koja za kod vraća naziv kolegija i nastavnika p
 6. Bez mreže: gumb isključen; predaja se nikad ne šalje sama.
 7. Ishod nepoznat: „Provjeri stanje predaje”; nova predaja nije moguća dok se ishod ne sazna.
 8. Student ne može povući ni ponovno predati; rad vraća samo nastavnik.
-9. Izjava i predaja zapisuju se zajedno u jednom pozivu; nema predaje bez izjave (zahtjev za server).
+9. Izjava i predaja zapisuju se zajedno u jednom pozivu (zahtjev za server). Vlasnikova odluka „nema predaje bez izjave” ne gradi se prije uvjeta iz D-129; do tada poziv prihvaća predaju i bez izjave (otvoreni nesklad N-2).
 10. Zamjenski postupak: mirna poruka i komu se obratiti; tekst je prijedlog do odgovora FPZG-a (Q-3).
 
 ## 10. Potvrda — IDE (paket D, 4/4; sve po preporuci)
@@ -130,3 +131,10 @@ Posljedica za server: nova ruta koja za kod vraća naziv kolegija i nastavnika p
 8. PDF s QR kodom kasnije.
 9. Poveznice na rad samo za čitanje i na sažetak procesa.
 10. Potvrda e-poštom ne u prvoj verziji.
+
+## Otvoreni neskladi (za vlasnikovu odluku)
+
+Nalazi neovisnog reviewa na #2035 od 18. 11. 2026. Dokument ih ne rješava; do vlasnikove odluke vrijedi postojeće pravilo.
+
+- **N-1, ekran 8 t. 4.** Odluka „jedina blokada: promjene na uređaju koje poslužitelj nema” uža je od `docs/PRODUCT.md` §5 pravila 11 i D-11 (potvrđeno D-81), prema kojima predaju blokira i nepodudarna rekonstrukcija. Vrijedi pravilo 11: obje blokade ostaju, a praznina u zapisu ne blokira. Pitanje vlasniku: potvrđuje li da je odluka značila samo popis provjera na ekranu.
+- **N-2, ekran 7 t. 2 i 10, ekran 9 t. 9.** Odluka „izjava je obvezna za svaku predaju; nema predaje bez izjave” proturječi D-129: nepotvrđena izjava smije blokirati predaju samo kao postavka zadatka navedena u obavijesti, i tek nakon pisane potvrde FPZG-a i upisa C-42; demo ostaje bez te blokade, a tehnička greška ne smije spriječiti predaju. Vrijedi D-129: Izjava se gradi kao korak bez blokade. Pitanje vlasniku: ostaje li pri D-129 ili donosi novu odluku.
