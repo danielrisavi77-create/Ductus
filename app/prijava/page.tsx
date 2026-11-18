@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import SignInScreen from "@/components/auth/SignInScreen";
 import { signedInRedirect, signInHref, signInTarget } from "@/components/auth/sign-in-link";
+import { SIGN_IN_NOTICE_PARAM, signInNotice } from "@/components/auth/sign-in-notice";
 import SessionObserver from "@/components/shell/SessionObserver";
 import { shellSession } from "@/components/shell/shell-session";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -18,14 +19,16 @@ export const metadata = { title: `${t.prijava.title} · ${t.app.name}` };
 // to "/", which sends the person to their own page by the role the database
 // knows (DAN-325); a closed session is then told so there (Z-03, #1231). This
 // page reads no database (F-151). The routes behind it check the session
-// themselves.
+// themselves. `?stanje=` picks one of the fixed S-01 states (signInNotice);
+// any other value is the plain sign-in and is never shown.
 export default async function PrijavaPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const { returnTo } = await searchParams;
+  const query = await searchParams;
+  const { returnTo } = query;
   const onward = signedInRedirect(token, returnTo);
   if (onward !== null) redirect(onward);
   // Outside the shell: the sign-in screen marks the session itself (F-113 t.1).
@@ -33,7 +36,10 @@ export default async function PrijavaPage({
   return (
     <>
       <SessionObserver tag={tag} at={at} />
-      <SignInScreen href={signInHref(signInTarget(returnTo))} />
+      <SignInScreen
+        href={signInHref(signInTarget(returnTo))}
+        notice={signInNotice(query[SIGN_IN_NOTICE_PARAM])}
+      />
     </>
   );
 }

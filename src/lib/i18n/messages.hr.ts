@@ -1472,6 +1472,14 @@ export const hr = {
     helpAaiLink: "Službena pomoć AAI@EduHr",
     helpAccessTitle: "Prijava je uspjela, ali nemate pristup?",
     helpAccessBody: "Javite se koordinatoru na svojoj ustanovi.",
+    // S-01 states (DAN-566 reference, prijava.html states 1 and 4); a failed
+    // or unanswered sign-in reuses `auth` (failedTitle, failedBody,
+    // unavailableBody, retry, home), the next step `access.deniedNext`.
+    redirecting: "Preusmjeravamo Vas na AAI@EduHr",
+    noRoleTitle: "Prijava je uspjela",
+    noRoleBody: "Ovaj račun još nema dodijeljenu ulogu, pa se Vaš prostor ne može otvoriti.",
+    // D-297: only the institution's administrator assigns the student and teacher roles.
+    noRoleAssign: "Ulogu dodjeljuje administrator fakulteta.",
   },
   // DAN-378 (M1.8): Z-03, a closed session behind the cookie; signed out,
   // with no session ever shown; Z-05, signed in without the role (UX pass
