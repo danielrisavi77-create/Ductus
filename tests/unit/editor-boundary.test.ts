@@ -39,7 +39,7 @@ const DEEP = [
   "@/editor/schema", "@/editor//schema", "@//editor/schema", "@/editor/index/../schema", "@/lib/../editor/schema",
   // K3 absolute paths and file: URLs
   schema, fileUrl, fileUrl.replace("file://", "file://localhost"), fileUrl.replace("file://", "FILE://"),
-  fileUrl.replace("file://", "file:"),
+  fileUrl.replace("file://", "file:"), "file:../editor/schema", "FILE:..\\editor\\schema",
   // K4 tab, CR, LF and C0 or space at the ends
   "../editor/sche\tma", "../edi\rtor/schema", "../editor/schema\n", "\t../editor/schema", "@/editor/sch\tema", " ../editor/schema",
   "\u0000../editor/schema", "@/editor/schema ",
@@ -54,6 +54,7 @@ const DEEP = [
   "..\\editor\\index?\\..\\schema", "@/editor\\index#\\..\\schema",
   // K8 letter case and Windows names
   "../Editor/schema", "@/EDITOR/schema", "../editor./schema", "../editor /schema", "../editor::$INDEX_ALLOCATION/schema",
+  "../../\u017Frc/editor/schema",
   // K9 schemes other than file: and node:
   "data:text/javascript,export*from'../editor/schema'", "C:\\x\\src\\editor\\schema", "http://x/src/editor/schema",
   // K10 a bare name read from node_modules or the root
@@ -88,9 +89,13 @@ const FORMS = [
   "export type X = typeof import(M);\n",
   "import x = require(M);\nexport { x };\n",
   "declare module M {}\nexport {};\n",
+  'import { vi } from "vitest";\nexport const x = await vi.importActual(M);\n',
+  "export const x = vi.importMock(M);\n",
+  "export const x = jest.requireActual(M);\n",
+  "export const x = import.meta.glob(M);\n",
 ];
 
-const code = (form: string, specifier: string) => form.replace("M", JSON.stringify(specifier));
+const code = (form: string, specifier: string) => form.replace(/\bM\b/u, JSON.stringify(specifier));
 
 describe("editor-core is imported through @/editor only (DAN-927)", () => {
   it("is on for every file", async () => {
@@ -130,6 +135,12 @@ describe("editor-core is imported through @/editor only (DAN-927)", () => {
     [FILE, '/// <reference path="../editor/schema.ts" />\nexport {};\n'],
     [FILE, "/// <reference types='@/editor/schema' />\nexport {};\n"],
     [FILE, '/// <reference path="..\\editor\\schema.ts" />\nexport {};\n'],
+    [FILE, '/// <reference preserve="true" path="../editor/schema.ts" />\nexport {};\n'],
+    [FILE, 'import { createRequire } from "node:module";\nlet load = createRequire(import.meta.url);\nload = createRequire(process.cwd());\nexport const x = load("./x");\n'],
+    [FILE, 'import { createRequire } from "node:module";\nvar load = createRequire(import.meta.url);\nvar load = createRequire(process.cwd());\nexport const x = load.resolve("./x");\n'],
+    [FILE, 'export const x = require.main.require("./x");\n'],
+    [FILE, 'export const x = process.mainModule.require("./x");\n'],
+    [FILE, 'export const x = import.meta.glob(["../editor/index.ts", "/src/editor/*.ts"]);\n'],
   ])("off passes, on catches %s: %j", async (file, text) => {
     expect(await hits(off, file, text)).toBe(0);
     expect(await hits(on, file, text)).toBe(1);
@@ -142,6 +153,8 @@ describe("editor-core is imported through @/editor only (DAN-927)", () => {
     [FILE, 'import { createRequire } from "node:module";\nexport const x = createRequire(import.meta.dirname)("react");\n'],
     [FILE, 'export const x = require.resolve("react", { paths: ["/elsewhere"] });\n'],
     [FILE, 'export const x = new URL("postgres://127.0.0.1/x");\n'],
+    [FILE, 'export const x = require.main.require("react");\n'],
+    [FILE, 'export const x = import.meta.glob(["../editor/index.ts", "!../editor/x.ts", "/src/lib/*.ts"]);\n'],
     [FILE, '/// <reference types="node" />\n/// <reference path="../editor/index.ts" />\nexport {};\n'],
   ])("allows %s: %j", async (file, text) => {
     expect(await hits(on, file, text)).toBe(0);

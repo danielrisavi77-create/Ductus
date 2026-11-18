@@ -57,14 +57,16 @@ const isDeepDb = (specifier) =>
 // The name of a member: x.resolve, or a literal computed one, x["resolve"].
 const memberName = (node) => (node.computed ? staticSpecifier(node.property) : node.property.name);
 
-// The binding a name refers to in the scope of node, or undefined.
-function binding(context, node, name) {
+// The variable a name refers to in the scope of node, and its first binding,
+// or undefined.
+function variableOf(context, node, name) {
   for (let scope = context.sourceCode.getScope(node); scope; scope = scope.upper) {
     const variable = scope.set.get(name);
-    if (variable) return variable.defs[0];
+    if (variable) return variable;
   }
   return undefined;
 }
+const binding = (context, node, name) => variableOf(context, node, name)?.defs[0];
 
 // createRequire from node:module, under any local name, or module.createRequire.
 function isCreateRequire(context, callee) {
@@ -158,9 +160,11 @@ const databaseBoundaryPlugin = {
 // of the package other than its entry, or when it cannot be placed.
 const REPO_ROOT = dirname(fileURLToPath(import.meta.url));
 // The names of a path in the repository as Windows reads them as well: any
-// letter case, trailing dots and spaces and a ":stream" suffix dropped.
+// letter case (folded), trailing dots and spaces and a ":stream" suffix dropped.
+// Upper then lower case folds letters such as U+017F (long s) to ASCII.
+const fold = (text) => text.toUpperCase().toLowerCase();
 const repoNames = (path) =>
-  relative(REPO_ROOT.toLowerCase(), path.toLowerCase())
+  relative(fold(REPO_ROOT), fold(path))
     .split(/[\\/]/u)
     .map((name) => name.replace(/:.*$/su, "").replace(/[. ]+$/u, ""));
 function isDeepEditor(path) {
@@ -196,7 +200,13 @@ function reachesEditor(text, dir) {
     } catch {
       // No scheme: a path, the alias or a bare name.
     }
-    if (url) return url.protocol !== "node:" && (url.protocol !== "file:" || isDeepEditor(fileURLToPath(url)));
+    if (url) {
+      if (url.protocol !== "file:") return url.protocol !== "node:";
+      // file:../x has no "//" and is read against the importing file.
+      if (dir) return isDeepEditor(fileURLToPath(new URL(text, pathToFileURL(`${dir}/`))));
+      if (new URL(text, "file:///a/b/").href !== new URL(text, "file:///c/d/").href) return true;
+      return isDeepEditor(fileURLToPath(url));
+    }
     let paths;
     if (/^@[\\/]/u.test(text)) {
       paths = readings(join(REPO_ROOT, "src"), `./${text.slice(2)}`);
@@ -214,6 +224,8 @@ function reachesEditor(text, dir) {
 }
 const isMeta = (node, names) =>
   node?.type === "MemberExpression" && node.object.type === "MetaProperty" && names.includes(memberName(node));
+const isMember = (node, object, names) =>
+  node?.type === "MemberExpression" && node.object.type === "Identifier" && node.object.name === object && names.includes(memberName(node));
 const isFree = (context, node, name) => node?.type === "Identifier" && node.name === name && !binding(context, node, name);
 // The directory a loader call resolves from; undefined when it is not this
 // file's: a second argument, or createRequire from another base.
@@ -224,8 +236,13 @@ function loaderBase(context, call, dir) {
   if (callee.type === "MemberExpression" && memberName(callee) === "resolve") callee = callee.object;
   let made = callee.type === "CallExpression" ? callee : undefined;
   if (callee.type === "Identifier") {
-    const def = binding(context, callee, callee.name);
-    if (def?.type === "Variable" && def.node.init?.type === "CallExpression") made = def.node.init;
+    const variable = variableOf(context, callee, callee.name);
+    const def = variable?.defs[0];
+    if (def?.type === "Variable" && def.node.init?.type === "CallExpression") {
+      // Declared again or assigned later: the base at this call is not known.
+      if (variable.defs.length > 1 || variable.references.some((ref) => ref.isWrite() && !ref.init)) return undefined;
+      made = def.node.init;
+    }
   }
   if (made === undefined) return dir;
   const [base, ...more] = made.arguments;
@@ -250,9 +267,9 @@ const editorBoundaryPlugin = {
         if (top === "src" && pkg === "editor" && rest.length > 0) return {};
         const dir = dirname(context.filename);
         const test = (text, call) => reachesEditor(text, loaderBase(context, call, dir));
-        const check = (node) => {
+        const check = (node, base = dir) => {
           const text = staticSpecifier(node);
-          if (typeof text === "string" && test(text)) context.report({ node, messageId: "deepEditor" });
+          if (typeof text === "string" && reachesEditor(text, base)) context.report({ node, messageId: "deepEditor" });
         };
         return {
           ...specifierVisitors(context, test, "deepEditor"),
@@ -270,7 +287,7 @@ const editorBoundaryPlugin = {
           // /// <reference path="M" /> and types="M" include a file.
           Program() {
             for (const comment of context.sourceCode.getAllComments()) {
-              const ref = /^\/\s*<reference\s+(?:path|types)\s*=\s*(["'])(.*?)\1/su.exec(comment.value);
+              const ref = /^\/\s*<reference\b[^>]*?\s(?:path|types)\s*=\s*(["'])(.*?)\1/su.exec(comment.value);
               if (comment.type === "Line" && ref && test(ref[2])) context.report({ loc: comment.loc, messageId: "deepEditor" });
             }
           },
@@ -278,6 +295,29 @@ const editorBoundaryPlugin = {
           NewExpression(node) {
             if (isFree(context, node.callee, "URL") && node.arguments.length === 2 && isMeta(node.arguments[1], ["url"])) {
               check(node.arguments[0]);
+            }
+          },
+          // Other loaders: Vitest and Jest helpers that load the real module,
+          // require of the main or parent module (another base) and Vite's
+          // import.meta.glob, whose "/" patterns start at the project root.
+          "CallExpression:exit"(node) {
+            const { callee } = node;
+            if (isMember(callee, "vi", ["importActual", "importMock"]) || isMember(callee, "jest", ["requireActual", "requireMock"])) {
+              check(node.arguments[0]);
+            } else if (
+              callee.type === "MemberExpression" &&
+              memberName(callee) === "require" &&
+              [["require", "main"], ["process", "mainModule"], ["module", "parent"]].some(([object, name]) => isMember(callee.object, object, [name]))
+            ) {
+              check(node.arguments[0], null);
+            } else if (isMeta(callee, ["glob"])) {
+              const [patterns] = node.arguments;
+              for (const pattern of patterns?.type === "ArrayExpression" ? patterns.elements : [patterns]) {
+                const text = staticSpecifier(pattern);
+                if (typeof text !== "string" || text.startsWith("!")) continue;
+                const rooted = /^\/(?![\\/])/u.test(text) && reachesEditor(`.${text}`, REPO_ROOT);
+                if (rooted || reachesEditor(text, dir)) context.report({ node: pattern, messageId: "deepEditor" });
+              }
             }
           },
         };
