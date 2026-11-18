@@ -12,7 +12,22 @@ const script = resolve(here, "assert-pg-version.sh");
 const dockerfile = readFileSync(resolve(here, "Dockerfile"), "utf8");
 const image = "17.11-1.pgdg13+2";
 
-const run = (args) => spawnSync("sh", [script, ...args], { encoding: "utf8" });
+// Windows: Git for Windows' sh splits its command line at line breaks, so a
+// trailing newline (8a) could never reach the script as part of an argument.
+// There the arguments travel in the environment, which keeps every byte, and
+// an inner sh hands them to the same script as real argv.
+const FORWARD =
+  'set --; i=1; while [ "$i" -le "$ARGC" ]; do eval "set -- \\"\\$@\\" \\"\\$ARG_$i\\""; i=$((i + 1)); done; exec sh "$SCRIPT" "$@"';
+const viaEnvironment = (args) => ({
+  ...process.env,
+  SCRIPT: script,
+  ARGC: String(args.length),
+  ...Object.fromEntries(args.map((value, i) => [`ARG_${i + 1}`, value])),
+});
+const run = (args) =>
+  process.platform === "win32"
+    ? spawnSync("sh", ["-c", FORWARD], { encoding: "utf8", env: viaEnvironment(args) })
+    : spawnSync("sh", [script, ...args], { encoding: "utf8" });
 
 const cases = [
   ["(1) server and client equal the image", [image, image, image], 0],

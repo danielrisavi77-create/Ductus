@@ -39,7 +39,14 @@ ${body}
   });
 }
 
-const killed = { code: null, signal: "SIGKILL", stdout: "armed\n", stderr: "" };
+// Windows has no signals: process.kill(pid, "SIGKILL") ends the process with
+// TerminateProcess, which a parent sees as exit code 1 and no signal. What
+// still tells the fence's kill from a crash is the empty stderr, the output
+// cut off after "armed" and the time window below.
+const killed =
+  process.platform === "win32"
+    ? { code: 1, signal: null, stdout: "armed\n", stderr: "" }
+    : { code: null, signal: "SIGKILL", stdout: "armed\n", stderr: "" };
 const survived = (stdout: string): object => ({ code: 0, signal: null, stdout, stderr: "" });
 
 describe("attempt fence: an attempt still armed at its time ends the process", () => {
