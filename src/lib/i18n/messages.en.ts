@@ -1459,6 +1459,10 @@ const en = {
     helpAaiLink: "Official AAI@EduHr help",
     helpAccessTitle: "Signed in, but no access?",
     helpAccessBody: "Contact the coordinator at your institution.",
+    redirecting: "Taking you to AAI@EduHr",
+    noRoleTitle: "Sign-in succeeded",
+    noRoleBody: "This account has no role assigned yet, so your space cannot open.",
+    noRoleAssign: "The faculty administrator assigns the role.",
   },
   // DAN-378 (M1.8): Z-03, a closed session behind the cookie; signed out,
   // with no session ever shown; Z-05, signed in without the role (UX pass

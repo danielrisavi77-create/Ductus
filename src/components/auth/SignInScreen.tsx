@@ -3,15 +3,55 @@ import Link from "next/link";
 import AppHeader from "@/components/shell/AppHeader";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
+import type { SignInNotice } from "./sign-in-notice";
+import SignInLink from "./SignInLink";
 import styles from "./SignInScreen.module.css";
 
 export type SignInScreenProps = {
   /** The login route with a checked returnTo (signInHref). */
   href: string;
+  /** Why the last sign-in did not open the space (signInNotice), or null for the plain sign-in. */
+  notice?: SignInNotice | null;
 };
 
 /** Official AAI@EduHr help: identity problems belong to the home institution. */
 const AAI_HELP_URL = "https://www.aaiedu.hr/kontakt";
+
+/**
+ * S-01 states 2 to 4 in place of the sign-in card (DAN-566 reference). A
+ * failure is an alert with a new sign-in by the same login route; a person
+ * without a role is a status with no new sign-in, which would only end here
+ * again: the role comes from the institution's administrator (D-297). No
+ * colour of its own and no red: the person did nothing wrong.
+ */
+function NoticePanel({ notice, href }: { notice: SignInNotice; href: string }) {
+  if (notice === "noRole") {
+    return (
+      <section className={styles.panel} role="status" aria-labelledby="prijava-kartica">
+        <h2 id="prijava-kartica" className={styles.panelTitle}>
+          {t.prijava.noRoleTitle}
+        </h2>
+        <p className={styles.body}>{t.prijava.noRoleBody}</p>
+        <p className={styles.body}>{t.prijava.noRoleAssign}</p>
+        <p className={styles.body}>{t.access.deniedNext}</p>
+      </section>
+    );
+  }
+  return (
+    <section className={styles.panel} role="alert" aria-labelledby="prijava-kartica">
+      <h2 id="prijava-kartica" className={styles.panelTitle}>
+        {t.auth.failedTitle}
+      </h2>
+      <p className={styles.body}>{notice === "unavailable" ? t.auth.unavailableBody : t.auth.failedBody}</p>
+      <SignInLink href={href} label={t.auth.retry} />
+      {notice === "failed" ? (
+        <Link className={styles.homeLink} href="/">
+          {t.auth.home}
+        </Link>
+      ) : null}
+    </section>
+  );
+}
 
 /**
  * Archivum sign-in (owner's design package of 26 Oct 2026, DAN-344), laid out
@@ -20,8 +60,9 @@ const AAI_HELP_URL = "https://www.aaiedu.hr/kontakt";
  * (D-09, D-16): no role picker, no e-mail, no password field. The button is a
  * plain link; the login route answers with a redirect to the provider. Help
  * and the code note are <details>, so the page works without JavaScript.
+ * A `notice` replaces the sign-in card with one of the S-01 states.
  */
-export default function SignInScreen({ href }: SignInScreenProps) {
+export default function SignInScreen({ href, notice = null }: SignInScreenProps) {
   return (
     <div className={styles.screen}>
       <AppHeader
@@ -71,37 +112,35 @@ export default function SignInScreen({ href }: SignInScreenProps) {
             </div>
           </div>
         </section>
-        <section className={styles.panel} aria-labelledby="prijava-kartica">
-          <p className={styles.eyebrow}>{t.prijava.cardEyebrow}</p>
-          <h2 id="prijava-kartica" className={styles.panelTitle}>
-            {t.prijava.cardTitle}{" "}
-            <br />
-            <em className={styles.accent}>{t.prijava.cardTitleAccent}</em>
-          </h2>
-          <p className={styles.body}>{t.prijava.cardBody}</p>
-          <a className={styles.button} href={href}>
-            <span className={styles.aai} aria-hidden="true">
-              aai
-            </span>{" "}
-            <span className={styles.buttonLabel}>{t.prijava.button}</span>{" "}
-            <span aria-hidden="true">→</span>
-          </a>
-          <p className={styles.note}>
-            <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true">
-              <rect x="1" y="5" width="8" height="6.5" rx="1.5" fill="none" stroke="currentColor" />
-              <path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" />
-            </svg>
-            {t.prijava.passwordNote}
-          </p>
-          <div className={styles.role}>
-            <h3 className={styles.roleTitle}>{t.prijava.roleTitle}</h3>
-            <p className={styles.small}>{t.prijava.roleBody}</p>
-          </div>
-          <details className={styles.details}>
-            <summary>{t.prijava.codeSummary}</summary>
-            <p className={styles.small}>{t.prijava.codeNote}</p>
-          </details>
-        </section>
+        {notice === null ? (
+          <section className={styles.panel} aria-labelledby="prijava-kartica">
+            <p className={styles.eyebrow}>{t.prijava.cardEyebrow}</p>
+            <h2 id="prijava-kartica" className={styles.panelTitle}>
+              {t.prijava.cardTitle}{" "}
+              <br />
+              <em className={styles.accent}>{t.prijava.cardTitleAccent}</em>
+            </h2>
+            <p className={styles.body}>{t.prijava.cardBody}</p>
+            <SignInLink href={href} label={t.prijava.button} />
+            <p className={styles.note}>
+              <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true">
+                <rect x="1" y="5" width="8" height="6.5" rx="1.5" fill="none" stroke="currentColor" />
+                <path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" />
+              </svg>
+              {t.prijava.passwordNote}
+            </p>
+            <div className={styles.role}>
+              <h3 className={styles.roleTitle}>{t.prijava.roleTitle}</h3>
+              <p className={styles.small}>{t.prijava.roleBody}</p>
+            </div>
+            <details className={styles.details}>
+              <summary>{t.prijava.codeSummary}</summary>
+              <p className={styles.small}>{t.prijava.codeNote}</p>
+            </details>
+          </section>
+        ) : (
+          <NoticePanel notice={notice} href={href} />
+        )}
       </main>
       <footer className={styles.footer}>
         <p className={styles.footerNote}>{t.prijava.footer}</p>
