@@ -3,7 +3,7 @@ import { getSchema } from "@tiptap/core";
 import { Step } from "@tiptap/pm/transform";
 import { describe, expect } from "vitest";
 
-import { createEditorExtensions } from "@/editor/schema";
+import { createEditorExtensions } from "@/editor";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 
 const schema = getSchema(createEditorExtensions());

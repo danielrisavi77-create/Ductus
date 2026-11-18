@@ -2,8 +2,7 @@ import type { Editor } from "@tiptap/core";
 import type { Node as PMNode, NodeType } from "@tiptap/pm/model";
 import { AllSelection, Selection, type Transaction } from "@tiptap/pm/state";
 
-import { CITATION_FORM_META } from "@/editor/source";
-import { storableText } from "@/editor/storable-text";
+import { CITATION_FORM_META, storableText } from "@/editor";
 
 import {
   formatBibliographyEntry, formatInText,

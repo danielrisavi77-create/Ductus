@@ -6,8 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { createTextAnchor, type TextAnchor } from "@/domain/collaboration";
 import type { CanonicalDocument, NodeId } from "@/domain/document";
-import { createAnchorPlacer } from "@/editor/comment-anchor";
-import { createEditorExtensions, NODE_ID_ATTRIBUTE } from "@/editor/schema";
+import { createAnchorPlacer, createEditorExtensions, NODE_ID_ATTRIBUTE } from "@/editor";
 
 import { createVersionGate, placementVersion, submittedTextsOf } from "./comment-version";
 

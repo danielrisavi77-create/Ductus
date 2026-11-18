@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
   // dev tools button sat over the account name in the sidebar on every demo
   // screenshot. Build and runtime errors still open the overlay.
   devIndicators: false,
+  // src/editor is reached only through its entry @/editor (DAN-927). Its
+  // modules run nothing at load time, so a page keeps only the modules it uses.
+  webpack(config: { module: { rules: object[] } }) {
+    config.module.rules.push({ test: /[\\/]src[\\/]editor[\\/][^\\/]+\.tsx?$/, sideEffects: false });
+    return config;
+  },
   async headers() {
     return [
       { source: "/:path*", headers: [...SECURITY_HEADERS] },
