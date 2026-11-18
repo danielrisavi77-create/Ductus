@@ -6,7 +6,7 @@ import { Slice, type Node as PmNode, type Schema } from "@tiptap/pm/model";
 import { Step, Transform } from "@tiptap/pm/transform";
 import { describe, expect, it } from "vitest";
 
-import { createEditorExtensions } from "@/editor/schema";
+import { createEditorExtensions } from "@/editor";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 

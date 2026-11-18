@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FetchLike } from "@/client/evidence-ingest";
 import type { CanonicalDocument } from "@/domain/document";
-import { tiptapToCanonical } from "@/editor/interop";
+import { tiptapToCanonical } from "@/editor";
 import { messagesEn } from "@/lib/i18n/messages.en";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";

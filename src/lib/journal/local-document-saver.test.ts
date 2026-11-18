@@ -13,7 +13,7 @@ import {
 } from "../../domain/document";
 import { documentByteLength, MAX_DOCUMENT_BYTES } from "../../domain/serverSync/contract";
 import type { SyncState } from "../../domain/sync/states";
-import { storableText } from "../../editor/storable-text";
+import { storableText } from "../../editor";
 import { AtomicDexieJournal, JournalError } from "./atomic-dexie-journal";
 import {
   failureOf, LocalDocumentSaver, reasonOf, type LoadResult, type SaverDeps, type SaverSnapshot,

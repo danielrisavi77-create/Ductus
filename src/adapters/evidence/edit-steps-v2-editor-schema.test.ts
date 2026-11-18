@@ -8,9 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { DocumentSource } from "../../domain/document/schema";
 import type { EvidenceEventV3 } from "../../domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "../../domain/forensics/jcs";
-import { CITATION_UNMARK_META } from "../../editor/citation";
-import { canonicalToTiptapV2, tiptapToCanonicalV2 } from "../../editor/interop-v2";
-import { createEditorExtensionsV2 } from "../../editor/schema";
+import { CITATION_UNMARK_META, canonicalToTiptapV2, tiptapToCanonicalV2, createEditorExtensionsV2 } from "../../editor";
 
 import { createEditStepsV2Replayer } from "./edit-steps-v2-replayer";
 import { editStepJsonV2, editStepsV2Schema } from "./edit-steps-v2-rules";

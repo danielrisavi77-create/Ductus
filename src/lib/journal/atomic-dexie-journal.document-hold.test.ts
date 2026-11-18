@@ -3,7 +3,7 @@ import { indexedDB } from "fake-indexeddb";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { emptyDocument, type DocumentTransaction } from "@/domain/document";
-import type { BuiltSegment } from "@/editor/capture";
+import type { BuiltSegment } from "@/editor";
 import {
   answer, capture, committed, DOC, deps, journalKit, R0, raw, save, UTC, type Chain,
 } from "@/lib/sync/evidence-test-kit";

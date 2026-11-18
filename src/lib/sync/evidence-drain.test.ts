@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { decodeBase64 } from "@/client/evidence-ingest";
 import { emptyDocument, type DocumentTransaction } from "@/domain/document";
 import type { EvidenceReceiptPayloadV2 } from "@/domain/forensics/evidence-receipt";
-import type { BuiltSegment } from "@/editor/capture";
+import type { BuiltSegment } from "@/editor";
 import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 
 import { createEvidenceTransport } from "./evidence-transport";

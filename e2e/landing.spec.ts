@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { BULLET_ITEM_HTML_ATTRIBUTE, BULLET_ITEM_HTML_VALUE } from "../src/editor/bullet-item";
+import { BULLET_ITEM_HTML_ATTRIBUTE, BULLET_ITEM_HTML_VALUE } from "../src/editor";
 import { messagesHr as t } from "../src/lib/i18n/messages.hr";
 import { SHEET_THEME_KEY } from "../src/lib/ui/sheet-theme";
 
