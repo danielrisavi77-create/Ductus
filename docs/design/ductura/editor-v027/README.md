@@ -29,7 +29,7 @@ Snimke: Playwright Chromium, lokalni statički poslužitelj nad cijelim prototip
 
 ## Što nije odlučeno
 
-- **Dani do roka na nastavničkim snimkama:** obje nastavničke snimke na 1440 px na dnu lijevog panela pokazuju „140 / 2 000 riječi · još 13 dana”. Taj element nije dio nastavničke reference: `docs/PRODUCT.md` §5 pravilo 4 i D-63 dopuštaju dane do roka samo studentu. Nastavnički prikaz gradi se bez njega.
+- **Dani do roka i trake napretka na nastavničkim snimkama:** obje nastavničke snimke na 1440 px imaju dva studentska elementa. Na dnu lijevog panela piše „140 / 2 000 riječi · još 13 dana”, a u panelu „Struktura” ispod svakog poglavlja stoji zlatna traka napretka. Nijedan od njih nije dio nastavničke reference: `docs/PRODUCT.md` §5 pravilo 4 i D-63 dopuštaju ih samo studentu. Nastavnički prikaz gradi se bez njih.
 
 - **Zapis nastanka i ritam tipkanja (`mentor3.js`, v0.27):** prijedlog, nije odluka. Ritam tipkanja proturječi `docs/PRODUCT.md` §5 pravilu 4 (iz vremena se nikad ne računa brzina, pauze ni ritam) i ne smije se graditi bez nove odluke vlasnika.
 - **Mentorski dio:** prijedlog; nije isproban ni s jednim mentorom. Granice su `docs/PRODUCT.md` §5 pravila 5 i 7 (D-130, D-142, D-143).
