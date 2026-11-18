@@ -13,6 +13,13 @@ import { afterAll, describe, expect, it } from "vitest";
 const work = mkdtempSync(path.join(tmpdir(), "ductus-shutdown-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
+// Windows delivers no SIGTERM to a child: child.kill("SIGTERM") ends it with
+// TerminateProcess and no handler runs. There the parent writes a line to the
+// child's stdin and the child emits SIGTERM on itself, which runs the same
+// listeners as a real signal does on Linux.
+const WINDOWS = process.platform === "win32";
+const signalOnStdin = WINDOWS ? `process.stdin.on("data", () => process.emit("SIGTERM"));\n` : "";
+
 const shutdownModule = pathToFileURL(path.resolve(__dirname, "../../src/server/shutdown.ts")).href;
 const server = path.join(work, "server.mjs");
 writeFileSync(
@@ -28,12 +35,14 @@ const http = createServer((req, res) => {
 });
 process.on("SIGTERM", () => http.close(() => process.exit(0)));
 installShutdownSignals(process, shutdown, { exit: process.exit, exitWhenDrained: false });
-http.listen(0, "127.0.0.1", () => console.log("port " + http.address().port));
+${signalOnStdin}http.listen(0, "127.0.0.1", () => console.log("port " + http.address().port));
 `,
 );
 
 async function run(url: string, graceMs: number) {
-  const child = spawn(process.execPath, [server, String(graceMs)], { stdio: ["ignore", "pipe", "pipe"] });
+  const child = WINDOWS
+    ? spawn(process.execPath, [server, String(graceMs)], { stdio: "pipe" })
+    : spawn(process.execPath, [server, String(graceMs)], { stdio: ["ignore", "pipe", "pipe"] });
   let stdout = "";
   let stderr = "";
   child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
@@ -60,7 +69,8 @@ async function run(url: string, graceMs: number) {
     check();
   });
   const signalled = Date.now();
-  child.kill("SIGTERM");
+  if (WINDOWS) child.stdin!.write("SIGTERM\n");
+  else child.kill("SIGTERM");
   return { code: await exited, answer: await answer, stderr, elapsed: Date.now() - signalled };
 }
 
