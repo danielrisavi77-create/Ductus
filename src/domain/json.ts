@@ -48,3 +48,22 @@ export function hasOnlyKeys(
 export function ownProperty(value: Record<string, unknown>, key: string): unknown {
   return Object.prototype.hasOwnProperty.call(value, key) ? value[key] : undefined;
 }
+
+/**
+ * A plain object whose own enumerable string keys are exactly `keys`: none
+ * missing, none extra.
+ *
+ * For reading an answer whose shape is fixed, where an unknown field means
+ * the two sides disagree about the format and the answer must be refused
+ * rather than half-read. `keys` must not repeat a name.
+ */
+export function hasExactKeys(
+  value: unknown,
+  keys: readonly string[],
+): value is Record<string, unknown> {
+  if (!isPlainObject(value)) return false;
+  return (
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.hasOwn(value, key))
+  );
+}

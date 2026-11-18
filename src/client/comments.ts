@@ -7,6 +7,7 @@
  */
 
 import { isTextAnchorInput, type TextAnchor } from "@/domain/collaboration";
+import { isPlainObject } from "@/domain/json";
 
 export type CommentRole = "teacher" | "student";
 export type ThreadState = "open" | "answered" | "resolved";
@@ -44,18 +45,15 @@ const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const ROLES: ReadonlySet<string> = new Set(["teacher", "student"]);
 const STATES: ReadonlySet<string> = new Set(["open", "answered", "resolved"]);
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /**
  * Threads from the body of `list`, whose rows come ordered by thread and
  * position. Null for any row out of shape or out of order.
  */
 export function threadsFromList(value: unknown): CommentThread[] | null {
-  if (!isObject(value) || !Array.isArray(value.comments)) return null;
+  if (!isPlainObject(value) || !Array.isArray(value.comments)) return null;
   const threads: { id: string; state: ThreadState; anchor: TextAnchor | null; comments: ThreadComment[] }[] = [];
   for (const row of value.comments as unknown[]) {
-    if (!isObject(row)) return null;
+    if (!isPlainObject(row)) return null;
     const { threadId, commentId, position, authorRole, isOwn, body, anchor, state, createdWindow, deletedWindow } = row;
     const standing = deletedWindow === null && typeof body === "string";
     const deleted = body === null && typeof deletedWindow === "string" && !Number.isNaN(Date.parse(deletedWindow));

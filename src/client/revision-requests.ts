@@ -18,6 +18,7 @@ import {
   type RevisionKind,
 } from "@/domain/collaboration/revision-input";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import { isPlainObject } from "@/domain/json";
 
 export type RevisionState = "open" | "responded" | "accepted" | "reopened" | "withdrawn";
 export type RevisionClosing = "accepted" | "reopened" | "withdrawn";
@@ -88,8 +89,6 @@ const ROW_KEYS = [
   "response_window", "version",
 ].sort();
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 const isTime = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(Date.parse(value));
 const isVersion = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= VERSION_MAX;
@@ -143,10 +142,10 @@ type Building = {
  * order, or any request whose versions disagree with its state.
  */
 export function requestsFromList(value: unknown): RevisionRequest[] | null {
-  if (!isObject(value) || !Array.isArray(value.requests)) return null;
+  if (!isPlainObject(value) || !Array.isArray(value.requests)) return null;
   const requests: Building[] = [];
   for (const row of value.requests as unknown[]) {
-    if (!isObject(row)) return null;
+    if (!isPlainObject(row)) return null;
     const keys = Object.keys(row).sort();
     if (keys.length !== ROW_KEYS.length || keys.some((key, i) => key !== ROW_KEYS[i])) return null;
     const { request_id: id, request_state: state, request_version: head, request_row_seq: rowSeq } = row;
@@ -241,7 +240,7 @@ export async function respondRevisionRequest(
     case 403: return { kind: "forbidden" };
     case 409: {
       const body: unknown = await response.json().catch(() => null);
-      const state = isObject(body) && typeof body.state === "string" && STATES.has(body.state)
+      const state = isPlainObject(body) && typeof body.state === "string" && STATES.has(body.state)
         ? body.state as RevisionState : null;
       return { kind: "conflict", state };
     }

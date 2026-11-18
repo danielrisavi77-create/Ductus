@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasOnlyKeys, isPlainObject, ownProperty } from "./json";
+import { hasExactKeys, hasOnlyKeys, isPlainObject, ownProperty } from "./json";
 
 /**
  * The prototype rule these two encode is a security rule (F1-10), and it is
@@ -65,6 +65,34 @@ describe("hasOnlyKeys", () => {
       enumerable: false,
     });
     expect(hasOnlyKeys(hidden, allowed)).toBe(false);
+  });
+});
+
+describe("hasExactKeys", () => {
+  const keys = ["status", "revision"];
+
+  it("accepts an object with exactly the named keys, in any order", () => {
+    expect(hasExactKeys({ status: "committed", revision: 1 }, keys)).toBe(true);
+    expect(hasExactKeys({ revision: 1, status: undefined }, keys)).toBe(true);
+    expect(hasExactKeys({}, [])).toBe(true);
+  });
+
+  it("rejects a missing key and an extra key", () => {
+    expect(hasExactKeys({ status: "committed" }, keys)).toBe(false);
+    expect(hasExactKeys({ status: "committed", revision: 1, extra: 1 }, keys)).toBe(false);
+    expect(hasExactKeys({ status: "committed", extra: 1 }, keys)).toBe(false);
+  });
+
+  it("does not take an inherited member for a named key", () => {
+    expect(hasExactKeys({ status: "committed" }, ["status", "constructor"])).toBe(false);
+    expect(hasExactKeys(JSON.parse('{"__proto__": 1}'), ["__proto__"])).toBe(true);
+  });
+
+  it("rejects everything that is not a plain object", () => {
+    expect(hasExactKeys(null, [])).toBe(false);
+    expect(hasExactKeys([], [])).toBe(false);
+    expect(hasExactKeys("status", [])).toBe(false);
+    expect(hasExactKeys(new Date(0), [])).toBe(false);
   });
 });
 
