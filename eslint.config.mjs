@@ -77,17 +77,25 @@ function isCreateRequire(context, callee) {
   return def?.type === "ImportBinding" && def.node.imported?.name === "createRequire";
 }
 
+// The createRequire(...) call a binding holds: a variable's initial value or
+// a parameter's default.
+function requireMadeBy(context, def) {
+  const holder = def.type === "Parameter" ? def.name.parent : undefined;
+  const init = def.type === "Variable" ? def.node.init : holder?.type === "AssignmentPattern" && holder.left === def.name ? holder.right : undefined;
+  return init?.type === "CallExpression" && isCreateRequire(context, init.callee) ? init : undefined;
+}
+
 // A function that loads a module by specifier: require, module.require,
-// createRequire(...) and a name bound to its result.
+// createRequire(...) and a name any of whose bindings holds its result.
 function isRequire(context, node) {
   if (node.type === "CallExpression") return isCreateRequire(context, node.callee);
   if (node.type === "MemberExpression") {
     return node.object.type === "Identifier" && node.object.name === "module" && memberName(node) === "require";
   }
   if (node.type !== "Identifier") return false;
-  const def = binding(context, node, node.name);
-  if (def === undefined) return node.name === "require";
-  return def.type === "Variable" && def.node.init?.type === "CallExpression" && isCreateRequire(context, def.node.init.callee);
+  const defs = variableOf(context, node, node.name)?.defs ?? [];
+  if (defs.length === 0) return node.name === "require";
+  return defs.some((def) => requireMadeBy(context, def));
 }
 
 // A call that loads or resolves a module: the forms of isRequire, their
@@ -237,11 +245,12 @@ function loaderBase(context, call, dir) {
   let made = callee.type === "CallExpression" ? callee : undefined;
   if (callee.type === "Identifier") {
     const variable = variableOf(context, callee, callee.name);
-    const def = variable?.defs[0];
-    if (def?.type === "Variable" && def.node.init?.type === "CallExpression") {
-      // Declared again or assigned later: the base at this call is not known.
-      if (variable.defs.length > 1 || variable.references.some((ref) => ref.isWrite() && !ref.init)) return undefined;
-      made = def.node.init;
+    const defs = variable?.defs ?? [];
+    if (defs.some((def) => requireMadeBy(context, def))) {
+      // Declared again, a parameter or assigned later: the base at this call
+      // is not known.
+      if (defs.length > 1 || defs[0].type !== "Variable" || variable.references.some((ref) => ref.isWrite() && !ref.init)) return undefined;
+      made = defs[0].node.init;
     }
   }
   if (made === undefined) return dir;
@@ -284,11 +293,17 @@ const editorBoundaryPlugin = {
           TSModuleDeclaration(node) {
             if (node.id.type === "Literal") check(node.id);
           },
-          // /// <reference path="M" /> and types="M" include a file.
+          // /// <reference path="M" /> and types="M" include a file. Read as
+          // TypeScript reads them (extractPragmas): the tag in any case, then
+          // each attribute anywhere in the comment, in any case.
           Program() {
             for (const comment of context.sourceCode.getAllComments()) {
-              const ref = /^\/\s*<reference\b[^>]*?\s(?:path|types)\s*=\s*(["'])(.*?)\1/su.exec(comment.value);
-              if (comment.type === "Line" && ref && test(ref[2])) context.report({ loc: comment.loc, messageId: "deepEditor" });
+              const text = `//${comment.value}`;
+              if (comment.type !== "Line" || /^\/\/\/\s*<(\S+)\s.*?\/>/imu.exec(text)?.[1].toLowerCase() !== "reference") continue;
+              for (const name of ["path", "types"]) {
+                const value = new RegExp(String.raw`\s${name}\s*=\s*(?:'([^']*)'|"([^"]*)")`, "imu").exec(text);
+                if (value && test(value[1] ?? value[2])) context.report({ loc: comment.loc, messageId: "deepEditor" });
+              }
             }
           },
           // new URL("M", import.meta.url), which bundlers follow.
@@ -299,10 +314,11 @@ const editorBoundaryPlugin = {
           },
           // Other loaders: Vitest and Jest helpers that load the real module,
           // require of the main or parent module (another base) and Vite's
-          // import.meta.glob, whose "/" patterns start at the project root.
+          // import.meta.glob, whose "/" patterns start at the project root and
+          // whose other patterns start at its base option, if any.
           "CallExpression:exit"(node) {
             const { callee } = node;
-            if (isMember(callee, "vi", ["importActual", "importMock"]) || isMember(callee, "jest", ["requireActual", "requireMock"])) {
+            if (isMember(callee, "vi", ["importActual", "importMock"]) || isMember(callee, "jest", ["requireActual", "requireMock", "createMockFromModule", "genMockFromModule"])) {
               check(node.arguments[0]);
             } else if (
               callee.type === "MemberExpression" &&
@@ -311,12 +327,20 @@ const editorBoundaryPlugin = {
             ) {
               check(node.arguments[0], null);
             } else if (isMeta(callee, ["glob"])) {
-              const [patterns] = node.arguments;
+              const [patterns, options] = node.arguments;
+              let from = dir;
+              if (options !== undefined) {
+                const known = options.type === "ObjectExpression" && options.properties.every((p) => p.type === "Property" && !p.computed);
+                const base = known ? options.properties.find((p) => (p.key.name ?? p.key.value) === "base") : undefined;
+                const text = base && staticSpecifier(base.value);
+                if (!known || (base && typeof text !== "string")) from = null;
+                else if (base) from = text.startsWith("/") ? join(REPO_ROOT, text) : resolve(dir, text);
+              }
               for (const pattern of patterns?.type === "ArrayExpression" ? patterns.elements : [patterns]) {
                 const text = staticSpecifier(pattern);
                 if (typeof text !== "string" || text.startsWith("!")) continue;
                 const rooted = /^\/(?![\\/])/u.test(text) && reachesEditor(`.${text}`, REPO_ROOT);
-                if (rooted || reachesEditor(text, dir)) context.report({ node: pattern, messageId: "deepEditor" });
+                if (rooted || reachesEditor(text, from)) context.report({ node: pattern, messageId: "deepEditor" });
               }
             }
           },

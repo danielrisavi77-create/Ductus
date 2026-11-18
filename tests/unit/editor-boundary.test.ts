@@ -141,6 +141,15 @@ describe("editor-core is imported through @/editor only (DAN-927)", () => {
     [FILE, 'export const x = require.main.require("./x");\n'],
     [FILE, 'export const x = process.mainModule.require("./x");\n'],
     [FILE, 'export const x = import.meta.glob(["../editor/index.ts", "/src/editor/*.ts"]);\n'],
+    [FILE, 'export const x = import.meta.glob("./schema.ts", { base: "../editor" });\n'],
+    [FILE, 'export const x = import.meta.glob("./schema.ts", { base: "/src/editor", eager: true });\n'],
+    [FILE, '/// <Reference PATH="../editor/schema.ts" />\nexport {};\n'],
+    [FILE, '/// <reference x="a>b" path="../editor/schema.ts" />\nexport {};\n'],
+    [FILE, '/// <reference /> path="../editor/schema.ts"\nexport {};\n'],
+    ["scripts/probe.mjs", 'import { createRequire } from "node:module";\nfunction load(s) { return s; }\nvar load = createRequire(process.cwd());\nexport const x = load("./src/editor/schema");\n'],
+    ["scripts/probe.mjs", 'import { createRequire } from "node:module";\nexport function f(load = createRequire(process.cwd())) { return load("./src/editor/schema"); }\n'],
+    [FILE, 'export const x = jest.createMockFromModule("../editor/schema");\n'],
+    [FILE, 'export const x = jest.genMockFromModule("../editor/schema");\n'],
   ])("off passes, on catches %s: %j", async (file, text) => {
     expect(await hits(off, file, text)).toBe(0);
     expect(await hits(on, file, text)).toBe(1);
@@ -156,6 +165,9 @@ describe("editor-core is imported through @/editor only (DAN-927)", () => {
     [FILE, 'export const x = require.main.require("react");\n'],
     [FILE, 'export const x = import.meta.glob(["../editor/index.ts", "!../editor/x.ts", "/src/lib/*.ts"]);\n'],
     [FILE, '/// <reference types="node" />\n/// <reference path="../editor/index.ts" />\nexport {};\n'],
+    [FILE, '/// <REFERENCE TYPES="node" />\nexport {};\n'],
+    [FILE, 'export const x = import.meta.glob("./*.ts", { base: "../lib", eager: true });\n'],
+    [FILE, 'export const x = import.meta.glob("/src/lib/*.ts", { base: "../editor" });\n'],
   ])("allows %s: %j", async (file, text) => {
     expect(await hits(on, file, text)).toBe(0);
   });
