@@ -80,6 +80,8 @@ const DEEP = [
   // Node ESM reads the URL path before its query or fragment, even when the
   // suffix holds a "/".
   ["scripts/probe.mjs", "../src/editor/schema.ts?cache=/../../v1"],
+  // Read as a path this is the entry; read as a URL it is schema.ts.
+  ["scripts/probe.mjs", "../src/editor/schema.ts?v=/../index.ts"],
   ["src/lib/probe.ts", "../editor/schema#/../../x"],
   ["src/lib/probe.ts", "../%65ditor/schema.ts?a=/../.."],
 ] as const;
