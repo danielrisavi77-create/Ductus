@@ -29,9 +29,11 @@ Snimke: Playwright Chromium, lokalni statički poslužitelj nad cijelim prototip
 
 ## Što nije odlučeno
 
+- **Dani do roka na nastavničkim snimkama:** obje nastavničke snimke na 1440 px na dnu lijevog panela pokazuju „140 / 2 000 riječi · još 13 dana”. Taj element nije dio nastavničke reference: `docs/PRODUCT.md` §5 pravilo 4 i D-63 dopuštaju dane do roka samo studentu. Nastavnički prikaz gradi se bez njega.
+
 - **Zapis nastanka i ritam tipkanja (`mentor3.js`, v0.27):** prijedlog, nije odluka. Ritam tipkanja proturječi `docs/PRODUCT.md` §5 pravilu 4 (iz vremena se nikad ne računa brzina, pauze ni ritam) i ne smije se graditi bez nove odluke vlasnika.
 - **Mentorski dio:** prijedlog; nije isproban ni s jednim mentorom. Granice su `docs/PRODUCT.md` §5 pravila 5 i 7 (D-130, D-142, D-143).
-- **Prijevod sažetka:** bilješke prototipa kažu da prijevod radi tek kad fakultet uključi AI; odluka c.6962890596 (t. 7) kaže da aplikacija prevodi sama. Vrijedi odluka.
+- **Prijevod sažetka:** bilješke prototipa kažu da prijevod radi tek kad fakultet uključi AI; odluka c.6962890596 (t. 3) kaže da aplikacija prevodi sama, bez prethodnog uključivanja na fakultetu. Ostatak T7 ostaje: prijevod je neobavezan, pokreće se klikom i dolazi u M9. Vrijedi odluka.
 - Odluke 9 do 14 iz predaje „Stranice, struka, fakultet” još nisu zapisane na #2012 i ova ih mapa ne uvodi.
 - Pragovi, omjeri i tekstovi savjeta u prototipu napisani su bez provjere sa studentima i nastavnicima.
 
