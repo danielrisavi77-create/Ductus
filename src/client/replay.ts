@@ -15,6 +15,7 @@
 
 import { createBrowserReplayStepsV1 } from "@/adapters/evidence/edit-steps-v1-replay-steps";
 import type { EvidenceChainHeadV2 } from "@/domain/forensics/evidence-chain-v2";
+import { hasExactKeys, isPlainObject } from "@/domain/json";
 import { buildReplayPlayer, type ReplayPlayer, type ReplayRecord } from "@/domain/projection/replay-player";
 
 export const REPLAY_PAGE_FORMAT = "ductus-evidence-replay-v1";
@@ -36,26 +37,18 @@ export type ReplayPage = {
 const HASH = /^[0-9a-f]{64}$/;
 const KEYS = ["replayFormat", "segmentCount", "head", "from", "next", "startDocument", "segments", "resumeDocuments"];
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-function exactly(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (!isObject(value)) return false;
-  return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-}
-
 const whole = (value: unknown, min: number): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= min;
 
 function head(value: unknown): EvidenceChainHeadV2 | null {
-  if (!exactly(value, ["segmentHash", "segmentCount"])) return null;
+  if (!hasExactKeys(value, ["segmentHash", "segmentCount"])) return null;
   const { segmentHash, segmentCount } = value;
   if (typeof segmentHash !== "string" || !HASH.test(segmentHash) || !whole(segmentCount, 1)) return null;
   return { segmentHash, segmentCount };
 }
 
 function texts(value: unknown): Record<string, string> | null {
-  if (!isObject(value)) return null;
+  if (!isPlainObject(value)) return null;
   const out: Record<string, string> = {};
   for (const [key, text] of Object.entries(value)) {
     if (!HASH.test(key) || typeof text !== "string") return null;
@@ -70,7 +63,7 @@ function texts(value: unknown): Record<string, string> | null {
  * otherwise null.
  */
 export function parseReplayPage(value: unknown, from: number, pin: EvidenceChainHeadV2 | null): ReplayPage | null {
-  if (!exactly(value, KEYS) || value.replayFormat !== REPLAY_PAGE_FORMAT) return null;
+  if (!hasExactKeys(value, KEYS) || value.replayFormat !== REPLAY_PAGE_FORMAT) return null;
   const { segmentCount: count, next, startDocument, segments } = value;
   if (!whole(count, 0) || value.from !== from) return null;
 

@@ -18,6 +18,7 @@
 import { TEXT_BLOCK_KINDS, type FastPathLoad, type FastPathRecord, type FastPathStudent, type WorkState } from "@/components/teacher/fast-path";
 import { isDocumentId } from "@/domain/collaboration";
 import { isEvidenceMinuteV2 } from "@/domain/forensics/evidence-segment-v2";
+import { hasExactKeys } from "@/domain/json";
 
 import { parseProcessSummaryV1 } from "./process-summary";
 import type { VisibilitySource } from "./live-reader";
@@ -27,22 +28,13 @@ export const FAST_PATH_REFRESH_MS = 300_000;
 
 export type FastPathRead = { kind: "ok"; students: FastPathStudent[] } | { kind: "signedOut" | "unavailable" };
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-function exactly(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (!isObject(value)) return false;
-  const own = Object.keys(value);
-  return own.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-}
-
 const WORK: readonly WorkState[] = ["notice_pending", "writing", "submitted"];
 
 function record(value: unknown): FastPathRecord | null {
-  if (!exactly(value, ["pastesWithoutSource", "blocks", "summary"])) return null;
+  if (!hasExactKeys(value, ["pastesWithoutSource", "blocks", "summary"])) return null;
   const { pastesWithoutSource: pastes, blocks } = value;
   if (typeof pastes !== "number" || !Number.isSafeInteger(pastes) || pastes < 0 || !Array.isArray(blocks)) return null;
-  const checked = blocks.every((b) => exactly(b, ["kind", "text"])
+  const checked = blocks.every((b) => hasExactKeys(b, ["kind", "text"])
     && (TEXT_BLOCK_KINDS as readonly unknown[]).includes(b.kind) && typeof b.text === "string");
   const summary = parseProcessSummaryV1(value.summary);
   if (!checked || summary === null) return null;
@@ -50,7 +42,7 @@ function record(value: unknown): FastPathRecord | null {
 }
 
 function student(value: unknown): FastPathStudent | null {
-  if (!exactly(value, ["id", "givenName", "surname", "documentId", "work", "lastChangeAt", "record"])) return null;
+  if (!hasExactKeys(value, ["id", "givenName", "surname", "documentId", "work", "lastChangeAt", "record"])) return null;
   const { id, givenName, surname, documentId, work, lastChangeAt } = value;
   if (typeof id !== "string" || id === "" || !WORK.includes(work as WorkState)) return null;
   // D1: a name is a pair; either both parts are there or neither.
@@ -76,7 +68,7 @@ function student(value: unknown): FastPathStudent | null {
 
 /** The students when `value` is exactly the fast path answer, otherwise null. */
 export function parseFastPath(value: unknown): FastPathStudent[] | null {
-  if (!exactly(value, ["kind", "students"]) || value.kind !== "ok" || !Array.isArray(value.students)) return null;
+  if (!hasExactKeys(value, ["kind", "students"]) || value.kind !== "ok" || !Array.isArray(value.students)) return null;
   const out: FastPathStudent[] = [];
   const ids = new Set<string>();
   for (const entry of value.students) {

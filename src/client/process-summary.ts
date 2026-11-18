@@ -19,25 +19,17 @@ import {
   type ProcessSummaryV1,
 } from "@/domain/projection/process-summary";
 import { isEvidenceMinuteV2 } from "@/domain/forensics/evidence-segment-v2";
+import { hasExactKeys } from "@/domain/json";
 
 export type SummaryOutcome =
   | { kind: "ok"; summary: ProcessSummaryV1 }
   | { kind: "signedOut" | "notFound" | "unavailable" };
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-function exactly(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (!isObject(value)) return false;
-  const own = Object.keys(value);
-  return own.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-}
-
 const whole = (value: unknown, min: number): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= min;
 
 function minuteSpan(value: unknown): MinuteSpan | null {
-  if (!exactly(value, ["from", "to"])) return null;
+  if (!hasExactKeys(value, ["from", "to"])) return null;
   const { from, to } = value;
   if (!isEvidenceMinuteV2(from) || !isEvidenceMinuteV2(to) || from > to) return null;
   return { from, to };
@@ -56,21 +48,21 @@ function list<T>(value: unknown, item: (entry: unknown) => T | null): T[] | null
 
 /** The summary when `value` is exactly `ProcessSummaryV1`, otherwise null. */
 export function parseProcessSummaryV1(value: unknown): ProcessSummaryV1 | null {
-  if (!exactly(value, ["summaryFormat", "sessions", "pastes", "gaps", "recordState"])) return null;
+  if (!hasExactKeys(value, ["summaryFormat", "sessions", "pastes", "gaps", "recordState"])) return null;
   if (value.summaryFormat !== PROCESS_SUMMARY_FORMAT_V1) return null;
 
   const { sessions, pastes, gaps, recordState } = value;
-  if (!exactly(sessions, ["evidenceKind", "breakAboveMinutes", "count", "items"])
+  if (!hasExactKeys(sessions, ["evidenceKind", "breakAboveMinutes", "count", "items"])
     || sessions.evidenceKind !== "observed" || !whole(sessions.breakAboveMinutes, 1)) return null;
   const sessionItems = list(sessions.items, minuteSpan);
   if (sessionItems === null || sessions.count !== sessionItems.length) return null;
 
-  if (!exactly(pastes, ["evidenceKind", "listedAboveCharacters", "listed", "smallerCount"])
+  if (!hasExactKeys(pastes, ["evidenceKind", "listedAboveCharacters", "listed", "smallerCount"])
     || pastes.evidenceKind !== "observed" || !whole(pastes.listedAboveCharacters, 0)
     || !whole(pastes.smallerCount, 0)) return null;
   const above = pastes.listedAboveCharacters;
   const listed = list(pastes.listed, (entry) => {
-    if (!exactly(entry, ["at", "characters", "origin"]) || entry.origin !== "not_observed") return null;
+    if (!hasExactKeys(entry, ["at", "characters", "origin"]) || entry.origin !== "not_observed") return null;
     const at = minuteSpan(entry.at);
     // Listed only above P-02, as the server decides it.
     if (at === null || !whole(entry.characters, above + 1)) return null;
@@ -78,9 +70,9 @@ export function parseProcessSummaryV1(value: unknown): ProcessSummaryV1 | null {
   });
   if (listed === null) return null;
 
-  if (!exactly(gaps, ["evidenceKind", "items"]) || gaps.evidenceKind !== "observed") return null;
+  if (!hasExactKeys(gaps, ["evidenceKind", "items"]) || gaps.evidenceKind !== "observed") return null;
   const gapItems = list(gaps.items, (entry) => {
-    if (!exactly(entry, ["previousEndedAt", "nextStartedAt"])) return null;
+    if (!hasExactKeys(entry, ["previousEndedAt", "nextStartedAt"])) return null;
     const { previousEndedAt, nextStartedAt } = entry;
     if (!isEvidenceMinuteV2(previousEndedAt) || !isEvidenceMinuteV2(nextStartedAt)) return null;
     return { previousEndedAt, nextStartedAt };
