@@ -84,6 +84,9 @@ const DEEP = [
   ["scripts/probe.mjs", "../src/editor/schema.ts?v=/../index.ts"],
   ["src/lib/probe.ts", "../editor/schema#/../../x"],
   ["src/lib/probe.ts", "../%65ditor/schema.ts?a=/../.."],
+  // The URL parser drops tabs and newlines anywhere and C0 controls at the ends.
+  ["scripts/probe.mjs", "../src/ed\titor/schema.ts"],
+  ["scripts/probe.mjs", "\u0001../src/editor/schema.ts\u0002"],
 ] as const;
 
 const ENTRY = [

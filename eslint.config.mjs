@@ -238,8 +238,11 @@ function isEditorDeep(context, specifier, loader) {
     }
   };
   const text = specifier.trim();
+  // The WHATWG URL parser drops C0 controls and spaces at the ends and tabs
+  // and newlines anywhere, so "../src/ed\titor/x" is src/editor/x in ESM.
+  const url = specifier.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/gu, "").replace(/[\t\n\r]/gu, "");
   const query = /[?#][^/]*$/su;
-  const forms = [text, decode(text), decode(text.replace(/[?#].*$/su, ""))].map((raw) => {
+  const forms = [text, decode(text), url, decode(url.replace(/[?#].*$/su, ""))].map((raw) => {
     const path = target(raw.replace(query, ""));
     return path === null ? null : posix.normalize(path).replace(/\/+$/u, "").toLowerCase();
   });
