@@ -4,7 +4,7 @@ Paket uređivača: Tiptap uređivač i shema dokumenta za uređivač (DAN-927, E
 
 ## Ulaz
 
-Jedini ulaz je `src/editor/index.ts`, uvozi se kao `@/editor` (iz `e2e/` i `spikes/` relativnom putanjom do mape, npr. `../../src/editor`). Kod izvan `src/editor/` ne uvozi pojedine module (`@/editor/schema`, `../../editor/capture` i slično). Javni popis imena ulaza drži test `src/editor/index.test.ts`; automatski čuvar granice dolazi u DAN-927 (dio 927-b2).
+Jedini ulaz je `src/editor/index.ts`, uvozi se kao `@/editor` (iz `e2e/` relativnom putanjom do mape, npr. `../../src/editor`; `spikes/` preko aliasa `@/editor`). Kod izvan `src/editor/` ne uvozi pojedine module (`@/editor/schema`, `../../editor/capture` i slično). Javni popis imena ulaza drži test `src/editor/index.test.ts`; automatski čuvar granice dolazi u DAN-927 (dio 927-b2).
 
 Unutar `src/editor/` moduli i testovi uvoze jedni druge izravno.
 
