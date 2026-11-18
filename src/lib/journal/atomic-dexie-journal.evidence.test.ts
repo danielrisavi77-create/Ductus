@@ -9,7 +9,7 @@ import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import { jcsUtf8Bytes } from "@/domain/forensics/jcs";
 import type { EvidenceOpening } from "@/domain/sync/journal-types";
-import type { BuiltSegment } from "@/editor/capture";
+import type { BuiltSegment } from "@/editor";
 import {
   answer, capture, committed, DOC, deps, journalKit, openedAfter, PROFILE, R0, raw, receiptKey, save, shifting, UTC, type Chain,
 } from "@/lib/sync/evidence-test-kit";

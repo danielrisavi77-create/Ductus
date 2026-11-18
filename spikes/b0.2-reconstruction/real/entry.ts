@@ -9,7 +9,7 @@ export { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-rep
 export { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 export { replayEvidenceFromCheckpointV2 } from "@/domain/forensics/evidence-checkpoint-v2";
 export { digestCanonicalDocumentV2, replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-export { changeOf, EvidenceRecorder, MAX_SEGMENT_EVENTS, MAX_SEGMENT_SPAN_MS } from "@/editor/capture";
+export {
+  changeOf, createEditorExtensions, EvidenceRecorder, MAX_SEGMENT_EVENTS, MAX_SEGMENT_SPAN_MS, tiptapToCanonical,
+} from "@/editor";
 export { canonicalizeJcs } from "@/domain/forensics/jcs";
-export { tiptapToCanonical } from "@/editor/interop";
-export { createEditorExtensions } from "@/editor/schema";

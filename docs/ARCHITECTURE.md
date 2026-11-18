@@ -20,7 +20,7 @@ src/domain/                  # čista domenska pravila i modeli
 src/application/             # slučajevi uporabe i portovi
 src/adapters/                # implementacije portova
 src/lib/                     # male zajedničke tehničke funkcije
-src/editor/                  # editor kada se njegov tok implementira
+src/editor/                  # editor-core: uređivač i shema; izvana samo kroz ulaz @/editor (index.ts)
 src/features/                # stvarni korisnički tokovi, postupno
 src/runtime/web/             # composition root kada se uvede runtime
 src/runtime/worker/           # odvojeni worker composition root kada je potreban

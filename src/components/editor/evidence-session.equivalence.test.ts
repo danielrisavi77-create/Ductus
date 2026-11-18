@@ -7,8 +7,7 @@ import { createBrowserEditStepsV1Replayer } from "@/adapters/evidence/edit-steps
 import type { CanonicalDocument } from "@/domain/document";
 import { canonicalizeJcs, jcsUtf8Bytes } from "@/domain/forensics/jcs";
 import type { QueuedTransaction } from "@/domain/sync/journal-types";
-import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
-import { createEditorExtensions } from "@/editor/schema";
+import { canonicalToTiptap, tiptapToCanonical, createEditorExtensions } from "@/editor";
 import { createDrainRunner } from "@/lib/sync/drain-runner";
 import { createEvidenceTransport, evidenceVerifierFor } from "@/lib/sync/evidence-transport";
 import { DOC, DOMAIN, journalKit, R0, server, sha256, trusted } from "@/lib/sync/evidence-test-kit";

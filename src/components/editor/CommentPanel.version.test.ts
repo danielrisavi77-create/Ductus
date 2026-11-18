@@ -6,8 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { CommentThread, ListOutcome } from "@/client/comments";
 import { createTextAnchor } from "@/domain/collaboration";
 import { newNodeId, type NodeId } from "@/domain/document";
-import { commentHighlightKey } from "@/editor/comment-anchor";
-import { createEditorExtensions, NodeIdentity, NODE_ID_ATTRIBUTE } from "@/editor/schema";
+import { commentHighlightKey, createEditorExtensions, NodeIdentity, NODE_ID_ATTRIBUTE } from "@/editor";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 /**

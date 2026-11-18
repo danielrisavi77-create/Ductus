@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { formatBibliographyEntry, formatInText, type BookSource, type ArticleSource } from "@/domain/citation";
 import { resolveCitationStyle } from "@/domain/institution-config";
-import { createEditorExtensions } from "@/editor/schema";
+import { createEditorExtensions } from "@/editor";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";

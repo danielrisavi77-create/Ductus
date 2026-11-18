@@ -9,7 +9,7 @@ import type { DocumentNode } from "@/domain/document";
 import type { ParagraphHistoryEntry, ReplayGap } from "@/domain/projection/replay-player";
 import type { ReplayChangeKind } from "@/domain/projection/replay-timeline";
 import type { EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
-import { tiptapToCanonical } from "@/editor/interop";
+import { tiptapToCanonical } from "@/editor";
 import { pluralHr } from "@/lib/i18n/hr";
 import { groupHr } from "@/lib/i18n/length-line";
 import { messagesHr } from "@/lib/i18n/messages.hr";

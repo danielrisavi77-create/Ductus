@@ -23,8 +23,7 @@ import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2"
 import type { EvidenceSegmentV2 } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, jcsUtf8Bytes, type JcsJsonValue } from "@/domain/forensics/jcs";
 import type { QueuedTransaction } from "@/domain/sync/journal-types";
-import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
-import { createEditorExtensions } from "@/editor/schema";
+import { canonicalToTiptap, tiptapToCanonical, createEditorExtensions } from "@/editor";
 import { createDrainRunner } from "@/lib/sync/drain-runner";
 import { createEvidenceTransport, evidenceVerifierFor } from "@/lib/sync/evidence-transport";
 import { DOC, DOMAIN, journalKit, json, R0, server, sha256, trusted, type Answer } from "@/lib/sync/evidence-test-kit";
