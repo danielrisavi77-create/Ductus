@@ -23,7 +23,7 @@ import type { SessionMark } from "@/client/session-marks";
 import { limitBody } from "@/domain/collaboration";
 import {
   commentHighlightKey, commentHighlightPlugin, createAnchorPlacer, type CommentRange,
-} from "@/editor/comment-anchor";
+} from "@/editor";
 import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 

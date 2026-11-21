@@ -14,7 +14,7 @@ import {
 import type { EvidenceEventV2, EvidenceSegmentV2, EvidenceStepV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 import { MARK_ORDER, PLAIN_BLOCK_TYPES } from "@/domain/document/schema";
-import { createEditorExtensions } from "@/editor/schema";
+import { createEditorExtensions } from "@/editor";
 
 import { createEditStepsV1Replayer, removedRangeSha256 } from "./edit-steps-v1-replayer";
 

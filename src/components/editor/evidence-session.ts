@@ -35,8 +35,7 @@ import type {
 } from "@/domain/sync/journal-types";
 import { restoreSyncState } from "@/domain/sync/restore";
 import type { SyncState } from "@/domain/sync/states";
-import { CaptureError, EvidenceRecorder, type BuiltSegment } from "@/editor/capture";
-import { NO_OBSERVATION, recordWithSource, type SourceObservation } from "@/editor/source";
+import { CaptureError, EvidenceRecorder, type BuiltSegment, NO_OBSERVATION, recordWithSource, type SourceObservation } from "@/editor";
 import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
   failureOf, type LoadResult, type SaverFailure, type SaverSnapshot,

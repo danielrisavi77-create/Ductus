@@ -9,8 +9,7 @@
 import { Editor } from "@tiptap/core";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 
-import { tiptapToCanonical } from "../../src/editor/interop";
-import { createEditorExtensions } from "../../src/editor/schema";
+import { tiptapToCanonical, createEditorExtensions } from "../../src/editor";
 
 export type HarnessBlock = { id: string; type: string; text: string };
 

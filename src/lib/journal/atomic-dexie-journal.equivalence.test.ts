@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { newNodeId, paragraphNode, textNode, type CanonicalDocument, type DocumentTransaction } from "../../domain/document";
 import { outcomeToEvents, type CommitReceiptVerification, type DrainOutcome } from "../../domain/sync/drain";
 import type { EvidenceOpening, PendingTransaction } from "../../domain/sync/journal-types";
-import type { BuiltSegment } from "../../editor/capture";
+import type { BuiltSegment } from "../../editor";
 import {
   capture, DOC, journalKit, json, openedAfter, R0, raw, runnerFor, save, server, UTC, type Chain,
 } from "../sync/evidence-test-kit";

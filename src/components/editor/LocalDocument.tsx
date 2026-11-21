@@ -49,14 +49,10 @@ import {
   browserMarkStore, currentSession, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
 } from "@/client/session-marks";
 import { localChip, type LocalChip } from "@/domain/sync/labels";
-import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
-import { startFreshHistory } from "@/editor/history";
-import { replaceWithStoredDocument } from "@/editor/identity";
-import { createEditorExtensions } from "@/editor/schema";
-import { ArrowCollapse } from "@/editor/arrow-collapse";
-import { ChapterNumbers } from "@/editor/chapter-numbers";
-import { StorableInput } from "@/editor/storable-input";
-import { storableDocument } from "@/editor/storable-text";
+import {
+  countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical, startFreshHistory, replaceWithStoredDocument,
+  createEditorExtensions, ArrowCollapse, ChapterNumbers, StorableInput, storableDocument, SourceObserver,
+} from "@/editor";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { followLogoutNatively, postLogout } from "@/client/logout-request";
@@ -64,7 +60,6 @@ import { signInHref, signInTarget, SIGN_IN_DEFAULT_TARGET } from "@/components/a
 import {
   editorSignOutPlan, planAfterDiscard, readLogoutHold, unsavedAfterSettle, untilLoaded, withinHoldLimit, type HoldRead,
 } from "@/client/logout-hold";
-import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 

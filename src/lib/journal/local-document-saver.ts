@@ -21,7 +21,7 @@ import { restoreSyncState } from "../../domain/sync/restore";
 import {
   LOCAL_SAVE_FAILURE_REASONS, SYNC_STATES, syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
 } from "../../domain/sync/states";
-import { storableDocument } from "../../editor/storable-text";
+import { storableDocument } from "../../editor";
 import type { AtomicDexieJournal } from "./atomic-dexie-journal";
 
 /**

@@ -54,6 +54,8 @@ async function buildBundle(): Promise<string> {
     configFile: false,
     logLevel: "silent",
     root: path.resolve(here, "../.."),
+    // The entry @/editor reaches modules that import through @/ (DAN-927).
+    resolve: { alias: { "@": path.resolve(here, "../../src") } },
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
     build: {
       write: false,
