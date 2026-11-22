@@ -95,19 +95,33 @@ Zabilježeni pristup podrške operatera (D-199 t. 3, dopunjuje D-172) traži pri
 
 Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 
-1. Ductus nikad ne tvrdi tko je napisao rad, niti je li AI korišten nedopušteno. Oznaka mjesta unosa („Napisano u Ducturi”) navodi mjesto, ne osobu, i nije tvrdnja o autoru (D-127). (C-9, C-10, D-01)
-2. Nema postotka AI-ja, postotka ljudskosti, ocjene rizika, sumnje ni integriteta. (C-6)
+1. Ductura nikad ne tvrdi tko je napisao rad ni je li AI korišten nedopušteno. Prikazuje samo **kako je tekst ušao u rad**: tipkano u Ducturi, umetnuto iz pomoćnika, podudara se s odgovorom pomoćnika, uvezeno iz datoteke, zalijepljeno (podrijetlo poznato ili nepoznato). To su oznake mjesta i načina unosa, ne autorstva (D-127). Uz svaki prikaz sastava stoji: „Ductura ne otkriva alate izvan sebe. Ovo nije samostalan temelj disciplinskog postupka.” (C-9, C-10, D-01; P-1)
+2. Nema postotka AI-ja, postotka ljudskosti, vjerojatnosti, ocjene rizika, sumnje ni integriteta (C-6). **Dopušten je** sastav rada po vrsti podrijetla, uključujući postotak, pod tri uvjeta:
+   1. svaki postotak nosi naziv vrste iz zatvorenog popisa (pravilo 1), nikad „AI”, „ljudsko” ni „izvorno” samo;
+   2. student vidi isti prikaz kao nastavnik i mentor, u isto vrijeme;
+   3. uz najistaknutiji broj („% nepoznato podrijetlo”) stoji: „Nepoznato podrijetlo nije prekršaj. Traži objašnjenje, ne sankciju.” (P-1)
 3. Nepoznato nije krivnja. Praznina u zapisu prikazuje se kao praznina, nikad kao znak nečega. (C-8)
-4. Ne bilježi se koja je tipka pritisnuta ni koliko je držana. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). Uz to se svaka promjena dokumenta, znak po znak, sprema s redoslijedom i vremenom u zasebnoj klasi podataka, isključivo za prikaz uživo i reprodukciju; iz vremena se nikad ne računa brzina, pauze, ritam ni bilo kakva mjera (D-143, D-56). Dvije izričite iznimke (D-63, 31. 10. 2026.): sesija po pragu P-01 iz sažetka procesa nije pauza u smislu ovog pravila, pa reprodukcija smije nuditi skok po sesijama; i studentov napredak (riječi po danu prema cilju, napredak po poglavlju, dani do roka) izvodi se iz verzija, ne iz vremena po promjeni, vidi ga samo student i ne ulazi u sažetak, izvoz, predaju ni nastavnički prikaz. (C-14, v1.4)
+4. Ne bilježi se koja je tipka pritisnuta ni koliko je držana. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). Uz to se svaka promjena dokumenta, znak po znak, sprema s redoslijedom i vremenom u zasebnoj klasi podataka, za prikaz uživo i reprodukciju (D-143, D-56). **Nova klasa „ritam unosa”**: razmaci u milisekundama između unosa unutar jednog naleta tipkanja, bez sadržaja tipke, stanjeni na najviše 130 vrijednosti po naletu. Ritam:
+   - je **uključen po zadanom** i **student ga može isključiti** u bilo kojem trenutku (isključenje vrijedi od tog trenutka; već zabilježeno se briše na zahtjev, PRIJEDLOG);
+   - prikazuje se samo kao stupci u genealogiji odsječka, uz natpis „Ritam je dokaz o unosu, ne o autorstvu.”;
+   - **nikad** ne ulazi u broj, ocjenu, usporedbu sa „normalnim” ritmom, usporedbu s drugim studentima ni u bilo kakav model;
+   - ima vlastiti, kraći rok čuvanja (§9).
+
+   Iz vremena se i dalje ne računa brzina, prosjek, profil ni bilo kakva mjera osobe. Dvije izričite iznimke (D-63, 31. 10. 2026.): sesija po pragu P-01 iz sažetka procesa nije pauza u smislu ovog pravila, pa reprodukcija smije nuditi skok po sesijama; i studentov napredak (riječi po danu prema cilju, napredak po poglavlju, dani do roka) izvodi se iz verzija, ne iz vremena po promjeni, vidi ga samo student i ne ulazi u sažetak, izvoz, predaju ni nastavnički prikaz. (C-14, v1.4; ritam: C-14, v1.5, P-1)
 5. Student uvijek vidi točno ono što o njegovu radu vidi nastavnik ili mentor, generirano istom funkcijom. Iznimka su mentorovi radni zapisi (oznaka zadnjeg pregleda, privatne bilješke, predlošci komentara, nacrt rubrike i izvješća): oni nisu prikaz rada, ne ulaze u sažetak, izvoz ni predaju, navedeni su u obavijesti i student ih može zatražiti pravom pristupa (D-130). Ocjena i obrazloženje vide se studentu tek nakon objave. (C-4)
 6. Student prije početka rada zna što nastavnik vidi i od kada: obavijest o praćenju je prvi ekran svakog zadatka. (C-3)
-7. Mentor i nastavnik zadatka vide rad uživo dok nastaje: promjene dokumenta pojavljuju se u njihovu prikazu u trenutku kad ih student napravi (D-142). Mentor, odnosno nastavnik zadatka (jedna uloga, D-154), može reproducirati nastanak rada znak po znak (D-143) i usporediti dvije poslane verzije rada, poslane na pregled ili predane (D-202); od ostalih uloga nitko drugi. Student vidi istu reprodukciju i istu usporedbu svog rada (pravilo 5). Prikaz uživo i reprodukcija služe praćenju i komentarima, nikad ocjeni, rangiranju ni oznaci sumnje. Usporedba pokazuje samo razliku između dviju poslanih verzija. Međustanja, odnosno stanja rada između poslanih verzija i tekst napisan i obrisan između njih, dostupna su samo u prikazu uživo i reprodukciji, nikad u nastavničkom pregledu, sažetku ni usporedbi. Student smije vidjeti vlastitu povijest rada; ona se ne šalje nikome drugome, ne ulazi u sažetak, izvoz ni predaju i čuva se najviše do kraja akademske godine zadatka (D-131, uvjetno: čeka pravno mišljenje D-55). Student u obavijesti zna da mentor i nastavnik vide rad uživo, pa i tekst koji će možda kasnije obrisati, te da mentor, odnosno nastavnik zadatka, može reproducirati nastanak rada i usporediti poslane verzije. (C-3, C-14, C-19, v1.5; tekst Ustava v1.5 upisuje vlasnik, D-202)
-8. Svaka promjena teksta pripisana je autoru: student, nastavnik ili mentor, prihvaćeni prijedlog, AI unutar Ductusa, uvoz, lijepljenje, vlastita inačica odlomka. Tekst koji nije u dokumentu, a može ući u njega (inačica odlomka), zapisuje se u evidenciju kad nastane, a njegov ulazak u dokument je zasebna promjena s izvorom; Ductus ne unosi tekst u dokument bez zapisa izvora (D-132). (C-11)
+7. Mentor i nastavnik zadatka vide rad uživo dok nastaje: promjene dokumenta pojavljuju se u njihovu prikazu u trenutku kad ih student napravi (D-142). Mentor, odnosno nastavnik zadatka (jedna uloga, D-154), može reproducirati nastanak rada znak po znak (D-143) i usporediti dvije poslane verzije rada, poslane na pregled ili predane (D-202); od ostalih uloga nitko drugi. Student vidi istu reprodukciju i istu usporedbu svog rada (pravilo 5). Prikaz uživo i reprodukcija služe praćenju i komentarima, nikad ocjeni, rangiranju ni oznaci sumnje. Usporedba pokazuje samo razliku između dviju poslanih verzija. Međustanja, odnosno stanja rada između poslanih verzija i tekst napisan i obrisan između njih, dostupna su samo u prikazu uživo i reprodukciji, nikad u nastavničkom pregledu, sažetku ni usporedbi. Student smije vidjeti vlastitu povijest rada; ona se ne šalje nikome drugome, ne ulazi u sažetak, izvoz ni predaju i čuva se najviše do kraja akademske godine zadatka (D-131, uvjetno: čeka pravno mišljenje D-55). Student u obavijesti zna da mentor i nastavnik vide rad uživo, pa i tekst koji će možda kasnije obrisati, te da mentor, odnosno nastavnik zadatka, može reproducirati nastanak rada i usporediti poslane verzije. Reprodukcija smije prikazati ritam unosa (pravilo 4) samo ako ga student nije isključio. (C-3, C-14, C-19, v1.5; tekst Ustava v1.5 upisuje vlasnik, D-202)
+8. Svaka promjena teksta pripisana je autoru: student, nastavnik ili mentor, prihvaćeni prijedlog, AI unutar Ductusa, uvoz, lijepljenje, vlastita inačica odlomka. Tekst koji nije u dokumentu, a može ući u njega (inačica odlomka), zapisuje se u evidenciju kad nastane, a njegov ulazak u dokument je zasebna promjena s izvorom; Ductus ne unosi tekst u dokument bez zapisa izvora (D-132). Svaka promjena nosi i vrstu podrijetla (pravilo 1). Vrsta se određuje pri unosu i ne mijenja se naknadno, osim kad student sam objasni podrijetlo zalijepljenog teksta („poznato”); tada se čuva i izvorna oznaka. (C-11)
 9. Integritet zapisa nije dokaz autorstva. Hash i potpis govore samo da zapis nije mijenjan od primitka. (C-13)
 10. Offline zapis ostaje označen kao offline i nakon sinkronizacije. (C-15)
 11. Predaja je moguća samo ako se predani dokument može točno rekonstruirati iz zapisa. Zadatak smije dodatno tražiti samo potpunost koju student sam može ispuniti u aplikaciji: popunjena mjesta za izvor i potvrdu izjave koju propisuje fakultet; uvjet je naveden u obavijesti, ne odnosi se na podrijetlo teksta, AI, lijepljenja ni praznine u zapisu, a tehnička greška ne smije spriječiti predaju (D-129, uvjetno: čeka pisanu potvrdu FPZG-a i upis C-42). (C-42)
-12. Pravila FPZG-a su konfiguracija, ne kod. To uključuje pravila oblika (iz Lekte), dopuštene AI pružatelje i pragove u sažetku procesa. Administrator fakulteta dio te konfiguracije (pravilo AI-ja i dopušteni oblici pomoći, dopušteni pružatelji, pragovi, rokovi čuvanja) uređuje u sučelju, verzionirano; pravilo AI-ja fakulteta je polazno pravilo koje nastavnik na kolegiju smije pooštriti ili ublažiti (D-175); pravila akademskog pisanja (oblik, citiranje, bibliografija, naslovna stranica, opseg) dolaze iz paketa pravila Lekte i u Ductusu se samo čitaju (D-117). (C-55, C-7)
-13. Nema AI analize procesa pisanja. AI postoji samo kao pomoćnik studentu, ako ga zadatak dopušta. (Akt o UI, Prilog III.)
+12. Pravila FPZG-a su konfiguracija, ne kod. To uključuje pravila oblika (iz Lekte), dopuštene AI pružatelje i pragove u sažetku procesa i u „Podrijetlu teksta”. Fakultet za svaku vrstu podrijetla može postaviti prag i odabrati je li **tvrd** (oznaka „prekoračeno”) ili **mek** (oznaka „za pregled”). Ductura prikazuje samo usporedbu zapisa s pragom: *u skladu / za pregled / prekoračeno*, uz natpis „Ovo je izjava o skladu s pravilima fakulteta, ne ocjena studenta.” Ductura ne predlaže pragove; zadani pragovi ne postoje dok ih fakultet ne upiše (prototip `unk 15 %`, `ai 10 %` služi samo kao primjer u demo podacima). Administrator fakulteta dio te konfiguracije (pravilo AI-ja i dopušteni oblici pomoći, dopušteni pružatelji, pragovi, rokovi čuvanja) uređuje u sučelju, verzionirano; pravilo AI-ja fakulteta je polazno pravilo koje nastavnik na kolegiju smije pooštriti ili ublažiti (D-175); pravila akademskog pisanja (oblik, citiranje, bibliografija, naslovna stranica, opseg) dolaze iz paketa pravila Lekte i u Ductusu se samo čitaju (D-117). (C-55, C-7)
+13. Nema AI analize procesa pisanja. AI postoji samo kao pomoćnik studentu, ako ga zadatak dopušta. (Akt o UI, Prilog III.) **Podudaranje s pomoćnikom** nije AI analiza: to je deterministička usporedba teksta (8 ili više riječi zaredom jednakih odgovoru pomoćnika iz istog rada). Kad se podudaranje nađe:
+    - odsječak dobiva vrstu „Podudara se s odgovorom pomoćnika”;
+    - razgovor iz kojeg odgovor potječe automatski se prilaže uz izjavu (kao kod prenesenog teksta, D-41), i student to vidi u trenutku prilaganja;
+    - ne tvrdi se da je tekst prepisan; student može dodati objašnjenje.
+
+    Podudaranje je izgrađeno, ali **isključeno po zadanom** do nakon pilota (D-268 O6). Uključuje ga fakultet. (P-1)
 14. Pravila zadatka koja je student potvrdio ne smiju se naknadno proširiti. Profil evidencije može se samo suziti. (C-3, C-18)
 15. Student nikad ne mora platiti da bi izvršio obvezu. U pilotu zadatak ne smije zahtijevati AI. (C-2)
 16. Sadržaj radova i uvezenih datoteka nikad ne mijenja pravila zadatka ni upute AI pomoćniku. (C-37)
@@ -120,13 +134,13 @@ Svaki redak vrijedi za sve oblike i složenice istog korijena (npr. kopirao, pre
 | Ne koristiti nikad | Engleski ekvivalenti (D-90 t.3) | Koristiti umjesto toga |
 | --- | --- | --- |
 | sumnjivo, rizik, anomalija, upozorenje o studentu | suspicious, suspected, doubt, risk (i low-risk, riskless), anomaly, warning about the student | (ništa; činjenice se prikazuju bez oznake) |
-| AI postotak (i udio AI-ja, ljudski udio, postotak ljudskosti, broj ili % uz AI, ljudsko, podrijetlo ili izvor), vjerojatnost (i vjerojatno), autentičnost, autenticitet, napisao AI | AI percentage, AI share, human share, humanness, probability, probably, likelihood, authenticity, written by AI | iz AI pomoćnika (model, vrijeme) |
+| AI postotak (i udio AI-ja, ljudski udio, postotak ljudskosti, broj ili % uz AI, ljudsko, podrijetlo ili izvor bez naziva vrste podrijetla iz pravila 1, npr. „podrijetlo 82 %”; AI-detected, flagged as AI), vjerojatnost (i vjerojatno), autentičnost, autenticitet, napisao AI | AI percentage, AI share, human share, humanness, probability, probably, likelihood, authenticity, written by AI | iz AI pomoćnika (model, vrijeme) |
 | verificirano autorstvo, dokaz autorstva | verified authorship, proof of authorship | zapis je cjelovit i neizmijenjen od primitka |
 | kopirano, prepisano; tuđi tekst, tuđe riječi, nije vlastiti / njegov / njezin (samo kao fraza; sama riječ „tuđi” nije zabranjena) | copied, copying, copy-paste, someone else's text, not their own | zalijepljeno (izvor nije opažen) |
 | nestali podaci, skriveno, sakriveno, prikriveno | vanished data, hidden, concealed | praznina u zapisu |
 | nedostajući podaci, izgubljeni podaci (samo o zapisu procesa u nastavničkom prikazu i sažetku; ne u porukama o oporavku na studentovu uređaju) | missing data, lost data (isti uvjet) | praznina u zapisu |
 | plagijat, plagiranje | plagiarism | (ništa; za podrijetlo „iz izvora X”) |
-| izvornost, originalnost | originality, unoriginal | zapis je cjelovit i neizmijenjen od primitka |
+| izvornost, originalnost (osim iznimke B-5 niže) | originality, unoriginal | zapis je cjelovit i neizmijenjen od primitka |
 | integritet (i u tehničkom značenju) | integrity | cjelovitost zapisa |
 | neobično, neuobičajeno | unusual, atypical | (ništa; opis činjenice bez ocjene) |
 | nepravilnost, nepravilno (samo o radu ili studentu, u sažetku i nastavničkom prikazu) | irregularity (isti uvjet) | (ništa; opis činjenice bez ocjene) |
@@ -143,11 +157,16 @@ Dopuštene radnje (ne krše Rječnik):
 - „nepravilan format” i slične poruke provjere unosa;
 - postotak napretka i učitavanja (D-63);
 - negacije poput „ne procjenjuje autorstvo” i „bez presude o autorstvu”;
-- „Napisano u Ducturi” samo kao oznaka mjesta unosa, uz uvjete iz D-127 (stalno objašnjenje „Ductus ne zna tko je tipkao”, bez zbroja i udjela);
+- „Tipkano u Ducturi · N %”, „Umetnuto iz pomoćnika · N %”, „Podudara se s odgovorom pomoćnika · N %”, „Uvezeno iz datoteke · N %”, „Zalijepljeno, podrijetlo poznato / nepoznato · N %” i „% nepoznato podrijetlo” samo kao zatvoreni popis vrsta podrijetla u „Podrijetlu teksta” i sažetku, uz natpise iz pravila 1 i 2 (P-1);
+- „u skladu / za pregled / prekoračeno” samo uz prag koji je upisao fakultet i natpis iz pravila 12 (P-1);
+- „Ritam unosa” samo u genealogiji odsječka, uz natpis iz pravila 4 (P-1);
+- „Napisano u Ducturi” samo kao oznaka mjesta unosa, uz uvjete iz D-127 (stalno objašnjenje „Ductus ne zna tko je tipkao”) (povijesni naziv oznake „Tipkano u Ducturi”);
 - „Izjava o autorstvu” samo kao naziv obrasca koji propisuje fakultet, uz oznaku „izjavljeno” (D-129, D-44);
 - „otvoreno mjesto za izvor” za oznaku u tekstu koju je student ostavio; ne miješa se s „prazninom u zapisu” (D-137).
 
 Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslovni citat pravilnika izuzima se samo u izričito označenom polju za citat, nikad cijela datoteka.
+
+**Iznimka B-5 (izvornost).** Riječ „izvornost” (i „originalnost”) dopuštena je **samo** u polju označenom `data-citat-obrasca` (ili `citatObrasca` u `config/faculties/**`) i samo kao doslovni navod službenog obrasca fakulteta, u navodnicima, s nazivom obrasca. Primjer: *Obrazac FPZG „Izjava o izvornosti rada”*. Skener i dalje pada na svaku drugu pojavu. Iznimka vrijedi za polje `data-citat-obrasca` / `citatObrasca`, ne za cijelu datoteku. (P-1, odluka vlasnika 22. 11. 2026.; izvedba u `scripts/forbidden-terms/` je zaseban korak koda: dok se ne spoji, skener pada i na tu pojavu.)
 
 ### Dodatni engleski popis (D-276, NQ12)
 
@@ -263,11 +282,11 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 9. Što se bilježi
 
-Jedna transakcija editora otprilike odgovara jednom pritisku tipke. U evidenciji se transakcije sažimaju u **odsječke** od najviše 30 sekundi (D-24, potvrđeno D-81). Odsječak sadrži sve korake promjene, potrebne za točnu rekonstrukciju, ali samo jedno vrijeme (početak odsječka, zaokruženo na minutu) i autora. Vrijeme po pojedinoj promjeni postoji samo u zasebnoj klasi podataka s kraćim rokom čuvanja, za prikaz uživo i reprodukciju (D-143), nikad u odsječku evidencije. I vrijeme primitka na poslužitelju zaokružuje se na minutu u svemu što vide student i nastavnik.
+Jedna transakcija editora otprilike odgovara jednom pritisku tipke. U evidenciji se transakcije sažimaju u **odsječke** od najviše 30 sekundi (D-24, potvrđeno D-81). Odsječak sadrži sve korake promjene, potrebne za točnu rekonstrukciju, ali samo jedno vrijeme (početak odsječka, zaokruženo na minutu) i autora. Vrijeme po pojedinoj promjeni postoji samo u zasebnoj klasi podataka s kraćim rokom čuvanja, za prikaz uživo i reprodukciju (D-143), nikad u odsječku evidencije. Isto vrijedi za ritam unosa (pravilo 4). I vrijeme primitka na poslužitelju zaokružuje se na minutu u svemu što vide student i nastavnik.
 
 | Bilježi se | Ne bilježi se |
 | --- | --- |
-| Promjene dokumenta sažete u odsječke, s autorom (student, nastavnik, mentor) | Koja je tipka pritisnuta i koliko je držana; izvedene mjere (brzina, pauze, obrasci) |
+| Promjene dokumenta sažete u odsječke, s autorom (student, nastavnik, mentor) | Koja je tipka pritisnuta i koliko je držana; brzina, prosjek ili profil tipkanja kao broj; usporedba s drugim studentima |
 | Svaka promjena dokumenta znak po znak, s redoslijedom i vremenom, zasebno i s kraćim rokom čuvanja, samo za prikaz uživo i reprodukciju (D-143) | Mjere izvedene iz vremena promjena |
 | Poništavanje i ponavljanje | Druge aplikacije, kartice preglednika, međuspremnik izvan zalijepljenog sadržaja |
 | Lijepljenje: veličina i vrijeme | Kamera, mikrofon, zaslon |
@@ -277,6 +296,21 @@ Jedna transakcija editora otprilike odgovara jednom pritisku tipke. U evidenciji
 | Komentari, prijedlozi i njihovo prihvaćanje ili odbijanje | Osobni prostor (ne postoji, D-19) |
 | Vrijeme odsječka na uređaju i vrijeme primitka na poslužitelju, odvojeno | |
 | Verzije, predaje, napomene, izjava o pomoći | |
+| Vrsta podrijetla po promjeni (Podrijetlo teksta, sažetak; rok kao evidencija) | |
+| Ritam unosa: razmaci u ms, bez tipki (genealogija odsječka, reprodukcija; kraći rok, vidi `docs/privacy/07-prijedlog-rokova-cuvanja.md`) | |
+| Podudaranje s odgovorom pomoćnika, kad je uključeno (Podrijetlo teksta, prilaganje razgovora; rok kao evidencija) | |
+
+Tekst dijaloga „Što se bilježi” koji student vidi u editoru (P-1, val 6):
+
+> **Što Ductura bilježi dok pišeš**
+> - Što je u radu i kako je ušlo: tipkano, iz pomoćnika, uvezeno ili zalijepljeno.
+> - Kad je otprilike nastalo (na minutu).
+> - **Ritam unosa**: razmake između unosa, ne koje tipke. Možeš ga isključiti ovdje: [ ] Bilježi ritam tipkanja.
+>
+> **Što ne bilježi:** koje tipke pritišćeš, koliko brzo tipkaš kao broj, ništa izvan Ducture.
+>
+> **Tko vidi:** ti i tvoj nastavnik ili mentor, isto i u isto vrijeme.
+> Ništa od ovoga nije ocjena ni tvrdnja o autorstvu.
 
 ---
 
