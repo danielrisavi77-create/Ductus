@@ -38,6 +38,16 @@
 27. `[Ustanova]` FPZG čl. 9. traži ispis razgovora vođenog s alatom; D-41 automatski prilaže samo razgovore iz kojih je tekst prenesen u rad. Prihvaća li FPZG izjavu s dijelom razgovora kad student ne doda ostale? `[ODLUKA]`
 28. `[Vlasnik, Ustanova]` Katalog namjena (D-64): „objašnjenje pojma” navodi razina 1 u D-64 i PRODUCT §8, a D-80 točka (1) kaže da izlazi iz zadanog skupa jer ga nema u FPZG čl. 8; dokumenti ne kažu je li dostupan na razini 2 ili je uklonjen. Uz D-194 t. 4 („sve namjene”) otvoreno je i ostaje li razina 2 (brainstorming, generiranje primjera) samo uz izričito nastavnikovo uključivanje te što o njoj kaže FPZG čl. 8. st. 4. `[ODLUKA]`
 
+## B1. Pitanja ZA DPO uz P-1 (ritam unosa, sastav po podrijetlu, podudaranje)
+
+Nacrt P-1 potvrdio je vlasnik 22. 11. 2026. (Ductus#2052). **Ništa se ne šalje DPO-u dok vlasnik ne kaže izričito „da”**; slanje je poruka u njegovo ime, a pripremu poruke radi orkestrator. Odgovori nisu pretpostavljeni.
+
+29. `[Pravnik, Ustanova]` **ZA DPO.** Pravna osnova ritma unosa: legitimni interes ili javni interes ustanove? Treba li privola, s obzirom na to da je ritam uključen po zadanom? `[ODLUKA]`
+30. `[Pravnik, Ustanova]` **ZA DPO.** Je li „uključeno po zadanom + isključivo od strane studenta” prihvatljivo, ili ritam mora biti „isključeno po zadanom”? `[ODLUKA]`
+31. `[Pravnik]` **ZA DPO.** Akt o UI, Prilog III. t. 3(d): spada li podudaranje s pomoćnikom ili usporedba s pragom fakulteta u visokorizični sustav? Stav Ductura: ne (deterministička usporedba, nije AI sustav, ne donosi odluku); treba potvrdu. `[ODLUKA]`
+32. `[Pravnik, Ustanova]` **ZA DPO.** Smije li se već zabilježeni ritam brisati na studentov zahtjev prije predaje, i što nakon predaje? `[ODLUKA]`
+33. `[Ustanova]` **ZA DPO.** Rok čuvanja ritma: PRIJEDLOG 30 dana od predaje rada (O1, zadani odgovor vlasnika 22. 11. 2026.; PRIJEDLOG dok ga ne potvrde FPZG i DPO, D-30). Potvrđuju FPZG i DPO (D-30); zatim se ritam briše automatski, dok odsječci i sastav ostaju prema roku evidencije. `[ODLUKA]`
+
 ## C. Rupe u izvedbi koje ne traže odluku, za orkestratora
 
 | Rupa | Dokaz u repou | Vrsta |

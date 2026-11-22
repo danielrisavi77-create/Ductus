@@ -45,7 +45,7 @@ Zadatak: DAN-297, M10.1-P02. Prilog ide uz jedan zahtjev FPZG-u (D-264 Q09, pake
 | 19 | Zahtjevi za doradu | | kao predaja (klasa 16) | | db, kopije |
 | 20 | Izvozni paket | 24 sata, koliko i poveznica (D-173, D-273 MQ08) | | | S3 (planirano) |
 | 21 | Odsječci i paketi evidencije | | kao predaja (klasa 16) | sadržaj u S3 briše adapter (D-272 MQ04) | db, S3, kopije |
-| 22 | Vrijeme po promjeni | | | rok; D-143 traži kraći rok od ostale evidencije | db (planirano kao zasebna klasa) |
+| 22 | Vrijeme po promjeni i ritam unosa (P-1, PRODUCT §5 pr. 4) | | ritam unosa: 30 dana od predaje rada (O1, zadani odgovor vlasnika 22. 11. 2026.; PRIJEDLOG dok ga ne potvrde FPZG i DPO, D-30); zatim automatsko brisanje | rok za vrijeme po promjeni (D-143 traži kraći rok od ostale evidencije); ritam: potvrda FPZG-a i DPO-a | db (planirano kao zasebna klasa) |
 | 23 | Odbačeni privremeni objekti | briše se prije D-30 (D-273 MQ08) | | trajanje nije zapisano | S3 |
 | 24 | Zapis AI pomoćnika | | | rok (Q-10) | db (planirano) |
 | 25 | Zapis pristupa radu | | dulje od predaje | koliko dulje | db, kopije |

@@ -24,12 +24,13 @@ Voditelj obrade je `[naziv ustanove]`. Ductus za ustanovu radi kao izvršitelj o
 
 ### 2. Čemu služi Ductus
 
-Ductus bilježi kako rad nastaje i olakšava razgovor o radu. Zaključak o vašem radu uvijek donosi osoba, nikad Ductus. Ductus ne tvrdi tko je napisao rad i ne ocjenjuje vas. Ne pokazuje postotke, ocjene ni oznake koje bi sugerirale procjenu vas kao studenta.
+Ductus bilježi kako rad nastaje i olakšava razgovor o radu. Zaključak o vašem radu uvijek donosi osoba, nikad Ductus. Ductus ne tvrdi tko je napisao rad i ne ocjenjuje vas. Ne pokazuje ocjene ni oznake koje bi sugerirale procjenu vas kao studenta. `[PLANIRANO, P-1: pokazuje samo kako je tekst ušao u rad, po vrstama, uz natpis da to nije ocjena ni tvrdnja o autorstvu.]`
 
 ### 3. Koje podatke obrađujemo
 
 - **Prijava.** Prijavljujete se isključivo AAI@EduHr računom. Od AAI-ja dobivamo i trajno spremamo oznaku vašeg računa (`hrEduPersonUniqueID`), oznaku izdavatelja prijave i identifikator korisnika kod izdavatelja (`sub`); matična ustanova iz AAI-ja služi za određivanje vaše ustanove: uz račun spremamo ustanovu, a ne izvorni atribut prijave. `[Dodatni atributi iz popisa u 04 tek kad budu potvrđeni.]` OIB ne tražimo.
 - **Rad.** Tekst koji pišete i promjene teksta, sažete u odsječke do 30 sekundi s vremenom zaokruženim na minutu. Bilježi se i je li promjena vaša, nastavnikova ili mentorova.
+- **Vrsta podrijetla i ritam unosa** `[PLANIRANO, P-1]`. Za svaki dio teksta bilježimo kako je ušao u rad (tipkano u Ducturi, umetnuto iz pomoćnika, podudara se s odgovorom pomoćnika, uvezeno iz datoteke, zalijepljeno). Bilježimo i ritam unosa: razmake između unosa, ne koje tipke. Ritam možete isključiti u Zapisniku.
 - **Događaji u radu.** Veliko lijepljenje (veličina i vrijeme), uvoz datoteke (naziv, vrsta, veličina), oznaka koju sami odaberete uz lijepljeni tekst, vaše napomene, izjava o pomoći alata i razgovori koje sami priložite.
 - **Nastava.** Upis u kolegij, potvrda ove obavijesti i vrijeme potvrde, predaje, komentari i prijedlozi nastavnika, produljenja roka.
 - **Tko je otvorio vaš rad.** Vidite tko je i kada otvorio vaš rad.
@@ -37,11 +38,12 @@ Ductus bilježi kako rad nastaje i olakšava razgovor o radu. Zaključak o vaše
 
 ### 4. Što ne bilježimo
 
-Koju ste tipku pritisnuli i koliko dugo ste je držali. Brzinu tipkanja i stanke kao mjeru. Druge aplikacije i kartice preglednika. Što je u međuspremniku izvan teksta koji zalijepite u rad. Kameru, mikrofon i zaslon. Razgovore s alatima umjetne inteligencije, osim ako ih sami priložite izjavi. U evidenciji nema IP adrese ni podataka o uređaju.
+Koje ste tipke pritisnuli i koliko dugo ste ih držali. Brzinu tipkanja kao broj. Usporedbu s drugima. Druge aplikacije i kartice preglednika. Što je u međuspremniku izvan teksta koji zalijepite u rad. Kameru, mikrofon i zaslon. Razgovore s alatima umjetne inteligencije, osim ako ih sami priložite izjavi. U evidenciji nema IP adrese ni podataka o uređaju.
 
 ### 5. Tko što vidi i od kada
 
 - Vi uvijek vidite točno ono što vidi nastavnik ili mentor.
+- `[PLANIRANO, P-1]` Sastav rada i ritam vidite vi i nastavnik ili mentor tog rada, isto i u isto vrijeme.
 - `[PLANIRANO, D-142 i D-144: Mentor i nastavnik zadatka vide vaš rad dok nastaje, od prvog dana i za sve zadatke, i prikaz im se osvježava dok pišete. Vidi se samo ono što je u editoru Ducture, ništa izvan njega. Prikaz služi praćenju nastanka rada i komentarima tijekom pisanja, nikad ocjeni ni rangiranju. Vidite isti prikaz svog rada. Mogu vidjeti i tekst koji ćete kasnije obrisati.]`
 - `[PLANIRANO, D-143: Mentor može pokrenuti reprodukciju kako je rad nastajao, znak po znak, uključujući tekst koji ste obrisali, lijepljenja, uvoze i izmjene. Vidite istu reprodukciju i vidite kad ju je mentor gledao; uz trenutak reprodukcije možete dodati napomenu. Vrijeme se koristi samo kao brzina reprodukcije: ne računaju se brzina tipkanja, stanke ni ritam. Ima li reprodukciju i nastavnik kolegija ili samo mentor: otvoreno u D-143 (D-154 u PR-u #480 predlaže samo mentora, koji je nastavnik zadatka).]`
 - Administrator ustanove vidi tko je kada pristupio kojem radu, ali ne vidi sadržaj rada.
@@ -66,6 +68,7 @@ Svaka vrsta podataka ima svoj rok, a kad rok istekne, podaci se brišu. `[Ciljno
 | Predani rad, komentari i zahtjevi za doradu | `[otvoreno; prijedlog: prema pravilniku ustanove, komentari i zahtjevi kao predani rad; klase 16, 18 i 19]` |
 | Izjava o pomoći AI-ja i priloženi ispisi razgovora | `[otvoreno, uz Q-10; klasa 17]` |
 | Evidencija nastanka rada | `[otvoreno; prijedlog: kao predani rad; klasa 21]` |
+| Ritam unosa `[PLANIRANO, P-1]` | `[PRIJEDLOG: 30 dana od predaje rada (O1, zadani odgovor vlasnika 22. 11. 2026.; PRIJEDLOG dok ga ne potvrde FPZG i DPO, D-30); zatim se briše automatski]` |
 | Vrijeme po promjeni | `[VARIJANTA, D-143: otvoreno, kraće od ostale evidencije; klasa 22]` |
 | Razgovori s AI pomoćnikom i zapis prijenosa | `[PLANIRANO, D-194: otvoreno, uz Q-10; klasa 24]` |
 | Zapis o tome tko je otvorio vaš rad | `[otvoreno; prijedlog: dulje od predanog rada; klasa 25]` |
