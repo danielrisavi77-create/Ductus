@@ -17,7 +17,7 @@ Vlasnik, 5. 11. 2026. ([#87, komentar 6645197873](https://github.com/danielrisav
 - **DJELOMIČNO**: ili slika postoji bez svih stanja, ili postoji samo stari .dc.html prototip ili snimka aplikacije u staroj paleti. Prototip nije odobrena referenca (DESIGN-SYSTEM §1 t. 4).
 - **NEMA**: ništa.
 
-**Nesklad Q-8 zatvoren (vlasnik, 24. 11. 2026.):** vrijedi Q-8 iz `STATE.md`: referenca je odobrena čim njezin PR prođe gate i spoji se u main. Rečenice u README-ima paketa `m*-reference` da je slika „prijedlog do Spoji n” (D-183) zastarjele su za svaki spojeni paket. S-16, S31-AI, N-AI-ATT i A-AI-POL su zato ODOBRENO. Prototip desnog panela v0.16 (`docs/design/ductura/desni-panel-v016/`) i dalje nije odobren izgled (D-315); vidi §2a.
+**Nesklad Q-8 zatvoren (vlasnik, 24. 11. 2026.):** vrijedi Q-8 iz `STATE.md`: referenca je odobrena čim njezin PR prođe gate i spoji se u main. Rečenice u README-ima paketa `m*-reference` da je slika „prijedlog do Spoji n” (D-183) zastarjele su za svaki spojeni paket. S-16, S31-AI, N-AI-ATT i A-AI-POL su zato ODOBRENO. Izgled prototipa desnog panela v0.16 (`docs/design/ductura/desni-panel-v016/`) odobren je 24. 11. 2026. (D-316, mijenja D-315 u dijelu o izgledu); vidi §2a.
 
 Zahtijevana stanja svakog ekrana: popunjeno, prazno, učitavanje, greška, mobitel (400 px), uz posebna stanja ekrana. Stupac „Nedostaje” navodi što još nije prikazano; to je procjena iz opisa ekrana, osim stanja doslovno navedenih u README-ima referenci. Stupac „Paket” upućuje na odjeljak 4 (— znači da ekran nema paket: gotov je ili izvan plana).
 
@@ -30,7 +30,7 @@ Redoslijed starosti: izvorni paket `.dc.html` (22. 10. 2026.) je najstariji, zat
 | Ekran | Mjerodavno | Prilagođava se (povijest) |
 |---|---|---|
 | S-10 Editor, Z-01 Ljuska | `editor-v027` (izgled odobren, #2012 c.6962890596); lijevi panel `lijevi-panel-v07` | `m0-rad-reference/radni-prostor.html`, `editor-v11.dc.html` |
-| Desni panel editora | raspored D-311; funkcije `desni-panel-v016` | izgled `desni-panel-v016` **nije odobren** (D-315): dok vlasnik izričito ne odluči drukčije, desni panel slijedi izgled `editor-v027` |
+| Desni panel editora | `desni-panel-v016`, izgled i funkcije (D-316), raspored D-311 | stariji prikazi panela u `m5-reference` (S-13), `m7-reference` (S-15), `m9-reference-a` (S-16), `m6-reference-b` (komentari) |
 | S-19 Uvoz teksta, paket `.ductura` | `uvoz-v031` | `m8-reference/s19-uvoz.html` |
 | S-01 Prijava | `m2-student-reference/prijava.html` | `prijava-v5.dc.html` |
 | S-02, S-03 Početna i kolegiji | `m2-student-reference/pocetna-kolegiji.html` | `pocetna.dc.html` |

@@ -1,6 +1,8 @@
-# Prototip desnog panela editora v0.16: prijedlog funkcija
+# Prototip desnog panela editora v0.16: referenca
 
-**Ovo je prijedlog funkcija. NIJE referentna slika i NIJE kod za preuzimanje. Izgled prototipa nije odobren** (D-183; vlasnik 17. 11. 2026., #2012 [c.6956819971](https://github.com/danielrisavi77-create/Ductus/issues/2012#issuecomment-6956819971) t. 2: „uzima se samo funkcija, izgled nije odobren”). Značenje vlasnikova pristanka na prototip zapisano je u D-315: pristanak na izradu prototipa, ne odluka o opsegu pilota ni o redoslijedu gradnje. Prototip dopunjuje postojeće reference (S-13, S-15, S-16, komentari) i ne zamjenjuje ih. Za izgled vrijede `docs/design/DESIGN-SYSTEM.md` i odobrene reference iz `docs/design/EKRANI.md`.
+**Izgled je odobren (D-316, vlasnik 24. 11. 2026.: „Odobravam desni panel.”).** Ovo je vizualna i funkcionalna referenca desnog panela editora, ne kod za preuzimanje. D-316 mijenja D-315 samo u dijelu o izgledu; ostaje da pristanak na funkcije nije odluka o opsegu pilota ni o redoslijedu gradnje. Gdje se preklapa sa starijim referencama (S-13, S-15, S-16, komentari), mjerodavan je ovaj prototip (`docs/design/EKRANI.md` §2a). Paleta je „papir i grafit” (D-188); rječnik zabranjenih izraza (`docs/PRODUCT.md` §5) i WCAG 2.2 AA (D-248) imaju prednost.
+
+> Povijest: do 24. 11. 2026. ovdje je pisalo da izgled nije odobren (D-183; vlasnik 17. 11. 2026., #2012 [c.6956819971](https://github.com/danielrisavi77-create/Ductus/issues/2012#issuecomment-6956819971) t. 2).
 
 Prototip je običan JavaScript nad Tiptapom koji HTML slaže iz teksta. U Ducturi se gradi u Reactu, CSS modulima i katalogu tekstova, na shemi dokumenta iz repoa. Nova se gradnja radi u `ductura/web` i `ductura/server` (D-294, D-306).
 
@@ -35,8 +37,8 @@ Skener (`scripts/forbidden-terms/terms.ts`) čita samo `app/` i `src/`, pa ova m
 ## Otvoreni neskladi (odlučuje Daniel)
 
 1. **`PREDAJA-LIJEVI-PANEL.md`, izvorni §8 C** tvrdi da Lektina dozvola pokriva širi opseg pravila. To proturječi D-309. Odjeljak nije u repou; vrijedi D-309.
-2. **Status referenci M9** (S-16, S31-AI, N-AI-ATT, A-AI-POL): po Q-8 u `STATE.md` spojene su reference odobrene, a README-i `../m9-reference-a` i `../m9-reference-b` kažu PRIJEDLOG do vlasnikove potvrde. Zapisano u `docs/design/EKRANI.md` §2 kao otvoren nesklad.
-3. **`../lijevi-panel-v07/README.md`** naziva prototip v0.7 „referencom”, a ovaj prototip po D-315 nije referenca. Taj README ovim PR-om nije mijenjan.
+2. **Status referenci M9** (S-16, S31-AI, N-AI-ATT, A-AI-POL): po Q-8 u `STATE.md` spojene su reference odobrene, a README-i `../m9-reference-a` i `../m9-reference-b` kažu PRIJEDLOG do vlasnikove potvrde. Zatvoreno 24. 11. 2026. (`docs/design/EKRANI.md` §2): vrijedi Q-8.
+3. **`../lijevi-panel-v07/README.md`** naziva prototip v0.7 „referencom”, što je od D-316 (24. 11. 2026.) točno i za ovaj prototip.
 4. **Zastarjele tvrdnje u predajama** (stanje na `main` 17. 11. 2026.):
    - S-15 postoji (`../m7-reference/`, #1815); predaja kaže da ga nema.
    - S-16 ima djelomičan kod i ugovore (`src/domain/assistant/purpose-catalog.ts` #1668, `docs/contracts/ai-request-v1.md`, `docs/contracts/ai-tools-v1.md`, `docs/AI-PRUZATELJI-MATRICA.md`, `docs/AI-HRVATSKI-PROTOKOL.md`).
