@@ -17,9 +17,30 @@ Vlasnik, 5. 11. 2026. ([#87, komentar 6645197873](https://github.com/danielrisav
 - **DJELOMIČNO**: ili slika postoji bez svih stanja, ili postoji samo stari .dc.html prototip ili snimka aplikacije u staroj paleti. Prototip nije odobrena referenca (DESIGN-SYSTEM §1 t. 4).
 - **NEMA**: ništa.
 
-**Otvoren nesklad, odlučuje Daniel (17. 11. 2026., #2012 c.6956819971):** S-16, S31-AI i N-AI-ATT spojeni su u main (#1650, #1698, #1731), pa bi po Q-8 u `STATE.md` (reference se odobravaju po ekranu čim prođu gate) i po ovom odjeljku bili ODOBRENO. README-i `docs/design/ductura/m9-reference-a` i `m9-reference-b` kažu da su prijedlog do vlasnikove potvrde („Spoji n”, D-183). Dok Daniel ne odluči, redci tih ekrana nose oznaku „spojeno; status otvoren”. Isto pitanje vrijedi za A-AI-POL (#1652), čiji redak ovdje nije mijenjan. Prototip desnog panela v0.16 (`docs/design/ductura/desni-panel-v016/`) nije referenca nijednog ekrana (D-315).
+**Nesklad Q-8 zatvoren (vlasnik, 24. 11. 2026.):** vrijedi Q-8 iz `STATE.md`: referenca je odobrena čim njezin PR prođe gate i spoji se u main. Rečenice u README-ima paketa `m*-reference` da je slika „prijedlog do Spoji n” (D-183) zastarjele su za svaki spojeni paket. S-16, S31-AI, N-AI-ATT i A-AI-POL su zato ODOBRENO. Prototip desnog panela v0.16 (`docs/design/ductura/desni-panel-v016/`) i dalje nije odobren izgled (D-315); vidi §2a.
 
 Zahtijevana stanja svakog ekrana: popunjeno, prazno, učitavanje, greška, mobitel (400 px), uz posebna stanja ekrana. Stupac „Nedostaje” navodi što još nije prikazano; to je procjena iz opisa ekrana, osim stanja doslovno navedenih u README-ima referenci. Stupac „Paket” upućuje na odjeljak 4 (— znači da ekran nema paket: gotov je ili izvan plana).
+
+## 2a. Mjerodavan izvor po ekranu
+
+Vlasnik, 24. 11. 2026.: „Sve sto je dodatno najnovije treba biti glavno. Ovo drugo trebamo prilagoditi samo tome” (doslovno, u sesiji; trag na #87 još nije upisan) Gdje isti ekran ima više izvora, mjerodavan je najnoviji; stariji se prilagođava njemu i ostaje samo povijest ili opis funkcija. Paleta je uvijek „papir i grafit” (D-188), a rječnik zabranjenih izraza (`docs/PRODUCT.md` §5) i WCAG 2.2 AA (D-248) imaju prednost pred svakim izvorom.
+
+Redoslijed starosti: izvorni paket `.dc.html` (22. 10. 2026.) je najstariji, zatim paketi `m*-reference` (5. do 13. 11. 2026.), zatim prototipovi `lijevi-panel-v07` (17. 11.), `editor-v027`, `uvoz-v031` i `desni-panel-v016` (18. 11.).
+
+| Ekran | Mjerodavno | Prilagođava se (povijest) |
+|---|---|---|
+| S-10 Editor, Z-01 Ljuska | `editor-v027` (izgled odobren, #2012 c.6962890596); lijevi panel `lijevi-panel-v07` | `m0-rad-reference/radni-prostor.html`, `editor-v11.dc.html` |
+| Desni panel editora | raspored D-311; funkcije `desni-panel-v016` | izgled `desni-panel-v016` **nije odobren** (D-315): dok vlasnik izričito ne odluči drukčije, desni panel slijedi izgled `editor-v027` |
+| S-19 Uvoz teksta, paket `.ductura` | `uvoz-v031` | `m8-reference/s19-uvoz.html` |
+| S-01 Prijava | `m2-student-reference/prijava.html` | `prijava-v5.dc.html` |
+| S-02, S-03 Početna i kolegiji | `m2-student-reference/pocetna-kolegiji.html` | `pocetna.dc.html` |
+| N-04, N-16, N-07 Pregled radova | `m2-nastavnik-reference`, `m6-reference-b` | `pregled-radova-v2.dc.html` |
+| N-02, N-03, S-05, N-05 Demo tok | `m2-nastavnik-reference`, `m2-student-reference/upis-obavijest.html`, `m7-reference-b` | `demo-tok-v2.dc.html` |
+| J-02 Kako Ductura radi | `m11-javno-reference/j02-kako-radi.html` | `kako-radi.dc.html` |
+| S-40 Komentari na mobitelu | `m6-reference-b` (N-08), `m11-reference` (Z-12) | `komentari-mobitel.dc.html` |
+| K-01, K-02, analiza | — (EQ4, izvan faza) | `koordinator.dc.html`, `istraga.dc.html`, `analiza.dc.html`, `povjerenstvo.dc.html` (P-01, uvjet U-1) |
+
+Ovaj odjeljak ne mijenja nijednu sliku. Prilagodba starijeg izvora ili koda novijem ide zasebnim zadatkom s usporedbom prema `docs/SESSIONS.md` §6.
 
 ## 3. Odluke EQ1–EQ10
 
@@ -71,35 +92,35 @@ N-19 AI pomoć nastavniku nema korak u fazi i ne crta se dok ga plan M9 ne dobij
 
 ## 5. Popis ekrana
 
-Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, m6-reference-b i screenshots-v3 (stara paleta). docs/design/m0-ljuska sadrži snimke aplikacije, ne odobrenu referencu.
+Osvježeno 24. 11. 2026. prema mainu: redci čiji je paket spojen nose ODOBRENO s imenom paketa (`m2-student` znači `docs/design/ductura/m2-student-reference`, `m5-c` znači `m5-reference-c` itd.) i Paket „—”. Stupac „Nedostaje” u tim redcima nije ponovno provjeren; stanja koja paket nema navodi njegov README, a ondje gdje fale, dopunjuju se u zadatku izvedbe. Mjerodavan izvor kod preklapanja je u §2a. docs/design/m0-ljuska sadrži snimke aplikacije, ne odobrenu referencu.
 
 | Oznaka | Naziv | Faza | Status | Paket | Nedostaje |
 |---|---|---|---|---|---|
-| Z-01 | Ljuska i navigacija | M0 | DJELOMIČNO | 2 | prazno, učitavanje, greška, fokus tipkovnica |
-| Z-04 | Greška i 404 | M0 | NEMA | 1 | 404, greška poslužitelja, mobitel |
-| Z-06 | Stanje učitavanja (uzorak) | M0 | NEMA | 1 | kostur, dugo učitavanje, smanjeno kretanje |
-| Z-08 | Dijalozi | M0 | NEMA | 1 | slanje na pregled, konačna predaja, opasna radnja, dijalog s poljem, fokus u dijalogu, mobitel |
-| Z-13 | Tema (svijetla/tamna, bijeli/tamni list) | M0 | DJELOMIČNO | 2 | list bijeli/tamni, prekidač |
-| S-01 | Prijava (AAI@EduHr) | M1 | DJELOMIČNO | 3 | prazno, učitavanje, greška, AAI nedostupan, odbijena prijava, nova osoba bez uloge |
-| Z-03 | Sesija istekla | M1 | NEMA | 1 | istekla, odjavljen u drugoj kartici, bez mreže, mobitel |
-| Z-05 | Nema ovlasti | M1 | NEMA | 1 | nema ovlasti, mobitel |
-| S-02 | Studentska početna | M2 | DJELOMIČNO | 3 | prazno, učitavanje, greška, mobitel, nema kolegija, rok blizu |
-| S-03 | Moji kolegiji (student) | M2 | DJELOMIČNO | 3 | popunjeno, prazno, učitavanje, greška, mobitel, jedan kolegij, više grupa |
-| S-04 | Upis kodom | M2 | DJELOMIČNO | 3 | neispravan kod, istekao kod, već upisan, mobitel, greška |
-| S-05 | Obavijest o zadatku (S3); dio M7 | M2 | DJELOMIČNO | 3 | prazno, učitavanje, greška, mobitel, potvrda obavijesti, promijenjen tekst obavijesti |
-| N-01 | Moji kolegiji (nastavnik) | M2 | NEMA | 4 | popunjeno, prazno, učitavanje, greška, mobitel |
-| N-02 | Novi kolegij i zadatak | M2 | DJELOMIČNO | 4 | prazno, učitavanje, greška, mobitel, valjanost obrasca |
-| N-03 | Čarobnjak zadatka | M2 | DJELOMIČNO | 4 | prazno, učitavanje, greška, mobitel, koraci, dopuštena uporaba alata |
-| N-04 | Popis studenata | M2 | NEMA | 4 | popunjeno, prazno, učitavanje, greška, mobitel, seminarska grupa |
-| N-16 | Radovi uz mentora (podaci) | M2 | NEMA | 4 | popunjeno, prazno, učitavanje, greška, mobitel |
-| A-01 | Pregled ustanove / operaterski status pilota | M2 | NEMA | 19 | popunjeno, prazno, učitavanje, greška, mobitel, STOP stanje |
-| A-02 | Korisnici i uloge | M2 | DJELOMIČNO | 11 | učitavanje |
-| A-03 | Kolegiji i akademske godine | M2 | DJELOMIČNO | 11 | učitavanje |
-| A-04 | Pravila fakulteta (samo čitanje) | M2 | DJELOMIČNO | 11 | učitavanje, greška |
-| S-10 | Editor (cijeli ekran) | M3 | DJELOMIČNO | 2 | popunjeno, prazno, učitavanje, greška, bez mreže, sukob, spremanje, predano (samo čitanje), fokus tipkovnica |
+| Z-01 | Ljuska i navigacija | M0 | ODOBRENO (m0-rad; Q-8) | — | prazno, učitavanje, greška, fokus tipkovnica |
+| Z-04 | Greška i 404 | M0 | ODOBRENO (zajednicko; Q-8) | — | 404, greška poslužitelja, mobitel |
+| Z-06 | Stanje učitavanja (uzorak) | M0 | ODOBRENO (zajednicko; Q-8) | — | kostur, dugo učitavanje, smanjeno kretanje |
+| Z-08 | Dijalozi | M0 | ODOBRENO (zajednicko; Q-8) | — | slanje na pregled, konačna predaja, opasna radnja, dijalog s poljem, fokus u dijalogu, mobitel |
+| Z-13 | Tema (svijetla/tamna, bijeli/tamni list) | M0 | ODOBRENO (m0-rad; Q-8) | — | list bijeli/tamni, prekidač |
+| S-01 | Prijava (AAI@EduHr) | M1 | ODOBRENO (m2-student; Q-8) | — | prazno, učitavanje, greška, AAI nedostupan, odbijena prijava, nova osoba bez uloge |
+| Z-03 | Sesija istekla | M1 | ODOBRENO (zajednicko; Q-8) | — | istekla, odjavljen u drugoj kartici, bez mreže, mobitel |
+| Z-05 | Nema ovlasti | M1 | ODOBRENO (zajednicko; Q-8) | — | nema ovlasti, mobitel |
+| S-02 | Studentska početna | M2 | ODOBRENO (m2-student; Q-8) | — | prazno, učitavanje, greška, mobitel, nema kolegija, rok blizu |
+| S-03 | Moji kolegiji (student) | M2 | ODOBRENO (m2-student; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, jedan kolegij, više grupa |
+| S-04 | Upis kodom | M2 | ODOBRENO (m2-student; Q-8) | — | neispravan kod, istekao kod, već upisan, mobitel, greška |
+| S-05 | Obavijest o zadatku (S3); dio M7 | M2 | ODOBRENO (m2-student; Q-8) | — | prazno, učitavanje, greška, mobitel, potvrda obavijesti, promijenjen tekst obavijesti |
+| N-01 | Moji kolegiji (nastavnik) | M2 | ODOBRENO (m2-nastavnik; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| N-02 | Novi kolegij i zadatak | M2 | ODOBRENO (m2-nastavnik; Q-8) | — | prazno, učitavanje, greška, mobitel, valjanost obrasca |
+| N-03 | Čarobnjak zadatka | M2 | ODOBRENO (m2-nastavnik; Q-8) | — | prazno, učitavanje, greška, mobitel, koraci, dopuštena uporaba alata |
+| N-04 | Popis studenata | M2 | ODOBRENO (m2-nastavnik; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, seminarska grupa |
+| N-16 | Radovi uz mentora (podaci) | M2 | ODOBRENO (m2-nastavnik; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| A-01 | Pregled ustanove / operaterski status pilota | M2 | ODOBRENO (m12; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, STOP stanje |
+| A-02 | Korisnici i uloge | M2 | ODOBRENO (m2; Q-8) | — | učitavanje |
+| A-03 | Kolegiji i akademske godine | M2 | ODOBRENO (m2; Q-8) | — | učitavanje |
+| A-04 | Pravila fakulteta (samo čitanje) | M2 | ODOBRENO (m4; Q-8) | — | učitavanje, greška |
+| S-10 | Editor (cijeli ekran) | M3 | ODOBRENO (editor-v027, m0-rad; Q-8) | — | popunjeno, prazno, učitavanje, greška, bez mreže, sukob, spremanje, predano (samo čitanje), fokus tipkovnica |
 | S-10.1 | Editor: stanja spremanja | M3 | ODOBRENO | — | — |
-| Z-11 | Druga kartica, bez mreže i oporavak | M3 | DJELOMIČNO | 2 | oporavak (zaseban tok) |
-| Z-02 | Odjava i dijalog (nesinkronizirane izmjene) | M3 | DJELOMIČNO | 2 | odjava, odjava s nesinkroniziranim, odjava bez mreže, mobitel |
+| Z-11 | Druga kartica, bez mreže i oporavak | M3 | ODOBRENO (m3, m0-rad; Q-8) | — | oporavak (zaseban tok) |
+| Z-02 | Odjava i dijalog (nesinkronizirane izmjene) | M3 | ODOBRENO (m0-rad; Q-8) | — | odjava, odjava s nesinkroniziranim, odjava bez mreže, mobitel |
 | S-11 | Panel Upute i provjera oblika | M4 | ODOBRENO | — | — |
 | S-10.2 | Traži i zamijeni | M5 | ODOBRENO | — | — |
 | S-10.3 | Način fokusa | M5 | ODOBRENO | — | — |
@@ -107,15 +128,15 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | S-10.5 | Fusnote | M5 | ODOBRENO | — | — |
 | S-10.6 | Tablice i slike | M5 | ODOBRENO | — | — |
 | S-10.7 | Navodi u tekstu i bibliografija | M5 | ODOBRENO | — | — |
-| S-13 | Literatura i bilježnica izvora | M5 | DJELOMIČNO | 5 | uvoz BibTeX/RIS |
+| S-13 | Literatura i bilježnica izvora | M5 | ODOBRENO (m5, m5-c; Q-8) | — | uvoz BibTeX/RIS |
 | S-14 | Struktura (kartica Nacrt) | M5 | ODOBRENO | — | — |
 | S-45 | Prvi ulazak i vodič (dvije minute) | M5 | ODOBRENO | — | — |
-| S-06 | Planer rada iz roka i opsega | M5 | NEMA | 5 | popunjeno, prazno, učitavanje, greška, mobitel |
-| S-07 | Pravopis prema jeziku rada | M5 | NEMA | 5 | uključeno, isključeno, jezik nepoznat, mobitel |
+| S-06 | Planer rada iz roka i opsega | M5 | ODOBRENO (m5-c; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| S-07 | Pravopis prema jeziku rada | M5 | ODOBRENO (m5-c; Q-8) | — | uključeno, isključeno, jezik nepoznat, mobitel |
 | S-08 | DOI i ISBN u bibliografskom zapisu | M5 | ODOBRENO | — | — |
-| S-34 | Reprodukcija vlastitog rada | M6 | U PR-u | — | — |
-| N-09 | Reprodukcija (nastavnik) | M6 | U PR-u | — | — |
-| N-08 | Komentari, prijedlozi i zahtjevi za doradu | M6 | DJELOMIČNO | 9 | sukob (zastarjela baza) |
+| S-34 | Reprodukcija vlastitog rada | M6 | ODOBRENO (m6; Q-8) | — | — |
+| N-09 | Reprodukcija (nastavnik) | M6 | ODOBRENO (m6; Q-8) | — | — |
+| N-08 | Komentari, prijedlozi i zahtjevi za doradu | M6 | ODOBRENO (m6-b; Q-8) | — | sukob (zastarjela baza) |
 | N-12 | Konzultacije | M6 | ODOBRENO | — | — |
 | S-12 | Komentari studenta | M6 | DJELOMIČNO | 9 | popunjeno, prazno, učitavanje, greška, otvoreni/riješeni |
 | S-17 | Kako vidi nastavnik | M6 | DJELOMIČNO | 9 | popunjeno, prazno, učitavanje, greška, mobitel |
@@ -128,42 +149,42 @@ Postojeće reference na main: docs/design/ductura/m2-reference do m5-reference, 
 | P-01 | Povjerenstvo (zaključan rad, rubrika) | M6 | DJELOMIČNO | U | prazno, učitavanje, greška, mobitel, bez pristupa, ocjene ostalih skrivene |
 | N-15 | Etape, rubrika, izvješće, ocjena | M6 | DJELOMIČNO | U | prazno, učitavanje, greška, mobitel |
 | S-15 | Panel Rad | M7 | ODOBRENO (m7-reference, #1815; Q-8) | — | — |
-| S-30 | Pregled prije predaje | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel, bez mreže |
-| S-31 | Izjava | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel |
-| S-32 | Potvrda predaje | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel, potvrda čeka potpis |
-| S-33 | Sažetak procesa | M7 | DJELOMIČNO | 6 | prazno, učitavanje, greška, mobitel |
-| S-43 | Napomene i osporavanje | M7 | NEMA | 8 | popunjeno, prazno, učitavanje, greška, mobitel |
-| N-05 | Brz put | M7 | DJELOMIČNO | 7 | prazno, učitavanje, greška, mobitel |
-| N-10 | Sažetak i karta podrijetla | M7 | DJELOMIČNO | 7 | prazno, učitavanje, greška, mobitel |
-| N-11 | Usporedba verzija | M7 | DJELOMIČNO | 7 | prazno, učitavanje, greška, mobitel |
-| N-13 | Produljenje roka | M7 | NEMA | 7 | popunjeno, prazno, učitavanje, greška, mobitel, sukob s rokom |
-| J-03 | Provjera potvrde (putovnica) | M7 | NEMA | 8 | popunjeno, prazno, učitavanje, greška, mobitel, ne podudara se |
+| S-30 | Pregled prije predaje | M7 | ODOBRENO (m7; Q-8) | — | prazno, učitavanje, greška, mobitel, bez mreže |
+| S-31 | Izjava | M7 | ODOBRENO (m7; Q-8) | — | prazno, učitavanje, greška, mobitel |
+| S-32 | Potvrda predaje | M7 | ODOBRENO (m7; Q-8) | — | prazno, učitavanje, greška, mobitel, potvrda čeka potpis |
+| S-33 | Sažetak procesa | M7 | ODOBRENO (m7; Q-8) | — | prazno, učitavanje, greška, mobitel |
+| S-43 | Napomene i osporavanje | M7 | ODOBRENO (m7-c; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| N-05 | Brz put | M7 | ODOBRENO (m7-b; Q-8) | — | prazno, učitavanje, greška, mobitel |
+| N-10 | Sažetak i karta podrijetla | M7 | ODOBRENO (m7-b; Q-8) | — | prazno, učitavanje, greška, mobitel |
+| N-11 | Usporedba verzija | M7 | ODOBRENO (m7-b; Q-8) | — | prazno, učitavanje, greška, mobitel |
+| N-13 | Produljenje roka | M7 | ODOBRENO (m7-b; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, sukob s rokom |
+| J-03 | Provjera potvrde (putovnica) | M7 | ODOBRENO (m7-c; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, ne podudara se |
 | N-14 | Priprema za razgovor i obranu | M7 | NEMA | U | popunjeno, prazno, učitavanje, greška, mobitel |
-| S-47 | Moj rad u brojkama | M7 | NEMA | 8 | popunjeno, prazno, učitavanje, greška, mobitel |
-| S-19 | Uvoz teksta (pregled gubitaka) | M8 | DJELOMIČNO | 12 | popunjeno, prazno, učitavanje, greška, mobitel, djelomičan uvoz, nepodržan format |
-| S-20 | Izvoz (A4 pregled) | M8 | DJELOMIČNO | 12 | popunjeno, prazno, učitavanje, greška, mobitel, izvoz .docx/PDF |
-| N-18 | Izvoz predanog rada i paket za Merlin | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel |
+| S-47 | Moj rad u brojkama | M7 | ODOBRENO (m7-c; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| S-19 | Uvoz teksta (pregled gubitaka) | M8 | ODOBRENO (uvoz-v031, m8; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, djelomičan uvoz, nepodržan format |
+| S-20 | Izvoz (A4 pregled) | M8 | ODOBRENO (m8; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, izvoz .docx/PDF |
+| N-18 | Izvoz predanog rada i paket za Merlin | M8 | ODOBRENO (m8-b; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
 | S-09 | PDF izvori u bilježnici (isticanje, citat) | M8 | NEMA | 12 | popunjeno, prazno, učitavanje, greška, mobitel, citat nije pronađen |
-| S-16 | Panel Asistent (12 stanja) | M9 | spojeno; status otvoren (§2, nesklad Q-8) (DAN-411, m9-reference-a, #1650) | 13 | — |
-| S31-AI | Izjava o uporabi AI u predaji | M9 | spojeno; status otvoren (§2, nesklad Q-8) (DAN-411, m9-reference-b, #1698) | 14 | — |
-| N-AI-ATT | Nastavnik: pregled AI-atribucije | M9 | spojeno; status otvoren (§2, nesklad Q-8) (DAN-411, m9-reference-b, #1731) | 14 | — |
-| A-AI-POL | Administrator: pravilo o uporabi AI | M9 | PRIJEDLOG (DAN-411, m9-reference-b) | 14 | pregled, samo za čitanje, neispravan unos, trošak nije podešen, učitavanje, greška |
+| S-16 | Panel Asistent (12 stanja) | M9 | ODOBRENO (m9-a; Q-8) | — | — |
+| S31-AI | Izjava o uporabi AI u predaji | M9 | ODOBRENO (m9-b; Q-8) | — | — |
+| N-AI-ATT | Nastavnik: pregled AI-atribucije | M9 | ODOBRENO (m9-b; Q-8) | — | — |
+| A-AI-POL | Administrator: pravilo o uporabi AI | M9 | ODOBRENO (m9-b; Q-8) | — | pregled, samo za čitanje, neispravan unos, trošak nije podešen, učitavanje, greška |
 | N-19 | AI pomoć nastavniku | M9 | NEMA | — | — |
 | S-18 | Vlastita povijest rada | M10 | NEMA | U | popunjeno, prazno, učitavanje, greška, mobitel |
-| S-42 | Dnevnik pristupa (vlastiti) | M10 | NEMA | 15 | popunjeno, prazno, učitavanje, greška, mobitel, opoziv |
-| S-44 | Izvoz vlastitih podataka | M10 | NEMA | 15 | zahtjev, stanje posla, preuzimanje, istek, greška, mobitel |
-| A-05 | Čuvanje i pravno zadržavanje | M10 | NEMA | 16 | popunjeno, prazno, učitavanje, greška, mobitel |
-| A-06 | Revizijski trag pristupa | M10 | NEMA | 16 | popunjeno, prazno, učitavanje, greška, mobitel |
-| A-08 | Izlaz iz usluge | M10 | NEMA | 16 | popunjeno, prazno, učitavanje, greška, mobitel, potvrda |
+| S-42 | Dnevnik pristupa (vlastiti) | M10 | ODOBRENO (m10-student; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, opoziv |
+| S-44 | Izvoz vlastitih podataka | M10 | ODOBRENO (m10-student; Q-8) | — | zahtjev, stanje posla, preuzimanje, istek, greška, mobitel |
+| A-05 | Čuvanje i pravno zadržavanje | M10 | ODOBRENO (m10-admin; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| A-06 | Revizijski trag pristupa | M10 | ODOBRENO (m10-admin; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| A-08 | Izlaz iz usluge | M10 | ODOBRENO (m10-admin; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, potvrda |
 | S-46 | Paket zaštite studenta | M10 | NEMA | U | popunjeno, prazno, učitavanje, greška, mobitel |
-| A-07 | Integracije i status AAI@EduHr | M11 | NEMA | 18 | popunjeno, prazno, učitavanje, greška, mobitel, AAI nedostupan |
-| A-09 | Zdravlje sustava i kopije | M11 | NEMA | 18 | popunjeno, prazno, učitavanje, greška, mobitel |
-| J-01 | Javna naslovnica | M11 | DJELOMIČNO | 17 | prazno, učitavanje, greška, svijetla tema, prijavljen/odjavljen |
-| J-02 | Kako Ductura radi | M11 | DJELOMIČNO | 17 | prazno, učitavanje, greška, mobitel |
-| J-05 | Statusna stranica i izjava o pristupačnosti | M11 | NEMA | 17 | popunjeno, prazno, učitavanje, greška, mobitel, incident |
-| Z-09 | Postavke | M11 | DJELOMIČNO | 18 | popunjeno, prazno, učitavanje, greška, mobitel, tema, obavijesti |
-| Z-10 | Prijavi problem | M11 | NEMA | 18 | popunjeno, prazno, učitavanje, greška, mobitel, poslano |
-| Z-12 | Mobilni prikaz (sustavno) | M11 | DJELOMIČNO | 18 | uska širina svih ekrana, dodir ≥ 44 px |
+| A-07 | Integracije i status AAI@EduHr | M11 | ODOBRENO (m11; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, AAI nedostupan |
+| A-09 | Zdravlje sustava i kopije | M11 | ODOBRENO (m11; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel |
+| J-01 | Javna naslovnica | M11 | ODOBRENO (m11-javno; Q-8) | — | prazno, učitavanje, greška, svijetla tema, prijavljen/odjavljen |
+| J-02 | Kako Ductura radi | M11 | ODOBRENO (m11-javno; Q-8) | — | prazno, učitavanje, greška, mobitel |
+| J-05 | Statusna stranica i izjava o pristupačnosti | M11 | ODOBRENO (m11-javno; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, incident |
+| Z-09 | Postavke | M11 | ODOBRENO (m11; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, tema, obavijesti |
+| Z-10 | Prijavi problem | M11 | ODOBRENO (m11; Q-8) | — | popunjeno, prazno, učitavanje, greška, mobitel, poslano |
+| Z-12 | Mobilni prikaz (sustavno) | M11 | ODOBRENO (m11; Q-8) | — | uska širina svih ekrana, dodir ≥ 44 px |
 | K-01 | Koordinator (zbrojevi po kolegiju) | bez faze | DJELOMIČNO | — | prazno, učitavanje, greška, mobitel |
 | K-02 | Odobrenje istrage | bez faze | DJELOMIČNO | — | prazno, učitavanje, greška, mobitel |
 | A-10 | Slučajevi i paket dokaza | bez faze | NEMA | — | popunjeno, prazno, učitavanje, greška, mobitel |
