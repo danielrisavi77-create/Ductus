@@ -37,6 +37,7 @@ import { summarizeTranscript } from "./token-report.mjs";
 const script = fileURLToPath(new URL("./agent-hooks.mjs", import.meta.url));
 const repo = fileURLToPath(new URL("../../", import.meta.url));
 const BAN = /Do not (start|take)/;
+const ROTATE = /should be rotated|fresh session|rotation point/;
 const big = { size: LARGE_DOC_BYTES + 1 };
 const doc = "# Title\n\n## 1. One\ntext\n```\n## not a heading\n```\n## 2. Two\n";
 
@@ -183,9 +184,9 @@ test("lastContext resets at a compaction boundary", () => {
   assert.equal(lastContext([before, boundary, summary, assistant("b", { cache_read_input_tokens: 40_000 })].join("\n")), 40_000);
 });
 
-test("budget notice appears only past the rotation point and escalates", () => {
+test("budget notice appears only past the handoff point and escalates", () => {
   assert.equal(budgetNotice(ROTATE_AT - 1), null);
-  assert.match(budgetNotice(ROTATE_AT), /150k rotation point/);
+  assert.match(budgetNotice(ROTATE_AT), /150k handoff point/);
   assert.match(budgetNotice(HARD_AT), /hard limit/);
 });
 
@@ -264,8 +265,9 @@ test("every profile in PROFILE_ROLES gets the notice of its own role from the bu
         if (other === role) assert.match(notice, pattern, profile);
         else assert.doesNotMatch(notice, pattern, profile);
       }
-      if (role === "orchestrator") assert.doesNotMatch(notice, BAN, profile);
-      else assert.match(notice, BAN, profile);
+      // No role is told to stop taking work or to rotate (owner, 24 Nov 2026).
+      assert.doesNotMatch(notice, BAN, profile);
+      assert.doesNotMatch(notice, ROTATE, profile);
     }
     // A name near a profile is not that profile.
     for (const profile of ["ductus-scout", "Ductus-Orchestrator", "ductus-orchestrator ", "orchestrator"]) {
@@ -302,14 +304,16 @@ test("an unrecognised role is never forbidden to work and gets the orchestrator 
   }
 });
 
-test("workers hand off in their own PR, control roles in their own comment", () => {
+test("workers hand off in their own PR, control roles in their own comment, and both keep working", () => {
   for (const tokens of [ROTATE_AT, HARD_AT]) {
     const worker = budgetNotice(tokens, "worker");
-    assert.match(worker, BAN);
+    assert.doesNotMatch(worker, BAN);
+    assert.doesNotMatch(worker, ROTATE);
     assert.match(worker, /ductus-handoff/);
     assert.match(worker, /your own PR/);
     const control = budgetNotice(tokens, "control");
-    assert.match(control, BAN);
+    assert.doesNotMatch(control, BAN);
+    assert.doesNotMatch(control, ROTATE);
     assert.match(control, /your own comment/);
     assert.match(control, /never edit another author's PR body/);
     assert.doesNotMatch(control, /IZVJEŠTAJ block/);
@@ -324,7 +328,8 @@ test("budget entry point applies the role from the hook input", () => {
     const notice = (extra) => run("budget", { transcript_path: transcript, ...extra }).additionalContext;
     assert.doesNotMatch(notice({ agent_type: "ductus-orchestrator" }), BAN);
     assert.match(notice({ agent_type: "ductus-orchestrator" }), /not rotated/);
-    assert.match(notice({ agent_type: "ductus-backend-data" }), BAN);
+    assert.doesNotMatch(notice({ agent_type: "ductus-backend-data" }), BAN);
+    assert.match(notice({ agent_type: "ductus-backend-data" }), /and continue/);
     assert.match(notice({ agent_type: "ductus-independent-reviewer" }), /your own comment/);
     assert.doesNotMatch(notice({}), BAN);
     assert.doesNotMatch(notice({ agent_type: { nested: true } }), BAN);
@@ -1204,10 +1209,12 @@ test("thresholds are literal: only the orchestrator moved, other roles stay at 1
   assert.equal(ORCHESTRATOR_LIMIT, 400_000);
   for (const role of ["worker", "control", "unknown"]) {
     assert.equal(budgetNotice(149_999, role), null, role);
-    assert.match(budgetNotice(150_000, role), /past the 150k rotation point/, role);
-    assert.match(budgetNotice(249_999, role), /past the 150k rotation point/, role);
+    assert.match(budgetNotice(150_000, role), /past the 150k handoff point/, role);
+    assert.match(budgetNotice(150_000, role), /compacts it at 200k/, role);
+    assert.match(budgetNotice(249_999, role), /past the 150k handoff point/, role);
     assert.match(budgetNotice(250_000, role), /past the 250k hard limit/, role);
     assert.match(budgetNotice(500_000, role), /past the 250k hard limit/, role);
+    assert.match(budgetNotice(250_000, role), /compact the context now/, role);
   }
 });
 

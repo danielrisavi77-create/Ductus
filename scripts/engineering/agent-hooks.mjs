@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Point where a non-orchestrator session writes its handoff before compaction (docs/SESSIONS.md §4).
 export const ROTATE_AT = 150_000;
 // Upper safety limit for the permanent orchestrator session (docs/ORKESTRATOR.md §7).
 // Owner decision 10 Oct 2026: 400k. The first reminder comes earlier, at 300k.
@@ -174,16 +175,22 @@ const ORCHESTRATOR_RULE =
   "at the end of the current logical unit write the handoff to the board and as a comment on the coordination issue, " +
   "then compact the context (yourself if the runtime allows it, otherwise ask Daniel)";
 
-// Where each rotating role writes its handoff (ductus-handoff skill, step 2).
+// Where each role writes its handoff before compaction (ductus-handoff skill, step 2).
 const HANDOFF_AT = {
   worker: "the IZVJEŠTAJ block of your own PR, or your own issue when there is no PR",
   control: "your own comment on the PR or issue you are checking; never edit another author's PR body",
 };
 
-// The notice added to a prompt once the context passes the rotation point.
-// Only a recognised worker or control role is told to rotate and to take no
-// new task. The orchestrator gets a reminder, and so does a session whose
-// role is unknown, because it may be the orchestrator.
+// Owner decision 24 Nov 2026: sessions are not rotated. Every role keeps
+// working in the same session and the runtime compacts the context at 200k
+// (CLAUDE_CODE_AUTO_COMPACT_WINDOW in .claude/settings.json).
+export const AUTO_COMPACT_AT = 200_000;
+
+// The notice added to a prompt once the context passes the handoff point.
+// No role is told to rotate or to stop taking work: a summary loses detail,
+// so the session writes its handoff first and then carries on. The
+// orchestrator gets its own reminder, and so does a session whose role is
+// unknown, because it may be the orchestrator.
 export function budgetNotice(tokens, role = "unknown") {
   // A count that is not a finite number (NaN, a string) gives no notice instead of "NaNk".
   if (typeof tokens !== "number" || !Number.isFinite(tokens)) return null;
@@ -195,19 +202,20 @@ export function budgetNotice(tokens, role = "unknown") {
     return `Context is ${size} tokens. Reminder, not a stop: ${ORCHESTRATOR_RULE}.${limit}`;
   }
   const where = hard
-    ? `Context is ${size} tokens, past the ${HARD_AT / 1000}k hard limit. Every further call re-reads all of it. `
-    : `Context is ${size} tokens, past the ${ROTATE_AT / 1000}k rotation point in docs/SESSIONS.md §4. `;
+    ? `Context is ${size} tokens, past the ${HARD_AT / 1000}k hard limit, so automatic compaction at ${AUTO_COMPACT_AT / 1000}k is not active in this session. `
+    : `Context is ${size} tokens, past the ${ROTATE_AT / 1000}k handoff point in docs/SESSIONS.md §4. The session is not rotated: the runtime compacts it at ${AUTO_COMPACT_AT / 1000}k and work continues here. `;
+  const after = hard
+    ? "then compact the context now (yourself if the runtime allows it, otherwise ask Daniel) and continue"
+    : "then continue; the handoff is the starting point after compaction";
   const target = HANDOFF_AT[role];
   if (!target) {
     return (
       `${where}This session's role could not be detected, so nothing is forbidden here. ` +
       `If you are the orchestrator, ${ORCHESTRATOR_RULE}. ` +
-      "Any other role: finish the current step, write the handoff with the ductus-handoff skill at the place it names for your role, and tell the user this session should be rotated."
+      `Any other role: at the end of the current step write the handoff with the ductus-handoff skill at the place it names for your role, ${after}.`
     );
   }
-  const handoff = `write the handoff with the ductus-handoff skill (${target})`;
-  if (hard) return `${where}Do not start new work in this session: finish only the step in progress, ${handoff}, and tell the user to continue in a fresh session.`;
-  return `${where}Finish the current step, then ${handoff} and tell the user this session should be rotated. Do not take on a new task here.`;
+  return `${where}At the end of the current step write the handoff with the ductus-handoff skill (${target}), ${after}.`;
 }
 
 // The Owner queue is for the owner and the orchestrator (CLAUDE.md, STATE.md).

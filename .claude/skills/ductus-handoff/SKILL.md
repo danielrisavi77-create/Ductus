@@ -1,9 +1,9 @@
 ---
 name: ductus-handoff
-description: Write the handoff for a Ductus session that is being rotated or has passed its context budget, so a fresh session or another account can continue from GitHub and the repo alone.
+description: Write the handoff for a Ductus session that has passed its context budget and will be compacted, or is handed to another account, so work can continue from GitHub and the repo alone.
 ---
 
-Use when the context-budget notice appears, when a logical unit of work is done, or when the user asks to rotate. Rules: `docs/SESSIONS.md` §4 and §4a, `docs/ORKESTRATOR.md` §7, `docs/MULTI-ACCOUNT.md` §9–§10.
+Use when the context-budget notice appears, when a logical unit of work is done, or when the work moves to another session or account. Rules: `docs/SESSIONS.md` §4 and §4a, `docs/ORKESTRATOR.md` §7, `docs/MULTI-ACCOUNT.md` §9–§10.
 
 1. Finish or cleanly stop the step in progress. Commit work that passes the checks; never leave uncommitted changes as the only copy.
 2. Write the handoff where the next session of your role will look, not in chat:
